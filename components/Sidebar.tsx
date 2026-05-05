@@ -15,6 +15,8 @@ const MGLASS_NAV = [
   { href: '/calculations',      label: 'История расчётов' },
   { href: '/orders',            label: 'История заказов' },
   { href: '/my-earnings',       label: '💰 Мои заработки' },
+  { href: '/ai-assistant',      label: '✦ AI Ассистент' },
+  { href: '/kp-generator',      label: '✦ КП Генератор' },
 ]
 
 const PRODUCTION_NAV = [
