@@ -20,9 +20,6 @@ const MGLASS_NAV = [
 
 const AI_NAV = [
   { href: '/my-dashboard',   label: 'Дашборд' },
-  { href: '/amo-analysis',   label: '📊 Анализ воронки' },
-  { href: '/ai-stats',       label: '🤖 Диалоги Владислава' },
-  { href: '/my-notes',       label: '🎙️ Мои заметки' },
   { href: '/ai-assistant',   label: 'AI Ассистент' },
   { href: '/kp-generator',   label: 'КП Генератор' },
   { href: '/objections',     label: 'Возражения' },
@@ -30,6 +27,13 @@ const AI_NAV = [
   { href: '/templates',      label: 'Шаблоны' },
   { href: '/deal-analysis',  label: 'Анализ сделки' },
   { href: '/competitors',    label: 'Конкуренты' },
+]
+
+const VLADISLAV_NAV = [
+  { href: '/vladislav',    label: '💬 Сообщения' },
+  { href: '/ai-stats',     label: '📊 Статистика AI' },
+  { href: '/amo-analysis', label: '🔍 Анализ воронки' },
+  { href: '/my-notes',     label: '🎙️ Мои заметки' },
 ]
 
 const PRODUCTION_NAV = [
@@ -53,11 +57,13 @@ const ADMIN_NAV = [
   { href: '/admin/users',         label: 'Пользователи' },
 ]
 
-const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors', '/my-dashboard', '/amo-analysis']
+const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors', '/my-dashboard']
+const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/my-notes']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
 
-function detectSection(pathname: string): 'mglass' | 'ai' | 'production' | 'admin' {
+function detectSection(pathname: string): 'mglass' | 'ai' | 'production' | 'admin' | 'vladislav' {
+  if (VLADISLAV_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'vladislav'
   if (AI_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'ai'
   if (PRODUCTION_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'production'
   if (ADMIN_PATHS.some(p => pathname.startsWith(p))) return 'admin'
@@ -182,6 +188,36 @@ export function Sidebar({ userEmail, role }: Props) {
             </div>
           )}
         </div>
+
+        {/* Кабинет Владислава — только admin */}
+        {role === 'admin' && (
+          <div>
+            <button
+              onClick={() => toggleSection('vladislav')}
+              className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#f8f8f7] transition-colors group">
+              <span className="text-[12px] font-bold text-indigo-600 uppercase tracking-widest">Владислав</span>
+              <svg
+                className={`w-3.5 h-3.5 text-indigo-400 transition-transform ${openSections.has('vladislav') ? 'rotate-180' : ''}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+              </svg>
+            </button>
+            {openSections.has('vladislav') && (
+              <div className="space-y-0.5 mt-0.5">
+                {VLADISLAV_NAV.map(item => (
+                  <Link key={item.href} href={item.href}
+                    className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] transition-colors ${
+                      isActive(item.href)
+                        ? 'bg-indigo-50 text-indigo-700 font-semibold'
+                        : 'text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110]'
+                    }`}>
+                    {item.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* AI Продажи */}
         <div>
