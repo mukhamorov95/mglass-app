@@ -11,6 +11,13 @@ function db() {
   )
 }
 
+async function applyToBotKnowledge(supabase: ReturnType<typeof db>, newFact: string) {
+  const { data } = await supabase.from('ai_settings').select('value').eq('key', 'bot_extra_knowledge').single()
+  const current = data?.value?.trim() || ''
+  const updated = current ? `${current}\n\n${newFact}` : newFact
+  await supabase.from('ai_settings').upsert({ key: 'bot_extra_knowledge', value: updated, updated_at: new Date().toISOString() })
+}
+
 export async function POST(req: Request) {
   try {
     const { content, noteId } = await req.json() as { content: string; noteId?: string }
@@ -63,6 +70,12 @@ ${content}
         ai_actions:  analysis.actions,
         ai_for_bot:  analysis.for_bot,
       }).select('id').single()
+
+      // Auto-apply to bot knowledge if there's something for the bot
+      if (analysis.for_bot?.trim()) {
+        await applyToBotKnowledge(supabase, analysis.for_bot)
+      }
+
       return NextResponse.json({ ...analysis, id: data?.id })
     }
 

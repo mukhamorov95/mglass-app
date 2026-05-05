@@ -58,6 +58,7 @@ export default function TasksPage() {
   const [newTask, setNewTask]       = useState<Task | null>(null)
   const [expanded, setExpanded]     = useState<string | null>(null)
   const [speechOk, setSpeechOk]     = useState(false)
+  const [applying, setApplying]     = useState<string | null>(null)
   const recRef = useRef<ISpeechRecognition | null>(null)
 
   useEffect(() => {
@@ -121,6 +122,20 @@ export default function TasksPage() {
   async function processNext() {
     await fetch('/api/cron/process-tasks', { method: 'POST' })
     await load()
+  }
+
+  async function applyTask(taskId: string) {
+    setApplying(taskId)
+    try {
+      await fetch('/api/tasks/apply', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ taskId }),
+      })
+      await load()
+    } finally {
+      setApplying(null)
+    }
   }
 
   const pending     = tasks.filter(t => t.status === 'pending').length
@@ -273,6 +288,21 @@ export default function TasksPage() {
                     <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1">Результат</p>
                     <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{task.result}</p>
                   </div>
+                )}
+
+                {/* Apply button */}
+                {task.status !== 'done' && (
+                  <button
+                    onClick={() => applyTask(task.id)}
+                    disabled={applying === task.id}
+                    className={`w-full py-2 rounded-xl text-[13px] font-semibold transition-colors ${
+                      task.type === 'config'
+                        ? 'bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50'
+                        : 'bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50'
+                    }`}>
+                    {applying === task.id ? 'Выполняется...' :
+                      task.type === 'config' ? '⚡ Внедрить сейчас (авто)' : '📋 Поставить в очередь для разработчика'}
+                  </button>
                 )}
               </div>
             )}
