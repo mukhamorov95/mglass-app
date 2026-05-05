@@ -22,6 +22,7 @@ const AI_NAV = [
   { href: '/my-dashboard',   label: 'Дашборд' },
   { href: '/amo-analysis',   label: '📊 Анализ воронки' },
   { href: '/ai-stats',       label: '🤖 Диалоги Владислава' },
+  { href: '/my-notes',       label: '🎙️ Мои заметки' },
   { href: '/ai-assistant',   label: 'AI Ассистент' },
   { href: '/kp-generator',   label: 'КП Генератор' },
   { href: '/objections',     label: 'Возражения' },
