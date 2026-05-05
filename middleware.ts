@@ -25,6 +25,7 @@ export async function middleware(request: NextRequest) {
 
   const isLoginPage = request.nextUrl.pathname === '/login'
   const isWebhook = request.nextUrl.pathname.startsWith('/api/wazzup/') ||
+                    request.nextUrl.pathname.startsWith('/api/amo/webhook') ||
                     request.nextUrl.pathname.startsWith('/api/cron/')
 
   if (!user && !isLoginPage && !isWebhook) {

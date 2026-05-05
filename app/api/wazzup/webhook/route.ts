@@ -1,7 +1,9 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import type { Tool, MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/wazzup'
+import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const AMO_BASE = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
@@ -11,18 +13,50 @@ const VLADISLAV_USER_ID = parseInt(process.env.AMO_VLADISLAV_USER_ID || '8352283
 const SYSTEM = `Ты — Владислав, менеджер по продажам компании MGlass (Москва).
 
 MGlass производит:
-- Зеркала с LED-подсветкой: сенсорные, антизапотевание, разные размеры. Цены от 8 000 до 60 000+ руб.
-- Лофт-перегородки: металл + стекло, цвета RAL. Цены от 30 000 до 300 000+ руб.
-- Душевые перегородки: безрамные и с профилем. Цены от 20 000 до 150 000+ руб.
+- Зеркала с LED-подсветкой: сенсорные, антизапотевание, разные размеры.
+- Лофт-перегородки: металл + стекло, цвета RAL.
+- Душевые перегородки: безрамные и с профилем.
 Производство своё в Москве, гарантия 2 года, монтаж входит в стоимость, срок 14 дней.
 
-ЗАДАЧА: квалифицировать клиента → дать предварительную стоимость → закрыть на БЕСПЛАТНЫЙ ЗАМЕР.
+ЗАДАЧА: квалифицировать клиента → рассчитать точную стоимость → закрыть на БЕСПЛАТНЫЙ ЗАМЕР.
+
+РАСЧЁТ ЦЕН: когда клиент называет размеры — ВСЕГДА вызывай инструмент calculate_price для получения точной цены. Не давай цены из памяти — только через калькулятор.
 
 СТИЛЬ: пиши как живой человек. Коротко — максимум 2-3 предложения. Без официоза. Используй имя если знаешь.
 
 СПЕЦКОМАНДЫ (добавь в конец ответа если нужно):
 [ЗАМЕР_ГОТОВ] — если клиент согласился на замер
 [НУЖЕН_ЧЕЛОВЕК] — если вопрос слишком сложный или клиент агрессивен`
+
+const CALC_TOOL: Tool = {
+  name: 'calculate_price',
+  description: 'Рассчитать точную стоимость изделия через калькулятор MGlass по размерам клиента. Вызывай всегда, когда клиент называет конкретные размеры.',
+  input_schema: {
+    type: 'object' as const,
+    properties: {
+      type: {
+        type: 'string',
+        enum: ['mirror', 'loft', 'shower'],
+        description: 'mirror — зеркало, loft — лофт-перегородка, shower — душевая перегородка',
+      },
+      width: { type: 'number', description: 'Ширина в мм (например 1000 для 100 см)' },
+      height: { type: 'number', description: 'Высота в мм (например 2000 для 200 см)' },
+      options: {
+        type: 'object',
+        description: 'Дополнительные параметры',
+        properties: {
+          hasLighting: { type: 'boolean', description: 'Нужна ли подсветка (для зеркала, по умолчанию true)' },
+          withMounting: { type: 'boolean', description: 'Нужен ли монтаж' },
+          model: { type: 'string', description: 'Модель душевой: M1-M12' },
+          tier: { type: 'string', enum: ['budget', 'standard'], description: 'Класс душевой' },
+          sections: { type: 'number', description: 'Количество секций лофт-перегородки' },
+          systemType: { type: 'string', enum: ['fixed', 'sliding', 'swing'], description: 'Тип открывания лофт' },
+        },
+      },
+    },
+    required: ['type', 'width', 'height'],
+  },
+}
 
 function supabase() {
   return createServiceClient(
@@ -77,6 +111,57 @@ async function findLeadByPhone(phone: string): Promise<{ id: number; responsible
   return { id: lead.id, responsible_user_id: lead.responsible_user_id }
 }
 
+async function generateAiResponse(messages: MessageParam[]): Promise<string> {
+  let response = await anthropic.messages.create({
+    model: 'claude-sonnet-4-6',
+    max_tokens: 500,
+    system: SYSTEM,
+    tools: [CALC_TOOL],
+    messages,
+  })
+
+  // Handle tool_use loop (max 2 rounds)
+  for (let round = 0; round < 2 && response.stop_reason === 'tool_use'; round++) {
+    const toolUseBlocks = response.content.filter(b => b.type === 'tool_use')
+    const toolResults = await Promise.all(
+      toolUseBlocks.map(async (block) => {
+        if (block.type !== 'tool_use') return null
+        const input = block.input as { type: string; width: number; height: number; options?: CalcOptions }
+        const result = await quickCalc(
+          input.type as CalcType,
+          input.width,
+          input.height,
+          input.options ?? {},
+        )
+        return {
+          type: 'tool_result' as const,
+          tool_use_id: block.id,
+          content: result
+            ? `Точная цена: ${result.finalPrice.toLocaleString('ru-RU')} ₽\n${result.description}`
+            : 'Ошибка расчёта — используй приблизительную цену из памяти',
+        }
+      })
+    )
+
+    const validResults = toolResults.filter((r): r is NonNullable<typeof r> => r !== null)
+    messages = [
+      ...messages,
+      { role: 'assistant' as const, content: response.content },
+      { role: 'user' as const, content: validResults },
+    ]
+
+    response = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 500,
+      system: SYSTEM,
+      tools: [CALC_TOOL],
+      messages,
+    })
+  }
+
+  return response.content.find(b => b.type === 'text')?.text ?? ''
+}
+
 async function processMessage(msg: {
   chatId: string
   channelId: string
@@ -123,20 +208,12 @@ async function processMessage(msg: {
     .order('created_at', { ascending: true })
     .limit(20)
 
-  const messages = (history || []).map((m: { role: string; content: string }) => ({
+  const messages: MessageParam[] = (history || []).map((m: { role: string; content: string }) => ({
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
 
-  // Generate AI response
-  const aiMsg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
-    max_tokens: 400,
-    system: SYSTEM,
-    messages,
-  })
-
-  const rawResponse = aiMsg.content[0].type === 'text' ? aiMsg.content[0].text : ''
+  const rawResponse = await generateAiResponse(messages)
   const isMeasureReady = rawResponse.includes('[ЗАМЕР_ГОТОВ]')
   const needsHuman = rawResponse.includes('[НУЖЕН_ЧЕЛОВЕК]')
   const cleanResponse = rawResponse
