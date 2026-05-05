@@ -9,6 +9,8 @@ type Message = {
   streaming?: boolean
 }
 
+type SyncState = 'idle' | 'loading' | 'ok' | 'error'
+
 const QUICK_PROMPTS = [
   'Сколько стоит зеркало 600×800 мм с подсветкой?',
   'Помоги составить ответ клиенту на вопрос о цене',
@@ -22,6 +24,30 @@ export default function AIAssistantPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [toolsRunning, setToolsRunning] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+
+  const [syncState, setSyncState] = useState<SyncState>('idle')
+  const [syncLog, setSyncLog] = useState('')
+  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+
+  async function handleSync() {
+    setSyncState('loading')
+    setSyncLog('')
+    try {
+      const res = await fetch('/api/admin/sync', { method: 'POST' })
+      const data = await res.json()
+      if (data.ok) {
+        setSyncState('ok')
+        setSyncLog(data.log ?? '')
+        setTimeout(() => setSyncState('idle'), 4000)
+      } else {
+        setSyncState('error')
+        setSyncLog(data.error ?? 'Неизвестная ошибка')
+      }
+    } catch (e) {
+      setSyncState('error')
+      setSyncLog(e instanceof Error ? e.message : 'Ошибка сети')
+    }
+  }
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -106,9 +132,52 @@ export default function AIAssistantPage() {
 
   return (
     <div className="max-w-[860px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-[18px] font-bold text-[#111110] tracking-tight">AI Ассистент</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Помогает отвечать клиентам, считать ориентировочные цены, работать с возражениями</p>
+      <div className="flex items-start justify-between mb-6">
+        <div>
+          <h1 className="text-[18px] font-bold text-[#111110] tracking-tight">AI Ассистент</h1>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">Помогает отвечать клиентам, считать ориентировочные цены, работать с возражениями</p>
+        </div>
+
+        {isLocalhost && (
+          <div className="flex flex-col items-end gap-1">
+            <button
+              onClick={handleSync}
+              disabled={syncState === 'loading'}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-[13px] font-semibold transition-all disabled:opacity-60 ${
+                syncState === 'ok'
+                  ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+                  : syncState === 'error'
+                  ? 'bg-red-50 text-red-600 border border-red-200'
+                  : 'bg-[#111110] text-white hover:bg-[#2a2a28]'
+              }`}>
+              {syncState === 'loading' && (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              )}
+              {syncState === 'ok' && (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+                </svg>
+              )}
+              {syncState === 'error' && (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12"/>
+                </svg>
+              )}
+              {syncState === 'idle' && (
+                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              )}
+              {syncState === 'loading' ? 'Синхронизация...' : syncState === 'ok' ? 'Готово' : syncState === 'error' ? 'Ошибка' : 'Синхронизировать'}
+            </button>
+            {syncLog && (
+              <p className="text-[10px] font-mono text-[#9a9a95] max-w-[260px] text-right leading-tight">{syncLog.split('\n')[0]}</p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex flex-col" style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
