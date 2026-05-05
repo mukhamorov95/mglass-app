@@ -94,11 +94,13 @@ async function getNextRoundRobinManager(): Promise<number | null> {
   return managerId
 }
 
+const STAGE_ASSIGNED = 48587215 // "Назначен ответственный" в воронке Продажи
+
 async function assignLeadToManager(leadId: number, managerId: number) {
   await fetch(`${AMO_BASE}/leads`, {
     method: 'PATCH',
     headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ id: leadId, responsible_user_id: managerId }]),
+    body: JSON.stringify([{ id: leadId, responsible_user_id: managerId, status_id: STAGE_ASSIGNED }]),
   })
 }
 
