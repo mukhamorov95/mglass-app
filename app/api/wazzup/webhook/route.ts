@@ -21,11 +21,10 @@ MGlass — своё производство в Москве: зеркала с 
 4. Закрыть на бесплатный замер
 
 ═══ КАК НАЗЫВАТЬ ЦЕНУ ═══
-Просто называй цифру как само собой разумеющееся — без слов "считал", "по калькулятору", "выходит".
-Хорошо: "120 на 200 с подсветкой — 27 тысяч, монтаж отдельно договоримся"
-Хорошо: "Такой размер будет около 27к, это стандарт для ванной"
-Плохо: "Считал сейчас — выходит 27 333 ₽"
-Плохо: "По нашему калькулятору..."
+ВСЕГДА показывай разбивку тремя строками — изделие, монтаж, доставка — и отдельно итого.
+Пример: "Зеркало — 25 000 ₽, монтаж — 3 000 ₽, доставка по МКАД — 2 000 ₽. Итого 30 000 ₽"
+Пиши это разговорно, но три строки должны быть всегда — клиент сам видит из чего складывается цена.
+Не говори "считал", "по калькулятору", "выходит" — просто называй цифры уверенно.
 Никогда не пиши звёздочки **вот так** — это WhatsApp, не документ.
 
 ═══ ГОЛОС И СТИЛЬ ═══
@@ -128,6 +127,34 @@ async function findLeadByPhone(phone: string): Promise<{ id: number; responsible
   return { id: lead.id, responsible_user_id: lead.responsible_user_id }
 }
 
+function buildPriceBreakdown(result: { finalPrice: number; price: number; description: string }): string {
+  const r = result as any
+  // Extract services from description lines like "Монтаж — 3 500 ₽" / "Доставка — 2 000 ₽"
+  const lines = result.description.split('\n').map((l: string) => l.trim()).filter(Boolean)
+
+  const product   = result.finalPrice
+  const services  = result.price - result.finalPrice  // grandTotal - finalPrice = servicesTotal
+  const mounting  = lines.find((l: string) => l.toLowerCase().includes('монтаж'))
+  const delivery  = lines.find((l: string) => l.toLowerCase().includes('доставка'))
+
+  const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+
+  let breakdown = `Изделие: ${fmt(product)}`
+  if (mounting) breakdown += `\nМонтаж: ${mounting.replace(/.*:?\s*/, '').trim() || 'уточним на замере'}`
+  else if (r.serviceLines?.length) {
+    const m = r.serviceLines.find((s: any) => s.name?.toLowerCase().includes('монтаж'))
+    if (m) breakdown += `\nМонтаж: ${fmt(m.total)}`
+  }
+  breakdown += `\nДоставка по МКАД: уточним`
+  if (delivery) {
+    const deliveryLine = r.serviceLines?.find((s: any) => s.name?.toLowerCase().includes('доставка'))
+    if (deliveryLine) breakdown = breakdown.replace('Доставка по МКАД: уточним', `Доставка: ${fmt(deliveryLine.total)}`)
+  }
+  breakdown += `\nИтого: ${fmt(result.price)}`
+
+  return `Данные из калькулятора для ответа клиенту:\n${breakdown}\n\nПокажи клиенту разбивку по этим трём строкам: изделие, монтаж, доставка. Итого называй отдельно. Пиши в своём разговорном стиле.`
+}
+
 async function getExtraKnowledge(): Promise<string> {
   try {
     const db = supabase()
@@ -167,7 +194,7 @@ async function generateAiResponse(messages: MessageParam[]): Promise<string> {
           type: 'tool_result' as const,
           tool_use_id: block.id,
           content: result
-            ? `Точная цена: ${result.finalPrice.toLocaleString('ru-RU')} ₽\n${result.description}`
+            ? buildPriceBreakdown(result)
             : 'Ошибка расчёта — используй приблизительную цену из памяти',
         }
       })
