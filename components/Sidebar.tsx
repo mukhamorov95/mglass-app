@@ -15,8 +15,11 @@ const MGLASS_NAV = [
   { href: '/calculations',      label: 'История расчётов' },
   { href: '/orders',            label: 'История заказов' },
   { href: '/my-earnings',       label: '💰 Мои заработки' },
-  { href: '/ai-assistant',      label: '✦ AI Ассистент' },
-  { href: '/kp-generator',      label: '✦ КП Генератор' },
+]
+
+const AI_NAV = [
+  { href: '/ai-assistant', label: 'AI Ассистент' },
+  { href: '/kp-generator',  label: 'КП Генератор' },
 ]
 
 const PRODUCTION_NAV = [
@@ -40,10 +43,12 @@ const ADMIN_NAV = [
   { href: '/admin/users',         label: 'Пользователи' },
 ]
 
+const AI_PATHS = ['/ai-assistant', '/kp-generator']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
 
-function detectSection(pathname: string): 'mglass' | 'production' | 'admin' {
+function detectSection(pathname: string): 'mglass' | 'ai' | 'production' | 'admin' {
+  if (AI_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'ai'
   if (PRODUCTION_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'production'
   if (ADMIN_PATHS.some(p => pathname.startsWith(p))) return 'admin'
   return 'mglass'
@@ -112,6 +117,34 @@ export function Sidebar({ userEmail, role }: Props) {
                   className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] transition-colors ${
                     isActive(item.href)
                       ? 'bg-blue-50 text-blue-700 font-semibold'
+                      : 'text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110]'
+                  }`}>
+                  {item.label}
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* AI Продажи */}
+        <div>
+          <button
+            onClick={() => toggleSection('ai')}
+            className="w-full flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-[#f8f8f7] transition-colors group">
+            <span className="text-[12px] font-bold text-emerald-600 uppercase tracking-widest">AI Продажи</span>
+            <svg
+              className={`w-3.5 h-3.5 text-emerald-400 transition-transform ${openSections.has('ai') ? 'rotate-180' : ''}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {openSections.has('ai') && (
+            <div className="space-y-0.5 mt-0.5">
+              {AI_NAV.map(item => (
+                <Link key={item.href} href={item.href}
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded-lg text-[13px] transition-colors ${
+                    isActive(item.href)
+                      ? 'bg-emerald-50 text-emerald-700 font-semibold'
                       : 'text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110]'
                   }`}>
                   {item.label}
