@@ -172,9 +172,21 @@ export async function POST(req: Request) {
     const body = await req.json()
     const messages: any[] = body.messages || []
 
+    // Log to Supabase for debugging
+    const db = supabase()
+    await db.from('ai_managed_chats').upsert({
+      chat_id: '__debug__',
+      channel_id: 'debug',
+      chat_type: 'debug',
+      client_name: JSON.stringify({ count: messages.length, first: messages[0] ?? null }),
+      is_active: false,
+    })
+
     for (const msg of messages) {
-      // Skip outgoing messages, non-text, system messages
-      if (!msg.text || msg.author === 'operator' || msg.incoming === false) continue
+      // Skip non-text and system messages; Wazzup sends both incoming/outgoing
+      if (!msg.text || msg.type === 'system') continue
+      // Skip outgoing (sent by us) — check multiple possible field names
+      if (msg.author === 'operator' || msg.incoming === false || msg.isOutgoing === true) continue
 
       await processMessage({
         chatId: msg.chatId,
@@ -188,6 +200,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('Wazzup webhook error:', err)
-    return NextResponse.json({ ok: false }, { status: 200 }) // Always 200 to Wazzup
+    return NextResponse.json({ ok: false }, { status: 200 })
   }
 }
