@@ -183,10 +183,10 @@ export async function POST(req: Request) {
     })
 
     for (const msg of messages) {
-      // Skip non-text and system messages; Wazzup sends both incoming/outgoing
+      // Skip non-text and system messages
       if (!msg.text || msg.type === 'system') continue
-      // Skip outgoing (sent by us) — check multiple possible field names
-      if (msg.author === 'operator' || msg.incoming === false || msg.isOutgoing === true) continue
+      // Skip outgoing/echo (our own sent messages)
+      if (msg.isEcho === true || msg.author === 'operator' || msg.incoming === false || msg.isOutgoing === true) continue
 
       await processMessage({
         chatId: msg.chatId,
