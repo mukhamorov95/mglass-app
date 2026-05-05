@@ -30,10 +30,11 @@ const AI_NAV = [
 ]
 
 const VLADISLAV_NAV = [
-  { href: '/vladislav',    label: '💬 Сообщения' },
-  { href: '/ai-stats',     label: '📊 Статистика AI' },
-  { href: '/amo-analysis', label: '🔍 Анализ воронки' },
-  { href: '/my-notes',     label: '🎙️ Мои заметки' },
+  { href: '/vladislav',        label: '💬 Сообщения' },
+  { href: '/vladislav/tasks',  label: '🗂️ Задачи AI' },
+  { href: '/ai-stats',         label: '📊 Статистика AI' },
+  { href: '/amo-analysis',     label: '🔍 Анализ воронки' },
+  { href: '/my-notes',         label: '🎙️ Мои заметки' },
 ]
 
 const PRODUCTION_NAV = [

@@ -25,7 +25,7 @@ export async function GET() {
     const [page1, page2, pipelinesData, usersData] = await Promise.all([
       amoGet('/leads?limit=250&page=1&with=contacts'),
       amoGet('/leads?limit=250&page=2&with=contacts'),
-      amoGet('/pipelines?with=statuses'),
+      amoGet('/leads/pipelines'),
       amoGet('/users'),
     ])
 

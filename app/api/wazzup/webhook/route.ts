@@ -135,11 +135,24 @@ async function findLeadByPhone(phone: string): Promise<{ id: number; responsible
   return { id: lead.id, responsible_user_id: lead.responsible_user_id }
 }
 
+async function getExtraKnowledge(): Promise<string> {
+  try {
+    const db = supabase()
+    const { data } = await db.from('ai_settings').select('value').eq('key', 'bot_extra_knowledge').single()
+    return data?.value?.trim() || ''
+  } catch { return '' }
+}
+
 async function generateAiResponse(messages: MessageParam[]): Promise<string> {
+  const extra = await getExtraKnowledge()
+  const system = extra
+    ? `${SYSTEM}\n\n═══ ДОПОЛНИТЕЛЬНЫЕ ЗНАНИЯ (обновляются автоматически) ═══\n${extra}`
+    : SYSTEM
+
   let response = await anthropic.messages.create({
     model: 'claude-sonnet-4-6',
     max_tokens: 500,
-    system: SYSTEM,
+    system,
     tools: [CALC_TOOL],
     messages,
   })
@@ -177,7 +190,7 @@ async function generateAiResponse(messages: MessageParam[]): Promise<string> {
     response = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 500,
-      system: SYSTEM,
+      system,
       tools: [CALC_TOOL],
       messages,
     })
