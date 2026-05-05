@@ -1,0 +1,5 @@
+project_id = "qbypyrzkguwlelyjehbj"
+
+[auth]
+site_url = "https://mglass-app.vercel.app"
+additional_redirect_urls = ["https://mglass-app.vercel.app/**", "https://mglass-38a61bt9q-mukhamorov95.vercel.app/**"]
