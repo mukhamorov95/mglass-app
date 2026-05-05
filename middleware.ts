@@ -24,8 +24,10 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const isLoginPage = request.nextUrl.pathname === '/login'
+  const isWebhook = request.nextUrl.pathname.startsWith('/api/wazzup/') ||
+                    request.nextUrl.pathname.startsWith('/api/cron/')
 
-  if (!user && !isLoginPage) {
+  if (!user && !isLoginPage && !isWebhook) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return NextResponse.redirect(url)
