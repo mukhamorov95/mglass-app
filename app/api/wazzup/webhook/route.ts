@@ -5,6 +5,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendMessage } from '@/lib/wazzup'
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 
+export const maxDuration = 60
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const AMO_BASE = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
 const AMO_TOKEN = process.env.AMO_ACCESS_TOKEN!
