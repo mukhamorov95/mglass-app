@@ -20,6 +20,7 @@ const MGLASS_NAV = [
 
 const AI_NAV = [
   { href: '/my-dashboard',   label: 'Дашборд' },
+  { href: '/amo-analysis',   label: '📊 Анализ воронки' },
   { href: '/ai-assistant',   label: 'AI Ассистент' },
   { href: '/kp-generator',   label: 'КП Генератор' },
   { href: '/objections',     label: 'Возражения' },
@@ -50,7 +51,7 @@ const ADMIN_NAV = [
   { href: '/admin/users',         label: 'Пользователи' },
 ]
 
-const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors', '/my-dashboard']
+const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors', '/my-dashboard', '/amo-analysis']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
 
