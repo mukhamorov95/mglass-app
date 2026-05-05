@@ -221,8 +221,11 @@ async function processMessage(msg: {
     return // Already handed off to human
   }
 
-  // Save user message
-  await db.from('ai_conversations').insert({ chat_id: chatId, role: 'user', content: text })
+  // Save user message and update stats
+  await Promise.all([
+    db.from('ai_conversations').insert({ chat_id: chatId, role: 'user', content: text }),
+    db.from('ai_managed_chats').update({ last_message_at: new Date().toISOString() }).eq('chat_id', chatId),
+  ])
 
   // Get history (last 20 messages)
   const { data: history } = await db
@@ -253,7 +256,10 @@ async function processMessage(msg: {
 
   // Handle transfer triggers
   if (isMeasureReady || needsHuman) {
-    await db.from('ai_managed_chats').update({ is_active: false }).eq('chat_id', chatId)
+    await db.from('ai_managed_chats').update({
+      is_active: false,
+      close_reason: isMeasureReady ? 'measurement' : 'human',
+    }).eq('chat_id', chatId)
     if (chat.amo_lead_id) {
       const taskText = isMeasureReady
         ? `✅ Клиент готов к замеру! AI-диалог завершён — позвонить и согласовать время`
