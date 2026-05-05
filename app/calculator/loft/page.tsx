@@ -1,0 +1,593 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { supabase } from '@/lib/supabase'
+import { Material, Service, HardwareItem, FinancialSettings, PartnerType } from '@/lib/types'
+import PricingBlock from '@/components/PricingBlock'
+import { calculateLoft, LoftInputs, LoftSystemType, LoftResult } from '@/lib/loftCalculator'
+import { useCart } from '@/lib/CartContext'
+import CartSection from '@/components/CartSection'
+import { saveCalculation } from '@/lib/saveCalculation'
+
+function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
+
+function loadSaved(): Record<string, unknown> {
+  try { return JSON.parse(localStorage.getItem('mglass_loft') ?? 'null') ?? {} } catch { return {} }
+}
+
+function Check({ value, onClick }: { value: boolean; onClick: () => void }) {
+  return (
+    <div onClick={onClick}
+      className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${value ? 'bg-blue-600 border-blue-600' : 'border-[#c4c4be] hover:border-blue-400'}`}>
+      {value && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
+    </div>
+  )
+}
+
+function Toggle({ value, onClick, label, desc }: { value: boolean; onClick: () => void; label: string; desc?: string }) {
+  return (
+    <div className="flex items-start gap-2 cursor-pointer" onClick={onClick}>
+      <Check value={value} onClick={onClick} />
+      <div className="min-w-0">
+        <p className="text-xs text-[#111110] leading-tight">{label}</p>
+        {desc && <p className="text-[10px] text-[#9a9a95] leading-tight mt-0.5">{desc}</p>}
+      </div>
+    </div>
+  )
+}
+
+export default function LoftCalculatorPage() {
+  const [materials, setMaterials]   = useState<Material[]>([])
+  const [services, setServices]     = useState<Service[]>([])
+  const [allHardware, setAllHardware] = useState<HardwareItem[]>([])
+  const [allSettings, setAllSettings] = useState<FinancialSettings[]>([])
+  const [partners, setPartners]     = useState<PartnerType[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [copied, setCopied]         = useState(false)
+  const [showDetails, setShowDetails] = useState(false)
+  const [addedToCart, setAddedToCart] = useState(false)
+  const [saving, setSaving]         = useState(false)
+  const [savedId, setSavedId]       = useState<number | null>(null)
+  const { addItem } = useCart()
+
+  const [calcTier, setCalcTier]     = useState<'standard' | 'b2b'>(() => (loadSaved().calcTier as 'standard' | 'b2b') ?? 'standard')
+  const [width, setWidth]           = useState(() => (loadSaved().width as string) ?? '2000')
+  const [height, setHeight]         = useState(() => (loadSaved().height as string) ?? '2400')
+  const [sections, setSections]     = useState(() => (loadSaved().sections as string) ?? '3')
+  const [divisions, setDivisions]   = useState(() => (loadSaved().divisions as string) ?? '2')
+  const [systemType, setSystemType] = useState<LoftSystemType>(() => (loadSaved().systemType as LoftSystemType) ?? 'fixed')
+  const [glassId, setGlassId]       = useState<number | null>(() => (loadSaved().glassId as number) ?? null)
+  const withTempering = true
+  const [withMirrorFilm, setWithMirrorFilm]   = useState(() => (loadSaved().withMirrorFilm as boolean) ?? false)
+  const [withPainting, setWithPainting]       = useState(() => (loadSaved().withPainting as boolean) ?? false)
+  const [hasInstallation, setHasInstallation] = useState(() => (loadSaved().hasInstallation as boolean) ?? false)
+  const [hasDelivery, setHasDelivery]         = useState(() => (loadSaved().hasDelivery as boolean) ?? false)
+  const [selectedHwIds, setSelectedHwIds]     = useState<Set<number>>(() => new Set((loadSaved().selectedHwIds as number[]) ?? []))
+  const [hwQty, setHwQty]           = useState<Record<number, number>>(() => (loadSaved().hwQty as Record<number, number>) ?? {})
+  const [partnerId, setPartnerId]   = useState<number | null>(() => (loadSaved().partnerId as number) ?? null)
+  const [discount, setDiscount]     = useState(() => (loadSaved().discount as string) ?? '0')
+  const [margin, setMargin]         = useState(() => (loadSaved().margin as string) ?? '40')
+  const [b2bDiscount, setB2bDiscount] = useState<number>(() => (loadSaved().b2bDiscount as number) ?? 20)
+
+  useEffect(() => {
+    async function load() {
+      const [{ data: mats }, { data: svcs }, { data: hw }, { data: fins }, { data: pts }] = await Promise.all([
+        supabase.from('materials').select('*').eq('active', true).order('category').order('name'),
+        supabase.from('services').select('*').eq('active', true),
+        supabase.from('hardware_items').select('*').eq('active', true).order('system_type'),
+        supabase.from('financial_settings').select('*'),
+        supabase.from('partner_types').select('*').eq('active', true),
+      ])
+      setMaterials(mats ?? [])
+      setServices(svcs ?? [])
+      setAllHardware(hw ?? [])
+      setAllSettings((fins ?? []) as FinancialSettings[])
+      setPartners(pts ?? [])
+      const saved = loadSaved()
+      const glasses = (mats ?? []).filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
+      if (!saved.glassId && glasses.length) setGlassId(glasses[0].id)
+      const loftSettings =
+        (fins ?? []).find((s: FinancialSettings) => s.product_type === 'loft') ??
+        (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
+        fins?.[0] ?? null
+      if (!saved.margin && loftSettings) setMargin(String((loftSettings as FinancialSettings).default_margin))
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const settings =
+    allSettings.find(s => s.product_type === 'loft') ??
+    allSettings.find(s => s.tier === 'standard') ??
+    allSettings[0] ?? null
+
+  useEffect(() => {
+    const s = allSettings.find(s => s.product_type === 'loft') ?? allSettings.find(s => s.tier === 'standard')
+    if (s) setMargin(String(s.default_margin))
+  }, [allSettings])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('mglass_loft', JSON.stringify({
+        calcTier, width, height, sections, divisions, systemType, glassId,
+        withMirrorFilm, withPainting, hasInstallation, hasDelivery,
+        discount, margin, partnerId, selectedHwIds: [...selectedHwIds], hwQty, b2bDiscount,
+      }))
+    } catch {}
+  }, [calcTier, width, height, sections, divisions, systemType, glassId,
+      withMirrorFilm, withPainting, hasInstallation, hasDelivery,
+      discount, margin, partnerId, selectedHwIds, hwQty, b2bDiscount])
+
+  const glassMaterials  = materials.filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
+  const selectedGlass   = glassMaterials.find(m => m.id === glassId) ?? null
+  const selectedPartner = partners.find(p => p.id === partnerId) ?? null
+  const minMargin       = settings?.min_margin ?? 25
+  const loftExpensesPercent = settings?.tax_percent ?? 0
+  const installSvc      = services.find(s => s.name.toLowerCase().includes('монтаж лофт') || s.name.toLowerCase().includes('монтаж перегородки'))
+  const deliverySvc     = services.find(s => s.name.toLowerCase().includes('доставка'))
+  const SWING_EXCLUDED = new Set(['Замок-защёлка', 'Петля угловая', 'Ручка-скоба'])
+  const relevantHardware = allHardware.filter(hw =>
+    (hw.system_type === 'universal' || hw.system_type === systemType) &&
+    !(systemType === 'swing' && SWING_EXCLUDED.has(hw.name))
+  )
+
+  function toggleHw(id: number) {
+    setSelectedHwIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else { next.add(id); setHwQty(q => ({ ...q, [id]: q[id] ?? 1 })) }
+      return next
+    })
+  }
+
+  const inputs: LoftInputs = {
+    width: Number(width) || 0, height: Number(height) || 0,
+    sections: Number(sections) || 1, divisions: Number(divisions) || 0,
+    systemType, glassMaterial: selectedGlass,
+    withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery,
+    hardware: relevantHardware.filter(h => selectedHwIds.has(h.id)),
+    hardwareQty: hwQty,
+    partnerPercent: selectedPartner?.percent ?? 0,
+    discount: Number(discount) || 0,
+    margin: Number(margin) || 40,
+  }
+
+  const result: LoftResult | null = useMemo(() => {
+    if (!settings) return null
+    return calculateLoft(inputs, materials, services, settings)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting,
+      hasInstallation, hasDelivery, selectedHwIds, hwQty, partnerId, discount, margin, materials, services, settings])
+
+  const marginNum   = result?.margin ?? 0
+  const marginColor = marginNum >= 35 ? 'text-emerald-600' : marginNum >= minMargin ? 'text-amber-600' : 'text-red-600'
+  const marginBg    = marginNum >= 35 ? 'bg-emerald-50 border-emerald-200' : marginNum >= minMargin ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+
+  const isB2B       = calcTier === 'b2b'
+  const b2bPrice    = result ? Math.round(result.finalPrice * (1 - b2bDiscount / 100)) : 0
+  const b2bMargin   = result && b2bPrice > 0 ? ((b2bPrice - result.totalCost - result.expensesAmount) / b2bPrice) * 100 : 0
+  const b2bMarginColor = b2bMargin >= 35 ? 'text-emerald-600' : b2bMargin >= minMargin ? 'text-amber-600' : 'text-red-600'
+  const b2bExpensesAmount = result ? Math.round(b2bPrice * (result.expensesPercent / 100)) : 0
+  const b2bProfit = result ? Math.round(b2bPrice - result.totalCost - b2bExpensesAmount) : 0
+
+  function handleAddToCart() {
+    if (!result) return
+    addItem({
+      product_type: 'loft',
+      label: `Лофт ${systemType} ${width}×${height} мм`,
+      input_data: { width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery },
+      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
+      financial_breakdown: {
+        expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
+        basePrice: result.basePrice, partnerAmount: result.partnerAmount,
+        discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal,
+      },
+      base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
+      final_price: result.finalPrice, grand_total: result.grandTotal,
+      margin: result.margin, profit: result.profit, manager_bonus: 0, client_text: result.clientText,
+    })
+    setMargin(String(settings?.default_margin ?? 40))
+    setAddedToCart(true)
+    setTimeout(() => setAddedToCart(false), 2000)
+  }
+
+  async function handleSave() {
+    if (!result) return
+    setSaving(true)
+    const saved = await saveCalculation({
+      product_type: 'loft',
+      input_data: { width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery },
+      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
+      financial_breakdown: {
+        expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
+        basePrice: result.basePrice, partnerAmount: result.partnerAmount,
+        discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal,
+      },
+      base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
+      final_price: result.grandTotal, margin: result.margin, profit: result.profit,
+      manager_bonus: 0, client_text: result.clientText,
+    })
+    if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    setSaving(false)
+  }
+
+  async function handleCopy() {
+    if (!result) return
+    await navigator.clipboard.writeText(result.clientText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center text-[#9a9a95] text-sm">Загрузка...</div>
+  )
+
+  const installPrice = installSvc ? (installSvc.sale_price ?? installSvc.cost_price) : 0
+  const deliveryPrice = deliverySvc ? (deliverySvc.sale_price ?? deliverySvc.cost_price) : 0
+
+  return (
+    <div className="bg-[#f5f5f3] min-h-screen">
+      <div className="max-w-[1100px] mx-auto px-4 py-4">
+
+        {/* Шапка */}
+        <div className="flex items-center justify-between gap-3 mb-3">
+          <div className="flex items-center gap-2">
+            <a href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</a>
+            <span className="text-[#d4d4d0]">/</span>
+            <h1 className="text-sm font-semibold text-[#111110]">Лофт-перегородка</h1>
+          </div>
+          <div className="flex gap-1 p-1 bg-[#ececea] rounded-lg">
+            {(['standard', 'b2b'] as const).map(t => (
+              <button key={t} onClick={() => setCalcTier(t)}
+                className={`px-3 py-1 rounded-md text-[12px] font-medium transition-all ${
+                  calcTier === t
+                    ? t === 'b2b' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white text-[#111110] shadow-sm'
+                    : 'text-[#6b6b66] hover:text-[#111110]'
+                }`}>
+                {t === 'standard' ? 'Стандартная' : `B2B −${b2bDiscount}%`}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3">
+
+          {/* ── Левая колонка ── */}
+          <div className="space-y-2">
+
+            {/* Карточка 1: Конфигурация */}
+            <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+              <div className="grid grid-cols-[auto_auto_1fr] gap-x-5 items-start">
+
+                {/* Размеры */}
+                <div>
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Размеры (мм)</p>
+                  <div className="flex gap-2">
+                    <div>
+                      <p className="text-[10px] text-[#9a9a95] mb-1">Ширина</p>
+                      <input type="number" value={width} onChange={e => setWidth(e.target.value)}
+                        className="w-24 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#9a9a95] mb-1">Высота</p>
+                      <input type="number" value={height} onChange={e => setHeight(e.target.value)}
+                        className="w-24 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                    </div>
+                  </div>
+                  {result && (
+                    <p className="text-[10px] text-[#9a9a95] mt-1.5">
+                      {result.area} м² · проф. {result.metalLength} пог.м · стекло {result.glassArea} м²
+                    </p>
+                  )}
+                </div>
+
+                {/* Структура + визуализация */}
+                <div>
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Структура</p>
+                  <div className="flex gap-2 items-end">
+                    <div>
+                      <p className="text-[10px] text-[#9a9a95] mb-1">Секции</p>
+                      <input type="number" min="1" max="20" value={sections} onChange={e => setSections(e.target.value)}
+                        className="w-14 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-[#9a9a95] mb-1">Деления</p>
+                      <input type="number" min="0" max="10" value={divisions} onChange={e => setDivisions(e.target.value)}
+                        className="w-14 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                    </div>
+                    {Number(sections) > 0 && (
+                      <div className="border-2 border-[#9a9a95] rounded flex-shrink-0"
+                        style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(sections)}, 1fr)`, width: 56, height: 44 }}>
+                        {Array.from({ length: Number(sections) }).map((_, si) => (
+                          <div key={si} className={si > 0 ? 'border-l-2 border-[#9a9a95]' : ''}
+                            style={{ display: 'grid', gridTemplateRows: `repeat(${Number(divisions) + 1}, 1fr)` }}>
+                            {Array.from({ length: Number(divisions) + 1 }).map((_, di) => (
+                              <div key={di} className={`bg-blue-50 ${di > 0 ? 'border-t-2 border-[#9a9a95]' : ''}`} />
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Тип системы */}
+                <div>
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Тип системы</p>
+                  <div className="flex gap-1">
+                    {([
+                      { value: 'fixed', label: 'Глухая' },
+                      { value: 'sliding', label: 'Раздвижная' },
+                      { value: 'swing', label: 'Распашная' },
+                    ] as const).map(s => (
+                      <button key={s.value}
+                        onClick={() => { setSystemType(s.value); setSelectedHwIds(new Set()) }}
+                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium border transition-colors ${systemType === s.value ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
+                        {s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Карточка 2: Всё остальное */}
+            <div className="bg-white rounded-lg border border-[#e4e4e0] p-3 space-y-3">
+
+              {/* Стекло */}
+              <div className="flex items-center gap-3">
+                <div className="flex-1">
+                  <p className="text-[10px] text-[#9a9a95] mb-1">Стекло 4 мм · закалка включена</p>
+                  <select value={glassId ?? ''} onChange={e => setGlassId(Number(e.target.value))}
+                    className="w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400">
+                    {glassMaterials.map(m => (
+                      <option key={m.id} value={m.id}>{m.name} — {m.cost_price.toLocaleString('ru-RU')} ₽/м²</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Опции — 2 колонки */}
+              <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
+                <Toggle value={withPainting}    onClick={() => setWithPainting(!withPainting)}       label="Покраска"          desc="1 200 ₽/м², мин. 10 000 ₽" />
+                <Toggle value={withMirrorFilm}  onClick={() => setWithMirrorFilm(!withMirrorFilm)}   label="Зеркальная плёнка" desc="2 500 ₽/м² · доп. услуга" />
+                <Toggle value={hasInstallation} onClick={() => setHasInstallation(!hasInstallation)} label="Монтаж"
+                  desc={installSvc ? `${fmt(installPrice)} × ${sections} секц. = ${fmt(installPrice * Number(sections))}` : undefined} />
+                <Toggle value={hasDelivery}     onClick={() => setHasDelivery(!hasDelivery)}         label="Доставка"
+                  desc={deliverySvc ? `${fmt(deliveryPrice)} · один рейс` : undefined} />
+              </div>
+
+              {/* Фурнитура */}
+              {systemType !== 'fixed' && relevantHardware.length > 0 && (
+                <div className="pt-2 border-t border-[#f0f0ec]">
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Фурнитура</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    {relevantHardware.map(hw => (
+                      <div key={hw.id} className="flex items-center gap-2">
+                        <Check value={selectedHwIds.has(hw.id)} onClick={() => toggleHw(hw.id)} />
+                        <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleHw(hw.id)}>
+                          <p className="text-xs text-[#111110] leading-tight">{hw.name}</p>
+                          <p className="text-[10px] text-[#9a9a95]">{(hw.cost_price ?? 0) > 0 ? `${(hw.cost_price ?? 0).toLocaleString('ru-RU')} ₽/${hw.unit}` : '—'}</p>
+                        </div>
+                        {selectedHwIds.has(hw.id) && (
+                          <div className="flex items-center gap-0.5 flex-shrink-0">
+                            <button onClick={() => setHwQty(q => ({ ...q, [hw.id]: Math.max(1, (q[hw.id] ?? 1) - 1) }))}
+                              className="w-5 h-5 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] flex items-center justify-center text-sm">−</button>
+                            <span className="w-5 text-center text-xs font-mono">{hwQty[hw.id] ?? 1}</span>
+                            <button onClick={() => setHwQty(q => ({ ...q, [hw.id]: (q[hw.id] ?? 1) + 1 }))}
+                              className="w-5 h-5 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] flex items-center justify-center text-sm">+</button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Коммерческие условия */}
+              {settings && (
+                <div className="pt-2 border-t border-[#f0f0ec]">
+                  <PricingBlock
+                    settings={settings}
+                    margin={margin} onMarginChange={setMargin}
+                    discount={discount} onDiscountChange={setDiscount}
+                    partners={partners} partnerId={partnerId} onPartnerChange={setPartnerId}
+                    actualMargin={result?.margin}
+                  />
+                </div>
+              )}
+
+            </div>
+          </div>
+
+          {/* ── Правая колонка ── */}
+          <div className="space-y-2">
+            {result ? (
+              <>
+                {result.belowMinMargin && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                    <p className="text-xs font-semibold text-red-700">Маржа ниже минимума ({minMargin}%)</p>
+                  </div>
+                )}
+
+                {/* Итог */}
+                <div className={`rounded-lg border p-3 ${marginBg}`}>
+                  <div className="flex items-start justify-between mb-3">
+                    <span className="text-xs font-semibold pt-1" style={{ color: isB2B ? '#ea580c' : '#6b6b66' }}>
+                      {isB2B ? 'B2B · без монтажа' : result.servicesTotal > 0 ? 'Итого с услугами' : 'Цена клиенту'}
+                    </span>
+                    <div className="text-right">
+                      <p className={`text-2xl font-bold font-mono leading-none ${isB2B ? 'text-orange-500' : marginColor}`}>
+                        {fmt(isB2B ? b2bPrice : result.grandTotal)}
+                      </p>
+                      {result.area > 0 && (
+                        <p className="text-[10px] text-[#9a9a95] mt-1">
+                          {Math.round((isB2B ? b2bPrice : result.grandTotal) / result.area).toLocaleString('ru-RU')} ₽/м²
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/5">
+                    <div className="text-center">
+                      <p className="text-[10px] text-[#9a9a95]">Маржа</p>
+                      <p className={`text-sm font-bold ${isB2B ? b2bMarginColor : marginColor}`}>
+                        {isB2B ? b2bMargin.toFixed(1) : result.margin}%
+                      </p>
+                    </div>
+                    <div className="text-center">
+                      <p className="text-[10px] text-[#9a9a95]">Прибыль</p>
+                      <p className="text-sm font-bold text-[#111110]">
+                        {fmt(isB2B ? b2bProfit : result.profit)}
+                      </p>
+                    </div>
+                  </div>
+                  {isB2B && (
+                    <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between">
+                      <p className="text-[10px] text-[#9a9a95]">Скидка B2B</p>
+                      <div className="flex gap-1">
+                        {[20, 25, 30].map(d => (
+                          <button key={d} onClick={() => setB2bDiscount(d)}
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${b2bDiscount === d ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
+                            {d}%
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {!isB2B && (
+                    <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between">
+                      <p className="text-[10px] text-[#9a9a95]">B2B −{b2bDiscount}%</p>
+                      <p className="text-[11px] font-mono text-[#9a9a95]">{fmt(b2bPrice)}</p>
+                    </div>
+                  )}
+                </div>
+
+
+                {/* Детали расчёта — раскрывающийся */}
+                <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+                  <button onClick={() => setShowDetails(!showDetails)}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#fafaf9] transition-colors">
+                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Детали расчёта</p>
+                    <svg className={`w-3 h-3 text-[#9a9a95] transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showDetails && (
+                    <div className="border-t border-[#f0f0ec] px-3 py-2.5 space-y-3">
+
+                      {/* Себестоимость */}
+                      <div>
+                        <p className="text-[10px] text-[#9a9a95] mb-1.5">Себестоимость</p>
+                        {result.costLines.map((line, i) => (
+                          <div key={i} className="flex items-baseline justify-between py-0.5">
+                            <div className="flex-1 min-w-0 pr-2">
+                              <span className="text-[11px] text-[#4b4b47]">{line.name}</span>
+                              <span className="text-[10px] text-[#c4c4be] ml-1">{line.qty} {line.unit}</span>
+                            </div>
+                            <span className="text-[11px] font-mono text-[#111110] flex-shrink-0">{line.total.toLocaleString('ru-RU')} ₽</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between pt-1.5 mt-1 border-t border-[#f0f0ec]">
+                          <span className="text-xs font-semibold text-[#4b4b47]">Итого себест.</span>
+                          <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.totalCost)}</span>
+                        </div>
+                      </div>
+
+                      {/* Финмодель */}
+                      <div className="pt-1 border-t border-[#f0f0ec]">
+                        <p className="text-[10px] text-[#9a9a95] mb-1.5">Ценообразование</p>
+                        {(() => {
+                          const priceBase = isB2B ? b2bPrice : result.basePrice
+                          const expAmt    = isB2B ? b2bExpensesAmount : result.expensesAmount
+                          const profit    = isB2B ? b2bProfit : Math.round(result.finalPrice - result.totalCost - result.expensesAmount)
+                          return (
+                            <>
+                              <div className="flex justify-between py-0.5">
+                                <span className="text-[11px] text-[#9a9a95]">Себестоимость</span>
+                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.totalCost)}</span>
+                              </div>
+                              <div className="flex justify-between py-0.5">
+                                <span className="text-[11px] text-[#9a9a95]">Налог {result.expensesPercent}%</span>
+                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(expAmt)}</span>
+                              </div>
+                              <div className="flex justify-between py-0.5">
+                                <span className="text-[11px] text-[#6b6b66]">{isB2B ? 'Прибыль' : `Маржа ${inputs.margin}%`}</span>
+                                <span className="text-[11px] font-mono text-[#111110]">{fmt(profit)}</span>
+                              </div>
+                            </>
+                          )
+                        })()}
+                        <div className="flex justify-between py-0.5 pt-1.5 border-t border-[#f0f0ec] mt-1">
+                          <span className="text-[11px] font-semibold text-[#4b4b47]">Цена изделия</span>
+                          <span className="text-[11px] font-mono font-bold text-[#111110]">{fmt(result.finalPrice)}</span>
+                        </div>
+                        {result.partnerAmount > 0 && (
+                          <div className="flex justify-between py-0.5">
+                            <span className="text-[11px] text-purple-600">Партнёрка {inputs.partnerPercent}%</span>
+                            <span className="text-[11px] font-mono text-purple-600">+{fmt(result.partnerAmount)}</span>
+                          </div>
+                        )}
+                        {result.discountAmount > 0 && (
+                          <div className="flex justify-between py-0.5">
+                            <span className="text-[11px] text-orange-600">Скидка {inputs.discount}%</span>
+                            <span className="text-[11px] font-mono text-orange-600">−{fmt(result.discountAmount)}</span>
+                          </div>
+                        )}
+                        {result.serviceLines.map((s, i) => (
+                          <div key={i} className="flex justify-between py-0.5">
+                            <span className="text-[11px] text-[#6b6b66]">{s.name}</span>
+                            <span className="text-[11px] font-mono text-[#111110]">{fmt(s.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Действия */}
+                <div className="flex gap-1.5">
+                  <button onClick={handleAddToCart}
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${addedToCart ? 'bg-emerald-600 text-white' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                    {addedToCart ? '✓ В корзине' : '+ В корзину'}
+                  </button>
+                  <button onClick={handleSave} disabled={saving}
+                    className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
+                    {saving ? '...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
+                  </button>
+                  <button onClick={handleCopy}
+                    className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] whitespace-nowrap">
+                    {copied ? '✓ КП' : 'Копировать КП'}
+                  </button>
+                </div>
+                {savedId && (
+                  <a href={`/calculations/${savedId}`}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-[#fafaf9] text-[#4b4b47] hover:bg-[#f0f0ec] transition-colors">
+                    → История расчётов #{savedId}
+                  </a>
+                )}
+
+                {/* Клиентский текст */}
+                <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Текст для клиента</p>
+                  <pre className="text-xs text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#fafaf9] rounded p-2">
+                    {result.clientText}
+                  </pre>
+                </div>
+              </>
+            ) : (
+              <div className={`rounded-lg border p-8 text-center text-xs ${loftExpensesPercent + Number(margin) >= 100 ? 'bg-red-50 border-red-200 text-red-700 font-semibold' : 'bg-white border-[#e4e4e0] text-[#9a9a95]'}`}>
+                {loftExpensesPercent + Number(margin) >= 100
+                  ? 'Сумма маржи и расходов не может быть ≥ 100%'
+                  : 'Введите размеры и выберите параметры'}
+              </div>
+            )}
+
+            <CartSection />
+          </div>
+        </div>
+      </div>
+
+    </div>
+  )
+}

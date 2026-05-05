@@ -1,0 +1,739 @@
+'use client'
+
+import { useEffect, useState, useMemo } from 'react'
+import { supabase } from '@/lib/supabase'
+import type { Material, Service, PartnerType, FinancialSettings } from '@/lib/types'
+import {
+  SHOWER_MODELS, HARDWARE_COLORS, TIER_CONFIGS, calculateShower,
+  type ShowerModelId, type ShowerTier, type ShowerInputs, type ShowerHardwareLine, type ShowerModel,
+} from '@/lib/showerCalculator'
+import { ShowerModelIcon } from '@/components/ShowerModelIcon'
+import { saveCalculation } from '@/lib/saveCalculation'
+import { useCart } from '@/lib/CartContext'
+import CartSection from '@/components/CartSection'
+
+const GLASS_TYPES = [
+  'М1 прозрачное',
+  'Тонированное (бронза/графит)',
+  'Сатинированное бесцветное',
+  'Сатин тонированный',
+  'Осветлённое CrystalVision',
+  'CrystalVision Matelux',
+]
+
+type StdShowerType = 'stationary' | 'swing' | 'sliding'
+const STD_SHOWER_TYPES: { v: StdShowerType; l: string }[] = [
+  { v: 'stationary', l: 'Стационарная' },
+  { v: 'swing',      l: 'Распашная'   },
+  { v: 'sliding',    l: 'Раздвижная'  },
+]
+
+type CatalogItem = {
+  id: number; name: string; category: string; manufacturer: string; unit: string
+  whip_length: number | null; shower_types: string[]
+  has_vat: boolean; photo_url: string; comment: string; active: boolean
+}
+type CatalogPrice = { id?: number; item_id: number; supplier_id: number; color_id: number; cost_price: number }
+type HwColor      = { id: number; name: string; sort_order: number; active: boolean }
+type HwSupplier   = { id: number; name: string; active: boolean }
+
+function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-wider mb-1.5">{children}</p>
+}
+
+function SField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <Label>{label}</Label>
+      {children}
+    </div>
+  )
+}
+
+function Seg<T extends string>({ options, value, onChange, small }: {
+  options: { v: T; l: string }[]
+  value: T
+  onChange: (v: T) => void
+  small?: boolean
+}) {
+  return (
+    <div className="inline-flex bg-[#f2f2f7] rounded-[10px] p-[3px] gap-[2px]">
+      {options.map(o => (
+        <button key={o.v} onClick={() => onChange(o.v)}
+          className={`px-3 ${small ? 'py-1 text-[12px]' : 'py-1.5 text-[13px]'} rounded-[8px] font-medium transition-all ${
+            value === o.v
+              ? 'bg-white text-[#1d1d1f] shadow-[0_1px_3px_rgba(0,0,0,0.12)]'
+              : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+          }`}>
+          {o.l}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+const inp = 'w-full bg-white border border-[#e8e8ed] rounded-[10px] px-3 py-2 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]'
+
+export default function ShowerCalculatorPage() {
+  const [materials, setMaterials]         = useState<Material[]>([])
+  const [services, setServices]           = useState<Service[]>([])
+  const [partners, setPartners]           = useState<PartnerType[]>([])
+  const [allSettings, setAllSettings]     = useState<FinancialSettings[]>([])
+  const [catalogItems, setCatalogItems]   = useState<CatalogItem[]>([])
+  const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([])
+  const [hwColors, setHwColors]           = useState<HwColor[]>([])
+  const [hwSuppliers, setHwSuppliers]     = useState<HwSupplier[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [copied, setCopied]       = useState(false)
+  const [saving, setSaving]       = useState(false)
+  const [savedId, setSavedId]     = useState<number | null>(null)
+  const [addedToCart, setAddedToCart] = useState(false)
+  const { addItem } = useCart()
+
+  const [hwSelection, setHwSelection]     = useState<Record<number, { qty: number }>>({})
+  const [stdColorId, setStdColorId]       = useState<number | null>(null)
+  const [stdSupplierId, setStdSupplierId] = useState<number | null>(null)
+  const [stdShowerType, setStdShowerType] = useState<StdShowerType>('swing')
+  const [stdGlassCount, setStdGlassCount] = useState('2')
+  const [stdIsCorner, setStdIsCorner]     = useState(false)
+
+  const [tier, setTier]       = useState<ShowerTier>('standard')
+  const [modelId, setModelId] = useState<string>('M2')
+  const [width, setWidth]     = useState('900')
+  const [width2, setWidth2]   = useState('900')
+  const [height, setHeight]   = useState('2000')
+  const [glassType, setGlassType]       = useState(GLASS_TYPES[0])
+  const thickness = 8
+  const [hwColor, setHwColor]           = useState('chrome')
+  const [withMounting, setWithMounting] = useState(false)
+  const [withDelivery, setWithDelivery] = useState(false)
+  const [floors, setFloors]     = useState('0')
+  const [discount, setDiscount] = useState('0')
+  const [margin, setMargin]     = useState('40')
+  const [partnerId, setPartnerId] = useState<number | null>(null)
+
+  useEffect(() => {
+    async function load() {
+      const [
+        { data: mats }, { data: svcs }, { data: pts }, { data: fins },
+        { data: items }, { data: prices }, { data: colors }, { data: sups },
+      ] = await Promise.all([
+        supabase.from('materials').select('*').eq('active', true),
+        supabase.from('services').select('*'),
+        supabase.from('partner_types').select('*').eq('active', true),
+        supabase.from('financial_settings').select('*'),
+        supabase.from('shower_catalog_items').select('*').eq('active', true).order('category').order('name'),
+        supabase.from('shower_catalog_prices').select('id,item_id,supplier_id,color_id,cost_price'),
+        supabase.from('shower_hw_colors').select('*').eq('active', true).order('sort_order'),
+        supabase.from('shower_hw_suppliers').select('*').eq('active', true).order('name'),
+      ])
+      setMaterials(mats ?? [])
+      setServices(svcs ?? [])
+      setPartners(pts ?? [])
+      setAllSettings((fins ?? []) as FinancialSettings[])
+      setCatalogItems((items ?? []) as CatalogItem[])
+      setCatalogPrices((prices ?? []) as CatalogPrice[])
+      const cols = (colors ?? []) as HwColor[]
+      const sup  = (sups  ?? []) as HwSupplier[]
+      setHwColors(cols)
+      setHwSuppliers(sup)
+      if (cols.length > 0) setStdColorId(cols[0].id)
+      if (sup.length  > 0) setStdSupplierId(sup[0].id)
+      const stdSettings =
+        (fins ?? []).find((s: FinancialSettings) => s.product_type === 'shower_standard') ??
+        (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
+        fins?.[0] ?? null
+      if (stdSettings) setMargin(String((stdSettings as FinancialSettings).default_margin))
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  useEffect(() => {
+    const productType = tier === 'budget' ? 'shower_budget' : 'shower_standard'
+    const s =
+      allSettings.find(s => s.product_type === productType) ??
+      allSettings.find(s => s.tier === tier)
+    if (s) setMargin(String(s.default_margin))
+  }, [tier, allSettings])
+
+  const tierCfg         = TIER_CONFIGS.find(t => t.value === tier)!
+  const availableColors = HARDWARE_COLORS.filter(c => tierCfg.colors.includes(c.value))
+  const budgetModel     = SHOWER_MODELS.find(m => m.id === modelId) ?? SHOWER_MODELS[1]
+  const colorObj        = availableColors.find(c => c.value === hwColor) ?? availableColors[0]
+  const selectedPartner = partners.find(p => p.id === partnerId) ?? null
+
+  const stdModel: ShowerModel = useMemo(() => ({
+    id:           'M1' as ShowerModelId,
+    label:        STD_SHOWER_TYPES.find(t => t.v === stdShowerType)?.l ?? stdShowerType,
+    desc:         STD_SHOWER_TYPES.find(t => t.v === stdShowerType)?.l ?? '',
+    glassCount:   Math.max(1, Number(stdGlassCount) || 1),
+    dimType:      stdIsCorner ? 'corner' : 'single',
+    hardwareBase: 0,
+    hardwareType: stdShowerType,
+  }), [stdShowerType, stdGlassCount, stdIsCorner])
+
+  const model = tier === 'standard' ? stdModel : budgetModel
+
+  useEffect(() => {
+    if (!tierCfg.colors.includes(hwColor)) setHwColor(tierCfg.colors[0])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tier])
+
+  useEffect(() => { setHwSelection({}) }, [tier, stdShowerType])
+
+  const filteredCatalogItems = useMemo(() =>
+    catalogItems.filter(item =>
+      item.shower_types.includes(stdShowerType) || item.shower_types.includes('universal')
+    ),
+  [catalogItems, stdShowerType])
+
+  const catalogByCategory = useMemo(() => {
+    const map: Record<string, CatalogItem[]> = {}
+    for (const item of filteredCatalogItems) {
+      if (!map[item.category]) map[item.category] = []
+      map[item.category].push(item)
+    }
+    return map
+  }, [filteredCatalogItems])
+
+  const getPriceForItem = useMemo(() => {
+    const pm = new Map<string, number>()
+    for (const p of catalogPrices) pm.set(`${p.item_id}:${p.supplier_id}:${p.color_id}`, p.cost_price)
+    return (itemId: number) =>
+      stdSupplierId !== null && stdColorId !== null
+        ? (pm.get(`${itemId}:${stdSupplierId}:${stdColorId}`) ?? 0)
+        : 0
+  }, [catalogPrices, stdSupplierId, stdColorId])
+
+  const selectedHardwareLines = useMemo((): ShowerHardwareLine[] => {
+    const colorName = hwColors.find(c => c.id === stdColorId)?.name ?? ''
+    return filteredCatalogItems
+      .filter(item => hwSelection[item.id])
+      .map(item => {
+        const sel = hwSelection[item.id]
+        const unitCost = getPriceForItem(item.id)
+        return { name: item.name, qty: sel.qty, unit: item.unit, color: colorName, unitCost, total: Math.round(unitCost * sel.qty) }
+      })
+  }, [filteredCatalogItems, hwSelection, getPriceForItem, hwColors, stdColorId])
+
+  const customHardwareCost = tier === 'standard' && selectedHardwareLines.length > 0
+    ? selectedHardwareLines.reduce((s, l) => s + l.total, 0)
+    : undefined
+
+  const glassCostPerM2 = useMemo(() => {
+    const mat  = materials.find(m => m.name === `Стекло ${glassType} ${thickness} мм` && m.category === 'стекло')
+    const temp = materials.find(m => m.name === `Закалка ${thickness} мм` && m.category === 'закалка')
+    return (mat?.cost_price ?? 0) + (temp?.cost_price ?? 0)
+  }, [materials, glassType, thickness])
+
+  const inputs: ShowerInputs = {
+    tier, model,
+    width: Number(width) || 0, width2: Number(width2) || 0, height: Number(height) || 0,
+    glassCostPerM2, glassName: glassType, thickness,
+    hardwareColor: colorObj.value, hardwareColorMultiplier: colorObj.multiplier,
+    withMounting, withDelivery, floors: Number(floors) || 0,
+    discount: Number(discount) || 0, partnerPercent: selectedPartner?.percent ?? 0,
+    margin: Number(margin) || 40,
+    expensesPercent: (() => {
+      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
+      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
+      return s?.tax_percent ?? 12
+    })(),
+    hwTierMultiplier: tierCfg.hwMultiplier,
+    customHardwareCost,
+    customHardwareLines: customHardwareCost !== undefined ? selectedHardwareLines : undefined,
+  }
+
+  const showerBlocked = inputs.expensesPercent + (Number(margin) || 0) >= 100
+
+  const result = useMemo(() => calculateShower(inputs, services),
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  [tier, modelId, stdShowerType, stdGlassCount, stdIsCorner, width, width2, height, glassType,
+   thickness, hwColor, withMounting, withDelivery, floors, discount, margin, partnerId,
+   materials, services, hwSelection, stdColorId, stdSupplierId])
+
+  function handleAddToCart() {
+    if (!result) return
+    const dimStr = model.dimType === 'corner' ? `${width}×${width2}×${height}` : `${width}×${height}`
+    addItem({
+      product_type: 'shower',
+      label: `${model.label} ${dimStr} мм [${tierCfg.label}]`,
+      input_data: { tier, modelId, width, width2, height, glassType, thickness, hwColor },
+      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
+      financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
+      base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
+      final_price: result.finalPrice, grand_total: result.grandTotal,
+      margin: result.margin, profit: result.profit, manager_bonus: 0, client_text: result.clientText,
+    })
+    setAddedToCart(true)
+    setTimeout(() => setAddedToCart(false), 2000)
+  }
+
+  async function handleSave() {
+    if (!result) return
+    setSaving(true)
+    const dimStr = model.dimType === 'corner' ? `${width}×${width2}×${height}` : `${width}×${height}`
+    const saved = await saveCalculation({
+      product_type: 'shower',
+      input_data: tier === 'standard'
+        ? { tier, stdShowerType, stdGlassCount, stdIsCorner, dimStr, glassType, thickness }
+        : { tier, modelId, model: budgetModel.label, dimStr, glassType, thickness, hwColor },
+      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
+      financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
+      base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
+      final_price: result.grandTotal, margin: result.margin, profit: result.profit, client_text: result.clientText,
+    })
+    if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    setSaving(false)
+  }
+
+  async function handleCopy() {
+    if (!result) return
+    await navigator.clipboard.writeText(result.clientText)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const marginOk    = result.margin >= 35
+  const marginWarn  = !marginOk && result.margin >= 25
+  const marginColor = marginOk ? '#34c759' : marginWarn ? '#ff9f0a' : '#ff3b30'
+
+  const showerSettings = useMemo(() => {
+    const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
+    const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
+    return s ?? null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allSettings, tier])
+
+
+  if (loading) return (
+    <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center">
+      <p className="text-[14px] text-[#86868b]">Загрузка...</p>
+    </div>
+  )
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f7]" style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif' }}>
+      <div className="max-w-[960px] mx-auto px-5 py-6">
+
+        {/* ── Header ────────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-5">
+          <div className="flex items-center gap-2.5">
+            <a href="/" className="text-[13px] text-[#0071e3] hover:underline">Главная</a>
+            <span className="text-[#c7c7cc]">/</span>
+            <h1 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">Душевая перегородка</h1>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleCopy} disabled={showerBlocked}
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              {copied ? '✓ Скопировано' : 'Копировать КП'}
+            </button>
+            <button onClick={handleAddToCart} disabled={showerBlocked}
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              {addedToCart ? '✓ Добавлено' : '+ В заказ'}
+            </button>
+            <button onClick={handleSave} disabled={saving || showerBlocked}
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
+            </button>
+            {savedId && (
+              <a href={`/calculations/${savedId}`}
+                className="px-3 py-1.5 text-[13px] text-[#0071e3] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] transition-colors">
+                → История
+              </a>
+            )}
+          </div>
+        </div>
+
+        {/* ── Tier tabs ─────────────────────────────────────── */}
+        <div className="flex items-center justify-between mb-4">
+          <Seg
+            options={[{ v: 'standard' as ShowerTier, l: 'Стандарт' }, { v: 'budget' as ShowerTier, l: 'Бюджет' }]}
+            value={tier}
+            onChange={setTier}
+          />
+          {tier === 'standard' && (
+            <Seg options={STD_SHOWER_TYPES} value={stdShowerType} onChange={setStdShowerType} small />
+          )}
+        </div>
+
+        {/* ── Main grid ─────────────────────────────────────── */}
+        <div className="grid grid-cols-[1fr_300px] gap-4">
+
+          {/* LEFT */}
+          <div className="space-y-3">
+
+            {/* Budget: model grid */}
+            {tier === 'budget' && (
+              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+                <Label>Модель перегородки</Label>
+                <div className="grid grid-cols-4 gap-1.5">
+                  {SHOWER_MODELS.map(m => {
+                    const active = modelId === m.id
+                    return (
+                      <button key={m.id} onClick={() => setModelId(m.id)}
+                        className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${
+                          active ? 'border-[#0071e3] bg-[#f0f7ff]' : 'border-[#e8e8ed] hover:border-[#c7c7cc]'
+                        }`}>
+                        <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center ${active ? 'bg-white' : 'bg-[#f5f5f7]'} ${m.image_url ? 'h-[108px]' : 'p-1'}`}>
+                          {m.image_url ? (
+                            <img src={m.image_url} alt={m.label}
+                              className="w-full h-full object-contain" />
+                          ) : (
+                            <ShowerModelIcon modelId={m.id as ShowerModelId} active={active} />
+                          )}
+                        </div>
+                        <div className="flex items-center justify-between mb-0.5">
+                          <span className={`text-[12px] font-bold ${active ? 'text-[#0071e3]' : 'text-[#1d1d1f]'}`}>{m.label}</span>
+                          <span className={`text-[9px] font-semibold rounded px-1 ${active ? 'bg-[#ddeeff] text-[#0071e3]' : 'bg-[#f2f2f7] text-[#86868b]'}`}>{m.glassCount}ст</span>
+                        </div>
+                        <span className="text-[9px] text-[#86868b] leading-tight">{m.desc}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* Dimensions */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <Label>Размеры, мм</Label>
+
+              {tier === 'standard' && (
+                <div className="flex items-center gap-4 mb-3">
+                  <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#1d1d1f]">
+                    <input type="checkbox" checked={stdIsCorner} onChange={e => setStdIsCorner(e.target.checked)}
+                      className="w-4 h-4 rounded accent-[#0071e3]"/>
+                    Угловая конструкция
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[12px] text-[#86868b]">Элементов:</span>
+                    <input type="number" min="1" max="6" value={stdGlassCount} onChange={e => setStdGlassCount(e.target.value)}
+                      className="w-12 border border-[#e8e8ed] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3]"/>
+                  </div>
+                </div>
+              )}
+
+              <div className={`grid gap-3 ${(tier === 'standard' ? stdIsCorner : budgetModel.dimType === 'corner') ? 'grid-cols-3' : 'grid-cols-2'}`}>
+                <SField label={(tier === 'standard' ? stdIsCorner : budgetModel.dimType === 'corner') ? 'Ширина 1' : 'Ширина'}>
+                  <input type="number" value={width} onChange={e => setWidth(e.target.value)} className={inp}/>
+                </SField>
+                {(tier === 'standard' ? stdIsCorner : budgetModel.dimType === 'corner') && (
+                  <SField label="Ширина 2">
+                    <input type="number" value={width2} onChange={e => setWidth2(e.target.value)} className={inp}/>
+                  </SField>
+                )}
+                <SField label="Высота">
+                  <input type="number" value={height} onChange={e => setHeight(e.target.value)} className={inp}/>
+                </SField>
+              </div>
+              <p className="mt-2 text-[11px] text-[#86868b]">
+                {result.glassArea.toFixed(2)} м² · {model.glassCount} {model.glassCount === 1 ? 'элемент' : model.glassCount < 5 ? 'элемента' : 'элементов'}
+              </p>
+            </section>
+
+            {/* Glass + Hardware filters — one row */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <div className="grid grid-cols-2 gap-4">
+                {/* Left: glass */}
+                <div>
+                  <Label>Стекло</Label>
+                  <select value={glassType} onChange={e => setGlassType(e.target.value)} className={inp}>
+                    {GLASS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                  {glassCostPerM2 > 0 && (
+                    <p className="mt-1.5 text-[11px] text-[#86868b]">
+                      Закалённое {thickness} мм · {glassCostPerM2.toLocaleString('ru-RU')} ₽/м²
+                    </p>
+                  )}
+                </div>
+                {/* Right: hardware filters */}
+                {tier === 'standard' ? (
+                  <div className="space-y-2.5">
+                    <div>
+                      <Label>Цвет фурнитуры</Label>
+                      <select value={stdColorId ?? ''} onChange={e => setStdColorId(e.target.value ? Number(e.target.value) : null)} className={inp}>
+                        <option value="">— не выбран</option>
+                        {hwColors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Поставщик</Label>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        {hwSuppliers.map(s => (
+                          <button key={s.id} onClick={() => setStdSupplierId(s.id)}
+                            className={`py-2 px-2 rounded-[10px] text-[13px] font-medium border transition-all truncate ${
+                              stdSupplierId === s.id
+                                ? 'bg-[#0071e3] text-white border-[#0071e3]'
+                                : 'bg-white border-[#e8e8ed] text-[#1d1d1f] hover:border-[#c7c7cc]'
+                            }`}>
+                            {s.name}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <Label>Цвет фурнитуры</Label>
+                    <select value={hwColor} onChange={e => setHwColor(e.target.value)} className={inp}>
+                      {availableColors.map(c => (
+                        <option key={c.value} value={c.value}>
+                          {c.label}{c.multiplier > 1 ? ` (+${Math.round((c.multiplier - 1) * 100)}%)` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </section>
+
+            {/* Hardware items list (standard only) */}
+            {tier === 'standard' && (
+              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <Label>Комплект фурнитуры</Label>
+                  {customHardwareCost !== undefined && (
+                    <span className="text-[13px] font-semibold text-[#0071e3] font-mono">
+                      {customHardwareCost.toLocaleString('ru-RU')} ₽
+                    </span>
+                  )}
+                </div>
+
+                {Object.keys(catalogByCategory).length === 0 ? (
+                  <p className="text-[13px] text-[#86868b]">Нет позиций для этого типа</p>
+                ) : (
+                  <div className="space-y-3">
+                    {Object.entries(catalogByCategory).map(([cat, items]) => (
+                      <div key={cat}>
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest">{cat}</span>
+                          <div className="flex-1 h-px bg-[#e8e8ed]"/>
+                        </div>
+                        <div className="space-y-1">
+                          {items.map(item => {
+                            const sel      = hwSelection[item.id]
+                            const selected = !!sel
+                            const price    = getPriceForItem(item.id)
+                            return (
+                              <label key={item.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
+                                selected
+                                  ? 'border-[#0071e3] bg-[#f0f7ff]'
+                                  : 'border-[#e8e8ed] bg-white hover:border-[#c7c7cc]'
+                              }`}>
+                                <input type="checkbox" checked={selected}
+                                  onChange={e => setHwSelection(prev => {
+                                    const next = { ...prev }
+                                    e.target.checked ? next[item.id] = { qty: 1 } : delete next[item.id]
+                                    return next
+                                  })}
+                                  className="w-4 h-4 flex-shrink-0 accent-[#0071e3]"/>
+                                <span className="flex-1 text-[13px] font-medium text-[#1d1d1f] leading-tight">{item.name}</span>
+                                <span className="text-[12px] text-[#86868b] whitespace-nowrap">
+                                  {price > 0 ? `${price.toLocaleString('ru-RU')} ₽/${item.unit}` : '—'}
+                                </span>
+                                {selected && (
+                                  <>
+                                    <input type="number" min="1" value={sel.qty}
+                                      onClick={e => e.preventDefault()}
+                                      onChange={e => setHwSelection(prev => ({ ...prev, [item.id]: { qty: Math.max(1, Number(e.target.value) || 1) } }))}
+                                      className="w-12 border border-[#c7c7cc] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3] bg-white"/>
+                                    <span className="text-[13px] font-semibold font-mono text-[#0071e3] w-[72px] text-right whitespace-nowrap">
+                                      {price > 0 ? `${(price * sel.qty).toLocaleString('ru-RU')} ₽` : '—'}
+                                    </span>
+                                  </>
+                                )}
+                              </label>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </section>
+            )}
+
+            {/* Services */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <Label>Услуги</Label>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={withMounting} onChange={e => setWithMounting(e.target.checked)}
+                    className="w-4 h-4 accent-[#0071e3]"/>
+                  <span className="text-[13px] text-[#1d1d1f]">Монтаж</span>
+                  <span className="text-[12px] text-[#86868b] ml-auto">
+                    {model.glassCount} эл. × {(services.find(s => s.name === 'Монтаж душевой перегородки')?.cost_price ?? 3000).toLocaleString('ru-RU')} ₽
+                  </span>
+                </label>
+                {withMounting && (
+                  <div className="ml-7 flex items-center gap-2">
+                    <span className="text-[12px] text-[#86868b]">Подъём, этажей:</span>
+                    <input type="number" min="0" value={floors} onChange={e => setFloors(e.target.value)}
+                      className="w-14 border border-[#e8e8ed] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3]"/>
+                  </div>
+                )}
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input type="checkbox" checked={withDelivery} onChange={e => setWithDelivery(e.target.checked)}
+                    className="w-4 h-4 accent-[#0071e3]"/>
+                  <span className="text-[13px] text-[#1d1d1f]">Доставка по Москве</span>
+                  <span className="text-[12px] text-[#86868b] ml-auto">
+                    {(services.find(s => s.name === 'Доставка Москва')?.cost_price ?? 3500).toLocaleString('ru-RU')} ₽
+                  </span>
+                </label>
+              </div>
+            </section>
+
+            {/* Financial params */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <Label>Параметры расчёта</Label>
+              <div className="grid grid-cols-3 gap-3">
+                <SField label="Маржа, %">
+                  <input type="number" value={margin} onChange={e => setMargin(e.target.value)} className={inp}/>
+                </SField>
+                <SField label="Скидка, %">
+                  <input type="number" value={discount} onChange={e => setDiscount(e.target.value)} className={inp}/>
+                </SField>
+                <SField label="Партнёр">
+                  <select value={partnerId ?? ''} onChange={e => setPartnerId(e.target.value ? Number(e.target.value) : null)} className={inp}>
+                    <option value="">Нет</option>
+                    {partners.map(p => <option key={p.id} value={p.id}>{p.name} ({p.percent}%)</option>)}
+                  </select>
+                </SField>
+              </div>
+            </section>
+
+          </div>
+
+          {/* RIGHT — summary */}
+          <div className="space-y-3">
+
+            {showerBlocked && (
+              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3">
+                <p className="text-xs font-semibold text-red-700">Сумма маржи и расходов не может быть ≥ 100%</p>
+              </div>
+            )}
+
+            {/* Cost breakdown */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Себестоимость</p>
+              <div className="space-y-1.5">
+                {result.costLines.map((l, i) => (
+                  <div key={i} className="flex justify-between items-start gap-2">
+                    <span className="text-[12px] text-[#6e6e73] leading-tight flex-1">{l.name}</span>
+                    <span className="text-[12px] font-mono text-[#1d1d1f] whitespace-nowrap">{l.total.toLocaleString('ru-RU')} ₽</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between mt-2.5 pt-2.5 border-t border-[#f2f2f7] font-semibold">
+                <span className="text-[13px] text-[#1d1d1f]">Итого</span>
+                <span className="text-[13px] font-mono text-[#1d1d1f]">{result.totalCost.toLocaleString('ru-RU')} ₽</span>
+              </div>
+            </section>
+
+            {/* Price calc */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Ценообразование</p>
+              <div className="space-y-1.5 text-[13px]">
+                {[
+                  { l: 'Себестоимость',            v: fmt(result.totalCost) },
+                  { l: `Налог ${result.expensesPercent}%`, v: fmt(result.expensesAmount) },
+                ].map(r => (
+                  <div key={r.l} className="flex justify-between text-[#6e6e73]">
+                    <span>{r.l}</span><span className="font-mono">{r.v}</span>
+                  </div>
+                ))}
+                <div className="flex justify-between font-semibold text-[#1d1d1f] pt-1 border-t border-[#f2f2f7]">
+                  <span>Цена без услуг</span><span className="font-mono">{fmt(result.basePrice)}</span>
+                </div>
+                {result.partnerAmount > 0 && (
+                  <div className="flex justify-between text-[#6e6e73]">
+                    <span>Партнёр</span><span className="font-mono">+{fmt(result.partnerAmount)}</span>
+                  </div>
+                )}
+                {result.discountAmount > 0 && (
+                  <div className="flex justify-between text-[#6e6e73]">
+                    <span>Скидка</span><span className="font-mono">−{fmt(result.discountAmount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold text-[#1d1d1f] pt-1 border-t border-[#f2f2f7]">
+                  <span>Цена клиенту</span><span className="font-mono">{fmt(result.finalPrice)}</span>
+                </div>
+              </div>
+
+              {/* +10% hint */}
+              {(() => {
+                const nm = inputs.margin + 10
+                const d  = 1 - nm / 100 - result.expensesPercent / 100
+                if (d <= 0) return null
+                const nf = Math.round((result.totalCost / d / (inputs.partnerPercent > 0 ? (1 - inputs.partnerPercent/100) : 1)) * (1 - inputs.discount/100))
+                return (
+                  <button onClick={() => setMargin(String(nm))}
+                    className="mt-2 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#f5fff8] border border-[#c6f0d4] hover:bg-[#ecfcf2] transition-colors text-left">
+                    <span className="text-[11px] text-[#1a7f37] font-medium">+10% к марже</span>
+                    <div className="text-right">
+                      <span className="text-[12px] font-mono font-bold text-[#1a7f37]">{nf.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[10px] text-[#57a86d] ml-1.5">+{(nf-result.finalPrice).toLocaleString('ru-RU')}</span>
+                    </div>
+                  </button>
+                )
+              })()}
+            </section>
+
+            {/* Services */}
+            {result.serviceLines.length > 0 && (
+              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+                <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-2">Услуги</p>
+                <div className="space-y-1.5">
+                  {result.serviceLines.map((s, i) => (
+                    <div key={i} className="flex justify-between text-[13px]">
+                      <span className="text-[#6e6e73]">{s.name} ({s.qty} {s.unit})</span>
+                      <span className="font-mono text-[#1d1d1f]">{fmt(s.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Margin + total */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[13px] text-[#6e6e73]">Маржа</span>
+                <span className="text-[20px] font-bold font-mono" style={{ color: marginColor }}>{result.margin}%</span>
+              </div>
+              <div className="flex justify-between items-center mb-3">
+                <span className="text-[13px] text-[#6e6e73]">Прибыль</span>
+                <span className="text-[14px] font-mono font-semibold text-[#1d1d1f]">{fmt(result.profit)}</span>
+              </div>
+              <div className="h-px bg-[#f2f2f7] mb-3"/>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[13px] font-semibold text-[#1d1d1f]">ИТОГО</span>
+                <span className="text-[24px] font-bold font-mono text-[#1d1d1f]">{fmt(result.grandTotal)}</span>
+              </div>
+            </section>
+
+            {/* КП text */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest">Текст КП</p>
+                <button onClick={handleCopy} className="text-[12px] text-[#0071e3] hover:underline">
+                  {copied ? 'Скопировано' : 'Копировать'}
+                </button>
+              </div>
+              <pre className="text-[11px] text-[#4b4b47] whitespace-pre-wrap leading-relaxed font-sans">
+                {result.clientText}
+              </pre>
+            </section>
+
+          </div>
+        </div>
+
+        <CartSection />
+      </div>
+
+    </div>
+  )
+}

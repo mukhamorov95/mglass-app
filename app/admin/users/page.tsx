@@ -1,0 +1,194 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+
+type User = {
+  id: string
+  email: string
+  name: string | null
+  role: 'admin' | 'manager'
+  active: boolean
+  manager_code: number | null
+  created_at: string
+}
+
+const ROLE_LABELS: Record<string, { label: string; color: string }> = {
+  admin:   { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },
+  manager: { label: 'Менеджер',      color: 'bg-blue-50 text-blue-700' },
+}
+
+export default function UsersPage() {
+  const [users, setUsers] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showInvite, setShowInvite] = useState(false)
+  const [inviteEmail, setInviteEmail] = useState('')
+  const [invitePassword, setInvitePassword] = useState('')
+  const [inviteRole, setInviteRole] = useState<'manager' | 'admin'>('manager')
+  const [inviteName, setInviteName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => { fetchUsers() }, [])
+
+  async function fetchUsers() {
+    setLoading(true)
+    const res = await fetch('/api/admin/users')
+    const data = await res.json()
+    setUsers(Array.isArray(data) ? data : [])
+    setLoading(false)
+  }
+
+  async function updateUser(id: string, fields: Partial<User>) {
+    setUsers(prev => prev.map(u => u.id === id ? { ...u, ...fields } : u))
+    const res = await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...fields }),
+    })
+    if (!res.ok) {
+      await fetchUsers()
+    }
+  }
+
+  async function handleInvite(e: React.FormEvent) {
+    e.preventDefault()
+    setSaving(true)
+    setError(null)
+
+    const res = await fetch('/api/admin/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail, password: invitePassword, role: inviteRole, name: inviteName }),
+    })
+    const json = await res.json()
+    setSaving(false)
+
+    if (!res.ok) {
+      setError(json.error ?? 'Ошибка')
+      return
+    }
+    setShowInvite(false)
+    setInviteEmail('')
+    setInvitePassword('')
+    setInviteName('')
+    setInviteRole('manager')
+    fetchUsers()
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-6">
+      <div className="max-w-3xl mx-auto">
+
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold text-gray-900">Пользователи</h1>
+          <button onClick={() => setShowInvite(true)}
+            className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700">
+            + Добавить
+          </button>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          {loading ? (
+            <div className="p-8 text-center text-gray-400 text-sm">Загрузка...</div>
+          ) : users.length === 0 ? (
+            <div className="p-8 text-center text-gray-400 text-sm">Нет пользователей</div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Имя / Email</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Роль</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase" title="Номер менеджера в номере заказа (XXX-M)">Код №</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Статус</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100">
+                {users.map(u => {
+                  const rl = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
+                  return (
+                    <tr key={u.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-gray-900">{u.name ?? '—'}</p>
+                        <p className="text-xs text-gray-400">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <select value={u.role}
+                          onChange={e => updateUser(u.id, { role: e.target.value as User['role'] })}
+                          className={`text-xs font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${rl.color}`}>
+                          <option value="manager">Менеджер</option>
+                          <option value="admin">Администратор</option>
+                        </select>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <input
+                          type="number" min="1" max="99"
+                          value={u.manager_code ?? 1}
+                          onChange={e => updateUser(u.id, { manager_code: Number(e.target.value) || 1 })}
+                          className="w-14 text-center border border-gray-200 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-blue-400"
+                          title="Код менеджера — появляется в номере заказа: 001-1"
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <button onClick={() => updateUser(u.id, { active: !u.active })}
+                          className={`text-xs px-3 py-1 rounded-full font-medium ${u.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                          {u.active ? 'Активен' : 'Отключён'}
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        {showInvite && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-xl border border-gray-200 p-6 w-full max-w-sm shadow-xl">
+              <h2 className="text-base font-semibold text-gray-900 mb-4">Новый пользователь</h2>
+              <form onSubmit={handleInvite} className="space-y-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Имя</label>
+                  <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                    placeholder="Иван Иванов"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Email</label>
+                  <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                    placeholder="manager@mglass.ru"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Пароль</label>
+                  <input type="password" required minLength={6} value={invitePassword} onChange={e => setInvitePassword(e.target.value)}
+                    placeholder="Минимум 6 символов"
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Роль</label>
+                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin')}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400">
+                    <option value="manager">Менеджер</option>
+                    <option value="admin">Администратор</option>
+                  </select>
+                </div>
+                {error && <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+                <div className="flex gap-2 pt-1">
+                  <button type="submit" disabled={saving}
+                    className="flex-1 bg-blue-600 text-white text-sm font-medium rounded-lg py-2 hover:bg-blue-700 disabled:opacity-50">
+                    {saving ? 'Создание...' : 'Создать'}
+                  </button>
+                  <button type="button" onClick={() => { setShowInvite(false); setError(null) }}
+                    className="flex-1 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg py-2 hover:bg-gray-200">
+                    Отмена
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
