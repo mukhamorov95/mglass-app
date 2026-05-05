@@ -19,22 +19,22 @@ const MGLASS_NAV = [
 ]
 
 const AI_NAV = [
-  { href: '/my-dashboard',   label: 'Дашборд' },
   { href: '/ai-assistant',   label: 'AI Ассистент' },
   { href: '/kp-generator',   label: 'КП Генератор' },
-  { href: '/objections',     label: 'Возражения' },
+  { href: '/objections',     label: 'Работа с возражениями' },
   { href: '/product-finder', label: 'Подбор продукта' },
-  { href: '/templates',      label: 'Шаблоны' },
   { href: '/deal-analysis',  label: 'Анализ сделки' },
+  { href: '/templates',      label: 'Шаблоны' },
   { href: '/competitors',    label: 'Конкуренты' },
 ]
 
 const VLADISLAV_NAV = [
-  { href: '/vladislav',        label: '💬 Сообщения' },
-  { href: '/vladislav/tasks',  label: '🗂️ Задачи AI' },
-  { href: '/ai-stats',         label: '📊 Статистика AI' },
-  { href: '/amo-analysis',     label: '🔍 Анализ воронки' },
-  { href: '/my-notes',         label: '🎙️ Мои заметки' },
+  { href: '/vladislav',                label: '💬 Сообщения' },
+  { href: '/ai-stats',                 label: '📊 Статистика AI-бота' },
+  { href: '/vladislav/manager-stats',  label: '👥 Аналитика менеджеров' },
+  { href: '/amo-analysis',             label: '🔍 Воронка AMO' },
+  { href: '/vladislav/tasks',          label: '🗂️ Задачи AI' },
+  { href: '/my-notes',                 label: '🎙️ Мои заметки' },
 ]
 
 const PRODUCTION_NAV = [
@@ -58,8 +58,8 @@ const ADMIN_NAV = [
   { href: '/admin/users',         label: 'Пользователи' },
 ]
 
-const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors', '/my-dashboard']
-const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/my-notes']
+const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors']
+const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/my-notes', '/vladislav/manager-stats']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
 
