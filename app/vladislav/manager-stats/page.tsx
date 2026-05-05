@@ -11,8 +11,11 @@ type ManagerStat = {
   active: number
 }
 
+type SourceStat = { total: number; won: number; lost: number; active: number }
+
 type StatsData = {
   managers: Record<string, ManagerStat>
+  sources:  Record<string, SourceStat>
   total: number
   from: number
   to: number
@@ -277,6 +280,55 @@ export default function ManagerStatsPage() {
               </table>
             </div>
           </div>
+
+          {/* Sources breakdown */}
+          {data?.sources && Object.keys(data.sources).length > 0 && (() => {
+            const sources = Object.entries(data.sources)
+              .map(([name, s]) => ({ name, ...s }))
+              .sort((a, b) => b.total - a.total)
+            const maxTotal = sources[0]?.total ?? 1
+            return (
+              <div className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden mb-6">
+                <div className="px-5 py-4 border-b border-[#f2f2f7]">
+                  <p className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wider">
+                    По источникам
+                  </p>
+                </div>
+                <div className="divide-y divide-[#f2f2f7]">
+                  {sources.map(s => {
+                    const closed = s.won + s.lost
+                    const conv = closed > 0 ? Math.round((s.won / closed) * 100) : null
+                    const pct = Math.round((s.total / maxTotal) * 100)
+                    return (
+                      <div key={s.name} className="px-5 py-3">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-[13px] font-medium text-[#1d1d1f]">{s.name}</span>
+                          <div className="flex items-center gap-3 text-[12px]">
+                            <span className="font-bold text-[#1d1d1f]">{s.total}</span>
+                            <span className="text-emerald-600">✓ {s.won}</span>
+                            <span className="text-red-500">✗ {s.lost}</span>
+                            <span className="text-[#aeaeb2]">● {s.active}</span>
+                            {conv !== null && (
+                              <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                                conv >= 50 ? 'bg-emerald-100 text-emerald-700' :
+                                conv >= 25 ? 'bg-amber-100 text-amber-700' :
+                                'bg-red-100 text-red-600'
+                              }`}>{conv}%</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex gap-0.5 h-1.5 rounded-full overflow-hidden bg-[#f2f2f7]">
+                          <div className="bg-emerald-400 h-full" style={{ width: `${s.total > 0 ? (s.won / s.total) * pct : 0}%` }} />
+                          <div className="bg-[#aeaeb2] h-full" style={{ width: `${s.total > 0 ? (s.active / s.total) * pct : 0}%` }} />
+                          <div className="bg-red-400 h-full" style={{ width: `${s.total > 0 ? (s.lost / s.total) * pct : 0}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
 
           {/* Per-manager daily grid — last 14 days max for readability, or monthly for year */}
           {days.length > 1 && (
