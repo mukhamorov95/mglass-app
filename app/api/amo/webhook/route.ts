@@ -8,6 +8,10 @@ const AMO_BASE = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
 const AMO_TOKEN = process.env.AMO_ACCESS_TOKEN!
 const VLADISLAV_USER_ID = parseInt(process.env.AMO_VLADISLAV_USER_ID || '8352283')
 
+const ROUND_ROBIN_ENABLED = process.env.AMOCRM_ROUND_ROBIN_ENABLED === 'true'
+const ROUND_ROBIN_MANAGERS: number[] = (process.env.AMOCRM_MANAGERS_IDS ?? '')
+  .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
+
 // Stage IDs — update if your pipeline uses different IDs
 // Find them via: GET /api/v4/leads/pipelines
 const STAGE_MEASUREMENT_SCHEDULED = process.env.AMO_STAGE_MEASUREMENT_ID
@@ -76,6 +80,26 @@ async function getDefaultChannel(): Promise<{ channelId: string; chatType: strin
   } catch {
     return null
   }
+}
+
+async function getNextRoundRobinManager(): Promise<number | null> {
+  if (!ROUND_ROBIN_ENABLED || !ROUND_ROBIN_MANAGERS.length) return null
+
+  const db = supabase()
+  const { data } = await db.from('ai_settings').select('value').eq('key', 'round_robin_index').single()
+  const idx = parseInt(data?.value ?? '0') || 0
+  const managerId = ROUND_ROBIN_MANAGERS[idx % ROUND_ROBIN_MANAGERS.length]
+  const nextIdx = (idx + 1) % ROUND_ROBIN_MANAGERS.length
+  await db.from('ai_settings').upsert({ key: 'round_robin_index', value: String(nextIdx), updated_at: new Date().toISOString() })
+  return managerId
+}
+
+async function assignLeadToManager(leadId: number, managerId: number) {
+  await fetch(`${AMO_BASE}/leads`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ id: leadId, responsible_user_id: managerId }]),
+  })
 }
 
 async function handleNewLead(leadId: number, responsibleUserId: number) {
@@ -172,7 +196,14 @@ export async function POST(req: Request) {
         if (leadId) {
           const lead = await amoGet(`/leads/${leadId}`)
           if (lead) {
-            await handleNewLead(leadId, lead.responsible_user_id)
+            let managerId: number = lead.responsible_user_id
+            const rrManager = await getNextRoundRobinManager()
+            if (rrManager && rrManager !== managerId) {
+              await assignLeadToManager(leadId, rrManager)
+              await addAmoNote(leadId, `🔄 Round-robin: заявка назначена менеджеру ID ${rrManager}`)
+              managerId = rrManager
+            }
+            await handleNewLead(leadId, managerId)
           }
         }
       }
