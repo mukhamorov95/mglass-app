@@ -27,6 +27,7 @@ export type QuickCalcResult = {
   price: number
   finalPrice: number
   description: string
+  serviceLines?: Array<{ name: string; total: number }>
 }
 
 function db() {
@@ -69,11 +70,13 @@ export async function quickCalc(
 
   if (type === 'mirror') {
     const cfg = pickSettings(settings, 'mirror_light')
-    const mirrorMats = materials.filter(m => m.category === 'зеркало').filter(m => {
-      const n = m.name.toLowerCase()
-      return (n.includes('silver') || n.includes('осветл')) && !n.includes('6 мм') && !n.includes('6мм')
-    })
-    const mirrorMaterial = mirrorMats[0] ?? materials.find(m => m.category === 'зеркало') ?? null
+    const allMirrorMats = materials.filter(m => m.category === 'зеркало')
+    // Always default to Silver 4mm (budget) — never осветлённое unless explicitly requested
+    const mirrorMaterial =
+      allMirrorMats.find(m => m.name.toLowerCase().includes('silver') && !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ??
+      allMirrorMats.find(m => !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ??
+      allMirrorMats[0] ??
+      null
     if (!mirrorMaterial) return null
 
     const inputs: MirrorInputs = {
@@ -97,7 +100,7 @@ export async function quickCalc(
     }
     const result = calculateMirror(inputs, materials, services)
     if (!result) return null
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText }
+    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, serviceLines: result.serviceLines }
   }
 
   if (type === 'shower') {

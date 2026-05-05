@@ -127,32 +127,24 @@ async function findLeadByPhone(phone: string): Promise<{ id: number; responsible
   return { id: lead.id, responsible_user_id: lead.responsible_user_id }
 }
 
-function buildPriceBreakdown(result: { finalPrice: number; price: number; description: string }): string {
-  const r = result as any
-  // Extract services from description lines like "Монтаж — 3 500 ₽" / "Доставка — 2 000 ₽"
-  const lines = result.description.split('\n').map((l: string) => l.trim()).filter(Boolean)
-
-  const product   = result.finalPrice
-  const services  = result.price - result.finalPrice  // grandTotal - finalPrice = servicesTotal
-  const mounting  = lines.find((l: string) => l.toLowerCase().includes('монтаж'))
-  const delivery  = lines.find((l: string) => l.toLowerCase().includes('доставка'))
-
+function buildPriceBreakdown(result: { finalPrice: number; price: number; description: string; serviceLines?: Array<{ name: string; total: number }> }): string {
   const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 
-  let breakdown = `Изделие: ${fmt(product)}`
-  if (mounting) breakdown += `\nМонтаж: ${mounting.replace(/.*:?\s*/, '').trim() || 'уточним на замере'}`
-  else if (r.serviceLines?.length) {
-    const m = r.serviceLines.find((s: any) => s.name?.toLowerCase().includes('монтаж'))
-    if (m) breakdown += `\nМонтаж: ${fmt(m.total)}`
-  }
-  breakdown += `\nДоставка по МКАД: уточним`
-  if (delivery) {
-    const deliveryLine = r.serviceLines?.find((s: any) => s.name?.toLowerCase().includes('доставка'))
-    if (deliveryLine) breakdown = breakdown.replace('Доставка по МКАД: уточним', `Доставка: ${fmt(deliveryLine.total)}`)
-  }
-  breakdown += `\nИтого: ${fmt(result.price)}`
+  const productLine = `Изделие — ${fmt(result.finalPrice)}`
 
-  return `Данные из калькулятора для ответа клиенту:\n${breakdown}\n\nПокажи клиенту разбивку по этим трём строкам: изделие, монтаж, доставка. Итого называй отдельно. Пиши в своём разговорном стиле.`
+  const mountingSvc = result.serviceLines?.find(s => s.name.toLowerCase().includes('монтаж'))
+  const mountingLine = mountingSvc
+    ? `Монтаж — ${fmt(mountingSvc.total)}`
+    : 'Монтаж — уточним на замере'
+
+  const deliverySvc = result.serviceLines?.find(s => s.name.toLowerCase().includes('доставка'))
+  const deliveryLine = deliverySvc
+    ? `Доставка — ${fmt(deliverySvc.total)}`
+    : 'Доставка по МКАД — уточним'
+
+  const totalLine = `Итого — ${fmt(result.price)}`
+
+  return `Данные из калькулятора:\n${productLine}\n${mountingLine}\n${deliveryLine}\n${totalLine}\n\nПокажи клиенту именно эти три строки (изделие, монтаж, доставка) и итого — в своём разговорном стиле.`
 }
 
 async function getExtraKnowledge(): Promise<string> {
