@@ -34,7 +34,6 @@ const VLADISLAV_NAV = [
   { href: '/vladislav/manager-stats',  label: '👥 Аналитика менеджеров' },
   { href: '/amo-analysis',             label: '🔍 Воронка AMO' },
   { href: '/vladislav/tasks',          label: '🗂️ Задачи AI' },
-  { href: '/my-notes',                 label: '🎙️ Мои заметки' },
 ]
 
 const PRODUCTION_NAV = [
@@ -59,7 +58,7 @@ const ADMIN_NAV = [
 ]
 
 const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/templates', '/deal-analysis', '/competitors']
-const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/my-notes', '/vladislav/manager-stats']
+const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/vladislav/manager-stats']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
 
