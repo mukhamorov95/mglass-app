@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { Role } from '@/lib/getRole'
 
 type Props = { userEmail: string; role: Role | null }
+type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 
 const MGLASS_NAV = [
   { href: '/calculator/mirror', label: 'Зеркало с подсветкой' },
@@ -62,6 +63,20 @@ export function Sidebar({ userEmail, role }: Props) {
 
   const activeSection = detectSection(pathname)
   const [openSections, setOpenSections] = useState<Set<string>>(() => new Set([activeSection]))
+  const [syncState, setSyncState] = useState<SyncState>('idle')
+  const isLocalhost = typeof window !== 'undefined' && window.location.hostname === 'localhost'
+
+  async function handleSync() {
+    setSyncState('loading')
+    try {
+      const res = await fetch('/api/admin/sync', { method: 'POST' })
+      const data = await res.json()
+      setSyncState(data.ok ? 'ok' : 'error')
+      if (data.ok) setTimeout(() => setSyncState('idle'), 3000)
+    } catch {
+      setSyncState('error')
+    }
+  }
 
   function toggleSection(key: string) {
     setOpenSections(prev => {
@@ -86,12 +101,45 @@ export function Sidebar({ userEmail, role }: Props) {
     <aside className="w-52 flex-shrink-0 flex flex-col bg-white border-r border-[#e4e4e0] min-h-screen sticky top-0 h-screen overflow-y-auto">
 
       {/* Лого */}
-      <Link href="/" className="flex items-center gap-2.5 px-4 py-4 border-b border-[#e4e4e0]">
-        <div className="w-7 h-7 bg-[#111110] rounded-[5px] flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-[11px] font-bold">MG</span>
-        </div>
-        <span className="text-[15px] font-bold text-[#111110] tracking-tight">MGlass</span>
-      </Link>
+      <div className="border-b border-[#e4e4e0]">
+        <Link href="/" className="flex items-center gap-2.5 px-4 py-4">
+          <div className="w-7 h-7 bg-[#111110] rounded-[5px] flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-[11px] font-bold">MG</span>
+          </div>
+          <span className="text-[15px] font-bold text-[#111110] tracking-tight">MGlass</span>
+        </Link>
+
+        {isLocalhost && (
+          <div className="px-3 pb-3">
+            <button
+              onClick={handleSync}
+              disabled={syncState === 'loading'}
+              className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[12px] font-semibold transition-all disabled:opacity-60 ${
+                syncState === 'ok'
+                  ? 'bg-emerald-100 text-emerald-700'
+                  : syncState === 'error'
+                  ? 'bg-red-50 text-red-600'
+                  : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] hover:text-[#111110]'
+              }`}>
+              {syncState === 'loading' ? (
+                <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                </svg>
+              ) : syncState === 'ok' ? (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7"/>
+                </svg>
+              ) : (
+                <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                </svg>
+              )}
+              {syncState === 'loading' ? 'Синхронизация...' : syncState === 'ok' ? 'Готово ✓' : syncState === 'error' ? 'Ошибка' : 'Синхронизировать'}
+            </button>
+          </div>
+        )}
+      </div>
 
       {/* Навигация */}
       <nav className="flex-1 px-3 py-3 space-y-1">
