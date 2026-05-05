@@ -334,6 +334,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   } catch (err) {
     console.error('Wazzup webhook error:', err)
-    return NextResponse.json({ ok: false }, { status: 200 })
+    return NextResponse.json({ ok: false, error: String(err) }, { status: 200 })
   }
 }
