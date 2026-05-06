@@ -254,15 +254,25 @@ async function processMessage(msg: {
     db.from('ai_managed_chats').update({ last_message_at: new Date().toISOString() }).eq('chat_id', chatId),
   ])
 
-  // Get history (last 20 messages)
+  // Get history (last 20 messages, newest first then reverse so we get latest context)
   const { data: history } = await db
     .from('ai_conversations')
     .select('role, content')
     .eq('chat_id', chatId)
-    .order('created_at', { ascending: true })
+    .order('created_at', { ascending: false })
     .limit(20)
 
-  const messages: MessageParam[] = (history || []).map((m: { role: string; content: string }) => ({
+  // Reverse to chronological order, then deduplicate consecutive same-role messages
+  const chronological = (history || []).reverse()
+  const deduped: typeof chronological = []
+  for (const msg of chronological) {
+    if (deduped.length > 0 && deduped[deduped.length - 1].role === msg.role) continue
+    deduped.push(msg)
+  }
+  // Ensure conversation starts with user message (Anthropic requirement)
+  while (deduped.length > 0 && deduped[0].role === 'assistant') deduped.shift()
+
+  const messages: MessageParam[] = deduped.map((m: { role: string; content: string }) => ({
     role: m.role as 'user' | 'assistant',
     content: m.content,
   }))
