@@ -85,10 +85,14 @@ export function Sidebar({ userEmail, role }: Props) {
     setSyncState('loading')
     try {
       const res = await fetch('/api/admin/sync', { method: 'POST' })
-      const data = await res.json()
+      const text = await res.text()
+      let data: any = {}
+      try { data = JSON.parse(text) } catch { console.error('Sync non-JSON:', text.slice(0, 200)) }
       setSyncState(data.ok ? 'ok' : 'error')
+      if (!data.ok) console.error('Sync error:', data.error, data.stderr)
       if (data.ok) setTimeout(() => setSyncState('idle'), 3000)
-    } catch {
+    } catch (e) {
+      console.error('Sync fetch error:', e)
       setSyncState('error')
     }
   }
