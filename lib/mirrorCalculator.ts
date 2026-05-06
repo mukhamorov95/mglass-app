@@ -74,8 +74,22 @@ export function calculateMirror(
 ): MirrorResult | null {
   if (!inputs.mirrorMaterial || inputs.width <= 0 || inputs.height <= 0) return null
 
-  const area      = (inputs.width * inputs.height) / 1_000_000
-  const perimeter = (2 * (inputs.width + inputs.height)) / 1000
+  let area: number
+  let perimeter: number
+  if (inputs.shape === 'circle') {
+    const r = Math.min(inputs.width, inputs.height) / 2 / 1000
+    area      = Math.PI * r * r
+    perimeter = 2 * Math.PI * r
+  } else if (inputs.shape === 'oval') {
+    const a = inputs.width / 2 / 1000
+    const b = inputs.height / 2 / 1000
+    area = Math.PI * a * b
+    const h = Math.pow(a - b, 2) / Math.pow(a + b, 2)
+    perimeter = Math.PI * (a + b) * (1 + (3 * h) / (10 + Math.sqrt(4 - 3 * h)))
+  } else {
+    area      = (inputs.width * inputs.height) / 1_000_000
+    perimeter = (2 * (inputs.width + inputs.height)) / 1000
+  }
 
   const lines: CostLine[] = []
 
@@ -208,9 +222,14 @@ export function calculateMirror(
   const managerBonus = managerBaseCommission + managerUpsellBonus
 
   // Клиентский текст
-  const matName  = inputs.mirrorMaterial.name  // напр. «Зеркало осветлённое 4 мм»
-  const shapeStr = inputs.shape === 'complex' ? 'фигурное' : 'прямоугольное'
-  const dims     = `${inputs.width} × ${inputs.height} мм`
+  const matName  = inputs.mirrorMaterial.name
+  const shapeStr =
+    inputs.shape === 'circle'  ? 'круглое'  :
+    inputs.shape === 'oval'    ? 'овальное' :
+    inputs.shape === 'complex' ? 'фигурное' : 'прямоугольное'
+  const dims =
+    inputs.shape === 'circle' ? `Ø${inputs.width} мм` :
+    `${inputs.width} × ${inputs.height} мм`
 
   const textParts: string[] = []
 

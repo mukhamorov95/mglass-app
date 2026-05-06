@@ -1,7 +1,7 @@
 import { NextResponse, after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
-import type { Tool, MessageParam } from '@anthropic-ai/sdk/resources/messages'
+import type { Tool } from '@anthropic-ai/sdk/resources/messages'
 import {
   sendMessage, editMessage, answerCallback, transcribeVoice,
   MAIN_MENU, type InlineKeyboard, type InlineButton,
@@ -30,7 +30,7 @@ function withTimeout<T>(p: Promise<T>, ms: number, label = ''): Promise<T> {
 
 async function getSession(tid: number) {
   const { data } = await db().from('telegram_sessions').select('state, context').eq('telegram_id', tid).single()
-  return data ?? { state: 'main_menu', context: {} }
+  return data ?? { state: 'main_menu', context: {} as Record<string, unknown> }
 }
 
 async function setSession(tid: number, state: string, context: Record<string, unknown> = {}) {
@@ -42,96 +42,213 @@ async function getTelegramUser(tid: number) {
   return data
 }
 
-// ─── Calc tool ───────────────────────────────────────────────────────────────
+// ─── Parsed calc input type ──────────────────────────────────────────────────
 
-const CALC_TOOL: Tool = {
-  name: 'calculate_price',
-  description: 'Рассчитать стоимость изделия MGlass по размерам.',
+type ParsedCalcInput = {
+  type: CalcType
+  width: number
+  height: number
+  options: CalcOptions
+}
+
+// ─── Parameter extraction tool ───────────────────────────────────────────────
+
+const PARSE_TOOL: Tool = {
+  name: 'extract_params',
+  description: 'Извлечь параметры изделия из запроса.',
   input_schema: {
     type: 'object' as const,
     properties: {
-      type:    { type: 'string', enum: ['mirror', 'loft', 'shower'] },
-      width:   { type: 'number', description: 'Ширина в мм' },
-      height:  { type: 'number', description: 'Высота в мм' },
-      options: {
-        type: 'object',
-        properties: {
-          hasLighting:  { type: 'boolean' },
-          withMounting: { type: 'boolean' },
-          model:        { type: 'string' },
-          tier:         { type: 'string', enum: ['budget', 'standard'] },
-          sections:     { type: 'number' },
-          systemType:   { type: 'string', enum: ['fixed', 'sliding', 'swing'] },
-        },
-      },
+      type:         { type: 'string', enum: ['mirror', 'loft', 'shower'], description: 'Тип изделия' },
+      width:        { type: 'number', description: 'Ширина в мм (для круга — диаметр)' },
+      height:       { type: 'number', description: 'Высота в мм (для круга = ширина)' },
+      shape:        { type: 'string', enum: ['rectangle', 'circle', 'oval'], description: 'Форма. circle — если сказано "круглое/круг/round"' },
+      mirrorType:   { type: 'string', enum: ['silver', 'crystal_vision'], description: 'crystal_vision — только если сказано "осветлённое/crystal vision/crystalvision". Иначе silver.' },
+      hasLighting:  { type: 'boolean', description: 'true ТОЛЬКО если явно: "подсветка/LED/Aura/с подсветкой"' },
+      hasSandblast: { type: 'boolean', description: 'true ТОЛЬКО если: "пескоструй/матирование/рисунок"' },
+      buttonType:   { type: 'string', enum: ['none', 'sensor', 'wave'], description: 'wave — датчик взмаха, sensor — сенсорная кнопка' },
+      withMounting: { type: 'boolean', description: 'true ТОЛЬКО если: "монтаж/установка/с монтажом"' },
+      model:        { type: 'string', description: 'Модель душевой: M1–M12' },
+      tier:         { type: 'string', enum: ['budget', 'standard'], description: 'Класс душевой' },
+      hardwareColor: { type: 'string', description: 'Цвет фурнитуры: chrome/black/gold/brass' },
+      systemType:   { type: 'string', enum: ['fixed', 'sliding', 'swing'], description: 'swing=распашная, sliding=раздвижная, fixed=неподвижная' },
+      sections:     { type: 'number', description: 'Секций лофт-перегородки' },
     },
     required: ['type', 'width', 'height'],
   },
 }
 
-const PARSE_SYSTEM = `Ты — парсер запросов MGlass. Задача: извлечь параметры и вызвать calculate_price.
+const PARSE_SYSTEM = `Ты — строгий парсер параметров MGlass. Задача: извлечь параметры и вызвать extract_params.
 
-Правила:
-- Есть размеры → вызывай calculate_price немедленно
-- Нет размеров → задай ОДИН вопрос: "Укажи размеры (ширина × высота в мм)"
-- Размеры в мм. 100 см = 1000 мм
-- mirror=зеркало, loft=лофт-перегородка, shower=душевая перегородка
-- hasLighting=true ТОЛЬКО если клиент прямо сказал "подсветка" / "LED" / "с подсветкой"
-- withMounting=true ТОЛЬКО если сказал "монтаж" / "установка" / "с монтажом"
-- Не добавляй опции которые не упомянуты явно`
+ПРАВИЛА (нарушение недопустимо):
+- Есть тип + размеры → сразу вызывай extract_params
+- Нет размеров → спроси только: "Укажи размеры (ширина × высота в мм)"
+- Размеры в мм. 100 см = 1000 мм. 80 см = 800 мм.
 
-async function runCalcChain(text: string): Promise<{ reply: string; hasResult: boolean }> {
-  const messages: MessageParam[] = [{ role: 'user', content: text }]
+ФОРМА ЗЕРКАЛА:
+- "круглое/круг/round/круглой формы" → shape: circle, width = height = диаметр
+- "овальное/oval" → shape: oval
+- Всё остальное → shape: rectangle (не указывай если прямоугольник)
 
+МАТЕРИАЛ ЗЕРКАЛА:
+- "осветлённое/осветленное/crystal vision/crystalvision/crystal" → mirrorType: crystal_vision
+- Всё остальное → mirrorType: silver (или не указывай)
+
+ПОДСВЕТКА:
+- ТОЛЬКО "подсветка/LED/Aura/с подсветкой/по периметру" → hasLighting: true
+- Без упоминания → НЕ включать
+
+МОНТАЖ:
+- ТОЛЬКО "монтаж/установка/с монтажом/повесить" → withMounting: true
+- Без упоминания → НЕ включать
+
+ЗАПРЕЩЕНО добавлять параметры которые пользователь не упоминал.`
+
+// ─── Normalization ───────────────────────────────────────────────────────────
+
+function normalizeInput(raw: Record<string, unknown>): ParsedCalcInput {
+  const type = raw.type as CalcType
+  let width  = Number(raw.width)  || 0
+  let height = Number(raw.height) || 0
+  const shape = raw.shape as CalcOptions['shape'] | undefined
+
+  // Нормализация синонимов цвета фурнитуры
+  const colorMap: Record<string, string> = {
+    'черн': 'black', 'black': 'black',
+    'хром': 'chrome', 'chrome': 'chrome', 'серебр': 'chrome',
+    'золот': 'gold', 'gold': 'gold',
+    'брасс': 'brass', 'латунь': 'brass',
+  }
+  let hardwareColor = raw.hardwareColor as string | undefined
+  if (hardwareColor) {
+    const lc = hardwareColor.toLowerCase()
+    hardwareColor = Object.entries(colorMap).find(([k]) => lc.includes(k))?.[1] ?? hardwareColor
+  }
+
+  // Для круга ширина = высота = диаметр
+  if (shape === 'circle') {
+    const d = Math.max(width, height)
+    width = height = d
+  }
+
+  const options: CalcOptions = {
+    shape,
+    mirrorType:   raw.mirrorType   as CalcOptions['mirrorType']   | undefined,
+    hasLighting:  Boolean(raw.hasLighting),
+    hasSandblast: Boolean(raw.hasSandblast),
+    buttonType:   (raw.buttonType  as CalcOptions['buttonType'])  ?? 'none',
+    withMounting: Boolean(raw.withMounting),
+    model:        raw.model        as string | undefined,
+    tier:         raw.tier         as CalcOptions['tier']         | undefined,
+    hardwareColor,
+    systemType:   raw.systemType   as CalcOptions['systemType']   | undefined,
+    sections:     raw.sections     ? Number(raw.sections)         : undefined,
+  }
+
+  // Убираем undefined-поля
+  Object.keys(options).forEach(k => {
+    if (options[k as keyof CalcOptions] === undefined) delete options[k as keyof CalcOptions]
+  })
+
+  return { type, width, height, options }
+}
+
+// ─── Parsed params summary ───────────────────────────────────────────────────
+
+function formatConfirmText(p: ParsedCalcInput, originalText?: string): string {
+  const typeLabels: Record<string, string> = {
+    mirror: '🪞 Зеркало', shower: '🚿 Душевая', loft: '🏗 Лофт',
+  }
+  const shapeLabels: Record<string, string> = {
+    circle: 'круглое', oval: 'овальное', rectangle: 'прямоугольное',
+  }
+  const systemLabels: Record<string, string> = {
+    fixed: 'неподвижная', sliding: 'раздвижная', swing: 'распашная',
+  }
+
+  const lines: string[] = ['📋 <b>Я понял запрос так:</b>\n']
+  lines.push(`Изделие: <b>${typeLabels[p.type] ?? p.type}</b>`)
+
+  if (p.type === 'mirror') {
+    const shape = p.options.shape ?? 'rectangle'
+    lines.push(`Форма: <b>${shapeLabels[shape]}</b>`)
+    if (shape === 'circle') {
+      lines.push(`Диаметр: <b>Ø${p.width} мм</b>`)
+    } else {
+      lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
+    }
+    lines.push(`Материал: <b>${p.options.mirrorType === 'crystal_vision' ? 'Crystal Vision (осветлённое)' : 'Silver (стандарт)'}</b>`)
+    if (p.options.hasLighting)  lines.push('Подсветка: <b>Aura ✓</b>')
+    if (p.options.hasSandblast) lines.push('Пескоструй: <b>да ✓</b>')
+    if (p.options.buttonType === 'wave')   lines.push('Кнопка: <b>датчик взмаха ✓</b>')
+    if (p.options.buttonType === 'sensor') lines.push('Кнопка: <b>сенсорная ✓</b>')
+  } else if (p.type === 'shower') {
+    lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
+    if (p.options.model)       lines.push(`Модель: <b>${p.options.model}</b>`)
+    if (p.options.tier)        lines.push(`Класс: <b>${p.options.tier === 'budget' ? 'Бюджет' : 'Стандарт'}</b>`)
+    if (p.options.hardwareColor) lines.push(`Фурнитура: <b>${p.options.hardwareColor}</b>`)
+    if (p.options.systemType)  lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
+  } else if (p.type === 'loft') {
+    lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
+    if (p.options.sections)    lines.push(`Секций: <b>${p.options.sections}</b>`)
+    if (p.options.systemType)  lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
+  }
+
+  if (p.options.withMounting) lines.push('Монтаж: <b>включён ✓</b>')
+
+  lines.push('\nВсё верно?')
+  return lines.join('\n')
+}
+
+// ─── Calculation & result formatting ─────────────────────────────────────────
+
+async function runCalc(p: ParsedCalcInput): Promise<{ reply: string; hasResult: boolean; margin: number }> {
+  const result = await withTimeout(
+    quickCalc(p.type, p.width, p.height, p.options),
+    12000, 'quickCalc'
+  )
+  if (!result) return { reply: '❌ Не удалось рассчитать. Проверь параметры.', hasResult: false, margin: 0 }
+
+  const icon = result.margin >= 40 ? '🟢' : result.margin >= 30 ? '🟡' : '🔴'
+  const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+
+  const reply = [
+    result.description,
+    '',
+    `📊 <i>Маржа: ${result.margin}% ${icon} | Итого: ${fmt(result.price)}</i>`,
+  ].join('\n')
+
+  return { reply, hasResult: true, margin: result.margin }
+}
+
+// ─── Claude parameter extraction ─────────────────────────────────────────────
+
+async function parseCalcInput(text: string): Promise<ParsedCalcInput | string> {
   const response = await withTimeout(
     anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: 300,
       system: PARSE_SYSTEM,
-      tools: [CALC_TOOL],
+      tools: [PARSE_TOOL],
       tool_choice: { type: 'auto' },
-      messages,
+      messages: [{ role: 'user', content: text }],
     }),
-    20000,
-    'claude-parse'
+    20000, 'claude-parse'
   )
 
-  // Claude asked a clarifying question
   if (response.stop_reason !== 'tool_use') {
-    const question = response.content.find(b => b.type === 'text')?.text ?? 'Укажи размеры (ширина × высота в мм).'
-    return { reply: question, hasResult: false }
+    return response.content.find(b => b.type === 'text')?.text ?? 'Укажи тип изделия и размеры (ширина × высота в мм).'
   }
 
-  // Tool called — calculate and format deterministically
-  const toolBlock = response.content.find(b => b.type === 'tool_use')
-  if (!toolBlock || toolBlock.type !== 'tool_use') {
-    return { reply: 'Укажи размеры (ширина × высота в мм).', hasResult: false }
+  const block = response.content.find(b => b.type === 'tool_use')
+  if (!block || block.type !== 'tool_use') {
+    return 'Укажи тип изделия и размеры (ширина × высота в мм).'
   }
 
-  const input = toolBlock.input as { type: string; width: number; height: number; options?: CalcOptions }
-  const result = await withTimeout(
-    quickCalc(input.type as CalcType, input.width, input.height, input.options ?? {}),
-    8000,
-    'quickCalc'
-  )
-
-  if (!result) return { reply: '❌ Не удалось рассчитать. Проверь параметры и попробуй снова.', hasResult: false }
-
-  const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
-  const margin = result.price > 0 ? Math.round(((result.price - result.finalPrice) / result.price) * 100) : 0
-  const icon = margin >= 40 ? '🟢' : margin >= 30 ? '🟡' : '🔴'
-
-  // Client text from calculator (deterministic — no AI invention)
-  const reply = [
-    result.description,
-    '',
-    `📊 <i>Маржа: ${margin}% ${icon} | Цена: ${fmt(result.price)}</i>`,
-  ].join('\n')
-
-  return { reply, hasResult: true }
+  return normalizeInput(block.input as Record<string, unknown>)
 }
 
-// ─── Format leads keyboard ───────────────────────────────────────────────────
+// ─── Leads keyboard ───────────────────────────────────────────────────────────
 
 function leadsKeyboard(chats: any[], page: number): InlineKeyboard {
   const PAGE = 5
@@ -148,107 +265,108 @@ function leadsKeyboard(chats: any[], page: number): InlineKeyboard {
   return rows
 }
 
-// ─── /health ─────────────────────────────────────────────────────────────────
+// ─── /health ──────────────────────────────────────────────────────────────────
 
 async function handleHealth(chatId: number) {
   const checks: string[] = ['🔧 <b>Статус MGlass Bot</b>\n']
-
   try {
     await withTimeout(Promise.resolve(db().from('telegram_sessions').select('telegram_id').limit(1)), 4000, 'supabase')
     checks.push('✅ Supabase — подключён')
   } catch {
-    checks.push('❌ Supabase — ошибка подключения')
+    checks.push('❌ Supabase — ошибка')
   }
-
   checks.push(process.env.ANTHROPIC_API_KEY ? '✅ Anthropic — ключ задан' : '❌ Anthropic — ключ не задан')
-  checks.push(process.env.OPENAI_API_KEY ? '✅ OpenAI (голос) — ключ задан' : '⚠️ OpenAI (голос) — ключ не задан')
+  checks.push(process.env.OPENAI_API_KEY    ? '✅ OpenAI (голос) — ключ задан' : '⚠️ OpenAI — ключ не задан (голос недоступен)')
   checks.push(process.env.TELEGRAM_BOT_TOKEN ? '✅ Telegram token — задан' : '❌ Telegram token — не задан')
   checks.push('✅ Webhook — активен')
-
   await sendMessage(chatId, checks.join('\n'), [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
 }
 
-// ─── /debug ──────────────────────────────────────────────────────────────────
+// ─── /debug & /debug_last ─────────────────────────────────────────────────────
 
 async function handleDebug(chatId: number, tid: number) {
-  const tgUser = await getTelegramUser(tid)
+  const tgUser  = await getTelegramUser(tid)
   const session = await getSession(tid)
-
   const lines = [
     '🔍 <b>Debug Info</b>\n',
     `Telegram ID: <code>${tid}</code>`,
-    `Авторизован: ${tgUser ? '✅ да' : '❌ нет'}`,
+    `Авторизован: ${tgUser ? '✅' : '❌'}`,
     `Состояние: <code>${session.state}</code>`,
-    `Контекст: <code>${JSON.stringify(session.context).slice(0, 100)}</code>`,
-    '',
     `OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✅' : '❌'}`,
     `ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`,
     `TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? '✅' : '❌'}`,
-    `SUPABASE_URL: ${process.env.NEXT_PUBLIC_SUPABASE_URL ? '✅' : '❌'}`,
   ]
+  await sendMessage(chatId, lines.join('\n'), [[{ text: '📋 Последний расчёт', callback_data: 'debug:last' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
+}
 
-  await sendMessage(chatId, lines.join('\n'), [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+async function handleDebugLast(chatId: number, tid: number) {
+  const session = await getSession(tid)
+  const d = (session.context as any)?.lastDebug as Record<string, unknown> | undefined
+  if (!d) {
+    await sendMessage(chatId, '📋 Нет данных о последнем расчёте.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+    return
+  }
+  const lines = [
+    '📋 <b>Последний расчёт — отладка</b>\n',
+    d.transcription ? `🎙 Транскрипция:\n<i>${d.transcription}</i>\n` : null,
+    d.parsed ? `🔍 Распознано:\n<code>${JSON.stringify(d.parsed, null, 2)}</code>\n` : null,
+    d.margin !== undefined ? `📊 Маржа: ${d.margin}%` : null,
+    d.error ? `❌ Ошибка: <code>${d.error}</code>` : null,
+  ].filter(Boolean).join('\n')
+  await sendMessage(chatId, lines, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
 }
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
 async function handle(update: any) {
   const msg = update.message
-  const cb = update.callback_query
+  const cb  = update.callback_query
   if (!msg && !cb) return
 
-  const tid: number = (msg ?? cb.message).chat.id
+  const tid    = (msg ?? cb.message).chat.id as number
   const chatId = tid
 
-  console.log(`[TG] update tid=${tid} type=${msg ? 'msg' : 'cb'}`)
+  console.log(`[TG] tid=${tid} type=${msg ? 'msg' : 'cb'}`)
 
-  // /health доступна без авторизации
+  // /health без авторизации
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/health') { await handleHealth(chatId); return }
   }
 
-  // Auth check
   const tgUser = await getTelegramUser(tid)
 
+  // ── Неавторизованный ──
   if (!tgUser) {
     if (msg?.text && /^\d{6}$/.test(msg.text.trim())) {
-      const code = msg.text.trim()
+      const code    = msg.text.trim()
       const supabase = db()
       const { data: codeRow } = await supabase
-        .from('telegram_auth_codes')
-        .select('user_id')
-        .eq('code', code)
-        .eq('used', false)
-        .gt('expires_at', new Date().toISOString())
-        .single()
+        .from('telegram_auth_codes').select('user_id')
+        .eq('code', code).eq('used', false)
+        .gt('expires_at', new Date().toISOString()).single()
 
       if (!codeRow) {
         await sendMessage(chatId, '❌ Код неверный или истёк. Попроси администратора создать новый.')
         return
       }
-
       await supabase.from('telegram_users').upsert({
-        telegram_id: tid,
-        user_id: codeRow.user_id,
-        first_name: msg.from?.first_name ?? null,
-        username: msg.from?.username ?? null,
+        telegram_id: tid, user_id: codeRow.user_id,
+        first_name: msg.from?.first_name ?? null, username: msg.from?.username ?? null,
       })
       await supabase.from('telegram_auth_codes').update({ used: true }).eq('code', code)
       await setSession(tid, 'main_menu')
       await sendMessage(chatId, `✅ Привязка успешна! Добро пожаловать в MGlass Assistant.`, MAIN_MENU)
       return
     }
-
     await sendMessage(chatId, '🔒 Введи <b>6-значный код</b> из MGlass (Admin → Пользователи → кнопка TG).')
     return
   }
 
   console.log(`[TG] authorized user_id=${tgUser.user_id}`)
-
   const session = await getSession(tid)
 
-  // ── Команды для авторизованных ──
+  // ── Команды авторизованного ──
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/start' || cmd === '/menu') {
@@ -256,13 +374,14 @@ async function handle(update: any) {
       await setSession(tid, 'main_menu')
       return
     }
-    if (cmd === '/debug') { await handleDebug(chatId, tid); return }
+    if (cmd === '/debug')      { await handleDebug(chatId, tid); return }
+    if (cmd === '/debug_last') { await handleDebugLast(chatId, tid); return }
   }
 
   // ── Callback buttons ──
   if (cb) {
     await answerCallback(cb.id)
-    const data: string = cb.data
+    const data: string  = cb.data
     const msgId: number = cb.message.message_id
 
     if (data === 'menu:main') {
@@ -272,13 +391,13 @@ async function handle(update: any) {
     }
 
     if (data === 'menu:calc') {
-      await editMessage(chatId, msgId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n\nПример: <i>Душевая 1000×2000 распашная с монтажом</i>')
+      await editMessage(chatId, msgId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n\n<i>Пример: Душевая 1000×2000 распашная с монтажом</i>')
       await setSession(tid, 'calc_input')
       return
     }
 
     if (data === 'menu:train') {
-      await editMessage(chatId, msgId, '🧠 <b>Задача для AI</b>\n\nОпиши текстом или голосом что нужно улучшить в AI-боте.')
+      await editMessage(chatId, msgId, '🧠 <b>Задача для AI</b>\n\nОпиши что нужно улучшить в боте.')
       await setSession(tid, 'train_input')
       return
     }
@@ -286,28 +405,24 @@ async function handle(update: any) {
     if (data === 'menu:leads' || data.startsWith('leads:page:')) {
       const page = data.startsWith('leads:page:') ? parseInt(data.split(':')[2]) : 0
       const { data: chats } = await db()
-        .from('ai_managed_chats')
-        .select('chat_id, client_name, is_active, last_message_at')
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-        .limit(50)
+        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
+        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
       const list = chats ?? []
       if (!list.length) {
         await editMessage(chatId, msgId, '📋 Нет активных лидов.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
         return
       }
-      await editMessage(chatId, msgId, `📋 <b>Лиды</b> (${list.length} шт)`, leadsKeyboard(list, page))
-      await setSession(tid, 'leads_list', { page, chats: list.map(c => c.chat_id) })
+      await editMessage(chatId, msgId, `📋 <b>Лиды</b> (${list.length})`, leadsKeyboard(list, page))
+      await setSession(tid, 'leads_list', { page })
       return
     }
 
     if (data === 'menu:msg') {
       const { data: chats } = await db()
-        .from('ai_managed_chats')
-        .select('chat_id, client_name, is_active, last_message_at')
-        .order('last_message_at', { ascending: false, nullsFirst: false })
-        .limit(50)
+        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
+        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
       const list = chats ?? []
-      await editMessage(chatId, msgId, `📋 <b>Выбери клиента:</b>`, leadsKeyboard(list, 0))
+      await editMessage(chatId, msgId, '📋 <b>Выбери клиента:</b>', leadsKeyboard(list, 0))
       await setSession(tid, 'msg_select_lead')
       return
     }
@@ -315,25 +430,25 @@ async function handle(update: any) {
     if (data.startsWith('lead:') && !data.startsWith('lead:pause') && !data.startsWith('lead:resume') && !data.startsWith('lead:msg')) {
       const chatPhoneId = data.slice(5)
       const { data: chat } = await db().from('ai_managed_chats').select('*').eq('chat_id', chatPhoneId).single()
-      if (!chat) { await answerCallback(cb.id, 'Не найдено'); return }
+      if (!chat) return
 
-      const { data: lastMsgs } = await db()
-        .from('ai_conversations')
-        .select('role, content')
-        .eq('chat_id', chatPhoneId)
-        .order('created_at', { ascending: false })
-        .limit(3)
+      const { data: lastMsgs } = await db().from('ai_conversations')
+        .select('role, content').eq('chat_id', chatPhoneId)
+        .order('created_at', { ascending: false }).limit(3)
       const history = (lastMsgs ?? []).reverse().map(m => `${m.role === 'user' ? '👤' : '🤖'} ${m.content}`).join('\n')
 
-      const statusText = chat.is_active ? '🟢 AI активен' : `⚪ Закрыт (${chat.close_reason ?? '—'})`
-      const text = [`<b>${chat.client_name || chat.chat_id}</b>`, `📱 ${chat.chat_id}`, statusText, '', history || '(нет сообщений)'].join('\n')
+      const text = [
+        `<b>${chat.client_name || chat.chat_id}</b>`, `📱 ${chat.chat_id}`,
+        chat.is_active ? '🟢 AI активен' : `⚪ Закрыт (${chat.close_reason ?? '—'})`,
+        '', history || '(нет сообщений)',
+      ].join('\n')
 
       const keyboard: InlineKeyboard = [
         [
           { text: '💬 Написать', callback_data: `lead:msg:${chatPhoneId}` },
           chat.is_active
             ? { text: '⏸ Остановить AI', callback_data: `lead:pause:${chatPhoneId}` }
-            : { text: '▶ Включить AI', callback_data: `lead:resume:${chatPhoneId}` },
+            : { text: '▶ Включить AI',   callback_data: `lead:resume:${chatPhoneId}` },
         ],
         [{ text: '◀ К списку', callback_data: 'menu:leads' }],
       ]
@@ -360,8 +475,53 @@ async function handle(update: any) {
 
     if (data.startsWith('lead:msg:')) {
       const chatPhoneId = data.slice(9)
-      await editMessage(chatId, msgId, `💬 Введи сообщение для клиента <b>${chatPhoneId}</b>.\n\nМожно текстом или голосом.`)
+      await editMessage(chatId, msgId, `💬 Введи сообщение для <b>${chatPhoneId}</b>. Текстом или голосом.`)
       await setSession(tid, 'lead_send_msg', { chatPhoneId })
+      return
+    }
+
+    // ── Calc confirm / reenter ──
+    if (data === 'calc:confirm') {
+      const ctx = session.context as any
+      const parsed = ctx?.parsedInput as ParsedCalcInput | undefined
+      if (!parsed) {
+        await editMessage(chatId, msgId, '❌ Параметры устарели. Введи запрос заново.', [[{ text: '🧮 Расчёт', callback_data: 'menu:calc' }]])
+        return
+      }
+
+      const waitMsg = await sendMessage(chatId, '⏳ Считаю...') as any
+      const waitMsgId = waitMsg?.result?.message_id
+
+      try {
+        console.log('[TG] calc confirmed, running quickCalc')
+        const { reply, hasResult, margin } = await runCalc(parsed)
+        console.log(`[TG] calc done margin=${margin}`)
+
+        const keyboard: InlineKeyboard = hasResult
+          ? [[{ text: '💾 Сохранить', callback_data: 'calc:save' }], [{ text: '🔄 Ещё', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
+          : [[{ text: '🏠 Меню', callback_data: 'menu:main' }]]
+
+        if (waitMsgId) await editMessage(chatId, waitMsgId, reply, keyboard)
+        else await sendMessage(chatId, reply, keyboard)
+
+        // Save debug + update session
+        const newCtx = { ...ctx, lastDebug: { ...((ctx.lastDebug as any) ?? {}), margin, calcResult: reply } }
+        await setSession(tid, hasResult ? 'main_menu' : 'calc_input', { ...newCtx, calcText: reply })
+      } catch (err) {
+        console.error('[TG] calc error:', err)
+        const isTimeout = err instanceof Error && err.message.startsWith('timeout')
+        const errText = isTimeout ? '⏱ Расчёт занял слишком долго. Попробуй снова.' : '❌ Ошибка расчёта. Попробуй снова.'
+        const kb: InlineKeyboard = [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
+        if (waitMsgId) await editMessage(chatId, waitMsgId, errText, kb)
+        else await sendMessage(chatId, errText, kb)
+        await setSession(tid, 'calc_input', { ...session.context, lastDebug: { error: String(err) } })
+      }
+      return
+    }
+
+    if (data === 'calc:reenter') {
+      await editMessage(chatId, msgId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие заново. Например:\n<i>Круглое зеркало 800 мм</i>\n<i>Душевая 900×2000 распашная с монтажом</i>')
+      await setSession(tid, 'calc_input')
       return
     }
 
@@ -369,15 +529,17 @@ async function handle(update: any) {
       const ctx = session.context as any
       if (ctx?.calcText) {
         await db().from('ai_training_tasks').insert({
-          title: 'Сохранённый расчёт из Telegram',
-          description: ctx.calcText,
-          source_text: ctx.calcText,
-          category: 'calculation',
-          created_by: tgUser.user_id,
+          title: 'Расчёт из Telegram', description: ctx.calcText,
+          source_text: ctx.calcText, category: 'calculation', created_by: tgUser.user_id,
         })
       }
       await answerCallback(cb.id, '✅ Сохранено')
-      await editMessage(chatId, msgId, `✅ Расчёт сохранён.`, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      await editMessage(chatId, msgId, '✅ Расчёт сохранён.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      return
+    }
+
+    if (data === 'debug:last') {
+      await handleDebugLast(chatId, tid)
       return
     }
 
@@ -385,40 +547,30 @@ async function handle(update: any) {
   }
 
   // ── Text / Voice ──
-  let inputText = msg?.text ?? ''
+  let inputText    = msg?.text ?? ''
+  let transcription: string | undefined
 
   if (msg?.voice || msg?.audio) {
     if (!process.env.OPENAI_API_KEY) {
-      await sendMessage(chatId,
-        '⚠️ Голосовое распознавание пока не настроено.\n\nОтправь запрос текстом.',
-        [[{ text: '🏠 Меню', callback_data: 'menu:main' }]]
-      )
+      await sendMessage(chatId, '⚠️ Голосовое распознавание не настроено. Отправь текстом.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
-
-    const fileId = msg.voice?.file_id ?? msg.audio?.file_id
+    const fileId   = msg.voice?.file_id ?? msg.audio?.file_id
     const statusMsg = await sendMessage(chatId, '🎙 Распознаю голос...') as any
     const statusMsgId = statusMsg?.result?.message_id
 
     try {
       console.log(`[TG] voice transcription start tid=${tid}`)
       inputText = await withTimeout(transcribeVoice(fileId), 30000, 'whisper')
-      console.log(`[TG] voice transcription done: "${inputText.slice(0, 60)}"`)
-
-      if (statusMsgId) {
-        await editMessage(chatId, statusMsgId, `📝 <i>${inputText}</i>`)
-      }
+      transcription = inputText
+      console.log(`[TG] voice done: "${inputText.slice(0, 60)}"`)
+      if (statusMsgId) await editMessage(chatId, statusMsgId, `🎙 Распознал: <i>${inputText}</i>`)
     } catch (err) {
-      console.error(`[TG] voice error:`, err)
+      console.error('[TG] voice error:', err)
       const isTimeout = err instanceof Error && err.message.startsWith('timeout')
-      const text = isTimeout
-        ? '⏱ Распознавание заняло слишком долго. Попробуй ещё раз или отправь текстом.'
-        : '❌ Не удалось распознать голос. Проверь соединение или отправь текстом.'
-      if (statusMsgId) {
-        await editMessage(chatId, statusMsgId, text, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      } else {
-        await sendMessage(chatId, text, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      }
+      const text = isTimeout ? '⏱ Распознавание заняло слишком долго.' : '❌ Не удалось распознать голос.'
+      if (statusMsgId) await editMessage(chatId, statusMsgId, `${text} Попробуй текстом.`, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      else await sendMessage(chatId, `${text} Попробуй текстом.`, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
   }
@@ -433,43 +585,49 @@ async function handle(update: any) {
     return
   }
 
+  // ── Расчёт: парсинг → подтверждение ──
   if (state === 'calc_input') {
-    console.log(`[TG] calc start: "${inputText.slice(0, 60)}"`)
-    const waitMsg = await sendMessage(chatId, '⏳ Считаю...') as any
-    const waitMsgId = waitMsg?.result?.message_id
+    const thinkMsg  = await sendMessage(chatId, '🔍 Распознаю параметры...') as any
+    const thinkMsgId = thinkMsg?.result?.message_id
 
     try {
-      const { reply, hasResult } = await runCalcChain(inputText)
-      console.log(`[TG] calc done hasResult=${hasResult}`)
+      console.log(`[TG] parsing: "${inputText.slice(0, 60)}"`)
+      const parseResult = await parseCalcInput(inputText)
 
-      const keyboard: InlineKeyboard = hasResult
-        ? [[{ text: '💾 Сохранить', callback_data: 'calc:save' }], [{ text: '🔄 Ещё расчёт', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
-        : [[{ text: '🏠 Меню', callback_data: 'menu:main' }]]
-
-      if (waitMsgId) {
-        await editMessage(chatId, waitMsgId, reply, keyboard)
-      } else {
-        await sendMessage(chatId, reply, keyboard)
+      if (typeof parseResult === 'string') {
+        // Claude задал уточняющий вопрос
+        if (thinkMsgId) await editMessage(chatId, thinkMsgId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        else await sendMessage(chatId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        return
       }
-      await setSession(tid, hasResult ? 'main_menu' : 'calc_input', { calcText: reply })
+
+      console.log(`[TG] parsed:`, JSON.stringify(parseResult))
+
+      const confirmText = formatConfirmText(parseResult, inputText)
+      const keyboard: InlineKeyboard = [
+        [{ text: '✅ Считать', callback_data: 'calc:confirm' }, { text: '✏️ Исправить', callback_data: 'calc:reenter' }],
+        [{ text: '🏠 Меню', callback_data: 'menu:main' }],
+      ]
+
+      if (thinkMsgId) await editMessage(chatId, thinkMsgId, confirmText, keyboard)
+      else await sendMessage(chatId, confirmText, keyboard)
+
+      await setSession(tid, 'calc_confirm', {
+        parsedInput: parseResult,
+        lastDebug: { transcription, parsed: parseResult },
+      })
     } catch (err) {
-      console.error(`[TG] calc error:`, err)
+      console.error('[TG] parse error:', err)
       const isTimeout = err instanceof Error && err.message.startsWith('timeout')
-      const errText = isTimeout
-        ? '⏱ Расчёт занял слишком долго. Попробуй ещё раз.'
-        : '❌ Не удалось выполнить расчёт. Попробуй перефразировать запрос.'
-      const kb: InlineKeyboard = [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
-      if (waitMsgId) {
-        await editMessage(chatId, waitMsgId, errText, kb)
-      } else {
-        await sendMessage(chatId, errText, kb)
-      }
+      const errText = isTimeout ? '⏱ Распознавание параметров заняло слишком долго.' : '❌ Не удалось распознать параметры. Попробуй снова.'
+      if (thinkMsgId) await editMessage(chatId, thinkMsgId, errText, [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
+      else await sendMessage(chatId, errText, [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     return
   }
 
   if (state === 'train_input') {
-    const waitMsg = await sendMessage(chatId, '⏳ Сохраняю...') as any
+    const waitMsg  = await sendMessage(chatId, '⏳ Сохраняю...') as any
     const waitMsgId = waitMsg?.result?.message_id
 
     try {
@@ -480,46 +638,28 @@ async function handle(update: any) {
           system: 'Classify this AI improvement task. Respond with JSON only: {"title":"short title in Russian","category":"tone|closing|objections|pricing|product|other"}',
           messages: [{ role: 'user', content: inputText }],
         }),
-        15000,
-        'claude-classify'
+        15000, 'claude-classify'
       )
-
-      let title = inputText.slice(0, 80)
-      let category = 'other'
+      let title = inputText.slice(0, 80), category = 'other'
       try {
         const raw = classifyResp.content.find(b => b.type === 'text')?.text ?? '{}'
-        const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
-        title = parsed.title ?? title
-        category = parsed.category ?? category
+        const p = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
+        title = p.title ?? title; category = p.category ?? category
       } catch {}
 
       await db().from('ai_training_tasks').insert({
-        title,
-        description: inputText,
-        source_text: inputText,
-        category,
-        priority: 'normal',
-        status: 'pending',
-        created_by: tgUser.user_id,
+        title, description: inputText, source_text: inputText,
+        category, priority: 'normal', status: 'pending', created_by: tgUser.user_id,
       })
 
-      const resultText = `✅ <b>Задача AI сохранена:</b>\n\n${title}\n\n<i>Категория: ${category}</i>`
-      const kb: InlineKeyboard = [[{ text: '➕ Ещё задача', callback_data: 'menu:train' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
-
-      if (waitMsgId) {
-        await editMessage(chatId, waitMsgId, resultText, kb)
-      } else {
-        await sendMessage(chatId, resultText, kb)
-      }
+      const text = `✅ <b>Задача AI сохранена:</b>\n\n${title}\n<i>Категория: ${category}</i>`
+      const kb: InlineKeyboard = [[{ text: '➕ Ещё', callback_data: 'menu:train' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
+      if (waitMsgId) await editMessage(chatId, waitMsgId, text, kb)
+      else await sendMessage(chatId, text, kb)
       await setSession(tid, 'main_menu')
     } catch (err) {
-      console.error(`[TG] train error:`, err)
-      const errText = '❌ Не удалось сохранить задачу. Попробуй ещё раз.'
-      if (waitMsgId) {
-        await editMessage(chatId, waitMsgId, errText, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      } else {
-        await sendMessage(chatId, errText, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      }
+      console.error('[TG] train error:', err)
+      if (waitMsgId) await editMessage(chatId, waitMsgId, '❌ Не удалось сохранить.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     return
   }
@@ -527,19 +667,16 @@ async function handle(update: any) {
   if (state === 'lead_send_msg') {
     const ctx = session.context as any
     const chatPhoneId: string = ctx.chatPhoneId
-
     try {
       const { data: chat } = await db().from('ai_managed_chats').select('channel_id, chat_type').eq('chat_id', chatPhoneId).single()
       if (!chat) throw new Error('chat not found')
       await sendWA(chat.channel_id, chatPhoneId, chat.chat_type, inputText)
       await db().from('ai_conversations').insert({ chat_id: chatPhoneId, role: 'assistant', content: inputText })
-      await sendMessage(chatId,
-        `✅ Сообщение отправлено!\n\n<i>${inputText}</i>`,
-        [[{ text: '◀ К клиенту', callback_data: `lead:${chatPhoneId}` }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
-      )
+      await sendMessage(chatId, `✅ Отправлено!\n\n<i>${inputText}</i>`,
+        [[{ text: '◀ К клиенту', callback_data: `lead:${chatPhoneId}` }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
     } catch (err) {
-      console.error(`[TG] lead_send error:`, err)
-      await sendMessage(chatId, '❌ Не удалось отправить сообщение.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      console.error('[TG] lead_send error:', err)
+      await sendMessage(chatId, '❌ Не удалось отправить.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     await setSession(tid, 'main_menu')
     return
@@ -549,7 +686,7 @@ async function handle(update: any) {
   await setSession(tid, 'main_menu')
 }
 
-// ─── POST ─────────────────────────────────────────────────────────────────────
+// ─── POST ──────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
   const secret = req.headers.get('x-telegram-bot-api-secret-token')
@@ -564,7 +701,6 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  // Отвечаем Telegram сразу, обрабатываем в фоне
   after(async () => {
     try {
       await handle(update)

@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { calculateMirror, type MirrorInputs } from './mirrorCalculator'
+import { calculateMirror, type MirrorInputs, type MirrorShape } from './mirrorCalculator'
 import {
   calculateShower, SHOWER_MODELS, TIER_CONFIGS, HARDWARE_COLORS,
   type ShowerInputs,
@@ -21,12 +21,15 @@ export type CalcOptions = {
   divisions?: number
   systemType?: 'fixed' | 'sliding' | 'swing'
   withMounting?: boolean
+  shape?: 'rectangle' | 'circle' | 'oval'
+  mirrorType?: 'silver' | 'crystal_vision'
 }
 
 export type QuickCalcResult = {
   price: number
   finalPrice: number
   description: string
+  margin: number
   serviceLines?: Array<{ name: string; total: number }>
 }
 
@@ -71,19 +74,16 @@ export async function quickCalc(
   if (type === 'mirror') {
     const cfg = pickSettings(settings, 'mirror_light')
     const allMirrorMats = materials.filter(m => m.category === 'зеркало')
-    // Always default to Silver 4mm (budget) — never осветлённое unless explicitly requested
-    const mirrorMaterial =
-      allMirrorMats.find(m => m.name.toLowerCase().includes('silver') && !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ??
-      allMirrorMats.find(m => !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ??
-      allMirrorMats[0] ??
-      null
+    const mirrorMaterial = options.mirrorType === 'crystal_vision'
+      ? (allMirrorMats.find(m => m.name.toLowerCase().includes('осветлённое') || m.name.toLowerCase().includes('crystal')) ?? allMirrorMats[0] ?? null)
+      : (allMirrorMats.find(m => m.name.toLowerCase().includes('silver') && !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ?? allMirrorMats.find(m => !m.name.toLowerCase().includes('6 мм')) ?? allMirrorMats[0] ?? null)
     if (!mirrorMaterial) return null
 
     const inputs: MirrorInputs = {
       width,
       height,
       mirrorMaterial,
-      shape: 'rectangle',
+      shape: (options.shape as MirrorShape) ?? 'rectangle',
       hasLighting: Boolean(options.hasLighting),
       buttonType: options.buttonType ?? 'none',
       hasSandblast: Boolean(options.hasSandblast),
@@ -100,7 +100,7 @@ export async function quickCalc(
     }
     const result = calculateMirror(inputs, materials, services)
     if (!result) return null
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, serviceLines: result.serviceLines }
+    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
   }
 
   if (type === 'shower') {
@@ -136,7 +136,7 @@ export async function quickCalc(
       hwTierMultiplier: tierCfg.hwMultiplier,
     }
     const result = calculateShower(inputs, services)
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText }
+    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
   }
 
   if (type === 'loft') {
@@ -164,7 +164,7 @@ export async function quickCalc(
     }
     const result = calculateLoft(inputs, materials, services, cfg)
     if (!result) return null
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText }
+    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
   }
 
   return null
