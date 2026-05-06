@@ -63,7 +63,7 @@ const CALC_TOOL: Tool = {
         type: 'object',
         description: 'Дополнительные параметры',
         properties: {
-          hasLighting: { type: 'boolean', description: 'Нужна ли подсветка (для зеркала, по умолчанию true)' },
+          hasLighting: { type: 'boolean', description: 'Подсветка зеркала — включать ТОЛЬКО если клиент упомянул подсветку. По умолчанию false.' },
           withMounting: { type: 'boolean', description: 'Нужен ли монтаж' },
           model: { type: 'string', description: 'Модель душевой: M1-M12' },
           tier: { type: 'string', enum: ['budget', 'standard'], description: 'Класс душевой' },
@@ -131,22 +131,21 @@ async function findLeadByPhone(phone: string): Promise<{ id: number; responsible
 
 function buildPriceBreakdown(result: { finalPrice: number; price: number; description: string; serviceLines?: Array<{ name: string; total: number }> }): string {
   const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+  const svcLines = (result.serviceLines ?? []).map(s => `${s.name} — ${fmt(s.total)}`)
 
-  const productLine = `Изделие — ${fmt(result.finalPrice)}`
-
-  const mountingSvc = result.serviceLines?.find(s => s.name.toLowerCase().includes('монтаж'))
-  const mountingLine = mountingSvc
-    ? `Монтаж — ${fmt(mountingSvc.total)}`
-    : 'Монтаж — уточним на замере'
-
-  const deliverySvc = result.serviceLines?.find(s => s.name.toLowerCase().includes('доставка'))
-  const deliveryLine = deliverySvc
-    ? `Доставка — ${fmt(deliverySvc.total)}`
-    : 'Доставка по МКАД — уточним'
-
-  const totalLine = `Итого — ${fmt(result.price)}`
-
-  return `Данные из калькулятора:\n${productLine}\n${mountingLine}\n${deliveryLine}\n${totalLine}\n\nПокажи клиенту именно эти три строки (изделие, монтаж, доставка) и итого — в своём разговорном стиле.`
+  return [
+    '=== КАЛЬКУЛЯТОР MGlass ===',
+    '',
+    'Клиентский текст (используй ТОЛЬКО эти данные, ничего не добавляй):',
+    result.description,
+    '',
+    'Цена:',
+    `Изделие — ${fmt(result.finalPrice)}`,
+    ...svcLines,
+    ...(svcLines.length ? [`Итого — ${fmt(result.price)}`] : []),
+    '',
+    'ВАЖНО: не упоминай услуги (монтаж, доставку, плёнку и т.д.), которых нет в списке выше.',
+  ].join('\n')
 }
 
 async function getExtraKnowledge(): Promise<string> {

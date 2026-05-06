@@ -36,30 +36,25 @@ export async function POST(req: Request) {
       }
 
       const productLabel = PRODUCT_LABELS[calc.product_type] ?? calc.product_type
-      const inputData = calc.input_data as Record<string, unknown>
-      const dimensions = inputData.width && inputData.height
-        ? `${inputData.width}×${inputData.height} мм`
-        : null
+      const clientText = (calc.client_text as string | null) ?? ''
 
       prompt = `Составь профессиональное коммерческое предложение для клиента от компании MGlass.
 
-Данные расчёта:
-- Изделие: ${productLabel}
-${dimensions ? `- Размеры: ${dimensions}` : ''}
-- Итоговая стоимость: ${(calc.final_price as number).toLocaleString('ru-RU')} ₽
-- Скидка: ${calc.discount ? `${calc.discount}%` : 'нет'}
-${context ? `\nДополнительная информация: ${context}` : ''}
+СОСТАВ ИЗДЕЛИЯ (только то, что реально входит в расчёт — не добавляй ничего лишнего):
+${clientText || `${productLabel}, стоимость ${(calc.final_price as number).toLocaleString('ru-RU')} ₽`}
+
+Итоговая стоимость: ${(calc.final_price as number).toLocaleString('ru-RU')} ₽${calc.discount ? `\nСкидка: ${calc.discount}%` : ''}
+${context ? `\nДополнительная информация от менеджера: ${context}` : ''}
 
 Структура КП:
 1. Краткое вступление (1-2 предложения, без воды)
-2. Описание изделия и что входит в стоимость
+2. Описание изделия — используй ТОЛЬКО то, что указано в СОСТАВЕ выше, ничего не придумывай
 3. Стоимость (выделить)
-4. Сроки изготовления и монтажа
-5. Условия оплаты
-6. Гарантия
-7. Призыв к действию (конкретный следующий шаг)
+4. Сроки изготовления
+5. Гарантия и условия
+6. Призыв к действию (конкретный следующий шаг)
 
-Стиль: профессионально, дружелюбно, без клише типа "рады предложить" и "в сжатые сроки". Конкретно и по делу.`
+Стиль: профессионально, дружелюбно, без клише. Конкретно и по делу.`
     } else {
       prompt = `Составь шаблон коммерческого предложения компании MGlass (стекло, зеркала, лофт-перегородки, душевые).
 ${context ? `\nКонтекст: ${context}` : ''}

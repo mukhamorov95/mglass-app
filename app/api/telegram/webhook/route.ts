@@ -69,78 +69,66 @@ const CALC_TOOL: Tool = {
   },
 }
 
-const PARSE_SYSTEM = `Ты помощник MGlass. Анализируй запрос пользователя на расчёт стоимости изделия.
-Если есть конкретные размеры — сразу вызывай calculate_price.
-Если размеров нет — спроси только: "Какой продукт и размеры?" (одним коротким вопросом).
-Тип продукта: mirror=зеркало, loft=лофт-перегородка, shower=душевая перегородка.
-Размеры всегда в мм. 100 см = 1000 мм.
-Если пользователь говорит "монтаж" или "установка" — withMounting: true.
-Для душевых: swing=распашная, sliding=раздвижная, fixed=неподвижная.`
+const PARSE_SYSTEM = `Ты — парсер запросов MGlass. Задача: извлечь параметры и вызвать calculate_price.
+
+Правила:
+- Есть размеры → вызывай calculate_price немедленно
+- Нет размеров → задай ОДИН вопрос: "Укажи размеры (ширина × высота в мм)"
+- Размеры в мм. 100 см = 1000 мм
+- mirror=зеркало, loft=лофт-перегородка, shower=душевая перегородка
+- hasLighting=true ТОЛЬКО если клиент прямо сказал "подсветка" / "LED" / "с подсветкой"
+- withMounting=true ТОЛЬКО если сказал "монтаж" / "установка" / "с монтажом"
+- Не добавляй опции которые не упомянуты явно`
 
 async function runCalcChain(text: string): Promise<{ reply: string; hasResult: boolean }> {
   const messages: MessageParam[] = [{ role: 'user', content: text }]
 
-  let response = await withTimeout(
+  const response = await withTimeout(
     anthropic.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 400,
+      max_tokens: 300,
       system: PARSE_SYSTEM,
       tools: [CALC_TOOL],
+      tool_choice: { type: 'auto' },
       messages,
     }),
     20000,
     'claude-parse'
   )
 
-  for (let round = 0; round < 2 && response.stop_reason === 'tool_use'; round++) {
-    const toolBlocks = response.content.filter(b => b.type === 'tool_use')
-    const results = await Promise.all(toolBlocks.map(async (block) => {
-      if (block.type !== 'tool_use') return null
-      const input = block.input as { type: string; width: number; height: number; options?: CalcOptions }
-      const result = await withTimeout(
-        quickCalc(input.type as CalcType, input.width, input.height, input.options ?? {}),
-        8000,
-        'quickCalc'
-      )
-      if (!result) return { type: 'tool_result' as const, tool_use_id: block.id, content: 'Ошибка расчёта' }
-
-      const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
-      const margin = result.price > 0 ? Math.round(((result.price - result.finalPrice) / result.price) * 100) : 0
-      const statusIcon = margin >= 40 ? '🟢' : margin >= 30 ? '🟡' : '🔴'
-      const mountLine = result.serviceLines?.find(s => s.name.toLowerCase().includes('монтаж'))
-      const delivLine = result.serviceLines?.find(s => s.name.toLowerCase().includes('доставка'))
-
-      const breakdown = [
-        `Изделие — ${fmt(result.finalPrice)}`,
-        mountLine ? `Монтаж — ${fmt(mountLine.total)}` : null,
-        delivLine ? `Доставка — ${fmt(delivLine.total)}` : null,
-        `<b>Итого — ${fmt(result.price)}</b>`,
-        `Маржа: ${margin}% ${statusIcon}`,
-      ].filter(Boolean).join('\n')
-
-      return { type: 'tool_result' as const, tool_use_id: block.id, content: breakdown }
-    }))
-
-    const valid = results.filter(Boolean) as NonNullable<typeof results[0]>[]
-    messages.push({ role: 'assistant', content: response.content })
-    messages.push({ role: 'user', content: valid })
-
-    response = await withTimeout(
-      anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 400,
-        system: PARSE_SYSTEM,
-        tools: [CALC_TOOL],
-        messages,
-      }),
-      15000,
-      'claude-result'
-    )
+  // Claude asked a clarifying question
+  if (response.stop_reason !== 'tool_use') {
+    const question = response.content.find(b => b.type === 'text')?.text ?? 'Укажи размеры (ширина × высота в мм).'
+    return { reply: question, hasResult: false }
   }
 
-  const text2 = response.content.find(b => b.type === 'text')?.text ?? ''
-  const hasResult = text2.includes('Итого') || text2.includes('₽')
-  return { reply: text2, hasResult }
+  // Tool called — calculate and format deterministically
+  const toolBlock = response.content.find(b => b.type === 'tool_use')
+  if (!toolBlock || toolBlock.type !== 'tool_use') {
+    return { reply: 'Укажи размеры (ширина × высота в мм).', hasResult: false }
+  }
+
+  const input = toolBlock.input as { type: string; width: number; height: number; options?: CalcOptions }
+  const result = await withTimeout(
+    quickCalc(input.type as CalcType, input.width, input.height, input.options ?? {}),
+    8000,
+    'quickCalc'
+  )
+
+  if (!result) return { reply: '❌ Не удалось рассчитать. Проверь параметры и попробуй снова.', hasResult: false }
+
+  const fmt = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+  const margin = result.price > 0 ? Math.round(((result.price - result.finalPrice) / result.price) * 100) : 0
+  const icon = margin >= 40 ? '🟢' : margin >= 30 ? '🟡' : '🔴'
+
+  // Client text from calculator (deterministic — no AI invention)
+  const reply = [
+    result.description,
+    '',
+    `📊 <i>Маржа: ${margin}% ${icon} | Цена: ${fmt(result.price)}</i>`,
+  ].join('\n')
+
+  return { reply, hasResult: true }
 }
 
 // ─── Format leads keyboard ───────────────────────────────────────────────────

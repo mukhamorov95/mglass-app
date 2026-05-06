@@ -84,7 +84,7 @@ export async function quickCalc(
       height,
       mirrorMaterial,
       shape: 'rectangle',
-      hasLighting: options.hasLighting !== false,
+      hasLighting: Boolean(options.hasLighting),
       buttonType: options.buttonType ?? 'none',
       hasSandblast: Boolean(options.hasSandblast),
       hasSubstrate: false,
