@@ -26,10 +26,18 @@ export async function PATCH(req: NextRequest) {
   const role = await getRole()
   if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
 
-  const { id, ...fields } = await req.json()
+  const { id, password_plain, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
 
-  const { error } = await adminClient().from('users').update(fields).eq('id', id)
+  const db = adminClient()
+
+  // If password is being updated — change it in Supabase Auth too
+  if (password_plain) {
+    await db.auth.admin.updateUserById(id, { password: password_plain })
+    fields.password_plain = password_plain
+  }
+
+  const { error } = await db.from('users').update(fields).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

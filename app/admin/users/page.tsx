@@ -29,6 +29,8 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
+  const [editingPassword, setEditingPassword] = useState<string | null>(null)
+  const [editPasswordValue, setEditPasswordValue] = useState('')
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -86,6 +88,18 @@ export default function UsersPage() {
     })
   }
 
+  function startEditPassword(u: User) {
+    setEditingPassword(u.id)
+    setEditPasswordValue(u.password_plain ?? '')
+  }
+
+  async function savePassword(id: string) {
+    const val = editPasswordValue.trim()
+    setEditingPassword(null)
+    if (!val) return
+    await updateUser(id, { password_plain: val })
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-4xl mx-auto">
@@ -125,23 +139,37 @@ export default function UsersPage() {
                         <p className="text-xs text-gray-400">{u.email}</p>
                       </td>
                       <td className="px-4 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-sm text-gray-700">
-                            {u.password_plain
-                              ? pwVisible ? u.password_plain : '••••••••'
-                              : <span className="text-gray-300 text-xs">не задан</span>
-                            }
-                          </span>
-                          {u.password_plain && (
-                            <button
-                              onClick={() => togglePassword(u.id)}
-                              className="text-gray-400 hover:text-gray-600 text-xs"
-                              title={pwVisible ? 'Скрыть' : 'Показать'}
+                        {editingPassword === u.id ? (
+                          <input
+                            autoFocus
+                            type="text"
+                            value={editPasswordValue}
+                            onChange={e => setEditPasswordValue(e.target.value)}
+                            onBlur={() => savePassword(u.id)}
+                            onKeyDown={e => { if (e.key === 'Enter') savePassword(u.id); if (e.key === 'Escape') setEditingPassword(null) }}
+                            className="font-mono text-sm border border-blue-300 rounded px-2 py-0.5 w-36 outline-none"
+                            placeholder="новый пароль"
+                          />
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <span
+                              onClick={() => startEditPassword(u)}
+                              className="font-mono text-sm text-gray-700 cursor-pointer hover:text-blue-600"
+                              title="Нажми чтобы изменить"
                             >
-                              {pwVisible ? '🙈' : '👁'}
-                            </button>
-                          )}
-                        </div>
+                              {u.password_plain
+                                ? pwVisible ? u.password_plain : '••••••••'
+                                : <span className="text-gray-300 text-xs italic">не задан</span>
+                              }
+                            </span>
+                            {u.password_plain && (
+                              <button onClick={() => togglePassword(u.id)} className="text-gray-400 hover:text-gray-600" title={pwVisible ? 'Скрыть' : 'Показать'}>
+                                {pwVisible ? '🙈' : '👁'}
+                              </button>
+                            )}
+                            <button onClick={() => startEditPassword(u)} className="text-gray-300 hover:text-blue-400 text-xs" title="Изменить пароль">✏️</button>
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-3">
                         <select value={u.role}
