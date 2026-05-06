@@ -9,6 +9,7 @@ type User = {
   role: 'admin' | 'manager'
   active: boolean
   manager_code: number | null
+  password_plain: string | null
   created_at: string
 }
 
@@ -27,6 +28,7 @@ export default function UsersPage() {
   const [inviteName, setInviteName] = useState('')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -51,9 +53,7 @@ export default function UsersPage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id, ...fields }),
     })
-    if (!res.ok) {
-      await fetchUsers()
-    }
+    if (!res.ok) await fetchUsers()
   }
 
   async function handleInvite(e: React.FormEvent) {
@@ -69,10 +69,7 @@ export default function UsersPage() {
     const json = await res.json()
     setSaving(false)
 
-    if (!res.ok) {
-      setError(json.error ?? 'Ошибка')
-      return
-    }
+    if (!res.ok) { setError(json.error ?? 'Ошибка'); return }
     setShowInvite(false)
     setInviteEmail('')
     setInvitePassword('')
@@ -81,9 +78,17 @@ export default function UsersPage() {
     fetchUsers()
   }
 
+  function togglePassword(id: string) {
+    setVisiblePasswords(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-3xl mx-auto">
+      <div className="max-w-4xl mx-auto">
 
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold text-gray-900">Пользователи</h1>
@@ -103,19 +108,40 @@ export default function UsersPage() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Имя / Email</th>
+                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Пароль</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Роль</th>
-                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase" title="Номер менеджера в номере заказа (XXX-M)">Код №</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase" title="Номер менеджера в номере заказа">Код №</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Статус</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {users.map(u => {
                   const rl = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
+                  const pwVisible = visiblePasswords.has(u.id)
                   return (
                     <tr key={u.id} className="hover:bg-gray-50">
                       <td className="px-4 py-3">
                         <p className="font-medium text-gray-900">{u.name ?? '—'}</p>
                         <p className="text-xs text-gray-400">{u.email}</p>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-sm text-gray-700">
+                            {u.password_plain
+                              ? pwVisible ? u.password_plain : '••••••••'
+                              : <span className="text-gray-300 text-xs">не задан</span>
+                            }
+                          </span>
+                          {u.password_plain && (
+                            <button
+                              onClick={() => togglePassword(u.id)}
+                              className="text-gray-400 hover:text-gray-600 text-xs"
+                              title={pwVisible ? 'Скрыть' : 'Показать'}
+                            >
+                              {pwVisible ? '🙈' : '👁'}
+                            </button>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3">
                         <select value={u.role}
@@ -131,7 +157,6 @@ export default function UsersPage() {
                           value={u.manager_code ?? 1}
                           onChange={e => updateUser(u.id, { manager_code: Number(e.target.value) || 1 })}
                           className="w-14 text-center border border-gray-200 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-blue-400"
-                          title="Код менеджера — появляется в номере заказа: 001-1"
                         />
                       </td>
                       <td className="px-4 py-3 text-center">
@@ -149,7 +174,10 @@ export default function UsersPage() {
         </div>
 
         {showInvite && (
-          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) { setShowInvite(false); setError(null) } }}>
+          <div
+            className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto"
+            onClick={e => { if (e.target === e.currentTarget) { setShowInvite(false); setError(null) } }}
+          >
             <div className="bg-white rounded-xl border border-gray-200 p-6 w-full max-w-sm shadow-xl">
               <h2 className="text-base font-semibold text-gray-900 mb-4">Новый пользователь</h2>
               <form onSubmit={handleInvite} className="space-y-3">
@@ -167,9 +195,9 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Пароль</label>
-                  <input type="password" required minLength={6} value={invitePassword} onChange={e => setInvitePassword(e.target.value)}
+                  <input type="text" required minLength={6} value={invitePassword} onChange={e => setInvitePassword(e.target.value)}
                     placeholder="Минимум 6 символов"
-                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:border-gray-400" />
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono outline-none focus:border-gray-400" />
                 </div>
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">Роль</label>

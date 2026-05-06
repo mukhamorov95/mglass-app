@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
 
   await adminClient
     .from('users')
-    .update({ role: newRole, name: name || null })
+    .update({ role: newRole, name: name || null, password_plain: password })
     .eq('id', data.user.id)
 
   return NextResponse.json({ id: data.user.id })
