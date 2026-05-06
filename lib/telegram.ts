@@ -54,7 +54,7 @@ export async function downloadFile(fileId: string): Promise<Buffer> {
 export async function transcribeVoice(fileId: string): Promise<string> {
   const buffer = await downloadFile(fileId)
   const formData = new FormData()
-  formData.append('file', new Blob([buffer], { type: 'audio/ogg' }), 'voice.ogg')
+  formData.append('file', new Blob([new Uint8Array(buffer)], { type: 'audio/ogg' }), 'voice.ogg')
   formData.append('model', 'whisper-1')
   formData.append('language', 'ru')
   const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {

@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { Tool, MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import {
   sendMessage, editMessage, answerCallback, getFileUrl, transcribeVoice,
-  MAIN_MENU, type InlineKeyboard,
+  MAIN_MENU, type InlineKeyboard, type InlineButton,
 } from '@/lib/telegram'
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 import { sendMessage as sendWA } from '@/lib/wazzup'
@@ -380,7 +380,7 @@ async function handle(update: any) {
     let category = 'other'
     try {
       const raw = classifyResp.content.find(b => b.type === 'text')?.text ?? '{}'
-      const parsed = JSON.parse(raw.match(/\{.*\}/s)?.[0] ?? '{}')
+      const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
       title = parsed.title ?? title
       category = parsed.category ?? category
     } catch {}
