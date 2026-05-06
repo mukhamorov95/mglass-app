@@ -133,7 +133,7 @@ export default function MyEarningsPage() {
       setCalcs(data ?? [])
       setLoading(false)
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   const nowKey       = monthKey(new Date().toISOString())
@@ -153,8 +153,8 @@ export default function MyEarningsPage() {
   if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и администраторов</div>
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
-      <div className="max-w-[900px] mx-auto px-4 py-4 space-y-3">
+    <div className="bg-white min-h-screen">
+      <div className="max-w-[900px] mx-auto px-4 py-6 space-y-4">
 
         {/* Шапка */}
         <div>
