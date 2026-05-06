@@ -41,3 +41,16 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
+
+export async function POST(req: NextRequest) {
+  const role = await getRole()
+  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+
+  const { action, userId } = await req.json()
+  if (action !== 'telegram_code' || !userId) return NextResponse.json({ error: 'bad request' }, { status: 400 })
+
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString()
+  await adminClient().from('telegram_auth_codes').insert({ code, user_id: userId, expires_at: expiresAt })
+  return NextResponse.json({ code })
+}

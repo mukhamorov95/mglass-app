@@ -31,6 +31,7 @@ export default function UsersPage() {
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
   const [editingPassword, setEditingPassword] = useState<string | null>(null)
   const [editPasswordValue, setEditPasswordValue] = useState('')
+  const [telegramCode, setTelegramCode] = useState<{ userId: string; code: string } | null>(null)
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -188,10 +189,23 @@ export default function UsersPage() {
                         />
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button onClick={() => updateUser(u.id, { active: !u.active })}
-                          className={`text-xs px-3 py-1 rounded-full font-medium ${u.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
-                          {u.active ? 'Активен' : 'Отключён'}
-                        </button>
+                        <div className="flex items-center justify-center gap-2">
+                          <button onClick={() => updateUser(u.id, { active: !u.active })}
+                            className={`text-xs px-3 py-1 rounded-full font-medium ${u.active ? 'bg-green-50 text-green-700' : 'bg-gray-100 text-gray-500'}`}>
+                            {u.active ? 'Активен' : 'Отключён'}
+                          </button>
+                          <button
+                            onClick={async () => {
+                              const res = await fetch('/api/admin/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'telegram_code', userId: u.id }) })
+                              const data = await res.json()
+                              if (data.code) setTelegramCode({ userId: u.id, code: data.code })
+                            }}
+                            className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
+                            title="Создать Telegram-код"
+                          >
+                            TG
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -200,6 +214,17 @@ export default function UsersPage() {
             </table>
           )}
         </div>
+
+        {telegramCode && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setTelegramCode(null)}>
+            <div className="bg-white rounded-xl p-6 w-full max-w-xs shadow-xl text-center" onClick={e => e.stopPropagation()}>
+              <p className="text-sm text-gray-500 mb-2">Telegram-код (15 минут)</p>
+              <p className="text-4xl font-mono font-bold text-gray-900 tracking-widest mb-4">{telegramCode.code}</p>
+              <p className="text-xs text-gray-400 mb-4">Отправь этот код боту MGlass в Telegram</p>
+              <button onClick={() => setTelegramCode(null)} className="w-full bg-gray-100 text-gray-700 text-sm font-medium rounded-lg py-2">Закрыть</button>
+            </div>
+          </div>
+        )}
 
         {showInvite && (
           <div
