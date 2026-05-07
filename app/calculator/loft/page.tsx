@@ -191,8 +191,11 @@ export default function LoftCalculatorPage() {
     setTimeout(() => setAddedToCart(false), 2000)
   }
 
+  const discountExceeded = Number(discount) > (settings?.max_discount_percent ?? 30)
+
   async function handleSave() {
     if (!result) return
+    if (discountExceeded) return
     setSaving(true)
     const saved = await saveCalculation({
       product_type: 'loft',
@@ -551,7 +554,8 @@ export default function LoftCalculatorPage() {
                     className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${addedToCart ? 'bg-emerald-600 text-white' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
                     {addedToCart ? '✓ В корзине' : '+ В корзину'}
                   </button>
-                  <button onClick={handleSave} disabled={saving}
+                  <button onClick={handleSave} disabled={saving || discountExceeded}
+                    title={discountExceeded ? `Скидка превышает лимит ${settings?.max_discount_percent}%` : undefined}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
                     {saving ? '...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
                   </button>

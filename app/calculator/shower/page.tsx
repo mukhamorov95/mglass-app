@@ -274,6 +274,7 @@ export default function ShowerCalculatorPage() {
 
   async function handleSave() {
     if (!result) return
+    if (discountExceeded) return
     setSaving(true)
     const dimStr = model.dimType === 'corner' ? `${width}×${width2}×${height}` : `${width}×${height}`
     const saved = await saveCalculation({
@@ -308,6 +309,8 @@ export default function ShowerCalculatorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allSettings, tier])
 
+  const discountExceeded = Number(discount) > (showerSettings?.max_discount_percent ?? 30)
+
 
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center">
@@ -335,7 +338,8 @@ export default function ShowerCalculatorPage() {
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {addedToCart ? '✓ Добавлено' : '+ В заказ'}
             </button>
-            <button onClick={handleSave} disabled={saving || showerBlocked}
+            <button onClick={handleSave} disabled={saving || showerBlocked || discountExceeded}
+              title={discountExceeded ? `Скидка превышает лимит ${showerSettings?.max_discount_percent}%` : undefined}
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
             </button>

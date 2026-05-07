@@ -79,11 +79,17 @@ export default function PricingBlock({
 
         {onDiscountChange !== undefined && (
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Скидка (%)</p>
+            <p className="text-[10px] text-[#9a9a95] mb-1">
+              Скидка (%) <span className="text-[#b4b4b0]">макс. {settings.max_discount_percent}%</span>
+            </p>
             <input
-              type="number" min="0" max="30"
+              type="number" min="0" max={settings.max_discount_percent ?? 30}
               value={discount ?? '0'} onChange={e => onDiscountChange(e.target.value)}
-              className="w-20 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400"
+              className={`w-20 border rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400 ${
+                Number(discount) > (settings.max_discount_percent ?? 30)
+                  ? 'border-red-400 bg-red-50'
+                  : 'border-[#e4e4e0]'
+              }`}
             />
           </div>
         )}
@@ -109,15 +115,24 @@ export default function PricingBlock({
       </div>
 
       {/* Status hint */}
-      {status !== 'green' && (
-        <p className={`text-[10px] font-medium ${
-          status === 'blocked' ? 'text-red-700' :
-          status === 'red'     ? 'text-red-600' : 'text-amber-600'
-        }`}>
-          {status === 'blocked' && `Маржа ниже минимума — требуется одобрение`}
-          {status === 'red'     && `Маржа ниже минимума (${settings.yellow_threshold ?? settings.min_margin ?? 25}%)`}
-          {status === 'yellow'  && `Ниже целевой (${settings.green_threshold ?? settings.default_margin ?? 35}%)`}
-        </p>
+      {(status !== 'green' || Number(discount) > (settings.max_discount_percent ?? 30)) && (
+        <div className="space-y-0.5">
+          {status !== 'green' && (
+            <p className={`text-[10px] font-medium ${
+              status === 'blocked' ? 'text-red-700' :
+              status === 'red'     ? 'text-red-600' : 'text-amber-600'
+            }`}>
+              {status === 'blocked' && `Маржа ниже минимума — требуется одобрение`}
+              {status === 'red'     && `Маржа ниже минимума (${settings.yellow_threshold ?? settings.min_margin ?? 25}%)`}
+              {status === 'yellow'  && `Ниже целевой (${settings.green_threshold ?? settings.default_margin ?? 35}%)`}
+            </p>
+          )}
+          {Number(discount) > (settings.max_discount_percent ?? 30) && (
+            <p className="text-[10px] font-medium text-red-700">
+              Скидка превышает лимит {settings.max_discount_percent}% — требуется согласование с руководителем
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
