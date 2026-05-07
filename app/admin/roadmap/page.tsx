@@ -180,14 +180,14 @@ const TASKS: Task[] = [
   { id: 'owner_dash',     title: 'Дашборд собственника',           desc: 'Выручка/маржа/заказов/тренды — один экран, всё видно',               roles: ['Собственник'],               phase: 1, effort: '4 дня',   defaultStatus: 'done' },
 
   // ── Phase 2: ВАЖНО ──
-  { id: 'prod_task',      title: 'Производственное задание',       desc: 'Карточка с размерами, параметрами, сроком. Этапы + чекбоксы',         roles: ['Производство'],              phase: 2, effort: '1 неделя', defaultStatus: 'planned' },
-  { id: 'prod_photo',     title: 'Фото готового изделия',          desc: 'Загрузка фото при завершении — контроль качества, защита от споров',  roles: ['Производство', 'Монтажи'],   phase: 2, effort: '2 дня',   defaultStatus: 'planned' },
+  { id: 'prod_task',      title: 'Производственное задание',       desc: 'Карточка с размерами, параметрами, сроком. Этапы + чекбоксы',         roles: ['Производство'],              phase: 2, effort: '1 неделя', defaultStatus: 'done' },
+  { id: 'prod_photo',     title: 'Фото готового изделия',          desc: 'Загрузка фото при завершении — контроль качества, защита от споров',  roles: ['Производство', 'Монтажи'],   phase: 2, effort: '2 дня',   defaultStatus: 'done' },
   { id: 'mount_calendar', title: 'Календарь замеров и монтажей',   desc: 'Визуальный календарь: замер/монтаж, адрес, монтажник, статус',        roles: ['Монтажи'],                   phase: 2, effort: '1 неделя', defaultStatus: 'done' },
   { id: 'client_card',    title: 'Карточка клиента с историей',    desc: 'Все расчёты, заказы, КП, история — в одном месте',                   roles: ['Менеджер'],                  phase: 2, effort: '4 дня',   defaultStatus: 'done' },
   { id: 'warehouse',      title: 'Склад: остатки и алерты',        desc: 'Учёт остатков материалов + уведомление при дефиците',                roles: ['Склад', 'Закупщик'],         phase: 2, effort: '1 неделя', defaultStatus: 'done' },
   { id: 'sla',            title: 'SLA-таймеры на заказах',         desc: 'Заказ завис в статусе > N дней — алерт руководителю',               roles: ['CEO'],                       phase: 2, effort: '2 дня',   defaultStatus: 'done' },
   { id: 'measurer_app',   title: 'Мобильная форма замерщика',      desc: 'Замерщик вводит размеры на объекте → сразу в систему + фото',        roles: ['Монтажи'],                   phase: 2, effort: '4 дня',   defaultStatus: 'done' },
-  { id: 'delivery_addr',  title: 'Адрес доставки в заказах',       desc: 'Обязательное поле + автоуведомление логисту при готовности',         roles: ['Логист'],                    phase: 2, effort: '1 день',   defaultStatus: 'planned' },
+  { id: 'delivery_addr',  title: 'Адрес доставки в заказах',       desc: 'Обязательное поле + автоуведомление логисту при готовности',         roles: ['Логист'],                    phase: 2, effort: '1 день',   defaultStatus: 'done' },
   { id: 'owner_alerts',   title: 'Алерты аномалий собственнику',   desc: 'Скидка > X%, маржа < минимума → Telegram собственнику',             roles: ['Собственник', 'CFO'],        phase: 2, effort: '2 дня',   defaultStatus: 'done' },
 
   // ── Phase 3: ПЛАНОВО ──
@@ -198,7 +198,7 @@ const TASKS: Task[] = [
   { id: 'pnl',            title: 'P&L финансовый отчёт',           desc: 'Выручка / себестоимость / маржа / расходы по месяцам',               roles: ['CFO', 'Собственник'],        phase: 3, effort: '1 неделя', defaultStatus: 'done' },
   { id: 'act',            title: 'Акт выполненных работ',          desc: 'Цифровой акт с подписью / кодом клиента',                            roles: ['Монтажи'],                   phase: 3, effort: '3 дня',   defaultStatus: 'done' },
   { id: 'rating',         title: 'Рейтинг монтажников',            desc: 'Клиент оценивает монтаж 1-5. Статистика по бригадам',               roles: ['Монтажи', 'CEO'],            phase: 3, effort: '2 дня',   defaultStatus: 'done' },
-  { id: 'sentry',         title: 'Error tracking (Sentry)',         desc: 'Все ошибки кода с трейсами — без Vercel Logs',                       roles: ['Собственник'],               phase: 3, effort: '1 день',   defaultStatus: 'planned' },
+  { id: 'sentry',         title: 'Error tracking (Sentry)',         desc: 'Все ошибки кода с трейсами — без Vercel Logs',                       roles: ['Собственник'],               phase: 3, effort: '1 день',   defaultStatus: 'done' },
   { id: 'domain',         title: 'Кастомный домен',                 desc: 'mglass.ru или mglass.pro вместо vercel.app',                         roles: ['Собственник'],               phase: 3, effort: '1 день',   defaultStatus: 'planned' },
   { id: 'warehouse_spec', title: 'Спецификация на заказ для склада', desc: 'Список материалов для комплектации конкретного заказа',            roles: ['Склад'],                     phase: 3, effort: '2 дня',   defaultStatus: 'done' },
   { id: 'notify_client',  title: 'Уведомления клиенту по этапам',  desc: 'WhatsApp: заказ принят / в производстве / готов / едем монтировать', roles: ['Менеджер', 'Монтажи'],       phase: 3, effort: '2 дня',   defaultStatus: 'done' },
