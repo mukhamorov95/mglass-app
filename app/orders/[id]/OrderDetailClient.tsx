@@ -79,6 +79,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
     (order as any).production_stages ?? {}
   )
   const [togglingStage, setTogglingStage] = useState<string | null>(null)
+  const [rating, setRating]               = useState(0)
+  const [ratingComment, setRatingComment] = useState('')
+  const [ratingSaved, setRatingSaved]     = useState(false)
+  const [savingRating, setSavingRating]   = useState(false)
 
   const daysInWork = order.launched_at
     ? Math.ceil((Date.now() - new Date(order.launched_at).getTime()) / 86_400_000)
@@ -157,6 +161,18 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
     setTogglingStage(null)
   }
 
+  async function saveRating() {
+    if (!rating) return
+    setSavingRating(true)
+    await fetch(`/api/orders/${order.id}/rating`, {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ rating, comment: ratingComment }),
+    })
+    setSavingRating(false)
+    setRatingSaved(true)
+  }
+
   async function handleStatusChange(newStatus: OrderStatus) {
     const res = await fetch(`/api/orders/${order.id}/status`, {
       method:  'PATCH',
@@ -191,6 +207,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                 Акт
               </Link>
             )}
+            <Link href={`/orders/${order.id}/spec`} target="_blank"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+              Спецификация
+            </Link>
           </div>
         </div>
 
@@ -566,6 +586,42 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
               </p>
               {order.approval_notes && (
                 <p className="text-[12px] text-[#6b6b66] mt-0.5">{order.approval_notes}</p>
+              )}
+            </div>
+          )}
+
+          {/* Installer rating */}
+          {order.status === 'completed' && (
+            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
+              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-3">Оценка монтажа</p>
+              {ratingSaved ? (
+                <p className="text-[13px] text-emerald-700 font-medium">✓ Спасибо за оценку!</p>
+              ) : (
+                <div className="space-y-2">
+                  <div className="flex gap-1">
+                    {[1, 2, 3, 4, 5].map(n => (
+                      <button key={n} onClick={() => setRating(n)}
+                        className={`text-[22px] transition-transform hover:scale-110 ${n <= rating ? 'opacity-100' : 'opacity-30'}`}>
+                        ★
+                      </button>
+                    ))}
+                  </div>
+                  {rating > 0 && (
+                    <>
+                      <input
+                        type="text"
+                        value={ratingComment}
+                        onChange={e => setRatingComment(e.target.value)}
+                        placeholder="Комментарий (необязательно)"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                      />
+                      <button onClick={saveRating} disabled={savingRating}
+                        className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+                        {savingRating ? 'Сохраняю...' : 'Сохранить оценку'}
+                      </button>
+                    </>
+                  )}
+                </div>
               )}
             </div>
           )}
