@@ -15,6 +15,9 @@ const MGLASS_NAV = [
   { href: '/calculator/shower', label: 'Душевая перегородка' },
   { href: '/calculations',      label: 'История расчётов' },
   { href: '/orders',            label: 'История заказов' },
+  { href: '/clients',           label: '👤 Клиенты' },
+  { href: '/calendar',          label: '📅 Календарь' },
+  { href: '/measurer',          label: '📐 Форма замера' },
   { href: '/my-earnings',       label: '💰 Мои заработки' },
 ]
 
@@ -44,6 +47,13 @@ const PRODUCTION_NAV = [
 ]
 
 const ADMIN_NAV = [
+  { href: '/admin/dashboard',         label: '📊 Дашборд' },
+  { href: '/admin/pnl',               label: '📈 P&L отчёт' },
+  { href: '/admin/roadmap',           label: '🗺️ Дорожная карта' },
+  { href: '/admin/infrastructure',    label: '⚙️ Техцентр' },
+  { href: '/admin/warehouse',         label: '📦 Склад' },
+  { href: '/admin/suppliers',         label: '🏭 Поставщики' },
+  { href: '/admin/brigades',          label: '👷 Бригады' },
   { href: '/admin/analytics-mglass', label: 'Аналитика МГласс' },
   { href: '/admin/materials',     label: 'Материалы' },
   { href: '/admin/services',      label: 'Услуги' },
@@ -61,12 +71,14 @@ const AI_PATHS = ['/ai-assistant', '/kp-generator', '/objections', '/product-fin
 const VLADISLAV_PATHS = ['/vladislav', '/ai-stats', '/amo-analysis', '/vladislav/manager-stats']
 const PRODUCTION_PATHS = ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/production', '/b2b-analytics']
 const ADMIN_PATHS = ['/admin']
+const MGLASS_EXTRA_PATHS = ['/clients', '/calendar', '/measurer']
 
 function detectSection(pathname: string): 'mglass' | 'ai' | 'production' | 'admin' | 'vladislav' {
   if (VLADISLAV_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'vladislav'
   if (AI_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'ai'
   if (PRODUCTION_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'production'
   if (ADMIN_PATHS.some(p => pathname.startsWith(p))) return 'admin'
+  if (MGLASS_EXTRA_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) return 'mglass'
   return 'mglass'
 }
 
