@@ -1,13 +1,16 @@
 'use client'
 
 import Link from 'next/link'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Order, OrderLine, OrderStatus, MarginStatus, PaymentStatus } from '@/lib/types'
 import {
   ORDER_STATUS_LABELS, MARGIN_STATUS_LABELS, MARGIN_STATUS_COLORS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS,
 } from '@/lib/types'
+
+type Zone    = { id: string; name: string; price: number; active: boolean }
+type Brigade = { id: string; name: string; lead_name: string | null; phone: string | null; active: boolean }
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
@@ -73,6 +76,13 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [paymentNotes, setPaymentNotes]     = useState(order.payment_notes ?? '')
   const [savingPayment, setSavingPayment]   = useState(false)
 
+  const [zones, setZones]           = useState<Zone[]>([])
+  const [brigades, setBrigades]     = useState<Brigade[]>([])
+  const [zoneId, setZoneId]         = useState<string>(order.delivery_zone_id ?? '')
+  const [deliveryCost, setDeliveryCost] = useState(order.delivery_cost ?? 0)
+  const [brigadeId, setBrigadeId]   = useState<string>(order.brigade_id ?? '')
+  const [savingBrigade, setSavingBrigade] = useState(false)
+
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photos, setPhotos] = useState<string[]>(order.completion_photos ?? [])
   const [prodStages, setProdStages] = useState<Record<string, string | null>>(
@@ -83,6 +93,11 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [ratingComment, setRatingComment] = useState('')
   const [ratingSaved, setRatingSaved]     = useState(false)
   const [savingRating, setSavingRating]   = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/delivery-zones').then(r => r.json()).then(setZones)
+    fetch('/api/admin/brigades').then(r => r.json()).then(setBrigades)
+  }, [])
 
   const daysInWork = order.launched_at
     ? Math.ceil((Date.now() - new Date(order.launched_at).getTime()) / 86_400_000)
@@ -110,9 +125,24 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
     await fetch(`/api/orders/${order.id}/delivery`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ delivery_address: deliveryAddr }),
+      body:    JSON.stringify({
+        delivery_address: deliveryAddr,
+        delivery_zone_id: zoneId || null,
+        delivery_cost:    deliveryCost,
+      }),
     })
     setSavingAddr(false)
+    router.refresh()
+  }
+
+  async function saveBrigade(newBrigadeId: string) {
+    setSavingBrigade(true)
+    await fetch(`/api/orders/${order.id}/brigade`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ brigade_id: newBrigadeId || null }),
+    })
+    setSavingBrigade(false)
     router.refresh()
   }
 
@@ -455,24 +485,85 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             </div>
           )}
 
-          {/* Delivery address */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Адрес доставки</p>
-            <div className="flex gap-2">
+          {/* Delivery zone + address */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-3">
+            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Доставка</p>
+
+            {/* Zone selector */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <p className="text-[10px] text-[#9a9a95] mb-1">Зона доставки</p>
+                <select
+                  value={zoneId}
+                  onChange={e => {
+                    const z = zones.find(z => z.id === e.target.value)
+                    setZoneId(e.target.value)
+                    if (z) setDeliveryCost(z.price)
+                  }}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
+                >
+                  <option value="">— не выбрана —</option>
+                  {zones.filter(z => z.active).map(z => (
+                    <option key={z.id} value={z.id}>
+                      {z.name} {z.price > 0 ? `(${z.price.toLocaleString('ru-RU')} ₽)` : '(бесплатно)'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#9a9a95] mb-1">Стоимость доставки, ₽</p>
+                <input
+                  type="number"
+                  min={0}
+                  value={deliveryCost}
+                  onChange={e => setDeliveryCost(Number(e.target.value))}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                />
+              </div>
+            </div>
+
+            {/* Address */}
+            <div>
+              <p className="text-[10px] text-[#9a9a95] mb-1">Адрес доставки</p>
               <input
                 type="text"
                 value={deliveryAddr}
                 onChange={e => setDeliveryAddr(e.target.value)}
                 placeholder="Введите адрес доставки..."
-                className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
+                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
               />
-              <button
-                onClick={saveDeliveryAddr}
-                disabled={savingAddr || deliveryAddr === (order.delivery_address ?? '')}
-                className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+            </div>
+
+            <button
+              onClick={saveDeliveryAddr}
+              disabled={savingAddr}
+              className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+            >
+              {savingAddr ? 'Сохраняю...' : 'Сохранить доставку'}
+            </button>
+          </div>
+
+          {/* Brigade assignment */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-2">
+            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Бригада / монтажник</p>
+            <div className="flex gap-2">
+              <select
+                value={brigadeId}
+                onChange={async e => {
+                  setBrigadeId(e.target.value)
+                  await saveBrigade(e.target.value)
+                }}
+                disabled={savingBrigade}
+                className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white disabled:opacity-50"
               >
-                {savingAddr ? 'Сохраняю...' : 'Сохранить'}
-              </button>
+                <option value="">— не назначена —</option>
+                {brigades.filter(b => b.active).map(b => (
+                  <option key={b.id} value={b.id}>
+                    {b.name}{b.lead_name ? ` · ${b.lead_name}` : ''}{b.phone ? ` · ${b.phone}` : ''}
+                  </option>
+                ))}
+              </select>
+              {savingBrigade && <span className="text-[12px] text-[#9a9a95] self-center">Сохраняю...</span>}
             </div>
           </div>
 

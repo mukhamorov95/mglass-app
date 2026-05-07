@@ -12,6 +12,8 @@ type Brigade = {
   notes:          string | null
 }
 
+type BrigadeStats = { brigade_id: string; avg_rating: number; count: number }
+
 const SPECS = ['Замеры', 'Монтаж зеркал', 'Монтаж лофт', 'Монтаж душевых', 'Монтаж общий', 'Доставка']
 
 const EMPTY: Omit<Brigade, 'id'> = {
@@ -20,6 +22,7 @@ const EMPTY: Omit<Brigade, 'id'> = {
 
 export default function BrigadesPage() {
   const [brigades, setBrigades] = useState<Brigade[]>([])
+  const [stats, setStats]       = useState<Record<string, BrigadeStats>>({})
   const [loading, setLoading]   = useState(true)
   const [editing, setEditing]   = useState<Brigade | null>(null)
   const [form, setForm]         = useState(EMPTY)
@@ -31,9 +34,14 @@ export default function BrigadesPage() {
 
   async function load() {
     setLoading(true)
-    const res  = await fetch('/api/admin/brigades')
-    const data = await res.json()
-    setBrigades(data)
+    const [brigRes, statsRes] = await Promise.all([
+      fetch('/api/admin/brigades'),
+      fetch('/api/admin/brigades/stats'),
+    ])
+    const brigData  = await brigRes.json()
+    const statsData: BrigadeStats[] = statsRes.ok ? await statsRes.json() : []
+    setBrigades(brigData)
+    setStats(Object.fromEntries(statsData.map(s => [s.brigade_id, s])))
     setLoading(false)
   }
 
@@ -158,9 +166,15 @@ export default function BrigadesPage() {
           {brigades.map(b => (
             <div key={b.id} className={`bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 flex items-start justify-between gap-4 ${!b.active ? 'opacity-50' : ''}`}>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2 mb-1 flex-wrap">
                   <p className="text-[14px] font-semibold text-[#111110]">{b.name}</p>
                   {!b.active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Неактивна</span>}
+                  {stats[b.id] && (
+                    <span className="text-[11px] text-amber-600 font-semibold">
+                      ★ {stats[b.id].avg_rating.toFixed(1)}
+                      <span className="text-[#b4b4b0] font-normal ml-1">({stats[b.id].count} оц.)</span>
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-3 flex-wrap">
                   {b.lead_name && <span className="text-[12px] text-[#6b6b66]">👤 {b.lead_name}</span>}

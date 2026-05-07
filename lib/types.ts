@@ -265,6 +265,10 @@ export type Order = {
   // Phase 2
   delivery_address:        string | null
   completion_photos:       string[]
+  // Integrations
+  delivery_zone_id:        string | null
+  delivery_cost:           number
+  brigade_id:              string | null
 }
 
 export type OrderLine = {
