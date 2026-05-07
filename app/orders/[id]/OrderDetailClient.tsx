@@ -177,13 +177,21 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             <span className="text-[#d4d4d0]">/</span>
             <span className="font-mono font-bold text-[#111110]">{order.number}</span>
           </div>
-          <Link href={`/orders/${order.id}/print`} target="_blank"
-            className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
-            </svg>
-            Печать
-          </Link>
+          <div className="flex gap-2">
+            <Link href={`/orders/${order.id}/print`} target="_blank"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
+              </svg>
+              КП
+            </Link>
+            {order.status === 'completed' && (
+              <Link href={`/orders/${order.id}/act`} target="_blank"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+                Акт
+              </Link>
+            )}
+          </div>
         </div>
 
         {/* Pending approval banner */}

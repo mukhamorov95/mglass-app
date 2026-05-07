@@ -1,6 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { notifyAdmins } from '@/lib/telegram'
+import { sendMessage as waSend } from '@/lib/wazzup'
+
+const CLIENT_MESSAGES: Partial<Record<string, string>> = {
+  in_work:   'Ваш заказ принят в производство! Срок изготовления — 7–14 рабочих дней. Как только будет готово — сразу свяжемся с вами.',
+  completed: 'Ваш заказ готов! 🎉 Наш менеджер свяжется с вами в ближайшее время для согласования доставки.',
+}
+
+async function notifyClient(clientPhone: string | null, orderNumber: string, newStatus: string) {
+  const msgText = CLIENT_MESSAGES[newStatus]
+  if (!msgText || !clientPhone) return
+
+  const phone = clientPhone.replace(/\D/g, '')
+  if (phone.length < 10) return
+
+  const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
+
+  // Try to find existing wazzup channel for this client
+  const { data: chat } = await svc
+    .from('ai_managed_chats')
+    .select('channel_id, chat_type')
+    .eq('chat_id', clientPhone)
+    .maybeSingle() as { data: { channel_id: string; chat_type: string } | null }
+
+  const channelId = chat?.channel_id ?? process.env.WAZZUP_CHANNEL_ID
+  const chatType  = chat?.chat_type  ?? 'whatsapp'
+
+  if (!channelId) return
+
+  try {
+    await waSend(channelId, phone, chatType, `Заказ №${orderNumber}: ${msgText}`)
+  } catch {
+    // Non-critical — don't fail the status change
+  }
+}
 
 const VALID_TRANSITIONS: Record<string, string[]> = {
   draft:            ['in_work', 'pending_approval', 'cancelled'],
@@ -56,8 +91,27 @@ export async function PATCH(
   if (newStatus === 'completed') update.actual_completion_date = new Date().toISOString()
   if (notes) update.notes = notes
 
-  const { error } = await client.from('orders').update(update).eq('id', id)
+  const { error, data: updatedOrder } = await client
+    .from('orders')
+    .update(update)
+    .eq('id', id)
+    .select('number, client_name, client_phone, delivery_address')
+    .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Notify client via WhatsApp
+  notifyClient((updatedOrder as any)?.client_phone, (updatedOrder as any)?.number, newStatus).catch(() => {})
+
+  // Notify admins when order is completed and has a delivery address
+  if (newStatus === 'completed' && updatedOrder?.delivery_address) {
+    const o = updatedOrder as any
+    notifyAdmins(
+      `🚚 <b>Заказ готов к доставке</b>\n\n` +
+      `Заказ: <b>${o.number}</b>\n` +
+      `Клиент: ${o.client_name}\n` +
+      `Адрес доставки: ${o.delivery_address}`,
+    ).catch(() => {})
+  }
 
   return NextResponse.json({ ok: true })
 }
