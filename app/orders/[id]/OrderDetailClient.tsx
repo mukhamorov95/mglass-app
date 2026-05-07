@@ -3,9 +3,10 @@
 import Link from 'next/link'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { Order, OrderLine, OrderStatus, MarginStatus } from '@/lib/types'
+import type { Order, OrderLine, OrderStatus, MarginStatus, PaymentStatus } from '@/lib/types'
 import {
   ORDER_STATUS_LABELS, MARGIN_STATUS_LABELS, MARGIN_STATUS_COLORS,
+  PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS,
 } from '@/lib/types'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
@@ -38,6 +39,18 @@ function MarginBadge({ status, percent }: { status: MarginStatus; percent: numbe
   )
 }
 
+const PROD_STAGES = [
+  { key: 'invoice_sent',     label: 'Счёт выставлен' },
+  { key: 'invoice_paid',     label: 'Счёт оплачен' },
+  { key: 'material_ordered', label: 'Материал заказан' },
+  { key: 'cut',              label: 'Нарезка' },
+  { key: 'edge_processed',   label: 'Кромка обработана' },
+  { key: 'drilled',          label: 'Сверловка' },
+  { key: 'tempering',        label: 'Закалка' },
+  { key: 'packaged',         label: 'Упакован' },
+  { key: 'shipped',          label: 'Отгружен' },
+] as const
+
 type Props = {
   order:       Order
   lines:       OrderLine[]
@@ -51,6 +64,21 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [approvalNotes, setApprovalNotes] = useState('')
   const [showApproveForm, setShowApproveForm] = useState(false)
   const [error, setError] = useState('')
+  const [deliveryAddr, setDeliveryAddr] = useState(order.delivery_address ?? '')
+  const [savingAddr, setSavingAddr] = useState(false)
+
+  const [paymentStatus, setPaymentStatus]   = useState<PaymentStatus>(order.payment_status ?? 'unpaid')
+  const [prepayAmount, setPrepayAmount]     = useState(order.prepayment_amount?.toString() ?? '')
+  const [prepayDate, setPrepayDate]         = useState(order.prepayment_date ?? '')
+  const [paymentNotes, setPaymentNotes]     = useState(order.payment_notes ?? '')
+  const [savingPayment, setSavingPayment]   = useState(false)
+
+  const [photoUploading, setPhotoUploading] = useState(false)
+  const [photos, setPhotos] = useState<string[]>(order.completion_photos ?? [])
+  const [prodStages, setProdStages] = useState<Record<string, string | null>>(
+    (order as any).production_stages ?? {}
+  )
+  const [togglingStage, setTogglingStage] = useState<string | null>(null)
 
   const daysInWork = order.launched_at
     ? Math.ceil((Date.now() - new Date(order.launched_at).getTime()) / 86_400_000)
@@ -71,6 +99,62 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
     const data = await res.json()
     if (!res.ok) { setError(data.error); setApproving(false); return }
     router.refresh()
+  }
+
+  async function saveDeliveryAddr() {
+    setSavingAddr(true)
+    await fetch(`/api/orders/${order.id}/delivery`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ delivery_address: deliveryAddr }),
+    })
+    setSavingAddr(false)
+    router.refresh()
+  }
+
+  async function savePayment() {
+    setSavingPayment(true)
+    await fetch(`/api/orders/${order.id}/payment`, {
+      method:  'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({
+        payment_status:    paymentStatus,
+        prepayment_amount: prepayAmount ? parseFloat(prepayAmount) : 0,
+        prepayment_date:   prepayDate || null,
+        payment_notes:     paymentNotes,
+      }),
+    })
+    setSavingPayment(false)
+    router.refresh()
+  }
+
+  async function uploadPhoto(file: File) {
+    setPhotoUploading(true)
+    const form = new FormData()
+    form.append('file', file)
+    const res = await fetch(`/api/orders/${order.id}/photos`, { method: 'POST', body: form })
+    const data = await res.json()
+    if (data.url) setPhotos(prev => [...prev, data.url])
+    setPhotoUploading(false)
+  }
+
+  async function toggleStage(stageKey: string) {
+    setTogglingStage(stageKey)
+    const isDone = !!prodStages[stageKey]
+    const res = await fetch(`/api/orders/${order.id}/production-stages`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: stageKey, done: !isDone }),
+    })
+    if (res.ok) {
+      setProdStages(prev => {
+        const next = { ...prev }
+        if (isDone) delete next[stageKey]
+        else next[stageKey] = new Date().toISOString().slice(0, 10)
+        return next
+      })
+    }
+    setTogglingStage(null)
   }
 
   async function handleStatusChange(newStatus: OrderStatus) {
@@ -286,6 +370,176 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
               </div>
             </div>
           </div>
+
+          {/* Production checklist */}
+          {(order.status === 'in_work' || order.status === 'completed') && (
+            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+              <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between">
+                <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Производственное задание</p>
+                <span className="text-[11px] text-[#9a9a95]">
+                  {Object.keys(prodStages).length}/{PROD_STAGES.length} этапов
+                </span>
+              </div>
+              <div className="p-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {PROD_STAGES.map(s => {
+                    const done = !!prodStages[s.key]
+                    const date = prodStages[s.key]
+                    return (
+                      <button
+                        key={s.key}
+                        onClick={() => toggleStage(s.key)}
+                        disabled={togglingStage === s.key}
+                        className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-colors ${
+                          done
+                            ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
+                            : 'bg-white border-[#e4e4e0] hover:border-[#c4c4c0] hover:bg-[#fafaf9]'
+                        } ${togglingStage === s.key ? 'opacity-50' : ''}`}
+                      >
+                        <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center ${done ? 'bg-emerald-500' : 'border-2 border-[#d4d4d0]'}`}>
+                          {done && (
+                            <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className={`text-[12px] font-medium leading-tight ${done ? 'text-emerald-800' : 'text-[#4b4b47]'}`}>
+                            {s.label}
+                          </p>
+                          {date && (
+                            <p className="text-[10px] text-emerald-600 mt-0.5">{date}</p>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })}
+                </div>
+                <div className="mt-3">
+                  <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-500 rounded-full transition-all"
+                      style={{ width: `${Math.round(Object.keys(prodStages).length / PROD_STAGES.length * 100)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Delivery address */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
+            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Адрес доставки</p>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={deliveryAddr}
+                onChange={e => setDeliveryAddr(e.target.value)}
+                placeholder="Введите адрес доставки..."
+                className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
+              />
+              <button
+                onClick={saveDeliveryAddr}
+                disabled={savingAddr || deliveryAddr === (order.delivery_address ?? '')}
+                className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+              >
+                {savingAddr ? 'Сохраняю...' : 'Сохранить'}
+              </button>
+            </div>
+          </div>
+
+          {/* Payment tracking */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Оплата</p>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${PAYMENT_STATUS_COLORS[paymentStatus]}`}>
+                {PAYMENT_STATUS_LABELS[paymentStatus]}
+              </span>
+            </div>
+
+            {/* Status buttons */}
+            <div className="flex gap-2">
+              {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map(s => (
+                <button
+                  key={s}
+                  onClick={() => setPaymentStatus(s)}
+                  className={`flex-1 py-2 text-[12px] font-medium rounded-lg border transition-colors ${
+                    paymentStatus === s
+                      ? PAYMENT_STATUS_COLORS[s] + ' font-semibold'
+                      : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'
+                  }`}
+                >
+                  {PAYMENT_STATUS_LABELS[s]}
+                </button>
+              ))}
+            </div>
+
+            {/* Prepayment fields — only when partial */}
+            {paymentStatus === 'partial' && (
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] text-[#9a9a95] mb-1">Сумма предоплаты, ₽</p>
+                  <input
+                    type="number"
+                    min={0}
+                    value={prepayAmount}
+                    onChange={e => setPrepayAmount(e.target.value)}
+                    placeholder="0"
+                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                  />
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#9a9a95] mb-1">Дата предоплаты</p>
+                  <input
+                    type="date"
+                    value={prepayDate}
+                    onChange={e => setPrepayDate(e.target.value)}
+                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                  />
+                </div>
+              </div>
+            )}
+
+            <div>
+              <p className="text-[10px] text-[#9a9a95] mb-1">Заметка об оплате</p>
+              <input
+                type="text"
+                value={paymentNotes}
+                onChange={e => setPaymentNotes(e.target.value)}
+                placeholder="Например: оплата наличными, ждём перевода..."
+                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+              />
+            </div>
+
+            <button
+              onClick={savePayment}
+              disabled={savingPayment}
+              className="w-full py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+            >
+              {savingPayment ? 'Сохраняю...' : 'Сохранить оплату'}
+            </button>
+          </div>
+
+          {/* Completion photos */}
+          {(order.status === 'in_work' || order.status === 'completed') && (
+            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
+              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-3">Фото готового изделия</p>
+              <div className="flex flex-wrap gap-3">
+                {photos.map((url, i) => (
+                  <a key={i} href={url} target="_blank" rel="noopener noreferrer">
+                    <img src={url} alt={`Фото ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-[#e4e4e0] hover:opacity-80 transition-opacity" />
+                  </a>
+                ))}
+                <label className={`w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4c0] transition-colors ${photoUploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                  <svg className="w-6 h-6 text-[#b4b4b0] mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
+                  </svg>
+                  <span className="text-[10px] text-[#b4b4b0]">{photoUploading ? 'Загрузка...' : 'Добавить'}</span>
+                  <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadPhoto(e.target.files[0])} />
+                </label>
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           {order.notes && (
