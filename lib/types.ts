@@ -51,6 +51,9 @@ export type FinancialSettings = {
   yellow_threshold: number
   red_threshold: number
   blocked_below: number
+  max_discount_percent: number
+  sla_days_approved:   number
+  sla_days_in_work:    number
   updated_at: string
 }
 
@@ -215,6 +218,20 @@ export type BOMLine = {
   total:     number
 }
 
+export type PaymentStatus = 'unpaid' | 'partial' | 'paid'
+
+export const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  unpaid:  'Не оплачен',
+  partial: 'Предоплата',
+  paid:    'Оплачен',
+}
+
+export const PAYMENT_STATUS_COLORS: Record<PaymentStatus, string> = {
+  unpaid:  'bg-red-50 text-red-700 border-red-200',
+  partial: 'bg-amber-50 text-amber-700 border-amber-200',
+  paid:    'bg-emerald-50 text-emerald-700 border-emerald-200',
+}
+
 export type Order = {
   id:                      string
   number:                  string
@@ -240,6 +257,14 @@ export type Order = {
   planned_completion_date: string | null
   deadline:                string | null
   actual_completion_date:  string | null
+  // Payment tracking
+  payment_status:          PaymentStatus | null
+  prepayment_amount:       number | null
+  prepayment_date:         string | null
+  payment_notes:           string | null
+  // Phase 2
+  delivery_address:        string | null
+  completion_photos:       string[]
 }
 
 export type OrderLine = {

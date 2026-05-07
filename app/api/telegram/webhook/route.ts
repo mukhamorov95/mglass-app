@@ -131,8 +131,12 @@ function normalizeInput(raw: Record<string, unknown>): ParsedCalcInput {
     width = height = d
   }
 
+  // Круг/овал → подложка обязательна (как на веб-платформе)
+  const isRound = shape === 'circle' || shape === 'oval'
+
   const options: CalcOptions = {
     shape,
+    hasSubstrate: isRound || undefined,
     mirrorType:   raw.mirrorType   as CalcOptions['mirrorType']   | undefined,
     hasLighting:  Boolean(raw.hasLighting),
     hasSandblast: Boolean(raw.hasSandblast),
@@ -178,6 +182,7 @@ function formatConfirmText(p: ParsedCalcInput, originalText?: string): string {
       lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
     }
     lines.push(`Материал: <b>${p.options.mirrorType === 'crystal_vision' ? 'Crystal Vision (осветлённое)' : 'Silver (стандарт)'}</b>`)
+    if (p.options.hasSubstrate) lines.push('Подложка: <b>включена ✓</b>')
     if (p.options.hasLighting)  lines.push('Подсветка: <b>Aura ✓</b>')
     if (p.options.hasSandblast) lines.push('Пескоструй: <b>да ✓</b>')
     if (p.options.buttonType === 'wave')   lines.push('Кнопка: <b>датчик взмаха ✓</b>')
@@ -579,14 +584,17 @@ async function handle(update: any) {
 
   const state = session.state
 
-  if (state === 'main_menu' || state === 'leads_list') {
+  // Голосовое из любого состояния → всегда идём в расчёт
+  const effectiveState = transcription ? 'calc_input' : state
+
+  if (effectiveState === 'main_menu' || effectiveState === 'leads_list') {
     await sendMessage(chatId, '🏠 <b>Главное меню</b>', MAIN_MENU)
     await setSession(tid, 'main_menu')
     return
   }
 
   // ── Расчёт: парсинг → подтверждение ──
-  if (state === 'calc_input') {
+  if (effectiveState === 'calc_input') {
     const thinkMsg  = await sendMessage(chatId, '🔍 Распознаю параметры...') as any
     const thinkMsgId = thinkMsg?.result?.message_id
 
@@ -626,7 +634,7 @@ async function handle(update: any) {
     return
   }
 
-  if (state === 'train_input') {
+  if (effectiveState === 'train_input') {
     const waitMsg  = await sendMessage(chatId, '⏳ Сохраняю...') as any
     const waitMsgId = waitMsg?.result?.message_id
 
@@ -664,7 +672,7 @@ async function handle(update: any) {
     return
   }
 
-  if (state === 'lead_send_msg') {
+  if (effectiveState === 'lead_send_msg') {
     const ctx = session.context as any
     const chatPhoneId: string = ctx.chatPhoneId
     try {

@@ -95,11 +95,16 @@ export default function SettingsPage() {
                   ['green_threshold',    'Зелёный порог, %'],
                   ['yellow_threshold',   'Жёлтый порог, %'],
                   ['blocked_below',      'Блокировать ниже, %'],
+                  ['max_discount_percent', 'Макс. скидка менеджера, %'],
+                  ['sla_days_approved',   'SLA одобрен, дней'],
+                  ['sla_days_in_work',    'SLA в работе, дней'],
                 ] as [keyof FinancialSettings, string][]).map(([key, lbl]) => (
                   <div key={key}>
                     <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">{lbl}</label>
                     <input
-                      type="number" min="0" max="100" step="0.5"
+                      type="number" min="0"
+                      max={key === 'sla_days_approved' || key === 'sla_days_in_work' ? 365 : 100}
+                      step={key === 'sla_days_approved' || key === 'sla_days_in_work' ? 1 : 0.5}
                       className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#0071e3] transition-all"
                       value={row[key] as number}
                       onChange={e => update(row.id, key, Number(e.target.value))}

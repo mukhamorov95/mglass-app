@@ -2,8 +2,8 @@
 
 import Link from 'next/link'
 import { useState } from 'react'
-import type { Order, OrderStatus, MarginStatus } from '@/lib/types'
-import { ORDER_STATUS_LABELS, MARGIN_STATUS_LABELS } from '@/lib/types'
+import type { Order, OrderStatus, MarginStatus, PaymentStatus } from '@/lib/types'
+import { ORDER_STATUS_LABELS, MARGIN_STATUS_LABELS, PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS } from '@/lib/types'
 
 const STATUS_STYLE: Record<OrderStatus, string> = {
   draft:            'bg-gray-100 text-gray-600',
@@ -54,6 +54,11 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
   })
 
   const pendingApproval = orders.filter(o => o.status === 'pending_approval')
+  const unpaidActive    = orders.filter(o =>
+    (!o.payment_status || o.payment_status === 'unpaid') &&
+    (o.status === 'in_work' || o.status === 'approved')
+  )
+  const totalDebt = unpaidActive.reduce((s, o) => s + o.total_sale_price, 0)
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -69,6 +74,19 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
           </div>
           <div className="text-[13px] text-[#9a9a95]">{filtered.length} заказов</div>
         </div>
+
+        {/* Unpaid orders alert */}
+        {isAdmin && unpaidActive.length > 0 && (
+          <div className="mb-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center gap-3">
+            <span className="text-amber-500 text-lg">💰</span>
+            <div className="flex-1">
+              <p className="text-[13px] font-semibold text-amber-800">
+                {unpaidActive.length} активных заказов без оплаты — {fmt(totalDebt)}
+              </p>
+              <p className="text-[11px] text-amber-700 mt-0.5">Активные заказы без предоплаты или оплаты</p>
+            </div>
+          </div>
+        )}
 
         {/* Pending approval alert */}
         {isAdmin && pendingApproval.length > 0 && (
@@ -134,6 +152,14 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${STATUS_STYLE[order.status]}`}>
                         {ORDER_STATUS_LABELS[order.status]}
                       </span>
+                      {order.payment_status && (
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${PAYMENT_STATUS_COLORS[order.payment_status as PaymentStatus] ?? 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                          {PAYMENT_STATUS_LABELS[order.payment_status as PaymentStatus] ?? order.payment_status}
+                          {order.payment_status === 'partial' && order.prepayment_amount
+                            ? ` ${fmt(order.prepayment_amount)}`
+                            : ''}
+                        </span>
+                      )}
                       {order.deadline && deadlineBadge(order.deadline)}
                     </div>
                     <p className="text-[14px] text-[#111110] mt-0.5">{order.client_name}</p>

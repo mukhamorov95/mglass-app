@@ -23,6 +23,8 @@ export type CalcOptions = {
   withMounting?: boolean
   shape?: 'rectangle' | 'circle' | 'oval'
   mirrorType?: 'silver' | 'crystal_vision'
+  hasSubstrate?: boolean
+  substratePrice?: number
 }
 
 export type QuickCalcResult = {
@@ -79,16 +81,20 @@ export async function quickCalc(
       : (allMirrorMats.find(m => m.name.toLowerCase().includes('silver') && !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ?? allMirrorMats.find(m => !m.name.toLowerCase().includes('6 мм')) ?? allMirrorMats[0] ?? null)
     if (!mirrorMaterial) return null
 
+    // Web calculator maps round shapes to 'complex' + substrate (bounding-box area, +1500 form, +2000 substrate)
+    const isRound = options.shape === 'circle' || options.shape === 'oval'
+    const calcShape: MirrorShape = isRound ? 'complex' : (options.shape as MirrorShape) ?? 'rectangle'
+
     const inputs: MirrorInputs = {
       width,
       height,
       mirrorMaterial,
-      shape: (options.shape as MirrorShape) ?? 'rectangle',
+      shape: calcShape,
       hasLighting: Boolean(options.hasLighting),
       buttonType: options.buttonType ?? 'none',
       hasSandblast: Boolean(options.hasSandblast),
-      hasSubstrate: false,
-      substratePrice: 2000,
+      hasSubstrate: isRound || Boolean(options.hasSubstrate),
+      substratePrice: options.substratePrice ?? 2000,
       hasInstallation: Boolean(options.withMounting),
       hasDelivery: false,
       partnerPercent: 0,

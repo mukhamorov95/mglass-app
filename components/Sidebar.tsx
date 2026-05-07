@@ -55,6 +55,7 @@ const ADMIN_NAV = [
   { href: '/admin/route-sheet',       label: '🚚 Маршрутный лист' },
   { href: '/admin/suppliers',         label: '🏭 Поставщики' },
   { href: '/admin/brigades',          label: '👷 Бригады' },
+  { href: '/admin/delivery-zones',    label: '🚗 Зоны доставки' },
   { href: '/admin/analytics-mglass', label: 'Аналитика МГласс' },
   { href: '/admin/materials',     label: 'Материалы' },
   { href: '/admin/services',      label: 'Услуги' },

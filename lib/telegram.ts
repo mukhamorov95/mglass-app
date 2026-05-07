@@ -51,6 +51,21 @@ export async function downloadFile(fileId: string): Promise<Buffer> {
   return Buffer.from(await res.arrayBuffer())
 }
 
+export async function notifyAdmins(text: string) {
+  const { createClient } = await import('@supabase/supabase-js')
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+  const { data } = await supabase
+    .from('telegram_users')
+    .select('telegram_id, users!inner(role)')
+    .eq('users.role', 'admin')
+  for (const row of (data ?? [])) {
+    await sendMessage((row as any).telegram_id, text).catch(() => {})
+  }
+}
+
 export async function transcribeVoice(fileId: string): Promise<string> {
   const buffer = await downloadFile(fileId)
   const formData = new FormData()

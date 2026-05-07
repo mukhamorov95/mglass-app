@@ -302,6 +302,10 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings }: P
                       className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
                       Открыть
                     </Link>
+                    <a href={`/calculations/${c.id}/print`} target="_blank" rel="noopener noreferrer"
+                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-blue-100 text-blue-600 hover:bg-blue-50 transition-colors">
+                      PDF КП
+                    </a>
                     <button onClick={() => duplicateCalc(c)} disabled={duplicating === c.id}
                       className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors">
                       {duplicating === c.id ? '...' : 'Дублировать'}
