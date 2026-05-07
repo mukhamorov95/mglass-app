@@ -1,154 +1,239 @@
 import Link from 'next/link'
 import { getRole } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
+import { createClient as createServiceClient } from '@supabase/supabase-js'
 
-const MONTH_NAMES = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
+const DAYS = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']
+const MONTHS = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря']
 
-const MGLASS_MODULES = [
-  { href: '/calculator/mirror', label: 'Зеркало с подсветкой',  desc: 'Размеры, тип зеркала, LED, форма, допы, финмодель',    tag: 'Калькулятор', tagColor: 'text-blue-600 bg-blue-50' },
-  { href: '/calculator/loft',   label: 'Лофт-перегородка',       desc: 'Секции, деления, стекло, покраска, фурнитура, металл',  tag: 'Калькулятор', tagColor: 'text-orange-600 bg-orange-50' },
-  { href: '/calculator/shower', label: 'Душевая перегородка',    desc: 'Модель, размеры, стекло, фурнитура, монтаж, финмодель', tag: 'Калькулятор', tagColor: 'text-cyan-600 bg-cyan-50' },
-  { href: '/calculations',      label: 'История расчётов',       desc: 'Все расчёты, статусы, маржа, клиентские тексты',        tag: 'Журнал',      tagColor: 'text-emerald-600 bg-emerald-50' },
-  { href: '/ai-sales',          label: 'AI Sales',               desc: 'Ассистент продаж, генерация КП, ответы на вопросы клиентов', tag: 'AI',     tagColor: 'text-violet-600 bg-violet-50' },
+function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
+
+const CALC_CARDS = [
+  {
+    href: '/calculator/shower',
+    emoji: '🚿',
+    label: 'Душевая',
+    desc: 'Любая модель, стекло, фурнитура',
+    color: 'from-cyan-500 to-cyan-600',
+    bg: 'bg-cyan-50 border-cyan-200 hover:border-cyan-400',
+  },
+  {
+    href: '/calculator/mirror',
+    emoji: '🪞',
+    label: 'Зеркало',
+    desc: 'LED, форма, пескоструй, допы',
+    color: 'from-blue-500 to-blue-600',
+    bg: 'bg-blue-50 border-blue-200 hover:border-blue-400',
+  },
+  {
+    href: '/calculator/loft',
+    emoji: '🏗️',
+    label: 'Лофт',
+    desc: 'Секции, фурнитура, покраска',
+    color: 'from-orange-500 to-orange-600',
+    bg: 'bg-orange-50 border-orange-200 hover:border-orange-400',
+  },
+  {
+    href: '/calculator/b2b',
+    emoji: '🏢',
+    label: 'B2B',
+    desc: 'Опт, НДС, скидки клиентов',
+    color: 'from-violet-500 to-violet-600',
+    bg: 'bg-violet-50 border-violet-200 hover:border-violet-400',
+  },
 ]
 
-const PRODUCTION_MODULES = [
-  { href: '/calculator/b2b', label: 'B2B Калькулятор', desc: 'Оптовые заказы, НДС, отходы, скидки клиентов',      tag: 'Расчёт', tagColor: 'text-violet-600 bg-violet-50' },
-  { href: '/b2b-quotes',     label: 'B2B Просчёты',    desc: 'Ожидают подтверждения, запуск в производство',       tag: 'Журнал', tagColor: 'text-violet-600 bg-violet-50' },
-  { href: '/b2b-orders',     label: 'B2B Заказы',      desc: 'История по месяцам, этапы, сроки, суммы',            tag: 'Журнал', tagColor: 'text-violet-600 bg-violet-50' },
-  { href: '/production',     label: 'Производство',    desc: 'Поиск по номеру, отметка этапов, фильтр по операциям', tag: 'Цех',  tagColor: 'text-orange-700 bg-orange-50' },
-]
-
-const ADMIN_MODULES = [
-  { href: '/admin/materials',     label: 'Материалы',            desc: 'Справочник цен на зеркало, стекло, профиль, LED',  tag: 'Справочник',       tagColor: 'text-[#6b6b66] bg-[#f0f0ec]' },
-  { href: '/admin/services',      label: 'Услуги',               desc: 'Монтаж, доставка, закалка, покраска',              tag: 'Справочник',       tagColor: 'text-[#6b6b66] bg-[#f0f0ec]' },
-  { href: '/admin/hardware',      label: 'Фурнитура',            desc: 'Ролики, треки, петли, ручки, замки',               tag: 'Справочник',       tagColor: 'text-[#6b6b66] bg-[#f0f0ec]' },
-  { href: '/admin/settings',      label: 'Финансовые настройки', desc: 'Маржа, расходы, налоги, минимальный порог',        tag: 'Настройки',        tagColor: 'text-[#6b6b66] bg-[#f0f0ec]' },
-  { href: '/admin/users',         label: 'Пользователи',         desc: 'Менеджеры, роли, доступ',                         tag: 'Администрирование', tagColor: 'text-purple-700 bg-purple-50' },
-]
-
-function ModuleCard({ href, label, desc, tag, tagColor }: {
-  href: string; label: string; desc: string; tag: string; tagColor: string
-}) {
-  return (
-    <Link href={href}
-      className="group bg-white border border-[#e4e4e0] rounded-xl p-5 hover:border-[#c4c4be] hover:shadow-[0_2px_8px_rgba(0,0,0,0.06)] transition-all">
-      <div className="flex items-start justify-between mb-3">
-        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md tracking-wide uppercase ${tagColor}`}>{tag}</span>
-        <svg className="w-4 h-4 text-[#c4c4be] group-hover:text-[#8a8a85] transition-colors mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-        </svg>
-      </div>
-      <h2 className="text-[15px] font-semibold text-[#111110] mb-1.5 tracking-tight">{label}</h2>
-      <p className="text-[13px] text-[#8a8a85] leading-relaxed">{desc}</p>
-    </Link>
-  )
+const STATUS_COLORS: Record<string, string> = {
+  draft:    'bg-gray-100 text-gray-600',
+  sent:     'bg-blue-100 text-blue-700',
+  thinking: 'bg-amber-100 text-amber-700',
+  approved: 'bg-emerald-100 text-emerald-700',
+  launched: 'bg-purple-100 text-purple-700',
+  rejected: 'bg-red-100 text-red-600',
+}
+const STATUS_LABELS: Record<string, string> = {
+  draft:    'Черновик',
+  sent:     'Отправлено',
+  thinking: 'Думает',
+  approved: 'Согласовано',
+  launched: 'Запущено',
+  rejected: 'Отказ',
+}
+const PRODUCT_LABELS: Record<string, string> = {
+  mirror: 'Зеркало', loft: 'Лофт',
+  shower: 'Душевая', shower_standard: 'Душевая', shower_budget: 'Душевая',
 }
 
-function KPICard({ label, value, href, accent }: {
-  label: string; value: string | number; href: string; accent?: 'red' | 'amber' | 'emerald'
-}) {
-  const valueClass = accent === 'red' ? 'text-red-600' : accent === 'amber' ? 'text-amber-600' : accent === 'emerald' ? 'text-emerald-600' : 'text-[#111110]'
-  return (
-    <Link href={href}
-      className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 hover:border-[#c4c4be] hover:shadow-[0_2px_8px_rgba(0,0,0,0.04)] transition-all">
-      <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">{label}</p>
-      <p className={`text-[22px] font-bold tabular-nums leading-none ${valueClass}`}>{value}</p>
-    </Link>
-  )
-}
+const OWNER_CENTER = [
+  { href: '/admin/dashboard',      emoji: '📊', label: 'Дашборд',        desc: 'Выручка, маржа, конверсия' },
+  { href: '/admin/pnl',            emoji: '📈', label: 'P&L',            desc: 'Доходы, расходы, прибыль' },
+  { href: '/admin/org',            emoji: '🏗️', label: 'Оргструктура',  desc: 'Роли, регламенты, KPI' },
+  { href: '/admin/roadmap',        emoji: '🗺️', label: 'Roadmap',        desc: 'Прогресс внедрения' },
+  { href: '/admin/infrastructure', emoji: '⚙️', label: 'Техцентр',       desc: 'ENV, инфраструктура, боты' },
+  { href: '/admin/analytics-mglass', emoji: '🔍', label: 'Аналитика',   desc: 'Менеджеры, продукты, каналы' },
+  { href: '/admin/users',          emoji: '👥', label: 'Пользователи',   desc: 'Доступы и роли' },
+  { href: '/admin/suppliers',      emoji: '🏭', label: 'Поставщики',     desc: 'Контакты и условия' },
+  { href: '/admin/warehouse',      emoji: '📦', label: 'Склад',          desc: 'Остатки и алерты' },
+]
 
 export default async function Home() {
   const role = await getRole()
+  const isAdmin = role === 'admin'
   const supabase = await createClient()
 
   const now = new Date()
-  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const todayStr  = now.toISOString().slice(0, 10)
+  const monthStr  = now.toISOString().slice(0, 7)
+  const dateLabel = `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`
 
-  const { data: allOrders } = await supabase
-    .from('b2b_orders')
-    .select('id,total_after_discount,total_sale_inc_vat,discount_percent,notes,created_at')
+  // Fetch B2C calc stats
+  const { data: calcs } = await supabase
+    .from('calculations')
+    .select('id, status, final_price, margin, product_type, client_name, created_at, input_data')
+    .order('created_at', { ascending: false })
+    .limit(200)
 
-  const orders = allOrders ?? []
+  const all = calcs ?? []
 
-  const confirmed = orders.filter(o => {
-    try { const p = JSON.parse(o.notes ?? '{}'); return p.status !== 'quote' } catch { return true }
-  })
-  const quotes = orders.filter(o => {
-    try { const p = JSON.parse(o.notes ?? '{}'); return p.status === 'quote' } catch { return false }
-  })
+  const todayCalcs   = all.filter(c => c.created_at?.slice(0, 10) === todayStr).length
+  const sentCalcs    = all.filter(c => c.status === 'sent' || c.status === 'thinking').length
+  const approvedMonth = all.filter(c =>
+    (c.status === 'approved' || c.status === 'launched') &&
+    c.created_at?.slice(0, 7) === monthStr
+  ).length
+  const revenueMonth = all
+    .filter(c => (c.status === 'approved' || c.status === 'launched') && c.created_at?.slice(0, 7) === monthStr)
+    .reduce((s, c) => s + (c.final_price ?? 0), 0)
 
-  const activeOrders = confirmed.filter(o => {
-    try { const p = JSON.parse(o.notes ?? '{}'); return !p.stages?.shipped } catch { return true }
-  })
+  const recent = all.slice(0, 5)
 
-  const overdueOrders = activeOrders.filter(o => {
-    try {
-      const p = JSON.parse(o.notes ?? '{}')
-      if (!p.launched_at || !p.production_days) return false
-      const deadline = new Date(p.launched_at)
-      deadline.setDate(deadline.getDate() + p.production_days)
-      return deadline < now
-    } catch { return false }
-  })
-
-  const monthRevenue = confirmed
-    .filter(o => o.created_at >= monthStart)
-    .reduce((s, o) => s + ((o.discount_percent ?? 0) > 0 ? (o.total_after_discount ?? 0) : (o.total_sale_inc_vat ?? 0)), 0)
+  // Manager name (for admin only to avoid extra queries)
+  let usersMap: Record<string, string> = {}
+  if (isAdmin) {
+    const admin = createServiceClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    )
+    const { data } = await admin.from('users').select('id,name,email')
+    if (data) usersMap = Object.fromEntries(data.map(u => [u.id, u.name ?? u.email]))
+  }
 
   return (
-    <div className="max-w-[1200px] mx-auto px-6 py-8 space-y-8">
+    <div className="max-w-[960px] mx-auto px-5 py-8 space-y-8">
 
-      {/* KPI */}
-      <section>
-        <div className="flex items-center gap-3 mb-3">
-          <h2 className="text-[14px] font-bold text-[#111110] tracking-tight">Сейчас</h2>
-          <span className="text-[12px] text-[#9a9a95]">{now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</span>
+      {/* Greeting */}
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-[13px] text-[#9a9a95]">{dateLabel}</p>
+          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight mt-0.5">Панель менеджера</h1>
         </div>
+        <Link href="/calculations"
+          className="text-[13px] text-blue-600 hover:underline font-medium">
+          Все расчёты →
+        </Link>
+      </div>
+
+      {/* ── NEW CALCULATION – hero section ────────────────────────────── */}
+      <section>
+        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Новый расчёт</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <KPICard label="Заказов в работе"         value={activeOrders.length}   href="/b2b-orders" />
-          <KPICard label="Просрочено"                value={overdueOrders.length}  href="/production" accent={overdueOrders.length > 0 ? 'red' : undefined} />
-          <KPICard
-            label={`Выручка ${MONTH_NAMES[now.getMonth()]}`}
-            value={monthRevenue > 0 ? monthRevenue.toLocaleString('ru-RU') + ' ₽' : '—'}
-            href="/b2b-analytics"
-            accent={monthRevenue > 0 ? 'emerald' : undefined}
-          />
-          <KPICard label="Ожидают подтверждения"    value={quotes.length}         href="/b2b-quotes"  accent={quotes.length > 0 ? 'amber' : undefined} />
+          {CALC_CARDS.map(c => (
+            <Link key={c.href} href={c.href}
+              className={`group border-2 rounded-2xl p-4 transition-all hover:shadow-md ${c.bg}`}>
+              <div className="text-2xl mb-2">{c.emoji}</div>
+              <p className="text-[15px] font-bold text-[#111110] mb-0.5">{c.label}</p>
+              <p className="text-[11px] text-[#6b6b66] leading-snug">{c.desc}</p>
+            </Link>
+          ))}
         </div>
       </section>
 
-      {/* МГласс */}
+      {/* ── KPI row ────────────────────────────────────────────────────── */}
       <section>
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">МГласс</h2>
-          <span className="text-[12px] text-[#9a9a95]">Расчёты, калькуляторы, история</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {MGLASS_MODULES.map(m => <ModuleCard key={m.href} {...m} />)}
-        </div>
-      </section>
-
-      {/* Производство */}
-      <section>
-        <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">Производство</h2>
-          <span className="text-[12px] text-[#9a9a95]">B2B заказы, этапы, цех</span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {PRODUCTION_MODULES.map(m => <ModuleCard key={m.href} {...m} />)}
+        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Статистика</p>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'Расчётов сегодня', value: todayCalcs,    href: '/calculations', accent: '' },
+            { label: 'Ожидают ответа',   value: sentCalcs,     href: '/calculations', accent: sentCalcs > 0 ? 'text-amber-600' : '' },
+            { label: 'Согласовано в месяце', value: approvedMonth, href: '/calculations', accent: approvedMonth > 0 ? 'text-emerald-600' : '' },
+            { label: 'Выручка (согл.)',   value: revenueMonth > 0 ? fmt(revenueMonth) : '—', href: '/calculations', accent: 'text-emerald-600' },
+          ].map(({ label, value, href, accent }) => (
+            <Link key={label} href={href}
+              className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all">
+              <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1.5 leading-tight">{label}</p>
+              <p className={`text-[22px] font-bold tabular-nums leading-none ${accent || 'text-[#111110]'}`}>{value}</p>
+            </Link>
+          ))}
         </div>
       </section>
 
-      {/* Администрирование */}
-      {role === 'admin' && (
+      {/* ── Recent calculations ────────────────────────────────────────── */}
+      {recent.length > 0 && (
         <section>
-          <div className="flex items-center gap-3 mb-4">
-            <h2 className="text-[16px] font-bold text-[#111110] tracking-tight">Администрирование</h2>
-            <span className="text-[12px] text-[#9a9a95]">Справочники, настройки, пользователи</span>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Последние расчёты</p>
+            <Link href="/calculations" className="text-[12px] text-blue-600 hover:underline">Все →</Link>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {ADMIN_MODULES.map(m => <ModuleCard key={m.href} {...m} />)}
+          <div className="space-y-2">
+            {recent.map(c => {
+              const prodLabel = PRODUCT_LABELS[c.product_type] ?? c.product_type
+              const st = STATUS_LABELS[c.status] ?? 'Черновик'
+              const stColor = STATUS_COLORS[c.status] ?? STATUS_COLORS.draft
+              const d = c.input_data as Record<string, unknown>
+              const dim = c.product_type === 'loft' || c.product_type === 'mirror'
+                ? `${d.width}×${d.height} мм`
+                : d.dimStr ?? `${d.width}×${d.height} мм`
+              return (
+                <Link key={c.id} href={`/calculations/${c.id}`}
+                  className="flex items-center gap-3 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 hover:border-[#c4c4be] hover:shadow-sm transition-all">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] font-semibold text-[#111110]">
+                        {c.client_name ?? prodLabel}
+                      </span>
+                      {c.client_name && (
+                        <span className="text-[11px] text-[#9a9a95]">{prodLabel}</span>
+                      )}
+                      {dim && (
+                        <span className="text-[11px] text-[#9a9a95]">{String(dim)}</span>
+                      )}
+                    </div>
+                    <p className="text-[12px] text-[#9a9a95] mt-0.5">
+                      {new Date(c.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      {isAdmin && c.created_at && ' · ' + (usersMap[(c as any).created_by] ?? '')}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 flex-shrink-0">
+                    <span className="text-[14px] font-bold tabular-nums text-[#111110]">
+                      {(c.final_price ?? 0).toLocaleString('ru-RU')} ₽
+                    </span>
+                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stColor}`}>{st}</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
+      {/* ── OWNER CENTER (admin only) ─────────────────────────────────── */}
+      {isAdmin && (
+        <section>
+          <div className="flex items-center gap-3 mb-3">
+            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Owner Center</p>
+            <div className="flex-1 h-px bg-[#e4e4e0]" />
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
+            {OWNER_CENTER.map(item => (
+              <Link key={item.href} href={item.href}
+                className="flex items-start gap-3 bg-white border border-[#e4e4e0] rounded-xl p-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all group">
+                <span className="text-lg leading-none mt-0.5">{item.emoji}</span>
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors">{item.label}</p>
+                  <p className="text-[11px] text-[#9a9a95] leading-snug">{item.desc}</p>
+                </div>
+              </Link>
+            ))}
           </div>
         </section>
       )}

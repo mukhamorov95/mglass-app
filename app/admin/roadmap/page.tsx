@@ -202,6 +202,7 @@ const TASKS: Task[] = [
   { id: 'domain',         title: 'Кастомный домен',                 desc: 'mglass.ru или mglass.pro вместо vercel.app',                         roles: ['Собственник'],               phase: 3, effort: '1 день',   defaultStatus: 'planned' },
   { id: 'warehouse_spec', title: 'Спецификация на заказ для склада', desc: 'Список материалов для комплектации конкретного заказа',            roles: ['Склад'],                     phase: 3, effort: '2 дня',   defaultStatus: 'done' },
   { id: 'notify_client',  title: 'Уведомления клиенту по этапам',  desc: 'WhatsApp: заказ принят / в производстве / готов / едем монтировать', roles: ['Менеджер', 'Монтажи'],       phase: 3, effort: '2 дня',   defaultStatus: 'done' },
+  { id: 'org_structure',  title: 'Оргструктура и регламенты ролей', desc: '17 ролей с KPI, чеклистами, функциями, регламентами и PDF-выгрузкой', roles: ['Собственник', 'CEO'],        phase: 3, effort: '2 дня',   defaultStatus: 'done' },
 ]
 
 const ROLE_COLORS: Record<string, string> = {

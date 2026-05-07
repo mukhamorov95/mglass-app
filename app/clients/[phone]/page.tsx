@@ -7,6 +7,23 @@ import type { OrderStatus } from '@/lib/types'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
+const PRODUCT_LABELS: Record<string, { label: string; emoji: string }> = {
+  mirror:          { label: 'Зеркало', emoji: '🪞' },
+  loft:            { label: 'Лофт',    emoji: '🏗️' },
+  shower:          { label: 'Душевая', emoji: '🚿' },
+  shower_standard: { label: 'Душевая', emoji: '🚿' },
+  shower_budget:   { label: 'Душевая', emoji: '🚿' },
+}
+
+const CALC_STATUS: Record<string, string> = {
+  draft:    'Черновик',
+  sent:     'Отправлено',
+  thinking: 'Думает',
+  approved: 'Согласовано',
+  launched: 'Запущено',
+  rejected: 'Отказ',
+}
+
 const STATUS_STYLE: Record<OrderStatus, string> = {
   draft:            'bg-gray-100 text-gray-600',
   pending_approval: 'bg-red-100 text-red-700',
@@ -39,21 +56,28 @@ export default async function ClientDetailPage({
   if (role !== 'admin') ordersQuery = ordersQuery.eq('manager_id', user!.id)
 
   const { data: orders } = await ordersQuery
-  if (!orders?.length) notFound()
 
-  // Fetch calculations matching client phone/name
+  // Fetch calculations matching this client's phone or name
   const { data: calcs } = await supabase
     .from('calculations')
-    .select('id, product_type, final_price, margin, status, created_at, client_text')
+    .select('id, product_type, final_price, margin, status, created_at, client_text, client_name, client_phone')
+    .or(`client_phone.eq.${key},client_name.eq.${key}`)
     .order('created_at', { ascending: false })
     .limit(20)
 
-  const client = orders[0]
-  const totalRevenue = orders
+  if (!orders?.length && !calcs?.length) notFound()
+
+  const client = orders?.[0] ?? {
+    client_name: calcs?.[0]?.client_name ?? key,
+    client_phone: calcs?.[0]?.client_phone ?? null,
+    object_address: null,
+  }
+  const safeOrders = orders ?? []
+  const totalRevenue = safeOrders
     .filter(o => o.status !== 'cancelled')
     .reduce((s, o) => s + o.total_sale_price, 0)
 
-  const activeOrders = orders.filter(o => ['in_work', 'approved', 'pending_approval'].includes(o.status))
+  const activeOrders = safeOrders.filter(o => ['in_work', 'approved', 'pending_approval'].includes(o.status))
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -85,7 +109,7 @@ export default async function ClientDetailPage({
 
           <div className="mt-4 pt-4 border-t border-[#f0f0ec] grid grid-cols-3 gap-4">
             <div className="text-center">
-              <p className="text-[22px] font-bold text-[#111110]">{orders.length}</p>
+              <p className="text-[22px] font-bold text-[#111110]">{safeOrders.length}</p>
               <p className="text-[11px] text-[#9a9a95]">заказов всего</p>
             </div>
             <div className="text-center">
@@ -94,8 +118,8 @@ export default async function ClientDetailPage({
             </div>
             <div className="text-center">
               <p className="text-[22px] font-bold text-emerald-600">
-                {orders.filter(o => o.status !== 'cancelled').length > 0
-                  ? (orders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.margin_percent, 0) / orders.filter(o => o.status !== 'cancelled').length).toFixed(1)
+                {safeOrders.filter(o => o.status !== 'cancelled').length > 0
+                  ? (safeOrders.filter(o => o.status !== 'cancelled').reduce((s, o) => s + o.margin_percent, 0) / safeOrders.filter(o => o.status !== 'cancelled').length).toFixed(1)
                   : '—'}%
               </p>
               <p className="text-[11px] text-[#9a9a95]">средняя маржа</p>
@@ -108,11 +132,11 @@ export default async function ClientDetailPage({
           <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
             <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Заказы</p>
           </div>
-          {orders.length === 0 ? (
+          {safeOrders.length === 0 ? (
             <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Нет заказов</p>
           ) : (
             <div className="divide-y divide-[#f0f0ec]">
-              {orders.map(o => (
+              {safeOrders.map(o => (
                 <Link key={o.id} href={`/orders/${o.id}`}
                   className="flex items-center justify-between px-5 py-3.5 hover:bg-[#fafaf9] transition-colors">
                   <div>
@@ -136,6 +160,40 @@ export default async function ClientDetailPage({
             </div>
           )}
         </div>
+
+        {/* Calculations */}
+        {calcs && calcs.length > 0 && (
+          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden mb-4">
+            <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
+              <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Расчёты ({calcs.length})</p>
+            </div>
+            <div className="divide-y divide-[#f0f0ec]">
+              {calcs.map(c => {
+                const prod = PRODUCT_LABELS[c.product_type] ?? { label: c.product_type, emoji: '📋' }
+                const statusLabel = CALC_STATUS[c.status] ?? c.status
+                return (
+                  <Link key={c.id} href={`/calculations/${c.id}`}
+                    className="flex items-center justify-between px-5 py-3.5 hover:bg-[#fafaf9] transition-colors">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[13px]">{prod.emoji}</span>
+                        <span className="text-[13px] font-semibold text-[#111110]">{prod.label}</span>
+                        <span className="text-[11px] text-[#9a9a95] bg-[#f5f5f3] px-1.5 py-0.5 rounded">{statusLabel}</span>
+                      </div>
+                      <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                        {new Date(c.created_at).toLocaleDateString('ru-RU')}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[14px] font-bold font-mono text-[#111110]">{fmt(c.final_price)}</p>
+                      <p className="text-[11px] text-[#9a9a95]">Маржа {c.margin.toFixed(1)}%</p>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Back link */}
         <Link href="/clients" className="text-[13px] text-[#9a9a95] hover:text-[#6b6b66]">

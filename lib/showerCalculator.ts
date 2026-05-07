@@ -106,6 +106,8 @@ export type ShowerInputs = {
   hwTierMultiplier: number // from tier
   customHardwareCost?: number         // when using catalog builder
   customHardwareLines?: ShowerHardwareLine[]
+  minMargin?: number      // floor for belowMinMargin flag, default 25
+  standardMargin?: number // base margin for manager upsell bonus, default = margin
 }
 
 export type CostLine    = { name: string; qty: number; unit: string; price: number; total: number }
@@ -120,6 +122,7 @@ export type ShowerResult = {
   expensesAmount: number
   basePrice: number
   partnerAmount: number
+  priceWithPartner: number
   discountAmount: number
   finalPrice: number
   serviceLines: ServiceLine[]
@@ -127,6 +130,10 @@ export type ShowerResult = {
   grandTotal: number
   margin: number
   profit: number
+  managerBaseCommission: number
+  managerUpsellBonus: number
+  managerBonus: number
+  belowMinMargin: boolean
   clientText: string
   costLines: CostLine[]
 }
@@ -153,16 +160,22 @@ export function calculateShower(
     : Math.round(model.hardwareBase * hwTierMultiplier * hardwareColorMultiplier)
   const totalCost    = glassCost + hardwareCost
 
-  // Финмодель
-  const divisor        = 1 - expensesPercent / 100 - margin / 100
-  const basePrice      = divisor > 0 ? Math.round(totalCost / divisor) : 0
-  console.log('[shower] cost:', totalCost, 'margin:', margin, 'expenses:', expensesPercent, 'price:', basePrice)
-  const expensesAmount = Math.round(basePrice * expensesPercent / 100)
+  // Финмодель: цена = себестоимость / (1 − расходы − маржа)
+  const expensesDecimal = expensesPercent / 100
+  const marginDecimal   = margin / 100
+  const divisor         = 1 - expensesDecimal - marginDecimal
+  const basePrice       = divisor > 0 ? Math.round(totalCost / divisor) : 0
+  const expensesAmount  = Math.round(basePrice * expensesDecimal)
 
-  const partnerAmount    = Math.round(basePrice * partnerPercent / 100)
-  const priceWithPartner = basePrice + partnerAmount
-  const discountAmount   = Math.round(priceWithPartner * discount / 100)
-  const finalPrice       = priceWithPartner - discountAmount
+  // Партнёрка — grossup (правильная формула, не аддитивная)
+  const partnerDecimal   = partnerPercent / 100
+  const priceWithPartner = partnerDecimal > 0 ? basePrice / (1 - partnerDecimal) : basePrice
+  const partnerAmount    = Math.round(priceWithPartner - basePrice)
+
+  // Скидка
+  const discountDecimal = discount / 100
+  const finalPrice      = Math.round(priceWithPartner * (1 - discountDecimal))
+  const discountAmount  = Math.round(priceWithPartner - finalPrice)
 
   // Услуги
   const serviceLines: ServiceLine[] = []
@@ -171,35 +184,61 @@ export function calculateShower(
   const liftingSvc  = services.find(s => s.name === 'Подъём на этаж')
 
   if (withMounting && mountingSvc) {
+    const price = mountingSvc.sale_price ?? mountingSvc.cost_price
     serviceLines.push({
       name: 'Монтаж',
       qty: model.glassCount,
       unit: 'стекло',
-      price: mountingSvc.cost_price,
-      total: mountingSvc.cost_price * model.glassCount,
+      price,
+      total: price * model.glassCount,
     })
   }
   if (floors > 0 && liftingSvc) {
+    const price = liftingSvc.sale_price ?? liftingSvc.cost_price
     serviceLines.push({
       name: 'Подъём на этаж',
       qty: floors,
       unit: 'этаж',
-      price: liftingSvc.cost_price,
-      total: liftingSvc.cost_price * floors,
+      price,
+      total: price * floors,
     })
   }
   if (withDelivery && deliverySvc) {
+    const price = deliverySvc.sale_price ?? deliverySvc.cost_price
     serviceLines.push({
       name: 'Доставка',
       qty: 1,
       unit: 'рейс',
-      price: deliverySvc.cost_price,
-      total: deliverySvc.cost_price,
+      price,
+      total: price,
     })
   }
   const servicesTotal = serviceLines.reduce((s, l) => s + l.total, 0)
   const grandTotal    = finalPrice + servicesTotal
-  const profit        = Math.round(finalPrice * margin / 100)
+
+  // Реальная прибыль: цена − себестоимость − расходы (не margin × price!)
+  const taxOnFinal  = Math.round(finalPrice * expensesDecimal)
+  const profit      = Math.round(finalPrice - totalCost - taxOnFinal)
+  const realMargin  = finalPrice > 0 ? (profit / finalPrice) * 100 : 0
+
+  // Минимальная маржа и флаг
+  const minMargin      = inputs.minMargin ?? 25
+  const belowMinMargin = realMargin < minMargin
+
+  // Заработок менеджера: 2% базовый + 10% от прибыли сверх стандартной маржи
+  const standardMarginPct   = inputs.standardMargin ?? margin
+  const managerBaseCommission = Math.round(finalPrice * 0.02)
+  let managerUpsellBonus = 0
+  const stdDenom = 1 - standardMarginPct / 100 - expensesDecimal
+  if (stdDenom > 0 && margin > standardMarginPct) {
+    const stdBase        = totalCost / stdDenom
+    const stdWithPartner = partnerDecimal > 0 ? stdBase / (1 - partnerDecimal) : stdBase
+    const stdFinal       = Math.round(stdWithPartner * (1 - discountDecimal))
+    const extraRev       = Math.max(0, finalPrice - stdFinal)
+    const taxOnExtra     = Math.round(extraRev * expensesDecimal)
+    managerUpsellBonus   = Math.round((extraRev - taxOnExtra) * 0.10)
+  }
+  const managerBonus = managerBaseCommission + managerUpsellBonus
 
   const tierCfg    = TIER_CONFIGS.find(t => t.value === inputs.tier)!
   const colorLabel = HARDWARE_COLORS.find(c => c.value === inputs.hardwareColor)?.label ?? ''
@@ -250,10 +289,14 @@ export function calculateShower(
   return {
     glassArea, glassCost, hardwareCost, totalCost,
     expensesPercent, expensesAmount,
-    basePrice, partnerAmount, discountAmount, finalPrice,
+    basePrice,
+    partnerAmount, priceWithPartner: Math.round(priceWithPartner),
+    discountAmount, finalPrice,
     serviceLines, servicesTotal, grandTotal,
-    margin: Number(((profit / finalPrice) * 100).toFixed(1)),
+    margin: Number(realMargin.toFixed(1)),
     profit,
+    managerBaseCommission, managerUpsellBonus, managerBonus,
+    belowMinMargin,
     clientText, costLines,
   }
 }

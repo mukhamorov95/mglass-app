@@ -23,16 +23,28 @@ export default async function ClientsPage() {
 
   const { data: orders } = await query
 
-  // Group by client (by phone, fall back to name)
-  const clientMap = new Map<string, {
+  // Fetch calculation clients (not yet converted to orders)
+  let calcQuery = supabase
+    .from('calculations')
+    .select('client_name, client_phone, final_price, margin, created_at')
+    .not('client_name', 'is', null)
+    .order('created_at', { ascending: false })
+
+  if (role !== 'admin') calcQuery = calcQuery.eq('created_by', user!.id)
+  const { data: calcRows } = await calcQuery
+
+  type ClientEntry = {
     name: string
     phone: string | null
     key: string
     orderCount: number
+    calcCount: number
     totalRevenue: number
-    lastOrderAt: string
+    lastActivityAt: string
     avgMargin: number
-  }>()
+  }
+
+  const clientMap = new Map<string, ClientEntry>()
 
   for (const o of (orders ?? [])) {
     const key = (o as any).client_phone?.trim() || (o as any).client_name?.trim()
@@ -42,22 +54,45 @@ export default async function ClientsPage() {
       existing.orderCount++
       existing.totalRevenue += (o as any).total_sale_price
       existing.avgMargin = (existing.avgMargin + (o as any).margin_percent) / 2
-      if ((o as any).created_at > existing.lastOrderAt) existing.lastOrderAt = (o as any).created_at
+      if ((o as any).created_at > existing.lastActivityAt) existing.lastActivityAt = (o as any).created_at
     } else {
       clientMap.set(key, {
         name:        (o as any).client_name,
         phone:       (o as any).client_phone,
         key,
         orderCount:  1,
+        calcCount:   0,
         totalRevenue: (o as any).total_sale_price,
-        lastOrderAt: (o as any).created_at,
+        lastActivityAt: (o as any).created_at,
         avgMargin:   (o as any).margin_percent,
       })
     }
   }
 
+  // Merge calculation clients (only those not already in orders map)
+  for (const c of (calcRows ?? [])) {
+    const key = (c as any).client_phone?.trim() || (c as any).client_name?.trim()
+    if (!key) continue
+    const existing = clientMap.get(key)
+    if (existing) {
+      existing.calcCount++
+      if ((c as any).created_at > existing.lastActivityAt) existing.lastActivityAt = (c as any).created_at
+    } else {
+      clientMap.set(key, {
+        name:        (c as any).client_name,
+        phone:       (c as any).client_phone,
+        key,
+        orderCount:  0,
+        calcCount:   1,
+        totalRevenue: 0,
+        lastActivityAt: (c as any).created_at,
+        avgMargin:   (c as any).margin,
+      })
+    }
+  }
+
   const clients = Array.from(clientMap.values())
-    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .sort((a, b) => b.totalRevenue - a.totalRevenue || b.lastActivityAt.localeCompare(a.lastActivityAt))
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -84,18 +119,34 @@ export default async function ClientsPage() {
               >
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-[15px] font-semibold text-[#111110]">{c.name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[15px] font-semibold text-[#111110]">{c.name}</p>
+                      {c.orderCount === 0 && (
+                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
+                          только расчёт
+                        </span>
+                      )}
+                    </div>
                     {c.phone && <p className="text-[13px] text-[#9a9a95] mt-0.5">{c.phone}</p>}
                     <p className="text-[12px] text-[#b4b4b0] mt-0.5">
-                      Последний заказ: {new Date(c.lastOrderAt).toLocaleDateString('ru-RU')}
+                      Активность: {new Date(c.lastActivityAt).toLocaleDateString('ru-RU')}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="text-[16px] font-bold text-[#111110] font-mono">{fmt(c.totalRevenue)}</p>
-                    <p className="text-[12px] text-[#9a9a95]">{c.orderCount} заказ(ов)</p>
-                    <p className="text-[12px] text-emerald-600 font-medium">
-                      Маржа {c.avgMargin.toFixed(1)}%
+                    {c.totalRevenue > 0 ? (
+                      <p className="text-[16px] font-bold text-[#111110] font-mono">{fmt(c.totalRevenue)}</p>
+                    ) : (
+                      <p className="text-[13px] text-[#9a9a95]">нет заказов</p>
+                    )}
+                    <p className="text-[12px] text-[#9a9a95]">
+                      {c.orderCount > 0 ? `${c.orderCount} заказ(ов)` : ''}
+                      {c.calcCount > 0 ? `${c.orderCount > 0 ? ' · ' : ''}${c.calcCount} расчёт(ов)` : ''}
                     </p>
+                    {c.avgMargin > 0 && (
+                      <p className="text-[12px] text-emerald-600 font-medium">
+                        Маржа {c.avgMargin.toFixed(1)}%
+                      </p>
+                    )}
                   </div>
                 </div>
               </Link>

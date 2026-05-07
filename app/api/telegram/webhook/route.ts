@@ -498,9 +498,9 @@ async function handle(update: any) {
       const waitMsgId = waitMsg?.result?.message_id
 
       try {
-        console.log('[TG] calc confirmed, running quickCalc')
+        console.log(`[VOICE:calculation_started] tid=${tid} type=${parsed.type} ${parsed.width}x${parsed.height}`)
         const { reply, hasResult, margin } = await runCalc(parsed)
-        console.log(`[TG] calc done margin=${margin}`)
+        console.log(`[VOICE:calculation_finished] tid=${tid} margin=${margin} hasResult=${hasResult}`)
 
         const keyboard: InlineKeyboard = hasResult
           ? [[{ text: '💾 Сохранить', callback_data: 'calc:save' }], [{ text: '🔄 Ещё', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
@@ -508,12 +508,13 @@ async function handle(update: any) {
 
         if (waitMsgId) await editMessage(chatId, waitMsgId, reply, keyboard)
         else await sendMessage(chatId, reply, keyboard)
+        console.log(`[VOICE:response_sent] tid=${tid}`)
 
         // Save debug + update session
         const newCtx = { ...ctx, lastDebug: { ...((ctx.lastDebug as any) ?? {}), margin, calcResult: reply } }
         await setSession(tid, hasResult ? 'main_menu' : 'calc_input', { ...newCtx, calcText: reply })
       } catch (err) {
-        console.error('[TG] calc error:', err)
+        console.error(`[VOICE:calculation_error] tid=${tid}`, err)
         const isTimeout = err instanceof Error && err.message.startsWith('timeout')
         const errText = isTimeout ? '⏱ Расчёт занял слишком долго. Попробуй снова.' : '❌ Ошибка расчёта. Попробуй снова.'
         const kb: InlineKeyboard = [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
@@ -557,25 +558,55 @@ async function handle(update: any) {
 
   if (msg?.voice || msg?.audio) {
     if (!process.env.OPENAI_API_KEY) {
+      console.warn(`[VOICE:no_key] tid=${tid}`)
       await sendMessage(chatId, '⚠️ Голосовое распознавание не настроено. Отправь текстом.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
     const fileId   = msg.voice?.file_id ?? msg.audio?.file_id
+    const duration = msg.voice?.duration ?? msg.audio?.duration ?? 0
+    const fileSize = msg.voice?.file_size ?? msg.audio?.file_size ?? 0
+    console.log(`[VOICE:received] tid=${tid} fileId=${fileId} dur=${duration}s size=${fileSize}b`)
+
     const statusMsg = await sendMessage(chatId, '🎙 Распознаю голос...') as any
     const statusMsgId = statusMsg?.result?.message_id
 
     try {
-      console.log(`[TG] voice transcription start tid=${tid}`)
-      inputText = await withTimeout(transcribeVoice(fileId), 30000, 'whisper')
+      // transcribeVoice handles per-step timeouts: 15s download + 20s whisper
+      console.log(`[VOICE:pipeline_started] tid=${tid}`)
+      inputText = await withTimeout(transcribeVoice(fileId), 40_000, 'voice_pipeline')
       transcription = inputText
-      console.log(`[TG] voice done: "${inputText.slice(0, 60)}"`)
+      console.log(`[VOICE:pipeline_finished] tid=${tid} chars=${inputText.length}`)
+
+      if (!inputText) {
+        // Whisper вернул пустую строку — голос не разобран, но ошибки нет
+        console.warn(`[VOICE:empty_result] tid=${tid}`)
+        const reply = '🎙 Не смог разобрать голос. Говори чётче, ближе к микрофону, или напиши текстом.'
+        if (statusMsgId) await editMessage(chatId, statusMsgId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        else await sendMessage(chatId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        return
+      }
+
       if (statusMsgId) await editMessage(chatId, statusMsgId, `🎙 Распознал: <i>${inputText}</i>`)
     } catch (err) {
-      console.error('[TG] voice error:', err)
-      const isTimeout = err instanceof Error && err.message.startsWith('timeout')
-      const text = isTimeout ? '⏱ Распознавание заняло слишком долго.' : '❌ Не удалось распознать голос.'
-      if (statusMsgId) await editMessage(chatId, statusMsgId, `${text} Попробуй текстом.`, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      else await sendMessage(chatId, `${text} Попробуй текстом.`, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      const msg2 = err instanceof Error ? err.message : String(err)
+      console.error(`[VOICE:error] tid=${tid} err="${msg2}"`)
+      let reply: string
+      if (msg2.startsWith('timeout:download') || msg2.includes('download')) {
+        reply = '⏱ Не удалось скачать голосовой файл. Попробуй снова.'
+      } else if (msg2.startsWith('timeout:whisper') || msg2.startsWith('timeout:voice')) {
+        reply = '⏱ Распознавание заняло слишком долго. Попробуй короткое сообщение.'
+      } else if (msg2.includes('OPENAI_API_KEY')) {
+        reply = '⚠️ API ключ OpenAI не настроен. Обратитесь к администратору.'
+      } else if (msg2.includes('whisper_http_')) {
+        const code = msg2.match(/whisper_http_(\d+)/)?.[1]
+        reply = code === '429'
+          ? '⏳ Превышен лимит запросов к Whisper. Подожди минуту и попробуй снова.'
+          : `❌ Ошибка сервиса распознавания (${code}). Попробуй текстом.`
+      } else {
+        reply = '❌ Не удалось распознать голос. Попробуй текстом.'
+      }
+      if (statusMsgId) await editMessage(chatId, statusMsgId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      else await sendMessage(chatId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
   }
@@ -599,17 +630,18 @@ async function handle(update: any) {
     const thinkMsgId = thinkMsg?.result?.message_id
 
     try {
-      console.log(`[TG] parsing: "${inputText.slice(0, 60)}"`)
+      console.log(`[VOICE:parsing_started] tid=${tid} text="${inputText.slice(0, 60)}"`)
       const parseResult = await parseCalcInput(inputText)
 
       if (typeof parseResult === 'string') {
+        console.log(`[VOICE:parsing_question] tid=${tid}`)
         // Claude задал уточняющий вопрос
         if (thinkMsgId) await editMessage(chatId, thinkMsgId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
         else await sendMessage(chatId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
         return
       }
 
-      console.log(`[TG] parsed:`, JSON.stringify(parseResult))
+      console.log(`[VOICE:parsing_finished] tid=${tid}`, JSON.stringify(parseResult))
 
       const confirmText = formatConfirmText(parseResult, inputText)
       const keyboard: InlineKeyboard = [
@@ -625,7 +657,7 @@ async function handle(update: any) {
         lastDebug: { transcription, parsed: parseResult },
       })
     } catch (err) {
-      console.error('[TG] parse error:', err)
+      console.error(`[VOICE:parsing_error] tid=${tid}`, err)
       const isTimeout = err instanceof Error && err.message.startsWith('timeout')
       const errText = isTimeout ? '⏱ Распознавание параметров заняло слишком долго.' : '❌ Не удалось распознать параметры. Попробуй снова.'
       if (thinkMsgId) await editMessage(chatId, thinkMsgId, errText, [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])

@@ -26,7 +26,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           {user ? (
             <div className="flex min-h-screen">
               <Sidebar userEmail={user.email ?? ''} role={role} />
-              <main className="flex-1 min-w-0">{children}</main>
+              <main className="flex-1 min-w-0 pt-12 lg:pt-0">{children}</main>
             </div>
           ) : (
             <main className="min-h-screen">{children}</main>

@@ -238,7 +238,6 @@ export function calculateLoft(
 
   if (1 - expensesDecimal - marginDecimal <= 0) return null
   const basePrice = totalCost / (1 - expensesDecimal - marginDecimal)
-  console.log('[loft] cost:', totalCost, 'margin:', inputs.margin, 'expenses:', expensesPercent, 'price:', Math.round(basePrice))
   const expensesAmount = Math.round(basePrice * expensesDecimal)
 
   const partnerDecimal = inputs.partnerPercent / 100
@@ -267,7 +266,9 @@ export function calculateLoft(
   // Услуги (монтаж, доставка) — сверх цены изделия
   const serviceLines: { name: string; total: number }[] = []
   if (inputs.withMirrorFilm && glassArea > 0) {
-    serviceLines.push({ name: `Зеркальная плёнка (${glassArea.toFixed(2)} м²)`, total: Math.round(glassArea * 2500) })
+    const filmSvc = services.find(s => s.name.toLowerCase().includes('зеркальная плёнка') || s.name.toLowerCase().includes('зеркальная пленка'))
+    const filmPricePerM2 = filmSvc ? (filmSvc.sale_price ?? filmSvc.cost_price) : 2500
+    serviceLines.push({ name: `Зеркальная плёнка (${glassArea.toFixed(2)} м²)`, total: Math.round(glassArea * filmPricePerM2) })
   }
 
   if (inputs.hasInstallation) {

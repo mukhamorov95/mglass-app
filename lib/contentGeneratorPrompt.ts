@@ -1,0 +1,205 @@
+export const CONTENT_TYPE_LABELS: Record<string, string> = {
+  reels:     'Reels (60 сек)',
+  shorts:    'YouTube Shorts (60 сек)',
+  youtube:   'YouTube видео (5–10 мин)',
+  stories:   'Stories (15 сек × 3)',
+  telegram:  'Telegram пост',
+  whatsapp:  'WhatsApp статус',
+}
+
+export const TOPIC_LABELS: Record<string, string> = {
+  shower:      'Душевые перегородки',
+  mirror:      'Зеркала',
+  mirror_led:  'Зеркала с подсветкой',
+  loft:        'Лофт-перегородки',
+  office:      'Офисные перегородки',
+  production:  'Производство',
+  install:     'Монтаж',
+  mistakes:    'Ошибки клиентов',
+  premium:     'Premium объекты',
+  designers:   'Для дизайнеров',
+  b2b:         'B2B контент',
+  cases:       'Кейсы',
+  before_after:'До/после',
+  education:   'Обучающий',
+  compare:     'Сравнение материалов',
+}
+
+export const GOAL_LABELS: Record<string, string> = {
+  leads:    'Лиды',
+  sales:    'Продажи',
+  trust:    'Доверие',
+  brand:    'Бренд',
+  expert:   'Экспертность',
+  followup: 'Дожим',
+  partners: 'Партнёры',
+  b2b:      'B2B',
+  designers:'Дизайнеры',
+  engage:   'Вовлечение',
+}
+
+export type GeneratedScript = {
+  title: string
+  hook: string
+  structure: { time: string; label: string; visual: string; audio: string }[]
+  narrator_text: string
+  shots: { order: number; description: string; tip: string }[]
+  b_roll: string[]
+  editing_notes: string
+  subtitle_moments: string[]
+  cta: string
+  description: string
+  cover_idea: string
+  telegram_post: string
+  whatsapp_status: string
+  b2b_version: string
+}
+
+function structureForType(type: string): string {
+  if (type === 'reels' || type === 'shorts') {
+    return `
+СТРУКТУРА РОЛИКА (60 сек, точно 6 блоков):
+[0–3 сек] Хук — останавливает скролл
+[3–10 сек] Проблема — боль клиента
+[10–25 сек] Разбор — объяснение/нюансы
+[25–40 сек] Решение MGlass — как мы это решаем
+[40–55 сек] Результат — кейс/фото/цифра
+[55–60 сек] CTA — конкретное действие`
+  }
+  if (type === 'stories') {
+    return `
+СТРУКТУРА STORIES (3 истории по 15 сек):
+[История 1] Хук + Проблема
+[История 2] Решение + Демонстрация
+[История 3] CTA + Контакт`
+  }
+  if (type === 'youtube') {
+    return `
+СТРУКТУРА YouTube (5–10 мин, 7 блоков):
+[0–30 сек] Хук + обещание ценности
+[30–90 сек] Проблема + статистика
+[90–180 сек] Ошибки клиентов
+[180–300 сек] Разбор решения MGlass
+[300–420 сек] Примеры и кейсы
+[420–540 сек] Сравнение материалов
+[540–600 сек] Вывод + CTA`
+  }
+  return ''
+}
+
+export function buildContentGeneratorPrompt(
+  contentType: string,
+  topic: string,
+  goal: string,
+  context: string
+): string {
+  const typeLabel  = CONTENT_TYPE_LABELS[contentType]  ?? contentType
+  const topicLabel = TOPIC_LABELS[topic] ?? topic
+  const goalLabel  = GOAL_LABELS[goal]   ?? goal
+
+  return `Ты — AI-контент директор компании MGlass (стекло, душевые, зеркала, лофт-перегородки, Москва).
+
+Твоя задача: создать профессиональный медиа-скрипт.
+
+ПАРАМЕТРЫ:
+Формат: ${typeLabel}
+Тема: ${topicLabel}
+Цель: ${goalLabel}
+${context ? `Дополнительный контекст: ${context}` : ''}
+
+СТИЛЬ MGLASS:
+- Дорогой, экспертный, уверенный тон
+- Не рекламный блог — сильная производственная компания
+- Живой язык, не роботизированный
+- Конкретные детали: материалы, толщина стекла, типы фурнитуры
+- Хуки должны останавливать скролл — провокационные, неожиданные, цепляющие
+${structureForType(contentType)}
+
+ХУКИ — ПРИНЦИПЫ:
+- Вопрос с неожиданным ответом: "Почему душевые за 40 000 ₽ протекают через год?"
+- Цифра-шок: "80% клиентов делают эту ошибку при выборе зеркала"
+- Провокация: "Никогда не ставьте душевую без этого"
+- Инсайдерский секрет: "Вот что производители скрывают о стекле 4 мм"
+
+ТЕКСТ ДИКТОРА:
+- Короткие предложения
+- [пауза] где нужно подчеркнуть
+- Разговорный, но экспертный стиль
+- Не читать, а говорить
+
+Отвечай ТОЛЬКО валидным JSON без markdown, без пояснений, только объект:
+
+{
+  "title": "Название ролика/поста",
+  "hook": "Первые слова/фраза, останавливающая скролл",
+  "structure": [
+    {"time": "0–3 сек", "label": "Хук", "visual": "что показывать", "audio": "что говорить"},
+    {"time": "3–10 сек", "label": "Проблема", "visual": "...", "audio": "..."},
+    {"time": "10–25 сек", "label": "Разбор", "visual": "...", "audio": "..."},
+    {"time": "25–40 сек", "label": "Решение", "visual": "...", "audio": "..."},
+    {"time": "40–55 сек", "label": "Результат", "visual": "...", "audio": "..."},
+    {"time": "55–60 сек", "label": "CTA", "visual": "...", "audio": "..."}
+  ],
+  "narrator_text": "Полный текст диктора с [паузами] и акцентами",
+  "shots": [
+    {"order": 1, "description": "Конкретный кадр", "tip": "Как и где снять"},
+    {"order": 2, "description": "...", "tip": "..."},
+    {"order": 3, "description": "...", "tip": "..."},
+    {"order": 4, "description": "...", "tip": "..."},
+    {"order": 5, "description": "...", "tip": "..."}
+  ],
+  "b_roll": ["Архивный материал 1", "Архивный материал 2", "Архивный материал 3"],
+  "editing_notes": "Zoom in на 5 сек, slow-mo монтаж на 30 сек, текст поверх на 55 сек",
+  "subtitle_moments": ["Хук — крупный шрифт белый", "CTA — анимация текста снизу"],
+  "cta": "Конкретный призыв к действию",
+  "description": "Подпись для Instagram/YouTube (2–3 абзаца с хэштегами)",
+  "cover_idea": "Описание обложки/превью",
+  "telegram_post": "Адаптированный пост для Telegram (с форматированием)",
+  "whatsapp_status": "Очень короткий статус 3–5 строк + emoji + CTA",
+  "b2b_version": "Версия для B2B аудитории (мебельщики, стекольщики, строители)"
+}`
+}
+
+export const DAILY_CONTENT_PROMPT = `Ты — AI-директор по контенту MGlass (стекло, душевые, зеркала, лофт, Москва).
+
+Сгенерируй дневной контент-план для MGlass.
+
+MGlass производит: душевые перегородки, зеркала с подсветкой, лофт-перегородки, офисные перегородки.
+
+Сегодня нужно подготовить:
+
+Отвечай ТОЛЬКО валидным JSON:
+
+{
+  "date": "YYYY-MM-DD",
+  "reels_ideas": [
+    {"topic": "...", "hook": "...", "why_today": "почему этот контент актуален"},
+    {"topic": "...", "hook": "...", "why_today": "..."},
+    {"topic": "...", "hook": "...", "why_today": "..."}
+  ],
+  "top_reel_script": {
+    "title": "...",
+    "hook": "...",
+    "structure_summary": "Краткое описание структуры ролика",
+    "narrator_text": "Полный текст диктора",
+    "cta": "..."
+  },
+  "telegram_post": {
+    "text": "Готовый пост для Telegram",
+    "cta": "..."
+  },
+  "whatsapp_status": {
+    "text": "Готовый WhatsApp статус (3–5 строк + emoji)"
+  },
+  "b2b_idea": {
+    "topic": "...",
+    "hook": "...",
+    "format": "пост/видео/прайс/письмо",
+    "action": "Конкретное действие на сегодня"
+  },
+  "partner_action": {
+    "description": "Что сделать сегодня для партнёрской программы",
+    "message_template": "Готовый шаблон сообщения для дизайнера/прораба"
+  },
+  "insight": "Главный маркетинговый инсайт дня — что MGlass должен транслировать сегодня"
+}`

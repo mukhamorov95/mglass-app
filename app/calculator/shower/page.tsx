@@ -90,6 +90,8 @@ export default function ShowerCalculatorPage() {
   const [saving, setSaving]       = useState(false)
   const [savedId, setSavedId]     = useState<number | null>(null)
   const [addedToCart, setAddedToCart] = useState(false)
+  const [clientName, setClientName]   = useState('')
+  const [clientPhone, setClientPhone] = useState('')
   const { addItem } = useCart()
 
   const [hwSelection, setHwSelection]     = useState<Record<number, { qty: number }>>({})
@@ -245,6 +247,16 @@ export default function ShowerCalculatorPage() {
     hwTierMultiplier: tierCfg.hwMultiplier,
     customHardwareCost,
     customHardwareLines: customHardwareCost !== undefined ? selectedHardwareLines : undefined,
+    minMargin: (() => {
+      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
+      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
+      return s?.min_margin ?? 25
+    })(),
+    standardMargin: (() => {
+      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
+      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
+      return s?.default_margin ?? 40
+    })(),
   }
 
   const showerBlocked = inputs.expensesPercent + (Number(margin) || 0) >= 100
@@ -266,7 +278,7 @@ export default function ShowerCalculatorPage() {
       financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
       base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
       final_price: result.finalPrice, grand_total: result.grandTotal,
-      margin: result.margin, profit: result.profit, manager_bonus: 0, client_text: result.clientText,
+      margin: result.margin, profit: result.profit, manager_bonus: result.managerBonus, client_text: result.clientText,
     })
     setAddedToCart(true)
     setTimeout(() => setAddedToCart(false), 2000)
@@ -286,6 +298,8 @@ export default function ShowerCalculatorPage() {
       financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
       base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
       final_price: result.grandTotal, margin: result.margin, profit: result.profit, client_text: result.clientText,
+      client_name: clientName.trim() || undefined,
+      client_phone: clientPhone.trim() || undefined,
     })
     if (saved && 'id' in saved) setSavedId(saved.id ?? null)
     setSaving(false)
@@ -350,6 +364,23 @@ export default function ShowerCalculatorPage() {
               </a>
             )}
           </div>
+        </div>
+
+        {/* ── Quick presets ─────────────────────────────────── */}
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
+          <span className="text-[11px] font-semibold text-[#86868b] flex-shrink-0 whitespace-nowrap">Быстрый старт:</span>
+          {([
+            { l: 'Распашная хром 90×200',  action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('900');  setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(false); setDiscount('0'); } },
+            { l: 'Распашная хром 120×200', action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('1200'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(true);  setDiscount('0'); } },
+            { l: 'Раздвижная 120×200',     action: () => { setTier('standard'); setStdShowerType('sliding');  setWidth('1200'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(true);  setDiscount('0'); } },
+            { l: 'Premium Black 120×200',  action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('1200'); setHeight('2000'); setGlassType('Осветлённое CrystalVision'); setWithMounting(true); setDiscount('0'); } },
+            { l: 'Стационарная 80×200',    action: () => { setTier('standard'); setStdShowerType('stationary'); setWidth('800'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(false); setDiscount('0'); } },
+          ] as { l: string; action: () => void }[]).map(p => (
+            <button key={p.l} onClick={p.action}
+              className="px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e8e8ed] rounded-[10px] hover:border-[#0071e3] hover:text-[#0071e3] whitespace-nowrap flex-shrink-0 transition-colors">
+              {p.l}
+            </button>
+          ))}
         </div>
 
         {/* ── Tier tabs ─────────────────────────────────────── */}
@@ -719,6 +750,27 @@ export default function ShowerCalculatorPage() {
               </div>
             </section>
 
+            {/* Client info */}
+            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-2">Клиент (необязательно)</p>
+              <div className="grid grid-cols-2 gap-2">
+                <input
+                  type="text"
+                  value={clientName}
+                  onChange={e => setClientName(e.target.value)}
+                  placeholder="Имя клиента"
+                  className="border border-[#e8e8ed] rounded-[10px] px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] transition-colors"
+                />
+                <input
+                  type="text"
+                  value={clientPhone}
+                  onChange={e => setClientPhone(e.target.value)}
+                  placeholder="+7 000 000-00-00"
+                  className="border border-[#e8e8ed] rounded-[10px] px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] transition-colors"
+                />
+              </div>
+            </section>
+
             {/* КП text */}
             <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
               <div className="flex items-center justify-between mb-2">
@@ -731,6 +783,37 @@ export default function ShowerCalculatorPage() {
                 {result.clientText}
               </pre>
             </section>
+
+            {/* What's Next — appears after save */}
+            {savedId && (
+              <section className="bg-[#f0f7ff] rounded-2xl border border-[#bdd9ff] p-4">
+                <p className="text-[11px] font-bold text-[#0071e3] uppercase tracking-wider mb-3">
+                  ✓ Расчёт #{savedId} сохранён — что дальше?
+                </p>
+                <button onClick={handleCopy}
+                  className="w-full flex items-center justify-center gap-2 px-3 py-2.5 bg-[#0071e3] text-white rounded-xl text-[13px] font-semibold hover:bg-[#0062c4] transition-colors mb-2">
+                  📋 Скопировать текст клиенту
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <a href={`/calculations/${savedId}/print`} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    📄 PDF КП
+                  </a>
+                  <a href={`/calculations/${savedId}`}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    ✏️ Открыть расчёт
+                  </a>
+                  <a href="/calculations"
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    📋 История
+                  </a>
+                  <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    ➕ Новый расчёт
+                  </button>
+                </div>
+              </section>
+            )}
 
           </div>
         </div>

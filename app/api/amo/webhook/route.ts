@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { sendMessage, getChannels } from '@/lib/wazzup'
 
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const AMO_BASE = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
 const AMO_TOKEN = process.env.AMO_ACCESS_TOKEN!
 const VLADISLAV_USER_ID = parseInt(process.env.AMO_VLADISLAV_USER_ID || '8352283')
@@ -12,11 +10,11 @@ const ROUND_ROBIN_ENABLED = process.env.AMOCRM_ROUND_ROBIN_ENABLED === 'true'
 const ROUND_ROBIN_MANAGERS: number[] = (process.env.AMOCRM_MANAGERS_IDS ?? '')
   .split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n) && n > 0)
 
-// Stage IDs — update if your pipeline uses different IDs
-// Find them via: GET /api/v4/leads/pipelines
 const STAGE_MEASUREMENT_SCHEDULED = process.env.AMO_STAGE_MEASUREMENT_ID
   ? parseInt(process.env.AMO_STAGE_MEASUREMENT_ID)
   : null
+
+const STAGE_ASSIGNED = 48587215
 
 const FIRST_MESSAGE = `Здравствуйте! Меня зовут Владислав, я менеджер компании MGlass.
 
@@ -26,6 +24,10 @@ const MEASUREMENT_CONFIRMATION = `Отлично! Замер у вас назн�
 
 Если появятся вопросы — пишите сюда, всегда на связи 🙂`
 
+// ── AMO won/lost status IDs ──────────────────────────────────────────────────
+const AMO_WON_STATUS  = 142
+const AMO_LOST_STATUS = 143
+
 function supabase() {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +35,18 @@ function supabase() {
   )
 }
 
-async function amoGet(path: string) {
+// ── Normalize phone to 7XXXXXXXXXX format ────────────────────────────────────
+// Handles: +7, 8, 10-digit local, any separator chars
+function normalizePhone(raw: string): string | null {
+  const digits = raw.replace(/\D/g, '')
+  if (digits.length === 11 && digits.startsWith('8')) return '7' + digits.slice(1)
+  if (digits.length === 11 && digits.startsWith('7')) return digits
+  if (digits.length === 10) return '7' + digits
+  return null  // not a valid Russian number
+}
+
+// ── AMO helpers ───────────────────────────────────────────────────────────────
+async function amoGet(path: string): Promise<any> {
   const res = await fetch(`${AMO_BASE}${path}`, {
     headers: { Authorization: `Bearer ${AMO_TOKEN}` },
     cache: 'no-store',
@@ -50,24 +63,12 @@ async function addAmoNote(leadId: number, text: string) {
   })
 }
 
-async function getLeadPhone(leadId: number): Promise<{ phone: string; name: string } | null> {
-  const data = await amoGet(`/leads/${leadId}?with=contacts`)
-  const contacts = data?._embedded?.contacts
-  if (!contacts?.length) return null
-
-  for (const contact of contacts) {
-    const contactData = await amoGet(`/contacts/${contact.id}`)
-    const fields = contactData?.custom_fields_values ?? []
-    const phoneField = fields.find((f: any) => f.field_code === 'PHONE')
-    const phones = phoneField?.values ?? []
-    if (phones.length) {
-      const raw = phones[0].value as string
-      const clean = raw.replace(/\D/g, '').replace(/^8/, '7')
-      const name = contactData?.name ?? ''
-      return { phone: clean, name }
-    }
-  }
-  return null
+async function assignLeadToManager(leadId: number, managerId: number) {
+  await fetch(`${AMO_BASE}/leads`, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify([{ id: leadId, responsible_user_id: managerId, status_id: STAGE_ASSIGNED }]),
+  })
 }
 
 async function getDefaultChannel(): Promise<{ channelId: string; chatType: string } | null> {
@@ -82,9 +83,104 @@ async function getDefaultChannel(): Promise<{ channelId: string; chatType: strin
   }
 }
 
+// ── Get all normalized phones + contact IDs from a lead's contacts ────────────
+type ContactInfo = { phones: string[]; name: string; contactIds: number[] }
+
+async function getLeadContactInfo(leadId: number): Promise<ContactInfo> {
+  const data = await amoGet(`/leads/${leadId}?with=contacts`)
+  const contacts: any[] = data?._embedded?.contacts ?? []
+  const phones: string[] = []
+  const contactIds: number[] = []
+  let name = ''
+
+  for (const c of contacts) {
+    contactIds.push(c.id)
+    const contactData = await amoGet(`/contacts/${c.id}`)
+    if (!contactData) continue
+    if (!name) name = contactData.name ?? ''
+
+    const fields: any[] = contactData.custom_fields_values ?? []
+    const phoneField = fields.find(f => f.field_code === 'PHONE')
+    for (const pv of phoneField?.values ?? []) {
+      const norm = normalizePhone(pv.value as string)
+      if (norm && !phones.includes(norm)) phones.push(norm)
+    }
+  }
+
+  return { phones, name, contactIds }
+}
+
+// ── 1. Check local DB for existing ownership ─────────────────────────────────
+async function findOwnerInLocalDb(phones: string[]): Promise<number | null> {
+  if (!phones.length) return null
+  const db = supabase()
+  const { data } = await db
+    .from('client_ownership')
+    .select('manager_id')
+    .in('phone', phones)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+  return (data?.[0]?.manager_id as number) ?? null
+}
+
+// ── 2. Search AMO contacts/leads for existing manager ─────────────────────────
+// Returns the most recent active/won manager for this phone
+async function findOwnerInAmo(phones: string[]): Promise<number | null> {
+  for (const phone of phones) {
+    const data = await amoGet(`/contacts?query=${encodeURIComponent(phone)}&with=leads&limit=5`)
+    const contacts: any[] = data?._embedded?.contacts ?? []
+    if (!contacts.length) continue
+
+    // Collect all lead IDs from contacts found by this phone
+    const leadIds: number[] = []
+    for (const contact of contacts) {
+      for (const l of contact._embedded?.leads ?? []) {
+        if (!leadIds.includes(l.id)) leadIds.push(l.id)
+      }
+    }
+    if (!leadIds.length) continue
+
+    // Batch-fetch leads (up to 20)
+    const idsParam = leadIds.slice(0, 20).map(id => `filter[id][]=${id}`).join('&')
+    const leadsData = await amoGet(`/leads?${idsParam}`)
+    const leads: any[] = leadsData?._embedded?.leads ?? []
+    if (!leads.length) continue
+
+    // Prioritize: active deal > won deal > any, then most recent
+    const scored = leads.map(l => {
+      const isActive = l.status_id !== AMO_WON_STATUS && l.status_id !== AMO_LOST_STATUS
+      const isWon   = l.status_id === AMO_WON_STATUS
+      const score   = isActive ? 2 : isWon ? 1 : 0
+      return { managerId: l.responsible_user_id as number, score, createdAt: l.created_at as number ?? 0 }
+    })
+
+    scored.sort((a, b) => b.score - a.score || b.createdAt - a.createdAt)
+    if (scored[0]?.managerId) return scored[0].managerId
+  }
+
+  return null
+}
+
+// ── Save / update ownership in local DB ──────────────────────────────────────
+async function saveOwnership(phones: string[], managerId: number, contactId?: number) {
+  if (!phones.length) return
+  const db = supabase()
+  for (const phone of phones) {
+    await db.from('client_ownership').upsert(
+      {
+        phone,
+        contact_id: contactId ?? null,
+        manager_id: managerId,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'phone' }
+    )
+  }
+}
+
+// ── Round-robin (only for new clients) ───────────────────────────────────────
 async function getNextRoundRobinManager(): Promise<number | null> {
   if (!ROUND_ROBIN_ENABLED || !ROUND_ROBIN_MANAGERS.length) return null
-
   const db = supabase()
   const { data } = await db.from('ai_settings').select('value').eq('key', 'round_robin_index').single()
   const idx = parseInt(data?.value ?? '0') || 0
@@ -94,129 +190,122 @@ async function getNextRoundRobinManager(): Promise<number | null> {
   return managerId
 }
 
-const STAGE_ASSIGNED = 48587215 // "Назначен ответственный" в воронке Продажи
-
-async function assignLeadToManager(leadId: number, managerId: number) {
-  await fetch(`${AMO_BASE}/leads`, {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([{ id: leadId, responsible_user_id: managerId, status_id: STAGE_ASSIGNED }]),
-  })
-}
-
-async function handleNewLead(leadId: number, responsibleUserId: number) {
-  if (responsibleUserId !== VLADISLAV_USER_ID) return
+// ── Start AI bot conversation if manager is Vladislav ────────────────────────
+async function handleNewLead(leadId: number, managerId: number, phone: string | null, clientName: string) {
+  if (managerId !== VLADISLAV_USER_ID) return
+  if (!phone) return
 
   const db = supabase()
-  const phoneInfo = await getLeadPhone(leadId)
-  if (!phoneInfo) return
-
-  const channel = await getDefaultChannel()
-  if (!channel) return
-
-  const { phone, name } = phoneInfo
-  const { channelId, chatType } = channel
-
-  // Check if chat already exists
   const { data: existing } = await db
     .from('ai_managed_chats')
     .select('chat_id')
     .eq('chat_id', phone)
     .single()
+  if (existing) return // already managing this chat
 
-  if (existing) return // Already managing this chat
+  const channel = await getDefaultChannel()
+  if (!channel) return
 
-  // Create managed chat record
   await db.from('ai_managed_chats').insert({
     chat_id: phone,
-    channel_id: channelId,
-    chat_type: chatType,
+    channel_id: channel.channelId,
+    chat_type: channel.chatType,
     amo_lead_id: leadId,
-    client_name: name || null,
+    client_name: clientName || null,
     is_active: true,
   })
-
-  // Send first message
-  await sendMessage(channelId, phone, chatType, FIRST_MESSAGE)
-
-  // Save to conversation history
-  await db.from('ai_conversations').insert({
-    chat_id: phone,
-    role: 'assistant',
-    content: FIRST_MESSAGE,
-  })
-
+  await sendMessage(channel.channelId, phone, channel.chatType, FIRST_MESSAGE)
+  await db.from('ai_conversations').insert({ chat_id: phone, role: 'assistant', content: FIRST_MESSAGE })
   await addAmoNote(leadId, `🤖 AI-менеджер начал диалог с клиентом`)
 }
 
+// ── Stage change → send measurement confirmation ──────────────────────────────
 async function handleStageChange(leadId: number, newStatusId: number) {
   if (!STAGE_MEASUREMENT_SCHEDULED || newStatusId !== STAGE_MEASUREMENT_SCHEDULED) return
-
   const db = supabase()
   const { data: chat } = await db
     .from('ai_managed_chats')
     .select()
     .eq('amo_lead_id', leadId)
     .single()
-
   if (!chat) return
-
   await sendMessage(chat.channel_id, chat.chat_id, chat.chat_type, MEASUREMENT_CONFIRMATION)
-  await db.from('ai_conversations').insert({
-    chat_id: chat.chat_id,
-    role: 'assistant',
-    content: MEASUREMENT_CONFIRMATION,
-  })
+  await db.from('ai_conversations').insert({ chat_id: chat.chat_id, role: 'assistant', content: MEASUREMENT_CONFIRMATION })
 }
 
+// ── Main webhook handler ──────────────────────────────────────────────────────
 export async function POST(req: Request) {
   try {
-    // AMO sends form-urlencoded data
     const contentType = req.headers.get('content-type') ?? ''
     let body: Record<string, unknown> = {}
 
     if (contentType.includes('application/json')) {
       body = await req.json()
     } else {
-      // Parse form-urlencoded or query params
       const text = await req.text()
       const params = new URLSearchParams(text)
-      for (const [key, value] of params.entries()) {
-        body[key] = value
-      }
+      for (const [key, value] of params.entries()) body[key] = value
     }
 
-    // AMO webhook structure: leads[add][0][id], leads[status][0][id], etc.
-    // Parse lead events
-    const addMatches = JSON.stringify(body).match(/"leads\[add\]\[(\d+)\]\[id\]":"(\d+)"/g) ?? []
-    const statusMatches = JSON.stringify(body).match(/"leads\[status\]\[(\d+)\]\[id\]":"(\d+)"/g) ?? []
-
-    // Handle new leads
     for (const [key, value] of Object.entries(body)) {
+
+      // ── New lead ──────────────────────────────────────────────────────────
       if (key.startsWith('leads[add]') && key.endsWith('[id]')) {
         const leadId = parseInt(value as string)
-        if (leadId) {
-          const lead = await amoGet(`/leads/${leadId}`)
-          if (lead) {
-            let managerId: number = lead.responsible_user_id
-            const rrManager = await getNextRoundRobinManager()
-            if (rrManager && rrManager !== managerId) {
-              await assignLeadToManager(leadId, rrManager)
-              await addAmoNote(leadId, `🔄 Round-robin: заявка назначена менеджеру ID ${rrManager}`)
-              managerId = rrManager
-            }
-            await handleNewLead(leadId, managerId)
-          }
+        if (!leadId) continue
+
+        const lead = await amoGet(`/leads/${leadId}`)
+        if (!lead) continue
+
+        const { phones, name, contactIds } = await getLeadContactInfo(leadId)
+
+        // ── Ownership check: local DB first, then AMO ─────────────────────
+        let existingManager = await findOwnerInLocalDb(phones)
+
+        if (!existingManager) {
+          existingManager = await findOwnerInAmo(phones)
         }
+
+        let managerId: number = lead.responsible_user_id
+        let note: string
+
+        if (existingManager) {
+          // Returning client → assign to existing manager, skip round-robin
+          managerId = existingManager
+          await assignLeadToManager(leadId, managerId)
+          note = [
+            `🔁 Повторный клиент`,
+            `Менеджер закреплён: ID ${managerId}`,
+            phones.length ? `Совпадение по телефону: ${phones[0]}` : `Совпадение по контакту`,
+          ].join('\n')
+        } else {
+          // New client → round-robin
+          const rrManager = await getNextRoundRobinManager()
+          if (rrManager) {
+            managerId = rrManager
+            await assignLeadToManager(leadId, managerId)
+          }
+          note = [
+            `🆕 Новый клиент`,
+            rrManager
+              ? `Назначен через round-robin: ID ${managerId}`
+              : `Round-robin отключён, менеджер не изменён`,
+          ].join('\n')
+        }
+
+        // Save ownership for all found phones
+        await saveOwnership(phones, managerId, contactIds[0])
+        await addAmoNote(leadId, note)
+
+        // Start AI conversation if assigned to Vladislav
+        await handleNewLead(leadId, managerId, phones[0] ?? null, name)
       }
 
+      // ── Stage change ──────────────────────────────────────────────────────
       if (key.startsWith('leads[status]') && key.endsWith('[id]')) {
         const leadId = parseInt(value as string)
-        const statusKey = key.replace('[id]', '[status_id]')
-        const statusId = parseInt(body[statusKey] as string)
-        if (leadId && statusId) {
-          await handleStageChange(leadId, statusId)
-        }
+        const statusId = parseInt(body[key.replace('[id]', '[status_id]')] as string)
+        if (leadId && statusId) await handleStageChange(leadId, statusId)
       }
     }
 

@@ -14,6 +14,8 @@ type SavePayload = {
   manager_bonus?: number
   client_text: string
   notes?: string
+  client_name?: string
+  client_phone?: string
 }
 
 export type SaveResult = { id: number; error?: never } | { id?: never; error: string } | null

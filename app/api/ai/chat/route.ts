@@ -2,30 +2,31 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { MessageParam, ToolUseBlock } from '@anthropic-ai/sdk/resources/messages/messages'
 import { AI_TOOLS, executeTool } from '@/lib/ai-tools'
 import { createClient } from '@/lib/supabase-server'
+import { createClient as createAdminClient } from '@supabase/supabase-js'
+import { buildSalesManagerPrompt } from '@/lib/salesManagerPrompt'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
-const SYSTEM_PROMPT = `Ты — AI-ассистент по продажам компании MGlass.
+function adminDb() {
+  return createAdminClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+  )
+}
 
-MGlass производит и устанавливает:
-- Зеркала с подсветкой (LED, сенсорные, с пескоструем, разные формы)
-- Лофт-перегородки (металлический профиль, стекло, с покраской и без)
-- Душевые перегородки (раздвижные, распашные, разные модели стекла)
-- Стеклянные конструкции под заказ
-
-Ты помогаешь менеджерам:
-1. Отвечать на вопросы клиентов о продуктах, сроках, ценах
-2. Составлять и улучшать коммерческие предложения
-3. Делать ориентировочные расчёты стоимости
-4. Предлагать скрипты, аргументы и ответы на возражения
-
-Финансовая модель:
-- Суммарные операционные расходы: ~37% (налоги 12%, менеджер 3%, реализация 3%, маркетинг 5%, транспорт 2%, операционные 12%)
-- Дефолтная целевая маржа: 40%, минимально допустимая: 25%
-- Формула цены: цена = себестоимость ÷ (1 − расходы − маржа)
-- Продажа ниже минимальной маржи требует согласования руководства
-
-Используй инструменты для получения актуальных данных из базы. Отвечай кратко и по делу. Всегда на русском языке.`
+async function getSystemPrompt(): Promise<string> {
+  try {
+    const db = adminDb()
+    const [bonusRes, scriptRes] = await Promise.all([
+      db.from('sales_bonuses').select('name, description, conditions, value, type').eq('active', true).order('sort_order'),
+      db.from('sales_scripts').select('category, title, trigger_desc, body, is_featured').eq('active', true).eq('is_featured', true).order('sort_order'),
+    ])
+    return buildSalesManagerPrompt(bonusRes.data ?? [], scriptRes.data ?? [])
+  } catch {
+    const { DEFAULT_SALES_PROMPT } = await import('@/lib/salesManagerPrompt')
+    return DEFAULT_SALES_PROMPT
+  }
+}
 
 export async function POST(req: Request) {
   const supabase = await createClient()
@@ -33,6 +34,7 @@ export async function POST(req: Request) {
   if (!user) return new Response('Unauthorized', { status: 401 })
 
   const { messages } = await req.json() as { messages: MessageParam[] }
+  const systemPrompt = await getSystemPrompt()
 
   const encoder = new TextEncoder()
 
@@ -44,12 +46,11 @@ export async function POST(req: Request) {
       try {
         let currentMessages: MessageParam[] = messages
 
-        // Tool use loop — repeats until no more tool calls
         while (true) {
           const apiStream = anthropic.messages.stream({
             model: 'claude-sonnet-4-6',
             max_tokens: 4096,
-            system: SYSTEM_PROMPT,
+            system: systemPrompt,
             messages: currentMessages,
             tools: AI_TOOLS,
           })

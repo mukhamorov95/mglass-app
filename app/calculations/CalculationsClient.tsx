@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import LaunchOrderModal from '@/components/LaunchOrderModal'
@@ -25,6 +25,8 @@ type Calc = {
   manager_bonus: number
   status: string
   client_text: string | null
+  client_name: string | null
+  client_phone: string | null
 }
 
 type Props = {
@@ -33,60 +35,63 @@ type Props = {
   allSettings: FinancialSettings[]
 }
 
-const PRODUCT_LABELS: Record<string, { label: string; color: string }> = {
-  mirror:          { label: 'Зеркало',    color: 'bg-blue-50 text-blue-700' },
-  loft:            { label: 'Лофт',       color: 'bg-orange-50 text-orange-700' },
-  shower:          { label: 'Душевая',    color: 'bg-cyan-50 text-cyan-700' },
-  shower_standard: { label: 'Душевая',    color: 'bg-cyan-50 text-cyan-700' },
-  shower_budget:   { label: 'Душевая',    color: 'bg-cyan-50 text-cyan-700' },
-  order:           { label: 'Заказ',      color: 'bg-purple-50 text-purple-700' },
+const PRODUCT_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
+  mirror:          { label: 'Зеркало',  color: 'bg-blue-50 text-blue-700',    emoji: '🪞' },
+  loft:            { label: 'Лофт',     color: 'bg-orange-50 text-orange-700', emoji: '🏗️' },
+  shower:          { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
+  shower_standard: { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
+  shower_budget:   { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
+  order:           { label: 'Заказ',    color: 'bg-purple-50 text-purple-700', emoji: '📦' },
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  draft:    { label: 'Черновик',  color: 'bg-gray-100 text-gray-600' },
-  sent:     { label: 'Отправлен', color: 'bg-blue-100 text-blue-700' },
-  approved: { label: 'Принят',    color: 'bg-green-100 text-green-700' },
-  rejected: { label: 'Отклонён', color: 'bg-red-100 text-red-600' },
+// Sales flow statuses
+const STATUS_META: Record<string, { label: string; color: string; dot: string }> = {
+  draft:    { label: 'Черновик',   color: 'bg-gray-100 text-gray-600',         dot: 'bg-gray-400' },
+  sent:     { label: 'Отправлено', color: 'bg-blue-100 text-blue-700',         dot: 'bg-blue-500' },
+  thinking: { label: 'Думает',     color: 'bg-amber-100 text-amber-700',       dot: 'bg-amber-500' },
+  approved: { label: 'Согласовано',color: 'bg-emerald-100 text-emerald-700',   dot: 'bg-emerald-500' },
+  launched: { label: 'Запущено',   color: 'bg-purple-100 text-purple-700',     dot: 'bg-purple-500' },
+  rejected: { label: 'Отказ',      color: 'bg-red-100 text-red-600',           dot: 'bg-red-400' },
 }
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
-function getDescription(c: Calc): string {
+function getDesc(c: Calc): string {
   const d = c.input_data
   if (c.product_type === 'mirror') return `${d.width}×${d.height} мм`
   if (c.product_type === 'loft')   return `${d.width}×${d.height} мм${d.sections ? `, ${d.sections} секц.` : ''}`
-  if (c.product_type === 'shower' || c.product_type === 'shower_standard' || c.product_type === 'shower_budget') {
-    const tier = d.tier === 'budget' ? 'Бюджет' : 'Стандарт'
-    const dims = d.dimStr ?? `${d.width}×${d.height} мм`
-    return `${dims} — ${tier}`
+  if (c.product_type.startsWith('shower')) {
+    const dims = (d.dimStr as string) ?? `${d.width}×${d.height} мм`
+    const tier = d.tier === 'budget' ? ' · Бюджет' : ''
+    return dims + tier
   }
   return ''
 }
 
 function getProductName(c: Calc): string {
   const d = c.input_data
-  if (c.product_type === 'mirror') return `Зеркало ${d.width}×${d.height} мм`
+  const label = PRODUCT_LABELS[c.product_type]?.label ?? c.product_type
+  if (c.product_type === 'mirror') return `${label} ${d.width}×${d.height} мм`
   if (c.product_type === 'loft') {
     const dims = d.sections ? `${d.width}×${d.height} мм, ${d.sections} секц.` : `${d.width}×${d.height} мм`
     return `Лофт-перегородка ${dims}`
   }
-  if (c.product_type === 'shower' || c.product_type === 'shower_standard' || c.product_type === 'shower_budget') {
-    const tier = d.tier === 'budget' ? 'Бюджет' : 'Стандарт'
-    const dims = d.dimStr ?? `${d.width}×${d.height} мм`
-    return `Душевая перегородка ${dims} — ${tier}`
+  if (c.product_type.startsWith('shower')) {
+    const tier = d.tier === 'budget' ? ' Бюджет' : ''
+    const dims = (d.dimStr as string) ?? `${d.width}×${d.height} мм`
+    return `Душевая ${dims}${tier}`
   }
-  return c.product_type
+  return label
 }
 
 function buildLaunchPayload(c: Calc): LaunchOrderPayload {
   const costLines = (c.cost_breakdown?.lines ?? []) as { name: string; qty: number; unit: string; price?: number; total: number }[]
   const svcLines  = (c.financial_breakdown?.serviceLines ?? []) as { name: string; qty?: number; unit?: string; total: number }[]
   const totalCost = (c.cost_breakdown?.totalCost as number) ?? 0
-
   return {
     product_type:    c.product_type,
     product_name:    getProductName(c),
-    dimensions_text: getDescription(c),
+    dimensions_text: getDesc(c),
     unit_cost_price: totalCost,
     unit_sale_price: c.final_price,
     discount_percent: c.discount,
@@ -102,22 +107,27 @@ function buildLaunchPayload(c: Calc): LaunchOrderPayload {
   }
 }
 
-function findSettingsForCalc(c: Calc, allSettings: FinancialSettings[]): FinancialSettings | null {
-  const pt = c.product_type
+function findSettings(c: Calc, all: FinancialSettings[]): FinancialSettings | null {
   return (
-    allSettings.find(s => s.product_type === pt) ??
-    allSettings.find(s => (pt === 'shower_budget' ? s.tier === 'budget' : s.tier === 'standard')) ??
-    allSettings[0] ??
-    null
+    all.find(s => s.product_type === c.product_type) ??
+    all.find(s => c.product_type === 'shower_budget' ? s.tier === 'budget' : s.tier === 'standard') ??
+    all[0] ?? null
   )
 }
 
 export default function CalculationsClient({ isAdmin, usersMap, allSettings }: Props) {
-  const [calcs, setCalcs] = useState<Calc[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter, setFilter] = useState<'all' | 'mirror' | 'loft' | 'shower'>('all')
+  const [calcs, setCalcs]         = useState<Calc[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [search, setSearch]       = useState('')
+  const [filterType, setFilterType] = useState<'all' | 'mirror' | 'loft' | 'shower'>('all')
+  const [filterStatus, setFilterStatus] = useState<string>('all')
   const [launchCalc, setLaunchCalc] = useState<Calc | null>(null)
   const [duplicating, setDuplicating] = useState<number | null>(null)
+  // inline client name editing
+  const [editingClient, setEditingClient] = useState<number | null>(null)
+  const [clientNameDraft, setClientNameDraft] = useState('')
+  const [clientPhoneDraft, setClientPhoneDraft] = useState('')
+  const [savingClient, setSavingClient] = useState(false)
 
   useEffect(() => { fetchCalcs() }, [])
 
@@ -125,7 +135,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings }: P
     const supabase = createClient()
     const { data } = await supabase
       .from('calculations')
-      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text')
+      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone')
       .order('created_at', { ascending: false })
     setCalcs((data ?? []) as Calc[])
     setLoading(false)
@@ -151,175 +161,294 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings }: P
     const { data } = await supabase
       .from('calculations')
       .insert({
-        product_type:        c.product_type,
-        input_data:          c.input_data,
-        cost_breakdown:      c.cost_breakdown,
-        financial_breakdown: c.financial_breakdown,
-        base_price:          c.base_price,
-        discount:            c.discount,
-        partner_percent:     c.partner_percent,
-        final_price:         c.final_price,
-        margin:              c.margin,
-        profit:              c.profit,
-        manager_bonus:       c.manager_bonus,
-        client_text:         c.client_text,
-        created_by:          session?.user.id ?? null,
-        status:              'draft',
+        product_type: c.product_type, input_data: c.input_data,
+        cost_breakdown: c.cost_breakdown, financial_breakdown: c.financial_breakdown,
+        base_price: c.base_price, discount: c.discount, partner_percent: c.partner_percent,
+        final_price: c.final_price, margin: c.margin, profit: c.profit,
+        manager_bonus: c.manager_bonus, client_text: c.client_text,
+        client_name: c.client_name, client_phone: c.client_phone,
+        created_by: session?.user.id ?? null, status: 'draft',
       })
-      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text')
+      .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone')
       .single()
     if (data) setCalcs(prev => [data as Calc, ...prev])
     setDuplicating(null)
   }
 
-  const filtered = filter === 'all'
-    ? calcs
-    : calcs.filter(c =>
-        filter === 'shower'
-          ? c.product_type === 'shower' || c.product_type === 'shower_standard' || c.product_type === 'shower_budget'
-          : c.product_type === filter
-      )
+  function openClientEdit(c: Calc) {
+    setEditingClient(c.id)
+    setClientNameDraft(c.client_name ?? '')
+    setClientPhoneDraft(c.client_phone ?? '')
+  }
 
-  const launchSettings = launchCalc ? findSettingsForCalc(launchCalc, allSettings) : null
-  const launchPayload  = launchCalc ? buildLaunchPayload(launchCalc) : null
+  async function saveClientInfo(id: number) {
+    setSavingClient(true)
+    const supabase = createClient()
+    await supabase.from('calculations').update({
+      client_name:  clientNameDraft.trim() || null,
+      client_phone: clientPhoneDraft.trim() || null,
+    }).eq('id', id)
+    setCalcs(prev => prev.map(c => c.id === id
+      ? { ...c, client_name: clientNameDraft.trim() || null, client_phone: clientPhoneDraft.trim() || null }
+      : c
+    ))
+    setEditingClient(null)
+    setSavingClient(false)
+  }
+
+  const filtered = useMemo(() => {
+    let list = calcs
+    if (filterType !== 'all') {
+      list = list.filter(c =>
+        filterType === 'shower'
+          ? c.product_type.startsWith('shower')
+          : c.product_type === filterType
+      )
+    }
+    if (filterStatus !== 'all') {
+      list = list.filter(c => c.status === filterStatus)
+    }
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(c =>
+        c.client_name?.toLowerCase().includes(q) ||
+        c.client_phone?.includes(q) ||
+        (usersMap[c.created_by ?? ''] ?? '').toLowerCase().includes(q) ||
+        getDesc(c).toLowerCase().includes(q)
+      )
+    }
+    return list
+  }, [calcs, filterType, filterStatus, search])
+
+  const defaultSettings = allSettings[0]
 
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
-      <div className="max-w-5xl mx-auto px-4 py-5">
+      <div className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-[18px] font-bold text-[#111110]">История расчётов</h1>
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h1 className="text-[18px] font-bold text-[#111110]">История расчётов</h1>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">{calcs.length} расчётов</p>
+          </div>
           <div className="flex gap-1.5">
-            <Link href="/calculator/mirror" className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9]">
-              + Зеркало
-            </Link>
-            <Link href="/calculator/loft" className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9]">
-              + Лофт
-            </Link>
-            <Link href="/calculator/shower" className="px-3 py-1.5 text-xs font-medium rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9]">
-              + Душевая
-            </Link>
+            {[
+              { href: '/calculator/shower', label: '🚿 Душевая' },
+              { href: '/calculator/mirror', label: '🪞 Зеркало' },
+              { href: '/calculator/loft',   label: '🏗️ Лофт' },
+            ].map(l => (
+              <Link key={l.href} href={l.href}
+                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                + {l.label}
+              </Link>
+            ))}
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex gap-1.5 mb-4">
-          {([
-            { k: 'all' as const,    l: 'Все' },
-            { k: 'mirror' as const, l: 'Зеркала' },
-            { k: 'loft' as const,   l: 'Лофт' },
-            { k: 'shower' as const, l: 'Душевые' },
-          ]).map(f => {
-            const cnt = f.k === 'all' ? calcs.length
-              : f.k === 'shower' ? calcs.filter(c => c.product_type === 'shower' || c.product_type === 'shower_standard' || c.product_type === 'shower_budget').length
-              : calcs.filter(c => c.product_type === f.k).length
-            return (
-              <button key={f.k} onClick={() => setFilter(f.k)}
-                className={`px-3 py-1 rounded-full text-xs font-medium transition-colors ${filter === f.k ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#fafaf9]'}`}>
-                {f.l} ({cnt})
+        {/* Search */}
+        <div className="relative mb-3">
+          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9a9a95]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
+          </svg>
+          <input
+            type="text"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск по клиенту, телефону, параметрам..."
+            className="w-full pl-9 pr-4 py-2 bg-white border border-[#e4e4e0] rounded-xl text-[13px] text-[#111110] placeholder:text-[#c4c4be] focus:outline-none focus:border-[#9a9a95] transition-colors"
+          />
+          {search && (
+            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9a9a95] hover:text-[#4b4b47]">
+              ✕
+            </button>
+          )}
+        </div>
+
+        {/* Filters row */}
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          {/* Product type */}
+          <div className="flex gap-1">
+            {([
+              { k: 'all',    l: 'Все' },
+              { k: 'shower', l: '🚿 Душевые' },
+              { k: 'mirror', l: '🪞 Зеркала' },
+              { k: 'loft',   l: '🏗️ Лофт' },
+            ] as const).map(f => {
+              const cnt = f.k === 'all' ? calcs.length
+                : f.k === 'shower' ? calcs.filter(c => c.product_type.startsWith('shower')).length
+                : calcs.filter(c => c.product_type === f.k).length
+              return (
+                <button key={f.k} onClick={() => setFilterType(f.k)}
+                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${filterType === f.k ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#fafaf9]'}`}>
+                  {f.l} <span className="opacity-60">({cnt})</span>
+                </button>
+              )
+            })}
+          </div>
+
+          <div className="w-px h-5 bg-[#e4e4e0]" />
+
+          {/* Status */}
+          <div className="flex gap-1 flex-wrap">
+            {[
+              { k: 'all', l: 'Все статусы' },
+              ...Object.entries(STATUS_META).map(([k, v]) => ({ k, l: v.label }))
+            ].map(f => (
+              <button key={f.k} onClick={() => setFilterStatus(f.k)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${filterStatus === f.k ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#fafaf9]'}`}>
+                {f.l}
               </button>
-            )
-          })}
+            ))}
+          </div>
         </div>
 
         {/* Cards */}
         {loading ? (
-          <div className="py-12 text-center text-[#9a9a95] text-sm">Загрузка...</div>
+          <div className="py-16 text-center text-[#9a9a95] text-sm">Загрузка...</div>
         ) : filtered.length === 0 ? (
-          <div className="py-12 text-center text-[#9a9a95] text-sm">Расчётов пока нет</div>
+          <div className="py-16 text-center">
+            <p className="text-[#9a9a95] text-sm mb-2">Расчётов не найдено</p>
+            {search && <button onClick={() => setSearch('')} className="text-blue-600 text-xs hover:underline">Сбросить поиск</button>}
+          </div>
         ) : (
           <div className="space-y-2">
             {filtered.map(c => {
-              const prodLabel = PRODUCT_LABELS[c.product_type] ?? { label: c.product_type, color: 'bg-gray-100 text-gray-600' }
-              const desc      = getDescription(c)
+              const prod     = PRODUCT_LABELS[c.product_type] ?? { label: c.product_type, color: 'bg-gray-100 text-gray-600', emoji: '📋' }
+              const desc     = getDesc(c)
               const totalCost = (c.cost_breakdown?.totalCost as number) ?? 0
-              const status    = computeMarginStatus(c.margin, allSettings[0] ?? { default_margin: 40, min_margin: 25 })
-              const marginColor =
-                status === 'green'   ? 'text-emerald-600' :
-                status === 'yellow'  ? 'text-amber-600'   :
-                status === 'red'     ? 'text-red-600'     : 'text-red-700'
-              const marginBadge =
-                status === 'green'   ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                status === 'yellow'  ? 'bg-amber-50 text-amber-700 border-amber-200'       :
-                status === 'red'     ? 'bg-red-50 text-red-700 border-red-200'             :
-                                       'bg-neutral-100 text-neutral-700 border-neutral-300'
-              const managerName = c.created_by ? (usersMap[c.created_by] ?? '—') : '—'
-              const st = STATUS_LABELS[c.status] ?? STATUS_LABELS.draft
+              const mStatus  = computeMarginStatus(c.margin, defaultSettings ?? { default_margin: 40, min_margin: 25 })
+              const marginColor = mStatus === 'green' ? 'text-emerald-600' : mStatus === 'yellow' ? 'text-amber-600' : 'text-red-600'
+              const marginBadge = mStatus === 'green' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : mStatus === 'yellow' ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-red-50 text-red-700 border-red-200'
+              const st = STATUS_META[c.status] ?? STATUS_META.draft
+              const managerName = c.created_by ? (usersMap[c.created_by] ?? '') : ''
+              const isEditingThis = editingClient === c.id
 
               return (
-                <div key={c.id} className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-                  {/* Top row */}
-                  <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-center gap-2 flex-wrap min-w-0">
-                      <span className="text-[11px] font-mono text-[#c4c4be]">#{c.id}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${prodLabel.color}`}>
-                        {prodLabel.label}
-                      </span>
-                      {desc && <span className="text-[13px] text-[#111110] font-medium truncate">{desc}</span>}
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0 text-[11px] text-[#9a9a95]">
-                      {isAdmin && <span>{managerName}</span>}
-                      <span>{new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}</span>
-                      <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
-                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full border-0 cursor-pointer ${st.color}`}>
-                        {Object.entries(STATUS_LABELS).map(([val, { label }]) => (
-                          <option key={val} value={val}>{label}</option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Financials row */}
-                  <div className="flex items-center gap-4 mb-3">
-                    <div className="flex items-center gap-1">
-                      <span className="text-[11px] text-[#9a9a95]">Цена</span>
-                      <span className="text-[14px] font-bold font-mono text-[#111110]">{fmt(c.final_price)}</span>
-                    </div>
-                    {totalCost > 0 && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] text-[#9a9a95]">Себест.</span>
-                        <span className="text-[12px] font-mono text-[#6b6b66]">{fmt(totalCost)}</span>
+                <div key={c.id} className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden hover:border-[#c4c4be] transition-colors">
+                  <div className="px-4 py-3.5">
+                    {/* Top row */}
+                    <div className="flex items-start gap-3 mb-2.5">
+                      {/* Product badge + desc */}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${prod.color}`}>
+                            {prod.emoji} {prod.label}
+                          </span>
+                          {desc && <span className="text-[13px] font-semibold text-[#111110]">{desc}</span>}
+                        </div>
+                        {/* Client info */}
+                        {isEditingThis ? (
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <input
+                              autoFocus
+                              value={clientNameDraft}
+                              onChange={e => setClientNameDraft(e.target.value)}
+                              placeholder="Имя клиента"
+                              className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-32 focus:outline-none focus:border-blue-400"
+                            />
+                            <input
+                              value={clientPhoneDraft}
+                              onChange={e => setClientPhoneDraft(e.target.value)}
+                              placeholder="+7 000 000-00-00"
+                              className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-36 focus:outline-none focus:border-blue-400"
+                            />
+                            <button onClick={() => saveClientInfo(c.id)} disabled={savingClient}
+                              className="px-2.5 py-1 bg-[#111110] text-white rounded-lg text-[11px] font-semibold disabled:opacity-50">
+                              {savingClient ? '...' : 'Сохранить'}
+                            </button>
+                            <button onClick={() => setEditingClient(null)} className="text-[11px] text-[#9a9a95] hover:text-[#4b4b47]">
+                              Отмена
+                            </button>
+                          </div>
+                        ) : (
+                          <button onClick={() => openClientEdit(c)}
+                            className="flex items-center gap-1.5 text-left group">
+                            {c.client_name ? (
+                              <span className="text-[13px] font-semibold text-[#111110]">{c.client_name}</span>
+                            ) : (
+                              <span className="text-[12px] text-[#c4c4be] group-hover:text-blue-500 transition-colors">+ Добавить клиента</span>
+                            )}
+                            {c.client_phone && (
+                              <span className="text-[11px] text-[#9a9a95]">· {c.client_phone}</span>
+                            )}
+                          </button>
+                        )}
                       </div>
-                    )}
-                    <div className="flex items-center gap-1.5">
-                      <span className={`text-[13px] font-bold ${marginColor}`}>{c.margin.toFixed(1)}%</span>
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border ${marginBadge}`}>
-                        {MARGIN_STATUS_LABELS[status]}
-                      </span>
-                    </div>
-                    {c.profit > 0 && (
-                      <div className="flex items-center gap-1">
-                        <span className="text-[11px] text-[#9a9a95]">Прибыль</span>
-                        <span className="text-[12px] font-mono text-emerald-600">+{fmt(c.profit)}</span>
-                      </div>
-                    )}
-                  </div>
 
-                  {/* Action buttons */}
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Link href={`/calculations/${c.id}`}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
-                      Открыть
-                    </Link>
-                    <a href={`/calculations/${c.id}/print`} target="_blank" rel="noopener noreferrer"
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-blue-100 text-blue-600 hover:bg-blue-50 transition-colors">
-                      PDF КП
-                    </a>
-                    <button onClick={() => duplicateCalc(c)} disabled={duplicating === c.id}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors">
-                      {duplicating === c.id ? '...' : 'Дублировать'}
-                    </button>
-                    <button onClick={() => deleteCalc(c.id)}
-                      className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-red-100 text-red-500 hover:bg-red-50 transition-colors">
-                      Удалить
-                    </button>
-                    <div className="flex-1" />
-                    <button
-                      onClick={() => setLaunchCalc(c)}
-                      className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
-                      Запустить заказ →
-                    </button>
+                      {/* Right: date, manager, status */}
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-[11px] text-[#9a9a95]">
+                          {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                        {isAdmin && managerName && (
+                          <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
+                        )}
+                        <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
+                          className={`text-[11px] font-semibold px-2 py-1 rounded-full cursor-pointer border-0 outline-none ${st.color}`}>
+                          {Object.entries(STATUS_META).map(([val, { label }]) => (
+                            <option key={val} value={val}>{label}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* Financials */}
+                    <div className="flex items-center gap-4 mb-3 flex-wrap">
+                      <div className="flex items-baseline gap-1">
+                        <span className="text-[11px] text-[#9a9a95]">Цена</span>
+                        <span className="text-[15px] font-bold tabular-nums text-[#111110]">{fmt(c.final_price)}</span>
+                      </div>
+                      {totalCost > 0 && (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[11px] text-[#9a9a95]">С/С</span>
+                          <span className="text-[12px] tabular-nums text-[#6b6b66]">{fmt(totalCost)}</span>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[13px] font-bold ${marginColor}`}>{c.margin.toFixed(1)}%</span>
+                        <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${marginBadge}`}>
+                          {MARGIN_STATUS_LABELS[mStatus]}
+                        </span>
+                      </div>
+                      {c.profit > 0 && (
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-[11px] text-[#9a9a95]">Прибыль</span>
+                          <span className="text-[12px] tabular-nums text-emerald-600 font-semibold">+{fmt(c.profit)}</span>
+                        </div>
+                      )}
+                      {c.discount > 0 && (
+                        <span className="text-[11px] text-amber-600 font-medium">−{c.discount}% скидка</span>
+                      )}
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Link href={`/calculations/${c.id}`}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        Открыть
+                      </Link>
+                      <a href={`/calculations/${c.id}/print`} target="_blank" rel="noopener noreferrer"
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-blue-100 text-blue-600 hover:bg-blue-50 transition-colors">
+                        PDF КП
+                      </a>
+                      <button onClick={() => duplicateCalc(c)} disabled={duplicating === c.id}
+                        className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors">
+                        {duplicating === c.id ? '...' : 'Дублировать'}
+                      </button>
+                      {isAdmin && (
+                        <button onClick={() => deleteCalc(c.id)}
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-red-100 text-red-500 hover:bg-red-50 transition-colors">
+                          Удалить
+                        </button>
+                      )}
+                      <div className="flex-1" />
+                      <button onClick={() => setLaunchCalc(c)}
+                        className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                        Запустить заказ →
+                      </button>
+                    </div>
                   </div>
                 </div>
               )
@@ -331,8 +460,8 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings }: P
       <LaunchOrderModal
         isOpen={!!launchCalc}
         onClose={() => setLaunchCalc(null)}
-        payload={launchPayload}
-        settings={launchSettings}
+        payload={launchCalc ? buildLaunchPayload(launchCalc) : null}
+        settings={launchCalc ? findSettings(launchCalc, allSettings) : null}
       />
     </div>
   )

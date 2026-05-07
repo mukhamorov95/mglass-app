@@ -27,6 +27,8 @@ export default function MirrorCalculatorPage() {
   const [saving, setSaving]         = useState(false)
   const [savedId, setSavedId]       = useState<number | null>(null)
   const [addedToCart, setAddedToCart] = useState(false)
+  const [clientName, setClientName]   = useState('')
+  const [clientPhone, setClientPhone] = useState('')
   const { addItem } = useCart()
 
   const [width, setWidth]   = useState('1000')
@@ -155,6 +157,8 @@ export default function MirrorCalculatorPage() {
       final_price: result.grandTotal, margin: result.margin,
       profit: result.profit, manager_bonus: result.managerBonus,
       client_text: result.clientText,
+      client_name: clientName.trim() || undefined,
+      client_phone: clientPhone.trim() || undefined,
     })
     if (saved && 'id' in saved) setSavedId(saved.id ?? null)
     setSaving(false)
@@ -186,6 +190,23 @@ export default function MirrorCalculatorPage() {
           <a href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</a>
           <span className="text-[#d4d4d0]">/</span>
           <h1 className="text-sm font-semibold text-[#111110]">Зеркало с подсветкой</h1>
+        </div>
+
+        {/* ── Quick presets ─────────────────────────────────── */}
+        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
+          <span className="text-[11px] font-semibold text-[#86868b] flex-shrink-0 whitespace-nowrap">Быстрый старт:</span>
+          {([
+            { l: 'Ванная 60×80 LED',     action: () => { setWidth('600');  setHeight('800');  setShape('rectangle'); setHasLighting(true);  setButtonType('none');   setHasInstallation(false); } },
+            { l: 'Ванная 80×120 сенсор', action: () => { setWidth('800');  setHeight('1200'); setShape('rectangle'); setHasLighting(true);  setButtonType('sensor'); setHasInstallation(true);  } },
+            { l: 'Взмах 100×60 горизонт',action: () => { setWidth('1000'); setHeight('600');  setShape('rectangle'); setHasLighting(true);  setButtonType('wave');   setHasInstallation(true);  } },
+            { l: 'Прихожая 60×150',      action: () => { setWidth('600');  setHeight('1500'); setShape('rectangle'); setHasLighting(false); setButtonType('none');   setHasInstallation(true);  } },
+            { l: 'Сложная форма 90×180', action: () => { setWidth('900');  setHeight('1800'); setShape('complex');   setHasLighting(true);  setButtonType('sensor'); setHasInstallation(true);  } },
+          ] as { l: string; action: () => void }[]).map(p => (
+            <button key={p.l} onClick={p.action}
+              className="px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e4e4e0] rounded-[10px] hover:border-blue-400 hover:text-blue-600 whitespace-nowrap flex-shrink-0 transition-colors">
+              {p.l}
+            </button>
+          ))}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-3">
@@ -483,20 +504,63 @@ export default function MirrorCalculatorPage() {
                     {copied ? '✓ КП' : 'Копировать КП'}
                   </button>
                 </div>
-                {savedId && (
-                  <a href={`/calculations/${savedId}`}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-[#fafaf9] text-[#4b4b47] hover:bg-[#f0f0ec] transition-colors">
-                    → История расчётов #{savedId}
-                  </a>
-                )}
+
+                {/* Клиент */}
+                <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Клиент (необязательно)</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
+                      placeholder="Имя клиента"
+                      className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
+                    <input type="text" value={clientPhone} onChange={e => setClientPhone(e.target.value)}
+                      placeholder="+7 000 000-00-00"
+                      className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
+                  </div>
+                </div>
 
                 {/* Клиентский текст */}
                 <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Текст для клиента</p>
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текст КП</p>
+                    <button onClick={handleCopy} className="text-[11px] text-blue-600 hover:underline">
+                      {copied ? 'Скопировано' : 'Копировать'}
+                    </button>
+                  </div>
                   <pre className="text-xs text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#fafaf9] rounded p-2">
                     {result.clientText}
                   </pre>
                 </div>
+
+                {/* What's Next */}
+                {savedId && (
+                  <div className="bg-[#f0f7ff] rounded-lg border border-[#bdd9ff] p-3">
+                    <p className="text-[10px] font-bold text-[#0071e3] uppercase tracking-wider mb-2.5">
+                      ✓ Расчёт #{savedId} сохранён — что дальше?
+                    </p>
+                    <button onClick={handleCopy}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#0071e3] text-white rounded-lg text-xs font-semibold hover:bg-[#0062c4] transition-colors mb-2">
+                      📋 Скопировать текст клиенту
+                    </button>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <a href={`/calculations/${savedId}/print`} target="_blank" rel="noopener noreferrer"
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        📄 PDF КП
+                      </a>
+                      <a href={`/calculations/${savedId}`}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        ✏️ Открыть расчёт
+                      </a>
+                      <a href="/calculations"
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        📋 История
+                      </a>
+                      <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        ➕ Новый расчёт
+                      </button>
+                    </div>
+                  </div>
+                )}
               </>
             ) : (
               <div className={`rounded-lg border p-6 text-center text-xs ${expensesPercent + Number(margin) >= 100 ? 'bg-red-50 border-red-200 text-red-700 font-semibold' : 'bg-white border-[#e4e4e0] text-[#9a9a95]'}`}>
