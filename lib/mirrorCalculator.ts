@@ -164,7 +164,6 @@ export function calculateMirror(
   if (denom <= 0) return null
 
   const basePrice    = totalCost / denom
-  console.log('[mirror] cost:', totalCost, 'margin:', inputs.margin, 'tax:', inputs.tax, 'price:', Math.round(basePrice))
   const taxAmount    = Math.round(basePrice * taxDecimal)
   const marginAmount = Math.round(basePrice * marginDecimal)
 

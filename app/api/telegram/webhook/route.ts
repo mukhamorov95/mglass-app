@@ -698,7 +698,8 @@ async function handle(update: any) {
 
 export async function POST(req: Request) {
   const secret = req.headers.get('x-telegram-bot-api-secret-token')
-  if (process.env.TELEGRAM_WEBHOOK_SECRET && secret !== process.env.TELEGRAM_WEBHOOK_SECRET) {
+  const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET
+  if (!expectedSecret || secret !== expectedSecret) {
     return NextResponse.json({ ok: true })
   }
 

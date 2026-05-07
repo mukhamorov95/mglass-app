@@ -9,26 +9,36 @@ function svc() {
   )
 }
 
+async function requireAuth() {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { user: null, role: null }
+  const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
+  return { user, role: (data as { role: string } | null)?.role ?? null }
+}
+
 export async function GET() {
-  const { data, error } = await svc()
-    .from('delivery_zones')
-    .select('*')
-    .order('sort_order')
+  const { user } = await requireAuth()
+  if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+
+  const { data, error } = await svc().from('delivery_zones').select('*').order('sort_order')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  const { user, role } = await requireAuth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  if (role !== 'admin') return NextResponse.json({ error: 'Только администратор' }, { status: 403 })
 
-  const body = await req.json()
+  let body: Record<string, unknown>
+  try { body = await req.json() } catch { return NextResponse.json({ error: 'Неверный запрос' }, { status: 400 }) }
+
   const { data, error } = await svc()
     .from('delivery_zones')
     .insert({
-      name:        body.name?.trim(),
-      description: body.description?.trim() || null,
+      name:        String(body.name ?? '').trim(),
+      description: body.description ? String(body.description).trim() || null : null,
       price:       Number(body.price) || 0,
       sort_order:  Number(body.sort_order) || 0,
       active:      body.active ?? true,
