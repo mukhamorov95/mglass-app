@@ -306,12 +306,29 @@ function ScriptCard({ script, onUpdate, onDelete }: {
   )
 }
 
+const GENERATION_STAGES = [
+  { key: 'hook',       label: 'Хук', icon: '⚡' },
+  { key: 'structure',  label: 'Структура', icon: '🗂' },
+  { key: 'narrator',   label: 'Текст диктора', icon: '🎙' },
+  { key: 'shots',      label: 'Кадры', icon: '🎬' },
+  { key: 'b_roll',     label: 'B-roll', icon: '📹' },
+  { key: 'cta',        label: 'CTA', icon: '📣' },
+  { key: 'description',label: 'Описание', icon: '📝' },
+  { key: 'telegram',   label: 'Telegram', icon: '✈️' },
+  { key: 'whatsapp',   label: 'WhatsApp', icon: '💬' },
+  { key: 'b2b',        label: 'B2B версия', icon: '🏢' },
+  { key: 'cover',      label: 'Обложка', icon: '🖼' },
+  { key: 'editing',    label: 'Монтаж', icon: '✂️' },
+]
+
 function GeneratorTab({ onSaved }: { onSaved: () => void }) {
   const [contentType, setContentType] = useState('reels')
   const [topic, setTopic] = useState('shower')
   const [goal, setGoal] = useState('leads')
   const [context, setContext] = useState('')
   const [loading, setLoading] = useState(false)
+  const [streamText, setStreamText] = useState('')
+  const [doneCount, setDoneCount] = useState(0)
   const [result, setResult] = useState<GeneratedScript | null>(null)
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
@@ -323,15 +340,44 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
     setError('')
     setResult(null)
     setSaved(false)
+    setStreamText('')
+    setDoneCount(0)
+
     try {
       const res = await fetch('/api/ai/content-generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'script', content_type: contentType, topic, goal, context }),
+        body: JSON.stringify({ mode: 'script', content_type: contentType, topic, goal, context, stream: true }),
       })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.error || 'Ошибка генерации')
-      setResult(data as GeneratedScript)
+      if (!res.body) throw new Error('No stream body')
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder()
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        const chunk = decoder.decode(value)
+        for (const line of chunk.split('\n')) {
+          if (!line.startsWith('data: ') || line === 'data: [DONE]') continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'chunk') {
+              setStreamText(prev => {
+                const next = prev + data.text
+                // count how many top-level keys we've seen closed in the JSON so far
+                const matches = next.match(/"(hook|structure|narrator_text|shots|b_roll|cta|description|telegram_post|whatsapp_status|b2b_version|cover_idea|editing_notes)"\s*:/g)
+                setDoneCount(matches ? matches.length : 0)
+                return next
+              })
+            } else if (data.type === 'done') {
+              setResult(data.result as GeneratedScript)
+            } else if (data.type === 'error') {
+              setError(data.error)
+            }
+          } catch {}
+        }
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Ошибка')
     } finally {
@@ -356,11 +402,14 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
           ...result,
         }),
       })
-      if (!res.ok) throw new Error()
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({ error: `HTTP ${res.status}` }))
+        throw new Error(errData.error || `HTTP ${res.status}`)
+      }
       setSaved(true)
       onSaved()
-    } catch {
-      setError('Ошибка при сохранении')
+    } catch (e) {
+      setError('Ошибка при сохранении: ' + (e instanceof Error ? e.message : String(e)))
     } finally {
       setSaving(false)
     }
@@ -425,16 +474,42 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
         {error && <p className="text-[12px] text-red-500 mt-2">{error}</p>}
       </div>
 
-      {/* Loading state */}
+      {/* Loading state — live progress */}
       {loading && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center">
-          <div className="flex justify-center gap-2 mb-3">
-            {[0, 150, 300].map(d => (
-              <span key={d} className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex gap-1">
+              {[0, 150, 300].map(d => (
+                <span key={d} className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${d}ms` }} />
+              ))}
+            </div>
+            <p className="text-[13px] text-[#111110] font-medium">AI создаёт контент...</p>
+            <span className="text-[11px] text-[#8a8a85]">{doneCount} / 12 элементов</span>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full bg-[#f4f4f0] rounded-full h-1.5 mb-4">
+            <div
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${Math.min((doneCount / 12) * 100, 95)}%` }}
+            />
+          </div>
+          {/* Element chips */}
+          <div className="flex flex-wrap gap-1.5">
+            {GENERATION_STAGES.map((s, i) => (
+              <span key={s.key} className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
+                i < doneCount
+                  ? 'bg-blue-100 text-blue-700 font-medium'
+                  : 'bg-[#f4f4f0] text-[#8a8a85]'
+              }`}>
+                {s.icon} {s.label}
+              </span>
             ))}
           </div>
-          <p className="text-[13px] text-[#6b6b66]">AI создаёт 12 элементов контента...</p>
-          <p className="text-[11px] text-[#8a8a85] mt-1">Хук · Сценарий · Структуру · Диктора · Кадры · B-roll · CTA · Описание · Обложку · Монтаж · Субтитры · B2B версию</p>
+          {streamText.length > 100 && (
+            <p className="text-[10px] text-[#8a8a85] mt-3">
+              Получено символов: {streamText.length}
+            </p>
+          )}
         </div>
       )}
 
