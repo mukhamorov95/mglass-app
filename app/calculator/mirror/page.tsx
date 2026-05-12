@@ -8,10 +8,18 @@ import { calculateMirror, MirrorInputs, MirrorShape, MirrorResult } from '@/lib/
 import { saveCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
+import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import {
+  loadGlassMatrix, loadWasteModifiers, getMatrixPrice, getWastePct,
+  getMatrixNames, getAvailableMm, getShapeModifier,
+  GlassMatrixRow, WasteModifier, MatrixMm,
+} from '@/lib/glassMatrix'
 
-const SHAPES: { value: MirrorShape; label: string }[] = [
-  { value: 'rectangle', label: 'Прямоугольник' },
-  { value: 'complex',   label: 'Сложная форма' },
+const SHAPES: { value: MirrorShape; label: string; modKey: string }[] = [
+  { value: 'rectangle', label: 'Прямоугольник', modKey: '' },
+  { value: 'circle',    label: 'Круглое',       modKey: 'round' },
+  { value: 'oval',      label: 'Овальное',      modKey: 'oval' },
+  { value: 'complex',   label: 'Сложная форма', modKey: 'complex' },
 ]
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
@@ -21,6 +29,8 @@ export default function MirrorCalculatorPage() {
   const [services, setServices]     = useState<Service[]>([])
   const [partners, setPartners]     = useState<PartnerType[]>([])
   const [settings, setSettings]     = useState<FinancialSettings | null>(null)
+  const [matrix, setMatrix]         = useState<GlassMatrixRow[]>([])
+  const [modifiers, setModifiers]   = useState<WasteModifier[]>([])
   const [loading, setLoading]       = useState(true)
   const [copied, setCopied]         = useState(false)
   const [showCost, setShowCost]     = useState(false)
@@ -30,10 +40,12 @@ export default function MirrorCalculatorPage() {
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const { addItem } = useCart()
+  const { strategy } = useOwnerStrategy()
 
   const [width, setWidth]   = useState('1000')
   const [height, setHeight] = useState('1200')
-  const [mirrorId, setMirrorId] = useState<number | null>(null)
+  const [mirrorName, setMirrorName] = useState<string>('')
+  const [mirrorMm, setMirrorMm]     = useState<MatrixMm>(4)
   const [shape, setShape] = useState<MirrorShape>('rectangle')
 
   const [hasLighting,     setHasLighting]     = useState(true)
@@ -49,46 +61,72 @@ export default function MirrorCalculatorPage() {
   const [margin, setMargin] = useState('40')
 
   useEffect(() => {
+    setMargin(String(strategy.target_margin))
+  }, [strategy.target_margin])
+
+  useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }] = await Promise.all([
+      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, mx, mods] = await Promise.all([
         sb.from('materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('services').select('*').eq('active', true),
         sb.from('financial_settings').select('*'),
         sb.from('partner_types').select('*').eq('active', true),
+        loadGlassMatrix(),
+        loadWasteModifiers(),
       ])
       setMaterials(mats ?? [])
       setServices(svcs ?? [])
       setPartners(pts ?? [])
+      setMatrix(mx)
+      setModifiers(mods)
       const mirrorSettings =
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'mirror_light') ??
         (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
         fins?.[0] ?? null
       setSettings(mirrorSettings as FinancialSettings | null)
-      if (mirrorSettings) setMargin(String((mirrorSettings as FinancialSettings).default_margin))
-      const mirrors = (mats ?? []).filter((m: Material) => m.category === 'зеркало')
-      if (mirrors.length) setMirrorId(mirrors[0].id)
+      const names = getMatrixNames(mx, 'cost', 'mirror')
+      if (names.length) {
+        setMirrorName(names[0])
+        const avail = getAvailableMm(mx, names[0], 'cost', 'mirror')
+        setMirrorMm(avail[0] ?? 4 as MatrixMm)
+      }
       setLoading(false)
     }
     load()
   }, [])
 
-  const mirrorMaterials = materials.filter(m => {
-    if (m.category !== 'зеркало') return false
-    const n = m.name.toLowerCase()
-    if (n.includes('6 мм') || n.includes('6мм')) return false
-    return n.includes('silver') || n.includes('siver') || n.includes('осветл')
-  })
-  const selectedMirror  = mirrorMaterials.find(m => m.id === mirrorId) ?? null
-  const selectedPartner = partners.find(p => p.id === partnerId) ?? null
-  const minMargin      = settings?.min_margin     ?? 25
-  const standardMargin = settings?.default_margin ?? 40
+  // When mirror type changes, reset to first available thickness
+  function handleMirrorNameChange(name: string) {
+    setMirrorName(name)
+    const avail = getAvailableMm(matrix, name, 'cost', 'mirror')
+    if (!avail.includes(mirrorMm)) setMirrorMm(avail[0] ?? 4 as MatrixMm)
+  }
 
+  const mirrorNames     = getMatrixNames(matrix, 'cost', 'mirror')
+  const availMm         = getAvailableMm(matrix, mirrorName, 'cost', 'mirror')
+  const mirrorCostPerM2 = getMatrixPrice(matrix, mirrorName, mirrorMm, 'cost', 'mirror')
+  const mirrorWastePct  = getWastePct(matrix, mirrorName, 'mirror')
+
+  // Shape → waste modifier key
+  const shapeDef        = SHAPES.find(s => s.value === shape)!
+  const shapeModPct     = shapeDef.modKey ? getShapeModifier(modifiers, shapeDef.modKey) : 0
+
+  // Keep a stub Material for accessories lookup (LED, buttons, etc.) — still from materials table
+  const mirrorMatStub   = materials.find(m => m.category === 'зеркало') ?? null
+
+  const selectedPartner = partners.find(p => p.id === partnerId) ?? null
+  const minMargin       = strategy.min_margin
+  const standardMargin  = strategy.target_margin
   const expensesPercent = settings?.tax_percent ?? 12
 
   const inputs: MirrorInputs = {
     width: Number(width) || 0, height: Number(height) || 0,
-    mirrorMaterial: selectedMirror, shape,
+    mirrorMaterial: mirrorMatStub,
+    mirrorCostPerM2,
+    mirrorWastePct,
+    shapeModifierPct: shapeModPct,
+    shape,
     hasLighting, buttonType, hasSandblast, hasSubstrate,
     substratePrice: Number(substratePrice) || 0,
     hasInstallation, hasDelivery,
@@ -100,10 +138,19 @@ export default function MirrorCalculatorPage() {
     minMargin,
   }
 
+  // Override mirrorMaterial.name for display in costLines
+  const inputsForCalc: MirrorInputs = {
+    ...inputs,
+    mirrorMaterial: mirrorMatStub
+      ? { ...mirrorMatStub, name: mirrorName ? `${mirrorName} ${mirrorMm} мм` : mirrorMatStub.name }
+      : null,
+  }
+
   const result: MirrorResult | null = useMemo(
-    () => calculateMirror(inputs, materials, services),
+    () => calculateMirror(inputsForCalc, materials, services),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [width, height, mirrorId, shape, hasLighting, buttonType, hasSandblast, hasSubstrate,
+    [width, height, mirrorName, mirrorMm, mirrorCostPerM2, mirrorWastePct, shapeModPct,
+     shape, hasLighting, buttonType, hasSandblast, hasSubstrate,
      substratePrice, hasInstallation, hasDelivery, partnerId, discount, margin, materials, services],
   )
 
@@ -115,8 +162,8 @@ export default function MirrorCalculatorPage() {
     if (!result) return
     addItem({
       product_type: 'mirror',
-      label: `${selectedMirror?.name ?? 'Зеркало'} ${width}×${height} мм`,
-      input_data: { width, height, mirrorId, shape, hasLighting, buttonType, hasSandblast, hasSubstrate },
+      label: `${mirrorName || 'Зеркало'} ${mirrorMm} мм ${width}×${height} мм`,
+      input_data: { width, height, mirrorName, mirrorMm, shape, hasLighting, buttonType, hasSandblast, hasSubstrate },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -136,7 +183,7 @@ export default function MirrorCalculatorPage() {
     setTimeout(() => setAddedToCart(false), 2000)
   }
 
-  const discountExceeded = Number(discount) > (settings?.max_discount_percent ?? 30)
+  const discountExceeded = Number(discount) > strategy.max_manager_discount
 
   async function handleSave() {
     if (!result) return
@@ -144,7 +191,7 @@ export default function MirrorCalculatorPage() {
     setSaving(true)
     const saved = await saveCalculation({
       product_type: 'mirror',
-      input_data: { width, height, mirrorId, shape, hasLighting, buttonType, hasSandblast, hasSubstrate },
+      input_data: { width, height, mirrorName, mirrorMm, shape, hasLighting, buttonType, hasSandblast, hasSubstrate },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -236,10 +283,17 @@ export default function MirrorCalculatorPage() {
                     </div>
                   </div>
                   {result && (
-                    <p className="text-[10px] text-[#9a9a95] mt-1">
-                      {result.area} м² · {result.perimeter} пог.м
-                      {Number(height) > 2800 && <span className="text-orange-500 ml-1">↑×1.2</span>}
-                    </p>
+                    <div className="text-[10px] text-[#9a9a95] mt-1 space-y-0.5">
+                      <p>{result.area} м² · {result.perimeter} пог.м</p>
+                      {result.totalWastePct > 0 && (
+                        <p className="text-[#b45309]">
+                          Расход {result.baseWastePct}%
+                          {result.shapeModifierPct > 0 && <> +{result.shapeModifierPct}% форма</>}
+                          {Number(height) > 2800 && <> +20% высота</>}
+                          {' → '}{result.billingArea} м²
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
 
@@ -247,19 +301,36 @@ export default function MirrorCalculatorPage() {
                 <div>
                   <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Тип зеркала</p>
                   <div className="space-y-1">
-                    {mirrorMaterials.map(m => {
-                      const n = m.name.toLowerCase()
-                      const swatch = n.includes('silver') || n.includes('siver') ? 'bg-green-400' : n.includes('осветл') ? 'bg-sky-300' : 'bg-gray-300'
+                    {mirrorNames.map(name => {
+                      const n = name.toLowerCase()
+                      const swatch = n.includes('серебр') || n.includes('silver') ? 'bg-slate-300' : n.includes('осветл') ? 'bg-sky-300' : n.includes('тониров') ? 'bg-amber-300' : 'bg-gray-300'
                       return (
-                        <label key={m.id}
-                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md border cursor-pointer transition-colors ${mirrorId === m.id ? 'border-blue-400 bg-blue-50' : 'border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
-                          <input type="radio" className="w-3 h-3 flex-shrink-0" checked={mirrorId === m.id} onChange={() => setMirrorId(m.id)} />
+                        <label key={name}
+                          className={`flex items-center gap-2 px-2 py-1.5 rounded-md border cursor-pointer transition-colors ${mirrorName === name ? 'border-blue-400 bg-blue-50' : 'border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
+                          <input type="radio" className="w-3 h-3 flex-shrink-0" checked={mirrorName === name} onChange={() => handleMirrorNameChange(name)} />
                           <div className={`w-3 h-3 rounded-sm flex-shrink-0 ${swatch}`} />
-                          <span className="text-xs font-medium text-[#111110]">{m.name}</span>
+                          <span className="text-xs font-medium text-[#111110]">{name}</span>
                         </label>
                       )
                     })}
                   </div>
+                  {/* Толщина */}
+                  {availMm.length > 1 && (
+                    <div className="flex gap-1 mt-2">
+                      {availMm.map(mm => (
+                        <button key={mm} onClick={() => setMirrorMm(mm)}
+                          className={`px-2.5 py-1 text-[11px] font-medium rounded border transition-colors ${mirrorMm === mm ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f5f5f4]'}`}>
+                          {mm} мм
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {mirrorCostPerM2 != null && (
+                    <p className="text-[10px] text-[#9a9a95] mt-1.5">
+                      Себестоимость: {mirrorCostPerM2.toLocaleString('ru-RU')} ₽/м²
+                      {mirrorWastePct > 0 && <> · расход {mirrorWastePct}%</>}
+                    </p>
+                  )}
                 </div>
 
                 {/* Форма */}
@@ -270,6 +341,9 @@ export default function MirrorCalculatorPage() {
                       <button key={s.value} onClick={() => setShape(s.value)}
                         className={`w-full py-1.5 px-2 rounded-md text-xs font-medium border transition-colors text-left ${shape === s.value ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
                         {s.label}
+                        {s.modKey && shapeModPct > 0 && shape === s.value && (
+                          <span className="ml-1 text-[10px] opacity-70">+{shapeModPct}%</span>
+                        )}
                       </button>
                     ))}
                   </div>
@@ -495,7 +569,7 @@ export default function MirrorCalculatorPage() {
                     {addedToCart ? '✓ В корзине' : '+ В корзину'}
                   </button>
                   <button onClick={handleSave} disabled={saving || discountExceeded}
-                    title={discountExceeded ? `Скидка превышает лимит ${settings?.max_discount_percent}%` : undefined}
+                    title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
                     {saving ? '...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
                   </button>

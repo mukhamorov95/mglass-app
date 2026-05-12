@@ -1,0 +1,2 @@
+-- Superseded by 20250512_b2b_crm_columns.sql
+-- This file is intentionally empty to avoid duplicate column / table creation.

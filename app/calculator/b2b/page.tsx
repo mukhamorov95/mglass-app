@@ -1,9 +1,11 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BClient, B2BMaterial, B2BService } from '@/lib/types'
+import { B2BClient, B2BMaterial, B2BService, computeMarginStatus } from '@/lib/types'
+
+const DRAFT_KEY = 'mglass_calc_draft'
 
 const MATERIAL_ORDER = [
   'Прозрачное М1',
@@ -43,12 +45,25 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, WASTE_OPTIONS, TEMPERING_COST,
+  calcItem, calcTotals, WASTE_OPTIONS, TEMPERING_COST, VAT,
   type B2BOrderItem, type B2BOrderTotals,
 } from '@/lib/b2bCalculator'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
+
+function marginBadgeClass(m: number): string {
+  const s = computeMarginStatus(m, { green_threshold: 35, yellow_threshold: 25, blocked_below: 0 })
+  if (s === 'green')  return 'bg-emerald-50 text-emerald-700'
+  if (s === 'yellow') return 'bg-amber-50 text-amber-700'
+  return 'bg-red-50 text-red-600'
+}
+
+function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
+  const afterDisc = item.saleIncVat * (1 - discountPct / 100)
+  const exVat = afterDisc * 100 / (100 + VAT)
+  return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
+}
 
 function parseSalePrice(m: B2BMaterial): B2BMaterial {
   try {
@@ -62,11 +77,18 @@ function parseSalePrice(m: B2BMaterial): B2BMaterial {
 
 export default function B2BCalculatorPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [clients, setClients]     = useState<B2BClient[]>([])
   const [materials, setMaterials] = useState<B2BMaterial[]>([])
   const [services, setServices]   = useState<B2BService[]>([])
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
+  const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
+  const [managerEmail, setManagerEmail] = useState<string | null>(null)
+
+  type DraftData = { clientId: number | null; items: B2BOrderItem[]; notes: string; productionDays: number; savedAt: string }
+  const [draftToast, setDraftToast] = useState<DraftData | null>(null)
+  const draftRestoredRef = useRef(false)
 
   const [clientId, setClientId]     = useState<number | null>(null)
   const [notes, setNotes]           = useState('')
@@ -80,19 +102,39 @@ export default function B2BCalculatorPage() {
   const [fHeight, setFHeight]         = useState('')
   const [fQty, setFQty]               = useState('1')
   const [fWaste, setFWaste]           = useState(15)
-  const [fTempering, setFTempering]   = useState(false)
+  const [fTempering, setFTempering]   = useState(true)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
+  const [fComment, setFComment]       = useState('')
   const widthRef = useRef<HTMLInputElement>(null)
+  const heightRef = useRef<HTMLInputElement>(null)
+  const qtyRef = useRef<HTMLInputElement>(null)
+  const [attachFile, setAttachFile]   = useState<File | null>(null)
+  const attachInputRef = useRef<HTMLInputElement>(null)
+
+  // Edit modal state
+  const [editingLocalId, setEditingLocalId] = useState<string | null>(null)
+  const [eSuperCat, setESuperCat]     = useState<SuperCat>('стекло')
+  const [eThickness, setEThickness]   = useState<number | null>(null)
+  const [eMatId, setEMatId]           = useState<number | null>(null)
+  const [eWidth, setEWidth]           = useState('')
+  const [eHeight, setEHeight]         = useState('')
+  const [eQty, setEQty]               = useState('1')
+  const [eWaste, setEWaste]           = useState(15)
+  const [eTempering, setETempering]   = useState(false)
+  const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }] = await Promise.all([
+      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }] = await Promise.all([
         sb.from('b2b_clients').select('*').eq('active', true).order('name'),
         sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
         sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
+        sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
+        sb.auth.getUser(),
       ])
+      if (user?.email) setManagerEmail(user.email)
 
       const totals = new Map<number, number>()
       for (const o of orders ?? []) {
@@ -100,7 +142,24 @@ export default function B2BCalculatorPage() {
       }
       const sorted = (cls ?? []).slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
       setClients(sorted)
-      const parsed = (mats ?? []).map(parseSalePrice)
+
+      // Override sale_price from glass_price_matrix where available
+      const matrix = glassMatrix ?? []
+      const parsed = (mats ?? []).map(m => {
+        const base = parseSalePrice(m)
+        const mm = Math.round(m.thickness)
+        const cat = ['зеркало'].includes(m.category) ? 'mirror' : 'glass'
+        const matrixSale = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'sale')
+        const matrixCost = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'cost')
+        const matrixPrice = matrixSale ? (matrixSale as Record<string, unknown>)[`t${mm}`] as number | null : null
+        // waste_pct lives on cost rows — single source of truth
+        const matrixWaste = (matrixCost as Record<string, unknown> | undefined)?.waste_pct as number | null ?? null
+        return {
+          ...base,
+          ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
+          ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste } : {}),
+        }
+      })
       setMaterials(parsed)
       setServices(svcs ?? [])
       if (parsed.length > 0) {
@@ -115,6 +174,50 @@ export default function B2BCalculatorPage() {
     load()
   }, [])
 
+  // ── Check draft / orderId after data loads ──
+  useEffect(() => {
+    if (loading) return
+    const orderIdParam  = searchParams.get('orderId')
+    const clientIdParam = searchParams.get('client')
+
+    if (orderIdParam) {
+      // Load an existing order into the calculator
+      ;(async () => {
+        const sb = createClient()
+        const { data } = await sb.from('b2b_orders').select('client_id,items').eq('id', orderIdParam).single()
+        if (data) {
+          if (data.client_id) setClientId(data.client_id)
+          const loadedItems = (Array.isArray(data.items) ? data.items : []) as B2BOrderItem[]
+          setItems(loadedItems.map(i => ({ ...i, localId: (i as B2BOrderItem & { localId?: string }).localId || crypto.randomUUID() })))
+        }
+      })()
+      return
+    }
+    if (clientIdParam) {
+      setClientId(Number(clientIdParam))
+    }
+    if (!draftRestoredRef.current) {
+      draftRestoredRef.current = true
+      try {
+        const raw = localStorage.getItem(DRAFT_KEY)
+        if (raw) {
+          const draft = JSON.parse(raw) as DraftData
+          if (draft.items?.length > 0) setDraftToast(draft)
+        }
+      } catch {}
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading])
+
+  // ── Autosave draft to localStorage ──
+  useEffect(() => {
+    if (loading) return
+    if (items.length > 0 || notes) {
+      const draft: DraftData = { clientId, items, notes, productionDays: fProductionDays, savedAt: new Date().toISOString() }
+      try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)) } catch {}
+    }
+  }, [clientId, items, notes, fProductionDays, loading])
+
   const superCatDef      = SUPER_CATS.find(s => s.value === fSuperCat) ?? SUPER_CATS[0]
   const categoryMaterials  = useMemo(() => materials.filter(m => (superCatDef.cats as readonly string[]).includes(m.category)), [materials, fSuperCat])
   const availableThickness = useMemo(() => [...new Set(categoryMaterials.map(m => m.thickness))].sort((a, b) => a - b), [categoryMaterials])
@@ -122,7 +225,7 @@ export default function B2BCalculatorPage() {
 
   function handleSuperCatChange(sc: SuperCat) {
     setFSuperCat(sc)
-    if (sc === 'зеркало') setFTempering(false)
+    setFTempering(sc === 'стекло')
     const scDef = SUPER_CATS.find(s => s.value === sc)!
     const mats = materials.filter(m => (scDef.cats as readonly string[]).includes(m.category))
     const mat = pickDefault(mats, sc)
@@ -160,13 +263,23 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
 
     const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, selectedServices)
-    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
+    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined }])
     setFWidth('')
     setFHeight('')
     setFQty('1')
+    setFComment('')
     widthRef.current?.focus()
   }
 
+  function handleWidthKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); heightRef.current?.focus() }
+  }
+  function handleHeightKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); qtyRef.current?.focus() }
+  }
+  function handleQtyKeyDown(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') handleAddItem()
+  }
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'Enter') handleAddItem()
   }
@@ -175,14 +288,136 @@ export default function B2BCalculatorPage() {
     setItems(prev => prev.filter(i => i.localId !== localId))
   }
 
+  function copyItem(localId: string) {
+    setItems(prev => {
+      const item = prev.find(i => i.localId === localId)
+      if (!item) return prev
+      return [...prev, { ...item, localId: crypto.randomUUID() }]
+    })
+  }
+
+  const [eComment, setEComment] = useState('')
+
+  function openEdit(item: B2BOrderItem) {
+    const sc: SuperCat = item.category === 'зеркало' ? 'зеркало' : 'стекло'
+    setESuperCat(sc)
+    setEThickness(item.thickness)
+    setEMatId(item.materialId)
+    setEWidth(String(item.width))
+    setEHeight(String(item.height))
+    setEQty(String(item.quantity))
+    setEWaste(item.wastePercent)
+    setETempering(item.hasTempering)
+    setEServiceIds(item.services.map(s => s.id))
+    setEComment(item.comment ?? '')
+    setEditingLocalId(item.localId)
+  }
+
+  function cancelEdit() { setEditingLocalId(null) }
+
+  function saveEdit() {
+    if (!editingLocalId) return
+    const mat = materials.find(m => m.id === eMatId)
+    if (!mat) return
+    const w = Number(eWidth)
+    const h = Number(eHeight)
+    const q = Number(eQty) || 1
+    if (w <= 0 || h <= 0) return
+    const svcs = services.filter(s => eServiceIds.includes(s.id))
+    const calc = calcItem(mat, w, h, q, eWaste, eTempering, svcs)
+    setItems(prev => prev.map(i => i.localId === editingLocalId
+      ? { ...calc, localId: editingLocalId, comment: eComment || undefined }
+      : i))
+    setEditingLocalId(null)
+  }
+
+  function handleEditSuperCatChange(sc: SuperCat) {
+    setESuperCat(sc)
+    if (sc === 'зеркало') setETempering(false)
+    const scDef = SUPER_CATS.find(s => s.value === sc)!
+    const mats = materials.filter(m => (scDef.cats as readonly string[]).includes(m.category))
+    const mat = pickDefault(mats, sc)
+    if (mat) { setEThickness(mat.thickness); setEMatId(mat.id); setEWaste(mat.waste_percent) }
+    else { setEThickness(null); setEMatId(null) }
+  }
+
+  function handleEditThicknessChange(t: number) {
+    setEThickness(t)
+    const scDef = SUPER_CATS.find(s => s.value === eSuperCat) ?? SUPER_CATS[0]
+    const mats = sortByPriority(materials.filter(m => (scDef.cats as readonly string[]).includes(m.category) && m.thickness === t))
+    if (mats.length > 0) { setEMatId(mats[0].id); setEWaste(mats[0].waste_percent) }
+    else setEMatId(null)
+  }
+
+  function handleEditMatChange(id: number) {
+    const mat = materials.find(m => m.id === id)
+    setEMatId(id)
+    if (mat) setEWaste(mat.passthrough ? 10 : mat.waste_percent)
+  }
+
+  function toggleEditService(id: number) {
+    setEServiceIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
+  }
+
+  function restoreDraft(draft: DraftData) {
+    if (draft.clientId) setClientId(draft.clientId)
+    setItems(draft.items)
+    setNotes(draft.notes)
+    setFProductionDays(draft.productionDays)
+    setDraftToast(null)
+    try { localStorage.removeItem(DRAFT_KEY) } catch {}
+  }
+
+  function dismissDraft() {
+    setDraftToast(null)
+    try { localStorage.removeItem(DRAFT_KEY) } catch {}
+  }
+
   const totals: B2BOrderTotals | null = useMemo(() => {
     if (items.length === 0) return null
     return calcTotals(items, discount)
   }, [items, discount])
 
+  const kpText = useMemo(() => {
+    if (items.length === 0) return ''
+    const clientName = clients.find(c => c.id === clientId)?.name
+    const header = clientName ? `Расчёт для ${clientName}:\n` : 'Расчёт:\n'
+    const lines = items.map((item, i) => {
+      const matDesc = item.hasTempering
+        ? `${item.materialName} ${item.thickness}мм, закалённое`
+        : `${item.materialName} ${item.thickness}мм`
+      const price = Math.round(item.saleIncVat * (1 - discount / 100))
+      const svcNames = item.services.filter(s => s.cost > 0).map(s => s.name)
+      const parts = [
+        `${i + 1}. ${matDesc}`,
+        `   Размер: ${item.width} × ${item.height} мм`,
+        `   Количество: ${item.quantity} шт.`,
+        `   Площадь: ${fmtN(item.totalAreaNet)} м²`,
+      ]
+      if (svcNames.length > 0) parts.push(`   Обработка: ${svcNames.join(', ')}`)
+      parts.push(`   Стоимость: ${price.toLocaleString('ru-RU')} ₽`)
+      return parts.join('\n')
+    })
+    const totalSum = totals ? totals.totalAfterDiscount : 0
+    const area = totals ? fmtN(totals.totalAreaNet) : '0'
+    const weight = totals ? fmtN(totals.totalWeight, 1) : '0'
+    return [
+      header,
+      lines.join('\n\n'),
+      '',
+      '──────────────────────────',
+      `Итого: ${totalSum.toLocaleString('ru-RU')} ₽`,
+      `Площадь: ${area} м²  /  Вес: ${weight} кг`,
+      '',
+      'Срок изготовления: уточняется после согласования.',
+      'Отгрузка: г. Мытищи. Доставка — отдельно.',
+    ].join('\n')
+  }, [items, totals, discount, clientId, clients])
+
   async function handleSave() {
     if (items.length === 0 || !selectedClient) return
     setSaving(true)
+    const sb = createClient()
     const t = totals!
     const avgMargin = items.length > 0
       ? Math.round(items.reduce((s, i) => s + i.margin, 0) / items.length)
@@ -192,8 +427,9 @@ export default function B2BCalculatorPage() {
       quote_date: new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
+      manager_name: managerEmail ?? null,
     })
-    const { error } = await createClient().from('b2b_orders').insert({
+    const { data: saved, error } = await sb.from('b2b_orders').insert({
       client_id: clientId,
       client_name: selectedClient.name,
       discount_percent: discount,
@@ -206,9 +442,26 @@ export default function B2BCalculatorPage() {
       total_sale_inc_vat: t.totalSaleIncVat,
       total_after_discount: t.totalAfterDiscount,
       notes: orderNotes,
-    })
-    if (!error) {
-      router.push('/b2b-quotes')
+    }).select('id').single()
+
+    if (!error && saved) {
+      try { localStorage.removeItem(DRAFT_KEY) } catch {}
+      if (attachFile) {
+        const safeName = attachFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
+        const path = `${saved.id}/${Date.now()}_${safeName}`
+        const { error: uploadErr } = await sb.storage.from('b2b-attachments').upload(path, attachFile)
+        if (!uploadErr) {
+          const { data: urlData } = sb.storage.from('b2b-attachments').getPublicUrl(path)
+          await sb.from('b2b_calculation_attachments').insert({
+            order_id: saved.id,
+            file_name: attachFile.name,
+            file_url: urlData.publicUrl,
+            file_type: attachFile.type || attachFile.name.split('.').pop() || '',
+            file_size: attachFile.size,
+          })
+        }
+      }
+      setSavedOrderId(saved.id)
     }
     setSaving(false)
   }
@@ -218,8 +471,25 @@ export default function B2BCalculatorPage() {
   )
 
   return (
+    <>
     <div className="min-h-screen bg-[#f8f8f7]">
       <div className="max-w-[1400px] mx-auto px-4 py-4">
+
+        {draftToast && (
+          <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
+            <span className="text-amber-600 text-[13px] flex-1">
+              Найден черновик от {new Date(draftToast.savedAt).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })} ({draftToast.items.length} поз.)
+            </span>
+            <button onClick={() => restoreDraft(draftToast)}
+              className="text-[12px] font-semibold bg-amber-500 text-white px-3 py-1 rounded-lg hover:bg-amber-600 transition-colors">
+              Восстановить
+            </button>
+            <button onClick={dismissDraft}
+              className="text-[12px] text-amber-600 hover:text-amber-800 transition-colors px-2">
+              ✕
+            </button>
+          </div>
+        )}
 
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">B2B Просчёт</h1>
@@ -293,20 +563,9 @@ export default function B2BCalculatorPage() {
               </div>
             </div>
 
-            {/* Инфо */}
-            {selectedMaterial && (
-              <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f8f8f7] rounded-lg text-[12px]">
-                {selectedMaterial.sale_price > 0
-                  ? <span className="font-semibold text-[#111110] font-mono">{selectedMaterial.sale_price.toLocaleString('ru-RU')} ₽/м²</span>
-                  : <span className="text-orange-500 font-medium">цена не задана</span>}
-                <span className="text-[#d4d4ce]">·</span>
-                {selectedMaterial.passthrough
-                  ? <span className="text-orange-500 font-medium">проходной · отход 10%</span>
-                  : <span className="text-[#8a8a85]">отход {selectedMaterial.waste_percent}%</span>}
-                {TEMPERING_COST[selectedMaterial.thickness] && <>
-                  <span className="text-[#d4d4ce]">·</span>
-                  <span className="text-[#8a8a85]">закалка {TEMPERING_COST[selectedMaterial.thickness]} ₽/м²</span>
-                </>}
+            {selectedMaterial && (selectedMaterial.sale_price ?? 0) === 0 && (
+              <div className="px-3 py-1.5 bg-orange-50 rounded-lg text-[12px] text-orange-600 font-medium">
+                Цена не задана — добавьте цену в справочнике стекла
               </div>
             )}
 
@@ -318,13 +577,13 @@ export default function B2BCalculatorPage() {
               <div className="grid grid-cols-3 gap-2">
                 <input ref={widthRef} type="number" min="1"
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fWidth} onChange={e => setFWidth(e.target.value)} onKeyDown={handleKeyDown} placeholder="Ш, мм" />
-                <input type="number" min="1"
+                  value={fWidth} onChange={e => setFWidth(e.target.value)} onKeyDown={handleWidthKeyDown} placeholder="Ш, мм" />
+                <input ref={heightRef} type="number" min="1"
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fHeight} onChange={e => setFHeight(e.target.value)} onKeyDown={handleKeyDown} placeholder="В, мм" />
-                <input type="number" min="1"
+                  value={fHeight} onChange={e => setFHeight(e.target.value)} onKeyDown={handleHeightKeyDown} placeholder="В, мм" />
+                <input ref={qtyRef} type="number" min="1"
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fQty} onChange={e => setFQty(e.target.value)} onKeyDown={handleKeyDown} placeholder="Шт" />
+                  value={fQty} onChange={e => setFQty(e.target.value)} onKeyDown={handleQtyKeyDown} placeholder="Шт" />
               </div>
             </div>
 
@@ -332,7 +591,10 @@ export default function B2BCalculatorPage() {
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
-                  Отход листа
+                  Отход
+                  {selectedMaterial && !selectedMaterial.passthrough && fWaste === selectedMaterial.waste_percent && (
+                    <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">авто</span>
+                  )}
                   {selectedMaterial?.passthrough && <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>}
                 </label>
                 {selectedMaterial?.passthrough ? (
@@ -349,14 +611,24 @@ export default function B2BCalculatorPage() {
               </div>
               {fSuperCat === 'стекло' && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
-                  <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Закалка</label>
+                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTempering ? 'border-orange-300 bg-orange-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                     <input type="checkbox" checked={fTempering} onChange={e => setFTempering(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className="text-[13px] text-[#111110]">Закалка</span>
+                    <span className={`text-[13px] font-medium ${fTempering ? 'text-orange-700' : 'text-[#111110]'}`}>
+                      {fTempering ? 'Закалённое' : 'Без закалки'}
+                    </span>
                   </label>
                 </div>
               )}
+            </div>
+
+            {/* Комментарий к позиции */}
+            <div>
+              <input type="text" maxLength={120}
+                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                value={fComment} onChange={e => setFComment(e.target.value)} onKeyDown={handleKeyDown}
+                placeholder="Комментарий к позиции (опционально)" />
             </div>
 
             {/* Кнопка добавить */}
@@ -397,16 +669,44 @@ export default function B2BCalculatorPage() {
               </details>
             )}
 
-            {/* Примечание */}
+            {/* Чертёж / файл */}
+            <div>
+              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
+                Чертёж / файл клиента
+              </label>
+              {attachFile ? (
+                <div className="flex items-center gap-2 px-3 py-2 border border-[#e4e4e0] rounded-lg bg-[#f8f8f7]">
+                  <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
+                  <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
+                    {attachFile.size < 1024 * 1024
+                      ? `${(attachFile.size / 1024).toFixed(0)} КБ`
+                      : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
+                  </span>
+                  <button onClick={() => setAttachFile(null)}
+                    className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
+                </div>
+              ) : (
+                <button onClick={() => attachInputRef.current?.click()}
+                  className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-[#d4d4ce] rounded-lg text-[12px] text-[#9a9a95] hover:border-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                  📎 Прикрепить файл
+                </button>
+              )}
+              <input ref={attachInputRef} type="file"
+                accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.doc,.docx,.xls,.xlsx"
+                className="hidden"
+                onChange={e => setAttachFile(e.target.files?.[0] ?? null)} />
+            </div>
+
+            {/* Примечание к заказу */}
             <details className="group">
               <summary className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none hover:text-[#6b6b66] transition-colors">
                 <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
-                Примечание
+                Примечание к заказу
               </summary>
               <textarea
                 className="mt-2 w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all resize-none"
                 rows={2} value={notes} onChange={e => setNotes(e.target.value)}
-                placeholder="Комментарий к заказу..."
+                placeholder="Общий комментарий к заказу..."
               />
             </details>
           </div>
@@ -455,12 +755,15 @@ export default function B2BCalculatorPage() {
                         <th className="px-3 py-2.5 text-right w-14">Скид.%</th>
                         <th className="px-3 py-2.5 text-right w-24 text-[#111110]">Итого</th>
                         <th className="px-3 py-2.5 text-right w-24 text-[#9a9a95]">Себест.</th>
-                        <th className="w-8"></th>
+                        <th className="px-3 py-2.5 text-right w-16">Маржа</th>
+                        <th className="px-3 py-2.5 text-left min-w-[80px]">Комм.</th>
+                        <th className="w-20"></th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f8f8f7]">
                       {items.map((item, idx) => {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
+                        const em = effectiveItemMargin(item, discount)
                         return (
                           <tr key={item.localId} className="hover:bg-[#fafaf9] transition-colors">
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
@@ -488,9 +791,27 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{discount > 0 ? `${discount}%` : '—'}</td>
                             <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemAfterDiscount.toLocaleString('ru-RU')} ₽</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{item.costExVat.toLocaleString('ru-RU')} ₽</td>
-                            <td className="px-3 py-2.5 text-center">
-                              <button onClick={() => removeItem(item.localId)}
-                                className="text-[#c4c4be] hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                            <td className="px-3 py-2.5 text-right">
+                              <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
+                                {em}%
+                              </span>
+                            </td>
+                            <td className="px-3 py-2.5 text-[11px] text-[#9a9a95] max-w-[100px] truncate">
+                              {item.comment || ''}
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-1 justify-center">
+                                <button onClick={() => openEdit(item)} title="Редактировать"
+                                  className="text-[11px] text-[#c4c4be] hover:text-[#111110] transition-colors px-1.5 py-0.5 rounded hover:bg-[#f0f0ec] leading-none">
+                                  ✎
+                                </button>
+                                <button onClick={() => copyItem(item.localId)} title="Дублировать строку"
+                                  className="text-[11px] text-[#c4c4be] hover:text-blue-500 transition-colors px-1.5 py-0.5 rounded hover:bg-blue-50 leading-none">
+                                  ⧉
+                                </button>
+                                <button onClick={() => removeItem(item.localId)}
+                                  className="text-[#c4c4be] hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                              </div>
                             </td>
                           </tr>
                         )
@@ -512,6 +833,13 @@ export default function B2BCalculatorPage() {
                           <td></td>
                           <td className="px-3 py-2.5 text-right font-mono font-bold whitespace-nowrap">{fmt(totals.totalAfterDiscount)}</td>
                           <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{totals.totalCostExVat.toLocaleString('ru-RU')} ₽</td>
+                          <td className="px-3 py-2.5 text-right">
+                            {items.length > 0 && (() => {
+                              const avg = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                              return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg)}`}>{avg}%</span>
+                            })()}
+                          </td>
+                          <td></td>
                           <td></td>
                         </tr>
                       </tfoot>
@@ -521,25 +849,61 @@ export default function B2BCalculatorPage() {
               )}
             </div>
 
+            {/* КП для клиента */}
+            {kpText && (
+              <details className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden group">
+                <summary className="px-5 py-3 border-b border-[#f0f0ec] flex items-center gap-2 cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
+                  <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform inline-block">▶</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Клиентский расчёт (КП)</span>
+                  <span className="text-[11px] text-[#c4c4be] ml-auto">нажмите чтобы раскрыть</span>
+                </summary>
+                <div className="p-5">
+                  <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-[#111110] bg-[#f8f8f7] rounded-xl px-4 py-3 mb-3 border border-[#e8e8e4]">{kpText}</pre>
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(kpText)}
+                    className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors">
+                    Скопировать текст
+                  </button>
+                </div>
+              </details>
+            )}
+
             {/* Итоговый блок + кнопка сохранить */}
             {totals && (
               <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-4">
-                <div className="flex items-center justify-between">
+                <div className="flex items-start justify-between gap-3">
                   <div>
-                    <p className="text-[13px] text-[#6b6b66]">
-                      {discount > 0 ? (
-                        <>Сумма {fmt(totals.totalSaleIncVat)} · <span className="text-emerald-600">скидка {discount}%</span></>
-                      ) : (
-                        <>Сумма заказа</>
-                      )}
-                    </p>
-                    <p className="text-[24px] font-bold text-[#111110] font-mono">{fmt(totals.totalAfterDiscount)}</p>
+                    {discount > 0 && (
+                      <p className="text-[12px] text-[#9a9a95] line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
+                    )}
+                    <p className="text-[24px] font-bold text-[#111110] font-mono leading-none">{fmt(totals.totalAfterDiscount)}</p>
+                    {discount > 0 && (
+                      <p className="text-[11px] text-emerald-600 mt-0.5">скидка {discount}%</p>
+                    )}
                   </div>
-                  <div className="text-right text-[12px] text-[#8a8a85]">
-                    <p>{fmtN(totals.totalAreaNet)} м²</p>
-                    <p>{fmtN(totals.totalWeight, 1)} кг</p>
+                  <div className="text-right text-[12px] text-[#8a8a85] space-y-0.5">
+                    <p className="font-mono">{fmtN(totals.totalAreaNet)} м²</p>
+                    <p className="font-mono">{fmtN(totals.totalWeight, 1)} кг</p>
+                    <p className="font-mono text-[11px]">
+                      расч. {fmtN(items.reduce((s, i) => s + i.totalAreaBilled, 0))} м²
+                    </p>
                   </div>
                 </div>
+
+                {/* Маржа и прибыль — итоговая строка */}
+                {(() => {
+                  const avgEm = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                  return (
+                    <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
+                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
+                      <span className="text-[12px] text-[#6b6b66]">средняя маржа</span>
+                      <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
+                        {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
+                      </span>
+                      <span className="text-[11px] text-[#9a9a95]">прибыль</span>
+                    </div>
+                  )
+                })()}
 
                 <details className="group">
                   <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
@@ -570,11 +934,189 @@ export default function B2BCalculatorPage() {
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
                 </button>
+
+                {savedOrderId && (
+                  <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">
+                    <p className="text-[12px] font-semibold text-emerald-800">Расчёт сохранён ✓</p>
+                    <div className="flex gap-2">
+                      <a
+                        href={`/api/quotes/${savedOrderId}/pdf`}
+                        target="_blank"
+                        download
+                        className="flex-1 text-center bg-[#111110] text-white text-[12px] font-medium py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
+                        📄 Скачать КП (PDF)
+                      </a>
+                      <button
+                        onClick={() => router.push('/b2b-quotes')}
+                        className="flex-1 text-[12px] font-medium py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-white transition-colors">
+                        К списку →
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
         </div>
       </div>
     </div>
+
+    {/* ══ EDIT MODAL ══ */}
+    {editingLocalId !== null && (() => {
+      const eSuperCatDef   = SUPER_CATS.find(s => s.value === eSuperCat) ?? SUPER_CATS[0]
+      const eCatMats       = materials.filter(m => (eSuperCatDef.cats as readonly string[]).includes(m.category))
+      const eAvailThick    = [...new Set(eCatMats.map(m => m.thickness))].sort((a, b) => a - b)
+      const eThickMats     = sortByPriority(eCatMats.filter(m => m.thickness === eThickness))
+      const eSelectedMat   = materials.find(m => m.id === eMatId) ?? null
+      const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0
+
+      return (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl">
+
+            <div className="px-5 py-4 border-b border-[#f0f0ec] flex items-center justify-between sticky top-0 bg-white z-10">
+              <h2 className="text-[15px] font-semibold text-[#111110]">Редактировать позицию</h2>
+              <button onClick={cancelEdit} className="text-[#9a9a95] hover:text-[#111110] transition-colors text-lg leading-none">✕</button>
+            </div>
+
+            <div className="p-5 space-y-3">
+
+              {/* Стекло / Зеркало */}
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
+                <div className="flex gap-1.5">
+                  {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
+                    <button key={s.value} onClick={() => handleEditSuperCatChange(s.value)}
+                      className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${eSuperCat === s.value ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                      {s.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Толщина + Тип */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                  <select
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={eThickness ?? ''}
+                    onChange={e => handleEditThicknessChange(Number(e.target.value))}>
+                    {eAvailThick.map(t => <option key={t} value={t}>{t} мм</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип</label>
+                  <select
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110]"
+                    value={eMatId ?? ''}
+                    onChange={e => handleEditMatChange(Number(e.target.value))}>
+                    {eThickMats.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  </select>
+                </div>
+              </div>
+
+              {/* Цена материала */}
+              {eSelectedMat && (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f8f8f7] rounded-lg text-[12px]">
+                  {eSelectedMat.sale_price > 0
+                    ? <span className="font-semibold text-[#111110] font-mono">{eSelectedMat.sale_price.toLocaleString('ru-RU')} ₽/м²</span>
+                    : <span className="text-orange-500 font-medium">цена не задана</span>}
+                  <span className="text-[#d4d4ce]">·</span>
+                  <span className="text-[#8a8a85]">отход {eWaste}%</span>
+                </div>
+              )}
+
+              {/* Размеры + количество */}
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                <div className="grid grid-cols-3 gap-2">
+                  <input type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={eWidth} onChange={e => setEWidth(e.target.value)} placeholder="Ш, мм" />
+                  <input type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={eHeight} onChange={e => setEHeight(e.target.value)} placeholder="В, мм" />
+                  <input type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={eQty} onChange={e => setEQty(e.target.value)} placeholder="Шт" />
+                </div>
+              </div>
+
+              {/* Отход + Закалка */}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Отход</label>
+                  {eSelectedMat?.passthrough ? (
+                    <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
+                      10% — проходной
+                    </div>
+                  ) : (
+                    <select
+                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      value={eWaste} onChange={e => setEWaste(Number(e.target.value))}>
+                      {WASTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </select>
+                  )}
+                </div>
+                {eSuperCat === 'стекло' && (
+                  <div>
+                    <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
+                    <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
+                      <input type="checkbox" checked={eTempering} onChange={e => setETempering(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className="text-[13px] text-[#111110]">Закалка</span>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+              {/* Доп. услуги */}
+              {services.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Доп. услуги</label>
+                  <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
+                    {services.map(s => {
+                      const checked = eServiceIds.includes(s.id)
+                      return (
+                        <label key={s.id} className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none border-b border-[#f8f8f7] last:border-0 transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                          <input type="checkbox" checked={checked} onChange={() => toggleEditService(s.id)}
+                            className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
+                          <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
+                          <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                            {s.type === 'percent' ? `${s.value}%` : `${s.value.toLocaleString('ru-RU')} ₽`}
+                          </span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Комментарий */}
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <input type="text" maxLength={120}
+                  className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                  value={eComment} onChange={e => setEComment(e.target.value)}
+                  placeholder="Комментарий к позиции..." />
+              </div>
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={cancelEdit}
+                  className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                  Отмена
+                </button>
+                <button onClick={saveEdit} disabled={!eCanSave}
+                  className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  Сохранить
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )
+    })()}
+    </>
   )
 }

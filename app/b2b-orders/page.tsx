@@ -128,6 +128,7 @@ export default function B2BOrdersPage() {
         .select('*')
         .not('notes', 'ilike', '%"status":"quote"%')
         .order('created_at', { ascending: true })
+        .limit(1000)
 
       const parsed = (data ?? []).map(o => ({
         ...o,

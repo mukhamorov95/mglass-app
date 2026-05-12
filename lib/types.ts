@@ -108,7 +108,133 @@ export type B2BClient = {
   active: boolean
   notes: string | null
   created_at: string
+  updated_at?: string   // present when selected — used for optimistic locking
+  // Direct CRM columns — present only when explicitly selected in queries
+  crm_segment?: string | null
+  crm_status?: string | null
+  crm_score?: string | null
+  crm_city?: string | null
+  crm_manager?: string | null
+  crm_next_contact?: string | null  // DATE in DB, arrives as ISO string
+  crm_notes?: string | null
 }
+
+// Interaction row from b2b_interactions table
+export type B2BInteraction = {
+  id: number
+  client_id: number
+  type: string
+  note: string
+  outcome: string | null
+  next_action: string | null
+  next_action_date: string | null
+  created_by: string | null
+  created_at: string
+}
+
+// Domain view of CRM fields — used in edit forms and display components
+export type B2BCRM = {
+  segment: string | null
+  status: string | null
+  score: string | null
+  city: string | null
+  manager_name: string | null
+  next_contact_date: string | null
+  crm_notes: string | null
+}
+
+const EMPTY_CRM: B2BCRM = {
+  segment: null, status: null, score: null, city: null,
+  manager_name: null, next_contact_date: null, crm_notes: null,
+}
+
+// Primary path: reads direct DB columns. Falls back to JSON parsing when the
+// migration hasn't run yet (crm_status absent = column not selected or not applied).
+export function clientToCRM(c: B2BClient): B2BCRM {
+  if ('crm_status' in c) {
+    return {
+      segment:           c.crm_segment       ?? null,
+      status:            c.crm_status        ?? null,
+      score:             c.crm_score         ?? null,
+      city:              c.crm_city          ?? null,
+      manager_name:      c.crm_manager       ?? null,
+      next_contact_date: c.crm_next_contact  ?? null,
+      crm_notes:         c.crm_notes         ?? null,
+    }
+  }
+  return parseCRM(c.notes)
+}
+
+// Legacy: parse CRM data from the notes JSON blob (pre-migration records)
+export function parseCRM(notes: string | null): B2BCRM {
+  if (!notes) return { ...EMPTY_CRM }
+  try {
+    const p = JSON.parse(notes)
+    if (typeof p === 'object' && p !== null) {
+      return {
+        segment:           p.crm_segment      ?? null,
+        status:            p.crm_status       ?? null,
+        score:             p.crm_score        ?? null,
+        city:              p.crm_city         ?? null,
+        manager_name:      p.crm_manager      ?? null,
+        next_contact_date: p.crm_next_contact ?? null,
+        crm_notes:         p.crm_note         ?? null,
+      }
+    }
+  } catch {}
+  return { ...EMPTY_CRM }
+}
+
+// Legacy: merge CRM updates back into the notes JSON blob (pre-migration path).
+// expectedUpdatedAt is unused here — optimistic locking is enforced at the DB level
+// via .eq('updated_at', expectedUpdatedAt) on the Supabase update call.
+export function mergeCRM(notes: string | null, crm: Partial<B2BCRM>, _expectedUpdatedAt?: string): string {
+  let current: Record<string, unknown> = {}
+  if (notes) { try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) current = p } catch {} }
+  return JSON.stringify({
+    ...current,
+    ...(crm.segment !== undefined           ? { crm_segment:      crm.segment }           : {}),
+    ...(crm.status !== undefined            ? { crm_status:       crm.status }            : {}),
+    ...(crm.score !== undefined             ? { crm_score:        crm.score }             : {}),
+    ...(crm.city !== undefined              ? { crm_city:         crm.city }              : {}),
+    ...(crm.manager_name !== undefined      ? { crm_manager:      crm.manager_name }      : {}),
+    ...(crm.next_contact_date !== undefined ? { crm_next_contact: crm.next_contact_date } : {}),
+    ...(crm.crm_notes !== undefined         ? { crm_note:         crm.crm_notes }         : {}),
+  })
+}
+
+export const B2B_SEGMENTS = [
+  { value: 'designer',     label: 'Дизайнер' },
+  { value: 'furniture',    label: 'Мебельщик' },
+  { value: 'construction', label: 'Строитель' },
+  { value: 'aluminum',     label: 'Алюминий/Перегородки' },
+  { value: 'glass_company',label: 'Стекольная компания' },
+  { value: 'office',       label: 'Офисы' },
+  { value: 'other',        label: 'Другое' },
+] as const
+
+export const B2B_STATUSES = [
+  { value: 'new',       label: 'Новый',     color: 'bg-blue-50 text-blue-700' },
+  { value: 'contacted', label: 'Контакт',   color: 'bg-amber-50 text-amber-700' },
+  { value: 'active',    label: 'Активный',  color: 'bg-emerald-50 text-emerald-700' },
+  { value: 'sleeping',  label: 'Спящий',    color: 'bg-[#f0f0ec] text-[#6b6b66]' },
+  { value: 'lost',      label: 'Потерян',   color: 'bg-red-50 text-red-600' },
+] as const
+
+export const B2B_SCORES = [
+  { value: 'A', label: 'A', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'B', label: 'B', color: 'bg-amber-100 text-amber-800' },
+  { value: 'C', label: 'C', color: 'bg-[#f0f0ec] text-[#6b6b66]' },
+] as const
+
+export const B2B_INTERACTION_TYPES = [
+  { value: 'call',       label: 'Звонок',        icon: '📞' },
+  { value: 'message',    label: 'Сообщение',     icon: '💬' },
+  { value: 'meeting',    label: 'Встреча',       icon: '🤝' },
+  { value: 'quote_sent', label: 'КП отправлено', icon: '📄' },
+  { value: 'order',      label: 'Заказ',         icon: '📦' },
+  { value: 'note',       label: 'Заметка',       icon: '📝' },
+] as const
 
 export type B2BService = {
   id: number

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 
 type DashData = {
   revenueToday:    number
@@ -44,6 +45,7 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
   const [usersMap, setUsersMap] = useState<Record<string, string>>({})
+  const { strategy } = useOwnerStrategy()
 
   useEffect(() => { load() }, [])
 
@@ -197,12 +199,18 @@ export default function DashboardPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           {
-            label: 'Выручка этот месяц',
+            label: strategy.peak_months.includes(new Date().getMonth() + 1)
+              ? 'Выручка этот месяц 📈'
+              : 'Выручка этот месяц',
             value: fmt(data.revenueMonth, true),
-            sub: monthDelta !== null
-              ? `${monthDelta >= 0 ? '+' : ''}${monthDelta}% к прошлому`
-              : 'по расчётам',
-            subColor: monthDelta !== null ? (monthDelta >= 0 ? 'text-emerald-600' : 'text-red-500') : 'text-[#8a8a85]',
+            sub: strategy.monthly_revenue_target > 0
+              ? `${Math.round((data.revenueMonth / strategy.monthly_revenue_target) * 100)}% от плана · ${fmt(strategy.monthly_revenue_target, true)}`
+              : monthDelta !== null ? `${monthDelta >= 0 ? '+' : ''}${monthDelta}% к прошлому` : 'по расчётам',
+            subColor: strategy.monthly_revenue_target > 0
+              ? (data.revenueMonth >= strategy.monthly_revenue_target ? 'text-emerald-600'
+                : data.revenueMonth >= strategy.monthly_revenue_target * 0.7 ? 'text-amber-600'
+                : 'text-red-500')
+              : monthDelta !== null ? (monthDelta >= 0 ? 'text-emerald-600' : 'text-red-500') : 'text-[#8a8a85]',
             icon: '💰',
           },
           {
@@ -223,8 +231,8 @@ export default function DashboardPage() {
             label: 'Средняя маржа',
             value: `${data.avgMargin.toFixed(1)}%`,
             sub: 'за текущий месяц',
-            subColor: data.avgMargin >= 35 ? 'text-emerald-600' : data.avgMargin >= 25 ? 'text-amber-600' : 'text-red-500',
-            icon: data.avgMargin >= 35 ? '🟢' : data.avgMargin >= 25 ? '🟡' : '🔴',
+            subColor: data.avgMargin >= strategy.target_margin ? 'text-emerald-600' : data.avgMargin >= strategy.min_margin ? 'text-amber-600' : 'text-red-500',
+            icon: data.avgMargin >= strategy.target_margin ? '🟢' : data.avgMargin >= strategy.min_margin ? '🟡' : '🔴',
           },
         ].map(kpi => (
           <div key={kpi.label} className="bg-white border border-[#e4e4e0] rounded-xl p-5">

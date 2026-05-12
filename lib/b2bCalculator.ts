@@ -17,6 +17,7 @@ export const TRANSPORT_PER_PIECE = 77  // доставка на закалку, 
 export const PACKAGING_PER_M2   = 120  // гофракартон ₽/м²
 
 export const WASTE_OPTIONS = [
+  { value: 10, label: '10% — проходной' },
   { value: 15, label: '15% — стандарт' },
   { value: 18, label: '18% — зеркало' },
   { value: 20, label: '20% — тонированное' },
@@ -24,6 +25,9 @@ export const WASTE_OPTIONS = [
   { value: 25, label: '25% — декоративное' },
   { value: 30, label: '30% — рифлёное' },
   { value: 35, label: '35% — рифлёное с узором' },
+  { value: 40, label: '40% — рифлёное MORU' },
+  { value: 45, label: '45% — рифлёное Ультра' },
+  { value: 50, label: '50% — специальный' },
 ]
 
 export type ItemService = {
@@ -36,6 +40,7 @@ export type ItemService = {
 
 export type B2BOrderItem = {
   localId: string
+  comment?: string
   materialId: number
   materialName: string
   category: string

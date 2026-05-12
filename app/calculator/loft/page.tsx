@@ -8,6 +8,7 @@ import { calculateLoft, LoftInputs, LoftSystemType, LoftResult } from '@/lib/lof
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
 import { saveCalculation } from '@/lib/saveCalculation'
+import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
@@ -51,6 +52,7 @@ export default function LoftCalculatorPage() {
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const { addItem } = useCart()
+  const { strategy } = useOwnerStrategy()
 
   const [calcTier, setCalcTier]     = useState<'standard' | 'b2b'>(() => (loadSaved().calcTier as 'standard' | 'b2b') ?? 'standard')
   const [width, setWidth]           = useState(() => (loadSaved().width as string) ?? '2000')
@@ -59,6 +61,8 @@ export default function LoftCalculatorPage() {
   const [divisions, setDivisions]   = useState(() => (loadSaved().divisions as string) ?? '2')
   const [systemType, setSystemType] = useState<LoftSystemType>(() => (loadSaved().systemType as LoftSystemType) ?? 'fixed')
   const [glassId, setGlassId]       = useState<number | null>(() => (loadSaved().glassId as number) ?? null)
+  const [glassWastePct, setGlassWastePct]   = useState<number>(0)
+  const [glassCalcPrice, setGlassCalcPrice] = useState<number | undefined>(undefined)
   const withTempering = true
   const [withMirrorFilm, setWithMirrorFilm]   = useState(() => (loadSaved().withMirrorFilm as boolean) ?? false)
   const [withPainting, setWithPainting]       = useState(() => (loadSaved().withPainting as boolean) ?? false)
@@ -122,8 +126,28 @@ export default function LoftCalculatorPage() {
 
   const glassMaterials  = materials.filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
   const selectedGlass   = glassMaterials.find(m => m.id === glassId) ?? null
+
+  // Load waste_pct (cost row) and sale price (sale row) from glass_price_matrix when glass changes
+  useEffect(() => {
+    if (!selectedGlass) { setGlassWastePct(0); setGlassCalcPrice(undefined); return }
+
+    // Parse: "Стекло М1 прозрачное 4 мм" → typeName="М1 прозрачное", mm=4
+    const nameMatch = selectedGlass.name.match(/^Стекло\s+(.+?)\s+(\d+)\s*мм\s*$/i)
+    const typeName  = nameMatch?.[1]?.trim() ?? selectedGlass.name
+    const mm        = nameMatch ? parseInt(nameMatch[2]) : 4
+    const tKey      = `t${mm}` as 't4' | 't5' | 't6' | 't8' | 't10' | 't12'
+
+    Promise.all([
+      supabase.from('glass_price_matrix').select('waste_pct').eq('price_type', 'cost').eq('category', 'glass').eq('name', typeName).maybeSingle(),
+      supabase.from('glass_price_matrix').select('t4,t5,t6,t8,t10,t12').eq('price_type', 'sale').eq('category', 'glass').eq('name', typeName).maybeSingle(),
+    ]).then(([costRes, saleRes]) => {
+      setGlassWastePct(costRes.data?.waste_pct ?? 0)
+      const salePrice = (saleRes.data as Record<string, number | null> | null)?.[tKey] ?? null
+      setGlassCalcPrice(salePrice ?? undefined)
+    })
+  }, [selectedGlass?.id])
   const selectedPartner = partners.find(p => p.id === partnerId) ?? null
-  const minMargin       = settings?.min_margin ?? 25
+  const minMargin       = strategy.min_margin
   const loftExpensesPercent = settings?.tax_percent ?? 0
   const installSvc      = services.find(s => s.name.toLowerCase().includes('монтаж лофт') || s.name.toLowerCase().includes('монтаж перегородки'))
   const deliverySvc     = services.find(s => s.name.toLowerCase().includes('доставка'))
@@ -145,7 +169,7 @@ export default function LoftCalculatorPage() {
   const inputs: LoftInputs = {
     width: Number(width) || 0, height: Number(height) || 0,
     sections: Number(sections) || 1, divisions: Number(divisions) || 0,
-    systemType, glassMaterial: selectedGlass,
+    systemType, glassMaterial: selectedGlass, glassWastePct, glassCalcPrice,
     withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery,
     hardware: relevantHardware.filter(h => selectedHwIds.has(h.id)),
     hardwareQty: hwQty,
@@ -193,7 +217,7 @@ export default function LoftCalculatorPage() {
     setTimeout(() => setAddedToCart(false), 2000)
   }
 
-  const discountExceeded = Number(discount) > (settings?.max_discount_percent ?? 30)
+  const discountExceeded = Number(discount) > strategy.max_manager_discount
 
   async function handleSave() {
     if (!result) return
@@ -300,7 +324,10 @@ export default function LoftCalculatorPage() {
                   </div>
                   {result && (
                     <p className="text-[10px] text-[#9a9a95] mt-1.5">
-                      {result.area} м² · проф. {result.metalLength} пог.м · стекло {result.glassArea} м²
+                      {result.area} м² · проф. {result.metalLength} пог.м · стекло {result.glassAreaNet} м²
+                      {result.glassWastePct > 0 && (
+                        <span className="text-[#b45309]"> +{result.glassWastePct}% расход = {result.glassArea} м²</span>
+                      )}
                     </p>
                   )}
                 </div>
@@ -365,7 +392,13 @@ export default function LoftCalculatorPage() {
                   <select value={glassId ?? ''} onChange={e => setGlassId(Number(e.target.value))}
                     className="w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400">
                     {glassMaterials.map(m => (
-                      <option key={m.id} value={m.id}>{m.name} — {m.cost_price.toLocaleString('ru-RU')} ₽/м²</option>
+                      <option key={m.id} value={m.id}>
+                        {m.name}{m.id === glassId && glassCalcPrice
+                          ? ` — ${glassCalcPrice.toLocaleString('ru-RU')} ₽/м²`
+                          : m.sale_price
+                            ? ` — ${m.sale_price.toLocaleString('ru-RU')} ₽/м²`
+                            : ` — ${m.cost_price.toLocaleString('ru-RU')} ₽/м²`}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -575,7 +608,7 @@ export default function LoftCalculatorPage() {
                     {addedToCart ? '✓ В корзине' : '+ В корзину'}
                   </button>
                   <button onClick={handleSave} disabled={saving || discountExceeded}
-                    title={discountExceeded ? `Скидка превышает лимит ${settings?.max_discount_percent}%` : undefined}
+                    title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
                     {saving ? '...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
                   </button>

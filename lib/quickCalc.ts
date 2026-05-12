@@ -157,6 +157,7 @@ export async function quickCalc(
       divisions: options.divisions ?? 0,
       systemType: options.systemType ?? 'fixed',
       glassMaterial: glassMat,
+      glassWastePct: 0,
       withTempering: true,
       withMirrorFilm: false,
       withPainting: false,

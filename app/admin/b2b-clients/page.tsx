@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient } from '@/lib/types'
+import { usePaginatedQuery } from '@/lib/hooks/use-paginated-query'
+import Pagination from '@/components/Pagination'
 
 const EMPTY: Omit<B2BClient, 'id' | 'created_at'> = {
   name: '', contact: null, phone: null, discount_percent: 0, active: true, notes: null,
@@ -12,39 +14,43 @@ const MONTHS = ['Янв','Фев','Мар','Апр','Май','Июн','Июл','
 
 type MonthStats = { [clientId: number]: { [month: number]: number } }
 
+const PAGE_SIZE = 50
+
 export default function B2BClientsPage() {
   const [tab, setTab] = useState<'clients' | 'stats'>('clients')
-  const [clients, setClients] = useState<B2BClient[]>([])
-  const [loading, setLoading] = useState(true)
   const [form, setForm] = useState(EMPTY)
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [reloadKey, setReloadKey] = useState(0)
 
-  // Статистика
   const formRef = useRef<HTMLDivElement>(null)
+
+  const { data: clients, total: clientsTotal, page, goToPage, loading } = usePaginatedQuery<B2BClient>(
+    async (from, to) => {
+      const { data, count } = await createClient()
+        .from('b2b_clients')
+        .select('*', { count: 'exact' })
+        .order('name')
+        .range(from, to)
+      return { data: data as B2BClient[] | null, count }
+    },
+    PAGE_SIZE,
+    reloadKey,
+  )
 
   const [statsYear, setStatsYear] = useState(new Date().getFullYear())
   const [stats, setStats] = useState<MonthStats>({})
   const [statsLoading, setStatsLoading] = useState(false)
   const [clientNames, setClientNames] = useState<Record<number, string>>({})
 
-  useEffect(() => { load() }, [])
-  useEffect(() => { if (tab === 'stats') loadStats() }, [tab, statsYear])
+  useEffect(() => {
+    const names: Record<number, string> = {}
+    clients.forEach(c => { names[c.id] = c.name })
+    setClientNames(prev => ({ ...prev, ...names }))
+  }, [clients])
 
-  async function load() {
-    setLoading(true)
-    const supabase = createClient()
-    const { data, error } = await supabase.from('b2b_clients').select('*').order('name')
-    if (error) setError(error.message)
-    else {
-      setClients(data ?? [])
-      const names: Record<number, string> = {}
-      ;(data ?? []).forEach((c: B2BClient) => { names[c.id] = c.name })
-      setClientNames(names)
-    }
-    setLoading(false)
-  }
+  useEffect(() => { if (tab === 'stats') loadStats() }, [tab, statsYear])
 
   async function loadStats() {
     setStatsLoading(true)
@@ -86,14 +92,14 @@ export default function B2BClientsPage() {
       if (error) { setError(error.message); setSaving(false); return }
     }
     setForm(EMPTY)
-    await load()
+    setReloadKey(k => k + 1)
     setSaving(false)
   }
 
   async function toggleActive(id: number, active: boolean) {
     const supabase = createClient()
     await supabase.from('b2b_clients').update({ active: !active }).eq('id', id)
-    await load()
+    setReloadKey(k => k + 1)
   }
 
   function startEdit(c: B2BClient) {
@@ -113,7 +119,7 @@ export default function B2BClientsPage() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">B2B Клиенты</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">{clients.filter(c => c.active).length} активных</p>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">{clientsTotal} клиентов · {clients.filter(c => c.active).length} на странице активных</p>
         </div>
         <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
           <button onClick={() => setTab('clients')}
@@ -209,6 +215,10 @@ export default function B2BClientsPage() {
             ) : clients.length === 0 ? (
               <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет клиентов — добавьте первого</div>
             ) : (
+              <>
+              <div className="px-4 py-2 border-b border-[#f0f0ec]">
+                <Pagination page={page} total={clientsTotal} pageSize={PAGE_SIZE} onPageChange={goToPage} />
+              </div>
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[#f0f0ec]">
@@ -245,6 +255,10 @@ export default function B2BClientsPage() {
                   ))}
                 </tbody>
               </table>
+              <div className="px-4 py-3 border-t border-[#f0f0ec]">
+                <Pagination page={page} total={clientsTotal} pageSize={PAGE_SIZE} onPageChange={goToPage} />
+              </div>
+              </>
             )}
           </div>
         </>

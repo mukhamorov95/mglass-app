@@ -22,3 +22,31 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Mobile touch improvements */
+html {
+  -webkit-tap-highlight-color: transparent;
+  scroll-behavior: smooth;
+}
+
+/* Native-feel scrolling on iOS */
+.overflow-x-auto,
+.overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Minimum touch targets */
+button, a, [role="button"] {
+  touch-action: manipulation;
+}
+
+/* Safe area insets for notched devices */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
+
+/* Bottom sheet animation */
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+.slide-up { animation: slideUp 0.22s ease-out; }

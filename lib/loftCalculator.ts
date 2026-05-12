@@ -9,6 +9,8 @@ export type LoftInputs = {
   divisions: number    // количество горизонтальных делений внутри секции
   systemType: LoftSystemType
   glassMaterial: Material | null
+  glassWastePct: number   // % расхода из справочника стекла (0 = не применять)
+  glassCalcPrice?: number // продажная цена из glass_price_matrix; если задана, перекрывает glassMaterial.cost_price
   withTempering: boolean
   withMirrorFilm: boolean
   withPainting: boolean
@@ -32,7 +34,9 @@ export type CostLine = {
 
 export type LoftResult = {
   area: number          // м², общая площадь
-  glassArea: number     // м², площадь стекла
+  glassArea: number     // м², площадь стекла с учётом расхода
+  glassAreaNet: number  // м², чистая площадь стекла (без расхода)
+  glassWastePct: number
   metalLength: number   // пог.м, длина профиля
   штапикLength: number  // пог.м
   costLines: CostLine[]
@@ -88,7 +92,9 @@ export function calculateLoft(
   const openingW = Math.max(0, sectionW - 2 * frameWidth)
   const openingH = Math.max(0, sectionH - 2 * frameWidth)
   const openingsCount = S * (D + 1)
-  const glassArea = openingW * openingH * openingsCount
+  const glassAreaNet  = openingW * openingH * openingsCount  // чистая площадь
+  const wasteFactor   = 1 + Math.max(0, inputs.glassWastePct) / 100
+  const glassArea     = glassAreaNet * wasteFactor           // с учётом расхода
 
   // Штапик — периметр всех проёмов
   const штапикLength = 2 * (openingW + openingH) * openingsCount
@@ -168,14 +174,15 @@ export function calculateLoft(
     })
   }
 
-  // Стекло
+  // Стекло — используем продажную цену из glass_price_matrix если задана, иначе cost_price материала
   if (inputs.glassMaterial && glassArea > 0) {
+    const glassPrice = inputs.glassCalcPrice ?? inputs.glassMaterial.cost_price
     lines.push({
       name: inputs.glassMaterial.name,
       qty: Number(glassArea.toFixed(3)),
       unit: 'м²',
-      price: inputs.glassMaterial.cost_price,
-      total: Math.round(glassArea * inputs.glassMaterial.cost_price),
+      price: glassPrice,
+      total: Math.round(glassArea * glassPrice),
     })
   }
 
@@ -292,6 +299,8 @@ export function calculateLoft(
   return {
     area: Number(area.toFixed(3)),
     glassArea: Number(glassArea.toFixed(3)),
+    glassAreaNet: Number(glassAreaNet.toFixed(3)),
+    glassWastePct: inputs.glassWastePct,
     metalLength: Number(metalLength.toFixed(2)),
     штапикLength: Number(штапикLength.toFixed(2)),
     costLines: lines,

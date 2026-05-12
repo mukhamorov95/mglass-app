@@ -11,6 +11,7 @@ import { ShowerModelIcon } from '@/components/ShowerModelIcon'
 import { saveCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
+import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 
 const GLASS_TYPES = [
   'М1 прозрачное',
@@ -85,6 +86,8 @@ export default function ShowerCalculatorPage() {
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([])
   const [hwColors, setHwColors]           = useState<HwColor[]>([])
   const [hwSuppliers, setHwSuppliers]     = useState<HwSupplier[]>([])
+  // glass_price_matrix sale rows: name → { t4, t6, t8, t10, t12, … }
+  const [glassMatrix, setGlassMatrix]     = useState<Record<string, Record<string, number | null>>>({})
   const [loading, setLoading]     = useState(true)
   const [copied, setCopied]       = useState(false)
   const [saving, setSaving]       = useState(false)
@@ -93,6 +96,7 @@ export default function ShowerCalculatorPage() {
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const { addItem } = useCart()
+  const { strategy } = useOwnerStrategy()
 
   const [hwSelection, setHwSelection]     = useState<Record<number, { qty: number }>>({})
   const [stdColorId, setStdColorId]       = useState<number | null>(null)
@@ -121,6 +125,7 @@ export default function ShowerCalculatorPage() {
       const [
         { data: mats }, { data: svcs }, { data: pts }, { data: fins },
         { data: items }, { data: prices }, { data: colors }, { data: sups },
+        { data: glassRows },
       ] = await Promise.all([
         supabase.from('materials').select('*').eq('active', true),
         supabase.from('services').select('*'),
@@ -130,6 +135,7 @@ export default function ShowerCalculatorPage() {
         supabase.from('shower_catalog_prices').select('id,item_id,supplier_id,color_id,cost_price'),
         supabase.from('shower_hw_colors').select('*').eq('active', true).order('sort_order'),
         supabase.from('shower_hw_suppliers').select('*').eq('active', true).order('name'),
+        supabase.from('glass_price_matrix').select('name,t4,t5,t6,t8,t10,t12').eq('price_type', 'sale').eq('category', 'glass'),
       ])
       setMaterials(mats ?? [])
       setServices(svcs ?? [])
@@ -141,25 +147,26 @@ export default function ShowerCalculatorPage() {
       const sup  = (sups  ?? []) as HwSupplier[]
       setHwColors(cols)
       setHwSuppliers(sup)
+      // Build glass matrix: name → thickness prices
+      const matrix: Record<string, Record<string, number | null>> = {}
+      for (const row of (glassRows ?? []) as { name: string; t4: number|null; t5: number|null; t6: number|null; t8: number|null; t10: number|null; t12: number|null }[]) {
+        matrix[row.name] = { t4: row.t4, t5: row.t5, t6: row.t6, t8: row.t8, t10: row.t10, t12: row.t12 }
+      }
+      setGlassMatrix(matrix)
       if (cols.length > 0) setStdColorId(cols[0].id)
       if (sup.length  > 0) setStdSupplierId(sup[0].id)
       const stdSettings =
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'shower_standard') ??
         (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
         fins?.[0] ?? null
-      if (stdSettings) setMargin(String((stdSettings as FinancialSettings).default_margin))
       setLoading(false)
     }
     load()
   }, [])
 
   useEffect(() => {
-    const productType = tier === 'budget' ? 'shower_budget' : 'shower_standard'
-    const s =
-      allSettings.find(s => s.product_type === productType) ??
-      allSettings.find(s => s.tier === tier)
-    if (s) setMargin(String(s.default_margin))
-  }, [tier, allSettings])
+    setMargin(String(strategy.target_margin))
+  }, [tier, strategy.target_margin])
 
   const tierCfg         = TIER_CONFIGS.find(t => t.value === tier)!
   const availableColors = HARDWARE_COLORS.filter(c => tierCfg.colors.includes(c.value))
@@ -226,10 +233,14 @@ export default function ShowerCalculatorPage() {
     : undefined
 
   const glassCostPerM2 = useMemo(() => {
+    // Prefer glass_price_matrix sale price; fall back to materials.cost_price if not set
+    const matrixRow  = glassMatrix[glassType]
+    const matrixPrice = matrixRow?.[`t${thickness}`] ?? null
     const mat  = materials.find(m => m.name === `Стекло ${glassType} ${thickness} мм` && m.category === 'стекло')
+    const glassPrice = matrixPrice ?? mat?.sale_price ?? mat?.cost_price ?? 0
     const temp = materials.find(m => m.name === `Закалка ${thickness} мм` && m.category === 'закалка')
-    return (mat?.cost_price ?? 0) + (temp?.cost_price ?? 0)
-  }, [materials, glassType, thickness])
+    return glassPrice + (temp?.cost_price ?? 0)
+  }, [glassMatrix, materials, glassType, thickness])
 
   const inputs: ShowerInputs = {
     tier, model,
@@ -247,16 +258,8 @@ export default function ShowerCalculatorPage() {
     hwTierMultiplier: tierCfg.hwMultiplier,
     customHardwareCost,
     customHardwareLines: customHardwareCost !== undefined ? selectedHardwareLines : undefined,
-    minMargin: (() => {
-      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
-      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
-      return s?.min_margin ?? 25
-    })(),
-    standardMargin: (() => {
-      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
-      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
-      return s?.default_margin ?? 40
-    })(),
+    minMargin: strategy.min_margin,
+    standardMargin: strategy.target_margin,
   }
 
   const showerBlocked = inputs.expensesPercent + (Number(margin) || 0) >= 100
@@ -313,7 +316,7 @@ export default function ShowerCalculatorPage() {
   }
 
   const marginOk    = result.margin >= 35
-  const marginWarn  = !marginOk && result.margin >= 25
+  const marginWarn  = !marginOk && result.margin >= strategy.min_margin
   const marginColor = marginOk ? '#34c759' : marginWarn ? '#ff9f0a' : '#ff3b30'
 
   const showerSettings = useMemo(() => {
@@ -323,7 +326,7 @@ export default function ShowerCalculatorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allSettings, tier])
 
-  const discountExceeded = Number(discount) > (showerSettings?.max_discount_percent ?? 30)
+  const discountExceeded = Number(discount) > strategy.max_manager_discount
 
 
   if (loading) return (
@@ -353,7 +356,7 @@ export default function ShowerCalculatorPage() {
               {addedToCart ? '✓ Добавлено' : '+ В заказ'}
             </button>
             <button onClick={handleSave} disabled={saving || showerBlocked || discountExceeded}
-              title={discountExceeded ? `Скидка превышает лимит ${showerSettings?.max_discount_percent}%` : undefined}
+              title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
             </button>

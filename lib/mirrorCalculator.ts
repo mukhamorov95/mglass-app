@@ -6,6 +6,9 @@ export type MirrorInputs = {
   width: number
   height: number
   mirrorMaterial: Material | null
+  mirrorCostPerM2?: number | null   // from glass_price_matrix cost tab; overrides mirrorMaterial.sale_price
+  mirrorWastePct?: number           // base waste % from glass_price_matrix
+  shapeModifierPct?: number         // extra waste % from material_waste_modifiers
   shape: MirrorShape
   hasLighting: boolean
   buttonType: 'none' | 'sensor' | 'wave'  // none=0₽, sensor=сенсорная 400₽, wave=взмах 800₽
@@ -38,7 +41,11 @@ export type ServiceLine = {
 }
 
 export type MirrorResult = {
-  area: number
+  area: number         // чистая геометрическая площадь м²
+  billingArea: number  // площадь с учётом расхода
+  baseWastePct: number
+  shapeModifierPct: number
+  totalWastePct: number
   perimeter: number
   costLines: CostLine[]
   totalCost: number
@@ -93,16 +100,25 @@ export function calculateMirror(
 
   const lines: CostLine[] = []
 
-  // Зеркало (с коэффициентом за высоту > 2800 мм)
-  // Используем sale_price как расчётную цену; cost_price — только закупка
-  const mirrorCalcPrice = inputs.mirrorMaterial.sale_price ?? inputs.mirrorMaterial.cost_price
-  const mirrorArea = inputs.height > 2800 ? area * 1.2 : area
+  // Зеркало: cost price из glass_price_matrix, иначе — fallback на material
+  const mirrorCalcPrice =
+    inputs.mirrorCostPerM2 != null && inputs.mirrorCostPerM2 > 0
+      ? inputs.mirrorCostPerM2
+      : (inputs.mirrorMaterial?.sale_price ?? inputs.mirrorMaterial?.cost_price ?? 0)
+
+  // Расход: базовый (из справочника) + форма + высота > 2800 мм
+  const baseWastePct    = inputs.mirrorWastePct ?? 0
+  const shapeModPct     = inputs.shapeModifierPct ?? 0
+  const heightModPct    = inputs.height > 2800 ? 20 : 0
+  const totalWastePct   = baseWastePct + shapeModPct + heightModPct
+  const billingArea     = area * (1 + totalWastePct / 100)
+
   lines.push({
-    name:  inputs.mirrorMaterial.name,
-    qty:   Number(mirrorArea.toFixed(3)),
+    name:  inputs.mirrorMaterial?.name ?? 'Зеркало',
+    qty:   Number(billingArea.toFixed(3)),
     unit:  'м²',
     price: mirrorCalcPrice,
-    total: Math.round(mirrorArea * mirrorCalcPrice),
+    total: Math.round(billingArea * mirrorCalcPrice),
   })
 
   // Подсветка
@@ -273,9 +289,13 @@ export function calculateMirror(
   const clientText = textParts.join('\n')
 
   return {
-    area:            Number(area.toFixed(3)),
-    perimeter:       Number(perimeter.toFixed(2)),
-    costLines:       lines,
+    area:             Number(area.toFixed(3)),
+    billingArea:      Number(billingArea.toFixed(3)),
+    baseWastePct,
+    shapeModifierPct: shapeModPct,
+    totalWastePct,
+    perimeter:        Number(perimeter.toFixed(2)),
+    costLines:        lines,
     totalCost,
     expensesPercent: inputs.tax,
     expensesAmount:  taxAmount,
