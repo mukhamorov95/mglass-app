@@ -505,6 +505,54 @@ export default function GlassPricesPage() {
     }
   }
 
+  function fillAllByFormula(cat: Category) {
+    const section = cat === 'mirror' ? 'mirror' : 'glass'
+    function fp(key: string) {
+      return formula.find(p => p.section === section && p.param_key === key)?.value ?? 0
+    }
+    const opexPct = fp('opex')
+    const baseMarginPct = fp('base_margin')
+    const purchaseVat = fp('purchase_vat')
+    const temperingVat = fp('tempering_vat')
+    const denom = (100 - opexPct - baseMarginPct) / 100
+    if (denom <= 0) return
+    const thicks = cat === 'mirror' ? MIRROR_MM : GLASS_MM
+    const names = Array.from(new Set(rows.filter(r => rowCat(r) === cat).map(r => r.name)))
+    const newDirty: Record<string, DirtyEntry> = {}
+    let count = 0
+    for (const name of names) {
+      for (const t of thicks) {
+        const cR = rows.find(r => r.name === name && r.price_type === 'cost' && rowCat(r) === cat)
+        if (!cR) continue
+        const costPrice = (cR[`t${t}` as keyof GlassRow] as number | null) ?? 0
+        if (costPrice <= 0) continue
+        const wastePct = cR.waste_pct ?? 0
+        const effCost = costPrice * (1 + wastePct / 100)
+        const vatOnCost = effCost * purchaseVat / (100 + purchaseVat)
+        let netCost = effCost - vatOnCost
+        if (cat === 'glass') {
+          const tempCost = fp(`tempering_t${t}`)
+          if (tempCost > 0) {
+            const tempIncVat = tempCost * (1 + wastePct / 100)
+            netCost += tempIncVat - tempIncVat * temperingVat / (100 + temperingVat)
+          }
+        }
+        const recPrice = Math.round(netCost / denom)
+        if (recPrice > 0) {
+          newDirty[dirtyKey(name, `t${t}`, 'sale', cat)] = { name, field: `t${t}`, priceType: 'sale', category: cat, numVal: recPrice }
+          count++
+        }
+      }
+    }
+    if (count > 0) {
+      setDirty(prev => ({ ...prev, ...newDirty }))
+      showToast(`Пересчитано ${count} ячеек`)
+      setTab(cat === 'mirror' ? 'sale_mirror' : 'sale_glass')
+    } else {
+      showToast('Нет данных для расчёта')
+    }
+  }
+
   function fillByFormula() {
     const section = curCat === 'mirror' ? 'mirror' : 'glass'
     function fp(key: string) {
@@ -618,19 +666,43 @@ export default function GlassPricesPage() {
       {tab === 'formula' && (
         formulaLoading
           ? <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
-          : <FormulaTab
-              formula={formula}
-              editId={formulaEditId}
-              editVal={formulaEditVal}
-              saving={formulaSaving}
-              exCost={exCost} setExCost={setExCost}
-              exTempering={exTempering} setExTempering={setExTempering}
-              exPrice={exPrice} setExPrice={setExPrice}
-              onStartEdit={(id, cur) => { setFormulaEditId(id); setFormulaEditVal(String(cur)) }}
-              onCancelEdit={() => setFormulaEditId(null)}
-              onSave={saveFormulaParam}
-              onEditValChange={setFormulaEditVal}
-            />
+          : <>
+              <FormulaTab
+                formula={formula}
+                editId={formulaEditId}
+                editVal={formulaEditVal}
+                saving={formulaSaving}
+                exCost={exCost} setExCost={setExCost}
+                exTempering={exTempering} setExTempering={setExTempering}
+                exPrice={exPrice} setExPrice={setExPrice}
+                onStartEdit={(id, cur) => { setFormulaEditId(id); setFormulaEditVal(String(cur)) }}
+                onCancelEdit={() => setFormulaEditId(null)}
+                onSave={saveFormulaParam}
+                onEditValChange={setFormulaEditVal}
+              />
+              {/* Apply formula to all sale prices */}
+              <div className="mt-6 bg-white border border-[#e4e4e0] rounded-xl p-5">
+                <h2 className="text-[14px] font-semibold text-[#111110] mb-1">Применить формулу ко всем ценам</h2>
+                <p className="text-[13px] text-[#8a8a85] mb-4">
+                  Пересчитает и перезапишет все продажные цены на основе текущих параметров.
+                  Нажми «Сохранить изменения» после проверки.
+                </p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => fillAllByFormula('glass')}
+                    className="text-[13px] font-semibold px-5 py-2.5 rounded-lg bg-[#0071e3] text-white hover:bg-[#0062c4] transition-colors"
+                  >
+                    Пересчитать все цены — Стекло
+                  </button>
+                  <button
+                    onClick={() => fillAllByFormula('mirror')}
+                    className="text-[13px] font-semibold px-5 py-2.5 rounded-lg bg-[#7c3aed] text-white hover:bg-[#6d28d9] transition-colors"
+                  >
+                    Пересчитать все цены — Зеркало
+                  </button>
+                </div>
+              </div>
+            </>
       )}
 
       {/* ── Price matrix tabs ── */}
