@@ -111,6 +111,7 @@ export default function GlassPricesPage() {
   const [migrating, setMigrating] = useState(false)
   const [clearing, setClearing]   = useState(false)
   const [savingAll, setSavingAll] = useState(false)
+  const autoFilledRef = useRef<Set<string>>(new Set())
   const [undoRows, setUndoRows]   = useState<GlassRow[] | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -155,6 +156,18 @@ export default function GlassPricesPage() {
         .then((data: FormulaParam[]) => { setFormula(data); setFormulaLoaded(true); setFormulaLoading(false) })
     }
   }, [tab, formulaLoaded])
+
+  // Auto-fill: when formula loads AND we're on a sale tab, stage formula prices for empty cells
+  useEffect(() => {
+    const isSaleTab = tab === 'sale_glass' || tab === 'sale_mirror'
+    const cat: Category = (tab === 'sale_mirror' || tab === 'cost_mirror') ? 'mirror' : 'glass'
+    if (!formulaLoaded || loading || !isSaleTab) return
+    const key = `sale_${cat}`
+    if (autoFilledRef.current.has(key)) return
+    autoFilledRef.current.add(key)
+    fillByFormula()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [formulaLoaded, loading, tab])
 
   async function saveFormulaParam(id: number, raw: string) {
     const val = parseFloat(raw)
@@ -615,6 +628,34 @@ export default function GlassPricesPage() {
         <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
       ) : tab !== 'formula' && (
         <>
+          {/* Banner: empty sale cells that have cost data */}
+          {curPT === 'sale' && (() => {
+            const emptyCount = allNames.reduce((n, name) => n + thicknesses.filter(t => {
+              const sR = rows.find(r => r.name === name && r.price_type === 'sale' && rowCat(r) === curCat)
+              const cR = rows.find(r => r.name === name && r.price_type === 'cost' && rowCat(r) === curCat)
+              const dk = dirtyKey(name, `t${t}`, 'sale', curCat)
+              const dbSale = (sR?.[`t${t}` as keyof GlassRow] as number | null) ?? null
+              const dbCost = (cR?.[`t${t}` as keyof GlassRow] as number | null) ?? null
+              return (dbSale == null || dbSale === 0) && !(dk in dirty) && dbCost != null && dbCost > 0
+            }).length, 0)
+            if (emptyCount === 0) return null
+            return (
+              <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3">
+                <span className="text-[13px] text-amber-800">
+                  <span className="font-semibold">{emptyCount}</span> ячеек без продажной цены — есть себестоимость
+                  {!formulaLoaded && <span className="ml-1 text-[#8a8a85]">(формула загружается...)</span>}
+                </span>
+                <button
+                  onClick={fillByFormula}
+                  disabled={!formulaLoaded}
+                  className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-amber-600 text-white hover:bg-amber-700 disabled:opacity-40 transition-colors flex-shrink-0"
+                >
+                  Заполнить по формуле
+                </button>
+              </div>
+            )
+          })()}
+
           <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-4">
             <table className="w-full text-[13px]">
               <thead>
