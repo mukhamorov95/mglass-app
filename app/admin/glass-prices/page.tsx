@@ -513,6 +513,7 @@ export default function GlassPricesPage() {
     const opexPct = fp('opex')
     const baseMarginPct = fp('base_margin')
     const purchaseVat = fp('purchase_vat')
+    const temperingVat = fp('tempering_vat')
     const denom = (100 - opexPct - baseMarginPct) / 100
     if (denom <= 0) return
     let count = 0
@@ -530,7 +531,16 @@ export default function GlassPricesPage() {
           const wastePct = cR.waste_pct ?? 0
           const effCost = costPrice * (1 + wastePct / 100)
           const vatOnCost = effCost * purchaseVat / (100 + purchaseVat)
-          const netCost = effCost - vatOnCost
+          let netCost = effCost - vatOnCost
+          // Include tempering for glass (same calc as getMarginInfo)
+          if (curCat === 'glass') {
+            const tempCost = fp(`tempering_t${t}`)
+            if (tempCost > 0) {
+              const tempIncVat = tempCost * (1 + wastePct / 100)
+              const vatOnTemp = tempIncVat * temperingVat / (100 + temperingVat)
+              netCost += tempIncVat - vatOnTemp
+            }
+          }
           const recPrice = Math.round(netCost / denom)
           if (recPrice > 0) { stageValue(name, field, recPrice); count++ }
         }
