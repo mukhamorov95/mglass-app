@@ -99,6 +99,7 @@ export type ShowerInputs = {
   withMounting: boolean
   withDelivery: boolean
   deliveryCost?: number   // когда задан — используется вместо поиска услуги (линейная доставка за МКАД)
+  kmFromMkad?: number     // км за МКАД, только для текста КП
   floors: number
   discount: number
   partnerPercent: number
@@ -281,7 +282,11 @@ export function calculateShower(
     ),
     '',
     `Стоимость: ${finalPrice.toLocaleString('ru-RU')} ₽`,
-    ...serviceLines.map(s => `${s.name}: ${s.total.toLocaleString('ru-RU')} ₽`),
+    ...serviceLines.map(s => {
+      const isDeliveryMkad = s.name === 'Доставка за МКАД' && inputs.kmFromMkad && inputs.kmFromMkad > 0
+      const label = isDeliveryMkad ? `Доставка МСК + ${inputs.kmFromMkad} км` : s.name
+      return `${label}: ${s.total.toLocaleString('ru-RU')} ₽`
+    }),
     ...(serviceLines.length ? [`Итого с услугами: ${grandTotal.toLocaleString('ru-RU')} ₽`] : []),
   ].join('\n')
 

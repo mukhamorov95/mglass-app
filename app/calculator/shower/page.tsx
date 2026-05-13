@@ -282,7 +282,7 @@ export default function ShowerCalculatorPage() {
     width: Number(width) || 0, width2: Number(width2) || 0, height: Number(height) || 0,
     glassCostPerM2, glassName: glassType, thickness,
     hardwareColor: colorObj.value, hardwareColorMultiplier: colorObj.multiplier,
-    withMounting, withDelivery, deliveryCost, floors: Number(floors) || 0,
+    withMounting, withDelivery, deliveryCost, kmFromMkad: km > 0 ? km : undefined, floors: Number(floors) || 0,
     discount: Number(discount) || 0, partnerPercent: selectedPartner?.percent ?? 0,
     margin: Number(margin) || 40,
     expensesPercent: (() => {
