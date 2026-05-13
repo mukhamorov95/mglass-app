@@ -24,6 +24,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
   const [search,   setSearch]   = useState('')
   const [savingMan, setSavingMan] = useState(false)
   const [savedMan,  setSavedMan]  = useState(false)
+  const [saveErr,   setSaveErr]   = useState('')
 
   useEffect(() => {
     db.current.from('shower_catalog_items').select('id,name,category,unit,shower_types')
@@ -86,23 +87,31 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
 
   async function saveManualPrices() {
     setSavingMan(true)
+    setSaveErr('')
     const activeColors = colors.filter(c => c.active)
+    const errors: string[] = []
     await Promise.all(activeColors.map(async c => {
       const val = Number(manDraft[c.id]) || 0
       const existing = manual.find(m => m.color_id === c.id)
       if (existing?.id) {
-        await db.current.from('shower_budget_manual_prices')
+        const { error } = await db.current.from('shower_budget_manual_prices')
           .update({ price: val, updated_at: new Date().toISOString() })
           .eq('id', existing.id)
+        if (error) errors.push(`update ${c.id}: ${error.message}`)
       } else if (val > 0) {
-        await db.current.from('shower_budget_manual_prices')
+        const { error } = await db.current.from('shower_budget_manual_prices')
           .insert({ model_id: model, color_id: c.id, price: val })
+        if (error) errors.push(`insert ${c.id}: ${error.message}`)
       }
     }))
     setSavingMan(false)
-    setSavedMan(true)
-    setTimeout(() => setSavedMan(false), 2000)
-    await loadKit(model)
+    if (errors.length > 0) {
+      setSaveErr(errors.join(' | '))
+    } else {
+      setSavedMan(true)
+      setTimeout(() => setSavedMan(false), 2000)
+      await loadKit(model)
+    }
   }
 
   const activeColors = colors.filter(c => c.active)
@@ -386,6 +395,11 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
           </div>
         )}
 
+        {saveErr && (
+          <div className="mt-3 px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-[12px] text-red-700 font-mono">
+            {saveErr}
+          </div>
+        )}
         <div className="mt-4 flex items-center gap-4">
           <button onClick={saveManualPrices} disabled={savingMan}
             className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
