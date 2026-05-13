@@ -300,9 +300,10 @@ async function runAiForMessage(raw: RawMessage, leadId: number | null): Promise<
   const needsHuman = rawReply.includes('[НУЖЕН_ЧЕЛОВЕК]')
   const reply = rawReply.replace(/\[ЗАМЕР_ГОТОВ\]/g, '').replace(/\[НУЖЕН_ЧЕЛОВЕК\]/g, '').trim()
 
-  // Send reply via Wazzup
+  // Send reply via Wazzup; stamp last_bot_reply_at so echo detection works
   await sendMessage(raw.channel_id, raw.chat_id, raw.chat_type, reply)
   await supabase.from('ai_conversations').insert({ chat_id: raw.chat_id, role: 'assistant', content: reply })
+  await supabase.from('ai_managed_chats').update({ last_bot_reply_at: new Date().toISOString() }).eq('chat_id', raw.chat_id)
 
   // Handle transfer triggers
   if (isMeasure || needsHuman) {

@@ -66,9 +66,33 @@ export async function POST(req: Request) {
     const msg = raw as Record<string, unknown>
 
     try {
-      // Skip pure system events and echoes of our own sent messages
+      // Skip pure system events
       if (msg.type === 'system') continue
-      if (isOutgoing(msg)) continue
+
+      // Outgoing echo: check if it's a human manager writing (not our bot's own echo)
+      if (isOutgoing(msg)) {
+        const chatId = String(msg.chatId ?? '')
+        if (chatId) {
+          const { data: chat } = await supabase
+            .from('ai_managed_chats')
+            .select('is_active, last_bot_reply_at')
+            .eq('chat_id', chatId)
+            .maybeSingle()
+          // If bot is active and the last bot reply was >60s ago → human took over → pause
+          if (chat?.is_active) {
+            const lastReply = chat.last_bot_reply_at ? new Date(chat.last_bot_reply_at).getTime() : 0
+            const isOwnEcho = Date.now() - lastReply < 60_000
+            if (!isOwnEcho) {
+              await supabase.from('ai_managed_chats').update({
+                is_active: false,
+                close_reason: 'manager_wrote',
+              }).eq('chat_id', chatId)
+              console.log(`[wazzup-webhook] bot paused — manager took over chat ${chatId}`)
+            }
+          }
+        }
+        continue
+      }
 
       const wazzupId = (msg.id ?? msg.messageId ?? null) as string | null
       const chatId    = String(msg.chatId ?? '')
