@@ -113,9 +113,8 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
 
 // B2B — separate accordion (de-clutters Справочники, still accessible)
 const ADMIN_B2B: NavEntry[] = [
-  { href: '/admin/b2b-clients',   label: 'Клиенты',   icon: '🏢' },
-  { href: '/admin/b2b-materials', label: 'Материалы', icon: '🧱' },
-  { href: '/admin/b2b-services',  label: 'Услуги',    icon: '🔧' },
+  { href: '/admin/b2b-clients',  label: 'Клиенты', icon: '🏢' },
+  { href: '/admin/b2b-services', label: 'Услуги',  icon: '🔧' },
 ]
 
 const ADMIN_OPERATIONS: NavItem[] = [
@@ -143,7 +142,7 @@ const SECTION_PATHS: Record<string, string[]> = {
   ai:          ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/deal-analysis', '/templates', '/competitors'],
   vladislav:   ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'],
   directories: ['/admin/glass-prices', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'],
-  b2b:         ['/admin/b2b-clients', '/admin/b2b-materials', '/admin/b2b-services'],
+  b2b:         ['/admin/b2b-clients', '/admin/b2b-services'],
   operations:  ['/admin/warehouse', '/admin/route-sheet', '/admin/suppliers', '/admin/brigades', '/admin/delivery-zones'],
   productline: ['/admin/product-line', '/admin/b2b-presentation'],
   system:      ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'],
