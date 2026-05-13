@@ -270,14 +270,17 @@ export default function ShowerCalculatorPage() {
     : budgetManualCost
 
   const glassCostPerM2 = useMemo(() => {
-    // Prefer glass_price_matrix sale price; fall back to materials.cost_price if not set
-    const matrixKey  = GLASS_MATRIX_NAME[glassType] ?? glassType
-    const matrixRow  = glassMatrix[matrixKey]
+    // glass_price_matrix sale price already includes tempering — use as-is
+    const matrixKey   = GLASS_MATRIX_NAME[glassType] ?? glassType
+    const matrixRow   = glassMatrix[matrixKey]
     const matrixPrice = matrixRow?.[`t${thickness}`] ?? null
+    if (matrixPrice != null) return matrixPrice
+
+    // Fallback to materials table: raw cost → add tempering separately
     const mat  = materials.find(m => m.name === `Стекло ${glassType} ${thickness} мм` && m.category === 'стекло')
-    const glassPrice = matrixPrice ?? mat?.sale_price ?? mat?.cost_price ?? 0
+    const rawPrice = mat?.sale_price ?? mat?.cost_price ?? 0
     const temp = materials.find(m => m.name === `Закалка ${thickness} мм` && m.category === 'закалка')
-    return glassPrice + (temp?.cost_price ?? 0)
+    return rawPrice + (temp?.cost_price ?? 0)
   }, [glassMatrix, materials, glassType, thickness])
 
   const km = Number(kmFromMkad) || 0
