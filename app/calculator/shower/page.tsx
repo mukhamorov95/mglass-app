@@ -802,6 +802,31 @@ export default function ShowerCalculatorPage() {
                 <span className="text-[14px] font-mono font-semibold text-[#1d1d1f]">{fmt(result.profit)}</span>
               </div>
               <div className="h-px bg-[#f2f2f7] mb-3"/>
+
+              {/* Разбивка итога */}
+              <div className="space-y-1.5 mb-3">
+                <div className="flex justify-between items-baseline">
+                  <span className="text-[13px] text-[#6e6e73]">Изделие</span>
+                  <span className="text-[13px] font-mono text-[#1d1d1f]">{fmt(result.finalPrice)}</span>
+                </div>
+                {result.serviceLines.map((s, i) => {
+                  const isDeliveryMkad = s.name === 'Доставка за МКАД'
+                  const isMoscow = s.name === 'Доставка'
+                  const label = isDeliveryMkad
+                    ? `Доставка МСК + ${km} км`
+                    : isMoscow
+                    ? 'Доставка по Москве'
+                    : s.name
+                  return (
+                    <div key={i} className="flex justify-between items-baseline">
+                      <span className="text-[13px] text-[#6e6e73]">{label}</span>
+                      <span className="text-[13px] font-mono text-[#1d1d1f]">{fmt(s.total)}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="h-px bg-[#f2f2f7] mb-3"/>
               <div className="flex justify-between items-baseline">
                 <span className="text-[13px] font-semibold text-[#1d1d1f]">ИТОГО</span>
                 <span className="text-[24px] font-bold font-mono text-[#1d1d1f]">{fmt(result.grandTotal)}</span>
