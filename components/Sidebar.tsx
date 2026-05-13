@@ -135,11 +135,13 @@ const ADMIN_SYSTEM: NavItem[] = [
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const SECTION_PATHS: Record<string, string[]> = {
+  earnings:    ['/my-earnings'],
   calculator:  ['/calculator/mirror', '/calculator/shower', '/calculator/loft'],
   sales:       ['/calculations', '/orders', '/clients', '/calendar', '/measurer'],
   production:  ['/manager-dashboard', '/b2b-crm', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-pipeline', '/b2b-production', '/production', '/b2b-analytics'],
   marketing:   ['/marketing', '/marketing/video-factory', '/marketing/media-library', '/marketing/daily'],
   ai:          ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/deal-analysis', '/templates', '/competitors'],
+  owner:       ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'],
   vladislav:   ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'],
   directories: ['/admin/glass-prices', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'],
   b2b:         ['/admin/b2b-clients', '/admin/b2b-services'],
@@ -155,11 +157,13 @@ function inSection(pathname: string, paths: string[]): boolean {
 function autoOpenSections(pathname: string, mode: ViewMode): string[] {
   const open: string[] = []
   if (mode === 'manager') {
+    if (inSection(pathname, SECTION_PATHS.earnings))   open.push('earnings')
     if (inSection(pathname, SECTION_PATHS.calculator)) open.push('calculator')
     if (inSection(pathname, SECTION_PATHS.sales))      open.push('sales')
     if (inSection(pathname, SECTION_PATHS.production)) open.push('production')
     if (inSection(pathname, SECTION_PATHS.ai))         open.push('ai')
   } else if (mode === 'ceo') {
+    if (inSection(pathname, SECTION_PATHS.owner))       open.push('owner')
     if (inSection(pathname, SECTION_PATHS.marketing))   open.push('marketing')
     if (inSection(pathname, SECTION_PATHS.vladislav))   open.push('vladislav')
     if (inSection(pathname, SECTION_PATHS.productline)) open.push('productline')
@@ -195,11 +199,12 @@ export function Sidebar({ userEmail, role }: Props) {
 
   const isAdmin = role === 'admin'
 
-  const [viewMode, setViewMode]     = useState<ViewMode>('manager')
-  const [open, setOpen]             = useState<Set<string>>(new Set(['calculator']))
-  const [mobileOpen, setMobileOpen] = useState(false)
-  const [syncState, setSyncState]   = useState<SyncState>('idle')
+  const [viewMode, setViewMode]       = useState<ViewMode>('manager')
+  const [open, setOpen]               = useState<Set<string>>(new Set())
+  const [mobileOpen, setMobileOpen]   = useState(false)
+  const [syncState, setSyncState]     = useState<SyncState>('idle')
   const [isLocalhost, setIsLocalhost] = useState(false)
+  const [collapsed, setCollapsed]     = useState(false)
 
   useEffect(() => {
     setIsLocalhost(window.location.hostname === 'localhost')
@@ -207,7 +212,9 @@ export function Sidebar({ userEmail, role }: Props) {
     const mode: ViewMode = isAdmin ? (saved ?? detectModeFromPath(pathname)) : 'manager'
     setViewMode(mode)
     const auto = autoOpenSections(pathname, mode)
-    setOpen(new Set(auto.length ? auto : [mode === 'manager' ? 'calculator' : 'vladislav']))
+    setOpen(new Set(auto))
+    const savedCollapsed = localStorage.getItem('sidebarCollapsed')
+    if (savedCollapsed === 'true') setCollapsed(true)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -219,8 +226,7 @@ export function Sidebar({ userEmail, role }: Props) {
     setViewMode(mode)
     localStorage.setItem('sidebarMode', mode)
     const auto = autoOpenSections(pathname, mode)
-    const fallback = mode === 'manager' ? 'calculator' : mode === 'ceo' ? 'vladislav' : 'directories'
-    setOpen(new Set(auto.length ? auto : [fallback]))
+    setOpen(new Set(auto))
   }
 
   function toggle(key: string) {
@@ -228,6 +234,13 @@ export function Sidebar({ userEmail, role }: Props) {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
+    })
+  }
+
+  function toggleCollapse() {
+    setCollapsed(prev => {
+      localStorage.setItem('sidebarCollapsed', String(!prev))
+      return !prev
     })
   }
 
@@ -402,47 +415,34 @@ export function Sidebar({ userEmail, role }: Props) {
 
           {viewMode === 'manager' ? (
             <>
-              {sectionLabel('Мои заработки')}
-              {MANAGER_EARNINGS.map(i => navItem(i, 'bg-[#111110] text-white font-semibold'))}
+              {accordion('earnings', 'Мои заработки',
+                'text-[#6b6b66]', 'text-[#9a9a95]', MANAGER_EARNINGS, 'bg-[#111110] text-white font-semibold')}
 
-              {divider()}
-
-              {accordion('calculator', 'MGlass Калькулятор',
+              {accordion('calculator', 'Калькулятор',
                 'text-blue-600', 'text-blue-400', MANAGER_CALCULATOR, 'bg-blue-50 text-blue-700 font-semibold')}
-              {accordion('sales', 'MGlass Продажи',
+
+              {accordion('sales', 'Продажи',
                 'text-blue-600', 'text-blue-400', MANAGER_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
 
-              {divider()}
-
-              {accordion('production', 'Производство',
+              {accordion('production', 'B2B / Производство',
                 'text-orange-600', 'text-orange-400', MANAGER_PRODUCTION, 'bg-orange-50 text-orange-700 font-semibold')}
-
-              {divider()}
 
               {accordion('ai', 'AI Инструменты',
                 'text-violet-600', 'text-violet-400', MANAGER_AI, 'bg-violet-50 text-violet-700 font-semibold')}
             </>
           ) : viewMode === 'ceo' ? (
             <>
-              {sectionLabel('Owner Center')}
-              {ADMIN_OWNER.map(i => navItem(i, 'bg-purple-50 text-purple-700 font-semibold'))}
-
-              {divider()}
+              {accordion('owner', 'Owner Center',
+                'text-purple-600', 'text-purple-400', ADMIN_OWNER, 'bg-purple-50 text-purple-700 font-semibold')}
 
               {accordion('marketing', 'Маркетинг',
                 'text-rose-600', 'text-rose-400', MANAGER_MARKETING, 'bg-rose-50 text-rose-700 font-semibold')}
 
-              {divider()}
-
               {accordion('vladislav', 'Vladislav AI',
                 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV, 'bg-indigo-50 text-indigo-700 font-semibold')}
 
-              {divider()}
-
               {accordion('productline', 'Product Line',
                 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
-
-              {divider()}
 
               {accordion('system', 'Система',
                 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_SYSTEM, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
