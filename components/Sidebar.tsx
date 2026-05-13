@@ -8,7 +8,7 @@ import type { Role } from '@/lib/getRole'
 
 type Props = { userEmail: string; role: Role | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
-type ViewMode = 'manager' | 'admin'
+type ViewMode = 'manager' | 'admin' | 'ceo'
 
 // Nav entry can be a link or a visual group label (non-clickable)
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
@@ -159,24 +159,29 @@ function autoOpenSections(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, SECTION_PATHS.sales))      open.push('sales')
     if (inSection(pathname, SECTION_PATHS.production)) open.push('production')
     if (inSection(pathname, SECTION_PATHS.ai))         open.push('ai')
+  } else if (mode === 'ceo') {
+    if (inSection(pathname, SECTION_PATHS.marketing))   open.push('marketing')
+    if (inSection(pathname, SECTION_PATHS.vladislav))   open.push('vladislav')
+    if (inSection(pathname, SECTION_PATHS.productline)) open.push('productline')
+    if (inSection(pathname, SECTION_PATHS.system))      open.push('system')
   } else {
-    if (inSection(pathname, SECTION_PATHS.marketing))    open.push('marketing')
-    if (inSection(pathname, SECTION_PATHS.vladislav))    open.push('vladislav')
-    if (inSection(pathname, SECTION_PATHS.productline))  open.push('productline')
-    if (inSection(pathname, SECTION_PATHS.directories))  open.push('directories')
-    if (inSection(pathname, SECTION_PATHS.b2b))          open.push('b2b')
-    if (inSection(pathname, SECTION_PATHS.operations))   open.push('operations')
-    if (inSection(pathname, SECTION_PATHS.system))       open.push('system')
+    if (inSection(pathname, SECTION_PATHS.directories)) open.push('directories')
+    if (inSection(pathname, SECTION_PATHS.b2b))         open.push('b2b')
+    if (inSection(pathname, SECTION_PATHS.operations))  open.push('operations')
   }
   return open
 }
 
 function detectModeFromPath(pathname: string): ViewMode {
-  if (
-    pathname.startsWith('/admin') ||
-    inSection(pathname, SECTION_PATHS.vladislav) ||
-    inSection(pathname, SECTION_PATHS.marketing)
-  ) return 'admin'
+  if (inSection(pathname, SECTION_PATHS.marketing) ||
+      inSection(pathname, SECTION_PATHS.vladislav)  ||
+      inSection(pathname, SECTION_PATHS.productline) ||
+      inSection(pathname, SECTION_PATHS.system)      ||
+      ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass',
+       '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development',
+       '/admin/org', '/admin/users'].some(p => pathname === p || pathname.startsWith(p + '/')))
+    return 'ceo'
+  if (pathname.startsWith('/admin')) return 'admin'
   return 'manager'
 }
 
@@ -214,7 +219,8 @@ export function Sidebar({ userEmail, role }: Props) {
     setViewMode(mode)
     localStorage.setItem('sidebarMode', mode)
     const auto = autoOpenSections(pathname, mode)
-    setOpen(new Set(auto.length ? auto : [mode === 'manager' ? 'calculator' : 'vladislav']))
+    const fallback = mode === 'manager' ? 'calculator' : mode === 'ceo' ? 'vladislav' : 'directories'
+    setOpen(new Set(auto.length ? auto : [fallback]))
   }
 
   function toggle(key: string) {
@@ -359,12 +365,16 @@ export function Sidebar({ userEmail, role }: Props) {
           {isAdmin && (
             <div className="px-3 pb-3">
               <div className="flex bg-[#f5f5f3] rounded-[8px] p-0.5 gap-0.5">
-                {(['manager', 'admin'] as const).map(mode => (
-                  <button key={mode} onClick={() => switchMode(mode)}
-                    className={`flex-1 py-[5px] rounded-[6px] text-[11px] font-semibold transition-all ${
-                      viewMode === mode ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                {([
+                  { v: 'manager', l: 'Менеджер' },
+                  { v: 'admin',   l: 'Админ'    },
+                  { v: 'ceo',     l: 'СЕО'      },
+                ] as { v: ViewMode; l: string }[]).map(({ v, l }) => (
+                  <button key={v} onClick={() => switchMode(v)}
+                    className={`flex-1 py-[5px] rounded-[6px] text-[10px] font-semibold transition-all ${
+                      viewMode === v ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
                     }`}>
-                    {mode === 'manager' ? 'Менеджер' : 'Администратор'}
+                    {l}
                   </button>
                 ))}
               </div>
@@ -412,7 +422,7 @@ export function Sidebar({ userEmail, role }: Props) {
               {accordion('ai', 'AI Инструменты',
                 'text-violet-600', 'text-violet-400', MANAGER_AI, 'bg-violet-50 text-violet-700 font-semibold')}
             </>
-          ) : (
+          ) : viewMode === 'ceo' ? (
             <>
               {sectionLabel('Owner Center')}
               {ADMIN_OWNER.map(i => navItem(i, 'bg-purple-50 text-purple-700 font-semibold'))}
@@ -424,31 +434,29 @@ export function Sidebar({ userEmail, role }: Props) {
 
               {divider()}
 
-              {accordion('productline', 'Product Line',
-                'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
-
-              {divider()}
-
               {accordion('vladislav', 'Vladislav AI',
                 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV, 'bg-indigo-50 text-indigo-700 font-semibold')}
 
               {divider()}
 
-              {/* СПРАВОЧНИКИ — clean new structure */}
+              {accordion('productline', 'Product Line',
+                'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
+
+              {divider()}
+
+              {accordion('system', 'Система',
+                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_SYSTEM, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
+            </>
+          ) : (
+            <>
               {accordion('directories', 'Справочники',
                 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
 
-              {/* B2B — own section */}
               {accordion('b2b', 'B2B',
                 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_B2B, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
 
-              {/* ОПЕРАЦИИ */}
               {accordion('operations', 'Операции',
                 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_OPERATIONS, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-
-              {/* СИСТЕМА */}
-              {accordion('system', 'Система',
-                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_SYSTEM, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
             </>
           )}
 
