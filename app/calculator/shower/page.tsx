@@ -115,6 +115,9 @@ export default function ShowerCalculatorPage() {
   const [hwColor, setHwColor]           = useState('chrome')
   const [withMounting, setWithMounting] = useState(false)
   const [withDelivery, setWithDelivery] = useState(false)
+  const [kmFromMkad, setKmFromMkad]   = useState('')
+  const [deliveryBase, setDeliveryBase]   = useState(2000)
+  const [deliveryPerKm, setDeliveryPerKm] = useState(50)
   const [floors, setFloors]     = useState('0')
   const [discount, setDiscount] = useState('0')
   const [margin, setMargin]     = useState('40')
@@ -125,7 +128,7 @@ export default function ShowerCalculatorPage() {
       const [
         { data: mats }, { data: svcs }, { data: pts }, { data: fins },
         { data: items }, { data: prices }, { data: colors }, { data: sups },
-        { data: glassRows },
+        { data: glassRows }, delivRes,
       ] = await Promise.all([
         supabase.from('materials').select('*').eq('active', true),
         supabase.from('services').select('*'),
@@ -136,6 +139,7 @@ export default function ShowerCalculatorPage() {
         supabase.from('shower_hw_colors').select('*').eq('active', true).order('sort_order'),
         supabase.from('shower_hw_suppliers').select('*').eq('active', true).order('name'),
         supabase.from('glass_price_matrix').select('name,t4,t5,t6,t8,t10,t12').eq('price_type', 'sale').eq('category', 'glass'),
+        fetch('/api/admin/pricing-formula'),
       ])
       setMaterials(mats ?? [])
       setServices(svcs ?? [])
@@ -155,6 +159,13 @@ export default function ShowerCalculatorPage() {
       setGlassMatrix(matrix)
       if (cols.length > 0) setStdColorId(cols[0].id)
       if (sup.length  > 0) setStdSupplierId(sup[0].id)
+      if (delivRes.ok) {
+        const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
+        const bp = formula.find(p => p.section === 'delivery' && p.param_key === 'base_price')?.value
+        const pk = formula.find(p => p.section === 'delivery' && p.param_key === 'price_per_km')?.value
+        if (bp != null) setDeliveryBase(bp)
+        if (pk != null) setDeliveryPerKm(pk)
+      }
       const stdSettings =
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'shower_standard') ??
         (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
@@ -242,12 +253,15 @@ export default function ShowerCalculatorPage() {
     return glassPrice + (temp?.cost_price ?? 0)
   }, [glassMatrix, materials, glassType, thickness])
 
+  const km = Number(kmFromMkad) || 0
+  const deliveryCost = withDelivery && km > 0 ? Math.round(deliveryBase + deliveryPerKm * km) : undefined
+
   const inputs: ShowerInputs = {
     tier, model,
     width: Number(width) || 0, width2: Number(width2) || 0, height: Number(height) || 0,
     glassCostPerM2, glassName: glassType, thickness,
     hardwareColor: colorObj.value, hardwareColorMultiplier: colorObj.multiplier,
-    withMounting, withDelivery, floors: Number(floors) || 0,
+    withMounting, withDelivery, deliveryCost, floors: Number(floors) || 0,
     discount: Number(discount) || 0, partnerPercent: selectedPartner?.percent ?? 0,
     margin: Number(margin) || 40,
     expensesPercent: (() => {
@@ -267,7 +281,7 @@ export default function ShowerCalculatorPage() {
   const result = useMemo(() => calculateShower(inputs, services),
   // eslint-disable-next-line react-hooks/exhaustive-deps
   [tier, modelId, stdShowerType, stdGlassCount, stdIsCorner, width, width2, height, glassType,
-   thickness, hwColor, withMounting, withDelivery, floors, discount, margin, partnerId,
+   thickness, hwColor, withMounting, withDelivery, kmFromMkad, deliveryCost, floors, discount, margin, partnerId,
    materials, services, hwSelection, stdColorId, stdSupplierId])
 
   function handleAddToCart() {
@@ -614,14 +628,34 @@ export default function ShowerCalculatorPage() {
                       className="w-14 border border-[#e8e8ed] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3]"/>
                   </div>
                 )}
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input type="checkbox" checked={withDelivery} onChange={e => setWithDelivery(e.target.checked)}
-                    className="w-4 h-4 accent-[#0071e3]"/>
-                  <span className="text-[13px] text-[#1d1d1f]">Доставка по Москве</span>
-                  <span className="text-[12px] text-[#86868b] ml-auto">
-                    {(services.find(s => s.name === 'Доставка Москва')?.cost_price ?? 3500).toLocaleString('ru-RU')} ₽
-                  </span>
-                </label>
+                <div>
+                  <label className="flex items-center gap-3 cursor-pointer">
+                    <input type="checkbox" checked={withDelivery} onChange={e => setWithDelivery(e.target.checked)}
+                      className="w-4 h-4 accent-[#0071e3]"/>
+                    <span className="text-[13px] text-[#1d1d1f]">Доставка</span>
+                    <span className="text-[12px] text-[#86868b] ml-auto">
+                      {km > 0
+                        ? `${(deliveryCost!).toLocaleString('ru-RU')} ₽ (${km} км за МКАД)`
+                        : `${(services.find(s => s.name === 'Доставка Москва')?.cost_price ?? 3500).toLocaleString('ru-RU')} ₽`}
+                    </span>
+                  </label>
+                  {withDelivery && (
+                    <div className="mt-1.5 ml-7 flex items-center gap-2">
+                      <span className="text-[12px] text-[#86868b]">км от МКАД:</span>
+                      <input
+                        type="number" min="0" max="200" placeholder="0"
+                        value={kmFromMkad}
+                        onChange={e => setKmFromMkad(e.target.value)}
+                        className="w-16 border border-[#e8e8ed] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3]"
+                      />
+                      {km > 0 && (
+                        <span className="text-[12px] text-[#86868b]">
+                          {deliveryBase.toLocaleString('ru-RU')} + {km} × {deliveryPerKm} ₽
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </section>
 

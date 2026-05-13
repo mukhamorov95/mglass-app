@@ -98,6 +98,7 @@ export type ShowerInputs = {
   hardwareColorMultiplier: number
   withMounting: boolean
   withDelivery: boolean
+  deliveryCost?: number   // когда задан — используется вместо поиска услуги (линейная доставка за МКАД)
   floors: number
   discount: number
   partnerPercent: number
@@ -203,15 +204,13 @@ export function calculateShower(
       total: price * floors,
     })
   }
-  if (withDelivery && deliverySvc) {
-    const price = deliverySvc.sale_price ?? deliverySvc.cost_price
-    serviceLines.push({
-      name: 'Доставка',
-      qty: 1,
-      unit: 'рейс',
-      price,
-      total: price,
-    })
+  if (withDelivery) {
+    if (inputs.deliveryCost != null && inputs.deliveryCost > 0) {
+      serviceLines.push({ name: 'Доставка за МКАД', qty: 1, unit: 'рейс', price: inputs.deliveryCost, total: inputs.deliveryCost })
+    } else if (deliverySvc) {
+      const price = deliverySvc.sale_price ?? deliverySvc.cost_price
+      serviceLines.push({ name: 'Доставка', qty: 1, unit: 'рейс', price, total: price })
+    }
   }
   const servicesTotal = serviceLines.reduce((s, l) => s + l.total, 0)
   const grandTotal    = finalPrice + servicesTotal

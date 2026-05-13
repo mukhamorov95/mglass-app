@@ -17,6 +17,7 @@ export type MirrorInputs = {
   substratePrice: number  // default 2000
   hasInstallation: boolean
   hasDelivery: boolean
+  deliveryCost?: number   // когда задан — используется вместо поиска услуги (линейная доставка за МКАД)
   partnerPercent: number
   discount: number
   margin: number        // default 40
@@ -208,10 +209,14 @@ export function calculateMirror(
     }
   }
   if (inputs.hasDelivery) {
-    const svc = services.find(s => s.name.toLowerCase().includes('доставка'))
-    if (svc) {
-      const price = svc.sale_price ?? svc.cost_price
-      serviceLines.push({ name: svc.name, qty: 1, unit: 'заказ', total: Math.round(price) })
+    if (inputs.deliveryCost != null && inputs.deliveryCost > 0) {
+      serviceLines.push({ name: 'Доставка за МКАД', qty: 1, unit: 'заказ', total: inputs.deliveryCost })
+    } else {
+      const svc = services.find(s => s.name.toLowerCase().includes('доставка'))
+      if (svc) {
+        const price = svc.sale_price ?? svc.cost_price
+        serviceLines.push({ name: svc.name, qty: 1, unit: 'заказ', total: Math.round(price) })
+      }
     }
   }
 

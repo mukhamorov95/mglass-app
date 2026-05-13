@@ -55,6 +55,9 @@ export default function MirrorCalculatorPage() {
   const [substratePrice,  setSubstratePrice]  = useState('2000')
   const [hasInstallation, setHasInstallation] = useState(false)
   const [hasDelivery,     setHasDelivery]     = useState(false)
+  const [kmFromMkad,      setKmFromMkad]      = useState('')
+  const [deliveryBase,    setDeliveryBase]     = useState(2000)
+  const [deliveryPerKm,   setDeliveryPerKm]    = useState(50)
 
   const [partnerId, setPartnerId] = useState<number | null>(null)
   const [discount, setDiscount] = useState('0')
@@ -67,17 +70,25 @@ export default function MirrorCalculatorPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, mx, mods] = await Promise.all([
+      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, mx, mods, delivRes] = await Promise.all([
         sb.from('materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('services').select('*').eq('active', true),
         sb.from('financial_settings').select('*'),
         sb.from('partner_types').select('*').eq('active', true),
         loadGlassMatrix(),
         loadWasteModifiers(),
+        fetch('/api/admin/pricing-formula'),
       ])
       setMaterials(mats ?? [])
       setServices(svcs ?? [])
       setPartners(pts ?? [])
+      if (delivRes.ok) {
+        const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
+        const bp = formula.find(p => p.section === 'delivery' && p.param_key === 'base_price')?.value
+        const pk = formula.find(p => p.section === 'delivery' && p.param_key === 'price_per_km')?.value
+        if (bp != null) setDeliveryBase(bp)
+        if (pk != null) setDeliveryPerKm(pk)
+      }
       setMatrix(mx)
       setModifiers(mods)
       const mirrorSettings =
@@ -120,6 +131,9 @@ export default function MirrorCalculatorPage() {
   const standardMargin  = strategy.target_margin
   const expensesPercent = settings?.tax_percent ?? 12
 
+  const km = Number(kmFromMkad) || 0
+  const deliveryCost = hasDelivery && km > 0 ? Math.round(deliveryBase + deliveryPerKm * km) : undefined
+
   const inputs: MirrorInputs = {
     width: Number(width) || 0, height: Number(height) || 0,
     mirrorMaterial: mirrorMatStub,
@@ -130,6 +144,7 @@ export default function MirrorCalculatorPage() {
     hasLighting, buttonType, hasSandblast, hasSubstrate,
     substratePrice: Number(substratePrice) || 0,
     hasInstallation, hasDelivery,
+    deliveryCost,
     partnerPercent: selectedPartner?.percent ?? 0,
     discount: Number(discount) || 0,
     margin:         Number(margin) || 40,
@@ -151,7 +166,7 @@ export default function MirrorCalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [width, height, mirrorName, mirrorMm, mirrorCostPerM2, mirrorWastePct, shapeModPct,
      shape, hasLighting, buttonType, hasSandblast, hasSubstrate,
-     substratePrice, hasInstallation, hasDelivery, partnerId, discount, margin, materials, services],
+     substratePrice, hasInstallation, hasDelivery, kmFromMkad, deliveryCost, partnerId, discount, margin, materials, services],
   )
 
   const marginNum   = result?.margin ?? 0
@@ -405,9 +420,21 @@ export default function MirrorCalculatorPage() {
               <div className="mt-1.5">
                 <Toggle
                   label="Доставка"
-                  desc={deliverySvc ? fmt(deliverySvc.sale_price ?? deliverySvc.cost_price) + ' · один рейс на весь заказ' : ''}
+                  desc={km > 0 ? `${fmt(deliveryCost!)} · ${deliveryBase.toLocaleString('ru-RU')} + ${km} км × ${deliveryPerKm} ₽` : deliverySvc ? fmt(deliverySvc.sale_price ?? deliverySvc.cost_price) + ' · по Москве' : ''}
                   value={hasDelivery} set={setHasDelivery}
                 />
+                {hasDelivery && (
+                  <div className="mt-1.5 ml-8 flex items-center gap-2">
+                    <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">км от МКАД:</span>
+                    <input
+                      type="number" min="0" max="200" placeholder="0"
+                      value={kmFromMkad}
+                      onChange={e => setKmFromMkad(e.target.value)}
+                      className="w-16 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] text-center outline-none focus:border-[#0071e3]"
+                    />
+                    {km > 0 && <span className="text-[11px] text-[#6b6b66]">{fmt(deliveryCost!)}</span>}
+                  </div>
+                )}
               </div>
             </div>
 

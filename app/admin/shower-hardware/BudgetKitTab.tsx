@@ -6,7 +6,8 @@ import type { Color, Supplier } from './CatalogTab'
 
 type CatItem = { id: number; name: string; category: string; unit: string; shower_types: string[] }
 type CatalogPrice = { item_id: number; supplier_id: number; color_id: number; cost_price: number }
-type KitRow = { id: number; model_id: string; item_id: number; supplier_id: number | null; sort_order: number }
+type KitRow = { id: number; model_id: string; item_id: number; supplier_id: number | null; sort_order: number; qty: number }
+type ManualPrice = { id?: number; model_id: string; color_id: number; price: number }
 
 const MODELS = ['M1','M2','M3','M4','M5','M6','M7','M8','M9','M10','M11','M12']
 
@@ -16,9 +17,13 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
   const [allItems, setAllItems] = useState<CatItem[]>([])
   const [kitRows,  setKitRows]  = useState<KitRow[]>([])
   const [prices,   setPrices]   = useState<CatalogPrice[]>([])
+  const [manual,   setManual]   = useState<ManualPrice[]>([])
+  const [manDraft, setManDraft] = useState<Record<number, string>>({})
   const [loading,  setLoading]  = useState(true)
   const [showAdd,  setShowAdd]  = useState(false)
   const [search,   setSearch]   = useState('')
+  const [savingMan, setSavingMan] = useState(false)
+  const [savedMan,  setSavedMan]  = useState(false)
 
   useEffect(() => {
     db.current.from('shower_catalog_items').select('id,name,category,unit,shower_types')
@@ -33,14 +38,22 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
     const rowsData = (rows ?? []) as KitRow[]
     setKitRows(rowsData)
 
-    if (rowsData.length > 0) {
-      const itemIds = rowsData.map(r => r.item_id)
-      const { data: p } = await db.current.from('shower_catalog_prices')
-        .select('item_id,supplier_id,color_id,cost_price').in('item_id', itemIds)
-      setPrices((p ?? []) as CatalogPrice[])
-    } else {
-      setPrices([])
-    }
+    const [pricesResult, manualResult] = await Promise.all([
+      rowsData.length > 0
+        ? db.current.from('shower_catalog_prices')
+            .select('item_id,supplier_id,color_id,cost_price')
+            .in('item_id', rowsData.map(r => r.item_id))
+        : Promise.resolve({ data: [] }),
+      db.current.from('shower_budget_manual_prices')
+        .select('*').eq('model_id', m),
+    ])
+
+    setPrices((pricesResult.data ?? []) as CatalogPrice[])
+    const manData = (manualResult.data ?? []) as ManualPrice[]
+    setManual(manData)
+    const draft: Record<number, string> = {}
+    for (const mp of manData) draft[mp.color_id] = mp.price > 0 ? String(mp.price) : ''
+    setManDraft(draft)
     setLoading(false)
   }, [])
 
@@ -49,7 +62,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
   async function addItem(itemId: number) {
     if (kitRows.find(r => r.item_id === itemId)) return
     const { data } = await db.current.from('shower_budget_kit_rows')
-      .insert({ model_id: model, item_id: itemId, supplier_id: null, sort_order: kitRows.length })
+      .insert({ model_id: model, item_id: itemId, supplier_id: null, sort_order: kitRows.length, qty: 1 })
       .select('*').single()
     if (data) setKitRows(prev => [...prev, data as KitRow])
     setShowAdd(false); setSearch('')
@@ -65,14 +78,69 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
     setKitRows(prev => prev.map(r => r.id === rowId ? { ...r, supplier_id: supplierId } : r))
   }
 
+  async function setQty(rowId: number, qty: number) {
+    const q = Math.max(1, qty || 1)
+    await db.current.from('shower_budget_kit_rows').update({ qty: q }).eq('id', rowId)
+    setKitRows(prev => prev.map(r => r.id === rowId ? { ...r, qty: q } : r))
+  }
+
+  async function saveManualPrices() {
+    setSavingMan(true)
+    const activeColors = colors.filter(c => c.active)
+    await Promise.all(activeColors.map(async c => {
+      const val = Number(manDraft[c.id]) || 0
+      const existing = manual.find(m => m.color_id === c.id)
+      if (existing?.id) {
+        await db.current.from('shower_budget_manual_prices')
+          .update({ price: val, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+      } else if (val > 0) {
+        await db.current.from('shower_budget_manual_prices')
+          .insert({ model_id: model, color_id: c.id, price: val })
+      }
+    }))
+    setSavingMan(false)
+    setSavedMan(true)
+    setTimeout(() => setSavedMan(false), 2000)
+    await loadKit(model)
+  }
+
   const activeColors = colors.filter(c => c.active)
   const addable = allItems
     .filter(i => !kitRows.find(r => r.item_id === i.id))
     .filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase()))
 
-  // status counters
-  const filled  = kitRows.filter(r => r.supplier_id && prices.some(p => p.item_id === r.item_id && p.supplier_id === r.supplier_id)).length
-  const total   = kitRows.length
+  const filled = kitRows.filter(r => r.supplier_id && prices.some(p => p.item_id === r.item_id && p.supplier_id === r.supplier_id)).length
+  const total  = kitRows.length
+
+  // Calculated totals per color (sum of qty × price)
+  const calcTotals: Record<number, number> = {}
+  for (const color of activeColors) {
+    let sum = 0
+    for (const row of kitRows) {
+      const p = prices.find(p =>
+        p.item_id === row.item_id &&
+        p.supplier_id === row.supplier_id &&
+        p.color_id === color.id
+      )
+      if (p?.cost_price) sum += p.cost_price * (row.qty || 1)
+    }
+    calcTotals[color.id] = sum
+  }
+
+  // Effective totals: manual if set, else calculated
+  const effectiveTotals: Record<number, { price: number; isManual: boolean }> = {}
+  for (const color of activeColors) {
+    const man = manual.find(m => m.color_id === color.id)
+    const hasManual = man && man.price > 0
+    effectiveTotals[color.id] = {
+      price: hasManual ? man!.price : calcTotals[color.id],
+      isManual: !!hasManual,
+    }
+  }
+
+  const hasAnyCalc = activeColors.some(c => calcTotals[c.id] > 0)
+  const hasAnyManual = activeColors.some(c => (manual.find(m => m.color_id === c.id)?.price ?? 0) > 0)
 
   return (
     <div className="space-y-4">
@@ -103,7 +171,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
       {/* Add item panel */}
       {showAdd && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-          <p className="text-[12px] font-semibold text-blue-700 mb-2">Выберите позицию из справочника для модели {model}</p>
+          <p className="text-[12px] font-semibold text-blue-700 mb-2">Выберите позицию для модели {model}</p>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по названию..."
             className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-white mb-2" />
@@ -130,13 +198,13 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
       <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
         {loading ? (
           <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
-        ) : kitRows.length === 0 ? (
+        ) : kitRows.length === 0 && !hasAnyManual ? (
           <div className="p-8 text-center text-[#9a9a95] text-[13px]">
-            Комплект {model} пустой — добавьте позиции из справочника
+            Комплект {model} пустой — добавьте позиции из справочника или укажите стоимость вручную ниже
           </div>
-        ) : (
+        ) : kitRows.length > 0 ? (
           <div className="overflow-x-auto">
-            <div style={{ minWidth: 310 + activeColors.length * 88 }}>
+            <div style={{ minWidth: 340 + activeColors.length * 88 }}>
 
               {/* Header */}
               <div className="flex bg-[#f5f5f3] border-b-2 border-[#e4e4e0]">
@@ -145,6 +213,9 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                 </div>
                 <div className="px-3 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide border-r border-[#e4e4e0]" style={{ width: 120 }}>
                   Поставщик
+                </div>
+                <div className="px-2 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide text-center border-r border-[#e4e4e0]" style={{ width: 52 }}>
+                  Кол.
                 </div>
                 {activeColors.map(c => (
                   <div key={c.id} className="px-1 py-2.5 text-[9px] font-bold text-[#6b6b66] uppercase text-center leading-tight border-r border-[#e4e4e0] last:border-0"
@@ -172,9 +243,9 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                     {/* Item name */}
                     <div className="px-3 py-2.5 border-r border-[#f0f0ec]" style={{ width: 190 }}>
                       <div className="flex items-center gap-1.5">
-                        {hasData  && <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" title="Данные заполнены" />}
-                        {noPrice  && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" title="Нет цен для поставщика" />}
-                        {row.supplier_id === null && <span className="w-2 h-2 rounded-full bg-[#d4d4d0] flex-shrink-0" title="Поставщик не выбран" />}
+                        {hasData  && <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />}
+                        {noPrice  && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />}
+                        {row.supplier_id === null && <span className="w-2 h-2 rounded-full bg-[#d4d4d0] flex-shrink-0" />}
                         <div>
                           <p className="text-[13px] font-medium text-[#111110] leading-tight">{item.name}</p>
                           <p className="text-[10px] text-[#9a9a95]">{item.unit}</p>
@@ -207,20 +278,36 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                       </select>
                     </div>
 
-                    {/* Price cells from catalog */}
+                    {/* Qty */}
+                    <div className="px-1 py-2.5 text-center border-r border-[#f0f0ec]" style={{ width: 52 }}>
+                      <input
+                        type="number" min="1"
+                        value={row.qty || 1}
+                        onChange={e => setQty(row.id, Number(e.target.value))}
+                        className="w-10 border border-[#e4e4e0] rounded px-1 py-0.5 text-[12px] text-center outline-none focus:border-blue-400 bg-white"
+                      />
+                    </div>
+
+                    {/* Price cells */}
                     {activeColors.map(color => {
                       const p = prices.find(p =>
                         p.item_id === row.item_id &&
                         p.supplier_id === row.supplier_id &&
                         p.color_id === color.id
                       )
+                      const lineTotal = p?.cost_price ? p.cost_price * (row.qty || 1) : null
                       return (
                         <div key={color.id} className="px-1 py-2.5 text-center border-r border-[#f0f0ec] last:border-0"
                           style={{ width: 88 }}>
                           {p?.cost_price ? (
-                            <span className="text-[12px] font-mono font-semibold text-[#111110]">
-                              {p.cost_price.toLocaleString('ru-RU')}
-                            </span>
+                            <div>
+                              <div className="text-[11px] text-[#9a9a95]">{p.cost_price.toLocaleString('ru-RU')}</div>
+                              {(row.qty || 1) > 1 && (
+                                <div className="text-[12px] font-mono font-semibold text-[#111110]">
+                                  {lineTotal!.toLocaleString('ru-RU')}
+                                </div>
+                              )}
+                            </div>
                           ) : (
                             <span className="text-[12px] text-[#d4d4d0]">—</span>
                           )}
@@ -235,16 +322,97 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                   </div>
                 )
               })}
+
+              {/* ИТОГО row */}
+              {hasAnyCalc && (
+                <div className="flex items-center bg-[#f8f8f7] border-t-2 border-[#e4e4e0]">
+                  <div className="px-3 py-2.5 text-[12px] font-bold text-[#111110] border-r border-[#e4e4e0]" style={{ width: 190 }}>
+                    ИТОГО (позиции)
+                  </div>
+                  <div className="border-r border-[#e4e4e0]" style={{ width: 120 }} />
+                  <div className="border-r border-[#e4e4e0]" style={{ width: 52 }} />
+                  {activeColors.map(c => (
+                    <div key={c.id} className="px-1 py-2.5 text-center border-r border-[#e4e4e0] last:border-0" style={{ width: 88 }}>
+                      {calcTotals[c.id] > 0 ? (
+                        <span className="text-[13px] font-mono font-bold text-emerald-700">
+                          {calcTotals[c.id].toLocaleString('ru-RU')}
+                        </span>
+                      ) : (
+                        <span className="text-[12px] text-[#d4d4d0]">—</span>
+                      )}
+                    </div>
+                  ))}
+                  <div style={{ width: 36 }} />
+                </div>
+              )}
             </div>
           </div>
+        ) : null}
+      </div>
+
+      {/* Manual price section */}
+      <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-[13px] font-semibold text-[#111110]">Стоимость комплекта — ручной ввод</p>
+            <p className="text-[11px] text-[#9a9a95] mt-0.5">
+              {hasAnyCalc
+                ? 'Если заполнено — перекрывает расчёт из позиций. Оставьте 0 чтобы использовать автоподсчёт.'
+                : 'Укажите стоимость комплекта вручную пока позиции не заполнены.'}
+            </p>
+          </div>
+        </div>
+
+        {activeColors.length === 0 ? (
+          <p className="text-[12px] text-[#9a9a95]">Нет активных цветов</p>
+        ) : (
+          <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(activeColors.length, 4)}, minmax(0,1fr))` }}>
+            {activeColors.map(c => (
+              <div key={c.id}>
+                <p className="text-[10px] text-[#9a9a95] mb-1 font-semibold uppercase tracking-wide">{c.name}</p>
+                <input
+                  type="number" min="0" placeholder="0"
+                  value={manDraft[c.id] ?? ''}
+                  onChange={e => setManDraft(d => ({ ...d, [c.id]: e.target.value }))}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#0071e3]"
+                />
+                {hasAnyCalc && calcTotals[c.id] > 0 && (
+                  <p className="text-[10px] text-[#9a9a95] mt-0.5">
+                    Расчёт: {calcTotals[c.id].toLocaleString('ru-RU')} ₽
+                  </p>
+                )}
+              </div>
+            ))}
+          </div>
         )}
+
+        <div className="mt-4 flex items-center gap-4">
+          <button onClick={saveManualPrices} disabled={savingMan}
+            className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+            {savedMan ? 'Сохранено' : savingMan ? 'Сохраняю...' : 'Сохранить цены'}
+          </button>
+          {activeColors.length > 0 && (
+            <div className="flex flex-wrap gap-3">
+              {activeColors.map(c => {
+                const eff = effectiveTotals[c.id]
+                if (!eff || eff.price === 0) return null
+                return (
+                  <span key={c.id} className={`text-[12px] ${eff.isManual ? 'text-[#0071e3]' : 'text-emerald-700'}`}>
+                    {c.name}: {eff.price.toLocaleString('ru-RU')} ₽
+                    <span className="text-[10px] ml-1 opacity-70">{eff.isManual ? '(вручную)' : '(авто)'}</span>
+                  </span>
+                )
+              })}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Legend */}
       {kitRows.length > 0 && (
         <div className="flex items-center gap-5 text-[11px] text-[#9a9a95] flex-wrap">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Данные заполнены</span>
-          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/>Нет цен для поставщика (добавьте в Справочнике)</span>
+          <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/>Нет цен для поставщика</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d4d4d0] inline-block"/>Поставщик не выбран</span>
         </div>
       )}

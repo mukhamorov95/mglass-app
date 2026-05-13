@@ -16,6 +16,7 @@ export type LoftInputs = {
   withPainting: boolean
   hasInstallation: boolean
   hasDelivery: boolean
+  deliveryCost?: number   // когда задан — используется вместо поиска услуги (линейная доставка за МКАД)
   hardware: HardwareItem[]  // выбранная фурнитура
   hardwareQty: Record<number, number>  // id → количество
   partnerPercent: number
@@ -283,8 +284,12 @@ export function calculateLoft(
     if (svc) serviceLines.push({ name: `${svc.name} (${S} секц.)`, total: (svc.sale_price ?? svc.cost_price) * S })
   }
   if (inputs.hasDelivery) {
-    const svc = services.find(s => s.name.toLowerCase().includes('доставка'))
-    if (svc) serviceLines.push({ name: svc.name, total: svc.sale_price ?? svc.cost_price })
+    if (inputs.deliveryCost != null && inputs.deliveryCost > 0) {
+      serviceLines.push({ name: 'Доставка за МКАД', total: inputs.deliveryCost })
+    } else {
+      const svc = services.find(s => s.name.toLowerCase().includes('доставка'))
+      if (svc) serviceLines.push({ name: svc.name, total: svc.sale_price ?? svc.cost_price })
+    }
   }
   const servicesTotal = serviceLines.reduce((s, l) => s + l.total, 0)
   const grandTotal = finalPrice + servicesTotal

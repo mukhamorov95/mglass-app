@@ -68,6 +68,9 @@ export default function LoftCalculatorPage() {
   const [withPainting, setWithPainting]       = useState(() => (loadSaved().withPainting as boolean) ?? false)
   const [hasInstallation, setHasInstallation] = useState(() => (loadSaved().hasInstallation as boolean) ?? false)
   const [hasDelivery, setHasDelivery]         = useState(() => (loadSaved().hasDelivery as boolean) ?? false)
+  const [kmFromMkad, setKmFromMkad]           = useState('')
+  const [deliveryBase, setDeliveryBase]       = useState(2000)
+  const [deliveryPerKm, setDeliveryPerKm]     = useState(50)
   const [selectedHwIds, setSelectedHwIds]     = useState<Set<number>>(() => new Set((loadSaved().selectedHwIds as number[]) ?? []))
   const [hwQty, setHwQty]           = useState<Record<number, number>>(() => (loadSaved().hwQty as Record<number, number>) ?? {})
   const [partnerId, setPartnerId]   = useState<number | null>(() => (loadSaved().partnerId as number) ?? null)
@@ -77,18 +80,26 @@ export default function LoftCalculatorPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: mats }, { data: svcs }, { data: hw }, { data: fins }, { data: pts }] = await Promise.all([
+      const [{ data: mats }, { data: svcs }, { data: hw }, { data: fins }, { data: pts }, delivRes] = await Promise.all([
         supabase.from('materials').select('*').eq('active', true).order('category').order('name'),
         supabase.from('services').select('*').eq('active', true),
         supabase.from('hardware_items').select('*').eq('active', true).order('system_type'),
         supabase.from('financial_settings').select('*'),
         supabase.from('partner_types').select('*').eq('active', true),
+        fetch('/api/admin/pricing-formula'),
       ])
       setMaterials(mats ?? [])
       setServices(svcs ?? [])
       setAllHardware(hw ?? [])
       setAllSettings((fins ?? []) as FinancialSettings[])
       setPartners(pts ?? [])
+      if (delivRes.ok) {
+        const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
+        const bp = formula.find(p => p.section === 'delivery' && p.param_key === 'base_price')?.value
+        const pk = formula.find(p => p.section === 'delivery' && p.param_key === 'price_per_km')?.value
+        if (bp != null) setDeliveryBase(bp)
+        if (pk != null) setDeliveryPerKm(pk)
+      }
       const saved = loadSaved()
       const glasses = (mats ?? []).filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
       if (!saved.glassId && glasses.length) setGlassId(glasses[0].id)
@@ -166,11 +177,15 @@ export default function LoftCalculatorPage() {
     })
   }
 
+  const km = Number(kmFromMkad) || 0
+  const deliveryCost = hasDelivery && km > 0 ? Math.round(deliveryBase + deliveryPerKm * km) : undefined
+
   const inputs: LoftInputs = {
     width: Number(width) || 0, height: Number(height) || 0,
     sections: Number(sections) || 1, divisions: Number(divisions) || 0,
     systemType, glassMaterial: selectedGlass, glassWastePct, glassCalcPrice,
     withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery,
+    deliveryCost,
     hardware: relevantHardware.filter(h => selectedHwIds.has(h.id)),
     hardwareQty: hwQty,
     partnerPercent: selectedPartner?.percent ?? 0,
@@ -183,7 +198,7 @@ export default function LoftCalculatorPage() {
     return calculateLoft(inputs, materials, services, settings)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting,
-      hasInstallation, hasDelivery, selectedHwIds, hwQty, partnerId, discount, margin, materials, services, settings])
+      hasInstallation, hasDelivery, kmFromMkad, deliveryCost, selectedHwIds, hwQty, partnerId, discount, margin, materials, services, settings])
 
   const marginNum   = result?.margin ?? 0
   const marginColor = marginNum >= 35 ? 'text-emerald-600' : marginNum >= minMargin ? 'text-amber-600' : 'text-red-600'
@@ -410,8 +425,22 @@ export default function LoftCalculatorPage() {
                 <Toggle value={withMirrorFilm}  onClick={() => setWithMirrorFilm(!withMirrorFilm)}   label="Зеркальная плёнка" desc="2 500 ₽/м² · доп. услуга" />
                 <Toggle value={hasInstallation} onClick={() => setHasInstallation(!hasInstallation)} label="Монтаж"
                   desc={installSvc ? `${fmt(installPrice)} × ${sections} секц. = ${fmt(installPrice * Number(sections))}` : undefined} />
-                <Toggle value={hasDelivery}     onClick={() => setHasDelivery(!hasDelivery)}         label="Доставка"
-                  desc={deliverySvc ? `${fmt(deliveryPrice)} · один рейс` : undefined} />
+                <div className="col-span-2">
+                  <Toggle value={hasDelivery} onClick={() => setHasDelivery(!hasDelivery)} label="Доставка"
+                    desc={km > 0 ? `${fmt(deliveryCost!)} · ${deliveryBase.toLocaleString('ru-RU')} + ${km} км × ${deliveryPerKm} ₽` : deliverySvc ? `${fmt(deliveryPrice)} · по Москве` : undefined} />
+                  {hasDelivery && (
+                    <div className="mt-1.5 ml-6 flex items-center gap-2">
+                      <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">км от МКАД:</span>
+                      <input
+                        type="number" min="0" max="200" placeholder="0"
+                        value={kmFromMkad}
+                        onChange={e => setKmFromMkad(e.target.value)}
+                        className="w-16 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] text-center outline-none focus:border-[#0071e3]"
+                      />
+                      {km > 0 && <span className="text-[11px] text-[#6b6b66]">{fmt(deliveryCost!)}</span>}
+                    </div>
+                  )}
+                </div>
               </div>
 
               {/* Фурнитура */}

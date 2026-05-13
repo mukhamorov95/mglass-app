@@ -11,6 +11,8 @@ type Zone = {
   active:      boolean
 }
 
+type FormulaParam = { id: number; section: string; param_key: string; param_name: string; value: number; unit: string }
+
 const EMPTY: Omit<Zone, 'id'> = { name: '', description: '', price: 0, sort_order: 0, active: true }
 
 function fmt(n: number) { return n === 0 ? 'Бесплатно / по договору' : n.toLocaleString('ru-RU') + ' ₽' }
@@ -24,13 +26,43 @@ export default function DeliveryZonesPage() {
   const [error, setError]     = useState('')
   const [showForm, setShowForm] = useState(false)
 
+  const [linearParams, setLinearParams] = useState<FormulaParam[]>([])
+  const [linearDraft, setLinearDraft]   = useState<Record<number, string>>({})
+  const [linearSaving, setLinearSaving] = useState(false)
+  const [linearSaved, setLinearSaved]   = useState(false)
+
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const res  = await fetch('/api/admin/delivery-zones')
-    setZones(await res.json())
+    const [zonesRes, formulaRes] = await Promise.all([
+      fetch('/api/admin/delivery-zones'),
+      fetch('/api/admin/pricing-formula'),
+    ])
+    setZones(await zonesRes.json())
+    if (formulaRes.ok) {
+      const all = await formulaRes.json() as FormulaParam[]
+      const delivery = all.filter(p => p.section === 'delivery')
+      setLinearParams(delivery)
+      const draft: Record<number, string> = {}
+      for (const p of delivery) draft[p.id] = String(p.value)
+      setLinearDraft(draft)
+    }
     setLoading(false)
+  }
+
+  async function saveLinear() {
+    setLinearSaving(true)
+    await Promise.all(linearParams.map(p =>
+      fetch('/api/admin/pricing-formula', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: p.id, value: Number(linearDraft[p.id]) || 0 }),
+      })
+    ))
+    setLinearSaving(false)
+    setLinearSaved(true)
+    setTimeout(() => setLinearSaved(false), 2000)
   }
 
   function openEdit(z: Zone) {
@@ -109,6 +141,46 @@ export default function DeliveryZonesPage() {
               Отмена
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Linear MKAD delivery settings */}
+      {linearParams.length > 0 && (
+        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <p className="text-[14px] font-semibold text-[#111110]">Линейная доставка за МКАД</p>
+              <p className="text-[12px] text-[#8a8a85] mt-0.5">Базовая стоимость + стоимость за каждый км от МКАД</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4 mb-4">
+            {linearParams.map(p => (
+              <div key={p.id}>
+                <p className="text-[10px] text-[#9a9a95] mb-1">{p.param_name}, {p.unit}</p>
+                <input
+                  type="number" min="0"
+                  value={linearDraft[p.id] ?? ''}
+                  onChange={e => setLinearDraft(d => ({ ...d, [p.id]: e.target.value }))}
+                  className={inp}
+                />
+              </div>
+            ))}
+          </div>
+          {linearParams.length >= 2 && (() => {
+            const bp  = Number(linearDraft[linearParams.find(p => p.param_key === 'base_price')?.id ?? 0]) || 0
+            const pkm = Number(linearDraft[linearParams.find(p => p.param_key === 'price_per_km')?.id ?? 0]) || 0
+            return (
+              <div className="mb-3 text-[12px] text-[#6b6b66] bg-[#f8f8f7] rounded-lg px-3 py-2 space-y-0.5">
+                <p>5 км: {(bp + pkm * 5).toLocaleString('ru-RU')} ₽</p>
+                <p>20 км: {(bp + pkm * 20).toLocaleString('ru-RU')} ₽</p>
+                <p>50 км: {(bp + pkm * 50).toLocaleString('ru-RU')} ₽</p>
+              </div>
+            )
+          })()}
+          <button onClick={saveLinear} disabled={linearSaving}
+            className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+            {linearSaved ? 'Сохранено' : linearSaving ? 'Сохраняю...' : 'Сохранить тарифы'}
+          </button>
         </div>
       )}
 
