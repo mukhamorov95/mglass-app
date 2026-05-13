@@ -22,6 +22,11 @@ const GLASS_TYPES = [
   'CrystalVision Matelux',
 ]
 
+// Маппинг display-имени → имя в glass_price_matrix (там исторически 'Прозрачное М1')
+const GLASS_MATRIX_NAME: Record<string, string> = {
+  'М1 прозрачное': 'Прозрачное М1',
+}
+
 type StdShowerType = 'stationary' | 'swing' | 'sliding'
 const STD_SHOWER_TYPES: { v: StdShowerType; l: string }[] = [
   { v: 'stationary', l: 'Стационарная' },
@@ -266,7 +271,8 @@ export default function ShowerCalculatorPage() {
 
   const glassCostPerM2 = useMemo(() => {
     // Prefer glass_price_matrix sale price; fall back to materials.cost_price if not set
-    const matrixRow  = glassMatrix[glassType]
+    const matrixKey  = GLASS_MATRIX_NAME[glassType] ?? glassType
+    const matrixRow  = glassMatrix[matrixKey]
     const matrixPrice = matrixRow?.[`t${thickness}`] ?? null
     const mat  = materials.find(m => m.name === `Стекло ${glassType} ${thickness} мм` && m.category === 'стекло')
     const glassPrice = matrixPrice ?? mat?.sale_price ?? mat?.cost_price ?? 0
