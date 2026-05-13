@@ -307,6 +307,27 @@ export async function POST(req: Request) {
         const statusId = parseInt(body[key.replace('[id]', '[status_id]')] as string)
         if (leadId && statusId) await handleStageChange(leadId, statusId)
       }
+
+      // ── Responsible user changed → if was bot → pause bot ────────────────
+      if (key.startsWith('leads[update]') && key.endsWith('[id]')) {
+        const leadId = parseInt(value as string)
+        const newResponsible = parseInt(body[key.replace('[id]', '[responsible_user_id]')] as string)
+        if (leadId && newResponsible && newResponsible !== VLADISLAV_USER_ID) {
+          const db = supabase()
+          const { data: chat } = await db
+            .from('ai_managed_chats')
+            .select('is_active, chat_id')
+            .eq('amo_lead_id', leadId)
+            .maybeSingle()
+          if (chat?.is_active) {
+            await db.from('ai_managed_chats').update({
+              is_active: false,
+              close_reason: 'manager_took_over',
+            }).eq('amo_lead_id', leadId)
+            await addAmoNote(leadId, `⏸ AI-бот остановлен — менеджер взял диалог (ID ${newResponsible})`)
+          }
+        }
+      }
     }
 
     return NextResponse.json({ ok: true })
