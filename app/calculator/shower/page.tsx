@@ -86,6 +86,7 @@ export default function ShowerCalculatorPage() {
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([])
   const [hwColors, setHwColors]           = useState<HwColor[]>([])
   const [hwSuppliers, setHwSuppliers]     = useState<HwSupplier[]>([])
+  const [budgetManualPrices, setBudgetManualPrices] = useState<{ model_id: string; color_id: number; price: number }[]>([])
   // glass_price_matrix sale rows: name → { t4, t6, t8, t10, t12, … }
   const [glassMatrix, setGlassMatrix]     = useState<Record<string, Record<string, number | null>>>({})
   const [loading, setLoading]     = useState(true)
@@ -204,6 +205,15 @@ export default function ShowerCalculatorPage() {
 
   useEffect(() => { setHwSelection({}) }, [tier, stdShowerType])
 
+  // Load manual hardware prices for budget tier when model changes
+  useEffect(() => {
+    if (tier !== 'budget') return
+    supabase.from('shower_budget_manual_prices')
+      .select('model_id,color_id,price')
+      .eq('model_id', modelId)
+      .then(({ data }) => setBudgetManualPrices((data ?? []) as { model_id: string; color_id: number; price: number }[]))
+  }, [tier, modelId])
+
   const filteredCatalogItems = useMemo(() =>
     catalogItems.filter(item =>
       item.shower_types.includes(stdShowerType) || item.shower_types.includes('universal')
@@ -239,9 +249,20 @@ export default function ShowerCalculatorPage() {
       })
   }, [filteredCatalogItems, hwSelection, getPriceForItem, hwColors, stdColorId])
 
+  // Map calculator color value → DB color name (shower_hw_colors.name)
+  const COLOR_DB_NAME: Record<string, string> = {
+    chrome: 'ХРОМ', black: 'BLACK', bronze: 'БРОНЗА', gold: 'ЗОЛОТОЙ', white: 'БЕЛЫЙ',
+  }
+  const budgetColorId = hwColors.find(c =>
+    c.name.toUpperCase() === (COLOR_DB_NAME[hwColor] ?? hwColor.toUpperCase())
+  )?.id
+  const budgetManualCost = tier === 'budget' && budgetColorId
+    ? (budgetManualPrices.find(p => p.color_id === budgetColorId)?.price ?? 0) || undefined
+    : undefined
+
   const customHardwareCost = tier === 'standard' && selectedHardwareLines.length > 0
     ? selectedHardwareLines.reduce((s, l) => s + l.total, 0)
-    : undefined
+    : budgetManualCost
 
   const glassCostPerM2 = useMemo(() => {
     // Prefer glass_price_matrix sale price; fall back to materials.cost_price if not set
