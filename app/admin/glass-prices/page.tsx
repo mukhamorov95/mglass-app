@@ -111,6 +111,7 @@ export default function GlassPricesPage() {
   const [migrating, setMigrating] = useState(false)
   const [clearing, setClearing]   = useState(false)
   const [savingAll, setSavingAll] = useState(false)
+  const [syncingB2B, setSyncingB2B] = useState(false)
   const autoFilledRef = useRef<Set<string>>(new Set())
   const [undoRows, setUndoRows]   = useState<GlassRow[] | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -372,6 +373,16 @@ export default function GlassPricesPage() {
     ))
     showToast('Восстановлено')
     load()
+  }
+
+  async function syncToB2B() {
+    if (!confirm('Синхронизировать цены в B2B калькулятор?\nНовые материалы будут добавлены, существующие — обновлены.')) return
+    setSyncingB2B(true)
+    const res = await fetch('/api/admin/sync-b2b-materials', { method: 'POST' })
+    const data = await res.json()
+    setSyncingB2B(false)
+    if (!res.ok) { showToast(`Ошибка: ${data.error}`); return }
+    showToast(`✅ B2B обновлён: +${data.inserted} новых, ${data.updated} обновлено`)
   }
 
   async function migrateFromMaterials() {
@@ -640,10 +651,16 @@ export default function GlassPricesPage() {
               <span className="ml-1 text-[#b45309]">Расход %</span> — базовый коэффициент потерь при раскрое.
             </p>
           </div>
-          <a href="/admin/waste-modifiers"
-            className="flex-shrink-0 text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
-            Модификаторы расхода →
-          </a>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button onClick={syncToB2B} disabled={syncingB2B}
+              className="text-[12px] font-medium px-3.5 py-2 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors whitespace-nowrap">
+              {syncingB2B ? 'Синхронизация...' : '⟳ Синхр. в B2B'}
+            </button>
+            <a href="/admin/waste-modifiers"
+              className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
+              Модификаторы расхода →
+            </a>
+          </div>
         </div>
       </div>
 
