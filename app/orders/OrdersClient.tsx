@@ -47,6 +47,7 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
     if (search) {
       const q = search.toLowerCase()
       return o.number.toLowerCase().includes(q) ||
+             (o.custom_number ?? '').toLowerCase().includes(q) ||
              o.client_name.toLowerCase().includes(q) ||
              (o.object_address ?? '').toLowerCase().includes(q)
     }
@@ -148,7 +149,10 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
                   {/* Main info */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 flex-wrap">
-                      <span className="text-[14px] font-bold text-[#111110] font-mono">{order.number}</span>
+                      {order.custom_number && (
+                        <span className="text-[15px] font-bold text-[#111110] font-mono">{order.custom_number}</span>
+                      )}
+                      <span className={`text-[12px] font-mono text-[#9a9a95]`}>{order.number}</span>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${STATUS_STYLE[order.status]}`}>
                         {ORDER_STATUS_LABELS[order.status]}
                       </span>

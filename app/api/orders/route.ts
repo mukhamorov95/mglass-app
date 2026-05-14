@@ -10,6 +10,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json()
   const {
+    custom_number,
     client_name, client_phone, object_address,
     amo_deal_id, amo_deal_url,
     deadline, notes,
@@ -42,6 +43,7 @@ export async function POST(req: NextRequest) {
     .from('orders')
     .insert({
       number: '',  // will be set by trigger
+      custom_number: (custom_number as string)?.trim() || null,
       client_name: client_name.trim(),
       client_phone: client_phone?.trim() || null,
       object_address: object_address?.trim() || null,

@@ -26,11 +26,16 @@ export async function GET(
 
   const { data: order, error } = await sb
     .from('b2b_orders')
-    .select('id,client_id,client_name,discount_percent,items,total_sale_inc_vat,total_after_discount,notes,created_at')
+    .select('id,client_id,client_name,discount_percent,items,total_area,total_weight,total_sale_inc_vat,total_after_discount,notes,created_at,created_by')
     .eq('id', orderId)
     .single()
 
   if (error || !order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  // Проверяем доступ: только владелец заказа или пользователь с разрешением see_all_orders/admin
+  const { data: profile } = await sb.from('users').select('role,see_all_orders').eq('id', user.id).maybeSingle()
+  const canAccess = profile?.role === 'admin' || (profile?.see_all_orders ?? false) || order.created_by === user.id || order.created_by === null
+  if (!canAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Load client for contact details
   let contact: string | null = null
@@ -60,6 +65,8 @@ export async function GET(
     items:            Array.isArray(order.items) ? order.items : [],
     totalSaleIncVat:  order.total_sale_inc_vat ?? 0,
     totalAfterDiscount: order.total_after_discount ?? 0,
+    totalArea:        order.total_area ?? 0,
+    totalWeight:      order.total_weight ?? 0,
     managerName,
     productionDays,
     quoteDate,

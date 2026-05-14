@@ -190,33 +190,11 @@ async function getNextRoundRobinManager(): Promise<number | null> {
   return managerId
 }
 
-// ── Start AI bot conversation if manager is Vladislav ────────────────────────
-async function handleNewLead(leadId: number, managerId: number, phone: string | null, clientName: string) {
-  if (managerId !== VLADISLAV_USER_ID) return
-  if (!phone) return
-
-  const db = supabase()
-  const { data: existing } = await db
-    .from('ai_managed_chats')
-    .select('chat_id')
-    .eq('chat_id', phone)
-    .single()
-  if (existing) return // already managing this chat
-
-  const channel = await getDefaultChannel()
-  if (!channel) return
-
-  await db.from('ai_managed_chats').insert({
-    chat_id: phone,
-    channel_id: channel.channelId,
-    chat_type: channel.chatType,
-    amo_lead_id: leadId,
-    client_name: clientName || null,
-    is_active: true,
-  })
-  await sendMessage(channel.channelId, phone, channel.chatType, FIRST_MESSAGE)
-  await db.from('ai_conversations').insert({ chat_id: phone, role: 'assistant', content: FIRST_MESSAGE })
-  await addAmoNote(leadId, `🤖 AI-менеджер начал диалог с клиентом`)
+// ── Start AI bot conversation — DISABLED ─────────────────────────────────────
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+async function handleNewLead(_leadId: number, _managerId: number, _phone: string | null, _clientName: string) {
+  // Bot is temporarily disabled — remove this guard when ready to re-enable
+  return
 }
 
 // ── Stage change → send measurement confirmation ──────────────────────────────
@@ -234,15 +212,18 @@ async function handleStageChange(leadId: number, newStatusId: number) {
 }
 
 // ── Main webhook handler ──────────────────────────────────────────────────────
-export async function POST(req: Request) {
+export async function POST(_req: Request) {
+  // All AMO automation disabled — return 200 so AMO doesn't retry
+  return NextResponse.json({ ok: true })
+
   try {
-    const contentType = req.headers.get('content-type') ?? ''
+    const contentType = (_req as Request).headers.get('content-type') ?? ''
     let body: Record<string, unknown> = {}
 
     if (contentType.includes('application/json')) {
-      body = await req.json()
+      body = await (_req as Request).json()
     } else {
-      const text = await req.text()
+      const text = await (_req as Request).text()
       const params = new URLSearchParams(text)
       for (const [key, value] of params.entries()) body[key] = value
     }
@@ -271,25 +252,18 @@ export async function POST(req: Request) {
 
         if (existingManager) {
           // Returning client → assign to existing manager, skip round-robin
-          managerId = existingManager
-          await assignLeadToManager(leadId, managerId)
+          // Returning client — log only, no auto-assign (disabled)
           note = [
             `🔁 Повторный клиент`,
-            `Менеджер закреплён: ID ${managerId}`,
+            `Предыдущий менеджер: ID ${existingManager}`,
             phones.length ? `Совпадение по телефону: ${phones[0]}` : `Совпадение по контакту`,
+            `⚠️ Авто-назначение отключено — назначьте менеджера вручную`,
           ].join('\n')
         } else {
-          // New client → round-robin
-          const rrManager = await getNextRoundRobinManager()
-          if (rrManager) {
-            managerId = rrManager
-            await assignLeadToManager(leadId, managerId)
-          }
+          // New client — log only, no round-robin (disabled)
           note = [
             `🆕 Новый клиент`,
-            rrManager
-              ? `Назначен через round-robin: ID ${managerId}`
-              : `Round-robin отключён, менеджер не изменён`,
+            `⚠️ Авто-распределение отключено — назначьте менеджера вручную`,
           ].join('\n')
         }
 

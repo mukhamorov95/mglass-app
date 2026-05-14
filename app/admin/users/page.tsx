@@ -10,6 +10,7 @@ type User = {
   active: boolean
   manager_code: number | null
   password_plain: string | null
+  see_all_orders: boolean
   created_at: string
 }
 
@@ -126,6 +127,7 @@ export default function UsersPage() {
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Пароль</th>
                   <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Роль</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase" title="Номер менеджера в номере заказа">Код №</th>
+                  <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase" title="Видит все заказы или только свои">Заказы</th>
                   <th className="text-center px-4 py-3 text-xs font-semibold text-gray-500 uppercase">Статус</th>
                 </tr>
               </thead>
@@ -187,6 +189,19 @@ export default function UsersPage() {
                           onChange={e => updateUser(u.id, { manager_code: Number(e.target.value) || 1 })}
                           className="w-14 text-center border border-gray-200 rounded-lg px-2 py-1 text-sm font-mono outline-none focus:border-blue-400"
                         />
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {u.role === 'manager' ? (
+                          <button
+                            onClick={() => updateUser(u.id, { see_all_orders: !(u.see_all_orders ?? false) })}
+                            className={`text-xs px-3 py-1 rounded-full font-medium ${(u.see_all_orders ?? false) ? 'bg-emerald-50 text-emerald-700' : 'bg-gray-100 text-gray-500'}`}
+                            title={(u.see_all_orders ?? false) ? 'Видит все заказы — нажать чтобы ограничить' : 'Видит только свои — нажать чтобы открыть все'}
+                          >
+                            {(u.see_all_orders ?? false) ? 'Все' : 'Свои'}
+                          </button>
+                        ) : (
+                          <span className="text-xs text-gray-300">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-center">
                         <div className="flex items-center justify-center gap-2">

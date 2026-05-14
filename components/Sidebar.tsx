@@ -10,118 +10,142 @@ type Props = { userEmail: string; role: Role | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo'
 
-// Nav entry can be a link or a visual group label (non-clickable)
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
 type NavGroup = { groupLabel: string }
 type NavEntry = NavItem | NavGroup
 
 function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
 
-// ─── Navigation data ─────────────────────────────────────────────────────────
+// ─── Manager role ─────────────────────────────────────────────────────────────
 
-const MANAGER_EARNINGS: NavItem[] = [
-  { href: '/my-earnings', label: 'Мои заработки', icon: '💰' },
-]
-
-const MANAGER_CALCULATOR: NavItem[] = [
-  { href: '/calculator/mirror', label: 'Зеркало', icon: '🪞' },
-  { href: '/calculator/shower', label: 'Душевая', icon: '🚿' },
+const MANAGER_B2C_CALC: NavItem[] = [
+  { href: '/calculator/mirror', label: 'Зеркало',          icon: '🪞' },
+  { href: '/calculator/shower', label: 'Душевая',          icon: '🚿' },
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
 ]
 
-const MANAGER_SALES: NavItem[] = [
+const MANAGER_B2C_SALES: NavItem[] = [
   { href: '/calculations', label: 'История расчётов', icon: '📋' },
-  { href: '/orders',       label: 'Заказы', icon: '📦' },
-  { href: '/clients',      label: 'Клиенты', icon: '👤' },
-  { href: '/calendar',     label: 'Календарь', icon: '📅' },
-  { href: '/measurer',     label: 'Форма замера', icon: '📐' },
+  { href: '/orders',       label: 'Заказы',           icon: '📦' },
+  { href: '/clients',      label: 'Клиенты',          icon: '👤' },
+  { href: '/calendar',     label: 'Календарь',        icon: '📅' },
+  { href: '/measurer',     label: 'Форма замера',      icon: '📐' },
 ]
 
-const MANAGER_PRODUCTION: NavItem[] = [
+const MANAGER_B2B: NavItem[] = [
   { href: '/manager-dashboard', label: 'Дашборд менеджера', icon: '🎯' },
-  { href: '/b2b-crm',           label: 'B2B CRM',           icon: '🗂️' },
   { href: '/calculator/b2b',    label: 'B2B Калькулятор',   icon: '🏭' },
   { href: '/b2b-quotes',        label: 'B2B Просчёты',      icon: '📝' },
   { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
+  { href: '/b2b-crm',           label: 'B2B Клиенты',       icon: '🏢' },
+]
+
+// ─── Production role ──────────────────────────────────────────────────────────
+
+const PRODUCTION_ITEMS: NavItem[] = [
+  { href: '/manager-dashboard', label: 'Дашборд менеджера', icon: '🎯' },
   { href: '/b2b-pipeline',      label: 'Воронка продаж',    icon: '📌' },
   { href: '/b2b-production',    label: 'Производство B2B',  icon: '🔧' },
   { href: '/production',        label: 'Производство',      icon: '⚙️' },
-  { href: '/b2b-analytics',     label: 'B2B Аналитика',     icon: '📊' },
+  { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
 ]
 
-const MANAGER_MARKETING: NavItem[] = [
-  { href: '/marketing',                label: 'Marketing Center',  icon: '📣' },
-  { href: '/marketing/content',        label: 'Контент-план',      icon: '📅' },
-  { href: '/marketing/video-factory',  label: 'AI Video Factory',  icon: '🎬' },
-  { href: '/marketing/media-library',  label: 'Медиабиблиотека',   icon: '🖼️' },
-  { href: '/marketing/daily',          label: 'Дневной план AI',   icon: '✨' },
-  { href: '/marketing/partners',       label: 'Партнёры',          icon: '🤝' },
-  { href: '/marketing/promos',         label: 'Акции',             icon: '🎁' },
-  { href: '/marketing/tasks',          label: 'Задачи',            icon: '✅' },
-  { href: '/marketing/ai',             label: 'AI-маркетолог',    icon: '🤖' },
+// ─── SEO role ─────────────────────────────────────────────────────────────────
+
+const SEO_ANALYTICS: NavItem[] = [
+  { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
+  { href: '/ai-stats',      label: 'Статистика AI', icon: '📈' },
+  { href: '/amo-analysis',  label: 'Воронка AMO',   icon: '🔍' },
+  { href: '/ai-sales',      label: 'AI Продажи',    icon: '🤝' },
 ]
 
-const MANAGER_AI: NavItem[] = [
-  { href: '/ai-assistant',   label: 'AI Ассистент', icon: '🤖' },
-  { href: '/kp-generator',   label: 'КП Генератор', icon: '📄' },
-  { href: '/objections',     label: 'Возражения', icon: '💬' },
-  { href: '/product-finder', label: 'Подбор продукта', icon: '🔍' },
-  { href: '/deal-analysis',  label: 'Анализ сделки', icon: '📊' },
-  { href: '/templates',      label: 'Шаблоны', icon: '📋' },
-  { href: '/competitors',    label: 'Конкуренты', icon: '⚔️' },
+const SEO_MARKETING: NavItem[] = [
+  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
+  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
+  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
+  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
+  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
+  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
+  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
+  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
+  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
 ]
+
+const SEO_AI: NavItem[] = [
+  { href: '/ai-assistant', label: 'AI Ассистент', icon: '🤖' },
+  { href: '/kp-generator', label: 'КП Генератор', icon: '📄' },
+  { href: '/vladislav',    label: 'Vladislav AI', icon: '💬' },
+]
+
+// ─── CEO role ─────────────────────────────────────────────────────────────────
+
+const CEO_OWNER: NavItem[] = [
+  { href: '/admin/owner',            label: 'Owner Center',    icon: '👑' },
+  { href: '/admin/dashboard',        label: 'Дашборд',         icon: '📊' },
+  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
+  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
+  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
+  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
+  { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
+  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
+  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
+]
+
+const CEO_ANALYTICS: NavItem[] = [
+  { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
+  { href: '/vladislav',     label: 'Vladislav AI',  icon: '💬' },
+  { href: '/marketing',     label: 'Маркетинг',     icon: '📣' },
+  { href: '/ai-stats',      label: 'Статистика AI', icon: '📈' },
+  { href: '/amo-analysis',  label: 'Воронка AMO',   icon: '🔍' },
+  { href: '/ai-sales',      label: 'AI Продажи',    icon: '🤝' },
+]
+
+const CEO_SYSTEM: NavItem[] = [
+  { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
+  { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
+  { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
+]
+
+// ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
 const ADMIN_OWNER: NavItem[] = [
-  { href: '/admin/owner',            label: 'Owner Center', icon: '👑' },
-  { href: '/admin/dashboard',        label: 'Дашборд', icon: '📊' },
-  { href: '/admin/pnl',              label: 'P&L отчёт', icon: '📈' },
-  { href: '/admin/analytics-mglass', label: 'Аналитика', icon: '🔍' },
-  { href: '/admin/bonus-center',     label: 'Bonus Center', icon: '🎁' },
-  { href: '/admin/sales-center',     label: 'Sales Center', icon: '📣' },
+  { href: '/admin/owner',            label: 'Owner Center',    icon: '👑' },
+  { href: '/admin/dashboard',        label: 'Дашборд',         icon: '📊' },
+  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
+  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
+  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
+  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
-  { href: '/admin/org',              label: 'Оргструктура', icon: '🏗️' },
-  { href: '/admin/users',            label: 'Пользователи', icon: '👥' },
+  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
+  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
 ]
 
-const ADMIN_PRODUCT_LINE: NavItem[] = [
-  { href: '/admin/product-line',           label: 'Продуктовая линейка', icon: '📦' },
-  { href: '/admin/product-line/catalog',   label: 'Каталог серий',       icon: '🪞' },
-  { href: '/admin/b2b-presentation',       label: 'B2B Презентация',     icon: '🎯' },
+const ADMIN_MARKETING: NavItem[] = [
+  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
+  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
+  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
+  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
+  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
+  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
+  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
+  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
+  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
 ]
 
 const ADMIN_VLADISLAV: NavItem[] = [
-  { href: '/vladislav',               label: 'Сообщения', icon: '💬' },
-  { href: '/ai-stats',                label: 'Статистика бота', icon: '📊' },
+  { href: '/vladislav',               label: 'Сообщения',           icon: '💬' },
+  { href: '/vladislav/calls',         label: 'Анализ звонков',      icon: '📞' },
+  { href: '/ai-stats',                label: 'Статистика бота',     icon: '📊' },
   { href: '/vladislav/manager-stats', label: 'Аналитика менеджеров', icon: '👥' },
-  { href: '/amo-analysis',            label: 'Воронка AMO', icon: '🔍' },
-  { href: '/vladislav/tasks',         label: 'Задачи AI', icon: '🗂️' },
+  { href: '/amo-analysis',            label: 'Воронка AMO',         icon: '🔍' },
+  { href: '/vladislav/tasks',         label: 'Задачи AI',           icon: '🗂️' },
   { href: '/admin/integrations',      label: 'Avito / AMO Monitor', icon: '🔗' },
 ]
 
-// ─── СПРАВОЧНИКИ — new clean structure ───────────────────────────────────────
-// Group labels inside accordion (non-clickable visual separators)
-const ADMIN_DIRECTORIES: NavEntry[] = [
-  { href: '/admin/glass-prices',    label: 'Стекло',            icon: '🔷' },
-  { href: '/admin/services',        label: 'Услуги',            icon: '🔧' },
-  { groupLabel: 'Фурнитура' },
-  { href: '/admin/hardware',        label: 'Лофт',              icon: '🔩', indent: true },
-  { href: '/admin/shower-hardware', label: 'Душевые',           icon: '🚿', indent: true },
-  { href: '/admin/settings',        label: 'Фин. настройки',    icon: '💰' },
-  { href: '/admin/suppliers',       label: 'Поставщики',        icon: '🏭' },
-  { href: '/admin/architecture',    label: 'Карта данных',      icon: '🗺️' },
-]
-
-// B2B — separate accordion (de-clutters Справочники, still accessible)
-const ADMIN_B2B: NavEntry[] = [
-  { href: '/admin/b2b-clients',  label: 'Клиенты', icon: '🏢' },
-  { href: '/admin/b2b-services', label: 'Услуги',  icon: '🔧' },
-]
-
-const ADMIN_OPERATIONS: NavItem[] = [
-  { href: '/admin/warehouse',      label: 'Склад', icon: '📦' },
-  { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
-  { href: '/admin/brigades',       label: 'Бригады', icon: '👷' },
-  { href: '/admin/delivery-zones', label: 'Зоны доставки', icon: '🚗' },
+const ADMIN_PRODUCT_LINE: NavItem[] = [
+  { href: '/admin/product-line',         label: 'Продуктовая линейка', icon: '📦' },
+  { href: '/admin/product-line/catalog', label: 'Каталог серий',       icon: '🪞' },
+  { href: '/admin/b2b-presentation',     label: 'B2B Презентация',     icon: '🎯' },
 ]
 
 const ADMIN_SYSTEM: NavItem[] = [
@@ -132,59 +156,90 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
 ]
 
-// ─── Path helpers ─────────────────────────────────────────────────────────────
+// ─── Admin mode: Admin view ───────────────────────────────────────────────────
 
-const SECTION_PATHS: Record<string, string[]> = {
-  earnings:    ['/my-earnings'],
-  calculator:  ['/calculator/mirror', '/calculator/shower', '/calculator/loft'],
-  sales:       ['/calculations', '/orders', '/clients', '/calendar', '/measurer'],
-  production:  ['/manager-dashboard', '/b2b-crm', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-pipeline', '/b2b-production', '/production', '/b2b-analytics'],
-  marketing:   ['/marketing', '/marketing/video-factory', '/marketing/media-library', '/marketing/daily'],
-  ai:          ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/deal-analysis', '/templates', '/competitors'],
-  owner:       ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'],
-  vladislav:   ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'],
-  directories: ['/admin/glass-prices', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'],
-  b2b:         ['/admin/b2b-clients', '/admin/b2b-services'],
-  operations:  ['/admin/warehouse', '/admin/route-sheet', '/admin/suppliers', '/admin/brigades', '/admin/delivery-zones'],
-  productline: ['/admin/product-line', '/admin/b2b-presentation'],
-  system:      ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'],
-}
+const ADMIN_DIRECTORIES: NavEntry[] = [
+  { href: '/admin/glass-prices',    label: 'Стекло',         icon: '🔷' },
+  { href: '/admin/services',        label: 'Услуги',         icon: '🔧' },
+  { groupLabel: 'Фурнитура' },
+  { href: '/admin/hardware',        label: 'Лофт',           icon: '🔩', indent: true },
+  { href: '/admin/shower-hardware', label: 'Душевые',        icon: '🚿', indent: true },
+  { href: '/admin/settings',        label: 'Фин. настройки', icon: '💰' },
+  { href: '/admin/suppliers',       label: 'Поставщики',     icon: '🏭' },
+  { href: '/admin/architecture',    label: 'Карта данных',   icon: '🗺️' },
+]
+
+const ADMIN_B2B: NavEntry[] = [
+  { href: '/admin/b2b-clients',  label: 'Клиенты', icon: '🏢' },
+  { href: '/admin/b2b-services', label: 'Услуги',  icon: '🔧' },
+]
+
+const ADMIN_OPERATIONS: NavItem[] = [
+  { href: '/admin/warehouse',      label: 'Склад',           icon: '📦' },
+  { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
+  { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
+  { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
+]
+
+// ─── Path helpers ─────────────────────────────────────────────────────────────
 
 function inSection(pathname: string, paths: string[]): boolean {
   return paths.some(p => pathname === p || pathname.startsWith(p + '/'))
 }
 
-function autoOpenSections(pathname: string, mode: ViewMode): string[] {
+function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   const open: string[] = []
   if (mode === 'manager') {
-    if (inSection(pathname, SECTION_PATHS.earnings))   open.push('earnings')
-    if (inSection(pathname, SECTION_PATHS.calculator)) open.push('calculator')
-    if (inSection(pathname, SECTION_PATHS.sales))      open.push('sales')
-    if (inSection(pathname, SECTION_PATHS.production)) open.push('production')
-    if (inSection(pathname, SECTION_PATHS.ai))         open.push('ai')
+    if (inSection(pathname, ['/my-earnings'])) open.push('earnings')
+    if (inSection(pathname, ['/calculator/mirror', '/calculator/shower', '/calculator/loft'])) open.push('calculator')
+    if (inSection(pathname, ['/calculations', '/orders', '/clients', '/calendar', '/measurer'])) open.push('sales')
+    if (inSection(pathname, ['/manager-dashboard', '/b2b-crm', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-pipeline', '/b2b-production', '/production', '/b2b-analytics'])) open.push('b2b')
+    if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/deal-analysis', '/templates', '/competitors'])) open.push('ai')
   } else if (mode === 'ceo') {
-    if (inSection(pathname, SECTION_PATHS.owner))       open.push('owner')
-    if (inSection(pathname, SECTION_PATHS.marketing))   open.push('marketing')
-    if (inSection(pathname, SECTION_PATHS.vladislav))   open.push('vladislav')
-    if (inSection(pathname, SECTION_PATHS.productline)) open.push('productline')
-    if (inSection(pathname, SECTION_PATHS.system))      open.push('system')
+    if (inSection(pathname, ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/marketing'])) open.push('marketing')
+    if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
+    if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
+    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, SECTION_PATHS.directories)) open.push('directories')
-    if (inSection(pathname, SECTION_PATHS.b2b))         open.push('b2b')
-    if (inSection(pathname, SECTION_PATHS.operations))  open.push('operations')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
+    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services'])) open.push('b2b')
+    if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
+  }
+  return open
+}
+
+function autoOpenRole(pathname: string, role: Role): string[] {
+  const open: string[] = []
+  if (role === 'manager') {
+    if (inSection(pathname, ['/calculator/mirror', '/calculator/shower', '/calculator/loft'])) open.push('calculator')
+    if (inSection(pathname, ['/calculations', '/orders', '/clients', '/calendar', '/measurer'])) open.push('sales')
+    if (inSection(pathname, ['/manager-dashboard', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-crm'])) open.push('b2b')
+  } else if (role === 'seo') {
+    if (inSection(pathname, ['/b2b-analytics', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
+    if (inSection(pathname, ['/marketing'])) open.push('marketing')
+    if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
+  } else if (role === 'ceo') {
+    if (inSection(pathname, ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
+    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }
   return open
 }
 
 function detectModeFromPath(pathname: string): ViewMode {
-  if (inSection(pathname, SECTION_PATHS.marketing) ||
-      inSection(pathname, SECTION_PATHS.vladislav)  ||
-      inSection(pathname, SECTION_PATHS.productline) ||
-      inSection(pathname, SECTION_PATHS.system)      ||
-      ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass',
-       '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development',
-       '/admin/org', '/admin/users'].some(p => pathname === p || pathname.startsWith(p + '/')))
-    return 'ceo'
+  if (
+    pathname.startsWith('/admin/owner') || pathname.startsWith('/admin/dashboard') ||
+    pathname.startsWith('/admin/pnl')   || pathname.startsWith('/admin/analytics-mglass') ||
+    pathname.startsWith('/admin/bonus-center') || pathname.startsWith('/admin/sales-center') ||
+    pathname.startsWith('/admin/b2b-development') || pathname.startsWith('/admin/org') ||
+    pathname.startsWith('/admin/users') || pathname.startsWith('/admin/product-line') ||
+    pathname.startsWith('/admin/b2b-presentation') || pathname.startsWith('/admin/roadmap') ||
+    pathname.startsWith('/admin/pricing-manual') || pathname.startsWith('/admin/owner-questionnaire') ||
+    pathname.startsWith('/admin/infrastructure') || pathname.startsWith('/admin/shower-images') ||
+    pathname.startsWith('/marketing') || pathname.startsWith('/vladislav') ||
+    pathname.startsWith('/ai-stats')  || pathname.startsWith('/amo-analysis')
+  ) return 'ceo'
   if (pathname.startsWith('/admin')) return 'admin'
   return 'manager'
 }
@@ -199,34 +254,38 @@ export function Sidebar({ userEmail, role }: Props) {
 
   const isAdmin = role === 'admin'
 
-  const [viewMode, setViewMode]       = useState<ViewMode>('manager')
-  const [open, setOpen]               = useState<Set<string>>(new Set())
-  const [mobileOpen, setMobileOpen]   = useState(false)
-  const [syncState, setSyncState]     = useState<SyncState>('idle')
+  const [viewMode, setViewMode]     = useState<ViewMode>('manager')
+  const [open, setOpen]             = useState<Set<string>>(new Set())
+  const [mobileOpen, setMobileOpen] = useState(false)
+  const [syncState, setSyncState]   = useState<SyncState>('idle')
   const [isLocalhost, setIsLocalhost] = useState(false)
-  const [collapsed, setCollapsed]     = useState(false)
 
   useEffect(() => {
     setIsLocalhost(window.location.hostname === 'localhost')
-    const saved = localStorage.getItem('sidebarMode') as ViewMode | null
-    const mode: ViewMode = isAdmin ? (saved ?? detectModeFromPath(pathname)) : 'manager'
-    setViewMode(mode)
-    const auto = autoOpenSections(pathname, mode)
-    setOpen(new Set(auto))
-    const savedCollapsed = localStorage.getItem('sidebarCollapsed')
-    if (savedCollapsed === 'true') setCollapsed(true)
+    if (isAdmin) {
+      const saved = localStorage.getItem('sidebarMode') as ViewMode | null
+      const mode: ViewMode = saved ?? detectModeFromPath(pathname)
+      setViewMode(mode)
+      setOpen(new Set(autoOpenAdmin(pathname, mode)))
+    } else if (role) {
+      setOpen(new Set(autoOpenRole(pathname, role)))
+    }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    const auto = autoOpenSections(pathname, viewMode)
-    if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
-  }, [pathname, viewMode])
+    if (isAdmin) {
+      const auto = autoOpenAdmin(pathname, viewMode)
+      if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
+    } else if (role) {
+      const auto = autoOpenRole(pathname, role)
+      if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
+    }
+  }, [pathname, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
 
   function switchMode(mode: ViewMode) {
     setViewMode(mode)
     localStorage.setItem('sidebarMode', mode)
-    const auto = autoOpenSections(pathname, mode)
-    setOpen(new Set(auto))
+    setOpen(new Set(autoOpenAdmin(pathname, mode)))
   }
 
   function toggle(key: string) {
@@ -234,13 +293,6 @@ export function Sidebar({ userEmail, role }: Props) {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
       return next
-    })
-  }
-
-  function toggleCollapse() {
-    setCollapsed(prev => {
-      localStorage.setItem('sidebarCollapsed', String(!prev))
-      return !prev
     })
   }
 
@@ -286,7 +338,6 @@ export function Sidebar({ userEmail, role }: Props) {
     </Link>
   )
 
-  // Accordion that supports NavEntry (items + group separators)
   const accordion = (
     id: string,
     label: string,
@@ -327,13 +378,74 @@ export function Sidebar({ userEmail, role }: Props) {
     )
   }
 
-  const sectionLabel = (label: string) => (
-    <div className="px-2.5 pt-3.5 pb-0.5 text-[10px] font-bold uppercase tracking-widest text-[#c4c4be]">
-      {label}
-    </div>
-  )
+  // ── Role-based navigation ───────────────────────────────────────────────────
 
-  const divider = () => <div className="my-2 border-t border-[#f0f0ec]" />
+  function renderNav() {
+    // Manager: B2C + B2B
+    if (role === 'manager') return (
+      <>
+        {accordion('calculator', 'Калькулятор', 'text-blue-600',   'text-blue-400',   MANAGER_B2C_CALC,  'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('sales',      'Продажи',     'text-blue-600',   'text-blue-400',   MANAGER_B2C_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('b2b',        'B2B',         'text-orange-600', 'text-orange-400', MANAGER_B2B,       'bg-orange-50 text-orange-700 font-semibold')}
+      </>
+    )
+
+    // Production: flat list
+    if (role === 'production') return (
+      <div>
+        <div className="px-2.5 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
+        <div className="space-y-0.5">
+          {PRODUCTION_ITEMS.map(item => navItem(item, 'bg-orange-50 text-orange-700 font-semibold'))}
+        </div>
+      </div>
+    )
+
+    // SEO: analytics + marketing + AI accordions
+    if (role === 'seo') return (
+      <>
+        {accordion('analytics', 'Аналитика',     'text-blue-600',   'text-blue-400',   SEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('marketing', 'Маркетинг',     'text-rose-600',   'text-rose-400',   SEO_MARKETING, 'bg-rose-50 text-rose-700 font-semibold')}
+        {accordion('ai',        'AI Инструменты','text-violet-600', 'text-violet-400', SEO_AI,        'bg-violet-50 text-violet-700 font-semibold')}
+      </>
+    )
+
+    // CEO: owner + analytics + system
+    if (role === 'ceo') return (
+      <>
+        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-semibold')}
+        {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#9a9a95]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-semibold')}
+      </>
+    )
+
+    // Admin manager-preview: same view a real manager sees
+    if (viewMode === 'manager') return (
+      <>
+        {accordion('calculator', 'Калькулятор', 'text-blue-600',   'text-blue-400',   MANAGER_B2C_CALC,  'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('sales',      'Продажи',     'text-blue-600',   'text-blue-400',   MANAGER_B2C_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
+        {accordion('b2b',        'B2B',         'text-orange-600', 'text-orange-400', MANAGER_B2B,       'bg-orange-50 text-orange-700 font-semibold')}
+      </>
+    )
+
+    if (viewMode === 'ceo') return (
+      <>
+        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-semibold')}
+        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-semibold')}
+        {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-semibold')}
+        {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
+        {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#9a9a95]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-semibold')}
+      </>
+    )
+
+    // admin view
+    return (
+      <>
+        {accordion('directories', 'Справочники', 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
+        {accordion('b2b',         'B2B',         'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_B2B,         'bg-[#f5f5f3] text-[#111110] font-semibold')}
+        {accordion('operations',  'Операции',    'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_OPERATIONS,  'bg-[#f5f5f3] text-[#111110] font-semibold')}
+      </>
+    )
+  }
 
   // ── JSX ─────────────────────────────────────────────────────────────────────
 
@@ -364,7 +476,6 @@ export function Sidebar({ userEmail, role }: Props) {
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
-
         {/* Header */}
         <div className="border-b border-[#e4e4e0] flex-shrink-0">
           <Link href="/" onClick={() => setMobileOpen(false)}
@@ -372,7 +483,14 @@ export function Sidebar({ userEmail, role }: Props) {
             <div className="w-7 h-7 bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
               <span className="text-white text-[11px] font-bold tracking-tight">MG</span>
             </div>
-            <span className="text-[15px] font-bold text-[#111110] tracking-tight">MGlass</span>
+            <div>
+              <span className="text-[15px] font-bold text-[#111110] tracking-tight">MGlass</span>
+              {!isAdmin && role && (
+                <div className="text-[10px] text-[#9a9a95] leading-tight capitalize">
+                  {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : 'CEO'}
+                </div>
+              )}
+            </div>
           </Link>
 
           {isAdmin && (
@@ -394,7 +512,7 @@ export function Sidebar({ userEmail, role }: Props) {
             </div>
           )}
 
-          {isLocalhost && (
+          {isLocalhost && isAdmin && (
             <div className="px-3 pb-3">
               <button onClick={handleSync} disabled={syncState === 'loading'}
                 className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50 ${
@@ -412,54 +530,7 @@ export function Sidebar({ userEmail, role }: Props) {
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
-
-          {viewMode === 'manager' ? (
-            <>
-              {accordion('earnings', 'Мои заработки',
-                'text-[#6b6b66]', 'text-[#9a9a95]', MANAGER_EARNINGS, 'bg-[#111110] text-white font-semibold')}
-
-              {accordion('calculator', 'Калькулятор',
-                'text-blue-600', 'text-blue-400', MANAGER_CALCULATOR, 'bg-blue-50 text-blue-700 font-semibold')}
-
-              {accordion('sales', 'Продажи',
-                'text-blue-600', 'text-blue-400', MANAGER_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
-
-              {accordion('production', 'B2B / Производство',
-                'text-orange-600', 'text-orange-400', MANAGER_PRODUCTION, 'bg-orange-50 text-orange-700 font-semibold')}
-
-              {accordion('ai', 'AI Инструменты',
-                'text-violet-600', 'text-violet-400', MANAGER_AI, 'bg-violet-50 text-violet-700 font-semibold')}
-            </>
-          ) : viewMode === 'ceo' ? (
-            <>
-              {accordion('owner', 'Owner Center',
-                'text-purple-600', 'text-purple-400', ADMIN_OWNER, 'bg-purple-50 text-purple-700 font-semibold')}
-
-              {accordion('marketing', 'Маркетинг',
-                'text-rose-600', 'text-rose-400', MANAGER_MARKETING, 'bg-rose-50 text-rose-700 font-semibold')}
-
-              {accordion('vladislav', 'Vladislav AI',
-                'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV, 'bg-indigo-50 text-indigo-700 font-semibold')}
-
-              {accordion('productline', 'Product Line',
-                'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
-
-              {accordion('system', 'Система',
-                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_SYSTEM, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-            </>
-          ) : (
-            <>
-              {accordion('directories', 'Справочники',
-                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-
-              {accordion('b2b', 'B2B',
-                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_B2B, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-
-              {accordion('operations', 'Операции',
-                'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_OPERATIONS, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-            </>
-          )}
-
+          {renderNav()}
         </nav>
 
         {/* Footer */}

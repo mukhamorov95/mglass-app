@@ -42,6 +42,8 @@ type Quote = {
   id: number
   client_id: number | null
   client_name: string
+  custom_number: string | null
+  client_order_number: string | null
   discount_percent: number
   margin_percent: number
   items: OrderItem[]
@@ -119,9 +121,10 @@ export default function B2BQuotesPage() {
   const [page, setPage]               = useState(1)
 
   // "Запустить в заказ" modal
-  const [confirmingId, setConfirmingId] = useState<number | null>(null)
-  const [launchedAt, setLaunchedAt]     = useState(new Date().toISOString().slice(0, 10))
-  const [confirming, setConfirming]     = useState(false)
+  const [confirmingId, setConfirmingId]       = useState<number | null>(null)
+  const [launchedAt, setLaunchedAt]           = useState(new Date().toISOString().slice(0, 10))
+  const [confirmCustomNumber, setConfirmCustomNumber] = useState('')
+  const [confirming, setConfirming]           = useState(false)
 
   // Delete modal
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -219,8 +222,29 @@ export default function B2BQuotesPage() {
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadQuotes() {
     const sb = createClient()
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) { setLoading(false); return }
+
+    const { data: profile } = await sb
+      .from('users')
+      .select('role, see_all_orders')
+      .eq('id', user.id)
+      .single()
+
+    const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+
+    let ordersQuery = sb
+      .from('b2b_orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(2000)
+
+    if (!canSeeAll) {
+      ordersQuery = ordersQuery.eq('created_by', user.id)
+    }
+
     const [{ data: orders }, { data: attaches }] = await Promise.all([
-      sb.from('b2b_orders').select('*').order('created_at', { ascending: false }).limit(2000),
+      ordersQuery,
       sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
     ])
     setQuotes((orders ?? []).map(q => ({
@@ -234,15 +258,18 @@ export default function B2BQuotesPage() {
 
   // ── Duplicate / Delete ─────────────────────────────────────────────────────
   async function duplicateQuote(q: Quote) {
+    const sb = createClient()
+    const { data: { user } } = await sb.auth.getUser()
     const parsed = parseNotes(q.notes)
     const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined })
-    const { data, error } = await createClient().from('b2b_orders').insert({
+    const { data, error } = await sb.from('b2b_orders').insert({
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
       items: q.items, total_area: q.total_area, total_weight: q.total_weight,
       total_cost_net: 0, total_cost_vat: 0,
       total_sale_inc_vat: q.total_sale_inc_vat, total_after_discount: q.total_after_discount,
       notes: newNotes,
+      created_by: user?.id ?? null,
     }).select().single()
     if (!error && data) {
       setQuotes(prev => [{ ...data, items: q.items }, ...prev])
@@ -268,19 +295,38 @@ export default function B2BQuotesPage() {
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: 'agreed', to: 'confirmed', date: new Date().toISOString(), comment: null })
     const newNotes = JSON.stringify({ ...parsed, status: 'confirmed', launched_at: launchedAt, status_history: history })
-    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', confirmingId)
-    setQuotes(prev => prev.map(x => x.id === confirmingId ? { ...x, notes: newNotes } : x))
+    await createClient().from('b2b_orders').update({
+      notes: newNotes,
+      ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
+    }).eq('id', confirmingId)
+    setQuotes(prev => prev.map(x => x.id === confirmingId ? {
+      ...x,
+      notes: newNotes,
+      ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
+    } : x))
     setConfirmingId(null)
     setConfirming(false)
+    setConfirmCustomNumber('')
     showToast('Запущено в заказ')
   }
 
   // ── Derived ────────────────────────────────────────────────────────────────
+  const [search, setSearch] = useState('')
+
   const visible = useMemo(() => {
     setPage(1)
-    if (tab === 'all') return quotes
-    return quotes.filter(q => getStatus(q) === tab)
-  }, [quotes, tab])
+    let list = tab === 'all' ? quotes : quotes.filter(q => getStatus(q) === tab)
+    if (search.trim()) {
+      const q = search.trim().toLowerCase()
+      list = list.filter(x =>
+        x.client_name.toLowerCase().includes(q) ||
+        (x.custom_number ?? '').toLowerCase().includes(q) ||
+        (x.client_order_number ?? '').toLowerCase().includes(q) ||
+        String(x.id).includes(q)
+      )
+    }
+    return list
+  }, [quotes, tab, search])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: quotes.length }
@@ -304,15 +350,24 @@ export default function B2BQuotesPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Расчёты</h1>
           <p className="text-[12px] text-[#8a8a85] mt-0.5">{quotes.length} расчётов всего</p>
         </div>
-        <Link href="/calculator/b2b"
-          className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
-          + Новый расчёт
-        </Link>
+        <div className="flex items-center gap-2">
+          <input
+            type="text"
+            placeholder="Поиск: номер, клиент..."
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white w-52"
+          />
+          <Link href="/calculator/b2b"
+            className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+            + Новый расчёт
+          </Link>
+        </div>
       </div>
 
       {/* Status tabs */}
@@ -373,7 +428,17 @@ export default function B2BQuotesPage() {
                     onClick={() => setExpanded(isOpen ? null : quote.id)}>
                     <span className="text-[11px] font-bold text-[#c4c4be] flex-shrink-0">#{quote.id}</span>
                     <div className="min-w-0 flex-1">
-                      <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {quote.custom_number && (
+                          <span className="text-[13px] font-bold font-mono text-[#111110]">{quote.custom_number}</span>
+                        )}
+                        {quote.client_order_number && (
+                          <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">
+                            кл. {quote.client_order_number}
+                          </span>
+                        )}
+                        <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                      </div>
                       <p className="text-[11px] text-[#9a9a95]">
                         {dateStr}, {timeStr}
                         {' · '}{quote.items.length} поз.
@@ -437,7 +502,11 @@ export default function B2BQuotesPage() {
                       </>)}
                       {status === 'agreed' && (
                         <button
-                          onClick={() => { setConfirmingId(quote.id); setLaunchedAt(new Date().toISOString().slice(0, 10)) }}
+                          onClick={() => {
+                            setConfirmingId(quote.id)
+                            setLaunchedAt(new Date().toISOString().slice(0, 10))
+                            setConfirmCustomNumber(quote.custom_number ?? '')
+                          }}
                           className="text-[11px] font-medium px-2 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           В заказ →
                         </button>
@@ -567,7 +636,7 @@ export default function B2BQuotesPage() {
                         </thead>
                         <tbody className="divide-y divide-[#f8f8f7]">
                           {quote.items.map((item, idx) => {
-                            const itemAfterDiscount = Math.round((item.saleIncVat ?? 0) * (1 - (quote.discount_percent ?? 0) / 100))
+                            const itemFull = item.saleIncVat ?? 0
                             return (
                               <tr key={idx} className="hover:bg-[#fafaf9]">
                                 <td className="px-2 py-1 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
@@ -593,19 +662,35 @@ export default function B2BQuotesPage() {
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#6b6b66]">{Number(item.totalWeight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.pricePerM2 ?? 0).toLocaleString('ru-RU')}</td>
-                                <td className="px-2 py-1 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemAfterDiscount.toLocaleString('ru-RU')} ₽</td>
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemFull.toLocaleString('ru-RU')} ₽</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#9a9a95] whitespace-nowrap">{Number(item.costExVat ?? 0).toLocaleString('ru-RU')} ₽</td>
                               </tr>
                             )
                           })}
                         </tbody>
                         <tfoot>
-                          <tr className="border-t border-[#e4e4e0] bg-[#fafaf9] font-semibold text-[#111110]">
+                          <tr className="border-t border-[#e4e4e0] bg-[#fafaf9] text-[#111110]">
                             <td colSpan={7} className="px-2 py-1.5 text-[10px] text-[#6b6b66]">{quote.items.length} позиций</td>
                             <td className="px-2 py-1.5 text-right font-mono text-[11px]">{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                             <td className="px-2 py-1.5 text-right font-mono text-[11px] text-[#6b6b66]">{(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
                             <td />
-                            <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px]">{fmt(finalPrice)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap text-[11px] text-[#6b6b66]">{fmt(quote.total_sale_inc_vat)}</td>
+                            <td />
+                          </tr>
+                          {(quote.discount_percent ?? 0) > 0 && (
+                            <tr className="bg-[#fafaf9]">
+                              <td colSpan={10} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
+                                Скидка {quote.discount_percent}%
+                              </td>
+                              <td className="px-2 py-0.5 text-right font-mono text-[11px] text-emerald-600 whitespace-nowrap">
+                                −{fmt(quote.total_sale_inc_vat - finalPrice)}
+                              </td>
+                              <td />
+                            </tr>
+                          )}
+                          <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
+                            <td colSpan={10} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
+                            <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -697,13 +782,22 @@ export default function B2BQuotesPage() {
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
             <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Запустить в заказ</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-4">Укажите дату запуска в производство</p>
+            <p className="text-[13px] text-[#6b6b66] mb-4">Укажите номер и дату запуска</p>
+            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Номер заказа</label>
+            <input
+              autoFocus
+              type="text"
+              placeholder="0147-О, МГ-001..."
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono font-bold outline-none focus:border-[#111110] mb-3"
+              value={confirmCustomNumber}
+              onChange={e => setConfirmCustomNumber(e.target.value)}
+            />
             <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Дата запуска</label>
             <input type="date"
               className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-4"
               value={launchedAt} onChange={e => setLaunchedAt(e.target.value)} />
             <div className="flex gap-2">
-              <button onClick={() => setConfirmingId(null)}
+              <button onClick={() => { setConfirmingId(null); setConfirmCustomNumber('') }}
                 className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
                 Отмена
               </button>

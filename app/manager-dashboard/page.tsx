@@ -16,6 +16,7 @@ type Quote = {
   margin_percent: number
   notes: string | null
   created_at: string
+  created_by: string | null
 }
 
 type ClientWithMeta = B2BClient & {
@@ -47,12 +48,14 @@ export default function ManagerDashboardPage() {
   const [clients, setClients] = useState<ClientWithMeta[]>([])
   const [loading, setLoading] = useState(true)
 
-  const [myEmail, setMyEmail] = useState<string | null>(null)
-  const [role, setRole]       = useState<'manager' | 'admin'>('manager')
-  const [managers, setManagers] = useState<string[]>([])
-  const [viewAs, setViewAs]   = useState<string | null>(null)
+  const [myEmail, setMyEmail]       = useState<string | null>(null)
+  const [myUserId, setMyUserId]     = useState<string | null>(null)
+  const [role, setRole]             = useState<'manager' | 'admin'>('manager')
+  const [seeAllOrders, setSeeAllOrders] = useState(false)
+  const [managers, setManagers]     = useState<string[]>([])
+  const [viewAs, setViewAs]         = useState<string | null>(null)
 
-  const [myOnly, setMyOnly]   = useState<boolean>(() => {
+  const [myOnly, setMyOnly] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem(LS_KEY) !== 'false'
   })
@@ -61,6 +64,10 @@ export default function ManagerDashboardPage() {
     setMyOnly(val)
     localStorage.setItem(LS_KEY, String(val))
   }
+
+  // менеджер без разрешения — всегда только свои
+  const canSeeAll = role === 'admin' || seeAllOrders
+  const effectiveMyOnly = canSeeAll ? myOnly : true
 
   useEffect(() => { load() }, [])
 
@@ -71,21 +78,34 @@ export default function ManagerDashboardPage() {
     const { data: { user } } = await sb.auth.getUser()
     const email = user?.email ?? null
     setMyEmail(email)
+    if (user) setMyUserId(user.id)
 
-    // Load profile role
+    // Получаем профиль до запросов, чтобы использовать локальные переменные для фильтрации
+    let localRole: 'manager' | 'admin' = 'manager'
+    let localSeeAll = false
     if (user) {
-      const { data: profile } = await sb.from('profiles').select('role').eq('user_id', user.id).maybeSingle()
-      if (profile?.role === 'admin') setRole('admin')
+      const { data: profile } = await sb.from('users').select('role,see_all_orders').eq('id', user.id).maybeSingle()
+      localRole = profile?.role === 'admin' ? 'admin' : 'manager'
+      localSeeAll = profile?.see_all_orders ?? false
+      setRole(localRole)
+      setSeeAllOrders(localSeeAll)
     }
+
+    const localCanSeeAll = localRole === 'admin' || localSeeAll
 
     const now = new Date()
     const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
 
+    let quotesQuery = sb.from('b2b_orders')
+      .select('id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at,created_by')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    if (!localCanSeeAll && user) {
+      quotesQuery = quotesQuery.eq('created_by', user.id)
+    }
+
     const [{ data: qs }, { data: cls }, { data: orders }, { data: lastInts }] = await Promise.all([
-      sb.from('b2b_orders')
-        .select('id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at')
-        .order('created_at', { ascending: false })
-        .limit(500),
+      quotesQuery,
       sb.from('b2b_clients').select(CRM_COLS).eq('active', true),
       sb.from('b2b_orders')
         .select('client_id,total_after_discount,discount_percent,total_sale_inc_vat')
@@ -125,21 +145,29 @@ export default function ManagerDashboardPage() {
     setLoading(false)
   }
 
-  // The email to filter by (admin can view as another manager)
+  // filterEmail — для клиентов CRM (по имени/email менеджера)
   const filterEmail = useMemo(() => {
-    if (!myOnly) return null
+    if (!effectiveMyOnly) return null
     return viewAs ?? myEmail
-  }, [myOnly, viewAs, myEmail])
+  }, [effectiveMyOnly, viewAs, myEmail])
+
+  // filterUserId — для КП/заказов (по created_by UUID)
+  const filterUserId = useMemo(() => {
+    if (!effectiveMyOnly) return null
+    if (viewAs) return null // admin смотрит другого менеджера по email, UUID неизвестен
+    return myUserId
+  }, [effectiveMyOnly, viewAs, myUserId])
 
   const noReply = useMemo(() =>
     quotes.filter(q => {
       const n = parseNotes(q.notes)
       if (n.status !== 'sent') return false
       if (daysAgo(q.created_at) < 2) return false
-      if (filterEmail && n.manager_name !== filterEmail) return false
+      if (filterUserId && q.created_by !== filterUserId) return false
+      if (!filterUserId && filterEmail && n.manager_name !== filterEmail) return false
       return true
     }).slice(0, 10),
-    [quotes, filterEmail]
+    [quotes, filterUserId, filterEmail]
   )
 
   const overdueContacts = useMemo(() =>
@@ -179,7 +207,8 @@ export default function ManagerDashboardPage() {
   const monthStats = useMemo(() => {
     const thisMonth = quotes.filter(q => {
       if (new Date(q.created_at) < monthStart) return false
-      if (filterEmail && parseNotes(q.notes).manager_name !== filterEmail) return false
+      if (filterUserId && q.created_by !== filterUserId) return false
+      if (!filterUserId && filterEmail && parseNotes(q.notes).manager_name !== filterEmail) return false
       return true
     })
     const confirmed = thisMonth.filter(q => {
@@ -193,14 +222,14 @@ export default function ManagerDashboardPage() {
       ? Math.round(confirmed.reduce((s, q) => s + (q.margin_percent ?? 0), 0) / confirmed.length)
       : 0
     return { kpCount: thisMonth.length, orderCount: confirmed.length, total, conversion, avgMargin }
-  }, [quotes, filterEmail, monthStart])
+  }, [quotes, filterUserId, filterEmail, monthStart])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
   )
 
-  const activeFilterLabel = filterEmail
-    ? (filterEmail === myEmail ? 'мои' : filterEmail)
+  const activeFilterLabel = effectiveMyOnly
+    ? (viewAs ? viewAs : 'мои')
     : 'все'
 
   return (
@@ -229,19 +258,21 @@ export default function ManagerDashboardPage() {
                 ))}
               </select>
             )}
-            {/* Toggle */}
-            <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
-              <button
-                onClick={() => toggleMyOnly(true)}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${myOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
-                Только мои
-              </button>
-              <button
-                onClick={() => toggleMyOnly(false)}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${!myOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
-                Все
-              </button>
-            </div>
+            {/* Toggle — только для тех, кто может видеть все */}
+            {canSeeAll && (
+              <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
+                <button
+                  onClick={() => toggleMyOnly(true)}
+                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${effectiveMyOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
+                  Только мои
+                </button>
+                <button
+                  onClick={() => toggleMyOnly(false)}
+                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${!effectiveMyOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
+                  Все
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

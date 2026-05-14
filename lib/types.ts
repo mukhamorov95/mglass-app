@@ -241,6 +241,7 @@ export type B2BService = {
   name: string
   type: 'percent' | 'per_m2' | 'fixed'
   value: number
+  cost_price: number  // закупочная себестоимость услуги
   description: string
   active: boolean
   sort_order: number
@@ -361,6 +362,7 @@ export const PAYMENT_STATUS_COLORS: Record<PaymentStatus, string> = {
 export type Order = {
   id:                      string
   number:                  string
+  custom_number:           string | null
   amo_deal_id:             string | null
   amo_deal_url:            string | null
   client_name:             string

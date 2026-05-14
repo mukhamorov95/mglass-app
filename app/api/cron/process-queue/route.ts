@@ -257,6 +257,9 @@ async function runAiForMessage(raw: RawMessage, leadId: number | null): Promise<
 
   const supabase = db()
 
+  // Bot is temporarily disabled
+  return null
+
   // Is this chat AI-managed?
   const { data: chat } = await supabase
     .from('ai_managed_chats')

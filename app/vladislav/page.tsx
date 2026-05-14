@@ -111,9 +111,28 @@ export default function VladislavPage() {
     : tab === 'active' ? active
     : all
 
+  const [botEnabled, setBotEnabled] = useState<boolean | null>(null)
+  const [botToggling, setBotToggling] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/admin/bot-toggle').then(r => r.json()).then(d => setBotEnabled(d.enabled))
+  }, [])
+
+  async function toggleBot() {
+    setBotToggling(true)
+    const next = !botEnabled
+    await fetch('/api/admin/bot-toggle', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled: next }),
+    })
+    setBotEnabled(next)
+    setBotToggling(false)
+  }
+
   const QUICK = [
     { href: '/ai-stats', label: '📊 Статистика AI', sub: 'конверсия в замер' },
-    { href: '/my-notes', label: '🎙️ Мои заметки',  sub: 'голосовой ввод' },
+    { href: '/vladislav/calls', label: '📞 Анализ звонков', sub: 'расшифровка + AI' },
     { href: '/amo-analysis', label: '🔍 Анализ воронки', sub: 'AMO CRM' },
   ]
 
@@ -124,8 +143,24 @@ export default function VladislavPage() {
           <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Кабинет Владислава</h1>
           <p className="text-[13px] text-[#6e6e73]">Управление AI-менеджером и клиентскими диалогами</p>
         </div>
-        <div className="w-10 h-10 rounded-full bg-[#0071e3] flex items-center justify-center text-white font-semibold text-[16px]">
-          В
+        <div className="flex items-center gap-3">
+          {botEnabled !== null && (
+            <button
+              onClick={toggleBot}
+              disabled={botToggling}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 ${
+                botEnabled
+                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                  : 'bg-red-100 text-red-600 hover:bg-red-200'
+              }`}
+            >
+              <span className={`w-2 h-2 rounded-full ${botEnabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
+              {botToggling ? '...' : botEnabled ? 'Бот включён' : 'Бот выключен'}
+            </button>
+          )}
+          <div className="w-10 h-10 rounded-full bg-[#0071e3] flex items-center justify-center text-white font-semibold text-[16px]">
+            В
+          </div>
         </div>
       </div>
 

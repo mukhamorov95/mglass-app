@@ -84,13 +84,17 @@ export default function B2BCalculatorPage() {
   const [loading, setLoading]     = useState(true)
   const [saving, setSaving]       = useState(false)
   const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [managerEmail, setManagerEmail] = useState<string | null>(null)
+  const [managerId, setManagerId]       = useState<string | null>(null)
 
   type DraftData = { clientId: number | null; items: B2BOrderItem[]; notes: string; productionDays: number; savedAt: string }
   const [draftToast, setDraftToast] = useState<DraftData | null>(null)
   const draftRestoredRef = useRef(false)
 
-  const [clientId, setClientId]     = useState<number | null>(null)
+  const [clientId, setClientId]         = useState<number | null>(null)
+  const [ourOrderNumber, setOurOrderNumber]       = useState('')
+  const [clientOrderNumber, setClientOrderNumber] = useState('')
   const [notes, setNotes]           = useState('')
   const [fProductionDays, setFProductionDays] = useState(7)
   const [items, setItems]           = useState<B2BOrderItem[]>([])
@@ -135,6 +139,7 @@ export default function B2BCalculatorPage() {
         sb.auth.getUser(),
       ])
       if (user?.email) setManagerEmail(user.email)
+      if (user?.id) setManagerId(user.id)
 
       const totals = new Map<number, number>()
       for (const o of orders ?? []) {
@@ -417,6 +422,7 @@ export default function B2BCalculatorPage() {
   async function handleSave() {
     if (items.length === 0 || !selectedClient) return
     setSaving(true)
+    setSaveError(null)
     const sb = createClient()
     const t = totals!
     const avgMargin = items.length > 0
@@ -442,9 +448,19 @@ export default function B2BCalculatorPage() {
       total_sale_inc_vat: t.totalSaleIncVat,
       total_after_discount: t.totalAfterDiscount,
       notes: orderNotes,
+      custom_number: ourOrderNumber.trim() || null,
+      client_order_number: clientOrderNumber.trim() || null,
+      created_by: managerId ?? null,
     }).select('id').single()
 
-    if (!error && saved) {
+    if (error) {
+      console.error('B2B save error:', error)
+      setSaveError(error.message)
+      setSaving(false)
+      return
+    }
+
+    if (saved) {
       try { localStorage.removeItem(DRAFT_KEY) } catch {}
       if (attachFile) {
         const safeName = attachFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
@@ -514,6 +530,30 @@ export default function B2BCalculatorPage() {
                   </option>
                 ))}
               </select>
+            </div>
+
+            {/* Номера заказа */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Наш номер</label>
+                <input
+                  type="text"
+                  placeholder="МГ-001"
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  value={ourOrderNumber}
+                  onChange={e => setOurOrderNumber(e.target.value)}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">№ клиента</label>
+                <input
+                  type="text"
+                  placeholder="необязательно"
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                  value={clientOrderNumber}
+                  onChange={e => setClientOrderNumber(e.target.value)}
+                />
+              </div>
             </div>
 
             {/* Дней производства */}
@@ -934,6 +974,13 @@ export default function B2BCalculatorPage() {
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
                 </button>
+
+                {saveError && (
+                  <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
+                    <p className="font-semibold mb-0.5">Ошибка сохранения:</p>
+                    <p className="font-mono break-all">{saveError}</p>
+                  </div>
+                )}
 
                 {savedOrderId && (
                   <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">

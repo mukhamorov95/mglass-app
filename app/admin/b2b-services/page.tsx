@@ -11,7 +11,7 @@ const TYPE_LABELS: Record<string, string> = {
 }
 
 const EMPTY: Omit<B2BService, 'id'> = {
-  name: '', type: 'percent', value: 0, description: '', active: true, sort_order: 0,
+  name: '', type: 'percent', value: 0, cost_price: 0, description: '', active: true, sort_order: 0,
 }
 
 export default function B2BServicesPage() {
@@ -42,7 +42,7 @@ export default function B2BServicesPage() {
     setSaving(true)
     setError(null)
     const supabase = createClient()
-    const payload = { ...form, value: Number(form.value) || 0, sort_order: Number(form.sort_order) || 0 }
+    const payload = { ...form, value: Number(form.value) || 0, cost_price: Number(form.cost_price) || 0, sort_order: Number(form.sort_order) || 0 }
     if (editingId !== null) {
       const { error } = await supabase.from('b2b_services').update(payload).eq('id', editingId)
       if (error) { setError(error.message); setSaving(false); return }
@@ -64,7 +64,7 @@ export default function B2BServicesPage() {
 
   function startEdit(s: B2BService) {
     setEditingId(s.id)
-    setForm({ name: s.name, type: s.type, value: s.value, description: s.description, active: s.active, sort_order: s.sort_order })
+    setForm({ name: s.name, type: s.type, value: s.value, cost_price: s.cost_price ?? 0, description: s.description, active: s.active, sort_order: s.sort_order })
     setError(null)
   }
 
@@ -126,6 +126,17 @@ export default function B2BServicesPage() {
             />
           </div>
           <div>
+            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">
+              Себестоимость (₽{form.type === 'per_m2' ? '/м²' : form.type === 'fixed' ? '/шт' : ''})
+            </label>
+            <input type="number" min="0"
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+              value={form.cost_price}
+              onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
+              placeholder="0"
+            />
+          </div>
+          <div>
             <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Порядок сортировки</label>
             <input type="number" min="0"
               className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
@@ -172,7 +183,8 @@ export default function B2BServicesPage() {
               <tr className="border-b border-[#f0f0ec]">
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Услуга</th>
                 <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Тип</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Значение</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Цена</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Себест.</th>
                 <th className="w-36 px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -187,6 +199,12 @@ export default function B2BServicesPage() {
                   <td className="px-4 py-3 text-[#6b6b66]">{TYPE_LABELS[s.type]}</td>
                   <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">
                     {s.type === 'percent' ? `${s.value}%` : `${s.value.toLocaleString('ru-RU')} ₽`}
+                  </td>
+                  <td className="px-4 py-3 text-right font-mono text-[#6b6b66]">
+                    {(s.cost_price ?? 0) > 0
+                      ? `${(s.cost_price ?? 0).toLocaleString('ru-RU')} ₽`
+                      : <span className="text-[#c4c4be]">—</span>
+                    }
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 justify-end">

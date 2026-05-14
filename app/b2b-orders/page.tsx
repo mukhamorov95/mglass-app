@@ -51,6 +51,8 @@ type NotesData = {
 type Order = {
   id: number
   client_name: string
+  custom_number: string | null
+  client_order_number: string | null
   discount_percent: number
   items: unknown[]
   total_area: number
@@ -104,6 +106,32 @@ export default function B2BOrdersPage() {
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
 
+  const [editNumId, setEditNumId]           = useState<number | null>(null)
+  const [editCustomNum, setEditCustomNum]   = useState('')
+  const [editClientNum, setEditClientNum]   = useState('')
+  const [savingNum, setSavingNum]           = useState(false)
+
+  function startEditNum(order: Order) {
+    setEditNumId(order.id)
+    setEditCustomNum(order.custom_number ?? '')
+    setEditClientNum(order.client_order_number ?? '')
+  }
+
+  async function saveNum(orderId: number) {
+    setSavingNum(true)
+    const sb = createClient()
+    await sb.from('b2b_orders').update({
+      custom_number: editCustomNum.trim() || null,
+      client_order_number: editClientNum.trim() || null,
+    }).eq('id', orderId)
+    setOrders(prev => prev.map(o => o.id === orderId
+      ? { ...o, custom_number: editCustomNum.trim() || null, client_order_number: editClientNum.trim() || null }
+      : o
+    ))
+    setSavingNum(false)
+    setEditNumId(null)
+  }
+
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
@@ -123,13 +151,30 @@ export default function B2BOrdersPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const { data } = await sb
+      const { data: { user } } = await sb.auth.getUser()
+      if (!user) { setLoading(false); return }
+
+      // Check if manager has permission to see all orders
+      const { data: profile } = await sb
+        .from('users')
+        .select('role, see_all_orders')
+        .eq('id', user.id)
+        .single()
+
+      const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+
+      let query = sb
         .from('b2b_orders')
         .select('*')
         .not('notes', 'ilike', '%"status":"quote"%')
         .order('created_at', { ascending: true })
         .limit(1000)
 
+      if (!canSeeAll) {
+        query = query.eq('created_by', user.id)
+      }
+
+      const { data } = await query
       const parsed = (data ?? []).map(o => ({
         ...o,
         items: Array.isArray(o.items) ? o.items : [],
@@ -156,9 +201,12 @@ export default function B2BOrdersPage() {
       // Поиск по номеру заказа или клиенту
       if (search.trim()) {
         const q = search.trim().toLowerCase()
-        const orderNum = getOrderNum(pn).toLowerCase()
-        const client = o.client_name.toLowerCase()
-        if (!orderNum.includes(q) && !client.includes(q)) return false
+        const match =
+          o.client_name.toLowerCase().includes(q) ||
+          (o.custom_number ?? '').toLowerCase().includes(q) ||
+          (o.client_order_number ?? '').toLowerCase().includes(q) ||
+          getOrderNum(pn).toLowerCase().includes(q)
+        if (!match) return false
       }
 
       // Фильтр по дате запуска
@@ -319,9 +367,14 @@ export default function B2BOrdersPage() {
                     {/* Заголовок строки */}
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
-                        {orderNum && (
+                        {order.custom_number && (
                           <span className="text-[11px] font-bold text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded font-mono flex-shrink-0">
-                            {orderNum}
+                            {order.custom_number}
+                          </span>
+                        )}
+                        {order.client_order_number && (
+                          <span className="text-[10px] text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded font-mono flex-shrink-0">
+                            кл.{order.client_order_number}
                           </span>
                         )}
                         <span className="text-[12px] font-semibold text-[#111110] truncate">{order.client_name}</span>
@@ -444,6 +497,16 @@ export default function B2BOrdersPage() {
                                 <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{orderIdx + 1}</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
+                                    {order.custom_number && (
+                                      <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
+                                        {order.custom_number}
+                                      </span>
+                                    )}
+                                    {order.client_order_number && (
+                                      <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
+                                        кл.{order.client_order_number}
+                                      </span>
+                                    )}
                                     <p className="text-[12px] font-semibold text-[#111110]">{order.client_name}</p>
                                     {isShipped ? (
                                       <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700">отгружен</span>
@@ -493,6 +556,57 @@ export default function B2BOrdersPage() {
 
                             {isOpen && (
                               <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
+
+                                {/* Номера заказа */}
+                                {editNumId === order.id ? (
+                                  <div className="flex items-end gap-2 flex-wrap">
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
+                                      <input
+                                        autoFocus
+                                        className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                                        value={editCustomNum}
+                                        onChange={e => setEditCustomNum(e.target.value)}
+                                        placeholder="МГ-001"
+                                        onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+                                      />
+                                    </div>
+                                    <div>
+                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
+                                      <input
+                                        className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                                        value={editClientNum}
+                                        onChange={e => setEditClientNum(e.target.value)}
+                                        placeholder="необязательно"
+                                        onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+                                      />
+                                    </div>
+                                    <button
+                                      onClick={() => saveNum(order.id)}
+                                      disabled={savingNum}
+                                      className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                                      {savingNum ? '...' : 'Сохранить'}
+                                    </button>
+                                    <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
+                                      Отмена
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <div className="flex items-center gap-2">
+                                    {order.custom_number && (
+                                      <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+                                    )}
+                                    {order.client_order_number && (
+                                      <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
+                                    )}
+                                    <button
+                                      onClick={() => startEditNum(order)}
+                                      className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
+                                      {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
+                                    </button>
+                                  </div>
+                                )}
+
                                 <div>
                                   <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Этапы производства</p>
                                   <div className="flex flex-wrap gap-1">

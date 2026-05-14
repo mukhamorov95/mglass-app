@@ -35,7 +35,8 @@ export type ItemService = {
   name: string
   type: 'percent' | 'per_m2' | 'fixed'
   value: number
-  cost: number
+  cost: number       // цена продажи услуги клиенту (с НДС)
+  costPrice: number  // закупочная себестоимость услуги (с НДС)
 }
 
 export type B2BOrderItem = {
@@ -119,31 +120,42 @@ export function calcItem(
   const costTransport = Math.round(quantity * TRANSPORT_PER_PIECE)
   const costPackaging = Math.round(totalAreaNet * PACKAGING_PER_M2)
 
-  const costWithVat = costMaterial + costTempering + costEdge + costTransport + costPackaging
-  const inputVat    = Math.round(costWithVat * VAT / (100 + VAT))
-  const costExVat   = costWithVat - inputVat
+  const costWithVatBase = costMaterial + costTempering + costEdge + costTransport + costPackaging
 
   // Продажа — цена из прайса (финальная цена клиента, вкл. НДС)
   const pricePerM2     = mat.sale_price ?? 0
   const baseSaleIncVat = Math.round(pricePerM2 * totalAreaNet)
   const baseSaleExVat  = Math.round(baseSaleIncVat * 100 / (100 + VAT))
 
-  // Доп. услуги считаются от итоговой суммы (как в таблице)
+  // Доп. услуги: цена продажи + закупочная себестоимость
   const services: ItemService[] = selectedServices.map(s => {
     let cost = 0
     if (s.type === 'percent') cost = Math.round(baseSaleIncVat * s.value / 100)
     else if (s.type === 'per_m2') cost = Math.round(totalAreaNet * s.value)
     else if (s.type === 'fixed') cost = Math.round(s.value * quantity)
-    return { id: s.id, name: s.name, type: s.type, value: s.value, cost }
+
+    // Закупочная себестоимость услуги
+    let costPrice = 0
+    if (s.type === 'per_m2') costPrice = Math.round(totalAreaNet * (s.cost_price ?? 0))
+    else if (s.type === 'fixed') costPrice = Math.round((s.cost_price ?? 0) * quantity)
+    // percent: себестоимость не задаётся напрямую
+
+    return { id: s.id, name: s.name, type: s.type, value: s.value, cost, costPrice }
   })
   const servicesCost = services.reduce((sum, s) => sum + s.cost, 0)
+  const servicesCostPrice = services.reduce((sum, s) => sum + s.costPrice, 0)
+
+  // Итоговая себестоимость с учётом закупочной стоимости услуг
+  const costWithVatFull = costWithVatBase + servicesCostPrice
+  const inputVatFull    = Math.round(costWithVatFull * VAT / (100 + VAT))
+  const costExVatFull   = costWithVatFull - inputVatFull
 
   const saleIncVat = baseSaleIncVat + servicesCost
   const saleExVat  = Math.round(saleIncVat * 100 / (100 + VAT))
   const outputVat  = saleIncVat - saleExVat
 
-  // Наценка — расчётная (для отображения менеджеру)
-  const margin = baseSaleExVat > 0 ? Math.round((1 - costExVat / baseSaleExVat) * 100) : 0
+  // Наценка с учётом полных затрат включая услуги
+  const margin = saleExVat > 0 ? Math.round((1 - costExVatFull / saleExVat) * 100) : 0
 
   return {
     materialId: mat.id, materialName: mat.name, category: mat.category,
@@ -151,7 +163,7 @@ export function calcItem(
     areaPiece, totalAreaNet, totalAreaBilled, perimeterM,
     weightPerM2, totalWeight,
     costMaterial, costTempering, costEdge, costTransport, costPackaging,
-    costWithVat, inputVat, costExVat,
+    costWithVat: costWithVatFull, inputVat: inputVatFull, costExVat: costExVatFull,
     pricePerM2, margin, vatRate: VAT, servicesCost, baseSaleExVat,
     saleExVat, outputVat, saleIncVat,
   }

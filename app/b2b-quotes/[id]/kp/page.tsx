@@ -27,6 +27,8 @@ type Order = {
   id: number
   client_id: number | null
   client_name: string
+  custom_number: string | null
+  client_order_number: string | null
   discount_percent: number
   items: OrderItem[]
   total_area: number
@@ -95,6 +97,8 @@ export default function KPPrintPage() {
           id: raw.id as number,
           client_id: raw.client_id as number | null,
           client_name: (raw.client_name as string) || 'Клиент',
+          custom_number: (raw.custom_number as string) || null,
+          client_order_number: (raw.client_order_number as string) || null,
           discount_percent: (raw.discount_percent as number) || 0,
           items,
           total_area: (raw.total_area as number) || 0,
@@ -135,8 +139,12 @@ export default function KPPrintPage() {
 
   return (
     <>
-      {/* Print + screen layout styles */}
+      {/* Cyrillic font — must load before print */}
       <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=PT+Sans:ital,wght@0,400;0,700;1,400&display=swap&subset=cyrillic');
+        #kp-document, #kp-document * {
+          font-family: 'PT Sans', Arial, sans-serif !important;
+        }
         @media print {
           body * { visibility: hidden !important; }
           #kp-document, #kp-document * { visibility: visible !important; }
@@ -150,7 +158,7 @@ export default function KPPrintPage() {
       {/* Print button — screen only */}
       <div id="kp-print-btn" className="fixed top-4 right-4 z-50 print:hidden">
         <button
-          onClick={() => window.print()}
+          onClick={() => document.fonts.ready.then(() => window.print())}
           className="bg-[#1a1a18] text-white text-sm px-4 py-2 rounded-lg shadow-lg hover:bg-[#2a2a26] transition-colors"
         >
           Печать / PDF
@@ -172,6 +180,12 @@ export default function KPPrintPage() {
               </div>
             </div>
             <div className="text-right">
+              {order.custom_number && (
+                <div className="text-[20px] font-bold text-[#1a1a18] font-mono">{order.custom_number}</div>
+              )}
+              {order.client_order_number && (
+                <div className="text-[11px] text-[#6b6b66] font-mono">№ клиента: {order.client_order_number}</div>
+              )}
               <div className="text-[13px] font-semibold text-[#1a1a18]">{kpNum}</div>
               <div className="text-[11px] text-[#6b6b66] mt-0.5">от {fmtDate(quoteDate)}</div>
               <div className="text-[11px] text-[#6b6b66]">действует до {validUntil}</div>

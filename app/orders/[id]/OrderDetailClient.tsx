@@ -67,6 +67,23 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [approvalNotes, setApprovalNotes] = useState('')
   const [showApproveForm, setShowApproveForm] = useState(false)
   const [error, setError] = useState('')
+
+  const [customNumber, setCustomNumber]     = useState(order.custom_number ?? '')
+  const [editingCustomNum, setEditingCustomNum] = useState(false)
+  const [savingCustomNum, setSavingCustomNum]   = useState(false)
+
+  async function saveCustomNumber() {
+    setSavingCustomNum(true)
+    await fetch(`/api/orders/${order.id}/custom-number`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ custom_number: customNumber }),
+    })
+    setSavingCustomNum(false)
+    setEditingCustomNum(false)
+    router.refresh()
+  }
+
   const [deliveryAddr, setDeliveryAddr] = useState(order.delivery_address ?? '')
   const [savingAddr, setSavingAddr] = useState(false)
 
@@ -284,8 +301,45 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
+                {/* Custom order number — prominent */}
+                <div className="mb-2">
+                  {editingCustomNum ? (
+                    <div className="flex items-center gap-2">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={customNumber}
+                        onChange={e => setCustomNumber(e.target.value)}
+                        onKeyDown={e => { if (e.key === 'Enter') saveCustomNumber(); if (e.key === 'Escape') setEditingCustomNum(false) }}
+                        placeholder="0147-О"
+                        className="text-[26px] font-bold font-mono border-b-2 border-[#0071e3] outline-none bg-transparent w-48 text-[#111110]"
+                      />
+                      <button onClick={saveCustomNumber} disabled={savingCustomNum}
+                        className="text-[12px] px-3 py-1 bg-[#111110] text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+                        {savingCustomNum ? '...' : 'OK'}
+                      </button>
+                      <button onClick={() => { setEditingCustomNum(false); setCustomNumber(order.custom_number ?? '') }}
+                        className="text-[12px] px-2 py-1 border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f5f5f3]">
+                        ✕
+                      </button>
+                    </div>
+                  ) : customNumber ? (
+                    <button onClick={() => setEditingCustomNum(true)} title="Изменить номер заказа"
+                      className="group flex items-center gap-2">
+                      <span className="text-[28px] font-bold font-mono text-[#111110] group-hover:text-[#0071e3] transition-colors">
+                        {customNumber}
+                      </span>
+                      <span className="text-[11px] text-[#c4c4be] group-hover:text-[#6b6b66] transition-colors">✎</span>
+                    </button>
+                  ) : (
+                    <button onClick={() => setEditingCustomNum(true)}
+                      className="text-[13px] text-[#c4c4be] hover:text-[#6b6b66] font-medium transition-colors border border-dashed border-[#e4e4e0] hover:border-[#9a9a95] rounded-lg px-3 py-1.5">
+                      + Добавить номер заказа
+                    </button>
+                  )}
+                </div>
                 <div className="flex items-center gap-3 flex-wrap mb-1">
-                  <h1 className="text-[20px] font-bold text-[#111110] font-mono">{order.number}</h1>
+                  <span className="text-[13px] font-mono text-[#9a9a95]">{order.number}</span>
                   <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_STYLE[order.status]}`}>
                     {ORDER_STATUS_LABELS[order.status]}
                   </span>

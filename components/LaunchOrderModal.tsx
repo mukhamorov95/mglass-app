@@ -42,6 +42,7 @@ export default function LaunchOrderModal({ isOpen, onClose, payload, settings }:
   const router = useRouter()
   const nameRef = useRef<HTMLInputElement>(null)
 
+  const [customNumber,  setCustomNumber]  = useState('')
   const [clientName,    setClientName]    = useState('')
   const [clientPhone,   setClientPhone]   = useState('')
   const [address,       setAddress]       = useState('')
@@ -53,7 +54,7 @@ export default function LaunchOrderModal({ isOpen, onClose, payload, settings }:
 
   useEffect(() => {
     if (isOpen) {
-      setClientName(''); setClientPhone(''); setAddress('')
+      setCustomNumber(''); setClientName(''); setClientPhone(''); setAddress('')
       setAmoDealUrl(''); setDeadline(''); setNotes(''); setError('')
       setTimeout(() => nameRef.current?.focus(), 80)
     }
@@ -79,6 +80,7 @@ export default function LaunchOrderModal({ isOpen, onClose, payload, settings }:
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          custom_number:  customNumber.trim() || null,
           client_name:    clientName.trim(),
           client_phone:   clientPhone.trim() || null,
           object_address: address.trim()     || null,
@@ -148,6 +150,20 @@ export default function LaunchOrderModal({ isOpen, onClose, payload, settings }:
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto px-6 py-4 space-y-3">
+
+          <div>
+            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">
+              Номер заказа
+            </label>
+            <input
+              type="text"
+              value={customNumber}
+              onChange={e => setCustomNumber(e.target.value)}
+              placeholder="0147-О, МГ-2026-001..."
+              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#111110] transition-colors"
+            />
+            <p className="text-[10px] text-[#9a9a95] mt-0.5">Свой номер для поиска и распечатки</p>
+          </div>
 
           <div>
             <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">

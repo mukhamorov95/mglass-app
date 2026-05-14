@@ -8,8 +8,8 @@ import CartProvider from '@/components/CartProvider'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
 import type { OrgRole } from '@/lib/hooks/use-organization'
 
-const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin'] })
-const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin'] })
+const geistSans = Geist({ variable: '--font-geist-sans', subsets: ['latin', 'cyrillic'] })
+const geistMono = Geist_Mono({ variable: '--font-geist-mono', subsets: ['latin', 'cyrillic'] })
 
 export const metadata: Metadata = {
   title: 'MGlass — CRM',
