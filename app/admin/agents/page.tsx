@@ -37,6 +37,7 @@ const AGENT_META: Record<string, {
   badge: string
   badgeOff: string
 }> = {
+  ceo:        { emoji: '👔', color: 'text-slate-700',   bg: 'bg-slate-50',    border: 'border-slate-200',   badge: 'bg-slate-100 text-slate-700',     badgeOff: 'bg-gray-100 text-gray-400' },
   revenue:    { emoji: '💰', color: 'text-emerald-700', bg: 'bg-emerald-50',  border: 'border-emerald-200', badge: 'bg-emerald-100 text-emerald-700', badgeOff: 'bg-gray-100 text-gray-400' },
   analyst:    { emoji: '📊', color: 'text-blue-700',    bg: 'bg-blue-50',     border: 'border-blue-200',    badge: 'bg-blue-100 text-blue-700',       badgeOff: 'bg-gray-100 text-gray-400' },
   production: { emoji: '🏭', color: 'text-orange-700',  bg: 'bg-orange-50',   border: 'border-orange-200',  badge: 'bg-orange-100 text-orange-700',   badgeOff: 'bg-gray-100 text-gray-400' },
