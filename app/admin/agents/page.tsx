@@ -84,6 +84,8 @@ export default function AgentsPage() {
   const [running, setRunning]     = useState<Record<string, boolean>>({})
   const [toggling, setToggling]   = useState<Record<string, boolean>>({})
   const [expanded, setExpanded]   = useState<Record<string, boolean>>({})
+  const [uploading, setUploading] = useState(false)
+  const [uploadResult, setUploadResult] = useState<string | null>(null)
   const [lastRefresh, setLastRefresh] = useState(new Date())
 
   const load = useCallback(async () => {
@@ -117,6 +119,26 @@ export default function AgentsPage() {
       .eq('agent_key', agent.agent_key)
     await load()
     setToggling(p => ({ ...p, [agent.agent_key]: false }))
+  }
+
+  async function uploadPdf(file: File) {
+    setUploading(true)
+    setUploadResult(null)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res  = await fetch('/api/agents/catalog/upload-pdf', { method: 'POST', body: form })
+      const data = await res.json()
+      if (data.ok) {
+        setUploadResult(`✅ Найдено ${data.found} позиций — проверь Telegram`)
+        await load()
+      } else {
+        setUploadResult(`❌ ${data.error ?? 'Ошибка'}`)
+      }
+    } catch {
+      setUploadResult('❌ Не удалось загрузить файл')
+    }
+    setUploading(false)
   }
 
   async function runNow(agent: AgentSetting) {
@@ -271,17 +293,34 @@ export default function AgentsPage() {
                 )}
 
                 {/* Actions */}
-                <div className="border-t border-[#f0f0ee] px-4 py-2.5 flex items-center justify-between">
+                <div className="border-t border-[#f0f0ee] px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
                   <span className="text-[10px] text-[#9a9a95]">
-                    {agent.schedule ? `следующий: по расписанию (${schedLabel})` : 'только ручной запуск'}
+                    {agent.schedule ? `по расписанию (${schedLabel})` : 'только ручной запуск'}
                   </span>
-                  <button onClick={() => runNow(agent)} disabled={isRun || agent.is_running}
-                    className="h-7 px-3 rounded-lg text-[11px] font-medium border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] disabled:opacity-40 transition-colors flex items-center gap-1.5">
-                    {isRun || agent.is_running
-                      ? <><span className="w-3 h-3 border border-[#9a9a95] border-t-transparent rounded-full animate-spin" />Работает...</>
-                      : <>▶ Запустить</>
-                    }
-                  </button>
+                  <div className="flex items-center gap-2">
+                    {agent.agent_key === 'catalog' && (
+                      <>
+                        <label className={`h-7 px-3 rounded-lg text-[11px] font-medium border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors flex items-center gap-1.5 cursor-pointer ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                          {uploading
+                            ? <><span className="w-3 h-3 border border-[#9a9a95] border-t-transparent rounded-full animate-spin" />Читаю PDF...</>
+                            : <>📄 Загрузить прайс</>
+                          }
+                          <input type="file" accept=".pdf" className="hidden"
+                            onChange={e => { const f = e.target.files?.[0]; if (f) uploadPdf(f); e.target.value = '' }} />
+                        </label>
+                        {uploadResult && (
+                          <span className="text-[10px] text-[#6b6b66]">{uploadResult}</span>
+                        )}
+                      </>
+                    )}
+                    <button onClick={() => runNow(agent)} disabled={isRun || agent.is_running}
+                      className="h-7 px-3 rounded-lg text-[11px] font-medium border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] disabled:opacity-40 transition-colors flex items-center gap-1.5">
+                      {isRun || agent.is_running
+                        ? <><span className="w-3 h-3 border border-[#9a9a95] border-t-transparent rounded-full animate-spin" />Работает...</>
+                        : <>▶ Запустить</>
+                      }
+                    </button>
+                  </div>
                 </div>
               </div>
             )
