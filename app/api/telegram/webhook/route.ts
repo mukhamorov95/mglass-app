@@ -4,7 +4,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { Tool } from '@anthropic-ai/sdk/resources/messages'
 import {
   sendMessage, editMessage, answerCallback, transcribeVoice,
-  MAIN_MENU, type InlineKeyboard, type InlineButton,
+  type InlineKeyboard, type InlineButton,
 } from '@/lib/telegram'
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 import { sendMessage as sendWA } from '@/lib/wazzup'
@@ -26,7 +26,27 @@ function withTimeout<T>(p: Promise<T>, ms: number, label = ''): Promise<T> {
   ])
 }
 
-// ─── Session helpers ────────────────────────────────────────────────────────
+// ─── Menus ───────────────────────────────────────────────────────────────────
+
+const MAIN_MENU: InlineKeyboard = [
+  [
+    { text: '📊 Дашборд',        callback_data: 'menu:dashboard' },
+    { text: '🤖 Агенты',         callback_data: 'menu:agents' },
+  ],
+  [
+    { text: '🧮 Расчёт цены',    callback_data: 'menu:calc' },
+    { text: '📋 Лиды',           callback_data: 'menu:leads' },
+  ],
+  [
+    { text: '💬 Написать клиенту', callback_data: 'menu:msg' },
+  ],
+]
+
+const AGENT_ICONS: Record<string, string> = {
+  revenue: '💰', analyst: '📊', production: '🏭', catalog: '🧠',
+}
+
+// ─── Session ─────────────────────────────────────────────────────────────────
 
 async function getSession(tid: number) {
   const { data } = await db().from('telegram_sessions').select('state, context').eq('telegram_id', tid).single()
@@ -42,16 +62,114 @@ async function getTelegramUser(tid: number) {
   return data
 }
 
-// ─── Parsed calc input type ──────────────────────────────────────────────────
+// ─── Dashboard ───────────────────────────────────────────────────────────────
 
-type ParsedCalcInput = {
-  type: CalcType
-  width: number
-  height: number
-  options: CalcOptions
+async function handleDashboard(chatId: number, msgId?: number) {
+  const supabase = db()
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
+
+  const [
+    { count: calcCount },
+    { data: orders },
+    { data: b2bOrders },
+    { count: inProdCount },
+    { data: agentRows },
+    { data: followupRows },
+  ] = await Promise.all([
+    supabase.from('calculations').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
+    supabase.from('orders').select('total_sale_price').gte('created_at', todayStart.toISOString()),
+    supabase.from('b2b_orders').select('total_amount').gte('created_at', todayStart.toISOString()),
+    supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['confirmed', 'in_production']),
+    supabase.from('agent_settings').select('agent_key, enabled, last_action_text, last_run_at'),
+    supabase.from('calculations').select('id', { count: 'exact', head: true }).is('followup_sent_at', null).not('client_phone', 'is', null),
+  ])
+
+  const orderRevenue = orders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
+  const b2bRevenue   = b2bOrders?.reduce((s, o) => s + (o.total_amount ?? 0), 0) ?? 0
+  const totalRevenue = orderRevenue + b2bRevenue
+  const activeAgents = agentRows?.filter(a => a.enabled).length ?? 0
+  const pendingFollowup = followupRows ?? 0
+
+  const now = new Date()
+  const timeStr = now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
+  const dateStr = now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
+  const goal500k = 500_000
+  const pct = Math.min(100, Math.round(totalRevenue / goal500k * 100))
+  const bar = '█'.repeat(Math.round(pct / 10)) + '░'.repeat(10 - Math.round(pct / 10))
+
+  const lines = [
+    `📊 <b>Дашборд MGlass</b>  <i>${dateStr}, ${timeStr}</i>`,
+    ``,
+    `<b>Сегодня</b>`,
+    `🧮 Расчётов: <b>${calcCount ?? 0}</b>`,
+    `💰 Выручка: <b>${totalRevenue.toLocaleString('ru-RU')} ₽</b>`,
+    `${bar} ${pct}% от цели 500К`,
+    ``,
+    `<b>Производство</b>`,
+    `🏭 В работе: <b>${inProdCount ?? 0}</b> заказов`,
+    ``,
+    `<b>AI-команда</b>  ${activeAgents} из ${agentRows?.length ?? 0} активны`,
+  ]
+
+  if ((agentRows ?? []).length > 0) {
+    for (const a of agentRows ?? []) {
+      const icon = AGENT_ICONS[a.agent_key] ?? '🤖'
+      const status = a.enabled ? '🟢' : '⚪'
+      lines.push(`${status} ${icon} ${a.last_action_text ?? 'ещё не запускался'}`)
+    }
+  }
+
+  const kb: InlineKeyboard = [
+    [
+      { text: '🔄 Обновить', callback_data: 'menu:dashboard' },
+      { text: '🤖 Агенты',   callback_data: 'menu:agents' },
+    ],
+    [{ text: '🏠 Меню', callback_data: 'menu:main' }],
+  ]
+
+  const text = lines.join('\n')
+  if (msgId) await editMessage(chatId, msgId, text, kb)
+  else await sendMessage(chatId, text, kb)
 }
 
-// ─── Parameter extraction tool ───────────────────────────────────────────────
+// ─── Agents menu ─────────────────────────────────────────────────────────────
+
+async function handleAgentsMenu(chatId: number, msgId?: number) {
+  const { data: agents } = await db()
+    .from('agent_settings')
+    .select('agent_key, name, enabled, is_running, last_action_text, last_run_at')
+    .order('id')
+
+  const lines = [`🤖 <b>AI-команда MGlass</b>\n`]
+  for (const a of agents ?? []) {
+    const icon   = AGENT_ICONS[a.agent_key] ?? '🤖'
+    const status = a.is_running ? '⚡' : a.enabled ? '🟢' : '⚪'
+    lines.push(`${status} ${icon} <b>${a.name}</b>`)
+    if (a.last_action_text) lines.push(`   └ <i>${a.last_action_text}</i>`)
+  }
+
+  const keyboard: InlineKeyboard = []
+  for (const a of agents ?? []) {
+    keyboard.push([
+      {
+        text: `${a.enabled ? '⏸ Выкл' : '▶ Вкл'} ${a.name}`,
+        callback_data: `agents:toggle:${a.agent_key}`,
+      },
+      { text: '🔁 Запустить', callback_data: `agents:run:${a.agent_key}` },
+    ])
+  }
+  keyboard.push([{ text: '🏠 Меню', callback_data: 'menu:main' }])
+
+  const text = lines.join('\n')
+  if (msgId) await editMessage(chatId, msgId, text, keyboard)
+  else await sendMessage(chatId, text, keyboard)
+}
+
+// ─── Calc tools ───────────────────────────────────────────────────────────────
+
+type ParsedCalcInput = {
+  type: CalcType; width: number; height: number; options: CalcOptions
+}
 
 const PARSE_TOOL: Tool = {
   name: 'extract_params',
@@ -59,197 +177,127 @@ const PARSE_TOOL: Tool = {
   input_schema: {
     type: 'object' as const,
     properties: {
-      type:         { type: 'string', enum: ['mirror', 'loft', 'shower'], description: 'Тип изделия' },
-      width:        { type: 'number', description: 'Ширина в мм (для круга — диаметр)' },
-      height:       { type: 'number', description: 'Высота в мм (для круга = ширина)' },
-      shape:        { type: 'string', enum: ['rectangle', 'circle', 'oval'], description: 'Форма. circle — если сказано "круглое/круг/round"' },
-      mirrorType:   { type: 'string', enum: ['silver', 'crystal_vision'], description: 'crystal_vision — только если сказано "осветлённое/crystal vision/crystalvision". Иначе silver.' },
-      hasLighting:  { type: 'boolean', description: 'true ТОЛЬКО если явно: "подсветка/LED/Aura/с подсветкой"' },
-      hasSandblast: { type: 'boolean', description: 'true ТОЛЬКО если: "пескоструй/матирование/рисунок"' },
-      buttonType:   { type: 'string', enum: ['none', 'sensor', 'wave'], description: 'wave — датчик взмаха, sensor — сенсорная кнопка' },
-      withMounting: { type: 'boolean', description: 'true ТОЛЬКО если: "монтаж/установка/с монтажом"' },
-      model:        { type: 'string', description: 'Модель душевой: M1–M12' },
-      tier:         { type: 'string', enum: ['budget', 'standard'], description: 'Класс душевой' },
-      hardwareColor: { type: 'string', description: 'Цвет фурнитуры: chrome/black/gold/brass' },
-      systemType:   { type: 'string', enum: ['fixed', 'sliding', 'swing'], description: 'swing=распашная, sliding=раздвижная, fixed=неподвижная' },
-      sections:     { type: 'number', description: 'Секций лофт-перегородки' },
+      type:          { type: 'string', enum: ['mirror', 'loft', 'shower'] },
+      width:         { type: 'number' },
+      height:        { type: 'number' },
+      shape:         { type: 'string', enum: ['rectangle', 'circle', 'oval'] },
+      mirrorType:    { type: 'string', enum: ['silver', 'crystal_vision'] },
+      hasLighting:   { type: 'boolean' },
+      hasSandblast:  { type: 'boolean' },
+      buttonType:    { type: 'string', enum: ['none', 'sensor', 'wave'] },
+      withMounting:  { type: 'boolean' },
+      model:         { type: 'string' },
+      tier:          { type: 'string', enum: ['budget', 'standard'] },
+      hardwareColor: { type: 'string' },
+      systemType:    { type: 'string', enum: ['fixed', 'sliding', 'swing'] },
+      sections:      { type: 'number' },
     },
     required: ['type', 'width', 'height'],
   },
 }
 
 const PARSE_SYSTEM = `Ты — строгий парсер параметров MGlass. Задача: извлечь параметры и вызвать extract_params.
-
-ПРАВИЛА (нарушение недопустимо):
+ПРАВИЛА:
 - Есть тип + размеры → сразу вызывай extract_params
-- Нет размеров → спроси только: "Укажи размеры (ширина × высота в мм)"
-- Размеры в мм. 100 см = 1000 мм. 80 см = 800 мм.
-
-ФОРМА ЗЕРКАЛА:
-- "круглое/круг/round/круглой формы" → shape: circle, width = height = диаметр
-- "овальное/oval" → shape: oval
-- Всё остальное → shape: rectangle (не указывай если прямоугольник)
-
-МАТЕРИАЛ ЗЕРКАЛА:
-- "осветлённое/осветленное/crystal vision/crystalvision/crystal" → mirrorType: crystal_vision
-- Всё остальное → mirrorType: silver (или не указывай)
-
-ПОДСВЕТКА:
-- ТОЛЬКО "подсветка/LED/Aura/с подсветкой/по периметру" → hasLighting: true
-- Без упоминания → НЕ включать
-
-МОНТАЖ:
-- ТОЛЬКО "монтаж/установка/с монтажом/повесить" → withMounting: true
-- Без упоминания → НЕ включать
-
+- Нет размеров → спроси: "Укажи размеры (ширина × высота в мм)"
+- "круглое/круг" → shape: circle, width=height=диаметр
+- "осветлённое/crystal vision" → mirrorType: crystal_vision
+- "подсветка/LED" → hasLighting: true
+- "монтаж/установка" → withMounting: true
 ЗАПРЕЩЕНО добавлять параметры которые пользователь не упоминал.`
 
-// ─── Normalization ───────────────────────────────────────────────────────────
-
 function normalizeInput(raw: Record<string, unknown>): ParsedCalcInput {
-  const type = raw.type as CalcType
-  let width  = Number(raw.width)  || 0
-  let height = Number(raw.height) || 0
-  const shape = raw.shape as CalcOptions['shape'] | undefined
-
-  // Нормализация синонимов цвета фурнитуры
+  const type   = raw.type as CalcType
+  let width    = Number(raw.width) || 0
+  let height   = Number(raw.height) || 0
+  const shape  = raw.shape as CalcOptions['shape'] | undefined
   const colorMap: Record<string, string> = {
-    'черн': 'black', 'black': 'black',
-    'хром': 'chrome', 'chrome': 'chrome', 'серебр': 'chrome',
-    'золот': 'gold', 'gold': 'gold',
-    'брасс': 'brass', 'латунь': 'brass',
+    'черн': 'black', 'black': 'black', 'хром': 'chrome', 'chrome': 'chrome',
+    'серебр': 'chrome', 'золот': 'gold', 'gold': 'gold', 'брасс': 'brass', 'латунь': 'brass',
   }
   let hardwareColor = raw.hardwareColor as string | undefined
   if (hardwareColor) {
     const lc = hardwareColor.toLowerCase()
     hardwareColor = Object.entries(colorMap).find(([k]) => lc.includes(k))?.[1] ?? hardwareColor
   }
-
-  // Для круга ширина = высота = диаметр
-  if (shape === 'circle') {
-    const d = Math.max(width, height)
-    width = height = d
-  }
-
-  // Круг/овал → подложка обязательна (как на веб-платформе)
+  if (shape === 'circle') { const d = Math.max(width, height); width = height = d }
   const isRound = shape === 'circle' || shape === 'oval'
-
   const options: CalcOptions = {
     shape,
-    hasSubstrate: isRound || undefined,
-    mirrorType:   raw.mirrorType   as CalcOptions['mirrorType']   | undefined,
-    hasLighting:  Boolean(raw.hasLighting),
-    hasSandblast: Boolean(raw.hasSandblast),
-    buttonType:   (raw.buttonType  as CalcOptions['buttonType'])  ?? 'none',
-    withMounting: Boolean(raw.withMounting),
-    model:        raw.model        as string | undefined,
-    tier:         raw.tier         as CalcOptions['tier']         | undefined,
+    hasSubstrate:  isRound || undefined,
+    mirrorType:    raw.mirrorType    as CalcOptions['mirrorType']  | undefined,
+    hasLighting:   Boolean(raw.hasLighting),
+    hasSandblast:  Boolean(raw.hasSandblast),
+    buttonType:    (raw.buttonType   as CalcOptions['buttonType']) ?? 'none',
+    withMounting:  Boolean(raw.withMounting),
+    model:         raw.model         as string | undefined,
+    tier:          raw.tier          as CalcOptions['tier']        | undefined,
     hardwareColor,
-    systemType:   raw.systemType   as CalcOptions['systemType']   | undefined,
-    sections:     raw.sections     ? Number(raw.sections)         : undefined,
+    systemType:    raw.systemType    as CalcOptions['systemType']  | undefined,
+    sections:      raw.sections ? Number(raw.sections) : undefined,
   }
-
-  // Убираем undefined-поля
   Object.keys(options).forEach(k => {
     if (options[k as keyof CalcOptions] === undefined) delete options[k as keyof CalcOptions]
   })
-
   return { type, width, height, options }
 }
 
-// ─── Parsed params summary ───────────────────────────────────────────────────
-
-function formatConfirmText(p: ParsedCalcInput, originalText?: string): string {
-  const typeLabels: Record<string, string> = {
-    mirror: '🪞 Зеркало', shower: '🚿 Душевая', loft: '🏗 Лофт',
-  }
-  const shapeLabels: Record<string, string> = {
-    circle: 'круглое', oval: 'овальное', rectangle: 'прямоугольное',
-  }
-  const systemLabels: Record<string, string> = {
-    fixed: 'неподвижная', sliding: 'раздвижная', swing: 'распашная',
-  }
-
+function formatConfirmText(p: ParsedCalcInput): string {
+  const typeLabels: Record<string, string>   = { mirror: '🪞 Зеркало', shower: '🚿 Душевая', loft: '🏗 Лофт' }
+  const shapeLabels: Record<string, string>  = { circle: 'круглое', oval: 'овальное', rectangle: 'прямоугольное' }
+  const systemLabels: Record<string, string> = { fixed: 'неподвижная', sliding: 'раздвижная', swing: 'распашная' }
   const lines: string[] = ['📋 <b>Я понял запрос так:</b>\n']
   lines.push(`Изделие: <b>${typeLabels[p.type] ?? p.type}</b>`)
-
   if (p.type === 'mirror') {
     const shape = p.options.shape ?? 'rectangle'
     lines.push(`Форма: <b>${shapeLabels[shape]}</b>`)
-    if (shape === 'circle') {
-      lines.push(`Диаметр: <b>Ø${p.width} мм</b>`)
-    } else {
-      lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
-    }
-    lines.push(`Материал: <b>${p.options.mirrorType === 'crystal_vision' ? 'Crystal Vision (осветлённое)' : 'Silver (стандарт)'}</b>`)
-    if (p.options.hasSubstrate) lines.push('Подложка: <b>включена ✓</b>')
-    if (p.options.hasLighting)  lines.push('Подсветка: <b>Aura ✓</b>')
-    if (p.options.hasSandblast) lines.push('Пескоструй: <b>да ✓</b>')
-    if (p.options.buttonType === 'wave')   lines.push('Кнопка: <b>датчик взмаха ✓</b>')
-    if (p.options.buttonType === 'sensor') lines.push('Кнопка: <b>сенсорная ✓</b>')
+    if (shape === 'circle') lines.push(`Диаметр: <b>Ø${p.width} мм</b>`)
+    else lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
+    lines.push(`Материал: <b>${p.options.mirrorType === 'crystal_vision' ? 'Crystal Vision' : 'Silver'}</b>`)
+    if (p.options.hasSubstrate) lines.push('Подложка: ✓')
+    if (p.options.hasLighting)  lines.push('Подсветка Aura: ✓')
+    if (p.options.hasSandblast) lines.push('Пескоструй: ✓')
+    if (p.options.buttonType === 'wave')   lines.push('Кнопка: датчик взмаха')
+    if (p.options.buttonType === 'sensor') lines.push('Кнопка: сенсорная')
   } else if (p.type === 'shower') {
     lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
-    if (p.options.model)       lines.push(`Модель: <b>${p.options.model}</b>`)
-    if (p.options.tier)        lines.push(`Класс: <b>${p.options.tier === 'budget' ? 'Бюджет' : 'Стандарт'}</b>`)
+    if (p.options.model)         lines.push(`Модель: <b>${p.options.model}</b>`)
+    if (p.options.tier)          lines.push(`Класс: <b>${p.options.tier === 'budget' ? 'Бюджет' : 'Стандарт'}</b>`)
     if (p.options.hardwareColor) lines.push(`Фурнитура: <b>${p.options.hardwareColor}</b>`)
-    if (p.options.systemType)  lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
+    if (p.options.systemType)    lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
   } else if (p.type === 'loft') {
     lines.push(`Размер: <b>${p.width} × ${p.height} мм</b>`)
-    if (p.options.sections)    lines.push(`Секций: <b>${p.options.sections}</b>`)
-    if (p.options.systemType)  lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
+    if (p.options.sections)   lines.push(`Секций: <b>${p.options.sections}</b>`)
+    if (p.options.systemType) lines.push(`Тип: <b>${systemLabels[p.options.systemType!]}</b>`)
   }
-
-  if (p.options.withMounting) lines.push('Монтаж: <b>включён ✓</b>')
-
+  if (p.options.withMounting) lines.push('Монтаж: включён ✓')
   lines.push('\nВсё верно?')
   return lines.join('\n')
 }
 
-// ─── Calculation & result formatting ─────────────────────────────────────────
-
 async function runCalc(p: ParsedCalcInput): Promise<{ reply: string; hasResult: boolean; margin: number }> {
-  const result = await withTimeout(
-    quickCalc(p.type, p.width, p.height, p.options),
-    12000, 'quickCalc'
-  )
+  const result = await withTimeout(quickCalc(p.type, p.width, p.height, p.options), 12000, 'quickCalc')
   if (!result) return { reply: '❌ Не удалось рассчитать. Проверь параметры.', hasResult: false, margin: 0 }
-
-  const icon = result.margin >= 40 ? '🟢' : result.margin >= 30 ? '🟡' : '🔴'
-  const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
-
-  const reply = [
-    result.description,
-    '',
-    `📊 <i>Маржа: ${result.margin}% ${icon} | Итого: ${fmt(result.price)}</i>`,
-  ].join('\n')
-
+  const icon  = result.margin >= 40 ? '🟢' : result.margin >= 30 ? '🟡' : '🔴'
+  const fmt   = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+  const reply = [result.description, '', `📊 <i>Маржа: ${result.margin}% ${icon} | Итого: ${fmt(result.price)}</i>`].join('\n')
   return { reply, hasResult: true, margin: result.margin }
 }
-
-// ─── Claude parameter extraction ─────────────────────────────────────────────
 
 async function parseCalcInput(text: string): Promise<ParsedCalcInput | string> {
   const response = await withTimeout(
     anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 300,
-      system: PARSE_SYSTEM,
-      tools: [PARSE_TOOL],
-      tool_choice: { type: 'auto' },
+      model: 'claude-sonnet-4-6', max_tokens: 300,
+      system: PARSE_SYSTEM, tools: [PARSE_TOOL], tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: text }],
     }),
     20000, 'claude-parse'
   )
-
   if (response.stop_reason !== 'tool_use') {
-    return response.content.find(b => b.type === 'text')?.text ?? 'Укажи тип изделия и размеры (ширина × высота в мм).'
+    return response.content.find(b => b.type === 'text')?.text ?? 'Укажи тип изделия и размеры.'
   }
-
   const block = response.content.find(b => b.type === 'tool_use')
-  if (!block || block.type !== 'tool_use') {
-    return 'Укажи тип изделия и размеры (ширина × высота в мм).'
-  }
-
+  if (!block || block.type !== 'tool_use') return 'Укажи тип изделия и размеры.'
   return normalizeInput(block.input as Record<string, unknown>)
 }
 
@@ -270,60 +318,25 @@ function leadsKeyboard(chats: any[], page: number): InlineKeyboard {
   return rows
 }
 
-// ─── /health ──────────────────────────────────────────────────────────────────
+// ─── /health & /debug ─────────────────────────────────────────────────────────
 
 async function handleHealth(chatId: number) {
   const checks: string[] = ['🔧 <b>Статус MGlass Bot</b>\n']
   try {
     await withTimeout(Promise.resolve(db().from('telegram_sessions').select('telegram_id').limit(1)), 4000, 'supabase')
     checks.push('✅ Supabase — подключён')
-  } catch {
-    checks.push('❌ Supabase — ошибка')
-  }
+  } catch { checks.push('❌ Supabase — ошибка') }
   checks.push(process.env.ANTHROPIC_API_KEY ? '✅ Anthropic — ключ задан' : '❌ Anthropic — ключ не задан')
-  checks.push(process.env.OPENAI_API_KEY    ? '✅ OpenAI (голос) — ключ задан' : '⚠️ OpenAI — ключ не задан (голос недоступен)')
+  checks.push(process.env.OPENAI_API_KEY    ? '✅ OpenAI (голос) — ключ задан' : '⚠️ OpenAI — ключ не задан')
   checks.push(process.env.TELEGRAM_BOT_TOKEN ? '✅ Telegram token — задан' : '❌ Telegram token — не задан')
+  checks.push(process.env.WAZZUP_API_KEY ? '✅ Wazzup — ключ задан' : '⚠️ Wazzup — ключ не задан')
   checks.push('✅ Webhook — активен')
   await sendMessage(chatId, checks.join('\n'), [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
 }
 
-// ─── /debug & /debug_last ─────────────────────────────────────────────────────
-
-async function handleDebug(chatId: number, tid: number) {
-  const tgUser  = await getTelegramUser(tid)
-  const session = await getSession(tid)
-  const lines = [
-    '🔍 <b>Debug Info</b>\n',
-    `Telegram ID: <code>${tid}</code>`,
-    `Авторизован: ${tgUser ? '✅' : '❌'}`,
-    `Состояние: <code>${session.state}</code>`,
-    `OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? '✅' : '❌'}`,
-    `ANTHROPIC_API_KEY: ${process.env.ANTHROPIC_API_KEY ? '✅' : '❌'}`,
-    `TELEGRAM_BOT_TOKEN: ${process.env.TELEGRAM_BOT_TOKEN ? '✅' : '❌'}`,
-  ]
-  await sendMessage(chatId, lines.join('\n'), [[{ text: '📋 Последний расчёт', callback_data: 'debug:last' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
-}
-
-async function handleDebugLast(chatId: number, tid: number) {
-  const session = await getSession(tid)
-  const d = (session.context as any)?.lastDebug as Record<string, unknown> | undefined
-  if (!d) {
-    await sendMessage(chatId, '📋 Нет данных о последнем расчёте.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-    return
-  }
-  const lines = [
-    '📋 <b>Последний расчёт — отладка</b>\n',
-    d.transcription ? `🎙 Транскрипция:\n<i>${d.transcription}</i>\n` : null,
-    d.parsed ? `🔍 Распознано:\n<code>${JSON.stringify(d.parsed, null, 2)}</code>\n` : null,
-    d.margin !== undefined ? `📊 Маржа: ${d.margin}%` : null,
-    d.error ? `❌ Ошибка: <code>${d.error}</code>` : null,
-  ].filter(Boolean).join('\n')
-  await sendMessage(chatId, lines, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-}
-
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-async function handle(update: any) {
+async function handle(update: any, baseUrl: string) {
   const msg = update.message
   const cb  = update.callback_query
   if (!msg && !cb) return
@@ -331,9 +344,6 @@ async function handle(update: any) {
   const tid    = (msg ?? cb.message).chat.id as number
   const chatId = tid
 
-  console.log(`[TG] tid=${tid} type=${msg ? 'msg' : 'cb'}`)
-
-  // /health без авторизации
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/health') { await handleHealth(chatId); return }
@@ -344,13 +354,12 @@ async function handle(update: any) {
   // ── Неавторизованный ──
   if (!tgUser) {
     if (msg?.text && /^\d{6}$/.test(msg.text.trim())) {
-      const code    = msg.text.trim()
+      const code     = msg.text.trim()
       const supabase = db()
       const { data: codeRow } = await supabase
         .from('telegram_auth_codes').select('user_id')
         .eq('code', code).eq('used', false)
         .gt('expires_at', new Date().toISOString()).single()
-
       if (!codeRow) {
         await sendMessage(chatId, '❌ Код неверный или истёк. Попроси администратора создать новый.')
         return
@@ -361,17 +370,16 @@ async function handle(update: any) {
       })
       await supabase.from('telegram_auth_codes').update({ used: true }).eq('code', code)
       await setSession(tid, 'main_menu')
-      await sendMessage(chatId, `✅ Привязка успешна! Добро пожаловать в MGlass Assistant.`, MAIN_MENU)
+      await sendMessage(chatId, `✅ Привязка успешна! Добро пожаловать.`, MAIN_MENU)
       return
     }
     await sendMessage(chatId, '🔒 Введи <b>6-значный код</b> из MGlass (Admin → Пользователи → кнопка TG).')
     return
   }
 
-  console.log(`[TG] authorized user_id=${tgUser.user_id}`)
   const session = await getSession(tid)
 
-  // ── Команды авторизованного ──
+  // ── Команды ──
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
     if (cmd === '/start' || cmd === '/menu') {
@@ -379,154 +387,169 @@ async function handle(update: any) {
       await setSession(tid, 'main_menu')
       return
     }
-    if (cmd === '/debug')      { await handleDebug(chatId, tid); return }
-    if (cmd === '/debug_last') { await handleDebugLast(chatId, tid); return }
+    if (cmd === '/d' || cmd === '/dashboard') {
+      await handleDashboard(chatId)
+      return
+    }
+    if (cmd === '/agents') {
+      await handleAgentsMenu(chatId)
+      return
+    }
+    if (cmd === '/calc') {
+      await sendMessage(chatId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n<i>Пример: Зеркало 800×600, Душевая 1000×2000 с монтажом</i>')
+      await setSession(tid, 'calc_input')
+      return
+    }
   }
 
-  // ── Callback buttons ──
+  // ── Callbacks ──
   if (cb) {
     await answerCallback(cb.id)
     const data: string  = cb.data
     const msgId: number = cb.message.message_id
 
+    // Главное меню
     if (data === 'menu:main') {
       await editMessage(chatId, msgId, '🏠 <b>Главное меню</b>', MAIN_MENU)
       await setSession(tid, 'main_menu')
       return
     }
 
+    // Дашборд
+    if (data === 'menu:dashboard') {
+      await handleDashboard(chatId, msgId)
+      return
+    }
+
+    // Агенты — список
+    if (data === 'menu:agents') {
+      await handleAgentsMenu(chatId, msgId)
+      return
+    }
+
+    // Агенты — вкл/выкл
+    if (data.startsWith('agents:toggle:')) {
+      const key = data.slice(14)
+      const { data: current } = await db().from('agent_settings').select('enabled, name').eq('agent_key', key).single()
+      if (current) {
+        await db().from('agent_settings')
+          .update({ enabled: !current.enabled, updated_at: new Date().toISOString() })
+          .eq('agent_key', key)
+        await answerCallback(cb.id, current.enabled ? `⏸ ${current.name} остановлен` : `▶ ${current.name} запущен`)
+      }
+      await handleAgentsMenu(chatId, msgId)
+      return
+    }
+
+    // Агенты — запустить
+    if (data.startsWith('agents:run:')) {
+      const key = data.slice(11)
+      const { data: agent } = await db().from('agent_settings').select('name, enabled').eq('agent_key', key).single()
+      if (!agent?.enabled) {
+        await answerCallback(cb.id, '⚠️ Сначала включи агента')
+        return
+      }
+      await answerCallback(cb.id, '⏳ Запускаю...')
+      // Запускаем асинхронно — результат придёт через уведомление
+      fetch(`${baseUrl}/api/cron/agent-${key}`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET ?? ''}`, 'Content-Type': 'application/json' },
+      }).then(() => {}).catch(() => {})
+      await sendMessage(chatId, `⏳ <b>${agent.name}</b> запускается...\nРезультат придёт сюда.`,
+        [[{ text: '🤖 К агентам', callback_data: 'menu:agents' }]])
+      return
+    }
+
+    // Наполнитель — одобрить позицию
+    if (data.startsWith('catalog:approve:')) {
+      const approvalId = data.slice(16)
+      const supabase = db()
+      const { data: settings } = await supabase
+        .from('agent_settings').select('memory').eq('agent_key', 'catalog').single()
+      const memory = settings?.memory as Record<string, unknown>
+      const pending = (memory?.pending_approvals ?? []) as Array<{
+        id: string; table: string; name: string; category?: string; reason: string
+      }>
+      const item = pending.find(p => p.id === approvalId)
+      if (!item) {
+        await answerCallback(cb.id, '⚠️ Позиция уже обработана')
+        return
+      }
+      try {
+        const row: Record<string, string> = { name: item.name }
+        if (item.category) row.category = item.category
+        await supabase.from(item.table).insert(row)
+        const newPending = pending.filter(p => p.id !== approvalId)
+        await supabase.from('agent_settings').update({
+          memory: { ...memory, pending_approvals: newPending, approved_count: ((memory.approved_count as number) ?? 0) + 1 },
+        }).eq('agent_key', 'catalog')
+        await answerCallback(cb.id, `✅ Добавлено: ${item.name}`)
+        await editMessage(chatId, msgId,
+          `✅ <b>Добавлено в ${item.table}:</b> ${item.name}${item.category ? ` (${item.category})` : ''}`,
+          [[{ text: '🤖 Агенты', callback_data: 'menu:agents' }]])
+      } catch {
+        await answerCallback(cb.id, '❌ Ошибка при добавлении')
+      }
+      return
+    }
+
+    // Наполнитель — отклонить позицию
+    if (data.startsWith('catalog:reject:')) {
+      const approvalId = data.slice(15)
+      const supabase = db()
+      const { data: settings } = await supabase
+        .from('agent_settings').select('memory').eq('agent_key', 'catalog').single()
+      const memory = settings?.memory as Record<string, unknown>
+      const pending = (memory?.pending_approvals ?? []) as Array<{ id: string }>
+      const newPending = pending.filter(p => p.id !== approvalId)
+      await supabase.from('agent_settings').update({
+        memory: { ...memory, pending_approvals: newPending },
+      }).eq('agent_key', 'catalog')
+      await answerCallback(cb.id, '❌ Отклонено')
+      await editMessage(chatId, msgId, '❌ <i>Предложение отклонено</i>',
+        [[{ text: '🤖 Агенты', callback_data: 'menu:agents' }]])
+      return
+    }
+
+    // Расчёт
     if (data === 'menu:calc') {
-      await editMessage(chatId, msgId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n\n<i>Пример: Душевая 1000×2000 распашная с монтажом</i>')
+      await editMessage(chatId, msgId,
+        '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n<i>Пример: Душевая 1000×2000 распашная с монтажом</i>')
       await setSession(tid, 'calc_input')
       return
     }
 
-    if (data === 'menu:train') {
-      await editMessage(chatId, msgId, '🧠 <b>Задача для AI</b>\n\nОпиши что нужно улучшить в боте.')
-      await setSession(tid, 'train_input')
-      return
-    }
-
-    if (data === 'menu:leads' || data.startsWith('leads:page:')) {
-      const page = data.startsWith('leads:page:') ? parseInt(data.split(':')[2]) : 0
-      const { data: chats } = await db()
-        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
-        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
-      const list = chats ?? []
-      if (!list.length) {
-        await editMessage(chatId, msgId, '📋 Нет активных лидов.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-        return
-      }
-      await editMessage(chatId, msgId, `📋 <b>Лиды</b> (${list.length})`, leadsKeyboard(list, page))
-      await setSession(tid, 'leads_list', { page })
-      return
-    }
-
-    if (data === 'menu:msg') {
-      const { data: chats } = await db()
-        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
-        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
-      const list = chats ?? []
-      await editMessage(chatId, msgId, '📋 <b>Выбери клиента:</b>', leadsKeyboard(list, 0))
-      await setSession(tid, 'msg_select_lead')
-      return
-    }
-
-    if (data.startsWith('lead:') && !data.startsWith('lead:pause') && !data.startsWith('lead:resume') && !data.startsWith('lead:msg')) {
-      const chatPhoneId = data.slice(5)
-      const { data: chat } = await db().from('ai_managed_chats').select('*').eq('chat_id', chatPhoneId).single()
-      if (!chat) return
-
-      const { data: lastMsgs } = await db().from('ai_conversations')
-        .select('role, content').eq('chat_id', chatPhoneId)
-        .order('created_at', { ascending: false }).limit(3)
-      const history = (lastMsgs ?? []).reverse().map(m => `${m.role === 'user' ? '👤' : '🤖'} ${m.content}`).join('\n')
-
-      const text = [
-        `<b>${chat.client_name || chat.chat_id}</b>`, `📱 ${chat.chat_id}`,
-        chat.is_active ? '🟢 AI активен' : `⚪ Закрыт (${chat.close_reason ?? '—'})`,
-        '', history || '(нет сообщений)',
-      ].join('\n')
-
-      const keyboard: InlineKeyboard = [
-        [
-          { text: '💬 Написать', callback_data: `lead:msg:${chatPhoneId}` },
-          chat.is_active
-            ? { text: '⏸ Остановить AI', callback_data: `lead:pause:${chatPhoneId}` }
-            : { text: '▶ Включить AI',   callback_data: `lead:resume:${chatPhoneId}` },
-        ],
-        [{ text: '◀ К списку', callback_data: 'menu:leads' }],
-      ]
-      await editMessage(chatId, msgId, text, keyboard)
-      await setSession(tid, 'lead_detail', { chatPhoneId })
-      return
-    }
-
-    if (data.startsWith('lead:pause:')) {
-      const chatPhoneId = data.slice(11)
-      await db().from('ai_managed_chats').update({ is_active: false, close_reason: 'human' }).eq('chat_id', chatPhoneId)
-      await answerCallback(cb.id, '⏸ AI остановлен')
-      await handle({ callback_query: { ...cb, data: `lead:${chatPhoneId}` } })
-      return
-    }
-
-    if (data.startsWith('lead:resume:')) {
-      const chatPhoneId = data.slice(12)
-      await db().from('ai_managed_chats').update({ is_active: true, close_reason: null }).eq('chat_id', chatPhoneId)
-      await answerCallback(cb.id, '▶ AI включён')
-      await handle({ callback_query: { ...cb, data: `lead:${chatPhoneId}` } })
-      return
-    }
-
-    if (data.startsWith('lead:msg:')) {
-      const chatPhoneId = data.slice(9)
-      await editMessage(chatId, msgId, `💬 Введи сообщение для <b>${chatPhoneId}</b>. Текстом или голосом.`)
-      await setSession(tid, 'lead_send_msg', { chatPhoneId })
-      return
-    }
-
-    // ── Calc confirm / reenter ──
     if (data === 'calc:confirm') {
-      const ctx = session.context as any
+      const ctx    = session.context as any
       const parsed = ctx?.parsedInput as ParsedCalcInput | undefined
       if (!parsed) {
-        await editMessage(chatId, msgId, '❌ Параметры устарели. Введи запрос заново.', [[{ text: '🧮 Расчёт', callback_data: 'menu:calc' }]])
+        await editMessage(chatId, msgId, '❌ Параметры устарели. Введи запрос заново.',
+          [[{ text: '🧮 Расчёт', callback_data: 'menu:calc' }]])
         return
       }
-
-      const waitMsg = await sendMessage(chatId, '⏳ Считаю...') as any
+      const waitMsg   = await sendMessage(chatId, '⏳ Считаю...') as any
       const waitMsgId = waitMsg?.result?.message_id
-
       try {
-        console.log(`[VOICE:calculation_started] tid=${tid} type=${parsed.type} ${parsed.width}x${parsed.height}`)
         const { reply, hasResult, margin } = await runCalc(parsed)
-        console.log(`[VOICE:calculation_finished] tid=${tid} margin=${margin} hasResult=${hasResult}`)
-
         const keyboard: InlineKeyboard = hasResult
           ? [[{ text: '💾 Сохранить', callback_data: 'calc:save' }], [{ text: '🔄 Ещё', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
           : [[{ text: '🏠 Меню', callback_data: 'menu:main' }]]
-
         if (waitMsgId) await editMessage(chatId, waitMsgId, reply, keyboard)
         else await sendMessage(chatId, reply, keyboard)
-        console.log(`[VOICE:response_sent] tid=${tid}`)
-
-        // Save debug + update session
-        const newCtx = { ...ctx, lastDebug: { ...((ctx.lastDebug as any) ?? {}), margin, calcResult: reply } }
-        await setSession(tid, hasResult ? 'main_menu' : 'calc_input', { ...newCtx, calcText: reply })
+        await setSession(tid, hasResult ? 'main_menu' : 'calc_input', { ...ctx, calcText: reply })
       } catch (err) {
-        console.error(`[VOICE:calculation_error] tid=${tid}`, err)
         const isTimeout = err instanceof Error && err.message.startsWith('timeout')
-        const errText = isTimeout ? '⏱ Расчёт занял слишком долго. Попробуй снова.' : '❌ Ошибка расчёта. Попробуй снова.'
+        const errText   = isTimeout ? '⏱ Расчёт занял слишком долго.' : '❌ Ошибка расчёта. Попробуй снова.'
         const kb: InlineKeyboard = [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
         if (waitMsgId) await editMessage(chatId, waitMsgId, errText, kb)
         else await sendMessage(chatId, errText, kb)
-        await setSession(tid, 'calc_input', { ...session.context, lastDebug: { error: String(err) } })
       }
       return
     }
 
     if (data === 'calc:reenter') {
-      await editMessage(chatId, msgId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие заново. Например:\n<i>Круглое зеркало 800 мм</i>\n<i>Душевая 900×2000 распашная с монтажом</i>')
+      await editMessage(chatId, msgId,
+        '🧮 <b>Расчёт цены</b>\n\nОпиши изделие заново.\n<i>Пример: Круглое зеркало 800 мм</i>')
       await setSession(tid, 'calc_input')
       return
     }
@@ -540,12 +563,84 @@ async function handle(update: any) {
         })
       }
       await answerCallback(cb.id, '✅ Сохранено')
-      await editMessage(chatId, msgId, '✅ Расчёт сохранён.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      await editMessage(chatId, msgId, '✅ Расчёт сохранён.',
+        [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
 
-    if (data === 'debug:last') {
-      await handleDebugLast(chatId, tid)
+    // Лиды
+    if (data === 'menu:leads' || data.startsWith('leads:page:')) {
+      const page = data.startsWith('leads:page:') ? parseInt(data.split(':')[2]) : 0
+      const { data: chats } = await db()
+        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
+        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
+      const list = chats ?? []
+      if (!list.length) {
+        await editMessage(chatId, msgId, '📋 Нет активных лидов.',
+          [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        return
+      }
+      await editMessage(chatId, msgId, `📋 <b>Лиды</b> (${list.length})`, leadsKeyboard(list, page))
+      await setSession(tid, 'leads_list', { page })
+      return
+    }
+
+    if (data === 'menu:msg') {
+      const { data: chats } = await db()
+        .from('ai_managed_chats').select('chat_id, client_name, is_active, last_message_at')
+        .order('last_message_at', { ascending: false, nullsFirst: false }).limit(50)
+      await editMessage(chatId, msgId, '📋 <b>Выбери клиента:</b>', leadsKeyboard(chats ?? [], 0))
+      await setSession(tid, 'msg_select_lead')
+      return
+    }
+
+    if (data.startsWith('lead:') && !data.startsWith('lead:pause') && !data.startsWith('lead:resume') && !data.startsWith('lead:msg')) {
+      const chatPhoneId = data.slice(5)
+      const { data: chat } = await db().from('ai_managed_chats').select('*').eq('chat_id', chatPhoneId).single()
+      if (!chat) return
+      const { data: lastMsgs } = await db().from('ai_conversations')
+        .select('role, content').eq('chat_id', chatPhoneId)
+        .order('created_at', { ascending: false }).limit(3)
+      const history = (lastMsgs ?? []).reverse().map(m => `${m.role === 'user' ? '👤' : '🤖'} ${m.content}`).join('\n')
+      const text = [
+        `<b>${chat.client_name || chat.chat_id}</b>`, `📱 ${chat.chat_id}`,
+        chat.is_active ? '🟢 AI активен' : `⚪ Закрыт (${chat.close_reason ?? '—'})`,
+        '', history || '(нет сообщений)',
+      ].join('\n')
+      const keyboard: InlineKeyboard = [
+        [
+          { text: '💬 Написать', callback_data: `lead:msg:${chatPhoneId}` },
+          chat.is_active
+            ? { text: '⏸ Стоп AI', callback_data: `lead:pause:${chatPhoneId}` }
+            : { text: '▶ Вкл AI',  callback_data: `lead:resume:${chatPhoneId}` },
+        ],
+        [{ text: '◀ К списку', callback_data: 'menu:leads' }],
+      ]
+      await editMessage(chatId, msgId, text, keyboard)
+      await setSession(tid, 'lead_detail', { chatPhoneId })
+      return
+    }
+
+    if (data.startsWith('lead:pause:')) {
+      const chatPhoneId = data.slice(11)
+      await db().from('ai_managed_chats').update({ is_active: false, close_reason: 'human' }).eq('chat_id', chatPhoneId)
+      await answerCallback(cb.id, '⏸ AI остановлен')
+      await handle({ callback_query: { ...cb, data: `lead:${chatPhoneId}` } }, baseUrl)
+      return
+    }
+
+    if (data.startsWith('lead:resume:')) {
+      const chatPhoneId = data.slice(12)
+      await db().from('ai_managed_chats').update({ is_active: true, close_reason: null }).eq('chat_id', chatPhoneId)
+      await answerCallback(cb.id, '▶ AI включён')
+      await handle({ callback_query: { ...cb, data: `lead:${chatPhoneId}` } }, baseUrl)
+      return
+    }
+
+    if (data.startsWith('lead:msg:')) {
+      const chatPhoneId = data.slice(9)
+      await editMessage(chatId, msgId, `💬 Введи сообщение для <b>${chatPhoneId}</b>. Текстом или голосом.`)
+      await setSession(tid, 'lead_send_msg', { chatPhoneId })
       return
     }
 
@@ -558,65 +653,35 @@ async function handle(update: any) {
 
   if (msg?.voice || msg?.audio) {
     if (!process.env.OPENAI_API_KEY) {
-      console.warn(`[VOICE:no_key] tid=${tid}`)
-      await sendMessage(chatId, '⚠️ Голосовое распознавание не настроено. Отправь текстом.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      await sendMessage(chatId, '⚠️ Голосовое распознавание не настроено. Отправь текстом.',
+        [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       return
     }
     const fileId   = msg.voice?.file_id ?? msg.audio?.file_id
-    const duration = msg.voice?.duration ?? msg.audio?.duration ?? 0
-    const fileSize = msg.voice?.file_size ?? msg.audio?.file_size ?? 0
-    console.log(`[VOICE:received] tid=${tid} fileId=${fileId} dur=${duration}s size=${fileSize}b`)
-
-    const statusMsg = await sendMessage(chatId, '🎙 Распознаю голос...') as any
+    const statusMsg   = await sendMessage(chatId, '🎙 Распознаю голос...') as any
     const statusMsgId = statusMsg?.result?.message_id
-
     try {
-      // transcribeVoice handles per-step timeouts: 15s download + 20s whisper
-      console.log(`[VOICE:pipeline_started] tid=${tid}`)
-      inputText = await withTimeout(transcribeVoice(fileId), 40_000, 'voice_pipeline')
+      inputText    = await withTimeout(transcribeVoice(fileId), 40_000, 'voice_pipeline')
       transcription = inputText
-      console.log(`[VOICE:pipeline_finished] tid=${tid} chars=${inputText.length}`)
-
       if (!inputText) {
-        // Whisper вернул пустую строку — голос не разобран, но ошибки нет
-        console.warn(`[VOICE:empty_result] tid=${tid}`)
-        const reply = '🎙 Не смог разобрать голос. Говори чётче, ближе к микрофону, или напиши текстом.'
+        const reply = '🎙 Не смог разобрать. Говори чётче или напиши текстом.'
         if (statusMsgId) await editMessage(chatId, statusMsgId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-        else await sendMessage(chatId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+        else await sendMessage(chatId, reply)
         return
       }
-
       if (statusMsgId) await editMessage(chatId, statusMsgId, `🎙 Распознал: <i>${inputText}</i>`)
     } catch (err) {
-      const msg2 = err instanceof Error ? err.message : String(err)
-      console.error(`[VOICE:error] tid=${tid} err="${msg2}"`)
-      let reply: string
-      if (msg2.startsWith('timeout:download') || msg2.includes('download')) {
-        reply = '⏱ Не удалось скачать голосовой файл. Попробуй снова.'
-      } else if (msg2.startsWith('timeout:whisper') || msg2.startsWith('timeout:voice')) {
-        reply = '⏱ Распознавание заняло слишком долго. Попробуй короткое сообщение.'
-      } else if (msg2.includes('OPENAI_API_KEY')) {
-        reply = '⚠️ API ключ OpenAI не настроен. Обратитесь к администратору.'
-      } else if (msg2.includes('whisper_http_')) {
-        const code = msg2.match(/whisper_http_(\d+)/)?.[1]
-        reply = code === '429'
-          ? '⏳ Превышен лимит запросов к Whisper. Подожди минуту и попробуй снова.'
-          : `❌ Ошибка сервиса распознавания (${code}). Попробуй текстом.`
-      } else {
-        reply = '❌ Не удалось распознать голос. Попробуй текстом.'
-      }
+      const m = err instanceof Error ? err.message : String(err)
+      const reply = m.startsWith('timeout') ? '⏱ Распознавание заняло слишком долго.' : '❌ Не удалось распознать голос.'
       if (statusMsgId) await editMessage(chatId, statusMsgId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
-      else await sendMessage(chatId, reply, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      else await sendMessage(chatId, reply)
       return
     }
   }
 
   if (!inputText) return
 
-  const state = session.state
-
-  // Голосовое из любого состояния → всегда идём в расчёт
-  const effectiveState = transcription ? 'calc_input' : state
+  const effectiveState = transcription ? 'calc_input' : session.state
 
   if (effectiveState === 'main_menu' || effectiveState === 'leads_list') {
     await sendMessage(chatId, '🏠 <b>Главное меню</b>', MAIN_MENU)
@@ -624,82 +689,66 @@ async function handle(update: any) {
     return
   }
 
-  // ── Расчёт: парсинг → подтверждение ──
   if (effectiveState === 'calc_input') {
-    const thinkMsg  = await sendMessage(chatId, '🔍 Распознаю параметры...') as any
+    const thinkMsg   = await sendMessage(chatId, '🔍 Распознаю параметры...') as any
     const thinkMsgId = thinkMsg?.result?.message_id
-
     try {
-      console.log(`[VOICE:parsing_started] tid=${tid} text="${inputText.slice(0, 60)}"`)
       const parseResult = await parseCalcInput(inputText)
-
       if (typeof parseResult === 'string') {
-        console.log(`[VOICE:parsing_question] tid=${tid}`)
-        // Claude задал уточняющий вопрос
         if (thinkMsgId) await editMessage(chatId, thinkMsgId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
         else await sendMessage(chatId, parseResult, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
         return
       }
-
-      console.log(`[VOICE:parsing_finished] tid=${tid}`, JSON.stringify(parseResult))
-
-      const confirmText = formatConfirmText(parseResult, inputText)
+      const confirmText = formatConfirmText(parseResult)
       const keyboard: InlineKeyboard = [
         [{ text: '✅ Считать', callback_data: 'calc:confirm' }, { text: '✏️ Исправить', callback_data: 'calc:reenter' }],
         [{ text: '🏠 Меню', callback_data: 'menu:main' }],
       ]
-
       if (thinkMsgId) await editMessage(chatId, thinkMsgId, confirmText, keyboard)
       else await sendMessage(chatId, confirmText, keyboard)
-
       await setSession(tid, 'calc_confirm', {
         parsedInput: parseResult,
-        lastDebug: { transcription, parsed: parseResult },
+        lastDebug:   { transcription, parsed: parseResult },
       })
     } catch (err) {
-      console.error(`[VOICE:parsing_error] tid=${tid}`, err)
       const isTimeout = err instanceof Error && err.message.startsWith('timeout')
-      const errText = isTimeout ? '⏱ Распознавание параметров заняло слишком долго.' : '❌ Не удалось распознать параметры. Попробуй снова.'
-      if (thinkMsgId) await editMessage(chatId, thinkMsgId, errText, [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
-      else await sendMessage(chatId, errText, [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
+      const errText   = isTimeout ? '⏱ Слишком долго.' : '❌ Не удалось распознать параметры.'
+      if (thinkMsgId) await editMessage(chatId, thinkMsgId, errText,
+        [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
+      else await sendMessage(chatId, errText)
     }
     return
   }
 
   if (effectiveState === 'train_input') {
-    const waitMsg  = await sendMessage(chatId, '⏳ Сохраняю...') as any
+    const waitMsg   = await sendMessage(chatId, '⏳ Сохраняю...') as any
     const waitMsgId = waitMsg?.result?.message_id
-
     try {
-      const classifyResp = await withTimeout(
+      const resp = await withTimeout(
         anthropic.messages.create({
-          model: 'claude-sonnet-4-6',
-          max_tokens: 200,
+          model: 'claude-sonnet-4-6', max_tokens: 200,
           system: 'Classify this AI improvement task. Respond with JSON only: {"title":"short title in Russian","category":"tone|closing|objections|pricing|product|other"}',
           messages: [{ role: 'user', content: inputText }],
-        }),
-        15000, 'claude-classify'
+        }), 15000, 'claude-classify'
       )
       let title = inputText.slice(0, 80), category = 'other'
       try {
-        const raw = classifyResp.content.find(b => b.type === 'text')?.text ?? '{}'
+        const raw = resp.content.find(b => b.type === 'text')?.text ?? '{}'
         const p = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
         title = p.title ?? title; category = p.category ?? category
       } catch {}
-
       await db().from('ai_training_tasks').insert({
         title, description: inputText, source_text: inputText,
         category, priority: 'normal', status: 'pending', created_by: tgUser.user_id,
       })
-
       const text = `✅ <b>Задача AI сохранена:</b>\n\n${title}\n<i>Категория: ${category}</i>`
       const kb: InlineKeyboard = [[{ text: '➕ Ещё', callback_data: 'menu:train' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
       if (waitMsgId) await editMessage(chatId, waitMsgId, text, kb)
       else await sendMessage(chatId, text, kb)
       await setSession(tid, 'main_menu')
-    } catch (err) {
-      console.error('[TG] train error:', err)
-      if (waitMsgId) await editMessage(chatId, waitMsgId, '❌ Не удалось сохранить.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+    } catch {
+      if (waitMsgId) await editMessage(chatId, waitMsgId, '❌ Не удалось сохранить.',
+        [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     return
   }
@@ -714,9 +763,9 @@ async function handle(update: any) {
       await db().from('ai_conversations').insert({ chat_id: chatPhoneId, role: 'assistant', content: inputText })
       await sendMessage(chatId, `✅ Отправлено!\n\n<i>${inputText}</i>`,
         [[{ text: '◀ К клиенту', callback_data: `lead:${chatPhoneId}` }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
-    } catch (err) {
-      console.error('[TG] lead_send error:', err)
-      await sendMessage(chatId, '❌ Не удалось отправить.', [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+    } catch {
+      await sendMessage(chatId, '❌ Не удалось отправить.',
+        [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     await setSession(tid, 'main_menu')
     return
@@ -726,28 +775,25 @@ async function handle(update: any) {
   await setSession(tid, 'main_menu')
 }
 
-// ─── POST ──────────────────────────────────────────────────────────────────────
+// ─── POST ─────────────────────────────────────────────────────────────────────
 
 export async function POST(req: Request) {
-  const secret = req.headers.get('x-telegram-bot-api-secret-token')
+  const secret         = req.headers.get('x-telegram-bot-api-secret-token')
   const expectedSecret = process.env.TELEGRAM_WEBHOOK_SECRET
   if (!expectedSecret || secret !== expectedSecret) {
     return NextResponse.json({ ok: true })
   }
 
   let update: any
-  try {
-    update = await req.json()
-  } catch {
-    return NextResponse.json({ ok: true })
-  }
+  try { update = await req.json() } catch { return NextResponse.json({ ok: true }) }
+
+  const host    = req.headers.get('host') ?? 'localhost:3000'
+  const isLocal = host.includes('localhost') || host.includes('127.0.0.1')
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL ?? `${isLocal ? 'http' : 'https'}://${host}`
 
   after(async () => {
-    try {
-      await handle(update)
-    } catch (err) {
-      console.error('[TG] unhandled error:', err)
-    }
+    try { await handle(update, baseUrl) }
+    catch (err) { console.error('[TG] unhandled error:', err) }
   })
 
   return NextResponse.json({ ok: true })

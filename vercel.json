@@ -8,6 +8,10 @@
     { "path": "/api/cron/followup",      "schedule": "0 9 * * 1-5" },
     { "path": "/api/cron/sla",           "schedule": "0 9 * * *"   },
     { "path": "/api/cron/anomalies",     "schedule": "0 8 * * *"   },
-    { "path": "/api/cron/stock",         "schedule": "0 8 * * 1"   }
+    { "path": "/api/cron/stock",           "schedule": "0 8 * * 1"   },
+    { "path": "/api/cron/agent-revenue",   "schedule": "0 * * * *"   },
+    { "path": "/api/cron/agent-analyst",   "schedule": "0 */6 * * *" },
+    { "path": "/api/cron/agent-production","schedule": "0 */6 * * *" },
+    { "path": "/api/cron/agent-catalog",   "schedule": "0 9 * * *"   }
   ]
 }

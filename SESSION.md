@@ -1,67 +1,40 @@
 ## Текущая задача
-Нет активной задачи
+Система AI-агентов полностью собрана — все 4 агента готовы к активации
 
-## Что сделано (эта сессия — 13 мая 2026)
+## Что сделано (сессия 14 мая 2026 — AI агенты)
+- `lib/agentMemory.ts` — общий паттерн памяти для всех агентов (readMemory/writeMemory/writeLog/startRun/finishRun/failRun)
+- `app/admin/agents/page.tsx` — дашборд: грид 2×2, тоггл вкл/выкл, ручной запуск, лента логов, автообновление 30с
+- `app/api/cron/agent-revenue/route.ts` — переписан с памятью (followup WhatsApp клиентам)
+- `app/api/cron/agent-analyst/route.ts` — переписан с памятью (6ч отчёт метрик)
+- `app/api/cron/agent-production/route.ts` — создан (Максим, мониторинг производства 🏭)
+- `app/api/cron/agent-catalog/route.ts` — создан (Наполнитель справочников 🧠)
+- `app/api/agents/run/[key]/route.ts` — прокси для ручного запуска (проверяет Supabase-сессию)
+- `supabase/migrations/20250514_agent_settings_v2.sql` — columns memory, config, is_running, total_runs
+- Sidebar.tsx — пункт AI-агенты в SEO и ADMIN вкладках
 
-### Роли и навигация
-- `lib/getRole.ts` — 5 ролей (admin/manager/production/seo/ceo), `canAccess()`, `ROLE_ALLOWED`
-- `middleware.ts` — route protection, роль кэшируется в cookie `user-role` (1ч TTL)
-- `components/Sidebar.tsx` — полная переработка: меню по ролям
-  - manager: 3 аккордеона (Калькулятор B2C, Продажи B2C, B2B с 4 пунктами)
-  - production: плоский список с лейблом "Производство"
-  - seo: 3 аккордеона (Аналитика, Маркетинг, AI)
-  - ceo: 3 аккордеона (Owner Center, Аналитика, Система)
-  - admin: переключатель Менеджер/Админ/СЕО, бейдж роли под логотипом
-- `app/access-denied/page.tsx` — страница "Нет доступа"
-
-### PDF кириллица (QuotePDF.tsx)
-- Скачаны TTF: `public/fonts/PTSans-Regular.ttf`, `public/fonts/PTSans-Bold.ttf`
-- `Font.register()` с `path.join(process.cwd(), 'public', 'fonts', ...)`
-- Исправлена сумма позиции: `item.saleIncVat` (итого за все штуки, не умножать на qty)
-
-### Номера заказов
-- Миграция `20250513_b2b_order_numbers.sql` — колонка `client_order_number` в `b2b_orders` ✅ ПРИМЕНЕНА
-- Поля "Наш номер" / "№ клиента" в калькуляторе, б2б-просчётах, б2б-заказах
-- Inline-редактирование номеров в б2б-заказах
-
-### Менеджер видит только свои данные
-- Миграция `20250513_manager_order_scope.sql` — `created_by uuid` + `see_all_orders boolean` ✅ ПРИМЕНЕНА
-- `app/calculator/b2b/page.tsx` — сохраняет `created_by: managerId`
-- `app/b2b-quotes/page.tsx` — фильтр `.eq('created_by', user.id)` если нет разрешения
-- `app/b2b-orders/page.tsx` — аналогично
-- `app/manager-dashboard/page.tsx` — локальные переменные `localRole/localSeeAll`, фильтр на уровне запроса; переключатель "Все/Только мои" скрыт для обычных менеджеров
-- `app/admin/users/page.tsx` — колонка "Заказы" с toggle "Все/Свои" для менеджеров
-
-### КП — общий м² и кг в PDF
-- `components/QuotePDF.tsx` — добавлены поля `totalArea`/`totalWeight` в `QuotePDFProps`, отображаются под итоговой суммой (Площадь, Вес, Позиций)
-- `app/api/quotes/[id]/pdf/route.ts` — добавлен select `total_area,total_weight`, передаются в `QuotePDFProps`
-- HTML-версия (`app/b2b-quotes/[id]/kp/page.tsx`) — уже была с этими данными, изменений не требовала
-
-### Себестоимость доп. услуг (триплекс и др.)
-- `supabase/migrations/20250514_service_cost_price.sql` — миграция СОЗДАНА, но НЕ ПРИМЕНЕНА ещё
-- `lib/types.ts` — добавлено `cost_price: number` в `B2BService`
-- `lib/b2bCalculator.ts` — `costWithVatFull` теперь включает закупочную стоимость услуг
-- `app/admin/b2b-services/page.tsx` — поле и колонка "Себестоимость" добавлены
-
-### Аудит и исправления (полная проверка системы)
-- `b2b-quotes/page.tsx` — `duplicateQuote()` теперь копирует `created_by`
-- `app/api/quotes/[id]/pdf/route.ts` — проверка доступа (role/see_all_orders/created_by)
-- `app/admin/users/page.tsx` — `?? false` для `see_all_orders` (защита от undefined)
-- `calculator/b2b/page.tsx` — `saveError` state, ошибка показывается под кнопкой; `created_by: managerId ?? null`
-
-### Согласованность данных в б2б-просчётах
-- Позиции показывают полную цену до скидки — как в PDF
-- Скидка отдельной строкой в tfoot
-- Итоговая строка "Итого к оплате" = total_after_discount
+## Предыдущее (14 мая 2026 — зеркала)
+- `supabase/migrations/20250514_mirror_lighting_components.sql` ✅ ПРИМЕНЕНА + RLS политики
+- `app/admin/mirror-lighting/page.tsx` — справочник компонентов (CRUD)
+- `lib/mirrorCalculator.ts`, `app/calculator/mirror/page.tsx` — модульный конфигуратор
 
 ## Следующий шаг
-Применить миграцию `supabase/migrations/20250514_service_cost_price.sql` в Supabase SQL Editor (добавляет cost_price к b2b_services, ставит 2500 для триплекса)
+Применить в Supabase SQL Editor:
+1. `ALTER TABLE calculations ADD COLUMN IF NOT EXISTS followup_sent_at TIMESTAMPTZ;`
+2. Содержимое `supabase/migrations/20250514_agent_settings.sql`
+3. Содержимое `supabase/migrations/20250514_agent_settings_v2.sql`
+4. `supabase/migrations/20250514_service_cost_price.sql` (себестоимость доп. услуг)
+
+После — включить агентов через /admin/agents и добавить в vercel.json когда готов
 
 ## Контекст
-- Обе миграции применены в Supabase ✅
-- Cookie `user-role` кэшируется 1 час — при смене роли нужно подождать или сбросить cookie
-- Шрифты PT Sans в `public/fonts/` — обязательны для PDF, не удалять
-- manager03@mglass.ru — тестовый аккаунт менеджера (без see_all_orders)
+- Агенты НЕ добавлены в vercel.json — автозапуска нет, только ручной через дашборд
+- Прокси /api/agents/run/[key] требует Supabase сессию (аутентифицированный пользователь)
+- agent-catalog: require_approval=true — только предлагает позиции, не добавляет сам
+- Нужны env-переменные: CRON_SECRET, ANTHROPIC_API_KEY, WAZZUP_API_KEY, WAZZUP_CHANNEL_ID, NEXT_PUBLIC_APP_URL
+- Cookie user-role кэшируется 1ч; шрифты PT Sans в public/fonts/ — не удалять (PDF)
 
 ## Открытые вопросы
-- Нет
+- Миграции agent_settings + agent_settings_v2 применены в Supabase? (нужно проверить)
+- Колонка followup_sent_at добавлена в calculations?
+- Переменная NEXT_PUBLIC_APP_URL задана в Vercel?
+- Миграция 20250514_service_cost_price.sql — ещё не применена

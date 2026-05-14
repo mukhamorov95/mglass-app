@@ -72,9 +72,10 @@ const SEO_MARKETING: NavItem[] = [
 ]
 
 const SEO_AI: NavItem[] = [
-  { href: '/ai-assistant', label: 'AI Ассистент', icon: '🤖' },
-  { href: '/kp-generator', label: 'КП Генератор', icon: '📄' },
-  { href: '/vladislav',    label: 'Vladislav AI', icon: '💬' },
+  { href: '/ai-assistant',  label: 'AI Ассистент', icon: '🤖' },
+  { href: '/kp-generator',  label: 'КП Генератор', icon: '📄' },
+  { href: '/vladislav',     label: 'Vladislav AI', icon: '💬' },
+  { href: '/admin/agents',  label: 'AI-агенты',    icon: '⚡' },
 ]
 
 // ─── CEO role ─────────────────────────────────────────────────────────────────
@@ -154,13 +155,15 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
+  { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
 ]
 
 // ─── Admin mode: Admin view ───────────────────────────────────────────────────
 
 const ADMIN_DIRECTORIES: NavEntry[] = [
-  { href: '/admin/glass-prices',    label: 'Стекло',         icon: '🔷' },
-  { href: '/admin/services',        label: 'Услуги',         icon: '🔧' },
+  { href: '/admin/glass-prices',    label: 'Стекло',          icon: '🔷' },
+  { href: '/admin/mirror-lighting', label: 'Подсветка зеркал', icon: '💡' },
+  { href: '/admin/services',        label: 'Услуги',          icon: '🔧' },
   { groupLabel: 'Фурнитура' },
   { href: '/admin/hardware',        label: 'Лофт',           icon: '🔩', indent: true },
   { href: '/admin/shower-hardware', label: 'Душевые',        icon: '🚿', indent: true },
@@ -203,7 +206,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials'])) open.push('b2b')
     if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
   }

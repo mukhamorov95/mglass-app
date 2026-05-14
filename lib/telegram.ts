@@ -59,7 +59,7 @@ export async function downloadFile(fileId: string, signal?: AbortSignal): Promis
   return Buffer.from(await res.arrayBuffer())
 }
 
-export async function notifyAdmins(text: string) {
+async function getAdminIds(): Promise<number[]> {
   const { createClient } = await import('@supabase/supabase-js')
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -69,9 +69,17 @@ export async function notifyAdmins(text: string) {
     .from('telegram_users')
     .select('telegram_id, users!inner(role)')
     .eq('users.role', 'admin')
-  for (const row of (data ?? [])) {
-    await sendMessage((row as any).telegram_id, text).catch(() => {})
-  }
+  return (data ?? []).map((row: any) => row.telegram_id)
+}
+
+export async function notifyAdmins(text: string) {
+  const ids = await getAdminIds()
+  for (const id of ids) await sendMessage(id, text).catch(() => {})
+}
+
+export async function notifyAdminsWithKeyboard(text: string, keyboard: InlineKeyboard) {
+  const ids = await getAdminIds()
+  for (const id of ids) await sendMessage(id, text, keyboard).catch(() => {})
 }
 
 function voiceLog(step: string, data?: Record<string, unknown>) {
