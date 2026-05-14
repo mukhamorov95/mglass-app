@@ -279,46 +279,42 @@ export default function AgentsPage() {
                         Ожидают одобрения — {pending.length}
                       </p>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {pending.map((item: any) => (
-                          <div key={item.id} className="flex items-start justify-between gap-2 py-1.5 border-b border-[#f7f7f7] last:border-0">
+                        {pending.map((item: any, idx: number) => {
+                          const name = item.name ?? item.suggestion ?? null
+                          if (!name) return null
+                          const doAction = async (reject: boolean) => {
+                            const res = await fetch('/api/agents/catalog/approve', {
+                              method: 'POST',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({ id: item.id ?? null, idx: item.id ? undefined : idx, reject }),
+                            })
+                            if (res.ok) await load()
+                          }
+                          return (
+                          <div key={item.id ?? idx} className="flex items-start justify-between gap-2 py-1.5 border-b border-[#f7f7f7] last:border-0">
                             <div className="flex-1 min-w-0">
                               <p className="text-[11px] font-medium text-[#111110] truncate">
-                                {item.name}
+                                {name}
                                 {item.category && <span className="text-[#9a9a95] font-normal"> · {item.category}</span>}
                                 {item.cost_price && <span className="text-emerald-600 font-normal"> · {Number(item.cost_price).toLocaleString('ru-RU')} ₽</span>}
                                 {item.unit && <span className="text-[#9a9a95] font-normal">/{item.unit}</span>}
                               </p>
-                              <p className="text-[10px] text-[#9a9a95] truncate">{item.reason}</p>
+                              <p className="text-[10px] text-[#9a9a95] truncate">{item.reason ?? ''}</p>
                               {item.source && <p className="text-[10px] text-[#b8b8b4]">{item.source}</p>}
                             </div>
                             <div className="flex gap-1 flex-shrink-0">
-                              <button
-                                onClick={async () => {
-                                  await fetch('/api/agents/catalog/approve', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ id: item.id }),
-                                  })
-                                  await load()
-                                }}
+                              <button onClick={() => doAction(false)}
                                 className="h-6 px-2 rounded text-[10px] font-medium bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors">
                                 ✅
                               </button>
-                              <button
-                                onClick={async () => {
-                                  await fetch('/api/agents/catalog/approve', {
-                                    method: 'POST',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({ id: item.id, reject: true }),
-                                  })
-                                  await load()
-                                }}
+                              <button onClick={() => doAction(true)}
                                 className="h-6 px-2 rounded text-[10px] font-medium bg-red-50 text-red-500 hover:bg-red-100 transition-colors">
                                 ✕
                               </button>
                             </div>
                           </div>
-                        ))}
+                          )
+                        })}
                       </div>
                     </div>
                   )
