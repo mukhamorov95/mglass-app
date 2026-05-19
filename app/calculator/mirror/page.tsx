@@ -411,10 +411,12 @@ export default function MirrorCalculatorPage() {
   const marginBadge = isGreen ? 'bg-emerald-50 text-emerald-600' : isAmber ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-red-600'
   const discountExceeded = Number(discount) > strategy.max_manager_discount
 
-  const sensorBtn = materials.find(m => m.name.toLowerCase().includes('сенсорная кнопка') && m.active)
-  const waveBtn   = materials.find(m => m.name.toLowerCase().includes('датчик взмаха')    && m.active)
-  const installSvc= services.find(s => s.name.toLowerCase().includes('монтаж зеркала'))
-  const deliverySvc = services.find(s => s.name.toLowerCase().includes('доставка'))
+  const sensorBtn     = materials.find(m => m.name.toLowerCase().includes('сенсорная кнопка') && m.active)
+  const waveBtn       = materials.find(m => m.name.toLowerCase().includes('датчик взмаха')    && m.active)
+  const installSvc    = services.find(s => s.name.toLowerCase().includes('монтаж зеркала'))
+  const deliverySvc   = services.find(s => s.name.toLowerCase().includes('доставка'))
+  const sandblastMat  = materials.find(m => m.name.toLowerCase().includes('пескоструй') && m.active)
+  const sandblastPrice = sandblastMat?.cost_price ?? 1200
 
   function handleAddToCart() {
     if (!result) return
@@ -796,7 +798,7 @@ export default function MirrorCalculatorPage() {
             <div className="p-4">
               <SectionLabel>Опции</SectionLabel>
               <div className="space-y-2.5">
-                <OptionRow label="Пескоструйный рисунок" desc="1 200 ₽/м²" value={hasSandblast} onClick={() => setHasSandblast(!hasSandblast)} />
+                <OptionRow label="Пескоструйный рисунок" desc={`${sandblastPrice.toLocaleString('ru-RU')} ₽/м²`} value={hasSandblast} onClick={() => setHasSandblast(!hasSandblast)} />
                 <div className="flex items-center justify-between">
                   <OptionRow label="Подложка" value={hasSubstrate} onClick={() => setHasSubstrate(!hasSubstrate)} />
                   {hasSubstrate && (

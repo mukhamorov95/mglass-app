@@ -90,7 +90,6 @@ export default function LoftCalculatorPage() {
         supabase.from('partner_types').select('*').eq('active', true),
         fetch('/api/admin/pricing-formula'),
       ])
-      setMaterials(mats ?? [])
       setServices(svcs ?? [])
       setAllHardware(hw ?? [])
       setAllSettings((fins ?? []) as FinancialSettings[])
@@ -102,8 +101,53 @@ export default function LoftCalculatorPage() {
         if (bp != null) setDeliveryBase(bp)
         if (pk != null) setDeliveryPerKm(pk)
       }
+
+      // Build glass list: prefer materials table, fallback to glass_price_matrix
+      const realMats = (mats ?? []) as Material[]
+      let allMats = realMats
+      const hasGlassInMaterials = realMats.some(m => m.category === 'стекло')
+      if (!hasGlassInMaterials) {
+        const { data: matrix } = await supabase
+          .from('glass_price_matrix')
+          .select('name,price_type,t4,t5,t6,t8,t10,t12,waste_pct')
+          .eq('category', 'glass')
+          .order('name')
+        const THICKNESSES = [4, 5, 6, 8, 10, 12] as const
+        const costRows = (matrix ?? []).filter(r => r.price_type === 'cost')
+        const saleRows = (matrix ?? []).filter(r => r.price_type === 'sale')
+        const synth: Material[] = []
+        costRows.forEach((row, ri) => {
+          THICKNESSES.forEach(mm => {
+            const tKey = `t${mm}` as keyof typeof row
+            if (row[tKey] != null && Number(row[tKey]) > 0) {
+              const saleRow = saleRows.find(r => r.name === row.name)
+              const salePrice = saleRow ? (Number((saleRow as Record<string, unknown>)[`t${mm}`]) || 0) : 0
+              synth.push({
+                id: -(ri * 100 + mm),
+                name: `Стекло ${row.name} ${mm} мм`,
+                short_name: null,
+                category: 'стекло',
+                unit: 'м²',
+                cost_price: Number(row[tKey]) || 0,
+                sale_price: salePrice,
+                has_vat: false,
+                vat_rate: 0,
+                active: true,
+                in_stock: true,
+                comment: null,
+                image_url: null,
+                created_at: '',
+                updated_at: '',
+              } as Material)
+            }
+          })
+        })
+        allMats = [...realMats, ...synth]
+      }
+      setMaterials(allMats)
+
       const saved = loadSaved()
-      const glasses = (mats ?? []).filter(m => m.category === 'стекло')
+      const glasses = allMats.filter(m => m.category === 'стекло')
       if (!saved.glassId && glasses.length) setGlassId(glasses[0].id)
       const loftSettings =
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'loft') ??
@@ -416,18 +460,20 @@ export default function LoftCalculatorPage() {
               {/* Стекло */}
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <p className="text-[10px] text-[#9a9a95] mb-1">Стекло 4 мм · закалка включена</p>
+                  <p className="text-[10px] text-[#9a9a95] mb-1">Стекло · закалка включена</p>
                   <select value={glassId ?? ''} onChange={e => setGlassId(Number(e.target.value))}
                     className="w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400">
-                    {glassMaterials.map(m => (
-                      <option key={m.id} value={m.id}>
-                        {m.name}{m.id === glassId && glassCalcPrice
-                          ? ` — ${glassCalcPrice.toLocaleString('ru-RU')} ₽/м²`
-                          : m.sale_price
-                            ? ` — ${m.sale_price.toLocaleString('ru-RU')} ₽/м²`
-                            : ` — ${m.cost_price.toLocaleString('ru-RU')} ₽/м²`}
-                      </option>
-                    ))}
+                    {glassMaterials.length === 0 && <option value="">— нет стекла в справочнике —</option>}
+                    {glassMaterials.map(m => {
+                      const price = m.id === glassId && glassCalcPrice
+                        ? glassCalcPrice
+                        : (m.sale_price || m.cost_price)
+                      return (
+                        <option key={m.id} value={m.id}>
+                          {m.name} — {price.toLocaleString('ru-RU')} ₽/м²
+                        </option>
+                      )
+                    })}
                   </select>
                 </div>
               </div>

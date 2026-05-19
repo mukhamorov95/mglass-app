@@ -215,7 +215,9 @@ export function calculateMirror(
   // Sandblasting
   if (inputs.hasSandblast) {
     const sb = findMat(materials, 'Пескоструй')
-    if (sb) lines.push({ name: dn(sb), qty: Number(area.toFixed(3)), unit: 'м²', price: sb.cost_price, total: Math.round(area * sb.cost_price) })
+    const sbPrice = sb ? sb.cost_price : 1200
+    const sbName  = sb ? dn(sb) : 'Пескоструйный рисунок'
+    lines.push({ name: sbName, qty: Number(area.toFixed(3)), unit: 'м²', price: sbPrice, total: Math.round(area * sbPrice) })
   }
 
   // Substrate
