@@ -7,7 +7,7 @@ import PricingBlock from '@/components/PricingBlock'
 import { calculateLoft, LoftInputs, LoftSystemType, LoftResult } from '@/lib/loftCalculator'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
-import { saveCalculation } from '@/lib/saveCalculation'
+import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
@@ -51,6 +51,8 @@ export default function LoftCalculatorPage() {
   const [savedId, setSavedId]       = useState<number | null>(null)
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
+  const [editCalcId]        = useState<number | null>(() => (loadSaved().__editCalcId__ as number) ?? null)
+  const [editOrderGroupId]  = useState<string | null>(() => (loadSaved().__order_group_id__ as string) ?? null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
 
@@ -101,7 +103,7 @@ export default function LoftCalculatorPage() {
         if (pk != null) setDeliveryPerKm(pk)
       }
       const saved = loadSaved()
-      const glasses = (mats ?? []).filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
+      const glasses = (mats ?? []).filter(m => m.category === 'стекло')
       if (!saved.glassId && glasses.length) setGlassId(glasses[0].id)
       const loftSettings =
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'loft') ??
@@ -135,7 +137,7 @@ export default function LoftCalculatorPage() {
       withMirrorFilm, withPainting, hasInstallation, hasDelivery,
       discount, margin, partnerId, selectedHwIds, hwQty, b2bDiscount])
 
-  const glassMaterials  = materials.filter(m => m.category === 'стекло' && m.name.toLowerCase().includes('4'))
+  const glassMaterials  = materials.filter(m => m.category === 'стекло')
   const selectedGlass   = glassMaterials.find(m => m.id === glassId) ?? null
 
   // Load waste_pct (cost row) and sale price (sale row) from glass_price_matrix when glass changes
@@ -238,8 +240,9 @@ export default function LoftCalculatorPage() {
     if (!result) return
     if (discountExceeded) return
     setSaving(true)
-    const saved = await saveCalculation({
-      product_type: 'loft',
+
+    const payload = {
+      product_type: 'loft' as const,
       input_data: { width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
@@ -252,8 +255,18 @@ export default function LoftCalculatorPage() {
       manager_bonus: 0, client_text: result.clientText,
       client_name: clientName.trim() || undefined,
       client_phone: clientPhone.trim() || undefined,
-    })
-    if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    }
+
+    if (editCalcId) {
+      const res = await updateCalculation(editCalcId, payload)
+      if (res && 'id' in res) {
+        setSavedId(res.id ?? null)
+        setTimeout(() => { window.location.href = `/calculations/${editCalcId}` }, 800)
+      }
+    } else {
+      const saved = await saveCalculation({ ...payload, order_group_id: editOrderGroupId ?? undefined })
+      if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    }
     setSaving(false)
   }
 
@@ -639,7 +652,7 @@ export default function LoftCalculatorPage() {
                   <button onClick={handleSave} disabled={saving || discountExceeded}
                     title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
-                    {saving ? '...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
+                    {saving ? '...' : savedId ? `#${savedId} ✓` : editCalcId ? `Обновить #${editCalcId}` : 'Сохранить расчёт'}
                   </button>
                   <button onClick={handleCopy}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] whitespace-nowrap">

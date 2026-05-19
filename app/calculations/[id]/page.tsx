@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 
@@ -34,6 +34,7 @@ type Calc = {
   client_name: string | null
   client_phone: string | null
   amo_lead_id: number | null
+  order_group_id: string | null
 }
 
 type Change = {
@@ -130,6 +131,23 @@ function fmtPhone(raw: string) {
   const d = raw.replace(/\D/g, '')
   if (d.length === 11) return `+${d[0]} (${d.slice(1, 4)}) ${d.slice(4, 7)}-${d.slice(7, 9)}-${d.slice(9)}`
   return raw
+}
+
+function openInCalculator(calc: Calc) {
+  const d = calc.input_data
+  const pt = calc.product_type
+  // __editCalcId__ and __order_group_id__ tell the calculator to UPDATE this record
+  const meta = { __editCalcId__: calc.id, __order_group_id__: calc.order_group_id ?? undefined }
+  if (pt === 'mirror') {
+    sessionStorage.setItem('mglass_mirror_prefill', JSON.stringify({ ...d, ...meta }))
+    window.location.href = '/calculator/mirror'
+  } else if (pt === 'loft') {
+    localStorage.setItem('mglass_loft', JSON.stringify({ ...d, ...meta }))
+    window.location.href = '/calculator/loft'
+  } else if (pt.startsWith('shower')) {
+    sessionStorage.setItem('mglass_shower_prefill', JSON.stringify({ ...d, ...meta }))
+    window.location.href = '/calculator/shower'
+  }
 }
 
 export default function CalculationDetailPage() {
@@ -393,6 +411,12 @@ export default function CalculationDetailPage() {
                 AMO →
               </a>
             )}
+
+            {/* Recalculate */}
+            <button onClick={() => openInCalculator(calc)}
+              className="px-3 py-2 bg-white border border-[#e8e8ed] text-[#1d1d1f] text-[13px] font-medium rounded-xl hover:bg-[#f5f5f7] transition-colors">
+              Пересчитать
+            </button>
 
             {/* PDF */}
             <button onClick={() => window.open(`/calculations/${calc.id}/print`, '_blank')}

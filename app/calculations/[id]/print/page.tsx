@@ -15,6 +15,7 @@ type Calc = {
   financial_breakdown: {
     serviceLines: ServiceLine[]
     servicesTotal: number
+    discountAmount?: number
     expensesPercent?: number
   }
   final_price: number
@@ -23,11 +24,10 @@ type Calc = {
   notes: string | null
   client_name?: string | null
   client_phone?: string | null
+  creator?: { name: string } | null
 }
 
-function fmt(n: number) {
-  return n.toLocaleString('ru-RU') + ' ₽'
-}
+function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
 function addDays(date: Date, days: number) {
   const d = new Date(date)
@@ -35,36 +35,33 @@ function addDays(date: Date, days: number) {
   return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
 }
 
-function buildProductDescription(calc: Calc): string {
-  const d = calc.input_data
-  if (calc.product_type === 'shower' || calc.product_type === 'shower_budget') {
-    const tier    = d.tier === 'budget' ? 'Бюджетная серия' : 'Стандарт'
-    const model   = d.model as string || ''
-    const dims    = (d.dimStr as string) || `${d.width}×${d.height}`
-    const glass   = d.glassType as string || d.glass as string || ''
-    const thick   = d.thickness || 8
-    const color   = d.hwColor as string || ''
-    const colorLabel: Record<string, string> = { chrome: 'Хром', black: 'Чёрный', bronze: 'Бронза', gold: 'Золото', white: 'Белый' }
-    const colorRu = colorLabel[color] || color
-    const parts = [
-      `Стеклянная душевая перегородка${model ? '. ' + model : ''}.`,
-      `Стекло ${thick}мм, ${glass || 'М1 прозрачное'}, закалённое.`,
-      colorRu ? `Фурнитура ${colorRu}, Алюминиевый профиль, фурнитура нержавейка.` : '',
-      `Размеры ${dims}мм.`,
-      `[${tier}]`,
-    ]
-    return parts.filter(Boolean).join(' ')
+function getProductDescription(calc: Calc): string {
+  if (calc.client_text) {
+    const lines: string[] = []
+    for (const line of calc.client_text.split('\n')) {
+      if (line === '') break
+      if (/Стоимость|Итого с услугами/.test(line)) break
+      if (/ — \d[\d\s]*₽/.test(line)) continue
+      lines.push(line)
+    }
+    if (lines.length > 0) return lines.join('\n')
   }
+  const d = calc.input_data
   if (calc.product_type === 'mirror') {
     const shape = d.shape === 'circle' ? 'круглое' : d.shape === 'oval' ? 'овальное' : 'прямоугольное'
     const dims  = d.shape === 'circle' ? `Ø${d.width} мм` : `${d.width}×${d.height} мм`
-    const glass = d.glassType as string || 'М1 прозрачное'
-    return `Зеркало ${shape}, ${glass}. Размер: ${dims}.`
+    return `Зеркало ${shape}, ${dims}`
   }
   if (calc.product_type === 'loft') {
-    const dims = `${d.width}×${d.height} мм`
-    const sys  = d.systemType === 'sliding' ? 'раздвижная' : d.systemType === 'swing' ? 'распашная' : ''
-    return `Лофт-перегородка${sys ? ', ' + sys : ''}. Размеры: ${dims}.`
+    return `Лофт-перегородка ${d.width}×${d.height} мм`
+  }
+  if (calc.product_type.startsWith('shower')) {
+    const dims = (d.dimStr as string) || `${d.width}×${d.height} мм`
+    const glass = d.glassType as string || ''
+    const thick = d.thickness ? `${d.thickness}мм` : '8мм'
+    const colorLabel: Record<string, string> = { chrome: 'Хром', black: 'Чёрный', bronze: 'Бронза', gold: 'Золото', white: 'Белый' }
+    const color = colorLabel[d.hwColor as string] || ''
+    return [`Душевая перегородка ${dims}`, glass && `стекло ${thick} ${glass}`, color && `фурнитура ${color}`].filter(Boolean).join(', ')
   }
   return 'Изделие из стекла'
 }
@@ -77,7 +74,7 @@ export default function PrintPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient()
-      const { data } = await supabase.from('calculations').select('*').eq('id', id).single()
+      const { data } = await supabase.from('calculations').select('*, creator:users!created_by(name)').eq('id', id).single()
       if (data) setCalc(data)
       setLoading(false)
     }
@@ -85,54 +82,48 @@ export default function PrintPage() {
   }, [id])
 
   useEffect(() => {
-    if (!loading && calc) {
-      setTimeout(() => window.print(), 400)
-    }
+    if (!loading && calc) setTimeout(() => window.print(), 400)
   }, [loading, calc])
 
-  if (loading) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#9a9a95', fontSize: 14 }}>
-      Подготовка документа...
-    </div>
-  )
-  if (!calc) return (
-    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#9a9a95', fontSize: 14 }}>
-      Расчёт не найден
-    </div>
-  )
+  if (loading) return <div style={S.loader}>Подготовка документа...</div>
+  if (!calc)   return <div style={S.loader}>Расчёт не найден</div>
 
-  const createdAt     = new Date(calc.created_at)
-  const dateStr       = createdAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-  const validUntil    = addDays(createdAt, 7)
-  const kpNum         = String(calc.id).padStart(4, '0') + '-0'
-  const serviceLines  = calc.financial_breakdown?.serviceLines ?? []
-  const servicesTotal = calc.financial_breakdown?.servicesTotal ?? 0
-  const productPrice  = calc.final_price - servicesTotal
-  const grandTotal    = calc.final_price
-  const vatAmount     = Math.round(grandTotal / 1.05 * 0.05 * 100) / 100
-  const description   = buildProductDescription(calc)
+  const createdAt    = new Date(calc.created_at)
+  const dateStr      = createdAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const validUntil   = addDays(createdAt, 7)
+  const serviceLines = calc.financial_breakdown?.serviceLines ?? []
+  const servicesTotal= calc.financial_breakdown?.servicesTotal ?? 0
+  const productPrice = calc.final_price - servicesTotal
+  const grandTotal   = calc.final_price
+  const vatAmount    = Math.round(grandTotal / 1.05 * 0.05 * 100) / 100
+  const description  = getProductDescription(calc)
+  const originalPrice = calc.discount > 0 ? Math.round(productPrice / (1 - calc.discount / 100)) : productPrice
+  const discountAmount = originalPrice - productPrice
 
+  type Row = { id: number|''; name: string; qty: number|string; price: number; total: number; isService?: boolean; isDiscount?: boolean; isZero?: boolean }
+  const rows: Row[] = [{ id: 1, name: description, qty: 1, price: originalPrice, total: productPrice }]
+
+  if (calc.discount > 0 && discountAmount > 0) {
+    rows.push({ id: '', name: `Скидка ${calc.discount}%`, qty: 1, price: -discountAmount, total: -discountAmount, isDiscount: true })
+  }
+
+  let ri = 2
   const hasMounting  = serviceLines.some(s => s.name === 'Монтаж')
   const hasLifting   = serviceLines.some(s => s.name === 'Подъём на этаж')
   const deliveryLine = serviceLines.find(s => s.name.startsWith('Доставка'))
 
-  const tableRows: { id: number; name: string; qty: number | string; price: number | string; total: number | string; italic?: boolean; isZero?: boolean }[] = [
-    { id: 1, name: description, qty: 1, price: productPrice, total: productPrice },
-  ]
-
-  let rowIdx = 2
   if (hasMounting) {
     const ml = serviceLines.find(s => s.name === 'Монтаж')!
-    tableRows.push({ id: rowIdx++, name: 'Монтаж', qty: ml.qty ?? 1, price: ml.price ?? ml.total, total: ml.total })
+    rows.push({ id: ri++, name: 'Монтаж изделия', qty: 1, price: ml.price ?? ml.total, total: ml.total, isService: true })
   }
   if (hasLifting) {
     const ll = serviceLines.find(s => s.name === 'Подъём на этаж')!
-    tableRows.push({ id: rowIdx++, name: 'Подъём*', qty: ll.qty ?? 0, price: ll.price ?? 500, total: ll.total })
+    rows.push({ id: ri++, name: 'Подъём на этаж', qty: ll.qty ?? 1, price: ll.price ?? 500, total: ll.total, isService: true })
   } else {
-    tableRows.push({ id: rowIdx++, name: 'Подъём*', qty: 0, price: 500, total: 0, isZero: true })
+    rows.push({ id: ri++, name: 'Подъём на этаж*', qty: 0, price: 500, total: 0, isService: true, isZero: true })
   }
   if (deliveryLine) {
-    tableRows.push({ id: rowIdx++, name: `Доставка\n${deliveryLine.name.replace('Доставка', '').trim()}`, qty: 1, price: deliveryLine.total, total: deliveryLine.total, italic: true })
+    rows.push({ id: ri++, name: deliveryLine.name, qty: 1, price: deliveryLine.total, total: deliveryLine.total, isService: true })
   }
 
   return (
@@ -140,186 +131,233 @@ export default function PrintPage() {
       <style>{`
         @page { margin: 15mm 14mm; size: A4 portrait; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body {
-          font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
-          background: #fff;
-          color: #111;
-          font-size: 13px;
-          line-height: 1.45;
-        }
-        @media print {
-          body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-          .no-print { display: none !important; }
-        }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { padding: 8px 10px; }
+        body { font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif; background: #fff; color: #1a1a1a; font-size: 12px; line-height: 1.5; }
+        @media print { body { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .no-print { display: none !important; } }
       `}</style>
 
-      {/* Кнопки — только на экране */}
-      <div className="no-print" style={{ position: 'fixed', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 100 }}>
-        <button onClick={() => window.print()}
-          style={{ padding: '8px 18px', background: '#111', color: '#fff', fontSize: 13, fontWeight: 600, borderRadius: 8, border: 'none', cursor: 'pointer' }}>
-          Скачать PDF
-        </button>
-        <button onClick={() => window.close()}
-          style={{ padding: '8px 18px', background: '#fff', color: '#555', fontSize: 13, border: '1px solid #ddd', borderRadius: 8, cursor: 'pointer' }}>
-          Закрыть
-        </button>
+      {/* Screen buttons */}
+      <div className="no-print" style={S.btnBar}>
+        <button onClick={() => window.print()} style={S.btnPrimary}>Скачать PDF</button>
+        <button onClick={() => window.close()} style={S.btnSecondary}>Закрыть</button>
       </div>
 
-      <div style={{ maxWidth: 720, margin: '0 auto', padding: '10px 0' }}>
+      <div style={S.page}>
 
-        {/* ── Шапка ─────────────────────────────────── */}
-        <table style={{ marginBottom: 18 }}>
-          <tbody>
-            <tr>
-              <td style={{ verticalAlign: 'top', width: '55%' }}>
-                {/* Логотип */}
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                  <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
-                    <rect width="44" height="44" rx="8" fill="#111110"/>
-                    <text x="22" y="28" textAnchor="middle" fill="white" fontSize="14" fontWeight="800" fontFamily="Arial">MG</text>
-                  </svg>
-                  <div>
-                    <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', lineHeight: 1 }}>GLASS</div>
-                    <div style={{ fontSize: 10, color: '#888', letterSpacing: 0.5 }}>ИЗДЕЛИЯ ИЗ СТЕКЛА</div>
-                  </div>
-                </div>
-                <div style={{ fontSize: 11, color: '#555', lineHeight: 1.9 }}>
-                  <div><a href="https://mglass.pro/" style={{ color: '#0071e3', textDecoration: 'none' }}>https://mglass.pro/</a></div>
-                  <div>8 (925) 788 58 37</div>
-                  <div>mglass.ceo@gmail.com</div>
-                </div>
-              </td>
-              <td style={{ verticalAlign: 'top', textAlign: 'right' }}>
-                <div style={{ fontSize: 11, color: '#555', lineHeight: 2.1 }}>
-                  <div><span style={{ color: '#888' }}>Дата</span>{'  '}<strong>{dateStr}</strong></div>
-                  <div><span style={{ color: '#888' }}>Номер КП</span>{'  '}<strong>{calc.id}</strong></div>
-                  <div><span style={{ color: '#888' }}>Код сделки</span>{'  '}<strong>{kpNum}</strong></div>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* ── Заголовок ─────────────────────────────── */}
-        <div style={{ textAlign: 'center', marginBottom: 16 }}>
-          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.3px' }}>Коммерческое предложение</div>
+        {/* ── HEADER BAND ─── */}
+        <div style={S.header}>
+          <div style={S.headerLeft}>
+            <svg width="38" height="38" viewBox="0 0 38 38" fill="none" style={{ flexShrink: 0 }}>
+              <rect width="38" height="38" rx="6" fill="rgba(255,255,255,0.15)"/>
+              <text x="19" y="25" textAnchor="middle" fill="white" fontSize="13" fontWeight="800" fontFamily="Arial,sans-serif" letterSpacing="0.5">MG</text>
+            </svg>
+            <div>
+              <div style={S.headerBrand}>MGLASS</div>
+              <div style={S.headerSub}>Изделия из стекла и зеркал</div>
+            </div>
+          </div>
+          <div style={S.headerRight}>
+            <div style={S.headerMeta}><span style={S.metaLabel}>Дата</span><span>{dateStr}</span></div>
+            <div style={S.headerMeta}><span style={S.metaLabel}>Номер КП</span><span>#{calc.id}</span></div>
+          </div>
         </div>
 
-        {/* ── Клиент + срок ─────────────────────────── */}
-        <table style={{ marginBottom: 14, fontSize: 12 }}>
-          <tbody>
-            <tr>
-              <td style={{ width: '40%', paddingBottom: 6 }}>
-                <span style={{ color: '#888' }}>Заказчик</span>{'  '}
-                <strong>{calc.client_name || '___________________________'}</strong>
-                {calc.client_phone && <span style={{ color: '#555', marginLeft: 8 }}>{calc.client_phone}</span>}
-              </td>
-              <td style={{ textAlign: 'right', paddingBottom: 6 }}>
-                <span style={{ color: '#888' }}>Предложение актуально до</span>{'  '}<strong>{validUntil}</strong>
-              </td>
-            </tr>
-            <tr>
-              <td/>
-              <td style={{ textAlign: 'right' }}>
-                <span style={{ color: '#888' }}>Кем подготовлено</span>{'  '}<strong>Владислав</strong>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        {/* ── DOCUMENT TITLE ─── */}
+        <div style={S.titleBlock}>
+          <h1 style={S.title}>Коммерческое предложение</h1>
+        </div>
 
-        {/* ── Таблица позиций ───────────────────────── */}
-        <table style={{ border: '1px solid #ddd', marginBottom: 0, fontSize: 12 }}>
+        {/* ── CLIENT META ─── */}
+        <div style={S.clientRow}>
+          <div style={S.clientLeft}>
+            <span style={S.fieldLabel}>Заказчик</span>
+            <span style={S.clientName}>{calc.client_name || '——————————————'}</span>
+            {calc.client_phone && <span style={S.clientPhone}>{calc.client_phone}</span>}
+          </div>
+          <div style={S.clientRight}>
+            <div><span style={S.fieldLabel}>Актуально до</span> <strong>{validUntil}</strong></div>
+            <div style={{ marginTop: 3 }}><span style={S.fieldLabel}>Подготовил</span> <strong>{calc.creator?.name || 'Менеджер'}</strong></div>
+          </div>
+        </div>
+
+        {/* ── TABLE ─── */}
+        <table style={S.table}>
           <thead>
-            <tr style={{ background: '#f7f7f7', borderBottom: '2px solid #ccc' }}>
-              <th style={{ width: 36, textAlign: 'center', fontWeight: 700, borderRight: '1px solid #ddd' }}>№</th>
-              <th style={{ textAlign: 'left', fontWeight: 700, borderRight: '1px solid #ddd' }}>Изделие</th>
-              <th style={{ width: 80, textAlign: 'center', fontWeight: 700, borderRight: '1px solid #ddd' }}>Количество</th>
-              <th style={{ width: 110, textAlign: 'right', fontWeight: 700, borderRight: '1px solid #ddd' }}>Цена за единицу</th>
-              <th style={{ width: 100, textAlign: 'right', fontWeight: 700 }}>Сумма</th>
+            <tr>
+              <th style={{ ...S.th, width: 32, textAlign: 'center' }}>№</th>
+              <th style={{ ...S.th, textAlign: 'left' }}>Наименование</th>
+              <th style={{ ...S.th, width: 52, textAlign: 'center' }}>Кол.</th>
+              <th style={{ ...S.th, width: 110, textAlign: 'right' }}>Цена</th>
+              <th style={{ ...S.th, width: 110, textAlign: 'right', borderRight: 'none' }}>Сумма</th>
             </tr>
           </thead>
           <tbody>
-            {tableRows.map((row, i) => (
-              <tr key={row.id} style={{ borderBottom: '1px solid #eee', background: i % 2 === 1 ? '#fafafa' : '#fff' }}>
-                <td style={{ textAlign: 'center', color: '#888', borderRight: '1px solid #eee', verticalAlign: 'top', paddingTop: 10 }}>{row.id}</td>
-                <td style={{ borderRight: '1px solid #eee', verticalAlign: 'top', fontStyle: row.italic ? 'italic' : 'normal', fontWeight: i === 0 ? 600 : 400 }}>
-                  {row.name.split('\n').map((line, j) => (
-                    <div key={j}>{line}</div>
-                  ))}
-                </td>
-                <td style={{ textAlign: 'center', borderRight: '1px solid #eee', verticalAlign: 'top', color: row.isZero ? '#aaa' : '#111' }}>
-                  {row.qty}
-                </td>
-                <td style={{ textAlign: 'right', borderRight: '1px solid #eee', verticalAlign: 'top', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
-                  {typeof row.price === 'number' ? fmt(row.price) : row.price}
-                </td>
-                <td style={{ textAlign: 'right', verticalAlign: 'top', fontWeight: row.isZero ? 400 : 700, fontVariantNumeric: 'tabular-nums', color: row.isZero ? '#aaa' : '#111' }}>
-                  {row.isZero ? '— ₽' : typeof row.total === 'number' ? fmt(row.total) : row.total}
-                </td>
-              </tr>
-            ))}
+            {rows.map((row, i) => {
+              const isFirst = i === 0
+              const bg = row.isDiscount ? '#fffbea' : row.isZero ? '#fafafa' : row.isService ? '#f9f9f8' : '#fff'
+              return (
+                <tr key={i} style={{ background: bg, borderBottom: '1px solid #ebebeb' }}>
+                  <td style={{ ...S.td, textAlign: 'center', color: '#aaa', paddingTop: 11, verticalAlign: 'top' }}>
+                    {row.id}
+                  </td>
+                  <td style={{ ...S.td, verticalAlign: 'top', paddingLeft: row.isDiscount ? 20 : row.isService ? 20 : 12 }}>
+                    {row.isDiscount ? (
+                      <span style={{ fontStyle: 'italic', color: '#92400e', fontSize: 11 }}>
+                        🏷 {row.name}
+                      </span>
+                    ) : row.isService ? (
+                      <span style={{ color: row.isZero ? '#bbb' : '#555', fontSize: 11 }}>{row.name}</span>
+                    ) : (
+                      row.name.split('\n').map((line, j) => (
+                        <div key={j} style={{ fontWeight: j === 0 ? 600 : 400, color: j === 0 ? '#111' : '#555', fontSize: j === 0 ? 12 : 11, marginBottom: j === 0 && row.name.includes('\n') ? 2 : 0 }}>
+                          {line}
+                        </div>
+                      ))
+                    )}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'center', color: row.isZero ? '#ccc' : '#555', verticalAlign: 'top', paddingTop: 11 }}>
+                    {row.qty}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', color: row.isDiscount ? '#92400e' : row.isZero ? '#ccc' : '#444', verticalAlign: 'top', paddingTop: 11 }}>
+                    {row.isDiscount ? `− ${fmt(Math.abs(row.price))}` : row.isZero ? '—' : fmt(row.price)}
+                  </td>
+                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', fontWeight: isFirst ? 700 : row.isZero ? 400 : 500, color: row.isDiscount ? '#92400e' : row.isZero ? '#ccc' : '#111', verticalAlign: 'top', paddingTop: 11, borderRight: 'none' }}>
+                    {row.isDiscount ? `− ${fmt(Math.abs(row.total))}` : row.isZero ? '—' : fmt(row.total)}
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
 
-        {/* ── Промежуточный итог ────────────────────── */}
-        <table style={{ width: '100%', fontSize: 12, marginBottom: 0 }}>
-          <tbody>
-            <tr>
-              <td style={{ paddingTop: 8 }}>
-                <div style={{ fontSize: 11, color: '#666', lineHeight: 1.8 }}>
-                  <div>Срок изготовления изделий из стекла <strong><u>15 рабочих дней</u></strong></div>
-                  <div>*Подъём одного изделия 500р./этаж при необходимости</div>
-                </div>
-              </td>
-              <td style={{ textAlign: 'right', paddingTop: 8, verticalAlign: 'bottom', width: 220 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', paddingBottom: 4, color: '#555' }}>
-                  <span>Промежуточный итог</span>
-                  <span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmt(grandTotal)}</span>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-
-        {/* ── ИТОГО ─────────────────────────────────── */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4, marginBottom: 4 }}>
-          <div style={{ width: 280, borderTop: '2px solid #ccc', paddingTop: 8 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 0' }}>
-              <span style={{ fontSize: 14, fontWeight: 700 }}>ИТОГО:</span>
-              <span style={{ fontSize: 18, fontWeight: 800, background: '#FFD700', padding: '2px 10px', borderRadius: 4, fontVariantNumeric: 'tabular-nums' }}>
-                {fmt(grandTotal)}
-              </span>
+        {/* ── SUBTOTAL + TOTAL ─── */}
+        <div style={S.totalsBlock}>
+          <div style={S.termsText}>
+            <div>Срок изготовления — <strong>15 рабочих дней</strong></div>
+            <div style={{ color: '#999' }}>*Подъём одного изделия 500 ₽/этаж</div>
+          </div>
+          <div style={S.totalsRight}>
+            <div style={S.subtotalRow}>
+              <span style={{ color: '#888' }}>Промежуточный итог</span>
+              <span style={{ fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums' }}>{fmt(grandTotal)}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#555', paddingBottom: 4 }}>
-              <span>В т.ч. НДС 5%</span>
-              <span style={{ fontVariantNumeric: 'tabular-nums', fontStyle: 'italic' }}>
-                {vatAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽
-              </span>
+            <div style={S.totalBox}>
+              <div style={S.totalLabel}>ИТОГО</div>
+              <div style={S.totalPrice}>{fmt(grandTotal)}</div>
+            </div>
+            <div style={S.vatRow}>
+              В т.ч. НДС 5%&ensp;
+              <span style={{ fontFamily: 'ui-monospace, monospace' }}>{vatAmount.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ₽</span>
             </div>
           </div>
         </div>
 
-        {/* ── Примечание ────────────────────────────── */}
+        {/* ── NOTES ─── */}
         {calc.notes && (
-          <div style={{ marginTop: 12, fontSize: 11, color: '#555', background: '#f8f8f7', borderRadius: 6, padding: '8px 12px' }}>
-            {calc.notes}
-          </div>
+          <div style={S.notes}>{calc.notes}</div>
         )}
 
-        {/* ── Душевые ограждения описание ───────────── */}
-        <div style={{ marginTop: 12, fontSize: 11, color: '#666' }}>
-          Душевые ограждения выполняют функцию защиты от брызг и обеспечивают герметичность на 80%
-        </div>
-
-        {/* ── Благодарим ────────────────────────────── */}
-        <div style={{ marginTop: 20, borderTop: '2px solid #111', paddingTop: 14 }}>
-          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 4 }}>Благодарим за обращение!</div>
-          <div style={{ fontSize: 11, color: '#888' }}>душевые, зеркала и лофт</div>
+        {/* ── FOOTER ─── */}
+        <div style={S.footer}>
+          <div style={S.footerLeft}>
+            <div style={S.footerBrand}>MGlass</div>
+            <div><a href="https://mglass.pro/" style={{ color: '#0071e3', textDecoration: 'none' }}>mglass.pro</a></div>
+            <div>8 (925) 788 58 37</div>
+            <div style={{ color: '#aaa' }}>mglass.ceo@gmail.com</div>
+          </div>
+          <div style={S.footerRight}>
+            <div style={S.footerThanks}>Благодарим за обращение!</div>
+            <div style={{ color: '#999', marginTop: 4 }}>Предложение действительно до {validUntil}</div>
+          </div>
         </div>
 
       </div>
     </>
   )
+}
+
+// ── Shared styles ──────────────────────────────────────────────────────────────
+const S = {
+  loader: { display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', color: '#9a9a95', fontSize: 14 } as React.CSSProperties,
+
+  btnBar: { position: 'fixed', top: 16, right: 16, display: 'flex', gap: 8, zIndex: 100 } as React.CSSProperties,
+  btnPrimary:   { padding: '9px 20px', background: '#111110', color: '#fff', fontSize: 13, fontWeight: 600, borderRadius: 8, border: 'none', cursor: 'pointer' } as React.CSSProperties,
+  btnSecondary: { padding: '9px 20px', background: '#fff', color: '#555', fontSize: 13, border: '1px solid #ddd', borderRadius: 8, cursor: 'pointer' } as React.CSSProperties,
+
+  page: { maxWidth: 740, margin: '0 auto', paddingBottom: 20 } as React.CSSProperties,
+
+  header: {
+    background: '#111110',
+    color: '#fff',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: '18px 24px',
+    borderRadius: '0 0 0 0',
+  } as React.CSSProperties,
+  headerLeft: { display: 'flex', alignItems: 'center', gap: 12 } as React.CSSProperties,
+  headerBrand: { fontSize: 20, fontWeight: 800, letterSpacing: '0.5px', fontFamily: 'Georgia, serif', lineHeight: 1 } as React.CSSProperties,
+  headerSub: { fontSize: 10, color: 'rgba(255,255,255,0.5)', letterSpacing: '0.5px', marginTop: 2 } as React.CSSProperties,
+  headerRight: { textAlign: 'right' } as React.CSSProperties,
+  headerMeta: { display: 'flex', gap: 10, justifyContent: 'flex-end', fontSize: 11, marginBottom: 3 } as React.CSSProperties,
+  metaLabel: { color: 'rgba(255,255,255,0.45)', marginRight: 2 } as React.CSSProperties,
+
+  titleBlock: { textAlign: 'center', padding: '20px 24px 14px' } as React.CSSProperties,
+  title: { fontFamily: 'Georgia, serif', fontSize: 20, fontWeight: 700, color: '#111', letterSpacing: '-0.2px' } as React.CSSProperties,
+
+  clientRow: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', padding: '0 24px 18px', borderBottom: '1px solid #e8e8e8', gap: 16 } as React.CSSProperties,
+  clientLeft: { display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' as const } as React.CSSProperties,
+  clientRight: { textAlign: 'right', fontSize: 11, color: '#555', flexShrink: 0 } as React.CSSProperties,
+  fieldLabel: { fontSize: 10, color: '#aaa', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginRight: 4 } as React.CSSProperties,
+  clientName: { fontSize: 14, fontWeight: 700, color: '#111' } as React.CSSProperties,
+  clientPhone: { fontSize: 12, color: '#666' } as React.CSSProperties,
+
+  table: { width: '100%', borderCollapse: 'collapse' as const, borderTop: '2px solid #111110', marginTop: 18 } as React.CSSProperties,
+  th: {
+    background: '#111110',
+    color: '#fff',
+    padding: '9px 12px',
+    fontSize: 10,
+    fontWeight: 600,
+    letterSpacing: '0.4px',
+    textTransform: 'uppercase' as const,
+    borderRight: '1px solid rgba(255,255,255,0.1)',
+  } as React.CSSProperties,
+  td: { padding: '9px 12px', fontSize: 12, verticalAlign: 'middle', borderRight: '1px solid #f0f0f0' } as React.CSSProperties,
+
+  totalsBlock: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', padding: '14px 0 0', gap: 20 } as React.CSSProperties,
+  termsText: { fontSize: 10, color: '#777', lineHeight: 1.8, paddingLeft: 24 } as React.CSSProperties,
+  totalsRight: { minWidth: 260 } as React.CSSProperties,
+  subtotalRow: { display: 'flex', justifyContent: 'space-between', fontSize: 11, color: '#888', paddingBottom: 8, borderBottom: '1px solid #e0e0e0', marginBottom: 8 } as React.CSSProperties,
+
+  totalBox: {
+    background: '#111110',
+    color: '#fff',
+    borderRadius: 6,
+    padding: '10px 16px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  } as React.CSSProperties,
+  totalLabel: { fontSize: 12, fontWeight: 700, letterSpacing: '1px', textTransform: 'uppercase' as const } as React.CSSProperties,
+  totalPrice: { fontSize: 20, fontWeight: 800, fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums' } as React.CSSProperties,
+
+  vatRow: { fontSize: 10, color: '#aaa', textAlign: 'right' as const, fontStyle: 'italic' } as React.CSSProperties,
+
+  notes: { margin: '16px 24px 0', padding: '10px 14px', background: '#f9f9f8', borderLeft: '3px solid #d0d0d0', fontSize: 11, color: '#555', lineHeight: 1.6, borderRadius: '0 4px 4px 0' } as React.CSSProperties,
+
+  footer: {
+    marginTop: 28,
+    paddingTop: 16,
+    borderTop: '1px solid #e0e0e0',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingLeft: 0,
+    paddingRight: 0,
+  } as React.CSSProperties,
+  footerLeft: { fontSize: 10, color: '#888', lineHeight: 1.9 } as React.CSSProperties,
+  footerBrand: { fontFamily: 'Georgia, serif', fontWeight: 700, color: '#444', fontSize: 12, marginBottom: 2 } as React.CSSProperties,
+  footerRight: { textAlign: 'right' } as React.CSSProperties,
+  footerThanks: { fontFamily: 'Georgia, serif', fontSize: 15, fontWeight: 700, color: '#111' } as React.CSSProperties,
 }

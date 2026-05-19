@@ -3,6 +3,8 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
+import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -20,7 +22,6 @@ const STAGES = [
 
 type StageKey = typeof STAGES[number]['key']
 
-// Фильтры по этапу: "что нужно сделать сейчас"
 const STAGE_FILTERS = [
   { key: 'all_active',  label: 'Все активные', desc: '' },
   { key: 'cut',         label: 'Нарезка',      prev: 'printed'          as StageKey, curr: 'cut'           as StageKey },
@@ -97,6 +98,62 @@ function getOrderNum(pn: NotesData): string {
   return m ? m[1] : ''
 }
 
+function buildProductionMessage(order: Order): string {
+  const items = order.items as Record<string, unknown>[]
+  const finalPrice = getFinalPrice(order)
+
+  type MatGroup = {
+    label: string
+    hasTemp: boolean
+    lines: { w: number; h: number; qty: number; area: number }[]
+  }
+  const groups = new Map<string, MatGroup>()
+
+  for (const item of items) {
+    const key = `${item.materialName}|${item.thickness}`
+    const qty = Number(item.quantity ?? 0)
+    const w = Number(item.width ?? 0)
+    const h = Number(item.height ?? 0)
+    const area = Number(item.totalAreaNet ?? 0)
+    if (!groups.has(key)) {
+      groups.set(key, {
+        label: `${item.materialName} ${item.thickness} мм`,
+        hasTemp: !!item.hasTempering,
+        lines: [],
+      })
+    }
+    const g = groups.get(key)!
+    if (item.hasTempering) g.hasTemp = true
+    g.lines.push({ w, h, qty, area })
+  }
+
+  const msgLines: string[] = []
+  if (order.custom_number) msgLines.push(order.custom_number)
+  if (order.client_order_number) msgLines.push(`(${order.client_order_number})`)
+  msgLines.push('')
+  msgLines.push(order.client_name)
+
+  const hasAnyTemp = [...groups.values()].some(g => g.hasTemp)
+
+  for (const g of groups.values()) {
+    msgLines.push('')
+    let header = g.label
+    if (g.hasTemp) header += ', закалённое'
+    header += ', упакованное'
+    msgLines.push(header)
+    const totalQty = g.lines.reduce((s, l) => s + l.qty, 0)
+    const totalArea = g.lines.reduce((s, l) => s + l.area, 0)
+    for (const l of g.lines) {
+      msgLines.push(`  ${l.w}×${l.h} мм — ${l.qty} шт`)
+    }
+    msgLines.push(`  Итого: ${totalQty} шт · ${totalArea.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`)
+  }
+
+  msgLines.push('')
+  msgLines.push(`💰 ${finalPrice.toLocaleString('ru-RU')} ₽`)
+  return msgLines.join('\n')
+}
+
 export default function B2BOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
@@ -110,6 +167,14 @@ export default function B2BOrdersPage() {
   const [editCustomNum, setEditCustomNum]   = useState('')
   const [editClientNum, setEditClientNum]   = useState('')
   const [savingNum, setSavingNum]           = useState(false)
+
+  // Production extras
+  const [materials, setMaterials]     = useState<MatLight[]>([])
+  const [managerCode, setManagerCode] = useState<number>(0)
+  const [canDelete, setCanDelete]     = useState(false)
+  const [generatingNum, setGeneratingNum] = useState<number | null>(null)
+  const [msgOpenId, setMsgOpenId]     = useState<number | null>(null)
+  const [copiedMsg, setCopiedMsg]     = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -132,17 +197,60 @@ export default function B2BOrdersPage() {
     setEditNumId(null)
   }
 
+  async function generateNumber(orderId: number) {
+    setGeneratingNum(orderId)
+    try {
+      const sb = createClient()
+      const { data: allOrders } = await sb
+        .from('b2b_orders')
+        .select('custom_number')
+        .not('custom_number', 'is', null)
+
+      let maxNum = 0
+      let hasFormat = false
+      for (const o of allOrders ?? []) {
+        if (o.custom_number) {
+          const m = (o.custom_number as string).match(/^(\d+)-\d+$/)
+          if (m) {
+            hasFormat = true
+            const n = parseInt(m[1])
+            if (n > maxNum) maxNum = n
+          }
+        }
+      }
+
+      if (!hasFormat) {
+        const { count } = await sb
+          .from('b2b_orders')
+          .select('id', { count: 'exact', head: true })
+        maxNum = (count ?? 0) + 999
+      }
+
+      const newNum = `${maxNum + 1}-${String(managerCode).padStart(2, '0')}`
+      const order = orders.find(o => o.id === orderId)
+      if (order) {
+        setEditNumId(orderId)
+        setEditCustomNum(newNum)
+        setEditClientNum(order.client_order_number ?? '')
+      }
+    } finally {
+      setGeneratingNum(null)
+    }
+  }
+
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
-    await createClient().from('b2b_orders').delete().eq('id', deletingId)
+    await createClient()
+      .from('b2b_orders')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', deletingId)
     setOrders(prev => prev.filter(o => o.id !== deletingId))
     if (expanded === deletingId) setExpanded(null)
     setDeletingId(null)
     setDeleting(false)
   }
 
-  // Фильтры
   const [search, setSearch] = useState('')
   const [stageFilter, setStageFilter] = useState('all_active')
   const [dateFrom, setDateFrom] = useState('')
@@ -154,19 +262,21 @@ export default function B2BOrdersPage() {
       const { data: { user } } = await sb.auth.getUser()
       if (!user) { setLoading(false); return }
 
-      // Check if manager has permission to see all orders
       const { data: profile } = await sb
         .from('users')
-        .select('role, see_all_orders')
+        .select('role, see_all_orders, manager_code, can_delete')
         .eq('id', user.id)
         .single()
 
       const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+      setManagerCode(profile?.manager_code ?? 0)
+      setCanDelete(profile?.role === 'admin' || profile?.can_delete === true)
 
       let query = sb
         .from('b2b_orders')
         .select('*')
         .not('notes', 'ilike', '%"status":"quote"%')
+        .is('archived_at', null)
         .order('created_at', { ascending: true })
         .limit(1000)
 
@@ -174,7 +284,15 @@ export default function B2BOrdersPage() {
         query = query.eq('created_by', user.id)
       }
 
-      const { data } = await query
+      const [{ data }, { data: mats }] = await Promise.all([
+        query,
+        sb.from('b2b_materials')
+          .select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent')
+          .eq('active', true),
+      ])
+
+      setMaterials((mats ?? []) as MatLight[])
+
       const parsed = (data ?? []).map(o => ({
         ...o,
         items: Array.isArray(o.items) ? o.items : [],
@@ -198,7 +316,6 @@ export default function B2BOrdersPage() {
       const stages = pn.stages ?? {}
       const isShipped = !!stages.shipped
 
-      // Поиск по номеру заказа или клиенту
       if (search.trim()) {
         const q = search.trim().toLowerCase()
         const match =
@@ -209,12 +326,10 @@ export default function B2BOrdersPage() {
         if (!match) return false
       }
 
-      // Фильтр по дате запуска
       const launchedAt = pn.launched_at ?? o.created_at.slice(0, 10)
       if (dateFrom && launchedAt < dateFrom) return false
       if (dateTo && launchedAt > dateTo) return false
 
-      // Фильтр по статусу/этапу
       const sf = STAGE_FILTERS.find(f => f.key === stageFilter)
       if (!sf) return true
 
@@ -255,21 +370,351 @@ export default function B2BOrdersPage() {
   }
 
   async function toggleStage(orderId: number, stageKey: StageKey) {
-    setOrders(prev => prev.map(o => {
-      if (o.id !== orderId) return o
-      const stages = { ...(o.parsedNotes.stages ?? {}) } as Partial<Record<StageKey, string | null>>
-      stages[stageKey] = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
-      const newParsed: NotesData = { ...o.parsedNotes, stages }
-      createClient().from('b2b_orders').update({ notes: JSON.stringify(newParsed) }).eq('id', orderId).then()
-      return { ...o, parsedNotes: newParsed }
-    }))
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    const stages = { ...(order.parsedNotes.stages ?? {}) } as Partial<Record<StageKey, string | null>>
+    stages[stageKey] = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
+    const newParsed: NotesData = { ...order.parsedNotes, stages }
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
+    const { error } = await createClient().from('b2b_orders').update({ notes: JSON.stringify(newParsed) }).eq('id', orderId)
+    if (error) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
+    }
   }
+
+  // Точный раскрой через оптимайзер для развёрнутого заказа
+  const cuttingResultsMap = useMemo(() => {
+    if (!expanded || materials.length === 0) return new Map<string, number>()
+    const order = orders.find(o => o.id === expanded)
+    if (!order) return new Map<string, number>()
+
+    const items = order.items as Record<string, unknown>[]
+    const matLookup = new Map(materials.map(m => [`${m.name}|${m.thickness}`, m]))
+    const groups = new Map<string, PieceGroup>()
+
+    for (const item of items) {
+      const name = String(item.materialName ?? '')
+      const t = Number(item.thickness ?? 0)
+      const w = Number(item.width ?? 0)
+      const h = Number(item.height ?? 0)
+      const qty = Number(item.quantity ?? 0)
+      if (!name || !t || !w || !h || !qty) continue
+      const key = `${name}|${t}`
+      const mat = matLookup.get(key)
+      if (!groups.has(key)) {
+        groups.set(key, {
+          pieces: [],
+          materialLabel: `${name} ${t} мм`,
+          category: String(item.category ?? ''),
+          sheetWidth:  mat?.sheet_width  ?? 3210,
+          sheetHeight: mat?.sheet_height ?? 2250,
+          patternDirection: 'none' as const,
+        })
+      }
+      const g = groups.get(key)!
+      for (let i = 0; i < qty; i++) {
+        g.pieces.push({
+          id: `${key}-${i}`,
+          width: w, height: h,
+          label: `${w}×${h}`,
+          orderId: order.id,
+          orderClientName: order.client_name,
+          materialKey: key,
+          canRotate: true,
+        })
+      }
+    }
+
+    if (groups.size === 0) return new Map<string, number>()
+    const results = runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+    return new Map(results.map(r => [r.materialKey, r.sheetsNeeded]))
+  }, [expanded, orders, materials])
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
   )
 
   const totalSum = orders.reduce((s, o) => s + getFinalPrice(o), 0)
+
+  // ── Shared: expanded order body ─────────────────────────────────────────────
+  function renderOrderBody(order: Order) {
+    const items = order.items as Record<string, unknown>[]
+    const pn = order.parsedNotes
+    const quoteDate = fmtDate(order.created_at)
+    const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
+    const deadline = getDeadline(pn.launched_at, pn.production_days)
+    const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null
+    const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
+    const isShipped = !!pn.stages?.shipped
+    const finalPrice = getFinalPrice(order)
+    const isPlainNotes = order.notes && !order.notes.trim().startsWith('{')
+    const userNotes = typeof pn.user_notes === 'string'
+      ? pn.user_notes
+      : (isPlainNotes ? order.notes : null)
+    const isMsgOpen = msgOpenId === order.id
+
+    // Production summary — используем точный раскрой из оптимайзера
+    const summary = computeProductionSummary(
+      items.map(item => ({
+        materialName: String(item.materialName ?? ''),
+        thickness: Number(item.thickness ?? 0),
+        totalAreaNet: Number(item.totalAreaNet ?? 0),
+        totalAreaBilled: Number(item.totalAreaBilled ?? 0) || undefined,
+        hasTempering: !!item.hasTempering,
+        wastePercent: Number(item.wastePercent ?? 0) || undefined,
+      })),
+      materials,
+      cuttingResultsMap,
+    )
+
+    return (
+      <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
+
+        {/* Номера заказа */}
+        {editNumId === order.id ? (
+          <div className="flex items-end gap-2 flex-wrap">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
+              <input
+                autoFocus
+                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                value={editCustomNum}
+                onChange={e => setEditCustomNum(e.target.value)}
+                placeholder="МГ-001"
+                onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+              />
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
+              <input
+                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                value={editClientNum}
+                onChange={e => setEditClientNum(e.target.value)}
+                placeholder="необязательно"
+                onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
+              />
+            </div>
+            <button
+              onClick={() => saveNum(order.id)}
+              disabled={savingNum}
+              className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+              {savingNum ? '...' : 'Сохранить'}
+            </button>
+            <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
+              Отмена
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2 flex-wrap">
+            {order.custom_number && (
+              <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+            )}
+            {order.client_order_number && (
+              <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
+            )}
+            <button
+              onClick={() => startEditNum(order)}
+              className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
+              {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
+            </button>
+            <button
+              onClick={() => generateNumber(order.id)}
+              disabled={generatingNum === order.id}
+              className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition-colors">
+              {generatingNum === order.id ? '...' : '⚡ Сгенерировать номер'}
+            </button>
+          </div>
+        )}
+
+        {/* Этапы производства */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Этапы производства</p>
+          <div className="flex flex-wrap gap-1">
+            {STAGES.map(stage => {
+              const doneDate = pn.stages?.[stage.key]
+              const done = !!doneDate
+              return (
+                <button
+                  key={stage.key}
+                  onClick={() => toggleStage(order.id, stage.key)}
+                  title={done ? `Выполнено: ${doneDate}` : 'Нажмите чтобы отметить'}
+                  className={`flex flex-col items-center px-2 py-1 rounded-md text-[10px] font-medium transition-all border select-none ${
+                    done
+                      ? 'bg-emerald-600 text-white border-emerald-600'
+                      : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7]'
+                  }`}>
+                  {stage.label}
+                  {done && doneDate && (
+                    <span className="text-[8px] font-normal opacity-60 leading-none">
+                      {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Даты */}
+        <div className="flex gap-4 flex-wrap text-[11px]">
+          <div>
+            <span className="text-[#9a9a95]">Просчёт: </span>
+            <span className="font-medium text-[#111110]">{quoteDate}</span>
+          </div>
+          {launchedDate && (
+            <div>
+              <span className="text-[#9a9a95]">Запуск: </span>
+              <span className="font-medium text-emerald-700">{launchedDate}</span>
+            </div>
+          )}
+          {deadlineStr && pn.production_days && (
+            <div>
+              <span className="text-[#9a9a95]">Срок ({pn.production_days} дн.): </span>
+              <span className={`font-semibold ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
+                {deadlineStr}
+                {daysLeft !== null && !isShipped && (
+                  <span className="ml-1 font-normal text-[10px] text-[#9a9a95]">
+                    {daysLeft < 0 ? `(просрочен ${Math.abs(daysLeft)} д.)` : daysLeft === 0 ? '(сегодня)' : `(${daysLeft} д.)`}
+                  </span>
+                )}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Позиции */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Позиции</p>
+          <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+            {items.map((item, idx) => {
+              const svcs = Array.isArray(item.services) ? item.services as { name: string; cost: number }[] : []
+              return (
+                <div key={idx} className="px-3 py-1.5 border-b border-[#f8f8f7] last:border-0 text-[11px]">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0 min-w-0">
+                      <span className="text-[#c4c4be]">#{idx + 1}</span>
+                      <span className="font-medium text-[#111110]">{String(item.materialName ?? '')} {String(item.thickness ?? '')}мм</span>
+                      <span className="text-[#6b6b66]">{String(item.width ?? '')}×{String(item.height ?? '')} мм · {String(item.quantity ?? '')} шт.</span>
+                      {!!item.hasTempering && (
+                        <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Закалка</span>
+                      )}
+                      {svcs.map((svc, si) => (
+                        <span key={si} className="text-[9px] text-blue-700 bg-blue-50 px-1 py-px rounded">
+                          {svc.name} +{Number(svc.cost).toLocaleString('ru-RU')} ₽
+                        </span>
+                      ))}
+                    </div>
+                    <div className="text-right flex-shrink-0 whitespace-nowrap">
+                      <span className="font-mono font-semibold text-[#111110]">{Number(item.saleIncVat ?? 0).toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[9px] text-[#9a9a95] ml-1">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* ПРОИЗВОДСТВЕННАЯ СВОДКА */}
+        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+          <div className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0]">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственная сводка</span>
+          </div>
+          <div className="px-3 py-2 space-y-1.5 text-[11px]">
+            <div className="flex justify-between">
+              <span className="text-[#9a9a95]">Площадь</span>
+              <span className="font-semibold text-[#111110]">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-[#9a9a95]">Вес</span>
+              <span className="font-semibold text-[#111110]">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span>
+            </div>
+            {summary.rows.length > 0 && summary.totalSheets > 0 && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-[#9a9a95]">Листы</span>
+                  <span className="font-semibold text-[#111110]">{summary.totalSheets} шт</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-[#9a9a95]">Стоимость листов</span>
+                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.totalSheetCost)}</span>
+                </div>
+                {summary.totalTemperingCost > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-[#9a9a95]">Закалка</span>
+                    <span className="font-mono font-semibold text-amber-700">{fmt(summary.totalTemperingCost)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-[#f0f0ec] pt-1.5">
+                  <span className="text-[#6b6b66] font-medium">Себестоимость материала</span>
+                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.grandTotal)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between border-t border-[#e4e4e0] pt-1.5">
+              <span className="font-semibold text-[#111110]">Итого заказ</span>
+              <span className="font-mono font-bold text-[#111110]">{fmt(finalPrice)}</span>
+            </div>
+          </div>
+          {/* Материалы (разбивка) */}
+          {summary.rows.length > 0 && summary.totalSheets > 0 && (
+            <div className="border-t border-[#f0f0ec] px-3 py-2 space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Материалы</p>
+              {summary.rows.map(row => (
+                <div key={row.matKey} className="flex items-center justify-between text-[11px]">
+                  <span className="text-[#111110] font-medium">{row.matLabel}</span>
+                  <span className="text-[#6b6b66] font-mono text-[10px]">
+                    {row.sheetsNeeded} л. · {row.totalAreaNet.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* ПРОИЗВОДСТВЕННОЕ СООБЩЕНИЕ */}
+        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+          <button
+            className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#fafaf9] transition-colors"
+            onClick={() => setMsgOpenId(isMsgOpen ? null : order.id)}>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственное сообщение</span>
+            <span className={`text-[#c4c4be] text-[10px] transition-transform ${isMsgOpen ? 'rotate-180' : ''}`}>▼</span>
+          </button>
+          {isMsgOpen && (() => {
+            const msg = buildProductionMessage(order)
+            return (
+              <div className="border-t border-[#f0f0ec] px-3 py-2.5 space-y-2">
+                <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-[#111110] bg-[#f8f8f7] rounded-lg px-3 py-2.5 border border-[#e8e8e4] select-all">
+                  {msg}
+                </pre>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText(msg)
+                      setCopiedMsg(true)
+                      setTimeout(() => setCopiedMsg(false), 2000)
+                    }}
+                    className="flex-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                    {copiedMsg ? '✓ Скопировано' : '📋 Копировать'}
+                  </button>
+                  <button
+                    disabled
+                    title="В разработке: интеграция с Telegram"
+                    className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#c4c4be] cursor-not-allowed">
+                    ✈ Telegram
+                  </button>
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+
+        {userNotes && (
+          <p className="text-[11px] text-[#6b6b66] italic">{userNotes}</p>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="max-w-[1100px] mx-auto px-4 py-5">
@@ -290,8 +735,6 @@ export default function B2BOrdersPage() {
 
       {/* Панель фильтров */}
       <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-3 space-y-2.5">
-
-        {/* Строка 1: поиск + даты */}
         <div className="flex flex-wrap gap-2 items-center">
           <div className="relative flex-1 min-w-[160px]">
             <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#b4b4ae]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -321,8 +764,6 @@ export default function B2BOrdersPage() {
             </button>
           )}
         </div>
-
-        {/* Строка 2: фильтры по этапу */}
         <div className="flex flex-wrap gap-1">
           {STAGE_FILTERS.map(f => (
             <button
@@ -341,7 +782,6 @@ export default function B2BOrdersPage() {
 
       {/* Результат */}
       {isFiltered ? (
-        /* ── Плоский список (производственный режим) ── */
         <div>
           <p className="text-[11px] text-[#8a8a85] mb-2 px-1">
             {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов`}
@@ -357,14 +797,12 @@ export default function B2BOrdersPage() {
                 const isShipped = !!pn.stages?.shipped
                 const finalPrice = getFinalPrice(order)
                 const progress = calcProgress(pn.stages ?? {})
-                const orderNum = getOrderNum(pn)
                 const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : fmtDate(order.created_at)
                 const deadline = getDeadline(pn.launched_at, pn.production_days)
                 const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
 
                 return (
                   <div key={order.id} className="px-4 py-2.5">
-                    {/* Заголовок строки */}
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
                         {order.custom_number && (
@@ -396,18 +834,18 @@ export default function B2BOrdersPage() {
                         )}
                         <span className="text-[11px] text-[#9a9a95]">{launchedDate}</span>
                         <span className="text-[12px] font-semibold text-[#111110] font-mono">{fmt(finalPrice)}</span>
-                        <button
-                          onClick={() => setDeletingId(order.id)}
-                          title="Удалить заказ"
-                          className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
-                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                          </svg>
-                        </button>
+                        {canDelete && (
+                          <button
+                            onClick={() => setDeletingId(order.id)}
+                            title="Удалить заказ"
+                            className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
+                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                            </svg>
+                          </button>
+                        )}
                       </div>
                     </div>
-
-                    {/* Этапы — всегда видны */}
                     <div className="flex flex-wrap gap-1">
                       {STAGES.map(stage => {
                         const doneDate = pn.stages?.[stage.key]
@@ -439,7 +877,6 @@ export default function B2BOrdersPage() {
           )}
         </div>
       ) : (
-        /* ── Сгруппировано по месяцам (обычный вид) ── */
         monthGroups.length === 0 ? (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
             Заказов пока нет
@@ -450,7 +887,6 @@ export default function B2BOrdersPage() {
               const isMonthOpen = expandedMonths.has(group.key)
               return (
                 <div key={group.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-
                   <button
                     className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-[#fafaf9] transition-colors text-left"
                     onClick={() => toggleMonth(group.key)}>
@@ -472,7 +908,6 @@ export default function B2BOrdersPage() {
                     <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
                       {group.orders.map((order, orderIdx) => {
                         const isOpen = expanded === order.id
-                        const items = order.items as Record<string, unknown>[]
                         const pn = order.parsedNotes
                         const quoteDate = fmtDate(order.created_at)
                         const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
@@ -481,10 +916,6 @@ export default function B2BOrdersPage() {
                         const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
                         const isShipped = !!pn.stages?.shipped
                         const finalPrice = getFinalPrice(order)
-                        const isPlainNotes = order.notes && !order.notes.trim().startsWith('{')
-                        const userNotes = typeof pn.user_notes === 'string'
-                          ? pn.user_notes
-                          : (isPlainNotes ? order.notes : null)
                         const lastDoneIdx = STAGES.map((s, i) => pn.stages?.[s.key] ? i : -1).reduce((max, i) => Math.max(max, i), -1)
                         const progress = calcProgress(pn.stages ?? {})
 
@@ -524,7 +955,7 @@ export default function B2BOrdersPage() {
                                     )}
                                   </div>
                                   <p className="text-[10px] text-[#9a9a95]">
-                                    #{order.id} · {quoteDate}{launchedDate ? ` · запуск ${launchedDate}` : ''} · {items.length} поз.
+                                    #{order.id} · {quoteDate}{launchedDate ? ` · запуск ${launchedDate}` : ''} · {(order.items as unknown[]).length} поз.
                                   </p>
                                 </div>
                               </div>
@@ -540,171 +971,23 @@ export default function B2BOrdersPage() {
                                     <p className="text-[10px] text-emerald-600">−{order.discount_percent}%</p>
                                   )}
                                 </div>
-                                <button
-                                  onClick={e => { e.stopPropagation(); setDeletingId(order.id) }}
-                                  title="Удалить заказ"
-                                  className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
-                                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                  </svg>
-                                </button>
+                                {canDelete && (
+                                  <button
+                                    onClick={e => { e.stopPropagation(); setDeletingId(order.id) }}
+                                    title="Удалить заказ"
+                                    className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                  </button>
+                                )}
                                 <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
                                 </svg>
                               </div>
                             </div>
 
-                            {isOpen && (
-                              <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
-
-                                {/* Номера заказа */}
-                                {editNumId === order.id ? (
-                                  <div className="flex items-end gap-2 flex-wrap">
-                                    <div>
-                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
-                                      <input
-                                        autoFocus
-                                        className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
-                                        value={editCustomNum}
-                                        onChange={e => setEditCustomNum(e.target.value)}
-                                        placeholder="МГ-001"
-                                        onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
-                                      />
-                                    </div>
-                                    <div>
-                                      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
-                                      <input
-                                        className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
-                                        value={editClientNum}
-                                        onChange={e => setEditClientNum(e.target.value)}
-                                        placeholder="необязательно"
-                                        onKeyDown={e => { if (e.key === 'Enter') saveNum(order.id); if (e.key === 'Escape') setEditNumId(null) }}
-                                      />
-                                    </div>
-                                    <button
-                                      onClick={() => saveNum(order.id)}
-                                      disabled={savingNum}
-                                      className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                                      {savingNum ? '...' : 'Сохранить'}
-                                    </button>
-                                    <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
-                                      Отмена
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <div className="flex items-center gap-2">
-                                    {order.custom_number && (
-                                      <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
-                                    )}
-                                    {order.client_order_number && (
-                                      <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
-                                    )}
-                                    <button
-                                      onClick={() => startEditNum(order)}
-                                      className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
-                                      {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
-                                    </button>
-                                  </div>
-                                )}
-
-                                <div>
-                                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Этапы производства</p>
-                                  <div className="flex flex-wrap gap-1">
-                                    {STAGES.map(stage => {
-                                      const doneDate = pn.stages?.[stage.key]
-                                      const done = !!doneDate
-                                      return (
-                                        <button
-                                          key={stage.key}
-                                          onClick={() => toggleStage(order.id, stage.key)}
-                                          title={done ? `Выполнено: ${doneDate}` : 'Нажмите чтобы отметить'}
-                                          className={`flex flex-col items-center px-2 py-1 rounded-md text-[10px] font-medium transition-all border select-none ${
-                                            done
-                                              ? 'bg-emerald-600 text-white border-emerald-600'
-                                              : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7]'
-                                          }`}>
-                                          {stage.label}
-                                          {done && doneDate && (
-                                            <span className="text-[8px] font-normal opacity-60 leading-none">
-                                              {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
-                                            </span>
-                                          )}
-                                        </button>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-
-                                <div className="flex gap-4 flex-wrap text-[11px]">
-                                  <div>
-                                    <span className="text-[#9a9a95]">Просчёт: </span>
-                                    <span className="font-medium text-[#111110]">{quoteDate}</span>
-                                  </div>
-                                  {launchedDate && (
-                                    <div>
-                                      <span className="text-[#9a9a95]">Запуск: </span>
-                                      <span className="font-medium text-emerald-700">{launchedDate}</span>
-                                    </div>
-                                  )}
-                                  {deadlineStr && pn.production_days && (
-                                    <div>
-                                      <span className="text-[#9a9a95]">Срок ({pn.production_days} дн.): </span>
-                                      <span className={`font-semibold ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
-                                        {deadlineStr}
-                                        {daysLeft !== null && !isShipped && (
-                                          <span className="ml-1 font-normal text-[10px] text-[#9a9a95]">
-                                            {daysLeft < 0 ? `(просрочен ${Math.abs(daysLeft)} д.)` : daysLeft === 0 ? '(сегодня)' : `(${daysLeft} д.)`}
-                                          </span>
-                                        )}
-                                      </span>
-                                    </div>
-                                  )}
-                                </div>
-
-                                <div>
-                                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Позиции</p>
-                                  <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-                                    {items.map((item, idx) => {
-                                      const svcs = Array.isArray(item.services) ? item.services as { name: string; cost: number }[] : []
-                                      return (
-                                        <div key={idx} className="px-3 py-1.5 border-b border-[#f8f8f7] last:border-0 text-[11px]">
-                                          <div className="flex items-center justify-between gap-2">
-                                            <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0 min-w-0">
-                                              <span className="text-[#c4c4be]">#{idx + 1}</span>
-                                              <span className="font-medium text-[#111110]">{String(item.materialName ?? '')} {String(item.thickness ?? '')}мм</span>
-                                              <span className="text-[#6b6b66]">{String(item.width ?? '')}×{String(item.height ?? '')} мм · {String(item.quantity ?? '')} шт.</span>
-                                              {!!item.hasTempering && (
-                                                <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Закалка</span>
-                                              )}
-                                              {svcs.map((svc, si) => (
-                                                <span key={si} className="text-[9px] text-blue-700 bg-blue-50 px-1 py-px rounded">
-                                                  {svc.name} +{Number(svc.cost).toLocaleString('ru-RU')} ₽
-                                                </span>
-                                              ))}
-                                            </div>
-                                            <div className="text-right flex-shrink-0 whitespace-nowrap">
-                                              <span className="font-mono font-semibold text-[#111110]">{Number(item.saleIncVat ?? 0).toLocaleString('ru-RU')} ₽</span>
-                                              <span className="text-[9px] text-[#9a9a95] ml-1">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      )
-                                    })}
-                                  </div>
-                                </div>
-
-                                <div className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-2 flex flex-wrap gap-x-6 gap-y-1 text-[11px]">
-                                  <div><span className="text-[#9a9a95]">Площадь: </span><span className="font-semibold text-[#111110]">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span></div>
-                                  <div><span className="text-[#9a9a95]">Вес: </span><span className="font-semibold text-[#111110]">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span></div>
-                                  <div><span className="text-[#9a9a95]">Закупка: </span><span className="font-mono font-semibold text-[#111110]">{fmt(order.total_cost_net)}</span></div>
-                                  <div><span className="text-[#9a9a95]">Итого: </span><span className="font-mono font-bold text-[#111110]">{fmt(finalPrice)}</span></div>
-                                </div>
-
-                                {userNotes && (
-                                  <p className="text-[11px] text-[#6b6b66] italic">{userNotes}</p>
-                                )}
-                              </div>
-                            )}
+                            {isOpen && renderOrderBody(order)}
                           </div>
                         )
                       })}
@@ -716,12 +999,13 @@ export default function B2BOrdersPage() {
           </div>
         )
       )}
-      {/* Модальное окно удаления */}
+
+      {/* Диалог архивирования */}
       {deletingId !== null && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
           <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Удалить заказ?</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-5">Это действие нельзя отменить.</p>
+            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Архивировать заказ?</h2>
+            <p className="text-[13px] text-[#6b6b66] mb-5">Заказ будет скрыт из списка. Данные сохранятся в базе.</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDeletingId(null)}
@@ -731,8 +1015,8 @@ export default function B2BOrdersPage() {
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-[13px] font-medium hover:bg-red-700 disabled:opacity-40 transition-colors">
-                {deleting ? 'Удаление...' : 'Удалить'}
+                className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                {deleting ? 'Архивирование...' : 'Архивировать'}
               </button>
             </div>
           </div>

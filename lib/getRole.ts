@@ -1,6 +1,25 @@
 import { createClient } from './supabase-server'
+import type { UserPermissions } from './permissions'
+import { DEFAULT_PERMISSIONS } from './permissions'
+
+export type { UserPermissions }
+export { DEFAULT_PERMISSIONS }
 
 export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo'
+
+export type UserProfile = {
+  role:        Role
+  permissions: UserPermissions
+  managerCode: number | null
+  canDelete:   boolean
+  maxDiscount: number
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+function isRole(r: unknown): r is Role {
+  return r === 'admin' || r === 'manager' || r === 'production' || r === 'seo' || r === 'ceo'
+}
 
 export async function getRole(): Promise<Role | null> {
   const supabase = await createClient()
@@ -13,13 +32,51 @@ export async function getRole(): Promise<Role | null> {
     .eq('id', user.id)
     .single()
 
-  const r = data?.role
-  if (r === 'admin' || r === 'manager' || r === 'production' || r === 'seo' || r === 'ceo') return r
-  return null
+  return isRole(data?.role) ? data!.role : null
 }
 
-// Paths each role is allowed to access (prefix match).
-// admin gets everything. All roles get /api/ and /login.
+export async function getUserProfile(): Promise<UserProfile | null> {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  // Try full profile first (requires migrated columns); fall back to role-only
+  const { data, error } = await supabase
+    .from('users')
+    .select('role, permissions, manager_code, can_delete, max_discount_percent')
+    .eq('id', user.id)
+    .single()
+
+  if (error || !data) {
+    // Columns may not exist yet — fall back to role-only query
+    const { data: basic } = await supabase
+      .from('users')
+      .select('role')
+      .eq('id', user.id)
+      .single()
+    if (!basic || !isRole(basic.role)) return null
+    return {
+      role:        basic.role as Role,
+      permissions: { ...DEFAULT_PERMISSIONS },
+      managerCode: null,
+      canDelete:   basic.role === 'admin',
+      maxDiscount: basic.role === 'admin' ? 100 : 5,
+    }
+  }
+
+  if (!isRole(data.role)) return null
+
+  return {
+    role:        data.role as Role,
+    permissions: { ...DEFAULT_PERMISSIONS, ...(data.permissions as Partial<UserPermissions> ?? {}) },
+    managerCode: data.manager_code ?? null,
+    canDelete:   data.can_delete ?? false,
+    maxDiscount: data.max_discount_percent ?? 5,
+  }
+}
+
+// ─── Path access control ─────────────────────────────────────────────────────
+
 export const ROLE_ALLOWED: Record<Role, string[]> = {
   admin: ['/'],
 
@@ -33,11 +90,13 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/clients',
     '/calendar',
     '/measurer',
+    '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
     '/b2b-quotes',
     '/b2b-orders',
     '/b2b-crm',
+    '/b2b-cutting',
   ],
 
   production: [
@@ -87,7 +146,6 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 export function canAccess(role: Role, pathname: string): boolean {
   if (role === 'admin') return true
   const allowed = ROLE_ALLOWED[role] ?? []
-  // Always allow root, API, login, access-denied
   if (
     pathname === '/' ||
     pathname.startsWith('/api/') ||

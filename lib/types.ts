@@ -1,6 +1,7 @@
 export type Material = {
   id: number
   name: string
+  short_name: string | null   // короткое название для показа в калькуляторе
   category: string
   unit: string
   cost_price: number
@@ -18,6 +19,7 @@ export type Material = {
 export type Service = {
   id: number
   name: string
+  short_name: string | null
   unit: string
   cost_price: number
   sale_price: number | null
@@ -28,6 +30,7 @@ export type Service = {
 export type HardwareItem = {
   id: number
   name: string
+  short_name: string | null
   system_type: 'sliding' | 'swing' | 'universal'
   unit: string
   cost_price: number | null
@@ -236,16 +239,129 @@ export const B2B_INTERACTION_TYPES = [
   { value: 'note',       label: 'Заметка',       icon: '📝' },
 ] as const
 
-export type B2BService = {
+export const FRAME_TYPES = [
+  { value: 'slim',      label: 'Slim' },
+  { value: 'classic',   label: 'Classic' },
+  { value: 'shadow',    label: 'Shadow' },
+  { value: 'loft',      label: 'Loft' },
+  { value: 'minimal',   label: 'Minimal' },
+  { value: 'aluminium', label: 'Aluminium' },
+  { value: 'steel',     label: 'Steel' },
+] as const
+
+export const FRAME_COLORS = [
+  { value: 'black',    label: 'Чёрный'        },
+  { value: 'white',    label: 'Белый'          },
+  { value: 'graphite', label: 'Графит'         },
+  { value: 'gold',     label: 'Золото'         },
+  { value: 'brush',    label: 'Браш'           },
+  { value: 'chrome',   label: 'Хром'           },
+  { value: 'custom',   label: 'Индивидуальный' },
+] as const
+
+export type MirrorFrame = {
+  id: number
+  article: string | null
+  name: string
+  supplier: string | null
+  supplier_url: string | null
+  frame_type: string
+  color: string
+  profile_size: string | null
+  whip_length_m: number
+  cost_per_m: number
+  sale_per_m: number
+  waste_factor: number
+  cut_minutes: number
+  assemble_minutes: number
+  pack_minutes: number
+  assemble_cost_rub: number | null
+  assemble_sale_rub: number | null
+  image_url: string | null
+  active: boolean
+  sort_order: number
+  notes: string | null
+  created_at: string
+}
+
+// Frame cost calculation result (embedded in mirror calc)
+export type FrameCalcResult = {
+  perimeterM: number
+  profileNeededM: number
+  whipsNeeded: number
+  whipLengthM: number
+  profileCost: number
+  assemblyCost: number
+  totalCost: number
+  assemblySale: number
+  totalSale: number   // for display reference
+  leftoverM: number
+  totalMinutes: number
+}
+
+export const FRAME_ASSEMBLY_COST_RATE  = 3.5   // fallback ₽/мин (используется если нет production_settings)
+export const FRAME_ASSEMBLY_SALE_RATE  = 7.0   // fallback ₽/мин
+
+export function calcFrameCost(
+  frame: MirrorFrame,
+  width: number,
+  height: number,
+  costMinuteRate?: number,
+  saleMinuteRate?: number,
+): FrameCalcResult {
+  const effectiveCostRate = costMinuteRate ?? FRAME_ASSEMBLY_COST_RATE
+  const effectiveSaleRate = saleMinuteRate ?? FRAME_ASSEMBLY_SALE_RATE
+  const perimeterM      = (width + height) * 2 / 1000
+  const profileNeededM  = perimeterM * frame.waste_factor
+  const whipsNeeded     = Math.ceil(profileNeededM / frame.whip_length_m)
+  const whipLengthM     = frame.whip_length_m
+  const leftoverM       = whipsNeeded * whipLengthM - profileNeededM
+  const profileCost     = Math.round(whipsNeeded * whipLengthM * frame.cost_per_m)
+  const totalMinutes    = frame.cut_minutes + frame.assemble_minutes + frame.pack_minutes
+  const assemblyCost    = frame.assemble_cost_rub != null
+    ? frame.assemble_cost_rub
+    : Math.round(totalMinutes * effectiveCostRate)
+  const assemblySale    = frame.assemble_sale_rub != null
+    ? frame.assemble_sale_rub
+    : Math.round(totalMinutes * effectiveSaleRate)
+  const totalCost       = profileCost + assemblyCost
+  const totalSale       = Math.round(profileNeededM * frame.sale_per_m) + assemblySale
+  return { perimeterM, profileNeededM, whipsNeeded, whipLengthM, profileCost, assemblyCost, totalCost, assemblySale, totalSale, leftoverM, totalMinutes }
+}
+
+export type B2BFilm = {
   id: number
   name: string
-  type: 'percent' | 'per_m2' | 'fixed'
-  value: number
-  cost_price: number  // закупочная себестоимость услуги
-  description: string
+  cost_price_per_m2: number
+  sale_price_per_m2: number
+  work_cost_per_m2: number
+  work_sale_per_m2: number
+  description?: string | null
   active: boolean
   sort_order: number
 }
+
+export type B2BService = {
+  id: number
+  name: string
+  type: 'percent' | 'per_m2' | 'fixed' | 'calculated' | 'film'
+  value: number
+  cost_price: number
+  description: string
+  active: boolean
+  sort_order: number
+  // Поля для автоматического расчёта себестоимости (time_minutes > 0 = рассчитываемая услуга)
+  time_minutes?: number
+  equipment_depr_rub?: number
+  consumables_cost_rub?: number
+  overhead_override_pct?: number | null
+  margin_override_pct?: number | null
+  sale_price_override?: number | null
+  size_tiers?: import('./calcServiceCost').SizeTier[]
+  unit_label?: string
+}
+
+export type PatternDirection = 'none' | 'along_length' | 'along_width'
 
 export type B2BMaterial = {
   id: number
@@ -260,6 +376,10 @@ export type B2BMaterial = {
   passthrough: boolean  // проходной материал — отход всегда 10%
   notes: string | null
   created_at: string
+  // Раскрой
+  sheet_width: number            // мм, default 3210
+  sheet_height: number           // мм, default 2250
+  pattern_direction: PatternDirection  // направление рисунка для рифлёного стекла
 }
 
 export const B2B_CATEGORIES = [

@@ -2,14 +2,21 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BMaterial, B2B_CATEGORIES } from '@/lib/types'
+import { B2BMaterial, B2B_CATEGORIES, type PatternDirection } from '@/lib/types'
 import { TEMPERING_COST } from '@/lib/b2bCalculator'
 
 const VAT = 22
 
+const PATTERN_OPTIONS: { value: PatternDirection; label: string }[] = [
+  { value: 'none',         label: 'Нет направления' },
+  { value: 'along_length', label: 'Волна по длине (3210)' },
+  { value: 'along_width',  label: 'Волна по ширине (2250)' },
+]
+
 const EMPTY: Omit<B2BMaterial, 'id' | 'created_at'> = {
   name: '', category: 'стекло', thickness: 6, cost_price: 0, sale_price: 0,
   vat_rate: 22, waste_percent: 15, passthrough: false, active: true, notes: null,
+  sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none',
 }
 
 function parseNotes(m: B2BMaterial): B2BMaterial {
@@ -20,10 +27,13 @@ function parseNotes(m: B2BMaterial): B2BMaterial {
         ...m,
         sale_price: parsed?.sale_price ?? 0,
         passthrough: parsed?.passthrough ?? false,
+        sheet_width: m.sheet_width ?? 3210,
+        sheet_height: m.sheet_height ?? 2250,
+        pattern_direction: m.pattern_direction ?? 'none',
       }
     }
   } catch {}
-  return { ...m, sale_price: 0, passthrough: false }
+  return { ...m, sale_price: 0, passthrough: false, sheet_width: m.sheet_width ?? 3210, sheet_height: m.sheet_height ?? 2250, pattern_direction: m.pattern_direction ?? 'none' }
 }
 
 // Себестоимость на 1 м² нетто: закупка с отходом + закалка (для не-зеркал)
@@ -85,6 +95,9 @@ export default function B2BMaterialsPage() {
       vat_rate: Number(form.vat_rate),
       waste_percent: form.passthrough ? 10 : Number(form.waste_percent),
       thickness: Number(form.thickness),
+      sheet_width: Number(form.sheet_width) || 3210,
+      sheet_height: Number(form.sheet_height) || 2250,
+      pattern_direction: form.pattern_direction ?? 'none',
       notes: Object.keys(notesObj).length > 0 ? JSON.stringify(notesObj) : null,
     }
     if (editingId !== null) {
@@ -106,6 +119,13 @@ export default function B2BMaterialsPage() {
     await load()
   }
 
+  async function deleteItem(id: number, name: string, thickness: number) {
+    if (!confirm(`Удалить «${name} ${thickness}мм»?\nЭто действие нельзя отменить.`)) return
+    const supabase = createClient()
+    await supabase.from('b2b_materials').delete().eq('id', id)
+    await load()
+  }
+
   function startEdit(m: B2BMaterial) {
     setEditingId(m.id)
     setForm({
@@ -114,6 +134,9 @@ export default function B2BMaterialsPage() {
       vat_rate: m.vat_rate, waste_percent: m.waste_percent,
       passthrough: m.passthrough ?? false,
       active: m.active, notes: m.notes,
+      sheet_width: m.sheet_width ?? 3210,
+      sheet_height: m.sheet_height ?? 2250,
+      pattern_direction: m.pattern_direction ?? 'none',
     })
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -218,6 +241,41 @@ export default function B2BMaterialsPage() {
               <span className="text-[13px] font-medium text-[#111110]">Проходной материал</span>
               <span className="text-[11px] text-[#9a9a95]">— отход всегда 10%</span>
             </label>
+          </div>
+
+          {/* Раскрой */}
+          <div className="col-span-2">
+            <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2 pt-1 border-t border-[#f0f0ec] mt-1">
+              Раскрой листа
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1">Длина листа, мм</label>
+                <input type="number" min="100" max="9000"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  value={form.sheet_width ?? 3210}
+                  onChange={e => setForm(f => ({ ...f, sheet_width: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1">Ширина листа, мм</label>
+                <input type="number" min="100" max="9000"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  value={form.sheet_height ?? 2250}
+                  onChange={e => setForm(f => ({ ...f, sheet_height: Number(e.target.value) }))}
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1">Направление рисунка</label>
+                <select
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] bg-white"
+                  value={form.pattern_direction ?? 'none'}
+                  onChange={e => setForm(f => ({ ...f, pattern_direction: e.target.value as PatternDirection }))}
+                >
+                  {PATTERN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                </select>
+              </div>
+            </div>
           </div>
 
           <div className="col-span-2">
@@ -347,6 +405,7 @@ export default function B2BMaterialsPage() {
                         <button onClick={() => toggleActive(m.id, m.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
                           {m.active ? 'Скрыть' : 'Показать'}
                         </button>
+                        <button onClick={() => deleteItem(m.id, m.name, m.thickness)} className="text-[12px] text-red-400 hover:text-red-600 transition-colors">✕</button>
                       </div>
                     </td>
                   </tr>

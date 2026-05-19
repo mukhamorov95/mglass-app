@@ -5,8 +5,10 @@ import { useState, useEffect } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import type { Role } from '@/lib/getRole'
+import type { UserPermissions } from '@/lib/permissions'
+import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
-type Props = { userEmail: string; role: Role | null }
+type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo'
 
@@ -16,28 +18,30 @@ type NavEntry = NavItem | NavGroup
 
 function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
 
-// ─── Manager role ─────────────────────────────────────────────────────────────
+// ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
 
-const MANAGER_B2C_CALC: NavItem[] = [
+const MANAGER_MGLASS: NavEntry[] = [
+  { groupLabel: 'Калькуляторы' },
   { href: '/calculator/mirror', label: 'Зеркало',          icon: '🪞' },
   { href: '/calculator/shower', label: 'Душевая',          icon: '🚿' },
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
+  { groupLabel: 'Продажи' },
+  { href: '/calculations',  label: 'История расчётов', icon: '📋' },
+  { href: '/orders',        label: 'Заказы',           icon: '📦' },
+  { href: '/clients',       label: 'Клиенты',          icon: '👤' },
+  { href: '/calendar',      label: 'Календарь',        icon: '📅' },
+  { href: '/measurer',      label: 'Форма замера',      icon: '📐' },
+  { href: '/my-earnings',   label: 'Мои заработки',    icon: '💰' },
 ]
 
-const MANAGER_B2C_SALES: NavItem[] = [
-  { href: '/calculations', label: 'История расчётов', icon: '📋' },
-  { href: '/orders',       label: 'Заказы',           icon: '📦' },
-  { href: '/clients',      label: 'Клиенты',          icon: '👤' },
-  { href: '/calendar',     label: 'Календарь',        icon: '📅' },
-  { href: '/measurer',     label: 'Форма замера',      icon: '📐' },
-]
+// ─── Manager: B2B ─────────────────────────────────────────────────────────────
 
 const MANAGER_B2B: NavItem[] = [
-  { href: '/manager-dashboard', label: 'Дашборд менеджера', icon: '🎯' },
-  { href: '/calculator/b2b',    label: 'B2B Калькулятор',   icon: '🏭' },
-  { href: '/b2b-quotes',        label: 'B2B Просчёты',      icon: '📝' },
-  { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
-  { href: '/b2b-crm',           label: 'B2B Клиенты',       icon: '🏢' },
+  { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮' },
+  { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝' },
+  { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
+  { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
+  { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
 ]
 
 // ─── Production role ──────────────────────────────────────────────────────────
@@ -46,6 +50,7 @@ const PRODUCTION_ITEMS: NavItem[] = [
   { href: '/manager-dashboard', label: 'Дашборд менеджера', icon: '🎯' },
   { href: '/b2b-pipeline',      label: 'Воронка продаж',    icon: '📌' },
   { href: '/b2b-production',    label: 'Производство B2B',  icon: '🔧' },
+  { href: '/b2b-cutting',       label: 'Раскрой стекла',    icon: '✂️' },
   { href: '/production',        label: 'Производство',      icon: '⚙️' },
   { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
 ]
@@ -90,6 +95,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
+  { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
@@ -119,6 +125,7 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
+  { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
 ]
 
 const ADMIN_MARKETING: NavItem[] = [
@@ -134,13 +141,13 @@ const ADMIN_MARKETING: NavItem[] = [
 ]
 
 const ADMIN_VLADISLAV: NavItem[] = [
-  { href: '/vladislav',               label: 'Сообщения',           icon: '💬' },
-  { href: '/vladislav/calls',         label: 'Анализ звонков',      icon: '📞' },
-  { href: '/ai-stats',                label: 'Статистика бота',     icon: '📊' },
+  { href: '/vladislav',               label: 'Сообщения',            icon: '💬' },
+  { href: '/vladislav/calls',         label: 'Анализ звонков',       icon: '📞' },
+  { href: '/ai-stats',                label: 'Статистика бота',      icon: '📊' },
   { href: '/vladislav/manager-stats', label: 'Аналитика менеджеров', icon: '👥' },
-  { href: '/amo-analysis',            label: 'Воронка AMO',         icon: '🔍' },
-  { href: '/vladislav/tasks',         label: 'Задачи AI',           icon: '🗂️' },
-  { href: '/admin/integrations',      label: 'Avito / AMO Monitor', icon: '🔗' },
+  { href: '/amo-analysis',            label: 'Воронка AMO',          icon: '🔍' },
+  { href: '/vladislav/tasks',         label: 'Задачи AI',            icon: '🗂️' },
+  { href: '/admin/integrations',      label: 'Avito / AMO Monitor',  icon: '🔗' },
 ]
 
 const ADMIN_PRODUCT_LINE: NavItem[] = [
@@ -161,21 +168,25 @@ const ADMIN_SYSTEM: NavItem[] = [
 // ─── Admin mode: Admin view ───────────────────────────────────────────────────
 
 const ADMIN_DIRECTORIES: NavEntry[] = [
-  { href: '/admin/glass-prices',    label: 'Стекло',          icon: '🔷' },
-  { href: '/admin/mirror-lighting', label: 'Подсветка зеркал', icon: '💡' },
-  { href: '/admin/services',        label: 'Услуги',          icon: '🔧' },
+  { href: '/admin/glass-prices',      label: 'Стекло',           icon: '🔷' },
+  { href: '/admin/mirror-lighting',   label: 'Подсветка зеркал', icon: '💡' },
+  { href: '/admin/mirror-frames',     label: 'Рамки зеркал',     icon: '🖼️' },
+  { href: '/admin/materials',         label: 'Материалы',        icon: '📦' },
+  { href: '/admin/services',          label: 'Услуги',           icon: '🔧' },
   { groupLabel: 'Фурнитура' },
-  { href: '/admin/hardware',        label: 'Лофт',           icon: '🔩', indent: true },
-  { href: '/admin/shower-hardware', label: 'Душевые',        icon: '🚿', indent: true },
-  { href: '/admin/settings',        label: 'Фин. настройки', icon: '💰' },
-  { href: '/admin/suppliers',       label: 'Поставщики',     icon: '🏭' },
-  { href: '/admin/architecture',    label: 'Карта данных',   icon: '🗺️' },
+  { href: '/admin/hardware',          label: 'Лофт',            icon: '🔩', indent: true },
+  { href: '/admin/shower-hardware',   label: 'Душевые',         icon: '🚿', indent: true },
+  { href: '/admin/settings',          label: 'Фин. настройки',  icon: '💰' },
+  { href: '/admin/suppliers',         label: 'Поставщики',      icon: '🏭' },
+  { href: '/admin/suppliers/eleganz', label: 'Прайс Eleganz',   icon: '💡', indent: true },
+  { href: '/admin/architecture',      label: 'Карта данных',    icon: '🗺️' },
 ]
 
 const ADMIN_B2B: NavEntry[] = [
-  { href: '/admin/b2b-clients',   label: 'Клиенты',   icon: '🏢' },
-  { href: '/admin/b2b-services',  label: 'Услуги',    icon: '🔧' },
-  { href: '/admin/b2b-materials', label: 'Материалы', icon: '🪟' },
+  { href: '/admin/b2b-clients',      label: 'Клиенты',           icon: '🏢' },
+  { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
+  { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
+  { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
 ]
 
 const ADMIN_OPERATIONS: NavItem[] = [
@@ -187,6 +198,15 @@ const ADMIN_OPERATIONS: NavItem[] = [
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
+const MGLASS_PATHS = [
+  '/calculator/mirror', '/calculator/shower', '/calculator/loft',
+  '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/my-earnings',
+]
+const B2B_PATHS = [
+  '/manager-dashboard', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-crm',
+  '/b2b-pipeline', '/b2b-production', '/b2b-cutting', '/b2b-analytics',
+]
+
 function inSection(pathname: string, paths: string[]): boolean {
   return paths.some(p => pathname === p || pathname.startsWith(p + '/'))
 }
@@ -194,11 +214,8 @@ function inSection(pathname: string, paths: string[]): boolean {
 function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   const open: string[] = []
   if (mode === 'manager') {
-    if (inSection(pathname, ['/my-earnings'])) open.push('earnings')
-    if (inSection(pathname, ['/calculator/mirror', '/calculator/shower', '/calculator/loft'])) open.push('calculator')
-    if (inSection(pathname, ['/calculations', '/orders', '/clients', '/calendar', '/measurer'])) open.push('sales')
-    if (inSection(pathname, ['/manager-dashboard', '/b2b-crm', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-pipeline', '/b2b-production', '/production', '/b2b-analytics'])) open.push('b2b')
-    if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/objections', '/product-finder', '/deal-analysis', '/templates', '/competitors'])) open.push('ai')
+    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
+    if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -206,7 +223,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials'])) open.push('b2b')
     if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
   }
@@ -216,9 +233,8 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
 function autoOpenRole(pathname: string, role: Role): string[] {
   const open: string[] = []
   if (role === 'manager') {
-    if (inSection(pathname, ['/calculator/mirror', '/calculator/shower', '/calculator/loft'])) open.push('calculator')
-    if (inSection(pathname, ['/calculations', '/orders', '/clients', '/calendar', '/measurer'])) open.push('sales')
-    if (inSection(pathname, ['/manager-dashboard', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-crm'])) open.push('b2b')
+    if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
+    if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (role === 'seo') {
     if (inSection(pathname, ['/b2b-analytics', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -250,7 +266,7 @@ function detectModeFromPath(pathname: string): ViewMode {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Sidebar({ userEmail, role }: Props) {
+export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
 
@@ -322,25 +338,27 @@ export function Sidebar({ userEmail, role }: Props) {
 
   const active = (href: string) => pathname === href || pathname.startsWith(href + '/')
 
-  // ── Render helpers ──────────────────────────────────────────────────────────
+  // ── Nav item ────────────────────────────────────────────────────────────────
 
   const navItem = (item: NavItem, activeCls: string) => (
     <Link
       key={item.href}
       href={item.href}
       onClick={() => setMobileOpen(false)}
-      className={`flex items-center gap-2.5 py-[7px] rounded-lg text-[13px] transition-colors ${
-        item.indent ? 'pl-6 pr-2.5' : 'px-2.5'
+      className={`flex items-center gap-2 py-[6px] rounded-md text-[13px] transition-colors ${
+        item.indent ? 'pl-7 pr-2.5' : 'px-2.5'
       } ${
         active(item.href)
           ? activeCls
           : 'text-[#6b6b66] hover:bg-[#f5f5f3] hover:text-[#111110]'
       }`}
     >
-      <span className="text-[14px] w-5 flex-shrink-0 text-center leading-none">{item.icon}</span>
-      <span className="leading-tight">{item.label}</span>
+      <span className="text-[13px] w-4 flex-shrink-0 text-center leading-none opacity-75">{item.icon}</span>
+      <span className="leading-tight tracking-[-0.01em]">{item.label}</span>
     </Link>
   )
+
+  // ── Small accordion (for non-manager sections) ──────────────────────────────
 
   const accordion = (
     id: string,
@@ -355,21 +373,66 @@ export function Sidebar({ userEmail, role }: Props) {
       <div key={id}>
         <button
           onClick={() => toggle(id)}
-          className="w-full flex items-center justify-between px-2.5 py-[7px] rounded-lg hover:bg-[#f5f5f3] transition-colors group"
+          className="w-full flex items-center justify-between px-2.5 py-[6px] rounded-md hover:bg-[#f5f5f3] transition-colors"
         >
           <span className={`text-[10px] font-bold uppercase tracking-widest ${labelCls}`}>{label}</span>
           <svg
-            className={`w-3.5 h-3.5 ${chevronCls} transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 ${chevronCls} transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
           </svg>
         </button>
         {isOpen && (
-          <div className="mt-0.5 space-y-0.5 ml-0.5">
+          <div className="mt-0.5 space-y-px">
             {entries.map((entry, idx) =>
               isGroup(entry) ? (
-                <div key={`group-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b0b0aa]">
+                <div key={`group-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
+                  {entry.groupLabel}
+                </div>
+              ) : (
+                navItem(entry, activeCls)
+              )
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Top-level workspace accordion (MGlass / B2B) ────────────────────────────
+
+  const workspaceAccordion = (
+    id: string,
+    label: string,
+    dot: string,       // dot color class, e.g. 'bg-[#111110]' or 'bg-orange-500'
+    labelCls: string,
+    entries: NavEntry[],
+    activeCls: string,
+  ) => {
+    const isOpen = open.has(id)
+    return (
+      <div key={id} className="mb-1">
+        <button
+          onClick={() => toggle(id)}
+          className="w-full flex items-center justify-between px-2.5 py-[7px] rounded-md hover:bg-[#f5f5f3] transition-colors group"
+        >
+          <div className="flex items-center gap-2">
+            <span className={`w-[6px] h-[6px] rounded-full flex-shrink-0 ${dot}`} />
+            <span className={`text-[13px] font-semibold tracking-[-0.01em] ${labelCls}`}>{label}</span>
+          </div>
+          <svg
+            className={`w-3 h-3 text-[#c4c4be] group-hover:text-[#9a9a95] transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {isOpen && (
+          <div className="mt-0.5 space-y-px ml-0.5">
+            {entries.map((entry, idx) =>
+              isGroup(entry) ? (
+                <div key={`group-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
                   {entry.groupLabel}
                 </div>
               ) : (
@@ -384,69 +447,112 @@ export function Sidebar({ userEmail, role }: Props) {
 
   // ── Role-based navigation ───────────────────────────────────────────────────
 
+  function buildMglassNav(): NavEntry[] {
+    return MANAGER_MGLASS.filter(e => {
+      if (isGroup(e)) return true
+      if (e.href === '/clients')     return permissions.see_clients
+      if (e.href === '/calendar')    return permissions.see_calendar
+      if (e.href === '/my-earnings') return permissions.see_earnings
+      return true
+    })
+  }
+
+  function buildB2bNav(): NavItem[] {
+    return MANAGER_B2B.filter(e => {
+      if (e.href === '/b2b-crm') return permissions.see_clients
+      return true
+    })
+  }
+
   function renderNav() {
-    // Manager: B2C + B2B
-    if (role === 'manager') return (
-      <>
-        {accordion('calculator', 'Калькулятор', 'text-blue-600',   'text-blue-400',   MANAGER_B2C_CALC,  'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('sales',      'Продажи',     'text-blue-600',   'text-blue-400',   MANAGER_B2C_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('b2b',        'B2B',         'text-orange-600', 'text-orange-400', MANAGER_B2B,       'bg-orange-50 text-orange-700 font-semibold')}
-      </>
-    )
+    // Manager: MGlass + B2B (filtered by permissions)
+    if (role === 'manager') {
+      const mglassNav = buildMglassNav()
+      const b2bNav    = buildB2bNav()
+      return (
+        <>
+          {permissions.see_mglass && workspaceAccordion(
+            'mglass', 'MGlass',
+            'bg-[#111110]', 'text-[#111110]',
+            mglassNav,
+            'bg-[#f0f0ec] text-[#111110] font-medium',
+          )}
+          {permissions.see_mglass && permissions.see_b2b && (
+            <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+          )}
+          {permissions.see_b2b && workspaceAccordion(
+            'b2b', 'B2B',
+            'bg-orange-400', 'text-[#c2600a]',
+            b2bNav,
+            'bg-orange-50 text-orange-700 font-medium',
+          )}
+        </>
+      )
+    }
 
     // Production: flat list
     if (role === 'production') return (
       <div>
-        <div className="px-2.5 pt-2 pb-1.5 text-[10px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
-        <div className="space-y-0.5">
-          {PRODUCTION_ITEMS.map(item => navItem(item, 'bg-orange-50 text-orange-700 font-semibold'))}
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
+        <div className="space-y-px">
+          {PRODUCTION_ITEMS.map(item => navItem(item, 'bg-orange-50 text-orange-700 font-medium'))}
         </div>
       </div>
     )
 
-    // SEO: analytics + marketing + AI accordions
+    // SEO: analytics + marketing + AI
     if (role === 'seo') return (
       <>
-        {accordion('analytics', 'Аналитика',     'text-blue-600',   'text-blue-400',   SEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('marketing', 'Маркетинг',     'text-rose-600',   'text-rose-400',   SEO_MARKETING, 'bg-rose-50 text-rose-700 font-semibold')}
-        {accordion('ai',        'AI Инструменты','text-violet-600', 'text-violet-400', SEO_AI,        'bg-violet-50 text-violet-700 font-semibold')}
+        {accordion('analytics', 'Аналитика',      'text-blue-600',   'text-blue-400',   SEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
+        {accordion('marketing', 'Маркетинг',       'text-rose-600',   'text-rose-400',   SEO_MARKETING, 'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('ai',        'AI Инструменты',  'text-violet-600', 'text-violet-400', SEO_AI,        'bg-violet-50 text-violet-700 font-medium')}
       </>
     )
 
-    // CEO: owner + analytics + system
+    // CEO
     if (role === 'ceo') return (
       <>
-        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-semibold')}
-        {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#9a9a95]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-semibold')}
+        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
+        {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-medium')}
       </>
     )
 
-    // Admin manager-preview: same view a real manager sees
+    // Admin preview — manager view (shows everything, ignores permissions for admin)
     if (viewMode === 'manager') return (
       <>
-        {accordion('calculator', 'Калькулятор', 'text-blue-600',   'text-blue-400',   MANAGER_B2C_CALC,  'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('sales',      'Продажи',     'text-blue-600',   'text-blue-400',   MANAGER_B2C_SALES, 'bg-blue-50 text-blue-700 font-semibold')}
-        {accordion('b2b',        'B2B',         'text-orange-600', 'text-orange-400', MANAGER_B2B,       'bg-orange-50 text-orange-700 font-semibold')}
+        {workspaceAccordion(
+          'mglass', 'MGlass',
+          'bg-[#111110]', 'text-[#111110]',
+          MANAGER_MGLASS,
+          'bg-[#f0f0ec] text-[#111110] font-medium',
+        )}
+        <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+        {workspaceAccordion(
+          'b2b', 'B2B',
+          'bg-orange-400', 'text-[#c2600a]',
+          MANAGER_B2B,
+          'bg-orange-50 text-orange-700 font-medium',
+        )}
       </>
     )
 
     if (viewMode === 'ceo') return (
       <>
-        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-semibold')}
-        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-semibold')}
-        {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-semibold')}
-        {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-semibold')}
-        {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#9a9a95]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-semibold')}
+        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-medium')}
+        {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-medium')}
+        {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-medium')}
       </>
     )
 
-    // admin view
+    // Admin directories view
     return (
       <>
-        {accordion('directories', 'Справочники', 'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-semibold')}
-        {accordion('b2b',         'B2B',         'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_B2B,         'bg-[#f5f5f3] text-[#111110] font-semibold')}
-        {accordion('operations',  'Операции',    'text-[#6b6b66]', 'text-[#9a9a95]', ADMIN_OPERATIONS,  'bg-[#f5f5f3] text-[#111110] font-semibold')}
+        {accordion('directories', 'Справочники', 'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('b2b',         'B2B',         'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_B2B,         'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('operations',  'Операции',    'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_OPERATIONS,  'bg-[#f5f5f3] text-[#111110] font-medium')}
       </>
     )
   }
@@ -475,22 +581,22 @@ export function Sidebar({ userEmail, role }: Props) {
       <aside
         className={`
           fixed lg:sticky top-0 left-0 h-screen z-40 lg:z-auto
-          w-56 flex-shrink-0 flex flex-col bg-white border-r border-[#e4e4e0]
+          w-[220px] flex-shrink-0 flex flex-col bg-[#fafaf9] border-r border-[#ebebе8]
           transition-transform duration-200 ease-in-out overflow-hidden
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         {/* Header */}
-        <div className="border-b border-[#e4e4e0] flex-shrink-0">
+        <div className="border-b border-[#ebebе8] flex-shrink-0">
           <Link href="/" onClick={() => setMobileOpen(false)}
-            className="flex items-center gap-2.5 px-4 py-3.5 hover:bg-[#fafaf9] transition-colors">
-            <div className="w-7 h-7 bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
-              <span className="text-white text-[11px] font-bold tracking-tight">MG</span>
+            className="flex items-center gap-2.5 px-4 py-3 hover:bg-[#f5f5f3] transition-colors">
+            <div className="w-[26px] h-[26px] bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
+              <span className="text-white text-[10px] font-bold tracking-tight">MG</span>
             </div>
             <div>
-              <span className="text-[15px] font-bold text-[#111110] tracking-tight">MGlass</span>
+              <span className="text-[14px] font-bold text-[#111110] tracking-[-0.02em]">MGlass</span>
               {!isAdmin && role && (
-                <div className="text-[10px] text-[#9a9a95] leading-tight capitalize">
+                <div className="text-[10px] text-[#b0b0aa] leading-tight">
                   {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : 'CEO'}
                 </div>
               )}
@@ -499,15 +605,17 @@ export function Sidebar({ userEmail, role }: Props) {
 
           {isAdmin && (
             <div className="px-3 pb-3">
-              <div className="flex bg-[#f5f5f3] rounded-[8px] p-0.5 gap-0.5">
+              <div className="flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px]">
                 {([
                   { v: 'manager', l: 'Менеджер' },
                   { v: 'admin',   l: 'Админ'    },
                   { v: 'ceo',     l: 'СЕО'      },
                 ] as { v: ViewMode; l: string }[]).map(({ v, l }) => (
                   <button key={v} onClick={() => switchMode(v)}
-                    className={`flex-1 py-[5px] rounded-[6px] text-[10px] font-semibold transition-all ${
-                      viewMode === v ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                    className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
+                      viewMode === v
+                        ? 'bg-white text-[#111110] shadow-sm'
+                        : 'text-[#9a9a95] hover:text-[#6b6b66]'
                     }`}>
                     {l}
                   </button>
@@ -519,34 +627,34 @@ export function Sidebar({ userEmail, role }: Props) {
           {isLocalhost && isAdmin && (
             <div className="px-3 pb-3">
               <button onClick={handleSync} disabled={syncState === 'loading'}
-                className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-[11px] font-semibold transition-all disabled:opacity-50 ${
+                className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-semibold transition-all disabled:opacity-50 ${
                   syncState === 'ok'    ? 'bg-emerald-100 text-emerald-700' :
                   syncState === 'error' ? 'bg-red-50 text-red-600' :
-                  'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] hover:text-[#111110]'
+                  'bg-[#efefec] text-[#6b6b66] hover:bg-[#e8e8e4] hover:text-[#111110]'
                 }`}>
                 {syncState === 'loading' ? '...' :
                  syncState === 'ok'      ? '✓ Синхронизировано' :
-                 syncState === 'error'   ? 'Ошибка синхронизации' : '↻ Синхронизировать'}
+                 syncState === 'error'   ? 'Ошибка' : '↻ Синхронизировать'}
               </button>
             </div>
           )}
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-2 py-2 space-y-0.5 overflow-y-auto">
+        <nav className="flex-1 px-2 py-2 space-y-px overflow-y-auto">
           {renderNav()}
         </nav>
 
         {/* Footer */}
-        <div className="px-3 py-3 border-t border-[#e4e4e0] flex-shrink-0">
-          <div className="flex items-center gap-2 px-2 mb-1.5">
-            <div className="w-6 h-6 rounded-full bg-[#f5f5f3] border border-[#e4e4e0] flex items-center justify-center flex-shrink-0">
-              <span className="text-[10px] font-bold text-[#6b6b66]">{(userEmail[0] ?? '?').toUpperCase()}</span>
+        <div className="px-3 py-2.5 border-t border-[#ebebе8] flex-shrink-0">
+          <div className="flex items-center gap-2 px-2 mb-1">
+            <div className="w-5 h-5 rounded-full bg-[#efefec] border border-[#e4e4e0] flex items-center justify-center flex-shrink-0">
+              <span className="text-[9px] font-bold text-[#6b6b66]">{(userEmail[0] ?? '?').toUpperCase()}</span>
             </div>
             <p className="text-[11px] text-[#9a9a95] truncate leading-tight">{userEmail}</p>
           </div>
           <button onClick={logout}
-            className="w-full text-left px-2 py-1.5 rounded-lg text-[12px] text-[#9a9a95] hover:text-red-500 hover:bg-red-50 transition-colors">
+            className="w-full text-left px-2 py-1.5 rounded-md text-[12px] text-[#b0b0aa] hover:text-red-500 hover:bg-red-50 transition-colors">
             Выйти
           </button>
         </div>

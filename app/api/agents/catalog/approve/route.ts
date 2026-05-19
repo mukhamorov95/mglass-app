@@ -37,11 +37,32 @@ export async function POST(req: Request) {
   const name  = item.name ?? item.suggestion ?? '—'
   const table = item.table ?? 'materials'
 
+  // Нормализуем категорию агента к значениям таблицы materials
+  const CATEGORY_MAP: Record<string, string> = {
+    'Стекло':          'стекло',
+    'Фурнитура':       'фурнитура',
+    'Комплектующие':   'расходники',
+    'Химия':           'расходники',
+    'Упаковка':        'расходники',
+    'Профиль':         'профиль',
+    'Подсветка':       'подсветка',
+    'Электрика':       'электрика',
+    'Работа':          'работа',
+    'Услуга':          'услуга',
+    'Прочее':          'расходники',
+  }
+
   if (!reject) {
     const row: Record<string, unknown> = { name }
-    if (item.category)   row.category   = item.category
-    if (item.cost_price) row.cost_price = item.cost_price
-    if (item.unit)       row.unit       = item.unit
+    if (table === 'materials') {
+      const rawCat   = item.category ?? 'Прочее'
+      row.category   = CATEGORY_MAP[rawCat] ?? rawCat.toLowerCase()
+      row.unit       = item.unit       ?? 'шт'
+      row.cost_price = item.cost_price ?? 0
+    } else {
+      row.unit       = item.unit       ?? 'шт'
+      row.cost_price = item.cost_price ?? 0
+    }
 
     const { error } = await db_.from(table).insert(row)
     if (error && !error.message?.includes('duplicate')) {

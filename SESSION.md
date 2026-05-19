@@ -1,40 +1,86 @@
 ## Текущая задача
-Система AI-агентов полностью собрана — все 4 агента готовы к активации
+Создание менеджеров + soft delete + activity log viewer
 
-## Что сделано (сессия 14 мая 2026 — AI агенты)
-- `lib/agentMemory.ts` — общий паттерн памяти для всех агентов (readMemory/writeMemory/writeLog/startRun/finishRun/failRun)
-- `app/admin/agents/page.tsx` — дашборд: грид 2×2, тоггл вкл/выкл, ручной запуск, лента логов, автообновление 30с
-- `app/api/cron/agent-revenue/route.ts` — переписан с памятью (followup WhatsApp клиентам)
-- `app/api/cron/agent-analyst/route.ts` — переписан с памятью (6ч отчёт метрик)
-- `app/api/cron/agent-production/route.ts` — создан (Максим, мониторинг производства 🏭)
-- `app/api/cron/agent-catalog/route.ts` — создан (Наполнитель справочников 🧠)
-- `app/api/agents/run/[key]/route.ts` — прокси для ручного запуска (проверяет Supabase-сессию)
-- `supabase/migrations/20250514_agent_settings_v2.sql` — columns memory, config, is_running, total_runs
-- Sidebar.tsx — пункт AI-агенты в SEO и ADMIN вкладках
+## SQL МИГРАЦИИ (ВСЕ ВЫПОЛНИТЬ В SUPABASE!)
 
-## Предыдущее (14 мая 2026 — зеркала)
-- `supabase/migrations/20250514_mirror_lighting_components.sql` ✅ ПРИМЕНЕНА + RLS политики
-- `app/admin/mirror-lighting/page.tsx` — справочник компонентов (CRUD)
-- `lib/mirrorCalculator.ts`, `app/calculator/mirror/page.tsx` — модульный конфигуратор
+```sql
+-- 1. Права доступа
+ALTER TABLE users ADD COLUMN IF NOT EXISTS max_discount_percent integer NOT NULL DEFAULT 5;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS can_delete boolean NOT NULL DEFAULT false;
+UPDATE users SET max_discount_percent = 100, can_delete = true WHERE role = 'admin';
 
-## Следующий шаг
-Применить в Supabase SQL Editor:
-1. `ALTER TABLE calculations ADD COLUMN IF NOT EXISTS followup_sent_at TIMESTAMPTZ;`
-2. Содержимое `supabase/migrations/20250514_agent_settings.sql`
-3. Содержимое `supabase/migrations/20250514_agent_settings_v2.sql`
-4. `supabase/migrations/20250514_service_cost_price.sql` (себестоимость доп. услуг)
+-- 2. Гранулярные права (разделы меню)
+ALTER TABLE users
+  ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{"see_mglass":true,"see_b2b":true,"see_calendar":true,"see_clients":true,"see_earnings":true}'::jsonb;
 
-После — включить агентов через /admin/agents и добавить в vercel.json когда готов
+-- 3. Audit log
+CREATE TABLE IF NOT EXISTS activity_log (
+  id         bigserial PRIMARY KEY,
+  user_id    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_name  text,
+  action     text NOT NULL,
+  entity_type text,
+  entity_id  text,
+  details    jsonb,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_actlog_entity  ON activity_log(entity_type, entity_id);
+CREATE INDEX IF NOT EXISTS idx_actlog_user    ON activity_log(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_actlog_created ON activity_log(created_at DESC);
+
+-- 4. Мягкое удаление
+ALTER TABLE b2b_orders ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS archived_at timestamptz;
+CREATE INDEX IF NOT EXISTS idx_b2b_orders_archived ON b2b_orders(archived_at) WHERE archived_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_b2b_quotes_archived  ON b2b_quotes(archived_at)  WHERE archived_at IS NULL;
+```
+
+## СОЗДАНИЕ МЕНЕДЖЕРОВ
+
+Вызови API (один раз, будучи залогиненным как admin):
+```
+curl -X POST http://localhost:3000/api/admin/seed-managers \
+  -H "Cookie: <твои куки из браузера>"
+```
+Или из консоли браузера на localhost:3000:
+```javascript
+fetch('/api/admin/seed-managers', {method:'POST'})
+  .then(r=>r.json()).then(console.log)
+```
+Ответ покажет пароли для Александры и Яны.
+
+## Что сделано (сессия 19 мая)
+
+### app/api/admin/seed-managers/route.ts (новый)
+- POST → создаёт Александру (02) и Яну (04) с auto-паролями
+- Пропускает если email уже существует
+
+### app/b2b-orders/page.tsx
+- handleDelete → update archived_at вместо delete
+- Запрос добавляет .is('archived_at', null) — архивированные скрыты
+- Диалог: "Архивировать?" вместо "Удалить?"
+
+### app/b2b-quotes/page.tsx
+- handleDelete → update archived_at
+- Запрос добавляет .is('archived_at', null)
+- Toast: "Просчёт архивирован"
+
+### app/admin/activity-log/page.tsx (новый)
+- Таблица последних 500 действий
+- Фильтр по действию и сотруднику
+- Показывает дату/сотрудника/действие/объект/детали
+- Если таблица не создана → инструкция по миграции
+
+### components/Sidebar.tsx
+- "Лог действий" добавлен в ADMIN_OWNER и CEO_OWNER
 
 ## Контекст
-- Агенты НЕ добавлены в vercel.json — автозапуска нет, только ручной через дашборд
-- Прокси /api/agents/run/[key] требует Supabase сессию (аутентифицированный пользователь)
-- agent-catalog: require_approval=true — только предлагает позиции, не добавляет сам
-- Нужны env-переменные: CRON_SECRET, ANTHROPIC_API_KEY, WAZZUP_API_KEY, WAZZUP_CHANNEL_ID, NEXT_PUBLIC_APP_URL
-- Cookie user-role кэшируется 1ч; шрифты PT Sans в public/fonts/ — не удалять (PDF)
+- TypeScript: 0 ошибок
+- Soft delete работает как .update({ archived_at }) → данные в БД сохраняются
+- Admin всегда видит всё (permissions не проверяются для admin роли)
+- Менеджеры (Семён 05, Айжан 03) уже есть; Александра 02 и Яна 04 создаются через seed API
 
-## Открытые вопросы
-- Миграции agent_settings + agent_settings_v2 применены в Supabase? (нужно проверить)
-- Колонка followup_sent_at добавлена в calculations?
-- Переменная NEXT_PUBLIC_APP_URL задана в Vercel?
-- Миграция 20250514_service_cost_price.sql — ещё не применена
+## Следующий этап
+- Страница архива: /admin/archive показывает archived_at IS NOT NULL заказы
+- Версионность: сохранять снапшот заказа при изменении цены/скидки
+- Discount cap: проверка max_discount_percent в калькуляторе зеркал

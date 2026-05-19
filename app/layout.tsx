@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { createClient } from '@/lib/supabase-server'
-import { getRole } from '@/lib/getRole'
+import { getUserProfile, DEFAULT_PERMISSIONS } from '@/lib/getRole'
 import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
@@ -26,7 +26,9 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
-  const role = user ? await getRole() : null
+  const profile = user ? await getUserProfile() : null
+  const role = profile?.role ?? null
+  const permissions = profile?.permissions ?? DEFAULT_PERMISSIONS
 
   // Seed org context server-side so client components never show a loading state
   let orgId = 1
@@ -58,7 +60,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <CartProvider>
             {user ? (
               <div className="flex min-h-screen">
-                <Sidebar userEmail={user.email ?? ''} role={role} />
+                <Sidebar userEmail={user.email ?? ''} role={role} permissions={permissions} />
                 <main className="flex-1 min-w-0 pt-12 lg:pt-0">{children}</main>
               </div>
             ) : (

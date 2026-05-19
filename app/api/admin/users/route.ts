@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
+import { writeLogForCurrentUser } from '@/lib/activityLog'
 
 function adminClient() {
   return createClient(
@@ -13,32 +14,64 @@ export async function GET() {
   const role = await getRole()
   if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
 
-  const { data, error } = await adminClient()
+  const db = adminClient()
+
+  // Try with new columns first; fall back to base columns if migration not run yet
+  const full = await db
+    .from('users')
+    .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,max_discount_percent,can_delete,permissions,created_at')
+    .order('created_at', { ascending: true })
+
+  if (!full.error) return NextResponse.json(full.data ?? [])
+
+  const base = await db
     .from('users')
     .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,created_at')
     .order('created_at', { ascending: true })
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data)
+  if (base.error) return NextResponse.json({ error: base.error.message }, { status: 500 })
+  return NextResponse.json(base.data ?? [])
 }
 
 export async function PATCH(req: NextRequest) {
   const role = await getRole()
   if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
 
-  const { id, password_plain, ...fields } = await req.json()
+  const { id, password_plain, permissions, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
 
   const db = adminClient()
 
-  // If password is being updated — change it in Supabase Auth too
+  // Password change — update Supabase Auth too
   if (password_plain) {
     await db.auth.admin.updateUserById(id, { password: password_plain })
     fields.password_plain = password_plain
+    await writeLogForCurrentUser('user.password_change', { entityType: 'user', entityId: id })
   }
 
-  const { error } = await db.from('users').update(fields).eq('id', id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  // Merge permissions into fields (jsonb column)
+  if (permissions !== undefined) {
+    fields.permissions = permissions
+    await writeLogForCurrentUser('user.permission_change', {
+      entityType: 'user',
+      entityId: id,
+      details: { permissions },
+    })
+  }
+
+  if (Object.keys(fields).length > 0) {
+    const { error } = await db.from('users').update(fields).eq('id', id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+    if (!password_plain && permissions === undefined) {
+      await writeLogForCurrentUser('user.update', {
+        entityType: 'user',
+        entityId: id,
+        details: fields,
+      })
+    }
+  }
+
   return NextResponse.json({ ok: true })
 }
 

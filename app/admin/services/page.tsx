@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Service } from '@/lib/types'
 
-const EMPTY: Omit<Service, 'id'> = { name: '', unit: 'шт', cost_price: 0, sale_price: null, active: true, comment: null }
+const EMPTY: Omit<Service, 'id'> = { name: '', short_name: null, unit: 'шт', cost_price: 0, sale_price: null, active: true, comment: null }
 
 export default function ServicesAdminPage() {
   const [services, setServices] = useState<Service[]>([])
@@ -55,7 +55,7 @@ export default function ServicesAdminPage() {
 
   function startEdit(s: Service) {
     setEditingId(s.id)
-    setForm({ name: s.name, unit: s.unit, cost_price: s.cost_price, sale_price: s.sale_price, active: s.active, comment: s.comment })
+    setForm({ name: s.name, short_name: s.short_name ?? null, unit: s.unit, cost_price: s.cost_price, sale_price: s.sale_price, active: s.active, comment: s.comment })
     setError(null)
   }
 

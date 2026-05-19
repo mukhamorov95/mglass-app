@@ -62,6 +62,10 @@ function find(materials: Material[], name: string): Material | undefined {
   return materials.find(m => m.name.toLowerCase().includes(name.toLowerCase()) && m.active)
 }
 
+function dn(m: { name: string; short_name?: string | null }): string {
+  return m.short_name?.trim() || m.name
+}
+
 export function calculateLoft(
   inputs: LoftInputs,
   materials: Material[],
@@ -106,7 +110,7 @@ export function calculateLoft(
   const profile = find(materials, 'Профиль 40×20')
   if (profile) {
     lines.push({
-      name: profile.name,
+      name: dn(profile),
       qty: Number(metalLength.toFixed(2)),
       unit: 'пог.м',
       price: profile.cost_price,
@@ -119,7 +123,7 @@ export function calculateLoft(
   const штапик = find(materials, 'Штапик 15×15')
   if (штапик) {
     lines.push({
-      name: штапик.name,
+      name: dn(штапик),
       qty: Number(штапикLength.toFixed(2)),
       unit: 'пог.м',
       price: штапик.cost_price,
@@ -131,7 +135,7 @@ export function calculateLoft(
   const sealant = find(materials, 'Уплотнитель')
   if (sealant) {
     lines.push({
-      name: sealant.name,
+      name: dn(sealant),
       qty: Number(штапикLength.toFixed(2)),
       unit: 'пог.м',
       price: sealant.cost_price,
@@ -143,7 +147,7 @@ export function calculateLoft(
   const consumables = find(materials, 'Производственные расходники лофт')
   if (consumables) {
     lines.push({
-      name: consumables.name,
+      name: dn(consumables),
       qty: Number(area.toFixed(3)),
       unit: 'м²',
       price: consumables.cost_price,
@@ -155,7 +159,7 @@ export function calculateLoft(
   const welder = find(materials, 'Работа сварщика лофт')
   if (welder) {
     lines.push({
-      name: welder.name,
+      name: dn(welder),
       qty: Number(area.toFixed(3)),
       unit: 'м²',
       price: welder.cost_price,
@@ -167,7 +171,7 @@ export function calculateLoft(
   const assembly = find(materials, 'Сборка лофт')
   if (assembly) {
     lines.push({
-      name: assembly.name,
+      name: dn(assembly),
       qty: Number(area.toFixed(3)),
       unit: 'м²',
       price: assembly.cost_price,
@@ -179,7 +183,7 @@ export function calculateLoft(
   if (inputs.glassMaterial && glassArea > 0) {
     const glassPrice = inputs.glassCalcPrice ?? inputs.glassMaterial.cost_price
     lines.push({
-      name: inputs.glassMaterial.name,
+      name: dn(inputs.glassMaterial),
       qty: Number(glassArea.toFixed(3)),
       unit: 'м²',
       price: glassPrice,
@@ -192,7 +196,7 @@ export function calculateLoft(
     const tempering = services.find(s => s.name.toLowerCase().includes('закалка'))
     if (tempering) {
       lines.push({
-        name: tempering.name,
+        name: tempering.short_name?.trim() || tempering.name,
         qty: Number(glassArea.toFixed(3)),
         unit: 'м²',
         price: tempering.cost_price,
@@ -227,7 +231,7 @@ export function calculateLoft(
     const qty = inputs.hardwareQty[hw.id] ?? 1
     if (qty > 0 && (hw.cost_price ?? 0) > 0) {
       lines.push({
-        name: hw.name,
+        name: dn(hw),
         qty,
         unit: hw.unit,
         price: hw.cost_price ?? 0,

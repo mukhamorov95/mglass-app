@@ -19,8 +19,17 @@ const GROUPS: { label: string; categories: string[]; color: string }[] = [
 ]
 
 const EMPTY: Omit<Material, 'id' | 'created_at' | 'updated_at' | 'image_url'> = {
-  name: '', category: 'зеркало', unit: 'м²', cost_price: 0, sale_price: null,
+  name: '', short_name: null, category: 'зеркало', unit: 'м²', cost_price: 0, sale_price: null,
   has_vat: false, vat_rate: 20, active: true, in_stock: true, comment: null,
+}
+
+type TransferModal = {
+  material: Material
+  target: 'mirror_lighting' | 'hardware' | ''
+  componentType: 'frame' | 'led_strip' | 'power_supply' | 'diffuser' | ''
+  systemType: 'sliding' | 'swing' | 'universal'
+  transferring: boolean
+  error: string | null
 }
 
 export default function MaterialsAdminPage() {
@@ -32,6 +41,9 @@ export default function MaterialsAdminPage() {
   const [error, setError]           = useState<string | null>(null)
   const [showInactive, setShowInactive] = useState(false)
   const [uploadingId, setUploadingId] = useState<number | null>(null)
+  const [transfer, setTransfer]     = useState<TransferModal | null>(null)
+  const [catalogNames, setCatalogNames] = useState<Set<string>>(new Set())
+  const [selectedForClear, setSelectedForClear] = useState<Set<number>>(new Set())
   const fileInputRef = useRef<HTMLInputElement>(null)
   const uploadTargetId = useRef<number | null>(null)
   const formRef = useRef<HTMLDivElement>(null)
@@ -66,10 +78,44 @@ export default function MaterialsAdminPage() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const { data, error } = await supabase.from('materials').select('*').order('category').order('name')
+    const [{ data, error }, { data: mlc }, { data: hw }] = await Promise.all([
+      supabase.from('materials').select('*').order('created_at', { ascending: false }),
+      supabase.from('mirror_lighting_components').select('name'),
+      supabase.from('hardware_items').select('name'),
+    ])
     if (error) setError(error.message)
     else setMaterials(data ?? [])
+    const names = new Set([
+      ...(mlc ?? []).map((r: { name: string }) => r.name.toLowerCase().trim()),
+      ...(hw  ?? []).map((r: { name: string }) => r.name.toLowerCase().trim()),
+    ])
+    setCatalogNames(names)
     setLoading(false)
+  }
+
+  function toggleClearItem(id: number) {
+    setSelectedForClear(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  function toggleClearGroup(ids: number[], checked: boolean) {
+    setSelectedForClear(prev => {
+      const next = new Set(prev)
+      ids.forEach(id => checked ? next.add(id) : next.delete(id))
+      return next
+    })
+  }
+
+  async function deleteSelected() {
+    if (selectedForClear.size === 0) return
+    if (!confirm(`Удалить ${selectedForClear.size} позиций? Это действие нельзя отменить.`)) return
+    const supabase = createClient()
+    await supabase.from('materials').delete().in('id', [...selectedForClear])
+    setSelectedForClear(new Set())
+    await load()
   }
 
   async function handleSave() {
@@ -98,7 +144,7 @@ export default function MaterialsAdminPage() {
   function startEdit(m: Material) {
     setEditingId(m.id)
     setForm({
-      name: m.name, category: m.category, unit: m.unit,
+      name: m.name, short_name: m.short_name ?? null, category: m.category, unit: m.unit,
       cost_price: m.cost_price, sale_price: m.sale_price ?? null,
       has_vat: m.has_vat, vat_rate: m.vat_rate,
       active: m.active, in_stock: m.in_stock ?? true, comment: m.comment,
@@ -136,26 +182,177 @@ export default function MaterialsAdminPage() {
     setMaterials(prev => prev.map(m => m.id === id ? { ...m, in_stock: !in_stock } : m))
   }
 
-  const totalActive = materials.filter(m => m.active).length
+  async function handleTransfer() {
+    if (!transfer || !transfer.target) return
+    if (transfer.target === 'mirror_lighting' && !transfer.componentType) return
+    setTransfer(t => t ? { ...t, transferring: true, error: null } : t)
+    const res = await fetch('/api/admin/materials/transfer', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        materialId:    transfer.material.id,
+        target:        transfer.target,
+        componentType: transfer.componentType || undefined,
+        systemType:    transfer.systemType,
+      }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      setTransfer(t => t ? { ...t, transferring: false, error: data.error } : t)
+      return
+    }
+    setTransfer(null)
+    await load()
+  }
+
+  const totalActive   = materials.filter(m => m.active).length
+  const allGroupedCats = GROUPS.flatMap(g => g.categories)
+  const queueItems = materials.filter(m =>
+    m.active && !m.short_name && !allGroupedCats.includes(m.category)
+  )
+
+  const allVisibleIds = materials.filter(m => showInactive || m.active).map(m => m.id)
 
   return (
     <div className="max-w-[1000px] mx-auto px-6 py-8">
       <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
 
+      {/* Transfer modal */}
+      {transfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-[15px] font-semibold text-[#111110] mb-1">Перенести в специализированный справочник</h2>
+            <p className="text-[13px] text-[#6b6b66] mb-5 leading-snug">
+              <span className="font-medium text-[#111110]">{transfer.material.name}</span>
+              <span className="text-[#9a9a95]"> · {transfer.material.unit} · {transfer.material.cost_price.toLocaleString('ru-RU')} ₽</span>
+            </p>
+
+            {/* Куда */}
+            <div className="mb-4">
+              <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Куда перенести</label>
+              <div className="grid grid-cols-2 gap-2">
+                {([
+                  { value: 'mirror_lighting', label: '💡 Подсветка зеркал' },
+                  { value: 'hardware',        label: '🔩 Фурнитура' },
+                ] as const).map(opt => (
+                  <button key={opt.value}
+                    onClick={() => setTransfer(t => t ? { ...t, target: opt.value } : t)}
+                    className={`px-3 py-2.5 rounded-xl border text-[13px] font-medium transition-colors text-left ${
+                      transfer.target === opt.value
+                        ? 'bg-[#111110] text-white border-[#111110]'
+                        : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Доп. поля для Подсветки */}
+            {transfer.target === 'mirror_lighting' && (
+              <div className="mb-4">
+                <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Тип компонента</label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'frame',          label: '🔲 Каркас (профиль)' },
+                    { value: 'led_strip',      label: '💡 LED-лента' },
+                    { value: 'power_supply',   label: '🔌 Блок питания' },
+                    { value: 'diffuser',       label: '⬜ Рассеиватель' },
+                  ] as const).map(opt => (
+                    <button key={opt.value}
+                      onClick={() => setTransfer(t => t ? { ...t, componentType: opt.value } : t)}
+                      className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors text-left ${
+                        transfer.componentType === opt.value
+                          ? 'bg-yellow-400 text-[#111110] border-yellow-400'
+                          : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Доп. поля для Фурнитуры */}
+            {transfer.target === 'hardware' && (
+              <div className="mb-4">
+                <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Система</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {([
+                    { value: 'swing',     label: '🚪 Лофт' },
+                    { value: 'sliding',   label: '🚿 Душевые' },
+                    { value: 'universal', label: '🔧 Универс.' },
+                  ] as const).map(opt => (
+                    <button key={opt.value}
+                      onClick={() => setTransfer(t => t ? { ...t, systemType: opt.value } : t)}
+                      className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors text-center ${
+                        transfer.systemType === opt.value
+                          ? 'bg-[#111110] text-white border-[#111110]'
+                          : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                      }`}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {transfer.error && (
+              <p className="mb-3 text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{transfer.error}</p>
+            )}
+
+            <p className="text-[11px] text-[#9a9a95] mb-4">После переноса материал будет скрыт из общего справочника.</p>
+
+            <div className="flex gap-2">
+              <button
+                onClick={handleTransfer}
+                disabled={
+                  transfer.transferring ||
+                  !transfer.target ||
+                  (transfer.target === 'mirror_lighting' && !transfer.componentType)
+                }
+                className="flex-1 bg-[#111110] text-white text-[13px] font-medium px-4 py-2.5 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                {transfer.transferring ? 'Переносим...' : 'Перенести →'}
+              </button>
+              <button onClick={() => setTransfer(null)}
+                className="px-4 py-2.5 rounded-xl border border-[#e4e4e0] text-[13px] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Шапка */}
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Справочник материалов</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">{totalActive} активных позиций</p>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">
+            {totalActive} активных позиций
+            {queueItems.length > 0 && <span className="ml-2 text-amber-600 font-medium">· {queueItems.length} ждут обработки</span>}
+          </p>
         </div>
-        <label className="flex items-center gap-2 cursor-pointer select-none">
-          <div className={`w-8 h-4.5 rounded-full transition-colors relative ${showInactive ? 'bg-[#111110]' : 'bg-[#e4e4e0]'}`}
-            style={{ height: 18 }}
-            onClick={() => setShowInactive(!showInactive)}>
-            <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${showInactive ? 'translate-x-4' : 'translate-x-0.5'}`} />
-          </div>
-          <span className="text-[12px] text-[#6b6b66]">Показать скрытые</span>
-        </label>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => toggleClearGroup(allVisibleIds, selectedForClear.size < allVisibleIds.length)}
+            className="h-8 px-3 rounded-lg text-[12px] border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+            {selectedForClear.size < allVisibleIds.length ? 'Выбрать все' : 'Снять все'}
+          </button>
+          {selectedForClear.size > 0 && (
+            <button onClick={deleteSelected}
+              className="h-8 px-3 rounded-lg text-[12px] bg-red-500 text-white font-semibold hover:bg-red-600 transition-colors">
+              🗑 Удалить ({selectedForClear.size})
+            </button>
+          )}
+          <label className="flex items-center gap-2 cursor-pointer select-none ml-1">
+            <div className={`w-8 rounded-full transition-colors relative ${showInactive ? 'bg-[#111110]' : 'bg-[#e4e4e0]'}`}
+              style={{ height: 18 }}
+              onClick={() => setShowInactive(!showInactive)}>
+              <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${showInactive ? 'translate-x-4' : 'translate-x-0.5'}`} />
+            </div>
+            <span className="text-[12px] text-[#6b6b66]">Показать скрытые</span>
+          </label>
+        </div>
       </div>
 
       {/* Форма добавления / редактирования */}
@@ -173,13 +370,26 @@ export default function MaterialsAdminPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Название</label>
+            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Название (от поставщика)</label>
             <input
               autoFocus={editingId !== null}
               className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="Название материала"
+              placeholder="Полное название из прайса"
+            />
+          </div>
+
+          <div className="col-span-2">
+            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">
+              Короткое название
+              <span className="ml-1.5 text-[10px] font-normal text-[#b8b8b4] normal-case tracking-normal">показывается в калькуляторе вместо полного</span>
+            </label>
+            <input
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              value={form.short_name ?? ''}
+              onChange={e => setForm({ ...form, short_name: e.target.value || null })}
+              placeholder="напр. «Зеркало 4 мм» вместо «Зеркало осветлённое 4 мм Guardian»"
             />
           </div>
 
@@ -266,6 +476,63 @@ export default function MaterialsAdminPage() {
         <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
       ) : (
         <div className="space-y-6">
+
+          {/* Секция очереди — новые необработанные материалы */}
+          {queueItems.length > 0 && (
+            <div>
+              <div className="flex items-center gap-3 mb-2">
+                <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
+                  📥 Новые — обработать
+                </span>
+                <span className="text-[12px] text-[#9a9a95]">{queueItems.length} позиций</span>
+                <div className="flex-1 h-px bg-[#f0f0ec]" />
+              </div>
+              <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
+                <table className="w-full text-[13px]">
+                  <tbody>
+                    {queueItems.map((m, idx) => (
+                      <tr key={m.id} className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-amber-50/40'}`}>
+                        <td className="pl-3 pr-1 py-3 w-8">
+                          <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-medium text-[#111110]">{m.name}</span>
+                              {catalogNames.has(m.name.toLowerCase().trim()) && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">дублёр</span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-[#b8b8b4]">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 text-[#9a9a95] text-[11px] uppercase">{m.category}</td>
+                        <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
+                        <td className="px-4 py-3">
+                          <div className="flex gap-2 justify-end">
+                            <button
+                              onClick={() => setTransfer({ material: m, target: '', componentType: '', systemType: 'universal', transferring: false, error: null })}
+                              className="h-6 px-2.5 rounded text-[11px] font-medium bg-violet-50 text-violet-600 hover:bg-violet-100 transition-colors">
+                              ↗ Перенести
+                            </button>
+                            <button onClick={() => startEdit(m)}
+                              className="h-6 px-2.5 rounded text-[11px] font-medium bg-[#f5f5f3] text-[#4b4b47] hover:bg-[#ebebea] transition-colors">
+                              Изменить
+                            </button>
+                            <button onClick={() => deleteMaterial(m.id, m.name)}
+                              className="h-6 px-2 rounded text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                              ✕
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
           {GROUPS.map(group => {
             const items = materials.filter(m =>
               group.categories.includes(m.category) && (showInactive || m.active)
@@ -288,6 +555,7 @@ export default function MaterialsAdminPage() {
                   <table className="w-full text-[13px]">
                     <thead>
                       <tr className="border-b border-[#f0f0ec]">
+                        <th className="w-8 pl-3 pr-1 py-2.5"></th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Название</th>
                         <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-20">Ед.</th>
                         <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-32">Закупка</th>
@@ -305,9 +573,26 @@ export default function MaterialsAdminPage() {
                       {items.map(m => (
                         <tr key={m.id}
                           className={`border-b border-[#f8f8f7] last:border-0 transition-colors
-                            ${editingId === m.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}
+                            ${selectedForClear.has(m.id) ? 'bg-red-50' : editingId === m.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}
                             ${!m.active ? 'opacity-35' : ''}`}>
-                          <td className="px-4 py-3 font-medium text-[#111110]">{m.name}</td>
+                          <td className="pl-3 pr-1 py-3 w-8">
+                            <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-[#111110]">{m.name}</span>
+                                {catalogNames.has(m.name.toLowerCase().trim()) && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
+                                    дублёр
+                                  </span>
+                                )}
+                              </div>
+                              {m.short_name && (
+                                <span className="text-[11px] text-[#9a9a95]">→ {m.short_name}</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
                           <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">
                             {m.cost_price.toLocaleString('ru-RU')} ₽
@@ -351,6 +636,12 @@ export default function MaterialsAdminPage() {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-3 justify-end">
+                              <button
+                                onClick={() => setTransfer({ material: m, target: '', componentType: '', systemType: 'universal', transferring: false, error: null })}
+                                className="text-[12px] text-violet-500 hover:text-violet-700 transition-colors font-medium"
+                                title="Перенести в специализированный справочник">
+                                ↗ Перенести
+                              </button>
                               <button
                                 onClick={() => startEdit(m)}
                                 className="text-[12px] font-semibold text-blue-600 hover:text-blue-800 transition-colors">
@@ -396,13 +687,35 @@ export default function MaterialsAdminPage() {
                   <table className="w-full text-[13px]">
                     <tbody>
                       {otherItems.map(m => (
-                        <tr key={m.id} className="border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9]">
-                          <td className="px-4 py-3 font-medium text-[#111110]">{m.name}</td>
+                        <tr key={m.id} className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-[#fafaf9]'}`}>
+                          <td className="pl-3 pr-1 py-3 w-8">
+                            <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex flex-col gap-0.5">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium text-[#111110]">{m.name}</span>
+                                {catalogNames.has(m.name.toLowerCase().trim()) && (
+                                  <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
+                                    дублёр
+                                  </span>
+                                )}
+                              </div>
+                              {m.short_name && (
+                                <span className="text-[11px] text-[#9a9a95]">→ {m.short_name}</span>
+                              )}
+                            </div>
+                          </td>
                           <td className="px-4 py-3 text-[#9a9a95] text-[11px] uppercase">{m.category}</td>
                           <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
                           <td className="px-4 py-3 text-right font-mono font-semibold">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-3 justify-end">
+                              <button
+                                onClick={() => setTransfer({ material: m, target: '', componentType: '', systemType: 'universal', transferring: false, error: null })}
+                                className="text-[12px] text-violet-500 hover:text-violet-700 font-medium">
+                                ↗ Перенести
+                              </button>
                               <button onClick={() => startEdit(m)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изменить</button>
                               <button onClick={() => toggleActive(m.id, m.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">{m.active ? 'Скрыть' : 'Показать'}</button>
                             </div>

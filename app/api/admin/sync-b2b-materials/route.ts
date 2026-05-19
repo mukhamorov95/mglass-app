@@ -21,9 +21,18 @@ const WASTE_DEFAULTS: Record<string, number> = {
   стекло: 15, зеркало: 18, тонированное: 20, сатин: 22, рифленое: 30, декоративное: 25,
 }
 
-// Size-limited sheets (specific size in name) → passthrough = true, waste fixed at 10%
-function isPassthrough(name: string): boolean {
-  return /\d{3,4}[x×х]\d{3,4}/i.test(name)
+function buildNotes(salePrice: number): string | null {
+  if (salePrice > 0) return JSON.stringify({ sale_price: salePrice })
+  return null
+}
+
+function mergeNotes(existing: string | null, salePrice: number): string | null {
+  let base: Record<string, unknown> = {}
+  try { if (existing) base = JSON.parse(existing) } catch {}
+  if (salePrice > 0) base.sale_price = salePrice
+  else delete base.sale_price
+  // Never touch passthrough here — admin controls it manually in /admin/b2b-materials
+  return Object.keys(base).length > 0 ? JSON.stringify(base) : null
 }
 
 export async function POST() {
@@ -32,7 +41,6 @@ export async function POST() {
 
   const supabase = db()
 
-  // 1. Load glass_price_matrix (all rows)
   const { data: matrix, error: matErr } = await supabase
     .from('glass_price_matrix')
     .select('*')
@@ -40,34 +48,31 @@ export async function POST() {
 
   if (matErr) return NextResponse.json({ error: matErr.message }, { status: 500 })
 
-  // 2. Load existing b2b_materials
   const { data: existing, error: exErr } = await supabase
     .from('b2b_materials')
-    .select('id, name, thickness')
+    .select('id, name, thickness, notes')
 
   if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 })
 
-  // Build lookup: "name::thickness" → id
-  const lookup = new Map<string, number>()
+  const lookup = new Map<string, { id: number; notes: string | null }>()
   for (const m of existing ?? []) {
-    lookup.set(`${m.name}::${m.thickness}`, m.id)
+    lookup.set(`${m.name}::${m.thickness}`, { id: m.id, notes: m.notes })
   }
 
   const toInsert: object[] = []
-  const toUpdate: { id: number; cost_price: number; sale_price: number; waste_percent: number }[] = []
+  const toUpdate: { id: number; cost_price: number; waste_percent: number; notes: string | null }[] = []
 
-  // Group matrix rows by (name, category)
-  const names = [...new Set((matrix ?? []).map(r => `${r.name}::${r.category}`))]
+  const keys = [...new Set((matrix ?? []).map(r => `${r.name}::${r.category}`))]
 
-  for (const key of names) {
+  for (const key of keys) {
     const [name, matCategory] = key.split('::')
     const costRow = (matrix ?? []).find(r => r.name === name && r.category === matCategory && r.price_type === 'cost')
     const saleRow = (matrix ?? []).find(r => r.name === name && r.category === matCategory && r.price_type === 'sale')
-
     if (!costRow) continue
 
     const b2bCategory = guessB2BCategory(name, matCategory as 'glass' | 'mirror')
-    const passthrough = isPassthrough(name)
+    // Waste always comes from glass_price_matrix — source of truth
+    const wastePct = costRow.waste_pct ?? WASTE_DEFAULTS[b2bCategory] ?? 15
 
     for (const t of THICKNESSES) {
       const field = `t${t}` as keyof typeof costRow
@@ -75,29 +80,26 @@ export async function POST() {
       if (!costPrice) continue
 
       const salePrice = (saleRow?.[field as keyof typeof saleRow] as number | null) ?? 0
-      const wastePct = passthrough ? 10 : (costRow.waste_pct ?? WASTE_DEFAULTS[b2bCategory] ?? 15)
+      const existingEntry = lookup.get(`${name}::${t}`)
 
-      const existingId = lookup.get(`${name}::${t}`)
-      if (existingId) {
-        toUpdate.push({ id: existingId, cost_price: costPrice, sale_price: salePrice, waste_percent: wastePct })
+      if (existingEntry) {
+        const notes = mergeNotes(existingEntry.notes, salePrice)
+        toUpdate.push({ id: existingEntry.id, cost_price: costPrice, waste_percent: wastePct, notes })
       } else {
         toInsert.push({
           name,
           category: b2bCategory,
           thickness: t,
           cost_price: costPrice,
-          sale_price: salePrice,
-          vat_rate: 20,
+          vat_rate: 22,
           waste_percent: wastePct,
           active: true,
-          passthrough,
-          notes: null,
+          notes: buildNotes(salePrice),
         })
       }
     }
   }
 
-  // 3. Apply updates in batches
   let updated = 0
   for (const row of toUpdate) {
     const { id, ...fields } = row
@@ -105,12 +107,13 @@ export async function POST() {
     if (!error) updated++
   }
 
-  // 4. Insert new
   let inserted = 0
+  let insertError: string | null = null
   if (toInsert.length > 0) {
-    const { error } = await supabase.from('b2b_materials').insert(toInsert)
-    if (!error) inserted = toInsert.length
+    const { error, data } = await supabase.from('b2b_materials').insert(toInsert).select('id')
+    if (error) insertError = error.message
+    else inserted = data?.length ?? toInsert.length
   }
 
-  return NextResponse.json({ ok: true, updated, inserted, total: updated + inserted })
+  return NextResponse.json({ ok: !insertError, updated, inserted, total: updated + inserted, error: insertError })
 }

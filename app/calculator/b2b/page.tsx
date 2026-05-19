@@ -3,7 +3,10 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
-import { B2BClient, B2BMaterial, B2BService, computeMarginStatus } from '@/lib/types'
+import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
+import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
+import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
+import { computeProductionSummary } from '@/lib/productionSummary'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -80,8 +83,14 @@ export default function B2BCalculatorPage() {
   const searchParams = useSearchParams()
   const [clients, setClients]     = useState<B2BClient[]>([])
   const [materials, setMaterials] = useState<B2BMaterial[]>([])
-  const [services, setServices]   = useState<B2BService[]>([])
-  const [loading, setLoading]     = useState(true)
+  const [services, setServices]         = useState<B2BService[]>([])
+  const [films, setFilms]               = useState<B2BFilm[]>([])
+  const [prodSettings, setProdSettings] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
+  const [fTierSel, setFTierSel]         = useState<Record<number, number>>({})
+  const [eTierSel, setETierSel]         = useState<Record<number, number>>({})
+  const [fFilmSel, setFFilmSel]         = useState<Record<number, number>>({})
+  const [eFilmSel, setEFilmSel]         = useState<Record<number, number>>({})
+  const [loading, setLoading]           = useState(true)
   const [saving, setSaving]       = useState(false)
   const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -130,14 +139,18 @@ export default function B2BCalculatorPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }] = await Promise.all([
+      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }, { data: psData }, { data: filmsData }] = await Promise.all([
         sb.from('b2b_clients').select('*').eq('active', true).order('name'),
         sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
         sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
         sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
         sb.auth.getUser(),
+        sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
+        sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
       ])
+      if (psData) setProdSettings(psData as ProductionSettings)
+      setFilms((filmsData ?? []) as B2BFilm[])
       if (user?.email) setManagerEmail(user.email)
       if (user?.id) setManagerId(user.id)
 
@@ -162,7 +175,8 @@ export default function B2BCalculatorPage() {
         return {
           ...base,
           ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
-          ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste } : {}),
+          // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
+          ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
         }
       })
       setMaterials(parsed)
@@ -245,6 +259,32 @@ export default function B2BCalculatorPage() {
     else { setFMatId(null) }
   }
 
+  // Превращает calculated/film-услуги в fixed/per_m2 перед передачей в calcItem
+  function resolveSvcs(svcs: B2BService[], tierSel: Record<number, number>, filmSel: Record<number, number>): B2BService[] {
+    return svcs.map(s => {
+      if (s.type === 'calculated') {
+        const result = calcServiceCost(
+          { time_minutes: s.time_minutes ?? 0, equipment_depr_rub: s.equipment_depr_rub ?? 0,
+            consumables_cost_rub: s.consumables_cost_rub ?? 0,
+            overhead_override_pct: s.overhead_override_pct, margin_override_pct: s.margin_override_pct,
+            sale_price_override: s.sale_price_override, size_tiers: s.size_tiers },
+          prodSettings, tierSel[s.id],
+        )
+        return { ...s, type: 'fixed' as const, value: result.sale_price, cost_price: result.cost_price }
+      }
+      if (s.type === 'film') {
+        const film = films.find(f => f.id === filmSel[s.id])
+        if (!film) return { ...s, type: 'per_m2' as const, value: 0, cost_price: 0 }
+        return {
+          ...s, type: 'per_m2' as const,
+          value:      film.sale_price_per_m2 + (film.work_sale_per_m2 ?? 0),
+          cost_price: film.cost_price_per_m2 + (film.work_cost_per_m2 ?? 0),
+        }
+      }
+      return s
+    })
+  }
+
   const selectedClient   = clients.find(c => c.id === clientId) ?? null
   const discount         = selectedClient?.discount_percent ?? 0
   const selectedMaterial = materials.find(m => m.id === fMatId) ?? null
@@ -267,7 +307,7 @@ export default function B2BCalculatorPage() {
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
 
-    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, selectedServices)
+    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel))
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined }])
     setFWidth('')
     setFHeight('')
@@ -329,7 +369,7 @@ export default function B2BCalculatorPage() {
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
-    const calc = calcItem(mat, w, h, q, eWaste, eTempering, svcs)
+    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel))
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined }
       : i))
@@ -382,6 +422,34 @@ export default function B2BCalculatorPage() {
     if (items.length === 0) return null
     return calcTotals(items, discount)
   }, [items, discount])
+
+  // Cutting analysis — computed from current items + material sheet sizes
+  const cuttingResults = useMemo(() => {
+    if (items.length === 0) return null
+    const matLookup = new Map(materials.map(m => [`${m.name}|${m.thickness}`, m]))
+    const groups = new Map<string, PieceGroup>()
+    for (const item of items) {
+      if (!item.width || !item.height) continue
+      const qty = item.quantity
+      const key = `${item.materialName}|${item.thickness}|${item.category}`
+      const mat = matLookup.get(`${item.materialName}|${item.thickness}`)
+      if (!groups.has(key)) {
+        groups.set(key, {
+          pieces: [],
+          materialLabel: `${item.materialName} ${item.thickness} мм`,
+          category: item.category,
+          sheetWidth:  (mat as (B2BMaterial & { sheet_width?: number }) | undefined)?.sheet_width  ?? 3210,
+          sheetHeight: (mat as (B2BMaterial & { sheet_height?: number }) | undefined)?.sheet_height ?? 2250,
+          patternDirection: ((mat as (B2BMaterial & { pattern_direction?: string }) | undefined)?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
+        })
+      }
+      const g = groups.get(key)!
+      for (let i = 0; i < qty; i++) {
+        g.pieces.push({ id: `item-${item.materialId}-${i}`, width: item.width, height: item.height, label: `${item.width}×${item.height}`, orderId: 0, orderClientName: '', materialKey: key, canRotate: true })
+      }
+    }
+    return runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+  }, [items, materials])
 
   const kpText = useMemo(() => {
     if (items.length === 0) return ''
@@ -694,15 +762,63 @@ export default function B2BCalculatorPage() {
                 <div className="mt-1 border border-[#e4e4e0] rounded-lg overflow-hidden">
                   {services.map(s => {
                     const checked = fServiceIds.includes(s.id)
+                    const tiers = s.size_tiers ?? []
+                    const tierIdx = fTierSel[s.id] ?? 0
+                    const selectedFilmId = fFilmSel[s.id]
+                    const selectedFilm = films.find(f => f.id === selectedFilmId)
+                    const displayPrice = s.type === 'calculated'
+                      ? calcServiceCost({ time_minutes: s.time_minutes ?? 0, equipment_depr_rub: s.equipment_depr_rub ?? 0, consumables_cost_rub: s.consumables_cost_rub ?? 0, overhead_override_pct: s.overhead_override_pct, margin_override_pct: s.margin_override_pct, sale_price_override: s.sale_price_override, size_tiers: s.size_tiers }, prodSettings, tiers.length > 0 ? tierIdx : undefined).sale_price
+                      : s.type === 'film'
+                        ? (selectedFilm ? selectedFilm.sale_price_per_m2 + (selectedFilm.work_sale_per_m2 ?? 0) : null)
+                        : null
                     return (
-                      <label key={s.id} className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none transition-colors border-b border-[#f8f8f7] last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
-                        <input type="checkbox" checked={checked} onChange={() => toggleService(s.id)}
-                          className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
-                        <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
-                        <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
-                          {s.type === 'percent' ? `${s.value}%` : `${s.value.toLocaleString('ru-RU')} ₽`}
-                        </span>
-                      </label>
+                      <div key={s.id} className={`border-b border-[#f8f8f7] last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                        <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none transition-colors">
+                          <input type="checkbox" checked={checked} onChange={() => toggleService(s.id)}
+                            className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
+                          <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
+                          <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                            {s.type === 'percent' ? `${s.value}%`
+                              : s.type === 'film' ? (selectedFilm ? `${selectedFilm.sale_price_per_m2.toLocaleString('ru-RU')} ₽/м²` : '—')
+                              : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ₽`}
+                          </span>
+                        </label>
+                        {checked && s.type === 'film' && (
+                          <div className="px-3 pb-1.5 flex items-center gap-2">
+                            <span className="text-[10px] text-[#9a9a95] flex-shrink-0">Плёнка:</span>
+                            {films.length === 0 ? (
+                              <span className="text-[10px] text-orange-500">Нет плёнок в справочнике</span>
+                            ) : (
+                              <select
+                                value={selectedFilmId ?? ''}
+                                onChange={e => setFFilmSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
+                                className="flex-1 text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                <option value="">— выберите плёнку —</option>
+                                {films.map(f => {
+                                  const total = f.sale_price_per_m2 + (f.work_sale_per_m2 ?? 0)
+                                  const label = f.work_sale_per_m2
+                                    ? `${f.name} — ${total.toLocaleString('ru-RU')} ₽/м² (${f.sale_price_per_m2.toLocaleString('ru-RU')} + ${(f.work_sale_per_m2).toLocaleString('ru-RU')} работа)`
+                                    : `${f.name} — ${total.toLocaleString('ru-RU')} ₽/м²`
+                                  return <option key={f.id} value={f.id}>{label}</option>
+                                })}
+                              </select>
+                            )}
+                          </div>
+                        )}
+                        {checked && tiers.length > 0 && s.type !== 'film' && (
+                          <div className="px-3 pb-1.5 flex items-center gap-2">
+                            <span className="text-[10px] text-[#9a9a95]">Размер:</span>
+                            <select
+                              value={tierIdx}
+                              onChange={e => setFTierSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
+                              className="text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                              {tiers.map((t, i) => (
+                                <option key={i} value={i}>{t.label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
                     )
                   })}
                 </div>
@@ -1001,6 +1117,92 @@ export default function B2BCalculatorPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Предварительная закупка */}
+                {items.length > 0 && (() => {
+                  const summary = computeProductionSummary(
+                    items.map(i => ({
+                      materialName: i.materialName,
+                      thickness: i.thickness,
+                      totalAreaNet: i.totalAreaNet,
+                      totalAreaBilled: i.totalAreaBilled,
+                      hasTempering: i.hasTempering,
+                      wastePercent: i.wastePercent,
+                    })),
+                    materials,
+                  )
+                  if (!summary.totalSheets) return null
+                  const fmtRub = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+                  return (
+                    <details className="group border-t border-[#f0f0ec] pt-3">
+                      <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                        <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+                        📦 Предварительная закупка
+                      </summary>
+                      <div className="mt-3 space-y-1.5">
+                        {summary.rows.map(row => (
+                          <div key={row.matKey} className="flex items-center justify-between text-[12px] py-1 border-b border-[#f8f8f7] last:border-0">
+                            <div>
+                              <span className="font-semibold text-[#111110]">{row.matLabel}</span>
+                              <span className="ml-2 text-blue-700 font-bold">≈ {row.sheetsNeeded} л.</span>
+                              <span className="text-[#9a9a95] ml-1 text-[11px]">({row.sheetW}×{row.sheetH})</span>
+                            </div>
+                            <div className="text-right">
+                              <span className="font-mono text-[#111110]">{fmtRub(row.sheetCost)}</span>
+                              {row.temperingCost > 0 && (
+                                <span className="text-amber-600 ml-1.5 text-[11px]">+{fmtRub(row.temperingCost)} закалка</span>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        <div className="flex justify-between text-[12px] pt-1.5 font-semibold">
+                          <span className="text-[#6b6b66]">Итого листов: {summary.totalSheets} шт</span>
+                          <span className="font-mono text-[#111110]">{fmtRub(summary.grandTotal)}</span>
+                        </div>
+                      </div>
+                    </details>
+                  )
+                })()}
+
+                {/* Раскрой */}
+                {cuttingResults && cuttingResults.length > 0 && (
+                  <details className="group border-t border-[#f0f0ec] pt-3">
+                    <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                      <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
+                      ✂️ Раскрой листов
+                    </summary>
+                    <div className="mt-3 space-y-2">
+                      <table className="w-full text-[12px]">
+                        <thead>
+                          <tr className="border-b border-[#f0f0ec]">
+                            <th className="text-left py-1.5 text-[#9a9a95] font-medium">Материал</th>
+                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-20">Листов</th>
+                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-24">Лист</th>
+                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-16">КПД</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {cuttingResults.map(r => (
+                            <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
+                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
+                              <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
+                              <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
+                              <td className="py-2 text-center">
+                                <span className={`text-[11px] font-semibold ${r.avgEfficiency >= 70 ? 'text-emerald-600' : r.avgEfficiency >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
+                                  {r.avgEfficiency}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                      <p className="text-[11px] text-[#9a9a95]">
+                        Зазор 2 мм · Кромка 2 мм · Поворот разрешён
+                        {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
+                      </p>
+                    </div>
+                  </details>
+                )}
               </div>
             )}
           </div>
@@ -1125,15 +1327,63 @@ export default function B2BCalculatorPage() {
                   <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
                     {services.map(s => {
                       const checked = eServiceIds.includes(s.id)
+                      const tiers = s.size_tiers ?? []
+                      const tierIdx = eTierSel[s.id] ?? 0
+                      const selectedFilmId = eFilmSel[s.id]
+                      const selectedFilm = films.find(f => f.id === selectedFilmId)
+                      const displayPrice = s.type === 'calculated'
+                        ? calcServiceCost({ time_minutes: s.time_minutes ?? 0, equipment_depr_rub: s.equipment_depr_rub ?? 0, consumables_cost_rub: s.consumables_cost_rub ?? 0, overhead_override_pct: s.overhead_override_pct, margin_override_pct: s.margin_override_pct, sale_price_override: s.sale_price_override, size_tiers: s.size_tiers }, prodSettings, tiers.length > 0 ? tierIdx : undefined).sale_price
+                        : s.type === 'film'
+                          ? (selectedFilm ? selectedFilm.sale_price_per_m2 + (selectedFilm.work_sale_per_m2 ?? 0) : null)
+                          : null
                       return (
-                        <label key={s.id} className={`flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none border-b border-[#f8f8f7] last:border-0 transition-colors ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
-                          <input type="checkbox" checked={checked} onChange={() => toggleEditService(s.id)}
-                            className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
-                          <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
-                          <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
-                            {s.type === 'percent' ? `${s.value}%` : `${s.value.toLocaleString('ru-RU')} ₽`}
-                          </span>
-                        </label>
+                        <div key={s.id} className={`border-b border-[#f8f8f7] last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                          <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none transition-colors">
+                            <input type="checkbox" checked={checked} onChange={() => toggleEditService(s.id)}
+                              className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
+                            <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
+                            <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                              {s.type === 'percent' ? `${s.value}%`
+                                : s.type === 'film' ? (selectedFilm ? `${selectedFilm.sale_price_per_m2.toLocaleString('ru-RU')} ₽/м²` : '—')
+                                : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ₽`}
+                            </span>
+                          </label>
+                          {checked && s.type === 'film' && (
+                            <div className="px-3 pb-1.5 flex items-center gap-2">
+                              <span className="text-[10px] text-[#9a9a95] flex-shrink-0">Плёнка:</span>
+                              {films.length === 0 ? (
+                                <span className="text-[10px] text-orange-500">Нет плёнок в справочнике</span>
+                              ) : (
+                                <select
+                                  value={selectedFilmId ?? ''}
+                                  onChange={e => setEFilmSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
+                                  className="flex-1 text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                  <option value="">— выберите плёнку —</option>
+                                  {films.map(f => {
+                                    const total = f.sale_price_per_m2 + (f.work_sale_per_m2 ?? 0)
+                                    const label = f.work_sale_per_m2
+                                      ? `${f.name} — ${total.toLocaleString('ru-RU')} ₽/м² (${f.sale_price_per_m2.toLocaleString('ru-RU')} + ${(f.work_sale_per_m2).toLocaleString('ru-RU')} работа)`
+                                      : `${f.name} — ${total.toLocaleString('ru-RU')} ₽/м²`
+                                    return <option key={f.id} value={f.id}>{label}</option>
+                                  })}
+                                </select>
+                              )}
+                            </div>
+                          )}
+                          {checked && tiers.length > 0 && s.type !== 'film' && (
+                            <div className="px-3 pb-1.5 flex items-center gap-2">
+                              <span className="text-[10px] text-[#9a9a95]">Размер:</span>
+                              <select
+                                value={tierIdx}
+                                onChange={e => setETierSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
+                                className="text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                {tiers.map((t, i) => (
+                                  <option key={i} value={i}>{t.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </div>
                       )
                     })}
                   </div>

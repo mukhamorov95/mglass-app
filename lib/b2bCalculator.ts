@@ -33,10 +33,10 @@ export const WASTE_OPTIONS = [
 export type ItemService = {
   id: number
   name: string
-  type: 'percent' | 'per_m2' | 'fixed'
+  type: 'percent' | 'per_m2' | 'fixed' | 'calculated' | 'film'
   value: number
-  cost: number       // цена продажи услуги клиенту (с НДС)
-  costPrice: number  // закупочная себестоимость услуги (с НДС)
+  cost: number
+  costPrice: number
 }
 
 export type B2BOrderItem = {

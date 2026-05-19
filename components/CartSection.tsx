@@ -28,6 +28,7 @@ export default function CartSection() {
   async function handleSaveOrder() {
     setSaving(true)
     setSaveError(null)
+    const groupId = items.length > 1 ? crypto.randomUUID() : undefined
     for (const item of items) {
       const result = await saveCalculation({
         product_type: item.product_type,
@@ -42,6 +43,7 @@ export default function CartSection() {
         profit: item.profit,
         manager_bonus: item.manager_bonus,
         client_text: item.client_text,
+        order_group_id: groupId,
       })
       if (result && 'error' in result) {
         setSaveError(result.error ?? 'Неизвестная ошибка')

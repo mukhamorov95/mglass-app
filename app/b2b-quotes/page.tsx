@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import Pagination from '@/components/Pagination'
+import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 
 const PAGE_SIZE = 50
 
@@ -49,10 +50,13 @@ type Quote = {
   items: OrderItem[]
   total_area: number
   total_weight: number
+  total_cost_net: number | null
+  total_cost_vat: number | null
   total_sale_inc_vat: number
   total_after_discount: number
   notes: string | null
   created_at: string
+  created_by: string | null
 }
 
 type QuoteStatus   = 'quote' | 'sent' | 'agreed' | 'rejected' | 'confirmed'
@@ -62,7 +66,7 @@ type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
 const STATUS_META: Record<QuoteStatus, { label: string; bg: string; text: string }> = {
   quote:     { label: 'Черновик',         bg: 'bg-[#f0f0ec]',  text: 'text-[#6b6b66]'  },
-  sent:      { label: 'Отправлено',        bg: 'bg-blue-50',    text: 'text-blue-700'    },
+  sent:      { label: 'В работе',          bg: 'bg-blue-50',    text: 'text-blue-700'    },
   agreed:    { label: 'Согласовано',       bg: 'bg-emerald-50', text: 'text-emerald-700' },
   rejected:  { label: 'Отказ',            bg: 'bg-red-50',     text: 'text-red-600'     },
   confirmed: { label: 'Запущено в заказ', bg: 'bg-purple-50',  text: 'text-purple-700'  },
@@ -77,7 +81,7 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
 const ALL_TABS: { key: QuoteStatus | 'all'; label: string }[] = [
   { key: 'all',      label: 'Все' },
   { key: 'quote',    label: 'Черновики' },
-  { key: 'sent',     label: 'Отправлено' },
+  { key: 'sent',     label: 'В работе' },
   { key: 'agreed',   label: 'Согласовано' },
   { key: 'rejected', label: 'Отказ' },
 ]
@@ -115,10 +119,20 @@ const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 export default function B2BQuotesPage() {
   const [quotes, setQuotes]           = useState<Quote[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  const [materials, setMaterials]     = useState<MatLight[]>([])
   const [loading, setLoading]         = useState(true)
   const [expanded, setExpanded]       = useState<number | null>(null)
   const [tab, setTab]                 = useState<QuoteStatus | 'all'>('all')
   const [page, setPage]               = useState(1)
+
+  // "В работу" — inline date picker
+  const [workDateId, setWorkDateId]   = useState<number | null>(null)
+  const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
+  const workDateRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (workDateId !== null) setTimeout(() => workDateRef.current?.focus(), 50)
+  }, [workDateId])
 
   // "Запустить в заказ" modal
   const [confirmingId, setConfirmingId]       = useState<number | null>(null)
@@ -219,6 +233,25 @@ export default function B2BQuotesPage() {
     setPendingComment('')
   }
 
+  async function confirmWorkDate() {
+    if (!workDateId) return
+    const q = quotes.find(x => x.id === workDateId)
+    if (!q) return
+    const parsed = parseNotes(q.notes)
+    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
+    history.push({ from: getStatus(q), to: 'sent', date: new Date().toISOString(), comment: null })
+    const newNotes = JSON.stringify({
+      ...parsed,
+      status: 'sent',
+      work_started_at: workDate,
+      status_history: history,
+    })
+    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', workDateId)
+    setQuotes(prev => prev.map(x => x.id === workDateId ? { ...x, notes: newNotes } : x))
+    showToast('Запущено в работу')
+    setWorkDateId(null)
+  }
+
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadQuotes() {
     const sb = createClient()
@@ -236,6 +269,7 @@ export default function B2BQuotesPage() {
     let ordersQuery = sb
       .from('b2b_orders')
       .select('*')
+      .is('archived_at', null)
       .order('created_at', { ascending: false })
       .limit(2000)
 
@@ -243,14 +277,16 @@ export default function B2BQuotesPage() {
       ordersQuery = ordersQuery.eq('created_by', user.id)
     }
 
-    const [{ data: orders }, { data: attaches }] = await Promise.all([
+    const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
       ordersQuery,
       sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
+      sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
     ])
     setQuotes((orders ?? []).map(q => ({
       ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
     })))
     setAttachments(attaches ?? [])
+    setMaterials((mats ?? []) as MatLight[])
     setLoading(false)
   }
 
@@ -266,7 +302,7 @@ export default function B2BQuotesPage() {
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
       items: q.items, total_area: q.total_area, total_weight: q.total_weight,
-      total_cost_net: 0, total_cost_vat: 0,
+      total_cost_net: q.total_cost_net ?? 0, total_cost_vat: q.total_cost_vat ?? 0,
       total_sale_inc_vat: q.total_sale_inc_vat, total_after_discount: q.total_after_discount,
       notes: newNotes,
       created_by: user?.id ?? null,
@@ -280,11 +316,14 @@ export default function B2BQuotesPage() {
   async function handleDelete() {
     if (!deletingId) return
     setDeleting(true)
-    await createClient().from('b2b_orders').delete().eq('id', deletingId)
+    await createClient()
+      .from('b2b_orders')
+      .update({ archived_at: new Date().toISOString() })
+      .eq('id', deletingId)
     setQuotes(prev => prev.filter(q => q.id !== deletingId))
     setDeletingId(null)
     setDeleting(false)
-    showToast('Расчёт удалён')
+    showToast('Просчёт архивирован')
   }
 
   async function handleConfirm() {
@@ -413,8 +452,10 @@ export default function B2BQuotesPage() {
             const userNotes  = typeof parsed.user_notes === 'string' ? parsed.user_notes : null
             const statusComment = typeof parsed.status_comment === 'string' ? parsed.status_comment : null
             const hasAttach  = attachments.some(a => a.order_id === quote.id)
-            const isPendingThis = pendingChange?.quoteId === quote.id
-            const isPayEditThis = payEditId === quote.id
+            const isPendingThis  = pendingChange?.quoteId === quote.id
+            const isPayEditThis  = payEditId === quote.id
+            const isWorkDateThis = workDateId === quote.id
+            const workStartedAt  = parsed.work_started_at ? String(parsed.work_started_at) : null
 
             return (
               <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
@@ -485,9 +526,10 @@ export default function B2BQuotesPage() {
                     {/* Status actions */}
                     <div className="flex items-center gap-1">
                       {status === 'quote' && (
-                        <button onClick={() => requestStatusChange(quote.id, 'sent')}
+                        <button
+                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)) }}
                           className="text-[11px] font-medium px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors whitespace-nowrap">
-                          Отправлено
+                          В работу →
                         </button>
                       )}
                       {status === 'sent' && (<>
@@ -580,6 +622,30 @@ export default function B2BQuotesPage() {
                     </div>
                     <button onClick={() => { setPayEditId(null); setPayAmount('') }}
                       className="ml-auto text-[#9a9a95] hover:text-[#111110] text-sm transition-colors">✕</button>
+                  </div>
+                )}
+
+                {/* ── В работу: выбор даты запуска ──────────────────────── */}
+                {isWorkDateThis && (
+                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-blue-50/50 flex items-center gap-3 flex-wrap">
+                    <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Дата запуска в работу:</span>
+                    <input ref={workDateRef} type="date"
+                      className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                      value={workDate}
+                      onChange={e => setWorkDate(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
+                    />
+                    <p className="text-[11px] text-blue-600/70 flex-shrink-0">
+                      Укажите фактическую дату — если заказ уже в работе несколько дней
+                    </p>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <button onClick={confirmWorkDate} disabled={!workDate}
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap">
+                        Подтвердить →
+                      </button>
+                      <button onClick={() => setWorkDateId(null)}
+                        className="text-[#9a9a95] hover:text-[#111110] transition-colors px-1 text-sm">✕</button>
+                    </div>
                   </div>
                 )}
 
@@ -696,6 +762,58 @@ export default function B2BQuotesPage() {
                         </tfoot>
                       </table>
                     </div>
+
+                    {/* ПРЕДВАРИТЕЛЬНАЯ ЗАКУПКА */}
+                    {(() => {
+                      const summary = computeProductionSummary(
+                        quote.items.map(item => ({
+                          materialName: item.materialName,
+                          thickness: item.thickness,
+                          totalAreaNet: item.totalAreaNet,
+                          totalAreaBilled: item.totalAreaBilled,
+                          hasTempering: item.hasTempering,
+                          wastePercent: item.wastePercent,
+                        })),
+                        materials,
+                      )
+                      if (!summary.totalSheets) return null
+                      const fmtRub = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
+                      return (
+                        <div className="border-t border-[#f0f0ec]">
+                          <div className="px-4 py-2 bg-[#fafaf9]">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Предварительная закупка</p>
+                            <div className="space-y-1">
+                              {summary.rows.map(row => (
+                                <div key={row.matKey} className="flex items-center justify-between text-[11px]">
+                                  <div>
+                                    <span className="font-medium text-[#111110]">{row.matLabel}</span>
+                                    <span className="text-[#9a9a95] ml-2">≈ {row.sheetsNeeded} л.</span>
+                                    {row.temperingCost > 0 && (
+                                      <span className="text-amber-600 ml-1.5 text-[10px]">+ закалка {fmtRub(row.temperingCost)}</span>
+                                    )}
+                                  </div>
+                                  <span className="font-mono text-[#6b6b66]">{fmtRub(row.sheetCost)}</span>
+                                </div>
+                              ))}
+                              <div className="flex justify-between text-[11px] pt-1 border-t border-[#e4e4e0] mt-1">
+                                <span className="text-[#6b6b66]">Итого материал</span>
+                                <span className="font-mono font-semibold text-[#111110]">{fmtRub(summary.grandTotal)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })()}
+
+                    {/* Work start date */}
+                    {workStartedAt && (
+                      <div className="px-4 py-2 border-t border-[#f0f0ec] flex items-center gap-2 text-[11px] text-blue-700 bg-blue-50/30">
+                        <span className="font-semibold">В работе с:</span>
+                        <span className="font-mono">
+                          {new Date(workStartedAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                        </span>
+                      </div>
+                    )}
 
                     {/* Payment status in expanded view */}
                     <div className="px-4 py-2.5 border-t border-[#f0f0ec] flex items-center gap-3">

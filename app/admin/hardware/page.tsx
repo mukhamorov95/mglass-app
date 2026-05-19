@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { HardwareItem } from '@/lib/types'
 
-const EMPTY: Omit<HardwareItem, 'id'> = { name: '', system_type: 'universal', unit: 'шт', cost_price: 0, active: true, comment: null }
+const EMPTY: Omit<HardwareItem, 'id'> = { name: '', short_name: null, system_type: 'universal', unit: 'шт', cost_price: 0, active: true, comment: null }
 
 const SYSTEM_LABELS: Record<HardwareItem['system_type'], string> = {
   sliding: 'Раздвижная',
@@ -83,7 +83,7 @@ export default function HardwareAdminPage() {
 
   function startEdit(item: HardwareItem) {
     setEditingId(item.id)
-    setForm({ name: item.name, system_type: item.system_type, unit: item.unit, cost_price: item.cost_price ?? 0, active: item.active, comment: item.comment })
+    setForm({ name: item.name, short_name: item.short_name ?? null, system_type: item.system_type, unit: item.unit, cost_price: item.cost_price ?? 0, active: item.active, comment: item.comment })
     setError(null)
   }
 

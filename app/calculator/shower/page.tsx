@@ -8,7 +8,7 @@ import {
   type ShowerModelId, type ShowerTier, type ShowerInputs, type ShowerHardwareLine, type ShowerModel,
 } from '@/lib/showerCalculator'
 import { ShowerModelIcon } from '@/components/ShowerModelIcon'
-import { saveCalculation } from '@/lib/saveCalculation'
+import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
@@ -101,6 +101,8 @@ export default function ShowerCalculatorPage() {
   const [addedToCart, setAddedToCart] = useState(false)
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
+  const [editCalcId, setEditCalcId]             = useState<number | null>(null)
+  const [editOrderGroupId, setEditOrderGroupId] = useState<string | null>(null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
 
@@ -176,6 +178,24 @@ export default function ShowerCalculatorPage() {
         (fins ?? []).find((s: FinancialSettings) => s.product_type === 'shower_standard') ??
         (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
         fins?.[0] ?? null
+      // Apply prefill from detail page "Пересчитать" button
+      try {
+        const raw = sessionStorage.getItem('mglass_shower_prefill')
+        if (raw) {
+          sessionStorage.removeItem('mglass_shower_prefill')
+          const p = JSON.parse(raw) as Record<string, unknown>
+          if (p.tier)      setTier(p.tier as ShowerTier)
+          if (p.modelId)   setModelId(p.modelId as string)
+          if (p.width)     setWidth(String(p.width))
+          if (p.width2)    setWidth2(String(p.width2))
+          if (p.height)    setHeight(String(p.height))
+          if (p.glassType) setGlassType(p.glassType as string)
+          if (p.hwColor)   setHwColor(p.hwColor as string)
+          if (p.__editCalcId__)     setEditCalcId(p.__editCalcId__ as number)
+          if (p.__order_group_id__) setEditOrderGroupId(p.__order_group_id__ as string)
+        }
+      } catch {}
+
       setLoading(false)
     }
     load()
@@ -336,8 +356,9 @@ export default function ShowerCalculatorPage() {
     if (discountExceeded) return
     setSaving(true)
     const dimStr = model.dimType === 'corner' ? `${width}×${width2}×${height}` : `${width}×${height}`
-    const saved = await saveCalculation({
-      product_type: 'shower',
+
+    const payload = {
+      product_type: 'shower' as const,
       input_data: tier === 'standard'
         ? { tier, stdShowerType, stdGlassCount, stdIsCorner, dimStr, glassType, thickness }
         : { tier, modelId, model: budgetModel.label, dimStr, glassType, thickness, hwColor },
@@ -347,8 +368,18 @@ export default function ShowerCalculatorPage() {
       final_price: result.grandTotal, margin: result.margin, profit: result.profit, client_text: result.clientText,
       client_name: clientName.trim() || undefined,
       client_phone: clientPhone.trim() || undefined,
-    })
-    if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    }
+
+    if (editCalcId) {
+      const res = await updateCalculation(editCalcId, payload)
+      if (res && 'id' in res) {
+        setSavedId(res.id ?? null)
+        setTimeout(() => { window.location.href = `/calculations/${editCalcId}` }, 800)
+      }
+    } else {
+      const saved = await saveCalculation({ ...payload, order_group_id: editOrderGroupId ?? undefined })
+      if (saved && 'id' in saved) setSavedId(saved.id ?? null)
+    }
     setSaving(false)
   }
 
@@ -402,7 +433,7 @@ export default function ShowerCalculatorPage() {
             <button onClick={handleSave} disabled={saving || showerBlocked || discountExceeded}
               title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
-              {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : 'Сохранить расчёт'}
+              {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : editCalcId ? `Обновить #${editCalcId}` : 'Сохранить расчёт'}
             </button>
             {savedId && (
               <a href={`/calculations/${savedId}`}
