@@ -1,86 +1,83 @@
 ## Текущая задача
-Создание менеджеров + soft delete + activity log viewer
+Фацет — реализован, нужна SQL-миграция в Supabase
 
-## SQL МИГРАЦИИ (ВСЕ ВЫПОЛНИТЬ В SUPABASE!)
+## SQL МИГРАЦИИ (ВЫПОЛНИТЬ В SUPABASE!)
 
 ```sql
--- 1. Права доступа
+-- Таблица цен фацета
+CREATE TABLE IF NOT EXISTS facet_prices (
+  id             serial PRIMARY KEY,
+  type_mm        integer NOT NULL,
+  cost_price     numeric(10,2) NOT NULL DEFAULT 0,
+  transport_cost numeric(10,2) NOT NULL DEFAULT 0,
+  sale_price     numeric(10,2) NOT NULL DEFAULT 0,
+  active         boolean NOT NULL DEFAULT true,
+  updated_at     timestamptz NOT NULL DEFAULT now()
+);
+
+-- Начальные 3 строки (заполнить цены в админке)
+INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUES
+  (10, 0, 0, 0),
+  (15, 0, 0, 0),
+  (20, 0, 0, 0);
+```
+
+После миграции:
+1. Зайди в /admin/facet → заполни цены (себест. подрядчика, транспорт, цена клиенту) для 10/15/20 мм
+2. В B2B калькуляторе появятся чекбокс «Фацет» и дропдаун выбора типа
+
+## Что сделано (сессия 19 мая — фацет)
+
+### lib/b2bCalculator.ts
+- Добавлен тип `FacetPrice` (type_mm, cost_price, transport_cost, sale_price)
+- В `B2BOrderItem` добавлены поля: `hasFacet`, `facetTypeMm`, `costFacet`, `saleFacet`
+- `calcItem()` принимает `hasFacet`, `facetTypeMm`, `facetPrices[]`
+- Расчёт: `perimeterM × quantity × (cost_price + transport_cost)` → costFacet
+- Расчёт: `perimeterM × quantity × sale_price` → saleFacet
+- saleFacet добавляется к saleIncVat; costFacet добавляется к costWithVatBase
+
+### app/calculator/b2b/page.tsx
+- Состояния: `fFacet`, `fFacetMm`, `eFacet`, `eFacetMm`, `facetPrices`
+- Загрузка facet_prices из Supabase в load()
+- UI: чекбокс «Фацет» + дропдаун типа (показывается только если есть цены в БД)
+- Edit modal: аналогичные поля
+- Таблица позиций: бейдж «фацет 10мм» (фиолетовый)
+- КП текст: добавляет «фацет Xмм» к описанию материала
+
+### app/admin/facet/page.tsx (новый)
+- CRUD для 3 строк (10/15/20 мм): in-place редактирование
+- Показывает пример расчёта для детали 600×800 мм 3шт
+- Если таблица не создана → инструкция по миграции
+
+### components/Sidebar.tsx
+- Добавлена ссылка «💎 Фацет» в раздел ADMIN_B2B
+
+## Предыдущие миграции (уже выполнены 19 мая)
+
+```sql
 ALTER TABLE users ADD COLUMN IF NOT EXISTS max_discount_percent integer NOT NULL DEFAULT 5;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS can_delete boolean NOT NULL DEFAULT false;
 UPDATE users SET max_discount_percent = 100, can_delete = true WHERE role = 'admin';
-
--- 2. Гранулярные права (разделы меню)
-ALTER TABLE users
-  ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{"see_mglass":true,"see_b2b":true,"see_calendar":true,"see_clients":true,"see_earnings":true}'::jsonb;
-
--- 3. Audit log
+ALTER TABLE users ADD COLUMN IF NOT EXISTS permissions jsonb NOT NULL DEFAULT '{"see_mglass":true,"see_b2b":true,"see_calendar":true,"see_clients":true,"see_earnings":true}'::jsonb;
 CREATE TABLE IF NOT EXISTS activity_log (
-  id         bigserial PRIMARY KEY,
-  user_id    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
-  user_name  text,
-  action     text NOT NULL,
-  entity_type text,
-  entity_id  text,
-  details    jsonb,
-  created_at timestamptz NOT NULL DEFAULT now()
+  id bigserial PRIMARY KEY, user_id uuid REFERENCES auth.users(id) ON DELETE SET NULL,
+  user_name text, action text NOT NULL, entity_type text, entity_id text,
+  details jsonb, created_at timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_actlog_entity  ON activity_log(entity_type, entity_id);
 CREATE INDEX IF NOT EXISTS idx_actlog_user    ON activity_log(user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_actlog_created ON activity_log(created_at DESC);
-
--- 4. Мягкое удаление
 ALTER TABLE b2b_orders ADD COLUMN IF NOT EXISTS archived_at timestamptz;
-ALTER TABLE b2b_quotes ADD COLUMN IF NOT EXISTS archived_at timestamptz;
 CREATE INDEX IF NOT EXISTS idx_b2b_orders_archived ON b2b_orders(archived_at) WHERE archived_at IS NULL;
-CREATE INDEX IF NOT EXISTS idx_b2b_quotes_archived  ON b2b_quotes(archived_at)  WHERE archived_at IS NULL;
 ```
-
-## СОЗДАНИЕ МЕНЕДЖЕРОВ
-
-Вызови API (один раз, будучи залогиненным как admin):
-```
-curl -X POST http://localhost:3000/api/admin/seed-managers \
-  -H "Cookie: <твои куки из браузера>"
-```
-Или из консоли браузера на localhost:3000:
-```javascript
-fetch('/api/admin/seed-managers', {method:'POST'})
-  .then(r=>r.json()).then(console.log)
-```
-Ответ покажет пароли для Александры и Яны.
-
-## Что сделано (сессия 19 мая)
-
-### app/api/admin/seed-managers/route.ts (новый)
-- POST → создаёт Александру (02) и Яну (04) с auto-паролями
-- Пропускает если email уже существует
-
-### app/b2b-orders/page.tsx
-- handleDelete → update archived_at вместо delete
-- Запрос добавляет .is('archived_at', null) — архивированные скрыты
-- Диалог: "Архивировать?" вместо "Удалить?"
-
-### app/b2b-quotes/page.tsx
-- handleDelete → update archived_at
-- Запрос добавляет .is('archived_at', null)
-- Toast: "Просчёт архивирован"
-
-### app/admin/activity-log/page.tsx (новый)
-- Таблица последних 500 действий
-- Фильтр по действию и сотруднику
-- Показывает дату/сотрудника/действие/объект/детали
-- Если таблица не создана → инструкция по миграции
-
-### components/Sidebar.tsx
-- "Лог действий" добавлен в ADMIN_OWNER и CEO_OWNER
 
 ## Контекст
 - TypeScript: 0 ошибок
-- Soft delete работает как .update({ archived_at }) → данные в БД сохраняются
-- Admin всегда видит всё (permissions не проверяются для admin роли)
-- Менеджеры (Семён 05, Айжан 03) уже есть; Александра 02 и Яна 04 создаются через seed API
+- Фацет: расчёт по м.п. периметра × кол-во; не по площади
+- facetPrices = [] → UI не показывает чекбокс фацета (безопасно до миграции)
+- Менеджеры 02 (Александра) и 04 (Яна) создаются через /api/admin/seed-managers
 
 ## Следующий этап
-- Страница архива: /admin/archive показывает archived_at IS NOT NULL заказы
-- Версионность: сохранять снапшот заказа при изменении цены/скидки
-- Discount cap: проверка max_discount_percent в калькуляторе зеркал
+- Заполнить цены фацета в /admin/facet
+- Страница архива: /admin/archive (archived_at IS NOT NULL)
+- Discount cap: проверка max_discount_percent в калькуляторе
