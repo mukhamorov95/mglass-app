@@ -9,6 +9,7 @@ import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import ProductVisualization from '@/components/ProductVisualization'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
@@ -53,6 +54,7 @@ export default function LoftCalculatorPage() {
   const [allSettings, setAllSettings] = useState<FinancialSettings[]>([])
   const [partners, setPartners]     = useState<PartnerType[]>([])
   const [loading, setLoading]       = useState(true)
+  const [role, setRole]             = useState<string | null>(null)
   const [copied, setCopied]         = useState(false)
   const [showDetails, setShowDetails] = useState(false)
   const [addedToCart, setAddedToCart] = useState(false)
@@ -91,6 +93,11 @@ export default function LoftCalculatorPage() {
 
   useEffect(() => {
     async function load() {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (user) {
+        const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle()
+        setRole((prof as { role?: string } | null)?.role ?? null)
+      }
       const [{ data: mats }, { data: svcs }, { data: hw }, { data: fins }, { data: pts }, delivRes] = await Promise.all([
         supabase.from('materials').select('*').eq('active', true).order('category').order('name'),
         supabase.from('services').select('*').eq('active', true),
@@ -783,6 +790,8 @@ export default function LoftCalculatorPage() {
                   : 'Введите размеры и выберите параметры'}
               </div>
             )}
+
+            <ProductVisualization type="loft" inputs={inputs} role={role} />
 
             <CartSection />
           </div>

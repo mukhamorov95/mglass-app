@@ -13,6 +13,7 @@ import type { FacetPrice } from '@/lib/b2bCalculator'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
+import ProductVisualization from '@/components/ProductVisualization'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import {
   loadGlassMatrix, loadWasteModifiers, getMatrixPrice, getWastePct,
@@ -145,6 +146,7 @@ export default function MirrorCalculatorPage() {
   const [prodSettings, setProdSettings] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
   const [loading, setLoading]         = useState(true)
 
+  const [role, setRole]               = useState<string | null>(null)
   const [copied, setCopied]           = useState(false)
   const [showCost, setShowCost]       = useState(false)
   const [showPricing, setShowPricing] = useState(false)
@@ -212,6 +214,11 @@ export default function MirrorCalculatorPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
+      const { data: { user } } = await sb.auth.getUser()
+      if (user) {
+        const { data: prof } = await sb.from('user_profiles').select('role').eq('id', user.id).maybeSingle()
+        setRole((prof as { role?: string } | null)?.role ?? null)
+      }
       const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
         sb.from('materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('services').select('*').eq('active', true),
@@ -1170,6 +1177,8 @@ export default function MirrorCalculatorPage() {
                 <p className="text-xs text-[#a8a8a3]">Введите размеры и выберите параметры</p>
               </div>
             )}
+
+            <ProductVisualization type="mirror" inputs={inputs} role={role} />
 
             <CartSection />
           </div>

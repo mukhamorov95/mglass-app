@@ -1,9 +1,12 @@
 'use client'
 
-import { useEffect, useState, useRef, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback, useMemo } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import ProductVisualization from '@/components/ProductVisualization'
+import type { MirrorInputs } from '@/lib/mirrorCalculator'
+import type { LoftInputs }   from '@/lib/loftCalculator'
 
 type CostLine = { name: string; qty: number; unit: string; price: number; total: number; note?: string }
 
@@ -160,6 +163,7 @@ export default function CalculationDetailPage() {
   const [saveOk, setSaveOk] = useState(false)
   const [copied, setCopied] = useState(false)
   const [userEmail, setUserEmail] = useState<string>('')
+  const [role, setRole] = useState<string | null>(null)
 
   // Editable fields
   const [editPrice, setEditPrice] = useState('')
@@ -177,7 +181,11 @@ export default function CalculationDetailPage() {
     async function load() {
       const supabase = createClient()
       const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) setUserEmail(session.user.email ?? session.user.id)
+      if (session?.user) {
+        setUserEmail(session.user.email ?? session.user.id)
+        const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', session.user.id).maybeSingle()
+        setRole((prof as { role?: string } | null)?.role ?? null)
+      }
 
       const [{ data: calcData }, { data: changesData }] = await Promise.all([
         supabase.from('calculations').select('*').eq('id', id).single(),
@@ -360,6 +368,62 @@ export default function CalculationDetailPage() {
   const productInfo = PRODUCT_LABELS[calc.product_type] ?? { label: calc.product_type, badge: 'bg-gray-100 text-gray-600' }
   const statusMeta = getStatusMeta(calc.status)
   const params = buildParams(calc)
+
+  // ── Visualization inputs reconstruction ──────────────────────────────────
+  const vizInputs = useMemo(() => {
+    if (!calc) return null
+    const d = calc.input_data
+    if (calc.product_type === 'mirror') {
+      return {
+        type: 'mirror' as const,
+        inputs: {
+          width:  Number(d.width)  || 800,
+          height: Number(d.height) || 800,
+          shape:  (d.shape as string) || 'rectangle',
+          hasLighting: Boolean(d.hasLighting),
+          hasSandblast: Boolean(d.hasSandblast),
+          hasFacet: Boolean(d.hasFacet ?? false),
+          facetTypeMm: (d.facetTypeMm as number) ?? null,
+          mirrorFrame: null,
+          mirrorMaterial: d.mirrorName
+            ? { name: `${d.mirrorName} ${d.mirrorMm ?? 4} мм` } as MirrorInputs['mirrorMaterial']
+            : null,
+          buttonType: (d.buttonType as string) || 'none',
+          hasSubstrate: false,
+          substratePrice: 0,
+          hasInstallation: false,
+          hasDelivery: false,
+          facetCostPerM: 0, facetSalePerM: 0,
+          partnerPercent: 0, discount: 0, margin: 40, standardMargin: 40, tax: 12, minMargin: 20,
+        } as unknown as MirrorInputs,
+      }
+    }
+    if (calc.product_type === 'loft') {
+      return {
+        type: 'loft' as const,
+        inputs: {
+          width:    Number(d.width)    || 2000,
+          height:   Number(d.height)   || 2400,
+          sections: Number(d.sections) || 3,
+          divisions: Number(d.divisions) || 2,
+          systemType: (d.systemType as string) || 'fixed',
+          glassMaterial: d.glassId ? { name: String(d.glassName ?? '') } as LoftInputs['glassMaterial'] : null,
+          glassWastePct: 0,
+          withTempering: true,
+          withMirrorFilm: false,
+          withPainting: false,
+          hasInstallation: false,
+          hasDelivery: false,
+          hardware: [],
+          hardwareQty: {},
+          partnerPercent: 0,
+          discount: 0,
+          margin: 40,
+        } as unknown as LoftInputs,
+      }
+    }
+    return null
+  }, [calc])
 
   const hasChanges =
     parseInt(editPrice) !== calc.final_price ||
@@ -615,6 +679,13 @@ export default function CalculationDetailPage() {
                 </span>
               </div>
             </div>
+
+            {/* Visualization */}
+            {vizInputs && (
+              vizInputs.type === 'mirror'
+                ? <ProductVisualization type="mirror" inputs={vizInputs.inputs} role={role} />
+                : <ProductVisualization type="loft"   inputs={vizInputs.inputs} role={role} />
+            )}
 
             {/* Notes */}
             <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
