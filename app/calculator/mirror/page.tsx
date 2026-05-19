@@ -9,6 +9,7 @@ import {
   calculateMirror, MirrorInputs, MirrorShape, MirrorResult,
   MirrorLightingComponent,
 } from '@/lib/mirrorCalculator'
+import type { FacetPrice } from '@/lib/b2bCalculator'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
@@ -190,6 +191,9 @@ export default function MirrorCalculatorPage() {
   const [hasSandblast, setHasSandblast]     = useState(false)
   const [hasSubstrate, setHasSubstrate]     = useState(false)
   const [substratePrice, setSubstratePrice] = useState('2000')
+  const [hasFacet, setHasFacet]             = useState(false)
+  const [facetTypeMm, setFacetTypeMm]       = useState<number>(10)
+  const [facetPrices, setFacetPrices]       = useState<FacetPrice[]>([])
 
   // Services
   const [hasInstallation, setHasInstallation] = useState(false)
@@ -208,7 +212,7 @@ export default function MirrorCalculatorPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, mx, mods, delivRes] = await Promise.all([
+      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
         sb.from('materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('services').select('*').eq('active', true),
         sb.from('financial_settings').select('*'),
@@ -216,6 +220,7 @@ export default function MirrorCalculatorPage() {
         sb.from('mirror_lighting_components').select('*').eq('active', true).order('sort_order').order('id'),
         sb.from('mirror_frames').select('*').eq('active', true).order('sort_order').order('id'),
         sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
+        sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
         loadGlassMatrix(),
         loadWasteModifiers(),
         fetch('/api/admin/pricing-formula'),
@@ -227,6 +232,7 @@ export default function MirrorCalculatorPage() {
       setComponents(rawComps)
       setMirrorFrames((mframes ?? []) as MirrorFrame[])
       if (psData) setProdSettings(psData as ProductionSettings)
+      if (facetData) setFacetPrices((facetData as FacetPrice[]).filter(f => f.active !== false))
 
       if (delivRes.ok) {
         const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
@@ -377,6 +383,9 @@ export default function MirrorCalculatorPage() {
     frameAssemblySaleMinuteRate: frameSaleMinuteRate,
     buttonType, hasSandblast, hasSubstrate,
     substratePrice: Number(substratePrice) || 0,
+    hasFacet, facetTypeMm: hasFacet ? facetTypeMm : null,
+    facetCostPerM: (() => { const fp = facetPrices.find(f => f.type_mm === facetTypeMm); return fp ? fp.cost_price + fp.transport_cost : 0 })(),
+    facetSalePerM: facetPrices.find(f => f.type_mm === facetTypeMm)?.sale_price ?? 0,
     hasInstallation, hasDelivery, deliveryCost,
     partnerPercent: selectedPartner?.percent ?? 0,
     discount: Number(discount) || 0,
@@ -390,6 +399,7 @@ export default function MirrorCalculatorPage() {
     [width, height, mirrorName, mirrorMm, mirrorCostPerM2, mirrorSalePerM2, mirrorWastePct, shapeModPct,
      shape, hasLighting, voltage, frameId, ledStripId, psuId, diffuserId,
      buttonType, hasSandblast, hasSubstrate, substratePrice,
+     hasFacet, facetTypeMm, facetPrices,
      hasFrame, mirrorFrameId,
      hasInstallation, hasDelivery, kmFromMkad, deliveryCost, partnerId, discount, margin, materials, services],
   )
@@ -797,6 +807,38 @@ export default function MirrorCalculatorPage() {
                     </div>
                   )}
                 </div>
+
+                {/* Facet */}
+                {facetPrices.length > 0 && (
+                  <>
+                    <OptionRow
+                      label="Фацет"
+                      desc={hasFacet ? (() => { const fp = facetPrices.find(f => f.type_mm === facetTypeMm); return fp ? `${perimeterM.toFixed(2)} м × ${fp.sale_price} ₽` : '' })() : ''}
+                      value={hasFacet}
+                      onClick={() => {
+                        const next = !hasFacet
+                        setHasFacet(next)
+                        if (next && facetPrices.length > 0 && !facetPrices.find(f => f.type_mm === facetTypeMm)) {
+                          setFacetTypeMm(facetPrices[0].type_mm)
+                        }
+                      }}
+                    />
+                    {hasFacet && (
+                      <div className="ml-6 flex gap-1 flex-wrap">
+                        {facetPrices.map(f => (
+                          <button key={f.type_mm} onClick={() => setFacetTypeMm(f.type_mm)}
+                            className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
+                              facetTypeMm === f.type_mm
+                                ? 'bg-[#111110] text-white border-[#111110]'
+                                : 'border-[#e8e8e5] text-[#4b4b47] hover:border-[#b8b8b4] bg-white'
+                            }`}>
+                            {f.type_mm} мм
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
 
                 {/* Decorative frame */}
                 <OptionRow

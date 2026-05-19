@@ -12,6 +12,9 @@ export default async function CalculationsPage() {
   let allSettings: FinancialSettings[] = []
 
   const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  const userId = user?.id ?? null
+
   const { data: settingsData } = await supabase.from('financial_settings').select('*')
   allSettings = (settingsData ?? []) as FinancialSettings[]
 
@@ -26,5 +29,5 @@ export default async function CalculationsPage() {
     }
   }
 
-  return <CalculationsClient isAdmin={isAdmin} usersMap={usersMap} allSettings={allSettings} />
+  return <CalculationsClient isAdmin={isAdmin} usersMap={usersMap} allSettings={allSettings} userId={userId} />
 }

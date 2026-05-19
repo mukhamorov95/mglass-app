@@ -35,6 +35,7 @@ type Props = {
   isAdmin: boolean
   usersMap: Record<string, string>
   allSettings: FinancialSettings[]
+  userId: string | null
 }
 
 const PRODUCT_LABELS: Record<string, { label: string; color: string; emoji: string }> = {
@@ -141,7 +142,7 @@ function findSettings(c: Calc, all: FinancialSettings[]): FinancialSettings | nu
   )
 }
 
-export default function CalculationsClient({ isAdmin, usersMap, allSettings }: Props) {
+export default function CalculationsClient({ isAdmin, usersMap, allSettings, userId }: Props) {
   const [calcs, setCalcs]         = useState<Calc[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -166,10 +167,14 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings }: P
 
   async function fetchCalcs() {
     const supabase = createClient()
-    const { data } = await supabase
+    let query = supabase
       .from('calculations')
       .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone,order_group_id,order_number')
       .order('created_at', { ascending: false })
+    if (!isAdmin && userId) {
+      query = query.eq('created_by', userId)
+    }
+    const { data } = await query
     setCalcs((data ?? []) as Calc[])
     setLoading(false)
   }

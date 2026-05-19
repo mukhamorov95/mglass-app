@@ -49,7 +49,7 @@ const SUPER_CATS = [
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
   calcItem, calcTotals, WASTE_OPTIONS, TEMPERING_COST, VAT,
-  type B2BOrderItem, type B2BOrderTotals,
+  type B2BOrderItem, type B2BOrderTotals, type FacetPrice,
 } from '@/lib/b2bCalculator'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
@@ -116,8 +116,11 @@ export default function B2BCalculatorPage() {
   const [fQty, setFQty]               = useState('1')
   const [fWaste, setFWaste]           = useState(15)
   const [fTempering, setFTempering]   = useState(true)
+  const [fFacet, setFFacet]           = useState(false)
+  const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
+  const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
   const widthRef = useRef<HTMLInputElement>(null)
   const heightRef = useRef<HTMLInputElement>(null)
   const qtyRef = useRef<HTMLInputElement>(null)
@@ -134,12 +137,14 @@ export default function B2BCalculatorPage() {
   const [eQty, setEQty]               = useState('1')
   const [eWaste, setEWaste]           = useState(15)
   const [eTempering, setETempering]   = useState(false)
+  const [eFacet, setEFacet]           = useState(false)
+  const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }, { data: psData }, { data: filmsData }] = await Promise.all([
+      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
         sb.from('b2b_clients').select('*').eq('active', true).order('name'),
         sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -148,9 +153,11 @@ export default function B2BCalculatorPage() {
         sb.auth.getUser(),
         sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
         sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
+        sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
       ])
       if (psData) setProdSettings(psData as ProductionSettings)
       setFilms((filmsData ?? []) as B2BFilm[])
+      setFacetPrices((facetData ?? []) as FacetPrice[])
       if (user?.email) setManagerEmail(user.email)
       if (user?.id) setManagerId(user.id)
 
@@ -307,7 +314,7 @@ export default function B2BCalculatorPage() {
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
 
-    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel))
+    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices)
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined }])
     setFWidth('')
     setFHeight('')
@@ -353,6 +360,8 @@ export default function B2BCalculatorPage() {
     setEQty(String(item.quantity))
     setEWaste(item.wastePercent)
     setETempering(item.hasTempering)
+    setEFacet(item.hasFacet ?? false)
+    setEFacetMm(item.facetTypeMm ?? 10)
     setEServiceIds(item.services.map(s => s.id))
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -369,7 +378,7 @@ export default function B2BCalculatorPage() {
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
-    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel))
+    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices)
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined }
       : i))
@@ -456,9 +465,10 @@ export default function B2BCalculatorPage() {
     const clientName = clients.find(c => c.id === clientId)?.name
     const header = clientName ? `Расчёт для ${clientName}:\n` : 'Расчёт:\n'
     const lines = items.map((item, i) => {
+      const facetDesc = item.hasFacet && item.facetTypeMm ? `, фацет ${item.facetTypeMm}мм` : ''
       const matDesc = item.hasTempering
-        ? `${item.materialName} ${item.thickness}мм, закалённое`
-        : `${item.materialName} ${item.thickness}мм`
+        ? `${item.materialName} ${item.thickness}мм, закалённое${facetDesc}`
+        : `${item.materialName} ${item.thickness}мм${facetDesc}`
       const price = Math.round(item.saleIncVat * (1 - discount / 100))
       const svcNames = item.services.filter(s => s.cost > 0).map(s => s.name)
       const parts = [
@@ -729,6 +739,27 @@ export default function B2BCalculatorPage() {
                   </label>
                 </div>
               )}
+              {facetPrices.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Фацет</label>
+                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                    <input type="checkbox" checked={fFacet} onChange={e => setFFacet(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                    <span className={`text-[13px] font-medium ${fFacet ? 'text-purple-700' : 'text-[#111110]'}`}>
+                      {fFacet ? 'Фацет' : 'Без фацета'}
+                    </span>
+                  </label>
+                  {fFacet && (
+                    <select
+                      className="mt-1 w-full bg-white border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-purple-500"
+                      value={fFacetMm} onChange={e => setFFacetMm(Number(e.target.value))}>
+                      {facetPrices.map(f => (
+                        <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Комментарий к позиции */}
@@ -925,10 +956,13 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
                               <div className="font-medium text-[#111110]">{item.materialName}</div>
-                              {(item.hasTempering || item.services.length > 0) && (
+                              {(item.hasTempering || item.hasFacet || item.services.length > 0) && (
                                 <div className="flex gap-1 mt-0.5 flex-wrap">
                                   {item.hasTempering && (
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-orange-50 text-orange-600">закалка</span>
+                                  )}
+                                  {item.hasFacet && (
+                                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-purple-50 text-purple-600">фацет {item.facetTypeMm}мм</span>
                                   )}
                                   {item.services.map(s => (
                                     <span key={s.id} className="text-[9px] font-medium px-1 py-0.5 rounded bg-blue-50 text-blue-600">{s.name}</span>
@@ -1308,16 +1342,36 @@ export default function B2BCalculatorPage() {
                     </select>
                   )}
                 </div>
-                {eSuperCat === 'стекло' && (
-                  <div>
-                    <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
-                    <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
-                      <input type="checkbox" checked={eTempering} onChange={e => setETempering(e.target.checked)}
-                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                      <span className="text-[13px] text-[#111110]">Закалка</span>
-                    </label>
+                <div>
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
+                  <div className="space-y-1">
+                    {eSuperCat === 'стекло' && (
+                      <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
+                        <input type="checkbox" checked={eTempering} onChange={e => setETempering(e.target.checked)}
+                          className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                        <span className="text-[13px] text-[#111110]">Закалка</span>
+                      </label>
+                    )}
+                    {facetPrices.length > 0 && (
+                      <>
+                        <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                          <input type="checkbox" checked={eFacet} onChange={e => setEFacet(e.target.checked)}
+                            className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                          <span className={`text-[13px] ${eFacet ? 'text-purple-700 font-medium' : 'text-[#111110]'}`}>Фацет</span>
+                        </label>
+                        {eFacet && (
+                          <select
+                            className="w-full bg-white border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-purple-500"
+                            value={eFacetMm} onChange={e => setEFacetMm(Number(e.target.value))}>
+                            {facetPrices.map(f => (
+                              <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
+                            ))}
+                          </select>
+                        )}
+                      </>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
 
               {/* Доп. услуги */}

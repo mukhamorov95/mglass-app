@@ -103,6 +103,10 @@ export async function quickCalc(
       standardMargin: cfg?.default_margin ?? 40,
       tax: cfg?.tax_percent ?? 11,
       minMargin: cfg?.min_margin ?? 25,
+      hasFacet: false,
+      facetTypeMm: null,
+      facetCostPerM: 0,
+      facetSalePerM: 0,
     }
     const result = calculateMirror(inputs, materials, services)
     if (!result) return null

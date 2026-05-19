@@ -2,6 +2,15 @@ import type { B2BMaterial, B2BService } from './types'
 
 export const VAT = 22  // ставка НДС, %
 
+export type FacetPrice = {
+  id?: number
+  type_mm: number        // 10, 15 или 20
+  cost_price: number     // себестоимость подрядчика ₽/м.п.
+  transport_cost: number // транспортные расходы ₽/м.п.
+  sale_price: number     // продажная цена клиенту ₽/м.п.
+  active?: boolean
+}
+
 // Закалка по толщине, ₽/м² (с НДС)
 export const TEMPERING_COST: Record<number, number> = {
   4: 300,
@@ -51,6 +60,8 @@ export type B2BOrderItem = {
   quantity: number
   wastePercent: number
   hasTempering: boolean
+  hasFacet: boolean
+  facetTypeMm: number | null
   services: ItemService[]
   // площадь
   areaPiece: number
@@ -63,9 +74,11 @@ export type B2BOrderItem = {
   // себестоимость (все с НДС, т.к. покупаем с НДС)
   costMaterial: number
   costTempering: number
+  costFacet: number
   costEdge: number
   costTransport: number
   costPackaging: number
+  saleFacet: number
   costWithVat: number
   inputVat: number
   costExVat: number
@@ -102,6 +115,9 @@ export function calcItem(
   wastePercent: number,
   hasTempering: boolean = false,
   selectedServices: B2BService[] = [],
+  hasFacet: boolean = false,
+  facetTypeMm: number | null = null,
+  facetPrices: FacetPrice[] = [],
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
@@ -120,7 +136,17 @@ export function calcItem(
   const costTransport = Math.round(quantity * TRANSPORT_PER_PIECE)
   const costPackaging = Math.round(totalAreaNet * PACKAGING_PER_M2)
 
-  const costWithVatBase = costMaterial + costTempering + costEdge + costTransport + costPackaging
+  const facetPrice = hasFacet && facetTypeMm
+    ? facetPrices.find(f => f.type_mm === facetTypeMm)
+    : undefined
+  const costFacet = facetPrice
+    ? Math.round(perimeterM * quantity * (facetPrice.cost_price + facetPrice.transport_cost))
+    : 0
+  const saleFacet = facetPrice
+    ? Math.round(perimeterM * quantity * facetPrice.sale_price)
+    : 0
+
+  const costWithVatBase = costMaterial + costTempering + costFacet + costEdge + costTransport + costPackaging
 
   // Продажа — цена из прайса (финальная цена клиента, вкл. НДС)
   const pricePerM2     = mat.sale_price ?? 0
@@ -150,7 +176,7 @@ export function calcItem(
   const inputVatFull    = Math.round(costWithVatFull * VAT / (100 + VAT))
   const costExVatFull   = costWithVatFull - inputVatFull
 
-  const saleIncVat = baseSaleIncVat + servicesCost
+  const saleIncVat = baseSaleIncVat + servicesCost + saleFacet
   const saleExVat  = Math.round(saleIncVat * 100 / (100 + VAT))
   const outputVat  = saleIncVat - saleExVat
 
@@ -159,10 +185,11 @@ export function calcItem(
 
   return {
     materialId: mat.id, materialName: mat.name, category: mat.category,
-    thickness: mat.thickness, width, height, quantity, wastePercent, hasTempering, services,
+    thickness: mat.thickness, width, height, quantity, wastePercent, hasTempering,
+    hasFacet, facetTypeMm: hasFacet ? (facetTypeMm ?? null) : null, services,
     areaPiece, totalAreaNet, totalAreaBilled, perimeterM,
     weightPerM2, totalWeight,
-    costMaterial, costTempering, costEdge, costTransport, costPackaging,
+    costMaterial, costTempering, costFacet, costEdge, costTransport, costPackaging, saleFacet,
     costWithVat: costWithVatFull, inputVat: inputVatFull, costExVat: costExVatFull,
     pricePerM2, margin, vatRate: VAT, servicesCost, baseSaleExVat,
     saleExVat, outputVat, saleIncVat,

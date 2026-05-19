@@ -37,6 +37,10 @@ export type MirrorInputs = {
   hasSandblast: boolean
   hasSubstrate: boolean
   substratePrice: number
+  hasFacet: boolean
+  facetTypeMm: number | null
+  facetCostPerM: number   // итоговая себестоимость ₽/м.п. (cost_price + transport_cost)
+  facetSalePerM: number   // продажная цена клиенту ₽/м.п.
   hasInstallation: boolean
   hasDelivery: boolean
   deliveryCost?: number
@@ -219,6 +223,17 @@ export function calculateMirror(
     lines.push({ name: 'Подложка', qty: 1, unit: 'шт', price: inputs.substratePrice, total: inputs.substratePrice })
   }
 
+  // Facet (bevel edge) — per running meter of perimeter
+  if (inputs.hasFacet && inputs.facetCostPerM > 0) {
+    lines.push({
+      name:  `Фацет ${inputs.facetTypeMm ?? ''}мм`,
+      qty:   Number(perimeter.toFixed(2)),
+      unit:  'пог.м',
+      price: inputs.facetCostPerM,
+      total: Math.round(perimeter * inputs.facetCostPerM),
+    })
+  }
+
   // Complex shape surcharge
   if (inputs.shape === 'complex') {
     lines.push({ name: 'Сложная форма', qty: 1, unit: 'шт', price: 1500, total: 1500 })
@@ -353,6 +368,7 @@ export function calculateMirror(
   }
 
   const extras: string[] = []
+  if (inputs.hasFacet && inputs.facetTypeMm)  extras.push(`Фацет ${inputs.facetTypeMm} мм`)
   if (inputs.hasSandblast)             extras.push('Пескоструйный рисунок')
   if (inputs.hasSubstrate)             extras.push('Подложка')
   if (inputs.buttonType === 'sensor')  extras.push('Сенсорная кнопка')
