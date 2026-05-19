@@ -183,7 +183,7 @@ export default function CalculationDetailPage() {
       const { data: { session } } = await supabase.auth.getSession()
       if (session?.user) {
         setUserEmail(session.user.email ?? session.user.id)
-        const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', session.user.id).maybeSingle()
+        const { data: prof } = await supabase.from('users').select('role').eq('id', session.user.id).maybeSingle()
         setRole((prof as { role?: string } | null)?.role ?? null)
       }
 

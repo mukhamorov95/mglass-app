@@ -95,7 +95,7 @@ export default function LoftCalculatorPage() {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
-        const { data: prof } = await supabase.from('user_profiles').select('role').eq('id', user.id).maybeSingle()
+        const { data: prof } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
         setRole((prof as { role?: string } | null)?.role ?? null)
       }
       const [{ data: mats }, { data: svcs }, { data: hw }, { data: fins }, { data: pts }, delivRes] = await Promise.all([

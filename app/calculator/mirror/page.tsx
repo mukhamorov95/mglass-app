@@ -216,7 +216,7 @@ export default function MirrorCalculatorPage() {
       const sb = createClient()
       const { data: { user } } = await sb.auth.getUser()
       if (user) {
-        const { data: prof } = await sb.from('user_profiles').select('role').eq('id', user.id).maybeSingle()
+        const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
         setRole((prof as { role?: string } | null)?.role ?? null)
       }
       const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
