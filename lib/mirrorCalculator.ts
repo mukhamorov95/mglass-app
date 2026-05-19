@@ -9,6 +9,7 @@ export type MirrorLightingComponent = {
   cost_price: number
   unit: string
   voltage?: number | null
+  color_temp?: number | null
   power_per_meter?: number | null
   max_power?: number | null
 }
@@ -345,11 +346,10 @@ export function calculateMirror(
     textParts.push('')
     textParts.push('Подсветка:')
     if (inputs.ledStrip) {
-      const ledDisplay = dn(inputs.ledStrip)
-      textParts.push(ledDisplay)
-      if (inputs.ledStrip.power_per_meter) {
-        textParts.push(`${inputs.ledStrip.power_per_meter} W/м`)
-      }
+      let ledLine = dn(inputs.ledStrip)
+      if (inputs.ledStrip.power_per_meter) ledLine += ` ${inputs.ledStrip.power_per_meter}W/м`
+      if (inputs.ledStrip.color_temp)      ledLine += ` ${inputs.ledStrip.color_temp}K`
+      textParts.push(ledLine)
     }
     textParts.push(inputs.hasSandblast ? 'свет сквозь матовый рисунок' : 'мягкое свечение по периметру')
   }

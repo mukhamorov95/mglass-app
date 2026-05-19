@@ -45,7 +45,7 @@ function dn(c: { name: string; short_name?: string | null }): string {
 function toLC(c: RawComponent): MirrorLightingComponent {
   return {
     id: c.id, name: c.name, cost_price: c.cost_price, unit: c.unit,
-    voltage: c.voltage, power_per_meter: c.power_per_meter, max_power: c.max_power,
+    voltage: c.voltage, color_temp: c.color_temp, power_per_meter: c.power_per_meter, max_power: c.max_power,
   }
 }
 
@@ -644,7 +644,7 @@ export default function MirrorCalculatorPage() {
                     label="LED-лента"
                     isOpen={lightOpen.has('led')}
                     onToggle={() => toggleLight('led')}
-                    summary={selLed ? dn(selLed) : leds.length === 0 ? 'нет позиций' : 'не выбрана'}
+                    summary={selLed ? [dn(selLed), selLed.power_per_meter ? `${selLed.power_per_meter}W/м` : '', selLed.color_temp ? `${selLed.color_temp}K` : ''].filter(Boolean).join(' ') : leds.length === 0 ? 'нет позиций' : 'не выбрана'}
                     badge={totalLedWatts > 0 ? `${totalLedWatts.toFixed(0)} Вт` : undefined}
                   >
                     {leds.length === 0 ? (
@@ -656,8 +656,7 @@ export default function MirrorCalculatorPage() {
                       <div className="space-y-px pt-1">
                         {leds.map(l => {
                           const temp = l.color_temp
-                          const tempDot = temp === 3000 ? 'bg-amber-400' : temp === 4000 ? 'bg-yellow-200 border border-yellow-400' : 'bg-sky-300'
-                          const tempLabel = temp === 3000 ? 'тёплый' : temp === 4000 ? 'нейтральный' : 'холодный'
+                          const tempDot = temp && temp <= 3000 ? 'bg-amber-400' : temp && temp <= 4000 ? 'bg-yellow-200 border border-yellow-400' : 'bg-sky-300'
                           const active = ledStripId === l.id
                           return (
                             <label key={l.id}
@@ -669,7 +668,8 @@ export default function MirrorCalculatorPage() {
                               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${tempDot}`} />
                               <div className="flex-1 min-w-0">
                                 <span className="text-xs font-medium text-[#2a2a28]">{dn(l)}</span>
-                                {temp && <span className="text-[10px] text-[#9a9a95] ml-1.5">{tempLabel}</span>}
+                                {l.power_per_meter && <span className="text-[10px] text-[#9a9a95] ml-1.5 font-mono">{l.power_per_meter}W/м</span>}
+                                {temp && <span className="text-[10px] text-[#9a9a95] ml-1 font-mono">{temp}K</span>}
                               </div>
                               <div className="text-right flex-shrink-0">
                                 <p className="text-[11px] font-mono text-[#4b4b47]">{l.cost_price} ₽/м</p>
