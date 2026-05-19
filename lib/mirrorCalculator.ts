@@ -208,7 +208,7 @@ export function calculateMirror(
 
   // Assembly
   const assembly = inputs.hasSandblast
-    ? findMat(materials, 'Сборка зеркала с пескоструем')
+    ? (findMat(materials, 'Сборка зеркала с пескоструем') ?? findMat(materials, 'Сборка зеркала'))
     : findMat(materials, 'Сборка зеркала')
   if (assembly) lines.push({ name: dn(assembly), qty: 1, unit: 'шт', price: assembly.cost_price, total: assembly.cost_price })
 
