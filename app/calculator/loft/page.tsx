@@ -37,6 +37,15 @@ function Toggle({ value, onClick, label, desc }: { value: boolean; onClick: () =
   )
 }
 
+// Allowed glass thicknesses for loft partitions — change here to add more options
+const LOFT_GLASS_MM = [4]
+
+// Extract thickness (mm) from glass name like "Стекло М1 прозрачное 4 мм"
+function glassNameToMm(name: string): number | null {
+  const m = name.match(/^Стекло\s+.+?\s+(\d+)\s*мм\s*$/i)
+  return m ? parseInt(m[1]) : null
+}
+
 export default function LoftCalculatorPage() {
   const [materials, setMaterials]   = useState<Material[]>([])
   const [services, setServices]     = useState<Service[]>([])
@@ -112,7 +121,7 @@ export default function LoftCalculatorPage() {
           .select('name,price_type,t4,t5,t6,t8,t10,t12,waste_pct')
           .eq('category', 'glass')
           .order('name')
-        const THICKNESSES = [4, 5, 6, 8, 10, 12] as const
+        const THICKNESSES = ([4, 5, 6, 8, 10, 12] as const).filter(mm => LOFT_GLASS_MM.includes(mm))
         const costRows = (matrix ?? []).filter(r => r.price_type === 'cost')
         const saleRows = (matrix ?? []).filter(r => r.price_type === 'sale')
         const synth: Material[] = []
@@ -181,7 +190,11 @@ export default function LoftCalculatorPage() {
       withMirrorFilm, withPainting, hasInstallation, hasDelivery,
       discount, margin, partnerId, selectedHwIds, hwQty, b2bDiscount])
 
-  const glassMaterials  = materials.filter(m => m.category === 'стекло')
+  const glassMaterials  = materials.filter(m => {
+    if (m.category !== 'стекло') return false
+    const mm = glassNameToMm(m.name)
+    return mm === null || LOFT_GLASS_MM.includes(mm)
+  })
   const selectedGlass   = glassMaterials.find(m => m.id === glassId) ?? null
 
   // Load waste_pct (cost row) and sale price (sale row) from glass_price_matrix when glass changes
