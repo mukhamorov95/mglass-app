@@ -84,7 +84,22 @@ export default function B2BCRMPage() {
   const [assigningManagerId, setAssigningManagerId] = useState<string>('')
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  useEffect(() => { load(); loadManagers() }, [orgId])
+  useEffect(() => {
+    checkAccess().then(allowed => { if (allowed) { load(); loadManagers() } })
+  }, [orgId])
+
+  async function checkAccess(): Promise<boolean> {
+    const { sb } = createScopedClient(orgId)
+    const { data: { user } } = await sb.auth.getUser()
+    if (!user) { router.replace('/login'); return false }
+    const { data } = await sb.from('users').select('role').eq('id', user.id).single()
+    const role = data?.role
+    if (role !== 'admin' && role !== 'ceo') {
+      router.replace('/access-denied')
+      return false
+    }
+    return true
+  }
 
   async function load() {
     setLoading(true)
