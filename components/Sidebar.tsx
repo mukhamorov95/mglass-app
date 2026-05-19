@@ -460,7 +460,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
   function buildB2bNav(): NavItem[] {
     return MANAGER_B2B.filter(e => {
-      if (e.href === '/b2b-crm') return permissions.see_clients
+      if (e.href === '/b2b-crm') return false
       return true
     })
   }

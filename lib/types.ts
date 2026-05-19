@@ -112,6 +112,8 @@ export type B2BClient = {
   notes: string | null
   created_at: string
   updated_at?: string   // present when selected — used for optimistic locking
+  manager_id?: string | null
+  manager_code?: number | null
   // Direct CRM columns — present only when explicitly selected in queries
   crm_segment?: string | null
   crm_status?: string | null

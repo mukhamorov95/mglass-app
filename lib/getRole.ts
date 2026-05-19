@@ -95,7 +95,6 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/calculator/b2b',
     '/b2b-quotes',
     '/b2b-orders',
-    '/b2b-crm',
     '/b2b-cutting',
   ],
 

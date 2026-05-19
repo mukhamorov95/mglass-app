@@ -19,7 +19,7 @@ type ClientWithMeta = B2BClient & {
   orderCount: number
 }
 
-const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
+const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes,manager_id,manager_code'
 
 const segmentLabel = (v: string | null) =>
   B2B_SEGMENTS.find(s => s.value === v)?.label ?? v ?? '—'
@@ -48,7 +48,9 @@ function nextContactLabel(dateStr: string | null) {
 const SCORE_ORDER: Record<string, number> = { A: 0, B: 1, C: 2 }
 const STATUS_ORDER: Record<string, number> = { active: 0, contacted: 1, new: 2, sleeping: 3, lost: 4 }
 
-type ExpandMode = 'note' | 'remind'
+type ExpandMode = 'note' | 'remind' | 'manager'
+
+type ManagerOption = { id: string; name: string; code: number | null }
 
 const INTERACTION_TYPES = [
   { value: 'call',    label: 'Звонок'   },
@@ -78,8 +80,11 @@ export default function B2BCRMPage() {
   const [remindDate,   setRemindDate]   = useState('')
   const [savingInline, setSavingInline] = useState(false)
   const [inlineToast,  setInlineToast]  = useState<string | null>(null)
+  const [managers, setManagers]         = useState<ManagerOption[]>([])
+  const [assigningManagerId, setAssigningManagerId] = useState<string>('')
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
-  useEffect(() => { load() }, [orgId])
+  useEffect(() => { load(); loadManagers() }, [orgId])
 
   async function load() {
     setLoading(true)
@@ -120,6 +125,48 @@ export default function B2BCRMPage() {
 
     setClients(enriched)
     setLoading(false)
+  }
+
+  async function loadManagers() {
+    const { sb } = createScopedClient(orgId)
+    const { data: session } = await sb.auth.getUser()
+    if (session?.user) setCurrentUserId(session.user.id)
+    const { data } = await sb.from('users').select('id,name,email,manager_code').eq('role', 'manager')
+    if (data) setManagers(data.map(u => ({ id: u.id, name: u.name ?? u.email, code: u.manager_code ?? null })))
+  }
+
+  async function assignManager(client: ClientWithMeta, newManagerId: string) {
+    const newManager = managers.find(m => m.id === newManagerId) ?? null
+    const { sb } = createScopedClient(orgId)
+
+    const { data: me } = await sb.auth.getUser()
+    const myId = me?.user?.id ?? null
+    const { data: myProfile } = myId
+      ? await sb.from('users').select('name,email').eq('id', myId).single()
+      : { data: null }
+    const myName = myProfile ? (myProfile.name ?? myProfile.email ?? 'Администратор') : 'Администратор'
+
+    // Save history
+    await sb.from('b2b_client_manager_history').insert({
+      client_id: client.id,
+      old_manager_id: client.manager_id ?? null,
+      old_manager_name: client.crm.manager_name ?? null,
+      new_manager_id: newManagerId || null,
+      new_manager_name: newManager?.name ?? null,
+      changed_by: myId,
+      changed_by_name: myName,
+    })
+
+    // Update client
+    await sb.from('b2b_clients').update({
+      manager_id: newManagerId || null,
+      manager_code: newManager?.code ?? null,
+      crm_manager: newManager?.name ?? null,
+    }).eq('id', client.id)
+
+    showInlineToast(newManager ? `Назначен: ${newManager.name}` : 'Менеджер снят')
+    setExpandedId(null)
+    load()
   }
 
   const filtered = useMemo(() => {
@@ -357,6 +404,11 @@ export default function B2BCRMPage() {
                       className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'remind' ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'}`}>
                       Напомнить
                     </button>
+                    <button
+                      onClick={() => { toggleInline(c.id, 'manager'); setAssigningManagerId(c.manager_id ?? '') }}
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'manager' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-50'}`}>
+                      Менеджер
+                    </button>
                     <a
                       href={`/calculator/b2b?clientId=${c.id}`}
                       className="text-[11px] font-medium px-2.5 py-1 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors">
@@ -411,6 +463,29 @@ export default function B2BCRMPage() {
                             disabled={savingInline || !remindDate}
                             className="text-[12px] font-semibold bg-[#111110] text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
                             {savingInline ? '...' : 'Сохранить'}
+                          </button>
+                        </div>
+                      )}
+                      {expandMode === 'manager' && (
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-[12px] text-[#6b6b66]">Ответственный менеджер:</span>
+                          <select
+                            autoFocus
+                            value={assigningManagerId}
+                            onChange={e => setAssigningManagerId(e.target.value)}
+                            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] bg-[#fafaf9]">
+                            <option value="">— Без менеджера —</option>
+                            {managers.map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name}{m.code ? ` (${m.code})` : ''}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => assignManager(c, assigningManagerId)}
+                            disabled={savingInline}
+                            className="text-[12px] font-semibold bg-orange-500 text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-orange-600 transition-colors">
+                            {savingInline ? '...' : 'Назначить'}
                           </button>
                         </div>
                       )}

@@ -96,6 +96,18 @@ export default function B2BCalculatorPage() {
   const [saveError, setSaveError] = useState<string | null>(null)
   const [managerEmail, setManagerEmail] = useState<string | null>(null)
   const [managerId, setManagerId]       = useState<string | null>(null)
+  const [managerCode, setManagerCode]   = useState<number | null>(null)
+  const [isAdmin, setIsAdmin]           = useState(false)
+
+  // New client modal
+  const [showNewClient, setShowNewClient] = useState(false)
+  const [ncName, setNcName]     = useState('')
+  const [ncContact, setNcContact] = useState('')
+  const [ncPhone, setNcPhone]   = useState('')
+  const [ncDiscount, setNcDiscount] = useState(0)
+  const [ncNotes, setNcNotes]   = useState('')
+  const [ncSaving, setNcSaving] = useState(false)
+  const [ncError, setNcError]   = useState<string | null>(null)
 
   type DraftData = { clientId: number | null; items: B2BOrderItem[]; notes: string; productionDays: number; savedAt: string }
   const [draftToast, setDraftToast] = useState<DraftData | null>(null)
@@ -145,7 +157,7 @@ export default function B2BCalculatorPage() {
     async function load() {
       const sb = createClient()
       const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
-        sb.from('b2b_clients').select('*').eq('active', true).order('name'),
+        sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
         sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
         sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
         sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
@@ -161,11 +173,27 @@ export default function B2BCalculatorPage() {
       if (user?.email) setManagerEmail(user.email)
       if (user?.id) setManagerId(user.id)
 
+      // Load role + manager_code
+      let userIsAdmin = false
+      let userManagerCode: number | null = null
+      if (user?.id) {
+        const { data: profile } = await sb.from('users').select('role,manager_code').eq('id', user.id).single()
+        userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
+        userManagerCode = profile?.manager_code ?? null
+      }
+      setIsAdmin(userIsAdmin)
+      setManagerCode(userManagerCode)
+
       const totals = new Map<number, number>()
       for (const o of orders ?? []) {
         totals.set(o.client_id, (totals.get(o.client_id) ?? 0) + o.total_after_discount)
       }
-      const sorted = (cls ?? []).slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
+      // Non-admin managers see only their own clients
+      const allClients = (cls ?? []) as B2BClient[]
+      const visibleClients = userIsAdmin
+        ? allClients
+        : allClients.filter(c => c.manager_id === user?.id)
+      const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
       setClients(sorted)
 
       // Override sale_price from glass_price_matrix where available
@@ -497,6 +525,59 @@ export default function B2BCalculatorPage() {
     ].join('\n')
   }, [items, totals, discount, clientId, clients])
 
+  async function handleCreateClient() {
+    if (!ncName.trim()) { setNcError('Введите название компании'); return }
+    setNcSaving(true)
+    setNcError(null)
+    const sb = createClient()
+
+    // Duplicate check by name
+    const { data: existing } = await sb
+      .from('b2b_clients')
+      .select('id,name,manager_id')
+      .ilike('name', ncName.trim())
+      .eq('active', true)
+      .limit(1)
+    if (existing && existing.length > 0) {
+      const dup = existing[0] as { id: number; name: string; manager_id: string | null }
+      const isOwn = dup.manager_id === managerId
+      if (isOwn) {
+        setNcError(`Клиент "${dup.name}" уже существует в вашей базе — выберите его в списке.`)
+      } else {
+        setNcError('Похожий клиент уже существует. Обратитесь к администратору или выберите существующего клиента.')
+      }
+      setNcSaving(false)
+      return
+    }
+
+    const { data: created, error } = await sb
+      .from('b2b_clients')
+      .insert({
+        name: ncName.trim(),
+        contact: ncContact.trim() || null,
+        phone: ncPhone.trim() || null,
+        discount_percent: ncDiscount,
+        notes: ncNotes.trim() || null,
+        active: true,
+        manager_id: managerId,
+        manager_code: managerCode,
+      })
+      .select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code')
+      .single()
+
+    if (error || !created) {
+      setNcError(error?.message ?? 'Ошибка при создании клиента')
+      setNcSaving(false)
+      return
+    }
+
+    setClients(prev => [created as B2BClient, ...prev])
+    setClientId((created as B2BClient).id)
+    setShowNewClient(false)
+    setNcName(''); setNcContact(''); setNcPhone(''); setNcDiscount(0); setNcNotes('')
+    setNcSaving(false)
+  }
+
   async function handleSave() {
     if (items.length === 0 || !selectedClient) return
     setSaving(true)
@@ -596,7 +677,14 @@ export default function B2BCalculatorPage() {
 
             {/* Клиент */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Клиент</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Клиент</label>
+                <button
+                  onClick={() => setShowNewClient(true)}
+                  className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
+                  + Новый клиент
+                </button>
+              </div>
               <select
                 className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                 value={clientId ?? ''}
@@ -1468,6 +1556,69 @@ export default function B2BCalculatorPage() {
         </div>
       )
     })()}
+      {/* ══ Модалка: Новый клиент ══ */}
+      {showNewClient && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-[15px] font-semibold text-[#111110]">Новый B2B клиент</h2>
+              <button onClick={() => { setShowNewClient(false); setNcError(null) }}
+                className="text-[#9a9a95] hover:text-[#111110] text-lg transition-colors">✕</button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Название компании *</label>
+                <input
+                  type="text" placeholder="ООО Ромашка"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  value={ncName} onChange={e => setNcName(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Контактное лицо</label>
+                <input
+                  type="text" placeholder="Иван Иванов"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  value={ncContact} onChange={e => setNcContact(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Телефон</label>
+                <input
+                  type="text" placeholder="+7 999 000 00 00"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  value={ncPhone} onChange={e => setNcPhone(e.target.value)} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Скидка %</label>
+                <input
+                  type="number" min="0" max="50" step="1"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  value={ncDiscount} onChange={e => setNcDiscount(Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <textarea
+                  rows={2} placeholder="Дополнительная информация..."
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] resize-none"
+                  value={ncNotes} onChange={e => setNcNotes(e.target.value)} />
+              </div>
+
+              {ncError && <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{ncError}</p>}
+
+              <div className="flex gap-2 pt-1">
+                <button onClick={() => { setShowNewClient(false); setNcError(null) }}
+                  className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                  Отмена
+                </button>
+                <button onClick={handleCreateClient} disabled={ncSaving || !ncName.trim()}
+                  className="flex-1 py-2.5 rounded-lg bg-orange-500 text-white text-[13px] font-semibold hover:bg-orange-600 disabled:opacity-40 transition-colors">
+                  {ncSaving ? 'Создаём...' : 'Создать клиента'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
