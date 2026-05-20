@@ -2,11 +2,25 @@
 
 import { useState, useEffect } from 'react'
 
-// Каждый новый блок получает уникальный id.
-// Добавь сюда id нового блока — он подсветится жёлтым пока не нажата кнопка.
-const NEW_ITEMS = ['daily-checklist', 'responsibilities', 'system-buying', 'system-logistics', 'kpi', 'mistakes', 'tools']
+// Добавь id нового раздела — он подсветится жёлтым до первого прочтения
+const NEW_ITEMS = [
+  'daily-checklist',
+  'responsibilities',
+  'production-requests',
+  'system-procurement',
+  'system-stock',
+  'system-routes',
+  'price-monitoring',
+  'supplier-db',
+  'vera-sergey',
+  'system-logistics',
+  'kpi',
+  'mistakes',
+  'tools',
+  'future',
+]
 
-const STORAGE_KEY = 'guide_acknowledged_v1'
+const STORAGE_KEY = 'guide_acknowledged_v2'
 
 function useAcknowledged() {
   const [acked, setAcked] = useState<Set<string>>(new Set())
@@ -32,28 +46,26 @@ function useAcknowledged() {
 
 export default function GuidePage() {
   const { acked, acknowledge } = useAcknowledged()
-  const allAcked = NEW_ITEMS.every(id => acked.has(id))
+  const unread = NEW_ITEMS.filter(id => !acked.has(id)).length
+  const allAcked = unread === 0
 
   return (
     <div className="min-h-screen bg-[#f8f8f7] p-6">
       <div className="max-w-3xl mx-auto space-y-5">
 
-        {/* Заголовок */}
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110]">Регламент: Логист / Закупщик</h1>
           <p className="text-[12px] text-[#9a9a95] mt-0.5">Вера — MGlass, версия май 2025</p>
         </div>
 
-        {/* Баннер "пополняется" */}
+        {/* Баннер */}
         <div className="bg-[#111110] text-white rounded-xl px-6 py-5">
-          <p className="text-[22px] font-bold leading-tight">📌 Регламент постоянно пополняется.</p>
+          <p className="text-[24px] font-extrabold leading-tight">📌 Регламент постоянно пополняется.</p>
           <p className="text-[15px] text-[#a0a09a] mt-1">Новые разделы подсвечены жёлтым — прочитай и нажми «Ознакомилась».</p>
           {allAcked ? (
             <p className="mt-3 text-[13px] text-emerald-400 font-semibold">✓ Все разделы прочитаны</p>
           ) : (
-            <p className="mt-3 text-[13px] text-amber-400 font-semibold">
-              {NEW_ITEMS.filter(id => !acked.has(id)).length} непрочитанных разделов
-            </p>
+            <p className="mt-3 text-[13px] text-amber-400 font-semibold">{unread} непрочитанных разделов</p>
           )}
         </div>
 
@@ -71,14 +83,16 @@ export default function GuidePage() {
           </div>
         </div>
 
+        {/* ─── РАЗДЕЛЫ ─── */}
+
         <NewSection id="daily-checklist" title="☀️ Ежедневный чеклист (утро)" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
-                <Li>Критические позиции на складе (ниже минимума)</Li>
+                <Li>Критические позиции на складе (ниже минимума) — раздел «Критические остатки»</Li>
                 <Li>Ожидаемые поставки сегодня</Li>
-                <Li>Неоплаченные счета поставщиков</Li>
+                <Li>Неоплаченные счета поставщиков — Канбан закупок</Li>
                 <Li>Заявки от производства на материалы</Li>
                 <Li>Цены конкурентов на ключевые позиции</Li>
               </ul>
@@ -86,10 +100,10 @@ export default function GuidePage() {
             <div>
               <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
               <ul className="space-y-1.5">
-                <Li>Маршрутный лист на сегодня</Li>
+                <Li>Маршрутный лист на сегодня — готовится накануне вечером</Li>
                 <Li>Заказы, ожидающие доставки</Li>
                 <Li>Наличие водителей</Li>
-                <Li>Подтверждения доставок вчерашнего дня</Li>
+                <Li>Подтверждения доставок вчерашнего дня — прозвон клиентов или проверка в системе</Li>
                 <Li>Обратная связь от клиентов о доставке</Li>
               </ul>
             </div>
@@ -101,65 +115,189 @@ export default function GuidePage() {
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
-                <Li>Мониторинг складских остатков</Li>
+                <Li>Мониторинг складских остатков вручную</Li>
                 <Li>Своевременное размещение заказов у поставщиков</Li>
                 <Li>Переговоры об условиях поставки и ценах</Li>
                 <Li>Контроль доставки и качества материалов</Li>
                 <Li>Ведение базы поставщиков в системе</Li>
-                <Li>Согласование платежей с финансовым директором</Li>
+                <Li>Согласование платежей с руководством</Li>
                 <Li>Ежемесячный анализ цен</Li>
               </ul>
             </div>
             <div>
               <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
               <ul className="space-y-1.5">
-                <Li>Составление маршрутных листов доставок</Li>
-                <Li>Координация водителей</Li>
-                <Li>Отслеживание доставок в реальном времени</Li>
+                <Li>Составление маршрутных листов для клиентских доставок</Li>
+                <Li>Составление маршрутных листов к поставщикам</Li>
+                <Li>Координация водителя Сергея Васильевича</Li>
                 <Li>Учёт стоимости доставки по зонам</Li>
                 <Li>Решение проблем на маршруте</Li>
-                <Li>Сдача документов о доставке</Li>
+                <Li>Подтверждение факта доставки (звонок клиенту)</Li>
                 <Li>Планирование маршрутов для снижения затрат</Li>
               </ul>
             </div>
           </div>
         </NewSection>
 
-        <NewSection id="system-buying" title="💻 Работа в системе — Закупки" acked={acked} onAck={acknowledge}>
+        <NewSection id="production-requests" title="🏭 Заявки от производства" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Производственный процесс: Дмитрий (монтаж) → Бигзат (производство) → Вера (закупка)
+          </p>
           <Steps>
-            <Step n={1}>Открой раздел <b>Фурнитура душевых</b> → вкладка <b>Каталог</b>. Здесь весь каталог позиций.</Step>
-            <Step n={2}>Нажми <b>«+ Добавить позицию»</b> чтобы добавить новую. Заполни: наименование, категорию, подкатегорию, где используется.</Step>
-            <Step n={3}>В блоке <b>«Поведение в калькуляторе»</b> укажи срок поставки и остаток на складе.</Step>
-            <Step n={4}>Добавь цены: поставщик × цвет × цена на сайте × скидка. Закупочная считается автоматически.</Step>
-            <Step n={5}>Для обновления цены — найди позицию → <b>Изм.</b> → исправь строку цен → сохрани.</Step>
-            <Step n={6}>Для быстрого обновления прямо в таблице — раскрой позицию, кликни на ячейку матрицы цен.</Step>
-            <Step n={7}>Раздел <b>Поставщики</b> — справочник всех поставщиков. Добавляй новых здесь.</Step>
+            <Step n={1}>Дмитрий или Бигзат сообщает о нехватке материала — <b>лично, в Telegram или через систему</b>.</Step>
+            <Step n={2}>Вера проверяет склад в разделе <b>«Критические остатки»</b> — актуален ли сигнал.</Step>
+            <Step n={3}>Если позиция ниже минимума — немедленно размещает заказ у поставщика. Если выше — объясняет, когда плановая закупка.</Step>
+            <Step n={4}>Сообщает Дмитрию/Бигзату: ожидаемую дату поставки или дату ближайшей закупки.</Step>
+            <Step n={5}>После получения материала — обновляет <b>остаток в системе</b> (раздел «Критические остатки»).</Step>
           </Steps>
-          <div className="mt-3 text-[12px] text-[#6b6b66] bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
-            ⚠️ Если поставщик прекратил поставку цвета — обнули цену (поставь 0), не удаляй строку. Менеджер увидит «нет у поставщика».
+          <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+            📌 Правило: производство не должно останавливаться ни дня. Если есть риск простоя — сразу уведоми руководителя.
           </div>
         </NewSection>
 
-        <NewSection id="system-logistics" title="🚚 Работа в системе — Логистика" acked={acked} onAck={acknowledge}>
+        <NewSection id="system-stock" title="📦 Работа в системе — Критические остатки" acked={acked} onAck={acknowledge}>
           <Steps>
-            <Step n={1}>Открой раздел <b>Заказы MGlass</b> — список всех активных заказов. Смотри статус «Готов к доставке».</Step>
-            <Step n={2}>Открой <b>Маршрутный лист</b> — составь маршрут на день, добавь адреса доставок.</Step>
-            <Step n={3}>Проверь <b>Заказы B2B</b> — оптовые заказы, которые тоже могут требовать доставки.</Step>
-            <Step n={4}>После доставки отметь подтверждение в заказе. Приложи фото если нужно.</Step>
-            <Step n={5}>При проблеме на маршруте — уведоми руководителя и зафиксируй в системе.</Step>
+            <Step n={1}>Открой раздел <b>«Критические остатки»</b> в меню слева (раздел Склад).</Step>
+            <Step n={2}>По умолчанию видны только позиции с флагом «Критич. ★» — это ключевые позиции для мониторинга.</Step>
+            <Step n={3}>Нажми <b>«Все позиции»</b> чтобы видеть весь склад целиком.</Step>
+            <Step n={4}>Статусы: <b>Критично</b> (ниже минимума), <b>Внимание</b> (ниже рекомендуемого), <b>Норма</b>.</Step>
+            <Step n={5}>Обнови факт. остаток в строке — появится кнопка <b>«Сохр.»</b> — нажми. Данные сохраняются в базу.</Step>
+            <Step n={6}>Чтобы пометить позицию как критическую для мониторинга — нажми <b>«☆ Нет»</b> → станет <b>«★ Да»</b>.</Step>
+          </Steps>
+          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+            ⚠️ Остатки <b>не обновляются автоматически</b>. Обновляй после каждой приёмки товара.
+          </div>
+        </NewSection>
+
+        <NewSection id="system-procurement" title="💳 Работа в системе — Канбан закупок" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Канбан отражает жизненный цикл каждого счёта от поставщика — от получения до закрытия.
+          </p>
+          <Steps>
+            <Step n={1}>Открой раздел <b>«Канбан закупок»</b>. Видишь 8 колонок — стадии обработки счёта.</Step>
+            <Step n={2}>Нажми <b>«+ Новая закупка»</b> — заполни поставщика, сумму, счёт, позиции, комментарий.</Step>
+            <Step n={3}>Карточка появляется в первой колонке <b>«Получен счёт»</b>.</Step>
+            <Step n={4}>Нажимай <b>«→ следующий статус»</b> по мере прохождения этапов.</Step>
+            <Step n={5}>Если есть проблема — открой карточку → напиши в <b>«Проблема»</b>. Карточка выделится красным.</Step>
+            <Step n={6}>Когда товар получен и закрыт — переведи в <b>«Закрыто»</b>.</Step>
+          </Steps>
+          <div className="mt-3 text-[12px] text-[#6b6b66]">
+            Статусы: Получен счёт → На согласовании → Ожидает оплаты → Частично оплачен → Оплачен → В дороге → Самовывоз → Закрыто
+          </div>
+        </NewSection>
+
+        <NewSection id="system-routes" title="🗺️ Работа в системе — Маршруты к поставщикам" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Маршрутные листы к поставщикам составляются <b>накануне вечером</b> на следующий день.
+          </p>
+          <Steps>
+            <Step n={1}>Открой раздел <b>«Маршруты к поставщикам»</b>.</Step>
+            <Step n={2}>Выбери дату (завтра) и водителя → нажми <b>«+ Создать маршрут»</b>.</Step>
+            <Step n={3}>Нажимай <b>«+ Добавить точку»</b> для каждого поставщика. Заполни: название, адрес, контакт, что забрать, номер заказа/счёта, часы работы.</Step>
+            <Step n={4}>Точки нумеруются автоматически — выстраивай в логичный порядок (по geography или срочности).</Step>
+            <Step n={5}>Нажми <b>«🖨 Распечатать»</b> — откроется печатная версия. Кнопка «Печать» → бумажный лист водителю.</Step>
+            <Step n={6}>В день маршрута водитель отмечает статус каждой точки: В очереди / Выполнено / Проблема.</Step>
+          </Steps>
+          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+            📌 Правило: маршрутный лист всегда должен быть готов накануне до 18:00. Сергей Васильевич должен знать план заранее.
+          </div>
+        </NewSection>
+
+        <NewSection id="price-monitoring" title="📈 Мониторинг цен" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Цель: покупать по рынку или ниже. Не переплачивать из-за лени проверить альтернативу.
+          </p>
+          <Steps>
+            <Step n={1}><b>Еженедельно</b>: проверяй цены 3–5 основных поставщиков на ключевые позиции (фурнитура, стекло, комплектующие).</Step>
+            <Step n={2}><b>Ежемесячно</b>: сравни закупочные цены прошлого месяца с текущими предложениями. Если разница &gt;5% — запрашивай переговоры.</Step>
+            <Step n={3}>При получении нового прайса — обновляй цены в разделе <b>«Фурнитура душевых»</b> → позиция → строка цен.</Step>
+            <Step n={4}>Для новых поставщиков: запрашивай прайс, вноси в систему как нового поставщика, добавляй тестовую закупку в Канбан.</Step>
+            <Step n={5}>Правило двух поставщиков: на каждую ключевую позицию должно быть минимум <b>2 активных поставщика</b>.</Step>
+          </Steps>
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+            🚫 Запрещено покупать по первой предложенной цене без сравнения хотя бы с одним альтернативным поставщиком.
+          </div>
+        </NewSection>
+
+        <NewSection id="supplier-db" title="🏢 База поставщиков" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Все поставщики хранятся в разделе <b>«Поставщики»</b>. База должна быть актуальной.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Что вносить</p>
+              <ul className="space-y-1.5">
+                <Li>Полное название компании</Li>
+                <Li>Адрес склада/офиса (для маршрутов)</Li>
+                <Li>Контактное лицо + телефон + Telegram</Li>
+                <Li>Категория поставок (фурнитура, стекло, расходники…)</Li>
+                <Li>Режим работы</Li>
+                <Li>Условия работы (отсрочка, предоплата, минималка)</Li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Правила</p>
+              <ul className="space-y-1.5">
+                <Li>Новый поставщик → сразу вноси в базу, не держи только в телефоне</Li>
+                <Li>Поставщик прекратил работу → не удаляй, поставь статус «Неактивен»</Li>
+                <Li>Обновляй контакты при каждом изменении</Li>
+                <Li>На каждую категорию — минимум 2 поставщика</Li>
+              </ul>
+            </div>
+          </div>
+        </NewSection>
+
+        <NewSection id="vera-sergey" title="🤝 Взаимодействие с Сергеем Васильевичем" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            Сергей Васильевич — водитель и кладовщик MGlass. Вера — его непосредственный координатор по логистике.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Ежедневно</p>
+              <ul className="space-y-1.5">
+                <Li>Передаёт маршрутный лист (бумажный или сообщением)</Li>
+                <Li>Проверяет готовность к выезду</Li>
+                <Li>Принимает отчёт по каждой точке маршрута</Li>
+                <Li>Фиксирует проблемы если есть</Li>
+              </ul>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Важно</p>
+              <ul className="space-y-1.5">
+                <Li>Сергей не планирует маршрут — только выполняет. Вера планирует.</Li>
+                <Li>При отсутствии Сергея — Вера немедленно сообщает руководителю</Li>
+                <Li>Все изменения маршрута — только через Веру, не напрямую</Li>
+                <Li>Спорные ситуации с клиентами на маршруте — сразу звонок Вере</Li>
+              </ul>
+            </div>
+          </div>
+        </NewSection>
+
+        <NewSection id="system-logistics" title="🚚 Работа в системе — Логистика доставок клиентам" acked={acked} onAck={acknowledge}>
+          <Steps>
+            <Step n={1}>Открой <b>«Заказы MGlass»</b> — ищи статус «Готов к доставке». Это заказы на сегодня/ближайшее время.</Step>
+            <Step n={2}>Открой <b>«Маршрутный лист»</b> (доставки клиентам) — добавь адреса, удобное время, комментарии.</Step>
+            <Step n={3}>Для B2B: открой <b>«B2B Заказы»</b> — проверь, есть ли готовые к отгрузке.</Step>
+            <Step n={4}>Передай маршрут Сергею Васильевичу накануне. Убедись, что адреса верны.</Step>
+            <Step n={5}>После доставки: позвони клиенту, уточни всё ли в порядке. Отметь статус в заказе.</Step>
+            <Step n={6}>При повреждении или проблеме — сфотографируй, уведоми руководителя, зафиксируй в заказе.</Step>
           </Steps>
         </NewSection>
 
-        <NewSection id="kpi" title="📊 KPI" acked={acked} onAck={acknowledge}>
+        <NewSection id="kpi" title="📊 KPI — Показатели работы" acked={acked} onAck={acknowledge}>
+          <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-3">
+            <p className="text-[12px] font-semibold text-blue-700">🔧 Раздел KPI в системе находится в разработке.</p>
+            <p className="text-[11px] text-blue-600 mt-0.5">Ниже — плановые показатели для самоконтроля.</p>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
                 <Li>Нет остановок производства из-за отсутствия материалов</Li>
-                <Li>Экономия на закупках ≥ 5% от прошлого периода</Li>
+                <Li>Экономия на закупках ≥ 5% к прошлому периоду</Li>
                 <Li>Срок поставки соответствует договорному</Li>
-                <Li>База поставщиков актуальна</Li>
-                <Li>Счета согласованы и оплачены в срок</Li>
+                <Li>База поставщиков актуальна (0 устаревших контактов)</Li>
+                <Li>Все счета согласованы и оплачены в срок</Li>
               </ul>
             </div>
             <div>
@@ -167,8 +305,9 @@ export default function GuidePage() {
               <ul className="space-y-1.5">
                 <Li>Доставки в срок ≥ 95%</Li>
                 <Li>Повреждения при доставке &lt; 0.5%</Li>
-                <Li>Стоимость доставки в рамках зон</Li>
-                <Li>Все доставки подтверждены клиентом</Li>
+                <Li>Все доставки подтверждены звонком клиенту</Li>
+                <Li>Стоимость доставки в рамках плановых зон</Li>
+                <Li>Маршрутный лист готов накануне до 18:00</Li>
               </ul>
             </div>
           </div>
@@ -179,11 +318,13 @@ export default function GuidePage() {
             <div>
               <p className="text-[11px] font-bold text-red-500 uppercase tracking-wide mb-2">Не делать</p>
               <ul className="space-y-1.5">
-                <Li>Закупать по первой цене без анализа рынка</Li>
-                <Li>Не иметь 2–3 альтернативных поставщиков</Li>
-                <Li>Допускать кассовые разрывы из-за авансов</Li>
-                <Li>Не предупреждать клиента о времени доставки</Li>
+                <Li>Закупать по первой цене без сравнения с рынком</Li>
+                <Li>Не иметь 2–3 альтернативных поставщиков на позицию</Li>
+                <Li>Держать контакты поставщиков только в телефоне, не в системе</Li>
+                <Li>Составлять маршрут в день поездки (поздно)</Li>
+                <Li>Не предупреждать клиента о примерном времени доставки</Li>
                 <Li>Не проверять упаковку перед отгрузкой</Li>
+                <Li>Не обновлять остатки после приёмки товара</Li>
                 <Li>Игнорировать жалобы на доставку</Li>
               </ul>
             </div>
@@ -191,19 +332,52 @@ export default function GuidePage() {
               <p className="text-[11px] font-bold text-red-700 uppercase tracking-wide mb-2">Запрещено</p>
               <ul className="space-y-1.5">
                 <Li>Подписывать договоры с поставщиками без согласования</Li>
-                <Li>Оплачивать счета без согласования с финдиром</Li>
+                <Li>Оплачивать счета без согласования с руководством</Li>
                 <Li>Отгружать без документов</Li>
-                <Li>Менять маршрут без уведомления руководителя</Li>
+                <Li>Самостоятельно менять маршрут без уведомления руководителя</Li>
+                <Li>Давать поставщику обещания о цене или объёме без согласования</Li>
+                <Li>Принимать товар без проверки по накладной</Li>
               </ul>
             </div>
           </div>
         </NewSection>
 
         <NewSection id="tools" title="🛠️ Инструменты" acked={acked} onAck={acknowledge}>
-          <div className="flex flex-wrap gap-2">
-            {['MGlass Заказы', 'MGlass Маршрутный лист', 'Фурнитура душевых', 'Поставщики', 'Материалы', 'Admin Panel', 'Telegram', 'Яндекс.Карты', 'Excel'].map(t => (
-              <span key={t} className="px-3 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[12px] rounded-full">{t}</span>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Система MGlass</p>
+              <div className="flex flex-wrap gap-2">
+                {['Критические остатки', 'Канбан закупок', 'Маршруты к поставщикам', 'Заказы MGlass', 'Маршрутный лист', 'Фурнитура душевых', 'Поставщики', 'Материалы', 'B2B Заказы'].map(t => (
+                  <span key={t} className="px-2.5 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[11px] rounded-full">{t}</span>
+                ))}
+              </div>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Внешние</p>
+              <div className="flex flex-wrap gap-2">
+                {['Telegram', 'Яндекс.Карты', 'WhatsApp (поставщики)', 'Excel (резервно)'].map(t => (
+                  <span key={t} className="px-2.5 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[11px] rounded-full">{t}</span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </NewSection>
+
+        <NewSection id="future" title="🔭 Что будет добавлено в систему" acked={acked} onAck={acknowledge}>
+          <p className="text-[12px] text-[#6b6b66] mb-3">
+            MGlass строит единый центр снабжения и логистики. Эти разделы появятся по мере готовности:
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <FutureItem label="Карта поставщиков" desc="Визуальная карта всех поставщиков с маршрутами" />
+              <FutureItem label="Отслеживание доставок" desc="GPS-трекинг маршрута в реальном времени" />
+              <FutureItem label="Подтверждение доставки" desc="Клиент подписывает получение в системе" />
+            </div>
+            <div className="space-y-2">
+              <FutureItem label="Обратная связь клиентов" desc="Оценка качества доставки от получателя" />
+              <FutureItem label="Учёт логистических затрат" desc="Стоимость маршрутов, ГСМ, амортизация" />
+              <FutureItem label="Оптимизация маршрутов" desc="Автоматическое построение оптимального маршрута" />
+            </div>
           </div>
         </NewSection>
 
@@ -212,7 +386,7 @@ export default function GuidePage() {
   )
 }
 
-// ─── Блок с подсветкой и кнопкой ─────────────────────────────────────────────
+// ─── Компоненты ──────────────────────────────────────────────────────────────
 
 function NewSection({
   id, title, children, acked, onAck,
@@ -243,6 +417,18 @@ function NewSection({
         )}
       </div>
       <div className="text-[13px] text-[#4b4b47] leading-relaxed">{children}</div>
+    </div>
+  )
+}
+
+function FutureItem({ label, desc }: { label: string; desc: string }) {
+  return (
+    <div className="flex items-start gap-2 bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2">
+      <span className="text-[11px] font-bold text-[#9a9a95] mt-0.5 flex-shrink-0">🔧</span>
+      <div>
+        <p className="text-[12px] font-semibold text-[#6b6b66]">{label}</p>
+        <p className="text-[11px] text-[#9a9a95]">{desc}</p>
+      </div>
     </div>
   )
 }

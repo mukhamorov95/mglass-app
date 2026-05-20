@@ -134,6 +134,9 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/facet',
     '/admin/guide',
     '/admin/route-sheet',
+    '/admin/stock-control',
+    '/admin/procurement',
+    '/admin/procurement-routes',
   ],
 
   ceo: [
