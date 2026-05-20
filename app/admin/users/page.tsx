@@ -8,7 +8,7 @@ type User = {
   id: string
   email: string
   name: string | null
-  role: 'admin' | 'manager'
+  role: 'admin' | 'manager' | 'buyer'
   active: boolean
   manager_code: number | null
   password_plain: string | null
@@ -22,6 +22,7 @@ type User = {
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   admin:   { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },
   manager: { label: 'Менеджер',      color: 'bg-blue-50 text-blue-700' },
+  buyer:   { label: 'Закупщик',      color: 'bg-emerald-50 text-emerald-700' },
 }
 
 const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[] = [
@@ -50,7 +51,7 @@ export default function UsersPage() {
   const [showInvite, setShowInvite]     = useState(false)
   const [inviteEmail, setInviteEmail]   = useState('')
   const [invitePassword, setInvitePassword] = useState('')
-  const [inviteRole, setInviteRole]     = useState<'manager' | 'admin'>('manager')
+  const [inviteRole, setInviteRole]     = useState<'manager' | 'admin' | 'buyer'>('manager')
   const [inviteName, setInviteName]     = useState('')
   const [saving, setSaving]             = useState(false)
   const [error, setError]               = useState<string | null>(null)
@@ -196,6 +197,7 @@ export default function UsersPage() {
                   const rl      = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
                   const pwVisible = visiblePasswords.has(u.id)
                   const isAdmin = u.role === 'admin'
+                  const isBuyer = u.role === 'buyer'
                   const permsExpanded = expandedPerms.has(u.id)
                   const perms   = resolvePerms(u.permissions)
 
@@ -254,6 +256,7 @@ export default function UsersPage() {
                             onChange={e => updateUser(u.id, { role: e.target.value as User['role'] })}
                             className={`text-[11px] font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${rl.color}`}>
                             <option value="manager">Менеджер</option>
+                            <option value="buyer">Закупщик</option>
                             <option value="admin">Администратор</option>
                           </select>
                         </td>
@@ -336,6 +339,8 @@ export default function UsersPage() {
                         <td className="px-3 py-3 text-center">
                           {isAdmin ? (
                             <span className="text-[10px] text-[#9a9a95]">Всё</span>
+                          ) : isBuyer ? (
+                            <span className="text-[10px] text-emerald-600 font-medium">Каталог</span>
                           ) : (
                             <button
                               onClick={() => toggleExpandPerms(u.id)}
@@ -348,7 +353,7 @@ export default function UsersPage() {
                       </tr>
 
                       {/* Permissions expansion row */}
-                      {!isAdmin && permsExpanded && (
+                      {!isAdmin && !isBuyer && permsExpanded && (
                         <tr key={`${u.id}-perms`} className="bg-[#fafaf9]">
                           <td colSpan={9} className="px-6 py-4 border-t border-[#f0f0ec]">
                             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2.5">Разделы меню</p>
@@ -426,9 +431,10 @@ export default function UsersPage() {
                 </div>
                 <div>
                   <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Роль</label>
-                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin')}
+                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin' | 'buyer')}
                     className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]">
                     <option value="manager">Менеджер</option>
+                    <option value="buyer">Закупщик</option>
                     <option value="admin">Администратор</option>
                   </select>
                 </div>

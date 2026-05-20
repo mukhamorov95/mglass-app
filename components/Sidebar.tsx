@@ -44,6 +44,26 @@ const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
 ]
 
+// ─── Buyer role ───────────────────────────────────────────────────────────────
+
+const BUYER_ITEMS: NavEntry[] = [
+  { groupLabel: 'Стекло и зеркала' },
+  { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
+  { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
+  { href: '/admin/mirror-lighting', label: 'Подсветка зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
+  { groupLabel: 'Фурнитура' },
+  { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
+  { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
+  { groupLabel: 'Закупки' },
+  { href: '/admin/suppliers',       label: 'Поставщики',       icon: '🏭', indent: true },
+  { groupLabel: 'Производство' },
+  { href: '/admin/materials',       label: 'Материалы',        icon: '📦', indent: true },
+  { href: '/admin/services',        label: 'Услуги',           icon: '🔧', indent: true },
+  { groupLabel: 'Помощь' },
+  { href: '/admin/guide',           label: 'Руководство',      icon: '📖', indent: true },
+]
+
 // ─── Production role ──────────────────────────────────────────────────────────
 
 const PRODUCTION_ITEMS: NavItem[] = [
@@ -163,24 +183,28 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
+  { href: '/admin/architecture',        label: 'Карта данных',   icon: '🗺️' },
 ]
 
 // ─── Admin mode: Admin view ───────────────────────────────────────────────────
 
 const ADMIN_DIRECTORIES: NavEntry[] = [
-  { href: '/admin/glass-prices',      label: 'Стекло',           icon: '🔷' },
-  { href: '/admin/mirror-lighting',   label: 'Подсветка зеркал', icon: '💡' },
-  { href: '/admin/mirror-frames',     label: 'Рамки зеркал',     icon: '🖼️' },
-  { href: '/admin/facet',             label: 'Фацет',            icon: '💎' },
-  { href: '/admin/materials',         label: 'Материалы',        icon: '📦' },
-  { href: '/admin/services',          label: 'Услуги',           icon: '🔧' },
+  { groupLabel: 'Стекло и зеркала' },
+  { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
+  { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
+  { href: '/admin/mirror-lighting', label: 'Подсветка зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
   { groupLabel: 'Фурнитура' },
-  { href: '/admin/hardware',          label: 'Лофт',            icon: '🔩', indent: true },
-  { href: '/admin/shower-hardware',   label: 'Душевые',         icon: '🚿', indent: true },
-  { href: '/admin/settings',          label: 'Фин. настройки',  icon: '💰' },
-  { href: '/admin/suppliers',         label: 'Поставщики',      icon: '🏭' },
-  { href: '/admin/suppliers/eleganz', label: 'Прайс Eleganz',   icon: '💡', indent: true },
-  { href: '/admin/architecture',      label: 'Карта данных',    icon: '🗺️' },
+  { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
+  { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
+  { groupLabel: 'Закупки' },
+  { href: '/admin/suppliers',         label: 'Поставщики',    icon: '🏭', indent: true },
+  { href: '/admin/suppliers/eleganz', label: 'Прайс Eleganz', icon: '💡', indent: true },
+  { groupLabel: 'Производство' },
+  { href: '/admin/materials', label: 'Материалы', icon: '📦', indent: true },
+  { href: '/admin/services',  label: 'Услуги',    icon: '🔧', indent: true },
+  { groupLabel: 'Финансы' },
+  { href: '/admin/settings', label: 'Фин. настройки', icon: '💰', indent: true },
 ]
 
 const ADMIN_B2B: NavEntry[] = [
@@ -224,7 +248,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/architecture'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials'])) open.push('b2b')
     if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
   }
@@ -233,6 +257,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
 
 function autoOpenRole(pathname: string, role: Role): string[] {
   const open: string[] = []
+  if (role === 'buyer') return open  // buyer navigation is flat — no accordions
   if (role === 'manager') {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
@@ -490,6 +515,24 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         </>
       )
     }
+
+    // Buyer: справочники для закупки
+    if (role === 'buyer') return (
+      <div>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Закупщик</div>
+        <div className="space-y-px">
+          {BUYER_ITEMS.map((entry, idx) =>
+            isGroup(entry) ? (
+              <div key={`bg-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
+                {entry.groupLabel}
+              </div>
+            ) : (
+              navItem(entry, 'bg-emerald-50 text-emerald-700 font-medium')
+            )
+          )}
+        </div>
+      </div>
+    )
 
     // Production: flat list
     if (role === 'production') return (

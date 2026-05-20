@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useMemo } from 'react'
+import { useEffect, useState, useMemo, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Material, Service, PartnerType, FinancialSettings } from '@/lib/types'
 import {
@@ -38,6 +38,13 @@ type CatalogItem = {
   id: number; name: string; category: string; manufacturer: string; unit: string
   whip_length: number | null; shower_types: string[]
   has_vat: boolean; photo_url: string; comment: string; active: boolean
+  item_role: 'required' | 'optional' | 'addon'
+  depends_on_item_id: number | null
+  sort_order: number
+  min_qty: number
+  max_qty: number | null
+  hinge_type: 'wall-glass' | 'glass-glass' | null
+  track_type: 'open' | 'closed' | null
 }
 type CatalogPrice = { id?: number; item_id: number; supplier_id: number; color_id: number; cost_price: number }
 type HwColor      = { id: number; name: string; sort_order: number; active: boolean }
@@ -105,6 +112,7 @@ export default function ShowerCalculatorPage() {
   const [editOrderGroupId, setEditOrderGroupId] = useState<string | null>(null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
+  const supplierManuallySet = useRef(false)
 
   const [hwSelection, setHwSelection]     = useState<Record<number, { qty: number }>>({})
   const [stdColorId, setStdColorId]       = useState<number | null>(null)
@@ -112,6 +120,8 @@ export default function ShowerCalculatorPage() {
   const [stdShowerType, setStdShowerType] = useState<StdShowerType>('swing')
   const [stdGlassCount, setStdGlassCount] = useState('2')
   const [stdIsCorner, setStdIsCorner]     = useState(false)
+  const [hingeType, setHingeType] = useState<'wall-glass' | 'glass-glass'>('wall-glass')
+  const [trackType, setTrackType] = useState<'open' | 'closed'>('open')
 
   const [tier, setTier]       = useState<ShowerTier>('standard')
   const [modelId, setModelId] = useState<string>('M2')
@@ -142,7 +152,7 @@ export default function ShowerCalculatorPage() {
         supabase.from('services').select('*'),
         supabase.from('partner_types').select('*').eq('active', true),
         supabase.from('financial_settings').select('*'),
-        supabase.from('shower_catalog_items').select('*').eq('active', true).order('category').order('name'),
+        supabase.from('shower_catalog_items').select('*').eq('active', true).order('category').order('sort_order').order('name'),
         supabase.from('shower_catalog_prices').select('id,item_id,supplier_id,color_id,cost_price'),
         supabase.from('shower_hw_colors').select('*').eq('active', true).order('sort_order'),
         supabase.from('shower_hw_suppliers').select('*').eq('active', true).order('name'),
@@ -228,7 +238,7 @@ export default function ShowerCalculatorPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tier])
 
-  useEffect(() => { setHwSelection({}) }, [tier, stdShowerType])
+  useEffect(() => { setHwSelection({}) }, [tier, stdShowerType, hingeType, trackType])
 
   // Load manual hardware prices for budget tier when model changes
   useEffect(() => {
@@ -240,10 +250,13 @@ export default function ShowerCalculatorPage() {
   }, [tier, modelId])
 
   const filteredCatalogItems = useMemo(() =>
-    catalogItems.filter(item =>
-      item.shower_types.includes(stdShowerType) || item.shower_types.includes('universal')
-    ),
-  [catalogItems, stdShowerType])
+    catalogItems.filter(item => {
+      if (!item.shower_types.includes(stdShowerType) && !item.shower_types.includes('universal')) return false
+      if (stdShowerType === 'swing'    && item.hinge_type !== null) return item.hinge_type === hingeType
+      if (stdShowerType === 'sliding'  && item.track_type !== null) return item.track_type === trackType
+      return true
+    }),
+  [catalogItems, stdShowerType, hingeType, trackType])
 
   const catalogByCategory = useMemo(() => {
     const map: Record<string, CatalogItem[]> = {}
@@ -263,14 +276,38 @@ export default function ShowerCalculatorPage() {
         : 0
   }, [catalogPrices, stdSupplierId, stdColorId])
 
+  const supplierCoverage = useMemo(() => {
+    const covered = new Set<string>()
+    for (const p of catalogPrices) {
+      if (stdColorId !== null && p.color_id === stdColorId) covered.add(`${p.item_id}:${p.supplier_id}`)
+    }
+    return hwSuppliers.map(sup => ({
+      ...sup,
+      count: filteredCatalogItems.filter(item => covered.has(`${item.id}:${sup.id}`)).length,
+    }))
+  }, [catalogPrices, stdColorId, hwSuppliers, filteredCatalogItems])
+
+  // Авто-выбор поставщика с максимальным покрытием (только если не выбран вручную)
+  useEffect(() => {
+    if (supplierManuallySet.current) return
+    if (supplierCoverage.length === 0) return
+    const best = [...supplierCoverage].sort((a, b) => b.count - a.count)[0]
+    if (best) setStdSupplierId(best.id)
+  }, [supplierCoverage])
+
   const selectedHardwareLines = useMemo((): ShowerHardwareLine[] => {
     const colorName = hwColors.find(c => c.id === stdColorId)?.name ?? ''
     return filteredCatalogItems
-      .filter(item => hwSelection[item.id])
+      .filter(item => {
+        if (item.item_role === 'required') return true
+        if (!hwSelection[item.id]) return false
+        if (item.item_role === 'addon' && item.depends_on_item_id && !hwSelection[item.depends_on_item_id]) return false
+        return true
+      })
       .map(item => {
-        const sel = hwSelection[item.id]
+        const qty = item.item_role === 'required' ? (item.min_qty ?? 1) : hwSelection[item.id].qty
         const unitCost = getPriceForItem(item.id)
-        return { name: item.name, qty: sel.qty, unit: item.unit, color: colorName, unitCost, total: Math.round(unitCost * sel.qty) }
+        return { name: item.name, qty, unit: item.unit, color: colorName, unitCost, total: Math.round(unitCost * qty) }
       })
   }, [filteredCatalogItems, hwSelection, getPriceForItem, hwColors, stdColorId])
 
@@ -461,17 +498,70 @@ export default function ShowerCalculatorPage() {
           ))}
         </div>
 
-        {/* ── Tier tabs ─────────────────────────────────────── */}
-        <div className="flex items-center justify-between mb-4">
-          <Seg
-            options={[{ v: 'standard' as ShowerTier, l: 'Стандарт' }, { v: 'budget' as ShowerTier, l: 'Бюджет' }]}
-            value={tier}
-            onChange={setTier}
-          />
-          {tier === 'standard' && (
-            <Seg options={STD_SHOWER_TYPES} value={stdShowerType} onChange={setStdShowerType} small />
-          )}
-        </div>
+        {/* ── Конфигуратор ──────────────────────────────────── */}
+        <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4 mb-4">
+          <div className="space-y-4">
+
+            {/* Шаг 1: Класс + Тип системы */}
+            <div className="flex items-start gap-8">
+              <div>
+                <Label>Класс</Label>
+                <Seg
+                  options={[{ v: 'standard' as ShowerTier, l: 'Стандарт' }, { v: 'budget' as ShowerTier, l: 'Бюджет' }]}
+                  value={tier}
+                  onChange={setTier}
+                />
+              </div>
+              {tier === 'standard' && (
+                <div>
+                  <Label>Тип перегородки</Label>
+                  <Seg options={STD_SHOWER_TYPES} value={stdShowerType} onChange={setStdShowerType} />
+                </div>
+              )}
+            </div>
+
+            {/* Шаг 2: Подтип петель (распашная) */}
+            {tier === 'standard' && stdShowerType === 'swing' && (
+              <div className="border-t border-[#f2f2f7] pt-4">
+                <Label>Тип петель</Label>
+                <Seg
+                  options={[
+                    { v: 'wall-glass' as const, l: 'Стена — стекло' },
+                    { v: 'glass-glass' as const, l: 'Стекло — стекло' },
+                  ]}
+                  value={hingeType}
+                  onChange={setHingeType}
+                />
+                <p className="mt-1.5 text-[11px] text-[#86868b]">
+                  {hingeType === 'wall-glass'
+                    ? 'Одна сторона крепится к стене, вторая к стеклу'
+                    : 'Обе стороны крепятся к стеклянным элементам'}
+                </p>
+              </div>
+            )}
+
+            {/* Шаг 2: Подтип трека (раздвижная) */}
+            {tier === 'standard' && stdShowerType === 'sliding' && (
+              <div className="border-t border-[#f2f2f7] pt-4">
+                <Label>Тип трека</Label>
+                <Seg
+                  options={[
+                    { v: 'open' as const, l: 'Открытый' },
+                    { v: 'closed' as const, l: 'Закрытый' },
+                  ]}
+                  value={trackType}
+                  onChange={setTrackType}
+                />
+                <p className="mt-1.5 text-[11px] text-[#86868b]">
+                  {trackType === 'open'
+                    ? 'Ролик снаружи, профиль виден — стандартное решение'
+                    : 'Ролик внутри профиля — аккуратный вид, сложнее монтаж'}
+                </p>
+              </div>
+            )}
+
+          </div>
+        </section>
 
         {/* ── Main grid ─────────────────────────────────────── */}
         <div className="grid grid-cols-[1fr_300px] gap-4">
@@ -548,10 +638,9 @@ export default function ShowerCalculatorPage() {
               </p>
             </section>
 
-            {/* Glass + Hardware filters — one row */}
+            {/* Glass */}
             <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-              <div className="grid grid-cols-2 gap-4">
-                {/* Left: glass */}
+              {tier === 'standard' ? (
                 <div>
                   <Label>Стекло</Label>
                   <select value={glassType} onChange={e => setGlassType(e.target.value)} className={inp}>
@@ -563,33 +652,19 @@ export default function ShowerCalculatorPage() {
                     </p>
                   )}
                 </div>
-                {/* Right: hardware filters */}
-                {tier === 'standard' ? (
-                  <div className="space-y-2.5">
-                    <div>
-                      <Label>Цвет фурнитуры</Label>
-                      <select value={stdColorId ?? ''} onChange={e => setStdColorId(e.target.value ? Number(e.target.value) : null)} className={inp}>
-                        <option value="">— не выбран</option>
-                        {hwColors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <Label>Поставщик</Label>
-                      <div className="grid grid-cols-2 gap-1.5">
-                        {hwSuppliers.map(s => (
-                          <button key={s.id} onClick={() => setStdSupplierId(s.id)}
-                            className={`py-2 px-2 rounded-[10px] text-[13px] font-medium border transition-all truncate ${
-                              stdSupplierId === s.id
-                                ? 'bg-[#0071e3] text-white border-[#0071e3]'
-                                : 'bg-white border-[#e8e8ed] text-[#1d1d1f] hover:border-[#c7c7cc]'
-                            }`}>
-                            {s.name}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Стекло</Label>
+                    <select value={glassType} onChange={e => setGlassType(e.target.value)} className={inp}>
+                      {GLASS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                    </select>
+                    {glassCostPerM2 > 0 && (
+                      <p className="mt-1.5 text-[11px] text-[#86868b]">
+                        Закалённое {thickness} мм · {glassCostPerM2.toLocaleString('ru-RU')} ₽/м²
+                      </p>
+                    )}
                   </div>
-                ) : (
                   <div>
                     <Label>Цвет фурнитуры</Label>
                     <select value={hwColor} onChange={e => setHwColor(e.target.value)} className={inp}>
@@ -600,13 +675,43 @@ export default function ShowerCalculatorPage() {
                       ))}
                     </select>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
             </section>
 
             {/* Hardware items list (standard only) */}
             {tier === 'standard' && (
               <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+
+                {/* Цвет + Поставщик — шапка секции */}
+                <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-[#f2f2f7]">
+                  <div>
+                    <Label>Цвет фурнитуры</Label>
+                    <select value={stdColorId ?? ''} onChange={e => setStdColorId(e.target.value ? Number(e.target.value) : null)} className={inp}>
+                      <option value="">— не выбран</option>
+                      {hwColors.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Поставщик</Label>
+                    <div className="flex gap-1.5 flex-wrap">
+                      {supplierCoverage.map(s => (
+                        <button key={s.id} onClick={() => { supplierManuallySet.current = true; setStdSupplierId(s.id) }}
+                          className={`py-1.5 px-3 rounded-[10px] text-[12px] font-medium border transition-all ${
+                            stdSupplierId === s.id
+                              ? 'bg-[#0071e3] text-white border-[#0071e3]'
+                              : 'bg-white border-[#e8e8ed] text-[#1d1d1f] hover:border-[#c7c7cc]'
+                          }`}>
+                          {s.name}
+                          <span className={`ml-1.5 text-[10px] ${stdSupplierId === s.id ? 'text-blue-200' : 'text-[#86868b]'}`}>
+                            ({s.count})
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between mb-3">
                   <Label>Комплект фурнитуры</Label>
                   {customHardwareCost !== undefined && (
@@ -628,32 +733,56 @@ export default function ShowerCalculatorPage() {
                         </div>
                         <div className="space-y-1">
                           {items.map(item => {
-                            const sel      = hwSelection[item.id]
-                            const selected = !!sel
+                            const isRequired = item.item_role === 'required'
+                            const isAddon    = item.item_role === 'addon'
+                            const parentOk   = isAddon && item.depends_on_item_id
+                              ? !!hwSelection[item.depends_on_item_id]
+                              : true
+                            if (isAddon && !parentOk) return null
+
+                            const minQty   = item.min_qty ?? 1
+                            const maxQty   = item.max_qty ?? undefined
+                            const sel      = isRequired ? { qty: minQty } : hwSelection[item.id]
+                            const selected = isRequired || !!hwSelection[item.id]
                             const price    = getPriceForItem(item.id)
                             return (
-                              <label key={item.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border cursor-pointer transition-all ${
-                                selected
-                                  ? 'border-[#0071e3] bg-[#f0f7ff]'
-                                  : 'border-[#e8e8ed] bg-white hover:border-[#c7c7cc]'
+                              <label key={item.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border transition-all ${
+                                isRequired
+                                  ? 'border-[#34c759] bg-[#f0fff4] cursor-default'
+                                  : selected
+                                  ? 'border-[#0071e3] bg-[#f0f7ff] cursor-pointer'
+                                  : price === 0
+                                  ? 'border-[#f2f2f7] bg-[#fafafa] opacity-60 cursor-pointer'
+                                  : 'border-[#e8e8ed] bg-white hover:border-[#c7c7cc] cursor-pointer'
                               }`}>
-                                <input type="checkbox" checked={selected}
+                                <input type="checkbox" checked={selected} disabled={isRequired}
                                   onChange={e => setHwSelection(prev => {
                                     const next = { ...prev }
-                                    e.target.checked ? next[item.id] = { qty: 1 } : delete next[item.id]
+                                    e.target.checked ? next[item.id] = { qty: minQty } : delete next[item.id]
                                     return next
                                   })}
                                   className="w-4 h-4 flex-shrink-0 accent-[#0071e3]"/>
-                                <span className="flex-1 text-[13px] font-medium text-[#1d1d1f] leading-tight">{item.name}</span>
-                                <span className="text-[12px] text-[#86868b] whitespace-nowrap">
-                                  {price > 0 ? `${price.toLocaleString('ru-RU')} ₽/${item.unit}` : '—'}
+                                <span className={`flex-1 text-[13px] font-medium leading-tight ${isRequired ? 'text-[#1d7a3a]' : 'text-[#1d1d1f]'}`}>
+                                  {item.name}
+                                  {isRequired && <span className="ml-1.5 text-[9px] font-bold text-[#34c759] uppercase tracking-wide">обяз.</span>}
+                                  {isAddon    && <span className="ml-1.5 text-[9px] text-[#86868b] uppercase tracking-wide">доп.</span>}
                                 </span>
-                                {selected && (
+                                <span className={`text-[12px] whitespace-nowrap ${price > 0 ? 'text-[#86868b]' : 'text-[#c7c7cc] italic'}`}>
+                                  {price > 0 ? `${price.toLocaleString('ru-RU')} ₽/${item.unit}` : 'нет у поставщика'}
+                                </span>
+                                {selected && sel && (
                                   <>
-                                    <input type="number" min="1" value={sel.qty}
-                                      onClick={e => e.preventDefault()}
-                                      onChange={e => setHwSelection(prev => ({ ...prev, [item.id]: { qty: Math.max(1, Number(e.target.value) || 1) } }))}
-                                      className="w-12 border border-[#c7c7cc] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3] bg-white"/>
+                                    {isRequired ? (
+                                      <span className="w-12 text-[13px] text-center text-[#1d7a3a] font-medium">{sel.qty}</span>
+                                    ) : (
+                                      <input type="number" min={minQty} max={maxQty} value={sel.qty}
+                                        onClick={e => e.preventDefault()}
+                                        onChange={e => setHwSelection(prev => ({
+                                          ...prev,
+                                          [item.id]: { qty: Math.min(maxQty ?? 9999, Math.max(minQty, Number(e.target.value) || minQty)) },
+                                        }))}
+                                        className="w-12 border border-[#c7c7cc] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3] bg-white"/>
+                                    )}
                                     <span className="text-[13px] font-semibold font-mono text-[#0071e3] w-[72px] text-right whitespace-nowrap">
                                       {price > 0 ? `${(price * sel.qty).toLocaleString('ru-RU')} ₽` : '—'}
                                     </span>

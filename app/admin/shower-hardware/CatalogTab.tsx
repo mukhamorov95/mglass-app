@@ -16,6 +16,15 @@ export const SHOWER_TYPES = [
 ]
 const UNITS = ['шт', 'м.п.', 'хлыст', 'комплект']
 
+const SUBCATEGORIES: Record<string, string[]> = {
+  петли:        ['стена—стекло', 'стекло—стекло', 'нижняя'],
+  профили:      ['П-профиль', 'штанга', 'труба', 'добор', 'уголок'],
+  уплотнители:  ['магнитный', 'пороговый', 'капельник', 'Г-образный'],
+  ручки:        ['скоба', 'кнопка', 'скрытая'],
+  механизмы:    ['доводчик', 'фиксатор', 'замок'],
+  комплектующие: ['заглушка', 'шуруп', 'дюбель', 'вкладыш'],
+}
+
 export type Color    = { id: number; name: string; sort_order: number; active: boolean }
 export type Supplier = { id: number; name: string; active: boolean }
 
@@ -23,6 +32,16 @@ type Item = {
   id: number; name: string; article: string; category: string; unit: string
   whip_length: number | null; shower_types: string[]
   photo_url: string; url: string; comment: string; active: boolean
+  item_role: 'required' | 'optional' | 'addon'
+  depends_on_item_id: number | null
+  sort_order: number
+  min_qty: number
+  max_qty: number | null
+  hinge_type: 'wall-glass' | 'glass-glass' | null
+  track_type: 'open' | 'closed' | null
+  lead_days: number | null
+  stock_qty: number
+  subcategory: string | null
 }
 type Price = {
   id?: number; item_id: number; supplier_id: number; color_id: number
@@ -37,6 +56,16 @@ type FormState = {
   name: string; article: string; category: string; unit: string; whip_length: number | null
   shower_types: string[]; photo_url: string; url: string; comment: string; active: boolean
   prices: FormPriceRow[]
+  item_role: 'required' | 'optional' | 'addon'
+  depends_on_item_id: number | null
+  sort_order: number
+  min_qty: number
+  max_qty: number | null
+  hinge_type: 'wall-glass' | 'glass-glass' | null
+  track_type: 'open' | 'closed' | null
+  lead_days: number | null
+  stock_qty: number
+  subcategory: string | null
 }
 
 const EMPTY_PRICE: FormPriceRow = { supplier_id: null, color_id: null, website_price: '', discount_percent: '0', vat_included: false }
@@ -44,6 +73,10 @@ const EMPTY_FORM: FormState = {
   name: '', article: '', category: 'профили', unit: 'шт', whip_length: null,
   shower_types: [], photo_url: '', url: '', comment: '', active: true,
   prices: [{ ...EMPTY_PRICE }],
+  item_role: 'optional', depends_on_item_id: null,
+  sort_order: 0, min_qty: 1, max_qty: null,
+  hinge_type: null, track_type: null, lead_days: null,
+  stock_qty: 0, subcategory: null,
 }
 
 // ── Shared price-rows table ───────────────────────────────────────────────────
@@ -203,6 +236,16 @@ export function CatalogTab({
       article: rest.article ?? '',
       url: rest.url ?? '',
       comment: rest.comment ?? '',
+      item_role: rest.item_role ?? 'optional',
+      depends_on_item_id: rest.depends_on_item_id ?? null,
+      sort_order: rest.sort_order ?? 0,
+      min_qty: rest.min_qty ?? 1,
+      max_qty: rest.max_qty ?? null,
+      hinge_type: rest.hinge_type ?? null,
+      track_type: rest.track_type ?? null,
+      lead_days: rest.lead_days ?? null,
+      stock_qty: rest.stock_qty ?? 0,
+      subcategory: rest.subcategory ?? null,
       prices: (data ?? []).length
         ? (data ?? []).map(p => ({
             supplier_id: p.supplier_id, color_id: p.color_id,
@@ -249,6 +292,16 @@ export function CatalogTab({
         url: (form.url ?? '').trim(),
         comment: (form.comment ?? ''),
         active: form.active,
+        item_role: form.item_role,
+        depends_on_item_id: form.depends_on_item_id,
+        sort_order: form.sort_order,
+        min_qty: form.min_qty,
+        max_qty: form.max_qty,
+        hinge_type: form.hinge_type,
+        track_type: form.track_type,
+        lead_days: form.lead_days,
+        stock_qty: form.stock_qty,
+        subcategory: form.subcategory,
       }
 
       let itemId: number | null = null
@@ -293,6 +346,19 @@ export function CatalogTab({
   async function toggleActive(id: number, active: boolean) {
     await db.current.from('shower_catalog_items').update({ active: !active }).eq('id', id)
     setItems(prev => prev.map(i => i.id === id ? { ...i, active: !active } : i))
+  }
+
+  async function duplicateItem(item: Item) {
+    const { id: _, ...rest } = item
+    const copy = { ...rest, name: `${rest.name} (копия)`, active: false }
+    const { data, error } = await db.current.from('shower_catalog_items').insert(copy).select('id').single()
+    if (error || !data) return
+    const { data: priceData } = await db.current.from('shower_catalog_prices').select('*').eq('item_id', item.id)
+    if (priceData && priceData.length > 0) {
+      const newPrices = priceData.map(({ id: __, ...p }) => ({ ...p, item_id: data.id }))
+      await db.current.from('shower_catalog_prices').insert(newPrices)
+    }
+    await load()
   }
 
   // ── Price matrix (expanded view) ────────────────────────────────────────────
@@ -433,13 +499,106 @@ export function CatalogTab({
               </div>
             </div>
 
-            {/* Блок 3: Фото */}
+            {/* Блок 3: Поведение в калькуляторе */}
+            <div>
+              <p className="lbl mb-3">Поведение в калькуляторе</p>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+
+                <div>
+                  <label className="lbl">Роль позиции</label>
+                  <select value={form.item_role} onChange={e => setFF('item_role', e.target.value as FormState['item_role'])} className="inp">
+                    <option value="optional">Опциональная</option>
+                    <option value="required">Обязательная</option>
+                    <option value="addon">Дополнение (зависит от другой)</option>
+                  </select>
+                </div>
+
+                {form.item_role === 'addon' && (
+                  <div>
+                    <label className="lbl">Зависит от позиции (ID)</label>
+                    <select value={form.depends_on_item_id ?? ''} onChange={e => setFF('depends_on_item_id', e.target.value ? Number(e.target.value) : null)} className="inp">
+                      <option value="">— не выбрано —</option>
+                      {items.filter(i => i.id !== editId).map(i => (
+                        <option key={i.id} value={i.id}>{i.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="lbl">Порядок (sort_order)</label>
+                  <input type="number" value={form.sort_order} onChange={e => setFF('sort_order', Number(e.target.value) || 0)}
+                    placeholder="0" className="inp" />
+                </div>
+
+                <div>
+                  <label className="lbl">Мин. кол-во</label>
+                  <input type="number" min="1" value={form.min_qty} onChange={e => setFF('min_qty', Math.max(1, Number(e.target.value) || 1))}
+                    className="inp" />
+                </div>
+
+                <div>
+                  <label className="lbl">Макс. кол-во</label>
+                  <input type="number" min="1" value={form.max_qty ?? ''} onChange={e => setFF('max_qty', e.target.value ? Number(e.target.value) : null)}
+                    placeholder="без лимита" className="inp" />
+                </div>
+
+                <div>
+                  <label className="lbl">Срок поставки (дней)</label>
+                  <input type="number" min="0" value={form.lead_days ?? ''} onChange={e => setFF('lead_days', e.target.value ? Number(e.target.value) : null)}
+                    placeholder="напр. 14" className="inp" />
+                </div>
+
+                <div>
+                  <label className="lbl">Остаток на складе</label>
+                  <input type="number" min="0" value={form.stock_qty} onChange={e => setFF('stock_qty', Math.max(0, Number(e.target.value) || 0))}
+                    placeholder="0" className="inp" />
+                </div>
+
+                {SUBCATEGORIES[form.category] && (
+                  <div>
+                    <label className="lbl">Подкатегория</label>
+                    <select value={form.subcategory ?? ''} onChange={e => setFF('subcategory', e.target.value || null)} className="inp">
+                      <option value="">— без подкатегории —</option>
+                      {SUBCATEGORIES[form.category].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                )}
+
+                {/* Тип петель — только для петель распашной */}
+                {form.category === 'петли' && form.shower_types.includes('swing') && (
+                  <div>
+                    <label className="lbl">Тип петель</label>
+                    <select value={form.hinge_type ?? ''} onChange={e => setFF('hinge_type', (e.target.value || null) as FormState['hinge_type'])} className="inp">
+                      <option value="">— любой —</option>
+                      <option value="wall-glass">Стена — стекло</option>
+                      <option value="glass-glass">Стекло — стекло</option>
+                    </select>
+                  </div>
+                )}
+
+                {/* Тип трека — для раздвижной */}
+                {form.shower_types.includes('sliding') && (
+                  <div>
+                    <label className="lbl">Тип трека</label>
+                    <select value={form.track_type ?? ''} onChange={e => setFF('track_type', (e.target.value || null) as FormState['track_type'])} className="inp">
+                      <option value="">— любой —</option>
+                      <option value="open">Открытый</option>
+                      <option value="closed">Закрытый</option>
+                    </select>
+                  </div>
+                )}
+
+              </div>
+            </div>
+
+            {/* Блок 4: Фото */}
             <div>
               <p className="lbl mb-2">Фото</p>
               <ImagePicker value={form.photo_url} category={form.category} onChange={url => setFF('photo_url', url)} />
             </div>
 
-            {/* Блок 4: Цены */}
+            {/* Блок 5: Цены */}
             <div>
               <p className="lbl mb-2">Цены по поставщикам и цветам</p>
               <PriceRowsTable
@@ -449,7 +608,7 @@ export function CatalogTab({
               />
             </div>
 
-            {/* Блок 5: Статус */}
+            {/* Блок 6: Статус */}
             <div>
               <p className="lbl mb-2">Статус</p>
               <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#4b4b47]">
@@ -538,18 +697,44 @@ export function CatalogTab({
                   <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded">{item.category}</span>
                   <span className="text-[11px] text-[#9a9a95]">{item.unit}{item.whip_length ? ` ${item.whip_length}мм` : ''}</span>
                 </div>
-                {item.shower_types.length > 0 && (
-                  <div className="flex gap-1 mt-1">
+                {(item.shower_types.length > 0 || item.hinge_type || item.track_type || item.item_role !== 'optional') && (
+                  <div className="flex flex-wrap gap-1 mt-1">
                     {item.shower_types.map(t => (
                       <span key={t} className="text-[10px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">
                         {SHOWER_TYPES.find(st => st.v === t)?.l ?? t}
                       </span>
                     ))}
+                    {item.hinge_type && (
+                      <span className="text-[10px] bg-purple-50 text-purple-600 px-1.5 py-0.5 rounded-full">
+                        {item.hinge_type === 'wall-glass' ? 'стена—стекло' : 'стекло—стекло'}
+                      </span>
+                    )}
+                    {item.track_type && (
+                      <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded-full">
+                        {item.track_type === 'open' ? 'открытый трек' : 'закрытый трек'}
+                      </span>
+                    )}
+                    {item.item_role === 'required' && (
+                      <span className="text-[10px] bg-green-50 text-green-700 px-1.5 py-0.5 rounded-full font-semibold">обяз.</span>
+                    )}
+                    {item.item_role === 'addon' && (
+                      <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">доп.</span>
+                    )}
+                    {item.lead_days && (
+                      <span className="text-[10px] bg-[#f5f5f3] text-[#6b6b66] px-1.5 py-0.5 rounded-full">{item.lead_days} дн.</span>
+                    )}
+                    {item.subcategory && (
+                      <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded-full">{item.subcategory}</span>
+                    )}
+                    {item.stock_qty > 0 && (
+                      <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">склад: {item.stock_qty}</span>
+                    )}
                   </div>
                 )}
               </div>
               <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                 <button onClick={() => startEdit(item)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изм.</button>
+                <button onClick={() => duplicateItem(item)} className="text-[12px] text-[#9a9a95] hover:text-[#4b4b47]" title="Дублировать позицию">Дубль</button>
                 <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">
                   {item.active ? 'Скрыть' : 'Показать'}
                 </button>
