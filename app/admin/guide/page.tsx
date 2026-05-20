@@ -1,13 +1,60 @@
 'use client'
 
+import { useState, useEffect } from 'react'
+
+// Каждый новый блок получает уникальный id.
+// Добавь сюда id нового блока — он подсветится жёлтым пока не нажата кнопка.
+const NEW_ITEMS = ['daily-checklist', 'responsibilities', 'system-buying', 'system-logistics', 'kpi', 'mistakes', 'tools']
+
+const STORAGE_KEY = 'guide_acknowledged_v1'
+
+function useAcknowledged() {
+  const [acked, setAcked] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+      setAcked(new Set(stored))
+    } catch { /* ignore */ }
+  }, [])
+
+  function acknowledge(id: string) {
+    setAcked(prev => {
+      const next = new Set(prev)
+      next.add(id)
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...next])) } catch { /* ignore */ }
+      return next
+    })
+  }
+
+  return { acked, acknowledge }
+}
+
 export default function GuidePage() {
+  const { acked, acknowledge } = useAcknowledged()
+  const allAcked = NEW_ITEMS.every(id => acked.has(id))
+
   return (
     <div className="min-h-screen bg-[#f8f8f7] p-6">
       <div className="max-w-3xl mx-auto space-y-5">
 
+        {/* Заголовок */}
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110]">Регламент: Логист / Закупщик</h1>
           <p className="text-[12px] text-[#9a9a95] mt-0.5">Вера — MGlass, версия май 2025</p>
+        </div>
+
+        {/* Баннер "пополняется" */}
+        <div className="bg-[#111110] text-white rounded-xl px-6 py-5">
+          <p className="text-[22px] font-bold leading-tight">📌 Регламент постоянно пополняется.</p>
+          <p className="text-[15px] text-[#a0a09a] mt-1">Новые разделы подсвечены жёлтым — прочитай и нажми «Ознакомилась».</p>
+          {allAcked ? (
+            <p className="mt-3 text-[13px] text-emerald-400 font-semibold">✓ Все разделы прочитаны</p>
+          ) : (
+            <p className="mt-3 text-[13px] text-amber-400 font-semibold">
+              {NEW_ITEMS.filter(id => !acked.has(id)).length} непрочитанных разделов
+            </p>
+          )}
         </div>
 
         {/* Главная цель */}
@@ -24,8 +71,7 @@ export default function GuidePage() {
           </div>
         </div>
 
-        {/* Ежедневный чеклист */}
-        <Section title="☀️ Ежедневный чеклист (утро)">
+        <NewSection id="daily-checklist" title="☀️ Ежедневный чеклист (утро)" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
@@ -43,15 +89,14 @@ export default function GuidePage() {
                 <Li>Маршрутный лист на сегодня</Li>
                 <Li>Заказы, ожидающие доставки</Li>
                 <Li>Наличие водителей</Li>
-                <Li>Подтверждения доставок вчера</Li>
+                <Li>Подтверждения доставок вчерашнего дня</Li>
                 <Li>Обратная связь от клиентов о доставке</Li>
               </ul>
             </div>
           </div>
-        </Section>
+        </NewSection>
 
-        {/* Обязанности */}
-        <Section title="📋 Обязанности">
+        <NewSection id="responsibilities" title="📋 Обязанности" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
@@ -78,10 +123,9 @@ export default function GuidePage() {
               </ul>
             </div>
           </div>
-        </Section>
+        </NewSection>
 
-        {/* Работа в системе — Закупки */}
-        <Section title="💻 Работа в системе — Закупки">
+        <NewSection id="system-buying" title="💻 Работа в системе — Закупки" acked={acked} onAck={acknowledge}>
           <Steps>
             <Step n={1}>Открой раздел <b>Фурнитура душевых</b> → вкладка <b>Каталог</b>. Здесь весь каталог позиций.</Step>
             <Step n={2}>Нажми <b>«+ Добавить позицию»</b> чтобы добавить новую. Заполни: наименование, категорию, подкатегорию, где используется.</Step>
@@ -94,10 +138,9 @@ export default function GuidePage() {
           <div className="mt-3 text-[12px] text-[#6b6b66] bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
             ⚠️ Если поставщик прекратил поставку цвета — обнули цену (поставь 0), не удаляй строку. Менеджер увидит «нет у поставщика».
           </div>
-        </Section>
+        </NewSection>
 
-        {/* Работа в системе — Логистика */}
-        <Section title="🚚 Работа в системе — Логистика">
+        <NewSection id="system-logistics" title="🚚 Работа в системе — Логистика" acked={acked} onAck={acknowledge}>
           <Steps>
             <Step n={1}>Открой раздел <b>Заказы MGlass</b> — список всех активных заказов. Смотри статус «Готов к доставке».</Step>
             <Step n={2}>Открой <b>Маршрутный лист</b> — составь маршрут на день, добавь адреса доставок.</Step>
@@ -105,10 +148,9 @@ export default function GuidePage() {
             <Step n={4}>После доставки отметь подтверждение в заказе. Приложи фото если нужно.</Step>
             <Step n={5}>При проблеме на маршруте — уведоми руководителя и зафиксируй в системе.</Step>
           </Steps>
-        </Section>
+        </NewSection>
 
-        {/* KPI */}
-        <Section title="📊 KPI">
+        <NewSection id="kpi" title="📊 KPI" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
@@ -130,10 +172,9 @@ export default function GuidePage() {
               </ul>
             </div>
           </div>
-        </Section>
+        </NewSection>
 
-        {/* Ошибки и запреты */}
-        <Section title="🚫 Типичные ошибки и запреты">
+        <NewSection id="mistakes" title="🚫 Типичные ошибки и запреты" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <p className="text-[11px] font-bold text-red-500 uppercase tracking-wide mb-2">Не делать</p>
@@ -156,26 +197,51 @@ export default function GuidePage() {
               </ul>
             </div>
           </div>
-        </Section>
+        </NewSection>
 
-        {/* Инструменты */}
-        <Section title="🛠️ Инструменты">
+        <NewSection id="tools" title="🛠️ Инструменты" acked={acked} onAck={acknowledge}>
           <div className="flex flex-wrap gap-2">
             {['MGlass Заказы', 'MGlass Маршрутный лист', 'Фурнитура душевых', 'Поставщики', 'Материалы', 'Admin Panel', 'Telegram', 'Яндекс.Карты', 'Excel'].map(t => (
               <span key={t} className="px-3 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[12px] rounded-full">{t}</span>
             ))}
           </div>
-        </Section>
+        </NewSection>
 
       </div>
     </div>
   )
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+// ─── Блок с подсветкой и кнопкой ─────────────────────────────────────────────
+
+function NewSection({
+  id, title, children, acked, onAck,
+}: {
+  id: string
+  title: string
+  children: React.ReactNode
+  acked: Set<string>
+  onAck: (id: string) => void
+}) {
+  const isNew = !acked.has(id)
+
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl px-6 py-5">
-      <h2 className="text-[14px] font-semibold text-[#111110] mb-3">{title}</h2>
+    <div className={`rounded-xl border px-6 py-5 transition-colors ${
+      isNew ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-[#e4e4e0]'
+    }`}>
+      <div className="flex items-start justify-between gap-3 mb-3">
+        <h2 className="text-[14px] font-semibold text-[#111110]">
+          {isNew && <span className="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-2 mb-0.5" />}
+          {title}
+        </h2>
+        {isNew && (
+          <button
+            onClick={() => onAck(id)}
+            className="flex-shrink-0 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-yellow-400 text-yellow-900 hover:bg-yellow-500 transition-colors whitespace-nowrap">
+            ✓ Ознакомилась
+          </button>
+        )}
+      </div>
       <div className="text-[13px] text-[#4b4b47] leading-relaxed">{children}</div>
     </div>
   )
