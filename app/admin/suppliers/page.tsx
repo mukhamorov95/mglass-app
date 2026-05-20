@@ -1,30 +1,70 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
+
+type SupplierStatus = 'active' | 'inactive' | 'paused' | 'problem'
 
 type Supplier = {
-  id:        string
-  name:      string
-  contact:   string | null
-  phone:     string | null
-  email:     string | null
-  materials: string | null
-  notes:     string | null
-  active:    boolean
+  id:              string
+  name:            string
+  contact:         string | null
+  phone:           string | null
+  email:           string | null
+  whatsapp:        string | null
+  telegram:        string | null
+  address:         string | null
+  city:            string | null
+  work_hours:      string | null
+  materials:       string | null
+  type:            string | null
+  notes:           string | null
+  active:          boolean
+  has_vat:         boolean
+  status:          SupplierStatus
+  priority:        number
+  lead_time_days:  number | null
+  updated_at:      string | null
 }
 
-const EMPTY: Omit<Supplier, 'id'> = {
-  name: '', contact: '', phone: '', email: '', materials: '', notes: '', active: true,
+type FormState = Omit<Supplier, 'id' | 'updated_at'>
+
+const SUPPLIER_TYPES = ['стекло', 'зеркало', 'фурнитура', 'LED', 'упаковка', 'профиль', 'расходники', 'логистика', 'прочее']
+
+const STATUS_META: Record<SupplierStatus, { label: string; cls: string }> = {
+  active:   { label: 'Активный',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  inactive: { label: 'Неактивный',  cls: 'bg-gray-100   text-gray-500   border-gray-200'    },
+  paused:   { label: 'На паузе',    cls: 'bg-amber-50   text-amber-700  border-amber-200'   },
+  problem:  { label: 'Проблемный',  cls: 'bg-red-50     text-red-700    border-red-200'     },
+}
+
+const PRIORITY_META: Record<number, { label: string; cls: string }> = {
+  1: { label: 'Высокий',  cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  2: { label: 'Средний',  cls: 'bg-gray-50 text-gray-500 border-gray-200' },
+  3: { label: 'Низкий',   cls: 'bg-gray-50 text-gray-400 border-gray-200' },
+}
+
+const EMPTY: FormState = {
+  name: '', contact: '', phone: '', email: '', whatsapp: '', telegram: '',
+  address: '', city: '', work_hours: '', materials: '', type: '',
+  notes: '', active: true, has_vat: true, status: 'active', priority: 2, lead_time_days: null,
 }
 
 export default function SuppliersPage() {
-  const [suppliers, setSuppliers] = useState<Supplier[]>([])
-  const [loading, setLoading]     = useState(true)
-  const [editing, setEditing]     = useState<Supplier | null>(null)
-  const [form, setForm]           = useState(EMPTY)
-  const [saving, setSaving]       = useState(false)
-  const [error, setError]         = useState('')
-  const [search, setSearch]       = useState('')
+  const [suppliers, setSuppliers]   = useState<Supplier[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [modal, setModal]           = useState<'none' | 'create' | 'edit' | 'detail'>('none')
+  const [selected, setSelected]     = useState<Supplier | null>(null)
+  const [form, setForm]             = useState<FormState>(EMPTY)
+  const [saving, setSaving]         = useState(false)
+  const [error, setError]           = useState('')
+  const [toast, setToast]           = useState<string | null>(null)
+
+  // filters
+  const [search,         setSearch]         = useState('')
+  const [filterStatus,   setFilterStatus]   = useState<SupplierStatus | 'all'>('all')
+  const [filterType,     setFilterType]     = useState<string>('all')
+
+  function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
   useEffect(() => { load() }, [])
 
@@ -32,155 +72,394 @@ export default function SuppliersPage() {
     setLoading(true)
     const res  = await fetch('/api/admin/suppliers')
     const data = await res.json()
-    setSuppliers(data)
+    setSuppliers(res.ok ? data : [])
     setLoading(false)
   }
 
-  function openNew() {
-    setEditing(null)
+  function openCreate() {
     setForm(EMPTY)
     setError('')
+    setModal('create')
   }
 
-  function openEdit(s: Supplier) {
-    setEditing(s)
-    setForm({ name: s.name, contact: s.contact ?? '', phone: s.phone ?? '', email: s.email ?? '', materials: s.materials ?? '', notes: s.notes ?? '', active: s.active })
+  function openEdit(s: Supplier, e?: React.MouseEvent) {
+    e?.stopPropagation()
+    setSelected(s)
+    setForm({
+      name: s.name, contact: s.contact ?? '', phone: s.phone ?? '', email: s.email ?? '',
+      whatsapp: s.whatsapp ?? '', telegram: s.telegram ?? '', address: s.address ?? '',
+      city: s.city ?? '', work_hours: s.work_hours ?? '', materials: s.materials ?? '',
+      type: s.type ?? '', notes: s.notes ?? '', active: s.active, has_vat: s.has_vat,
+      status: s.status, priority: s.priority, lead_time_days: s.lead_time_days,
+    })
     setError('')
+    setModal('edit')
+  }
+
+  function openDetail(s: Supplier) {
+    setSelected(s)
+    setModal('detail')
   }
 
   async function save() {
     if (!form.name.trim()) { setError('Название обязательно'); return }
-    setSaving(true)
-    setError('')
-    const res = await fetch('/api/admin/suppliers' + (editing ? `/${editing.id}` : ''), {
-      method:  editing ? 'PATCH' : 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify(form),
-    })
+    setSaving(true); setError('')
+    const isEdit = modal === 'edit' && selected
+
+    const res = await fetch(
+      isEdit ? `/api/admin/suppliers/${selected.id}` : '/api/admin/suppliers',
+      {
+        method:  isEdit ? 'PATCH' : 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ ...(isEdit ? { id: selected.id } : {}), ...form }),
+      }
+    )
     const data = await res.json()
     if (!res.ok) { setError(data.error ?? 'Ошибка'); setSaving(false); return }
-    await load()
-    setEditing(null)
-    setForm(EMPTY)
+
+    if (isEdit) {
+      setSuppliers(prev => prev.map(s => s.id === selected.id ? { ...s, ...data } : s))
+      showToast('Поставщик обновлён')
+    } else {
+      setSuppliers(prev => [data, ...prev])
+      showToast('Поставщик добавлен')
+    }
+    setModal('none')
     setSaving(false)
   }
 
-  async function toggle(s: Supplier) {
-    await fetch(`/api/admin/suppliers/${s.id}`, {
+  async function toggleStatus(s: Supplier, status: SupplierStatus, e: React.MouseEvent) {
+    e.stopPropagation()
+    const res = await fetch(`/api/admin/suppliers/${s.id}`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body:    JSON.stringify({ active: !s.active }),
+      body:    JSON.stringify({ status, active: status === 'active' }),
     })
-    await load()
+    if (res.ok) {
+      const updated = await res.json()
+      setSuppliers(prev => prev.map(x => x.id === s.id ? { ...x, ...updated } : x))
+    }
   }
 
-  const visible = suppliers.filter(s =>
-    s.name.toLowerCase().includes(search.toLowerCase()) ||
-    (s.materials ?? '').toLowerCase().includes(search.toLowerCase())
-  )
+  const visible = useMemo(() => {
+    return suppliers.filter(s => {
+      if (filterStatus !== 'all' && s.status !== filterStatus) return false
+      if (filterType !== 'all' && s.type !== filterType) return false
+      if (search.trim()) {
+        const q = search.toLowerCase()
+        const haystack = [s.name, s.contact, s.phone, s.city, s.materials, s.type].join(' ').toLowerCase()
+        if (!haystack.includes(q)) return false
+      }
+      return true
+    })
+  }, [suppliers, filterStatus, filterType, search])
 
-  const inp = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]'
+  const counts = useMemo(() => {
+    const c: Record<string, number> = { all: suppliers.length }
+    for (const s of suppliers) { c[s.status] = (c[s.status] ?? 0) + 1 }
+    return c
+  }, [suppliers])
+
+  const inp = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white'
 
   return (
-    <div className="max-w-4xl mx-auto px-6 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-[20px] font-bold text-[#111110]">Поставщики</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Справочник поставщиков материалов</p>
-        </div>
-        <button onClick={openNew}
-          className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
-          + Добавить
-        </button>
-      </div>
-
-      <input
-        value={search} onChange={e => setSearch(e.target.value)}
-        placeholder="Поиск по названию или материалам..."
-        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] mb-4 outline-none focus:border-[#0071e3]"
-      />
-
-      {/* Form */}
-      {(editing !== null || form !== EMPTY) && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-4 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110] mb-1">{editing ? 'Редактировать' : 'Новый поставщик'}</p>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Название *</p>
-              <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className={inp} />
-            </div>
-            <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Контактное лицо</p>
-              <input value={form.contact ?? ''} onChange={e => setForm(f => ({...f, contact: e.target.value}))} className={inp} />
-            </div>
-            <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Телефон</p>
-              <input value={form.phone ?? ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} className={inp} />
-            </div>
-            <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Email</p>
-              <input value={form.email ?? ''} onChange={e => setForm(f => ({...f, email: e.target.value}))} className={inp} />
-            </div>
-          </div>
-          <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Материалы / Номенклатура</p>
-            <input value={form.materials ?? ''} onChange={e => setForm(f => ({...f, materials: e.target.value}))} placeholder="Зеркало, профиль, фурнитура..." className={inp} />
-          </div>
-          <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Заметки</p>
-            <textarea value={form.notes ?? ''} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} className={inp + ' resize-none'} />
-          </div>
-          {error && <p className="text-[12px] text-red-600">{error}</p>}
-          <div className="flex gap-2">
-            <button onClick={save} disabled={saving}
-              className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
-              {saving ? 'Сохраняю...' : 'Сохранить'}
-            </button>
-            <button onClick={() => { setEditing(null); setForm(EMPTY) }}
-              className="px-4 py-2 border border-[#e4e4e0] text-[13px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
-              Отмена
-            </button>
-          </div>
+    <div className="min-h-screen bg-[#f8f8f7]">
+      {toast && (
+        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
+          {toast}
         </div>
       )}
 
-      {loading ? (
-        <p className="text-[13px] text-[#9a9a95] text-center py-8">Загрузка...</p>
-      ) : visible.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-          <p className="text-[13px] text-[#9a9a95]">Поставщики не найдены</p>
+      <div className="max-w-5xl mx-auto px-6 py-6 space-y-4">
+
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-[18px] font-semibold text-[#111110]">Поставщики</h1>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">Централизованная база снабжения MGlass</p>
+          </div>
+          <button onClick={openCreate}
+            className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28] transition-colors">
+            + Добавить поставщика
+          </button>
         </div>
-      ) : (
-        <div className="space-y-2">
-          {visible.map(s => (
-            <div key={s.id} className={`bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 flex items-start justify-between gap-4 ${!s.active ? 'opacity-50' : ''}`}>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-[14px] font-semibold text-[#111110]">{s.name}</p>
-                  {!s.active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Неактивен</span>}
-                </div>
-                {s.materials && <p className="text-[12px] text-[#6b6b66]">Материалы: {s.materials}</p>}
-                <div className="flex gap-3 mt-1 flex-wrap">
-                  {s.contact && <span className="text-[11px] text-[#9a9a95]">👤 {s.contact}</span>}
-                  {s.phone   && <span className="text-[11px] text-[#9a9a95]">📞 {s.phone}</span>}
-                  {s.email   && <span className="text-[11px] text-[#9a9a95]">✉ {s.email}</span>}
-                </div>
-                {s.notes && <p className="text-[11px] text-[#b4b4b0] mt-1">{s.notes}</p>}
-              </div>
-              <div className="flex gap-2 flex-shrink-0">
-                <button onClick={() => openEdit(s)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
-                  Изменить
-                </button>
-                <button onClick={() => toggle(s)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
-                  {s.active ? 'Скрыть' : 'Включить'}
-                </button>
-              </div>
-            </div>
+
+        {/* Status filter pills */}
+        <div className="flex gap-2 flex-wrap">
+          {([
+            { key: 'all',      label: `Все (${counts.all ?? 0})` },
+            { key: 'active',   label: `Активные (${counts.active ?? 0})` },
+            { key: 'paused',   label: `На паузе (${counts.paused ?? 0})` },
+            { key: 'problem',  label: `Проблемные (${counts.problem ?? 0})` },
+            { key: 'inactive', label: `Неактивные (${counts.inactive ?? 0})` },
+          ] as const).map(f => (
+            <button key={f.key}
+              onClick={() => setFilterStatus(f.key)}
+              className={`text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f.key ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`}>
+              {f.label}
+            </button>
           ))}
         </div>
+
+        {/* Search + type filter */}
+        <div className="flex gap-2">
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Поиск по названию, телефону, городу, категории..."
+            className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white"
+          />
+          <select
+            value={filterType} onChange={e => setFilterType(e.target.value)}
+            className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white">
+            <option value="all">Все типы</option>
+            {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
+        </div>
+
+        {/* List */}
+        {loading ? (
+          <p className="text-center py-12 text-[13px] text-[#9a9a95]">Загрузка...</p>
+        ) : visible.length === 0 ? (
+          <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
+            <p className="text-[13px] text-[#9a9a95]">Поставщики не найдены</p>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {visible.map(s => {
+              const sm = STATUS_META[s.status] ?? STATUS_META.inactive
+              const pm = PRIORITY_META[s.priority] ?? PRIORITY_META[2]
+              return (
+                <div key={s.id}
+                  onClick={() => openDetail(s)}
+                  className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 cursor-pointer hover:border-[#111110] transition-colors group">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-1">
+                        <p className="text-[14px] font-semibold text-[#111110]">{s.name}</p>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sm.cls}`}>{sm.label}</span>
+                        {s.type && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{s.type}</span>
+                        )}
+                        {s.priority === 1 && (
+                          <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${pm.cls}`}>★ {pm.label}</span>
+                        )}
+                        {!s.has_vat && (
+                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">без НДС</span>
+                        )}
+                      </div>
+                      <div className="flex gap-4 flex-wrap">
+                        {s.city     && <span className="text-[11px] text-[#9a9a95]">📍 {s.city}</span>}
+                        {s.contact  && <span className="text-[11px] text-[#9a9a95]">👤 {s.contact}</span>}
+                        {s.phone    && <span className="text-[11px] text-[#9a9a95]">📞 {s.phone}</span>}
+                        {s.telegram && <span className="text-[11px] text-[#9a9a95]">✈️ {s.telegram}</span>}
+                        {s.work_hours && <span className="text-[11px] text-[#9a9a95]">🕐 {s.work_hours}</span>}
+                        {s.lead_time_days && <span className="text-[11px] text-[#9a9a95]">⏱ {s.lead_time_days} дн.</span>}
+                      </div>
+                      {s.materials && (
+                        <p className="text-[11px] text-[#6b6b66] mt-1">{s.materials}</p>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button
+                        onClick={e => openEdit(s, e)}
+                        className="px-3 py-1.5 text-[11px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                        Изменить
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Create / Edit modal */}
+      {(modal === 'create' || modal === 'edit') && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-[16px] font-semibold text-[#111110]">
+                {modal === 'create' ? '+ Новый поставщик' : 'Редактировать поставщика'}
+              </h2>
+              <button onClick={() => setModal('none')} className="text-[#9a9a95] hover:text-[#111110] text-xl">×</button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label>Название *</Label>
+                <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className={inp} placeholder="ООО Поставщик" />
+              </div>
+
+              <div>
+                <Label>Тип поставок</Label>
+                <select value={form.type ?? ''} onChange={e => setForm(f => ({...f, type: e.target.value}))} className={inp}>
+                  <option value="">— выбери —</option>
+                  {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <Label>Статус</Label>
+                <select value={form.status} onChange={e => setForm(f => ({...f, status: e.target.value as SupplierStatus}))} className={inp}>
+                  <option value="active">Активный</option>
+                  <option value="paused">На паузе</option>
+                  <option value="problem">Проблемный</option>
+                  <option value="inactive">Неактивный</option>
+                </select>
+              </div>
+
+              <div>
+                <Label>Контактное лицо</Label>
+                <input value={form.contact ?? ''} onChange={e => setForm(f => ({...f, contact: e.target.value}))} className={inp} />
+              </div>
+              <div>
+                <Label>Телефон</Label>
+                <input value={form.phone ?? ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} className={inp} placeholder="+7 (999) 000-00-00" />
+              </div>
+              <div>
+                <Label>WhatsApp</Label>
+                <input value={form.whatsapp ?? ''} onChange={e => setForm(f => ({...f, whatsapp: e.target.value}))} className={inp} placeholder="+7 ..." />
+              </div>
+              <div>
+                <Label>Telegram</Label>
+                <input value={form.telegram ?? ''} onChange={e => setForm(f => ({...f, telegram: e.target.value}))} className={inp} placeholder="@username" />
+              </div>
+              <div>
+                <Label>Email</Label>
+                <input value={form.email ?? ''} onChange={e => setForm(f => ({...f, email: e.target.value}))} className={inp} />
+              </div>
+              <div>
+                <Label>Город</Label>
+                <input value={form.city ?? ''} onChange={e => setForm(f => ({...f, city: e.target.value}))} className={inp} placeholder="Москва" />
+              </div>
+              <div className="col-span-2">
+                <Label>Адрес склада</Label>
+                <input value={form.address ?? ''} onChange={e => setForm(f => ({...f, address: e.target.value}))} className={inp} />
+              </div>
+              <div>
+                <Label>График работы</Label>
+                <input value={form.work_hours ?? ''} onChange={e => setForm(f => ({...f, work_hours: e.target.value}))} className={inp} placeholder="Пн-Пт 9:00–18:00" />
+              </div>
+              <div>
+                <Label>Срок поставки (дни)</Label>
+                <input type="number" min="1" value={form.lead_time_days ?? ''} onChange={e => setForm(f => ({...f, lead_time_days: e.target.value ? Number(e.target.value) : null}))} className={inp} placeholder="3" />
+              </div>
+              <div className="col-span-2">
+                <Label>Категория материалов</Label>
+                <input value={form.materials ?? ''} onChange={e => setForm(f => ({...f, materials: e.target.value}))} className={inp} placeholder="Зеркало, профиль, фурнитура..." />
+              </div>
+              <div>
+                <Label>Приоритет</Label>
+                <select value={form.priority} onChange={e => setForm(f => ({...f, priority: Number(e.target.value)}))} className={inp}>
+                  <option value={1}>★ Высокий</option>
+                  <option value={2}>Средний</option>
+                  <option value={3}>Низкий</option>
+                </select>
+              </div>
+              <div className="flex flex-col gap-2 pt-5">
+                <label className="flex items-center gap-2 text-[12px] text-[#4b4b47] cursor-pointer">
+                  <input type="checkbox" checked={form.has_vat} onChange={e => setForm(f => ({...f, has_vat: e.target.checked}))} className="rounded" />
+                  Работает с НДС
+                </label>
+              </div>
+              <div className="col-span-2">
+                <Label>Комментарий</Label>
+                <textarea value={form.notes ?? ''} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={3} className={inp + ' resize-none'} />
+              </div>
+            </div>
+
+            {error && <p className="text-[12px] text-red-600">{error}</p>}
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={save} disabled={saving}
+                className="flex-1 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
+                {saving ? 'Сохраняю...' : modal === 'create' ? 'Добавить поставщика' : 'Сохранить изменения'}
+              </button>
+              <button onClick={() => setModal('none')}
+                className="px-4 py-2.5 border border-[#e4e4e0] text-[13px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+                Отмена
+              </button>
+            </div>
+          </div>
+        </div>
       )}
+
+      {/* Detail modal */}
+      {modal === 'detail' && selected && (
+        <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-[16px] font-semibold text-[#111110]">{selected.name}</h2>
+                <div className="flex gap-2 mt-1 flex-wrap">
+                  <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_META[selected.status]?.cls ?? ''}`}>
+                    {STATUS_META[selected.status]?.label}
+                  </span>
+                  {selected.type && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{selected.type}</span>
+                  )}
+                  {!selected.has_vat && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">без НДС</span>
+                  )}
+                </div>
+              </div>
+              <button onClick={() => setModal('none')} className="text-[#9a9a95] hover:text-[#111110] text-xl flex-shrink-0">×</button>
+            </div>
+
+            <div className="space-y-2 text-[12px]">
+              {selected.contact    && <Row label="Контакт"    value={selected.contact} />}
+              {selected.phone      && <Row label="Телефон"    value={selected.phone} />}
+              {selected.whatsapp   && <Row label="WhatsApp"   value={selected.whatsapp} />}
+              {selected.telegram   && <Row label="Telegram"   value={selected.telegram} />}
+              {selected.email      && <Row label="Email"      value={selected.email} />}
+              {selected.city       && <Row label="Город"      value={selected.city} />}
+              {selected.address    && <Row label="Адрес"      value={selected.address} />}
+              {selected.work_hours && <Row label="Режим"      value={selected.work_hours} />}
+              {selected.lead_time_days && <Row label="Срок поставки" value={`${selected.lead_time_days} дн.`} />}
+              {selected.materials  && <Row label="Материалы"  value={selected.materials} />}
+              {selected.notes      && <Row label="Заметка"    value={selected.notes} />}
+            </div>
+
+            <div>
+              <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide mb-2">Изменить статус</p>
+              <div className="flex gap-2 flex-wrap">
+                {(Object.keys(STATUS_META) as SupplierStatus[]).map(st => (
+                  <button key={st}
+                    onClick={e => { toggleStatus(selected, st, e); setSelected({ ...selected, status: st }); }}
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${selected.status === st ? STATUS_META[st].cls : 'bg-white text-[#9a9a95] border-[#e4e4e0] hover:border-[#111110]'}`}>
+                    {STATUS_META[st].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => openEdit(selected)}
+                className="flex-1 py-2 bg-[#111110] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2a2a28]">
+                Редактировать
+              </button>
+              <button onClick={() => setModal('none')}
+                className="px-4 py-2 border border-[#e4e4e0] text-[12px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+                Закрыть
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">{children}</p>
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex gap-3">
+      <span className="text-[#9a9a95] w-28 flex-shrink-0">{label}</span>
+      <span className="text-[#111110] break-all">{value}</span>
     </div>
   )
 }

@@ -98,6 +98,7 @@ export default function B2BCalculatorPage() {
   const [managerId, setManagerId]       = useState<string | null>(null)
   const [managerCode, setManagerCode]   = useState<number | null>(null)
   const [isAdmin, setIsAdmin]           = useState(false)
+  const [maxDiscount, setMaxDiscount]   = useState<number>(100)
 
   // New client modal
   const [showNewClient, setShowNewClient] = useState(false)
@@ -177,9 +178,10 @@ export default function B2BCalculatorPage() {
       let userIsAdmin = false
       let userManagerCode: number | null = null
       if (user?.id) {
-        const { data: profile } = await sb.from('users').select('role,manager_code').eq('id', user.id).single()
+        const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent').eq('id', user.id).single()
         userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
         userManagerCode = profile?.manager_code ?? null
+        if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
       }
       setIsAdmin(userIsAdmin)
       setManagerCode(userManagerCode)
@@ -1000,7 +1002,9 @@ export default function B2BCalculatorPage() {
                     <span className="text-[12px] text-[#6b6b66]">{selectedClient.name}</span>
                   )}
                   {discount > 0 && (
-                    <span className="text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">скидка {discount}%</span>
+                    <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${discount > maxDiscount ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
+                      скидка {discount}%{discount > maxDiscount ? ` — превышает ваш лимит ${maxDiscount}%` : ''}
+                    </span>
                   )}
                 </div>
                 {items.length > 0 && (
@@ -1208,7 +1212,12 @@ export default function B2BCalculatorPage() {
                   </div>
                 </details>
 
-                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0}
+                {discount > maxDiscount && !isAdmin && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-[12px] text-red-700 font-medium">
+                    ⚠️ Скидка клиента {discount}% превышает ваш лимит {maxDiscount}%. Согласуйте с руководителем.
+                  </div>
+                )}
+                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || (!isAdmin && discount > maxDiscount)}
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
                 </button>

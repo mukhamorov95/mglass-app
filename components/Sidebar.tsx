@@ -42,6 +42,7 @@ const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
+  { href: '/admin/archive',  label: 'Архив расчётов',  icon: '📁' },
 ]
 
 // ─── Buyer role ───────────────────────────────────────────────────────────────
@@ -218,6 +219,7 @@ const ADMIN_B2B: NavEntry[] = [
   { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
+  { href: '/admin/archive',          label: 'Архив расчётов',    icon: '📁' },
 ]
 
 const ADMIN_OPERATIONS: NavItem[] = [

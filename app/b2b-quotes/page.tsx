@@ -274,7 +274,17 @@ export default function B2BQuotesPage() {
       .limit(2000)
 
     if (!canSeeAll) {
-      ordersQuery = ordersQuery.eq('created_by', user.id)
+      // Show quotes created by this manager OR for clients assigned to this manager
+      const { data: myClients } = await sb
+        .from('b2b_clients')
+        .select('id')
+        .eq('manager_id', user.id)
+      const myClientIds = (myClients ?? []).map((c: { id: number }) => c.id)
+      if (myClientIds.length > 0) {
+        ordersQuery = ordersQuery.or(`created_by.eq.${user.id},client_id.in.(${myClientIds.join(',')})`)
+      } else {
+        ordersQuery = ordersQuery.eq('created_by', user.id)
+      }
     }
 
     const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
