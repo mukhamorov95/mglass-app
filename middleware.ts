@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { canAccess, type Role } from './lib/getRole'
 
-const VALID_ROLES: Role[] = ['admin', 'manager', 'production', 'seo', 'ceo']
+const VALID_ROLES: Role[] = ['admin', 'manager', 'production', 'seo', 'ceo', 'buyer']
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
