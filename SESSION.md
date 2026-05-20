@@ -1,37 +1,37 @@
 ## Текущая задача
 Нет активной задачи
 
-## Что сделано (сессия 19 мая)
+## Что сделано (сессия 20 мая)
 
-### Фацет — единый справочник
-- `lib/mirrorCalculator.ts` — добавлены поля фацета в MirrorInputs, расчёт в costLines
-- `app/calculator/mirror/page.tsx` — загрузка facet_prices, UI выбора типа фацета
-- `components/Sidebar.tsx` — фацет перенесён из B2B → общий раздел Справочники
-- `lib/quickCalc.ts` — добавлены обязательные поля hasFacet/facetTypeMm/facetCostPerM/facetSalePerM
+### ERP инфраструктура — закупки/склад/логистика
+- `app/admin/stock-control` — дашборд критических остатков (фурнитура + материалы), ручное обновление
+- `app/admin/procurement` — Канбан закупок, 8 статусов, карточки счетов
+- `app/admin/procurement-routes` — маршруты к поставщикам, редактор точек, печать
+- `app/api/admin/purchase-orders` — CRUD API
+- `app/api/admin/procurement-routes` — CRUD API
+- `lib/getRole.ts` — новые пути в ROLE_ALLOWED.buyer
+- `app/admin/guide` — расширен регламент (14 разделов, полный ERP)
 
-### Изоляция расчётов менеджера
-- `app/calculations/page.tsx` — передаётся userId в клиентский компонент
-- `app/calculations/CalculationsClient.tsx` — фильтр .eq('created_by', userId) для не-админов
+### Поставщики — полная переработка
+- `app/admin/suppliers` — статусы, типы, WhatsApp/Telegram/адрес/город/режим/срок/НДС/приоритет, модалки, фильтры
+- `app/api/admin/suppliers` — buyer разрешён на POST/PATCH, DELETE только admin
+- `app/api/admin/suppliers/[id]` — аналогично
 
-### B2B клиенты — изоляция менеджеров
-- `lib/getRole.ts` — /b2b-crm убран из ROLE_ALLOWED для manager (редирект на /access-denied)
-- `components/Sidebar.tsx` — /b2b-crm скрыт из меню менеджера
-- `lib/types.ts` — добавлены manager_id, manager_code в тип B2BClient
-- `app/calculator/b2b/page.tsx`:
-  - менеджер видит только своих клиентов (фильтр по manager_id)
-  - кнопка "+ Новый клиент" + модалка с проверкой дублей
-  - новый клиент автоматически закрепляется за менеджером
-- `app/b2b-crm/page.tsx`:
-  - кнопка "Менеджер" в панели быстрых действий
-  - inline назначение ответственного менеджера
-  - сохранение истории смены в b2b_client_manager_history
+### Прочие доработки
+- `app/admin/archive` — страница архивных B2B расчётов с восстановлением
+- `components/Sidebar.tsx` — архив в ADMIN_B2B и MANAGER_B2B
+- `app/calculator/b2b` — cap на скидку (max_discount_percent из users)
+- `app/b2b-quotes` — фильтр по manager_id через b2b_clients (OR created_by)
 
 ## SQL миграции выполнены
-- facet_prices (CREATE TABLE + INSERT + DISABLE RLS) ✅
-- b2b_clients: manager_id, manager_code ✅
-- b2b_client_manager_history ✅
+- is_critical, min_stock, recommended_stock на shower_catalog_items ✅
+- min_stock_qty, recommended_stock, is_critical на materials ✅
+- CREATE TABLE purchase_orders ✅
+- CREATE TABLE procurement_routes + stops ✅
+- suppliers: type, whatsapp, telegram, address, city, work_hours, status, priority, lead_time_days, has_vat, updated_at ✅
 
 ## Следующие возможные задачи
-- Страница архива: /admin/archive (b2b_orders WHERE archived_at IS NOT NULL)
-- Discount cap: проверка max_discount_percent в B2B калькуляторе
-- Фильтр клиентов в b2b-quotes по manager_id для менеджеров
+- Загрузка прайсов к поставщикам (PDF/Excel attachment)
+- История изменений поставщика
+- Подтверждение доставки клиентом (подпись в системе)
+- Учёт затрат на логистику по маршрутам

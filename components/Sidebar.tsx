@@ -183,6 +183,7 @@ const ADMIN_PRODUCT_LINE: NavItem[] = [
 ]
 
 const ADMIN_SYSTEM: NavItem[] = [
+  { href: '/admin/data-hub',            label: 'Центр данных',   icon: '🔗' },
   { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
   { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
