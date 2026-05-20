@@ -47,6 +47,9 @@ const MANAGER_B2B: NavItem[] = [
 // ─── Buyer role ───────────────────────────────────────────────────────────────
 
 const BUYER_ITEMS: NavEntry[] = [
+  { groupLabel: 'Заказы' },
+  { href: '/orders',     label: 'Заказы MGlass', icon: '📦', indent: true },
+  { href: '/b2b-orders', label: 'Заказы B2B',    icon: '🏢', indent: true },
   { groupLabel: 'Стекло и зеркала' },
   { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
@@ -60,6 +63,8 @@ const BUYER_ITEMS: NavEntry[] = [
   { groupLabel: 'Производство' },
   { href: '/admin/materials',       label: 'Материалы',        icon: '📦', indent: true },
   { href: '/admin/services',        label: 'Услуги',           icon: '🔧', indent: true },
+  { groupLabel: 'Логистика' },
+  { href: '/admin/route-sheet',     label: 'Маршрутный лист',  icon: '🚚', indent: true },
   { groupLabel: 'Помощь' },
   { href: '/admin/guide',           label: 'Руководство',      icon: '📖', indent: true },
 ]
@@ -519,7 +524,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     // Buyer: справочники для закупки
     if (role === 'buyer') return (
       <div>
-        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Закупщик</div>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
         <div className="space-y-px">
           {BUYER_ITEMS.map((entry, idx) =>
             isGroup(entry) ? (

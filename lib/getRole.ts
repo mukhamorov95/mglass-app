@@ -121,6 +121,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 
   buyer: [
     '/',
+    '/orders',
+    '/b2b-orders',
     '/admin/shower-hardware',
     '/admin/hardware',
     '/admin/suppliers',
@@ -131,6 +133,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/mirror-frames',
     '/admin/facet',
     '/admin/guide',
+    '/admin/route-sheet',
   ],
 
   ceo: [
