@@ -65,7 +65,6 @@ const BUYER_ITEMS: NavEntry[] = [
   { href: '/admin/facet',           label: 'Фацет',               icon: '💎', indent: true },
   { href: '/admin/mirror-lighting', label: 'Подсветка зеркал',    icon: '💡', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',        icon: '🖼️', indent: true },
-  { href: '/admin/materials',       label: 'Материалы',           icon: '🪟', indent: true },
   { href: '/admin/services',        label: 'Услуги',              icon: '🔧', indent: true },
   { groupLabel: 'Помощь' },
   { href: '/admin/guide',           label: 'Регламент',           icon: '📖', indent: true },
