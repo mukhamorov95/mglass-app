@@ -766,7 +766,7 @@ export default function B2BCalculatorPage() {
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={fMatId ?? ''}
                   onChange={e => handleMaterialChange(Number(e.target.value))}>
-                  {thicknessMaterials.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  {thicknessMaterials.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
                 </select>
               </div>
             </div>
@@ -1391,7 +1391,7 @@ export default function B2BCalculatorPage() {
                     className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110]"
                     value={eMatId ?? ''}
                     onChange={e => handleEditMatChange(Number(e.target.value))}>
-                    {eThickMats.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    {eThickMats.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
                   </select>
                 </div>
               </div>

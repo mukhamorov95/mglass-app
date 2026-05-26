@@ -13,10 +13,13 @@ const PATTERN_OPTIONS: { value: PatternDirection; label: string }[] = [
   { value: 'along_width',  label: 'Волна по ширине (2250)' },
 ]
 
+type SupplierOption = { id: string; name: string }
+
 const EMPTY: Omit<B2BMaterial, 'id' | 'created_at'> = {
   name: '', category: 'стекло', thickness: 6, cost_price: 0, sale_price: 0,
   vat_rate: 22, waste_percent: 15, passthrough: false, active: true, notes: null,
   sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none',
+  supplier_id: null, supplier_material_name: null,
 }
 
 function parseNotes(m: B2BMaterial): B2BMaterial {
@@ -63,8 +66,17 @@ export default function B2BMaterialsPage() {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string>('all')
+  const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    createClient()
+      .from('suppliers')
+      .select('id, name, status')
+      .neq('status', 'inactive')
+      .order('name')
+      .then(({ data }) => setSuppliers((data ?? []) as SupplierOption[]))
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -137,6 +149,8 @@ export default function B2BMaterialsPage() {
       sheet_width: m.sheet_width ?? 3210,
       sheet_height: m.sheet_height ?? 2250,
       pattern_direction: m.pattern_direction ?? 'none',
+      supplier_id: m.supplier_id ?? null,
+      supplier_material_name: m.supplier_material_name ?? null,
     })
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -274,6 +288,39 @@ export default function B2BMaterialsPage() {
                 >
                   {PATTERN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
+              </div>
+            </div>
+          </div>
+
+          {/* Поставщик */}
+          <div className="col-span-4">
+            <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2 pt-1 border-t border-[#f0f0ec] mt-1">
+              Поставщик
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1">Поставщик</label>
+                <div className="flex gap-1.5">
+                  <select
+                    className="flex-1 bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                    value={form.supplier_id ?? ''}
+                    onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value || null }))}>
+                    <option value="">— не выбран —</option>
+                    {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </select>
+                  <a href="/admin/suppliers" target="_blank"
+                    className="flex items-center px-2 py-2 text-[12px] text-[#0071e3] border border-[#e4e4e0] rounded-lg hover:bg-[#f0f7ff] transition-colors whitespace-nowrap"
+                    title="Добавить поставщика">+ поставщик</a>
+                </div>
+              </div>
+              <div>
+                <label className="block text-[11px] text-[#9a9a95] mb-1">Наименование у поставщика</label>
+                <input
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  value={form.supplier_material_name ?? ''}
+                  onChange={e => setForm(f => ({ ...f, supplier_material_name: e.target.value || null }))}
+                  placeholder="Как называется у поставщика"
+                />
               </div>
             </div>
           </div>

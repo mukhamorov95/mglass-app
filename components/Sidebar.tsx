@@ -47,27 +47,35 @@ const MANAGER_B2B: NavItem[] = [
 
 // ─── Buyer role ───────────────────────────────────────────────────────────────
 
-const BUYER_ITEMS: NavEntry[] = [
-  { groupLabel: 'Склад' },
-  { href: '/admin/stock-control',   label: 'Критические остатки', icon: '📊', indent: true },
-  { groupLabel: 'Закупки' },
-  { href: '/admin/procurement',     label: 'Канбан закупок',      icon: '🗂️', indent: true },
-  { href: '/admin/suppliers',       label: 'Поставщики',          icon: '🏭', indent: true },
-  { href: '/admin/shower-hardware', label: 'Фурнитура душевых',   icon: '🚿', indent: true },
-  { href: '/admin/hardware',        label: 'Фурнитура лофт',      icon: '🔩', indent: true },
-  { groupLabel: 'Логистика' },
+const BUYER_SKLAD: NavItem[] = [
+  { href: '/admin/stock-control', label: 'Критические остатки', icon: '📊', indent: true },
+]
+
+const BUYER_ZAKUPKI: NavItem[] = [
+  { href: '/admin/procurement',     label: 'Канбан закупок',    icon: '🗂️', indent: true },
+  { href: '/admin/suppliers',       label: 'Поставщики',        icon: '🏭', indent: true },
+  { href: '/admin/shower-hardware', label: 'Фурнитура душевых', icon: '🚿', indent: true },
+  { href: '/admin/hardware',        label: 'Фурнитура лофт',   icon: '🔩', indent: true },
+]
+
+const BUYER_LOGISTIKA: NavItem[] = [
   { href: '/admin/procurement-routes', label: 'Маршруты к поставщикам', icon: '🚚', indent: true },
-  { href: '/admin/route-sheet',     label: 'Доставки клиентам',   icon: '📍', indent: true },
-  { href: '/orders',                label: 'Заказы MGlass',       icon: '📦', indent: true },
-  { href: '/b2b-orders',            label: 'Заказы B2B',          icon: '🏢', indent: true },
-  { groupLabel: 'Справочники' },
-  { href: '/admin/glass-prices',    label: 'Стекло',              icon: '🔷', indent: true },
-  { href: '/admin/facet',           label: 'Фацет',               icon: '💎', indent: true },
-  { href: '/admin/mirror-lighting', label: 'Подсветка зеркал',    icon: '💡', indent: true },
-  { href: '/admin/mirror-frames',   label: 'Рамки зеркал',        icon: '🖼️', indent: true },
-  { href: '/admin/services',        label: 'Услуги',              icon: '🔧', indent: true },
-  { groupLabel: 'Помощь' },
-  { href: '/admin/guide',           label: 'Регламент',           icon: '📖', indent: true },
+  { href: '/admin/route-sheet',        label: 'Доставки клиентам',      icon: '📍', indent: true },
+  { href: '/orders',                   label: 'Заказы MGlass',          icon: '📦', indent: true },
+  { href: '/b2b-orders',               label: 'Заказы B2B',             icon: '🏢', indent: true },
+]
+
+const BUYER_SPRAVOCHNIKI: NavItem[] = [
+  { href: '/admin/glass-prices',     label: 'Стекло',             icon: '🔷', indent: true },
+  { href: '/admin/facet',            label: 'Фацет',              icon: '💎', indent: true },
+  { href: '/admin/mirror-lighting',  label: 'Подсветка зеркал',  icon: '💡', indent: true },
+  { href: '/admin/mirror-frames',    label: 'Рамки зеркал',      icon: '🖼️', indent: true },
+  { href: '/admin/services',         label: 'Услуги',             icon: '🔧', indent: true },
+  { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️', indent: true },
+]
+
+const BUYER_POMOSH: NavItem[] = [
+  { href: '/admin/guide', label: 'Регламент', icon: '📖', indent: true },
 ]
 
 // ─── Production role ──────────────────────────────────────────────────────────
@@ -112,8 +120,9 @@ const SEO_AI: NavItem[] = [
 // ─── CEO role ─────────────────────────────────────────────────────────────────
 
 const CEO_OWNER: NavItem[] = [
-  { href: '/admin/owner',            label: 'Owner Center',    icon: '👑' },
-  { href: '/admin/dashboard',        label: 'Дашборд',         icon: '📊' },
+  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
+  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
+  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
@@ -142,8 +151,9 @@ const CEO_SYSTEM: NavItem[] = [
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
 const ADMIN_OWNER: NavItem[] = [
-  { href: '/admin/owner',            label: 'Owner Center',    icon: '👑' },
-  { href: '/admin/dashboard',        label: 'Дашборд',         icon: '📊' },
+  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
+  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
+  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
@@ -250,7 +260,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'ceo') {
-    if (inSection(pathname, ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
@@ -265,7 +275,14 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
 
 function autoOpenRole(pathname: string, role: Role): string[] {
   const open: string[] = []
-  if (role === 'buyer') return open  // buyer navigation is flat — no accordions
+  if (role === 'buyer') {
+    if (inSection(pathname, ['/admin/stock-control'])) open.push('buyer_sklad')
+    if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
+    if (inSection(pathname, ['/admin/procurement-routes', '/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
+    if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
+    return open
+  }
   if (role === 'manager') {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
@@ -274,7 +291,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }
@@ -283,6 +300,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
 
 function detectModeFromPath(pathname: string): ViewMode {
   if (
+    pathname.startsWith('/admin/ai-control-center') ||
     pathname.startsWith('/admin/owner') || pathname.startsWith('/admin/dashboard') ||
     pathname.startsWith('/admin/pnl')   || pathname.startsWith('/admin/analytics-mglass') ||
     pathname.startsWith('/admin/bonus-center') || pathname.startsWith('/admin/sales-center') ||
@@ -524,22 +542,16 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       )
     }
 
-    // Buyer: справочники для закупки
+    // Buyer: аккордеон-секции
     if (role === 'buyer') return (
-      <div>
+      <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
-        <div className="space-y-px">
-          {BUYER_ITEMS.map((entry, idx) =>
-            isGroup(entry) ? (
-              <div key={`bg-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
-                {entry.groupLabel}
-              </div>
-            ) : (
-              navItem(entry, 'bg-emerald-50 text-emerald-700 font-medium')
-            )
-          )}
-        </div>
-      </div>
+        {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
+      </>
     )
 
     // Production: flat list

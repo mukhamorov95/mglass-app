@@ -91,7 +91,7 @@ export async function DELETE(req: Request) {
   return NextResponse.json({ ok: true })
 }
 
-// PATCH — rename (updates both cost and sale rows for the same category)
+// PATCH — rename (updates both cost and sale rows for the same category, plus b2b_materials)
 export async function PATCH(req: Request) {
   const role = await getRole()
   if (!role) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
@@ -99,6 +99,7 @@ export async function PATCH(req: Request) {
   const { oldName, newName, category } = await req.json() as { oldName: string; newName: string; category?: Category }
   const supabase = db()
 
+  // Rename in glass_price_matrix (both cost + sale rows)
   let q = supabase
     .from('glass_price_matrix')
     .update({ name: newName, updated_at: new Date().toISOString() })
@@ -107,5 +108,12 @@ export async function PATCH(req: Request) {
 
   const { error } = await q
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Mirror rename into b2b_materials so the calculator stays in sync
+  await supabase
+    .from('b2b_materials')
+    .update({ name: newName })
+    .eq('name', oldName)
+
   return NextResponse.json({ ok: true })
 }

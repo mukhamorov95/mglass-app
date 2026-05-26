@@ -38,7 +38,8 @@ export default function CartSection() {
         base_price: item.base_price,
         discount: item.discount,
         partner_percent: item.partner_percent,
-        final_price: item.final_price,
+        // grand_total = finalPrice + services (what the client actually pays)
+        final_price: item.grand_total,
         margin: item.margin,
         profit: item.profit,
         manager_bonus: item.manager_bonus,

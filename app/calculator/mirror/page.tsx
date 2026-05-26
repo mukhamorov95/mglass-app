@@ -150,14 +150,17 @@ export default function MirrorCalculatorPage() {
   const [copied, setCopied]           = useState(false)
   const [showCost, setShowCost]       = useState(false)
   const [showPricing, setShowPricing] = useState(false)
+  const [showDebug, setShowDebug]     = useState(false)
   const [saving, setSaving]           = useState(false)
   const [savedId, setSavedId]         = useState<number | null>(null)
   const [addedToCart, setAddedToCart] = useState(false)
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
-  // Edit mode: set when opened via "Пересчитать" from a saved calculation
+  // Edit mode: set when opened via "Пересчитать по актуальным ценам"
+  // Saves as a NEW calculation (parent_calc_id = editCalcId) — original is never overwritten
   const [editCalcId, setEditCalcId]               = useState<number | null>(null)
   const [editOrderGroupId, setEditOrderGroupId]   = useState<string | null>(null)
+  const [editCalcOldPrice, setEditCalcOldPrice]   = useState<number | null>(null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
 
@@ -293,8 +296,9 @@ export default function MirrorCalculatorPage() {
           if (p.hasSubstrate != null) setHasSubstrate(Boolean(p.hasSubstrate))
           if (p.hasFrame != null)    setHasFrame(Boolean(p.hasFrame))
           if (p.mirrorFrameId)       setMirrorFrameId(p.mirrorFrameId as number)
-          if (p.__editCalcId__)    setEditCalcId(p.__editCalcId__ as number)
-          if (p.__order_group_id__) setEditOrderGroupId(p.__order_group_id__ as string)
+          if (p.__editCalcId__)      setEditCalcId(p.__editCalcId__ as number)
+          if (p.__order_group_id__)  setEditOrderGroupId(p.__order_group_id__ as string)
+          if (p.__old_final_price__) setEditCalcOldPrice(p.__old_final_price__ as number)
         }
       } catch {}
 
@@ -316,6 +320,14 @@ export default function MirrorCalculatorPage() {
     else setLedStripId(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [voltage])
+
+  // Complex shape: substrate is required, frame is not used
+  useEffect(() => {
+    if (shape === 'complex') {
+      setHasSubstrate(true)
+      setFrameId(null)
+    }
+  }, [shape])
 
   useEffect(() => {
     if (!hasLighting) { setPsuId(null); return }
@@ -381,7 +393,7 @@ export default function MirrorCalculatorPage() {
     mirrorCostPerM2: mirrorSalePerM2 ?? mirrorCostPerM2,
     mirrorWastePct, shapeModifierPct: shapeModPct, shape,
     hasLighting, voltage,
-    frame:       hasLighting && selFrame    ? toLC(selFrame)    : null,
+    frame:       hasLighting && selFrame && shape !== 'complex' ? toLC(selFrame) : null,
     ledStrip:    hasLighting && selLed      ? toLC(selLed)      : null,
     powerSupply: hasLighting && selPsu      ? toLC(selPsu)      : null,
     diffuser:    hasLighting && selDiffuser ? toLC(selDiffuser) : null,
@@ -408,7 +420,7 @@ export default function MirrorCalculatorPage() {
      buttonType, hasSandblast, hasSubstrate, substratePrice,
      hasFacet, facetTypeMm, facetPrices,
      hasFrame, mirrorFrameId,
-     hasInstallation, hasDelivery, kmFromMkad, deliveryCost, partnerId, discount, margin, materials, services],
+     hasInstallation, hasDelivery, kmFromMkad, deliveryCost, partnerId, discount, margin, expensesPercent, materials, services],
   )
 
   const marginNum   = result?.margin ?? 0
@@ -430,7 +442,16 @@ export default function MirrorCalculatorPage() {
     addItem({
       product_type: 'mirror',
       label: `${mirrorName || 'Зеркало'} ${mirrorMm} мм ${width}×${height} мм`,
-      input_data: { width, height, mirrorName, mirrorMm, shape, hasLighting, buttonType, hasSandblast, hasSubstrate },
+      // Complete snapshot of all selected params — needed for faithful "Пересчитать" later
+      input_data: {
+        width, height, mirrorName, mirrorMm, shape,
+        hasLighting, voltage, frameId, ledStripId, psuId, diffuserId, buttonType,
+        hasSandblast, hasSubstrate, substratePrice: Number(substratePrice) || 0,
+        hasFrame, mirrorFrameId,
+        hasFacet, facetTypeMm: hasFacet ? facetTypeMm : null,
+        hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -440,7 +461,8 @@ export default function MirrorCalculatorPage() {
       },
       base_price: result.basePrice, discount: inputs.discount,
       partner_percent: inputs.partnerPercent,
-      final_price: result.finalPrice, grand_total: result.grandTotal,
+      // grand_total = что клиент платит (продукт + услуги)
+      final_price: result.grandTotal, grand_total: result.grandTotal,
       margin: result.margin, profit: result.profit,
       manager_bonus: result.managerBonus, client_text: result.clientText,
     })
@@ -455,7 +477,15 @@ export default function MirrorCalculatorPage() {
 
     const payload = {
       product_type: 'mirror' as const,
-      input_data: { width, height, mirrorName, mirrorMm, shape, hasLighting, voltage, frameId, ledStripId, psuId, diffuserId, buttonType, hasSandblast, hasSubstrate, hasFrame, mirrorFrameId },
+      input_data: {
+        width, height, mirrorName, mirrorMm, shape,
+        hasLighting, voltage, frameId, ledStripId, psuId, diffuserId, buttonType,
+        hasSandblast, hasSubstrate, substratePrice: Number(substratePrice) || 0,
+        hasFrame, mirrorFrameId,
+        hasFacet, facetTypeMm: hasFacet ? facetTypeMm : null,
+        hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -472,20 +502,19 @@ export default function MirrorCalculatorPage() {
       client_phone: clientPhone.trim() || undefined,
     }
 
-    if (editCalcId) {
-      // Edit mode: update the existing calculation in place
-      const res = await updateCalculation(editCalcId, payload)
-      if (res && 'id' in res) {
-        setSavedId(res.id ?? null)
-        // Return to the calculation detail page after successful update
-        setTimeout(() => { window.location.href = `/calculations/${editCalcId}` }, 800)
+    // ВАЖНО: edit mode НИКОГДА не перезаписывает оригинал.
+    // Всегда сохраняем как НОВЫЙ расчёт, связывая через parent_calc_id.
+    const saved = await saveCalculation({
+      ...payload,
+      order_group_id: editOrderGroupId ?? undefined,
+      parent_calc_id: editCalcId ?? undefined,
+    })
+    if (saved && 'id' in saved) {
+      setSavedId(saved.id ?? null)
+      // После сохранения переходим на новый расчёт
+      if (editCalcId) {
+        setTimeout(() => { window.location.href = `/calculations/${saved.id}` }, 1200)
       }
-    } else {
-      const saved = await saveCalculation({
-        ...payload,
-        order_group_id: editOrderGroupId ?? undefined,
-      })
-      if (saved && 'id' in saved) setSavedId(saved.id ?? null)
     }
     setSaving(false)
   }
@@ -516,6 +545,41 @@ export default function MirrorCalculatorPage() {
           <span className="text-[#ddd]">/</span>
           <h1 className="text-sm font-semibold text-[#111110]">Зеркало с подсветкой</h1>
         </div>
+
+        {/* Recalculate mode banner */}
+        {editCalcId && (
+          <div className="mb-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <span className="text-amber-500 text-lg flex-shrink-0">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-amber-800">
+                Режим пересчёта — расчёт #{editCalcId}
+              </p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Цены взяты из актуального справочника.
+                {editCalcOldPrice != null && result && (
+                  <span>
+                    {' '}Было: <strong>{editCalcOldPrice.toLocaleString('ru-RU')} ₽</strong>
+                    {' → '} Сейчас: <strong className={result.grandTotal > editCalcOldPrice ? 'text-red-700' : result.grandTotal < editCalcOldPrice ? 'text-emerald-700' : ''}>
+                      {result.grandTotal.toLocaleString('ru-RU')} ₽
+                    </strong>
+                    {result.grandTotal !== editCalcOldPrice && (
+                      <span className={result.grandTotal > editCalcOldPrice ? ' text-red-600' : ' text-emerald-600'}>
+                        {' '}({result.grandTotal > editCalcOldPrice ? '+' : ''}{(result.grandTotal - editCalcOldPrice).toLocaleString('ru-RU')} ₽)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </p>
+              <p className="text-[11px] text-amber-600 mt-1">
+                Оригинал расчёта #{editCalcId} останется нетронутым. Нажмите «Сохранить» — создастся новый расчёт.
+              </p>
+            </div>
+            <a href={`/calculations/${editCalcId}`}
+              className="text-[11px] text-amber-700 border border-amber-300 px-2.5 py-1 rounded-lg hover:bg-amber-100 flex-shrink-0">
+              ← Вернуться
+            </a>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_304px] gap-3 items-start">
 
@@ -706,7 +770,7 @@ export default function MirrorCalculatorPage() {
                     ) : (
                       <div className="flex flex-wrap gap-1 pt-1">
                         {frames.map(f => (
-                          <button key={f.id} onClick={() => setFrameId(f.id)}
+                          <button key={f.id} onClick={() => setFrameId(frameId === f.id ? null : f.id)}
                             className={`h-7 px-3 rounded-lg text-[11px] font-medium border transition-all ${
                               frameId === f.id ? 'bg-[#111110] text-white border-[#111110]'
                                              : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4]'
@@ -807,7 +871,11 @@ export default function MirrorCalculatorPage() {
               <div className="space-y-2.5">
                 <OptionRow label="Пескоструйный рисунок" desc={`${sandblastPrice.toLocaleString('ru-RU')} ₽/м²`} value={hasSandblast} onClick={() => setHasSandblast(!hasSandblast)} />
                 <div className="flex items-center justify-between">
-                  <OptionRow label="Подложка" value={hasSubstrate} onClick={() => setHasSubstrate(!hasSubstrate)} />
+                  <OptionRow
+                    label={shape === 'complex' ? 'Подложка (авто: сложная форма)' : 'Подложка'}
+                    value={hasSubstrate}
+                    onClick={() => setHasSubstrate(!hasSubstrate)}
+                  />
                   {hasSubstrate && (
                     <div className="flex items-center gap-1">
                       <input type="number" value={substratePrice} onChange={e => setSubstratePrice(e.target.value)}
@@ -1086,7 +1154,93 @@ export default function MirrorCalculatorPage() {
                   )}
                 </div>
 
-                {/* ④ KP text */}
+                {/* ④ Admin debug panel */}
+                {(role === 'admin' || role === 'owner') && (
+                  <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
+                    <button onClick={() => setShowDebug(!showDebug)}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-50 transition-colors">
+                      <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-[0.08em]">
+                        Диагностика расчёта
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] text-amber-400">margin={inputs.margin}% tax={inputs.tax}%</span>
+                        <svg className={`w-3 h-3 text-amber-400 transition-transform ${showDebug ? 'rotate-180' : ''}`}
+                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                      </div>
+                    </button>
+                    {showDebug && result && (
+                      <div className="px-4 pb-4 border-t border-amber-100 text-[10px] font-mono space-y-1 bg-amber-50/30">
+                        <div className="text-amber-600 font-bold pt-3 text-[9px] uppercase tracking-wider">Входные данные</div>
+                        <div className="text-[#555]">
+                          Маржа: <span className="font-bold">{inputs.margin}%</span>
+                          &nbsp;·&nbsp;Налог: <span className="font-bold">{inputs.tax}%</span>
+                          &nbsp;·&nbsp;Знаменатель: <span className="font-bold">{(1 - inputs.margin/100 - inputs.tax/100).toFixed(4)}</span>
+                        </div>
+                        <div className="text-[#555]">Скидка: {inputs.discount}% · Партнёр: {inputs.partnerPercent}%</div>
+
+                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Себестоимость</div>
+                        {result.costLines.map((l, i) => (
+                          <div key={i} className="flex justify-between text-[#555]">
+                            <span className="truncate mr-2">{l.name}</span>
+                            <span className="flex-shrink-0 font-bold">{l.total.toLocaleString('ru-RU')} ₽</span>
+                          </div>
+                        ))}
+                        <div className="flex justify-between border-t border-amber-200 pt-1 font-bold text-amber-700">
+                          <span>∑ себестоимость</span>
+                          <span>{result.totalCost.toLocaleString('ru-RU')} ₽</span>
+                        </div>
+
+                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Формула</div>
+                        <div className="text-[#555] leading-relaxed">
+                          {result.totalCost.toLocaleString('ru-RU')} / {(1 - inputs.margin/100 - inputs.tax/100).toFixed(2)}
+                          {' = '}<span className="font-bold text-emerald-700">{result.basePrice.toLocaleString('ru-RU')} ₽</span>
+                          {' '}(базовая)
+                        </div>
+                        {result.partnerAmount > 0 && (
+                          <div className="text-[#555]">
+                            + партнёрка {result.partnerAmount.toLocaleString('ru-RU')} ₽
+                            → {result.priceWithPartner.toLocaleString('ru-RU')} ₽
+                          </div>
+                        )}
+                        {result.discountAmount > 0 && (
+                          <div className="text-[#555]">
+                            − скидка {result.discountAmount.toLocaleString('ru-RU')} ₽
+                            → {result.finalPrice.toLocaleString('ru-RU')} ₽
+                          </div>
+                        )}
+
+                        {result.serviceLines.length > 0 && (
+                          <>
+                            <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Услуги</div>
+                            {result.serviceLines.map((s, i) => (
+                              <div key={i} className="flex justify-between text-[#555]">
+                                <span>{s.name}</span>
+                                <span className="font-bold">{s.total.toLocaleString('ru-RU')} ₽</span>
+                              </div>
+                            ))}
+                          </>
+                        )}
+
+                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Итог</div>
+                        <div className="text-[#555]">
+                          цена изделия <span className="font-bold">{result.finalPrice.toLocaleString('ru-RU')}</span>
+                          {result.servicesTotal > 0 && (
+                            <> + услуги <span className="font-bold">{result.servicesTotal.toLocaleString('ru-RU')}</span></>
+                          )}
+                          {' = '}<span className="font-bold text-emerald-700">{result.grandTotal.toLocaleString('ru-RU')} ₽</span>
+                        </div>
+                        <div className="text-[#555]">
+                          Реальная маржа: <span className="font-bold">{result.margin}%</span>
+                          &nbsp;· Прибыль: <span className="font-bold">{result.profit.toLocaleString('ru-RU')} ₽</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* ⑤ KP text */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
                   <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em] mb-2.5">Текст КП</p>
                   <pre className="text-[11px] text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#f9f9f8] rounded-lg p-3 mb-3 border border-[#f0f0ee]">
@@ -1119,16 +1273,18 @@ export default function MirrorCalculatorPage() {
                 <div className="space-y-1.5">
                   <button onClick={handleSave} disabled={saving || discountExceeded}
                     title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
-                    className="w-full h-10 bg-[#111110] text-white rounded-xl text-sm font-semibold hover:bg-[#27272a] active:bg-[#3f3f46] disabled:opacity-40 transition-colors">
+                    className={`w-full h-10 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors ${
+                      editCalcId
+                        ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
+                        : 'bg-[#111110] hover:bg-[#27272a] active:bg-[#3f3f46]'
+                    }`}>
                     {saving
                       ? 'Сохранение...'
-                      : savedId && editCalcId
-                        ? `✓ Расчёт #${savedId} обновлён`
-                        : savedId
-                          ? `✓ Расчёт #${savedId} сохранён`
-                          : editCalcId
-                            ? `Обновить расчёт #${editCalcId}`
-                            : 'Сохранить расчёт'
+                      : savedId
+                        ? `✓ Новый расчёт #${savedId} создан`
+                        : editCalcId
+                          ? `Сохранить как новый расчёт`
+                          : 'Сохранить расчёт'
                     }
                   </button>
                   <div className="grid grid-cols-2 gap-1.5">

@@ -137,6 +137,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/stock-control',
     '/admin/procurement',
     '/admin/procurement-routes',
+    '/admin/cutting-settings',
   ],
 
   ceo: [
@@ -159,6 +160,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/roadmap',
     '/admin/owner-questionnaire',
     '/admin/pricing-manual',
+    '/admin/health-check',
+    '/admin/ai-control-center',
   ],
 }
 

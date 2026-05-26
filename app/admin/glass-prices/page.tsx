@@ -40,7 +40,10 @@ interface GlassRow {
   price_type: PriceType; category: Category; waste_pct: number | null
   t4: number | null; t5: number | null; t6: number | null
   t8: number | null; t10: number | null; t12: number | null
+  supplier_id: string | null; supplier_material_name: string | null
 }
+
+type RowSupplier = { supplier_id: string | null; supplier_material_name: string | null }
 
 interface MarginInfo {
   effectiveCost: number
@@ -93,6 +96,8 @@ export default function GlassPricesPage() {
   const [loading, setLoading]   = useState(true)
   const [tab, setTab]           = useState<TabKey>('cost_glass')
   const [isOwner, setIsOwner]   = useState(false)
+  const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
+  const [rowSupplier, setRowSupplier] = useState<Record<string, RowSupplier>>({})
 
   // Formula tab
   const [formula, setFormula]         = useState<FormulaParam[]>([])
@@ -133,7 +138,17 @@ export default function GlassPricesPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const res = await fetch('/api/admin/glass-prices')
-    if (res.ok) setRows(await res.json())
+    if (res.ok) {
+      const data: GlassRow[] = await res.json()
+      setRows(data)
+      const sup: Record<string, RowSupplier> = {}
+      for (const r of data) {
+        if (r.price_type === 'cost') {
+          sup[r.name] = { supplier_id: r.supplier_id ?? null, supplier_material_name: r.supplier_material_name ?? null }
+        }
+      }
+      setRowSupplier(sup)
+    }
     setLoading(false)
   }, [])
 
@@ -144,6 +159,28 @@ export default function GlassPricesPage() {
       if (user?.email === 'admin@mglass.ru') setIsOwner(true)
     })
   }, [])
+
+  useEffect(() => {
+    fetch('/api/admin/suppliers')
+      .then(r => r.ok ? r.json() : [])
+      .then((data: { id: string; name: string; status: string }[]) =>
+        setSuppliers(data.filter(s => s.status !== 'inactive').map(s => ({ id: s.id, name: s.name })))
+      )
+  }, [])
+
+  async function saveRowSupplierImmediate(name: string, supplierId: string | null, supplierMatName: string | null) {
+    await fetch('/api/admin/glass-prices', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name,
+        price_type: 'cost',
+        category: curCat,
+        supplier_id: supplierId,
+        supplier_material_name: supplierMatName || null,
+      }),
+    })
+  }
 
   useEffect(() => {
     if (editKey) setTimeout(() => inputRef.current?.focus(), 20)
@@ -814,6 +851,36 @@ export default function GlassPricesPage() {
                               ${nameDirty ? 'text-[#b45309] underline decoration-dotted' : 'text-[#111110]'}`}>
                               {dispName}
                             </span>}
+                        {isCostTab && (
+                          <div className="flex items-center gap-1.5 mt-1.5" onClick={e => e.stopPropagation()}>
+                            <select
+                              className="text-[11px] border border-[#e4e4e0] rounded px-1.5 py-0.5 text-[#6b6b66] bg-white outline-none focus:border-[#0071e3] max-w-[130px]"
+                              value={rowSupplier[origName]?.supplier_id ?? ''}
+                              onChange={e => {
+                                const val = e.target.value || null
+                                const current = rowSupplier[origName] ?? { supplier_id: null, supplier_material_name: null }
+                                setRowSupplier(prev => ({ ...prev, [origName]: { ...current, supplier_id: val } }))
+                                saveRowSupplierImmediate(origName, val, current.supplier_material_name)
+                              }}>
+                              <option value="">— поставщик —</option>
+                              {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                            </select>
+                            <input
+                              className="text-[11px] border border-[#e4e4e0] rounded px-1.5 py-0.5 text-[#6b6b66] outline-none focus:border-[#0071e3] w-[100px]"
+                              placeholder="наим. у пост."
+                              value={rowSupplier[origName]?.supplier_material_name ?? ''}
+                              onChange={e => setRowSupplier(prev => ({
+                                ...prev,
+                                [origName]: { ...(prev[origName] ?? { supplier_id: null, supplier_material_name: null }), supplier_material_name: e.target.value || null }
+                              }))}
+                              onBlur={e => saveRowSupplierImmediate(
+                                origName,
+                                rowSupplier[origName]?.supplier_id ?? null,
+                                e.target.value || null
+                              )}
+                            />
+                          </div>
+                        )}
                       </td>
 
                       {/* Расход % */}

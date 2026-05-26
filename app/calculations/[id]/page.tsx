@@ -38,6 +38,7 @@ type Calc = {
   client_phone: string | null
   amo_lead_id: number | null
   order_group_id: string | null
+  parent_calc_id: number | null
 }
 
 type Change = {
@@ -139,8 +140,13 @@ function fmtPhone(raw: string) {
 function openInCalculator(calc: Calc) {
   const d = calc.input_data
   const pt = calc.product_type
-  // __editCalcId__ and __order_group_id__ tell the calculator to UPDATE this record
-  const meta = { __editCalcId__: calc.id, __order_group_id__: calc.order_group_id ?? undefined }
+  // __editCalcId__: tells the calculator this is a "recalculate" mode — saves as NEW calc with parent_calc_id
+  // __old_final_price__: shown as "Было X ₽" in the before/after diff
+  const meta = {
+    __editCalcId__: calc.id,
+    __order_group_id__: calc.order_group_id ?? undefined,
+    __old_final_price__: calc.final_price,
+  }
   if (pt === 'mirror') {
     sessionStorage.setItem('mglass_mirror_prefill', JSON.stringify({ ...d, ...meta }))
     window.location.href = '/calculator/mirror'
@@ -164,6 +170,8 @@ export default function CalculationDetailPage() {
   const [copied, setCopied] = useState(false)
   const [userEmail, setUserEmail] = useState<string>('')
   const [role, setRole] = useState<string | null>(null)
+  const [childCalcs, setChildCalcs] = useState<{ id: number; created_at: string; final_price: number }[]>([])
+  const [showRecalcModal, setShowRecalcModal] = useState(false)
 
   // Editable fields
   const [editPrice, setEditPrice] = useState('')
@@ -187,13 +195,18 @@ export default function CalculationDetailPage() {
         setRole((prof as { role?: string } | null)?.role ?? null)
       }
 
-      const [{ data: calcData }, { data: changesData }] = await Promise.all([
+      const [{ data: calcData }, { data: changesData }, { data: childData }] = await Promise.all([
         supabase.from('calculations').select('*').eq('id', id).single(),
         supabase.from('calculation_changes')
           .select('*')
           .eq('calculation_id', id)
           .order('created_at', { ascending: false })
           .limit(50),
+        // Load newer versions of this calculation (if any)
+        supabase.from('calculations')
+          .select('id, created_at, final_price')
+          .eq('parent_calc_id', id)
+          .order('created_at', { ascending: true }),
       ])
 
       if (calcData) {
@@ -208,6 +221,7 @@ export default function CalculationDetailPage() {
         setEditAmoLeadId(calcData.amo_lead_id ? String(calcData.amo_lead_id) : '')
       }
       setChanges((changesData as Change[]) ?? [])
+      setChildCalcs((childData ?? []) as { id: number; created_at: string; final_price: number }[])
       setLoading(false)
     }
     load()
@@ -245,9 +259,21 @@ export default function CalculationDetailPage() {
     if (!calc) return { finalPrice: 0, profit: 0, margin: 0, discount: 0 }
     const finalPrice = parseInt(editPrice) || calc.final_price
     const discount = parseFloat(editDiscount) || 0
+
+    // When price/discount are unchanged from the stored snapshot, use stored profit/margin
+    // (recalculating would be wrong if services are included in final_price but not in expensesAmount)
+    if (finalPrice === calc.final_price && Math.abs(discount - calc.discount) < 0.01) {
+      return { finalPrice, profit: calc.profit, margin: calc.margin, discount }
+    }
+
+    // Only recalculate when user explicitly edits price or discount
     const fb = calc.financial_breakdown
     const cb = calc.cost_breakdown
-    const profit = Math.round(finalPrice - cb.totalCost - (fb.expensesAmount ?? 0))
+    const servicesTotal = fb.servicesTotal ?? 0
+    const productPrice = finalPrice - servicesTotal
+    const taxDecimal = (fb.expensesPercent ?? 12) / 100
+    const taxOnProduct = Math.round(productPrice * taxDecimal)
+    const profit = Math.round(productPrice - cb.totalCost - taxOnProduct)
     const margin = finalPrice > 0 ? Number(((profit / finalPrice) * 100).toFixed(1)) : 0
     return { finalPrice, profit, margin, discount }
   }
@@ -354,22 +380,7 @@ export default function CalculationDetailPage() {
     }, 1500)
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
-  if (!calc)   return <div className="min-h-screen flex items-center justify-center text-gray-400">Расчёт не найден</div>
-
-  const fb = calc.financial_breakdown
-  const cb = calc.cost_breakdown
-  const { finalPrice, profit, margin, discount } = getPreview()
-  const priceWithPartner = calc.base_price + (fb.partnerAmount ?? 0)
-
-  const marginColor = margin >= 45 ? 'text-emerald-600' : margin >= 30 ? 'text-amber-600' : 'text-red-600'
-  const marginBg    = margin >= 45 ? 'bg-emerald-50 border-emerald-200' : margin >= 30 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
-
-  const productInfo = PRODUCT_LABELS[calc.product_type] ?? { label: calc.product_type, badge: 'bg-gray-100 text-gray-600' }
-  const statusMeta = getStatusMeta(calc.status)
-  const params = buildParams(calc)
-
-  // ── Visualization inputs reconstruction ──────────────────────────────────
+  // ── Visualization inputs reconstruction — must be before early returns ──────
   const vizInputs = useMemo(() => {
     if (!calc) return null
     const d = calc.input_data
@@ -425,6 +436,21 @@ export default function CalculationDetailPage() {
     return null
   }, [calc])
 
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-gray-400">Загрузка...</div>
+  if (!calc)   return <div className="min-h-screen flex items-center justify-center text-gray-400">Расчёт не найден</div>
+
+  const fb = calc.financial_breakdown
+  const cb = calc.cost_breakdown
+  const { finalPrice, profit, margin, discount } = getPreview()
+  const priceWithPartner = calc.base_price + (fb.partnerAmount ?? 0)
+
+  const marginColor = margin >= 45 ? 'text-emerald-600' : margin >= 30 ? 'text-amber-600' : 'text-red-600'
+  const marginBg    = margin >= 45 ? 'bg-emerald-50 border-emerald-200' : margin >= 30 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'
+
+  const productInfo = PRODUCT_LABELS[calc.product_type] ?? { label: calc.product_type, badge: 'bg-gray-100 text-gray-600' }
+  const statusMeta = getStatusMeta(calc.status)
+  const params = buildParams(calc)
+
   const hasChanges =
     parseInt(editPrice) !== calc.final_price ||
     parseFloat(editDiscount) !== calc.discount ||
@@ -436,6 +462,71 @@ export default function CalculationDetailPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f7] py-6 px-4">
       <div className="max-w-5xl mx-auto space-y-4">
+
+        {/* ── Recalculate confirmation modal ─────────────────────────────── */}
+        {showRecalcModal && (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+              <div className="flex items-start gap-3 mb-4">
+                <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <span className="text-amber-600 text-lg">⚠</span>
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-semibold text-[#1d1d1f] mb-1">Пересчёт по актуальным ценам</h3>
+                  <p className="text-[13px] text-[#6e6e73] leading-relaxed">
+                    Откроется калькулятор с текущими ценами из справочников.
+                    Цены материалов и комплектующих могут отличаться от тех, что были на момент расчёта.
+                  </p>
+                  <div className="mt-3 px-3 py-2 bg-emerald-50 rounded-lg border border-emerald-200">
+                    <p className="text-[12px] text-emerald-700 font-medium">
+                      Оригинал расчёта #{calc.id} ({calc.final_price.toLocaleString('ru-RU')} ₽) останется нетронутым.
+                      Результат сохранится как новый расчёт.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div className="flex gap-3 justify-end">
+                <button onClick={() => setShowRecalcModal(false)}
+                  className="px-4 py-2 text-[13px] text-[#6e6e73] border border-[#e8e8ed] rounded-xl hover:bg-[#f5f5f7] transition-colors">
+                  Отмена
+                </button>
+                <button onClick={() => { setShowRecalcModal(false); openInCalculator(calc) }}
+                  className="px-4 py-2 text-[13px] font-semibold bg-amber-500 text-white rounded-xl hover:bg-amber-600 transition-colors">
+                  Открыть калькулятор
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── Version chain banners ───────────────────────────────────────── */}
+        {calc.parent_calc_id && (
+          <div className="px-4 py-2.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-2 text-[13px]">
+            <span className="text-blue-500">↩</span>
+            <span className="text-blue-700">Это пересчёт расчёта</span>
+            <Link href={`/calculations/${calc.parent_calc_id}`}
+              className="text-blue-600 font-semibold hover:underline">
+              #{calc.parent_calc_id}
+            </Link>
+          </div>
+        )}
+        {childCalcs.length > 0 && (
+          <div className="px-4 py-2.5 bg-amber-50 border border-amber-200 rounded-xl text-[13px]">
+            <span className="text-amber-700 font-medium">Пересчитан: </span>
+            {childCalcs.map((ch, i) => (
+              <span key={ch.id}>
+                {i > 0 && <span className="text-[#c7c7cc] mx-1">·</span>}
+                <Link href={`/calculations/${ch.id}`}
+                  className="text-amber-700 font-semibold hover:underline">
+                  #{ch.id}
+                </Link>
+                <span className="text-amber-600 ml-1">
+                  ({ch.final_price.toLocaleString('ru-RU')} ₽ · {new Date(ch.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })})
+                </span>
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* ── Header ─────────────────────────────────────────────────────── */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
@@ -476,10 +567,10 @@ export default function CalculationDetailPage() {
               </a>
             )}
 
-            {/* Recalculate */}
-            <button onClick={() => openInCalculator(calc)}
-              className="px-3 py-2 bg-white border border-[#e8e8ed] text-[#1d1d1f] text-[13px] font-medium rounded-xl hover:bg-[#f5f5f7] transition-colors">
-              Пересчитать
+            {/* Recalculate — opens modal first, then redirects to calculator */}
+            <button onClick={() => setShowRecalcModal(true)}
+              className="px-3 py-2 bg-amber-50 border border-amber-200 text-amber-800 text-[13px] font-medium rounded-xl hover:bg-amber-100 transition-colors">
+              Пересчитать по актуальным ценам
             </button>
 
             {/* PDF */}

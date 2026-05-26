@@ -17,6 +17,7 @@ type SavePayload = {
   client_name?: string
   client_phone?: string
   order_group_id?: string
+  parent_calc_id?: number
 }
 
 export type SaveResult = { id: number; error?: never } | { id?: never; error: string } | null
@@ -30,7 +31,12 @@ export async function saveCalculation(payload: SavePayload): Promise<SaveResult>
 
   const { data, error } = await supabase
     .from('calculations')
-    .insert({ ...payload, created_by: session.user.id, status: 'draft' })
+    .insert({
+      ...payload,
+      created_by: session.user.id,
+      status: 'draft',
+      ...(payload.parent_calc_id ? { parent_calc_id: payload.parent_calc_id } : {}),
+    })
     .select('id')
     .single()
 

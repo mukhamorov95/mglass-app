@@ -382,6 +382,8 @@ export type B2BMaterial = {
   sheet_width: number            // мм, default 3210
   sheet_height: number           // мм, default 2250
   pattern_direction: PatternDirection  // направление рисунка для рифлёного стекла
+  supplier_id?: string | null
+  supplier_material_name?: string | null
 }
 
 export const B2B_CATEGORIES = [

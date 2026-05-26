@@ -153,8 +153,9 @@ export function calculateMirror(
   })
 
   // Modular lighting system
+  // Complex shapes don't use a rectangular profile frame (assembled on substrate instead)
   if (inputs.hasLighting) {
-    if (inputs.frame) {
+    if (inputs.frame && inputs.shape !== 'complex') {
       lines.push({
         name:  dn(inputs.frame),
         qty:   Number(perimeter.toFixed(2)),
@@ -354,7 +355,7 @@ export function calculateMirror(
     textParts.push(inputs.hasSandblast ? 'свет сквозь матовый рисунок' : 'мягкое свечение по периметру')
   }
 
-  if (inputs.hasLighting && inputs.frame) {
+  if (inputs.hasLighting && inputs.frame && inputs.shape !== 'complex') {
     textParts.push('')
     textParts.push('Каркас:')
     textParts.push(dn(inputs.frame))

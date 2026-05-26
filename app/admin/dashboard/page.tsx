@@ -45,7 +45,20 @@ export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
   const [usersMap, setUsersMap] = useState<Record<string, string>>({})
+  const [role, setRole] = useState<string | null>(null)
   const { strategy } = useOwnerStrategy()
+
+  useEffect(() => {
+    async function loadRole() {
+      const sb = createClient()
+      const { data: { user } } = await sb.auth.getUser()
+      if (user) {
+        const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
+        setRole((prof as { role?: string } | null)?.role ?? null)
+      }
+    }
+    loadRole()
+  }, [])
 
   useEffect(() => { load() }, [])
 
@@ -172,9 +185,19 @@ export default function DashboardPage() {
             {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
-        <button onClick={load} className="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] transition-colors">
-          Обновить
-        </button>
+        <div className="flex items-center gap-2">
+          {(role === 'admin' || role === 'ceo') && (
+            <Link
+              href="/admin/health-check"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+            >
+              <span>✓</span> Проверить систему
+            </Link>
+          )}
+          <button onClick={load} className="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] transition-colors">
+            Обновить
+          </button>
+        </div>
       </div>
 
       {/* Alerts */}
