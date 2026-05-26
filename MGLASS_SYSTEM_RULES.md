@@ -1,180 +1,102 @@
-# MGLASS SYSTEM RULES
-## Обязательный документ — читать перед любыми изменениями
+# MGlass — Правила целостности данных калькулятора
 
-> **Главный принцип:** Любое новое внедрение — надстройка, а не разрушение существующей логики.
+## Статус
+Этот файл — ОБЯЗАТЕЛЬНЫЙ контракт системы.
+Он должен проверяться при каждом изменении любого калькулятора, saveCalculation, CartContext, или страницы расчётов.
 
 ---
 
-## 1. АРХИТЕКТУРА ПЛАТФОРМЫ
+## ИНВАРИАНТЫ — нарушение любого из них = баг
+
+### INV-1: final_price всегда включает услуги
+**Что должно быть:**
+- `final_price` в БД = продукт + монтаж + доставка (всё что платит клиент)
+- `final_price` = `grand_total`, никогда не `result.finalPrice` без услуг
+
+**Где проверять:**
+- `components/CartSection.tsx` → `handleSaveOrder()` → поле `final_price`
+- `app/calculator/mirror/page.tsx` → `handleAddToCart()` → `final_price` в CartItem
+- `app/calculator/loft/page.tsx` → `handleAddToCart()` → `final_price` в CartItem ⚠️ БАГ
+- `app/calculator/shower/page.tsx` → `handleAddToCart()` → `final_price` в CartItem ⚠️ БАГ
+
+**Правило:** `final_price: result.grandTotal` — всегда grandTotal, никогда finalPrice
+
+---
+
+### INV-2: input_data — полный snapshot для пересчёта
+**Что должно быть:**
+Из `input_data` должно быть возможно воспроизвести расчёт полностью.
+Включает ВСЕ пользовательские параметры: размеры, материалы, услуги, скидки, партнёр.
+
+**Что обязательно в input_data:**
+- Mirror: width, height, shape, mirrorName, mirrorMm, hasLighting, voltage, frameId, ledStripId, psuId, diffuserId, buttonType, hasSandblast, hasSubstrate, substratePrice, hasFrame, mirrorFrameId, hasFacet, facetTypeMm, hasInstallation, hasDelivery, kmFromMkad, partnerId, discount, margin
+- Loft: width, height, sections, divisions, systemType, glassId, glassName, glassThickness, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery, kmFromMkad, partnerId, discount, margin ⚠️ partnerId/discount/margin отсутствуют
+- Shower: tier, modelId, stdShowerType, stdGlassCount, stdIsCorner, dimStr, glassType, thickness, hwColor, hasInstallation, hasDelivery, kmFromMkad, partnerId, discount ⚠️ partnerId/discount отсутствуют
+
+---
+
+### INV-3: edit mode никогда не перезаписывает оригинал
+**Что должно быть:**
+"Пересчитать по актуальным ценам" → ВСЕГДА создаёт НОВЫЙ расчёт с `parent_calc_id = editCalcId`.
+`updateCalculation` вызывается только для редактирования клиента/скидки на странице расчёта.
+
+**Где проверять:**
+- `app/calculator/mirror/page.tsx` → `handleSave()` — ИСПРАВЛЕНО ✓
+- `app/calculator/loft/page.tsx` → `handleSave()` — ⚠️ до сих пор вызывает `updateCalculation`
+- `app/calculator/shower/page.tsx` → `handleSave()` — ⚠️ до сих пор вызывает `updateCalculation`
+
+**Правило:** в `handleSave()` не должно быть блока `if (editCalcId) { updateCalculation(...) }`.
+Всегда: `saveCalculation({ ...payload, parent_calc_id: editCalcId ?? undefined })`
+
+---
+
+### INV-4: profit и margin считаются корректно при наличии услуг
+**Что должно быть:**
+- `profit` = (final_price - servicesTotal) - totalCost - tax_on_product
+- `margin` = profit / final_price * 100
+- НЕ: profit = final_price - totalCost - expensesAmount (включает услуги в базу → занижает profit)
+
+**Где проверять:**
+- Все калькуляторы: `result.profit`, `result.margin` из lib/mirrorCalculator.ts, lib/loftCalculator.ts, lib/showerCalculator.ts
+- `app/calculations/[id]/page.tsx` → `getPreview()`: когда цена не изменена — использовать `calc.profit` и `calc.margin` из БД напрямую
+
+---
+
+### INV-5: CartItem.final_price = CartItem.grand_total
+**Что должно быть:**
+В `lib/CartContext.tsx`, тип `CartItem` поле `final_price` должно быть = `grand_total`.
+`CartSection.tsx` при сохранении использует `item.grand_total` как `final_price`.
+
+---
+
+### INV-6: parent_calc_id — ссылочная целостность
+**Что должно быть:**
+- Цикличных ссылок нет (A → B → A)
+- `parent_calc_id` ссылается на существующий расчёт
+
+---
+
+## ИЗВЕСТНЫЕ БАГИ (не исправлены на момент написания)
+
+| # | Файл | Строка | Баг | Приоритет |
+|---|------|--------|-----|-----------|
+| 1 | `app/calculator/loft/page.tsx` | ~293 | `final_price: result.finalPrice` вместо `result.grandTotal` в CartItem | КРИТИЧЕСКИЙ |
+| 2 | `app/calculator/shower/page.tsx` | ~380 | То же самое в CartItem | КРИТИЧЕСКИЙ |
+| 3 | `app/calculator/loft/page.tsx` | ~325 | `updateCalculation` в edit mode — перезаписывает оригинал | ВЫСОКИЙ |
+| 4 | `app/calculator/shower/page.tsx` | ~411 | То же самое | ВЫСОКИЙ |
+| 5 | `app/calculator/loft/page.tsx` | ~285 | input_data без partnerId, discount, margin, kmFromMkad | СРЕДНИЙ |
+| 6 | `app/calculator/shower/page.tsx` | ~380 | input_data без partnerId, discount, kmFromMkad | СРЕДНИЙ |
+
+---
+
+## ЧЕКЛИСТ для проверки после любых изменений в калькуляторах
 
 ```
-mglass-app/
-├── app/
-│   ├── admin/              — административная часть (справочники, дашборд, настройки)
-│   ├── calculator/
-│   │   ├── mirror/         — калькулятор зеркал с подсветкой
-│   │   ├── shower/         — калькулятор душевых перегородок
-│   │   ├── loft/           — калькулятор лофт-перегородок
-│   │   └── b2b/            — B2B калькулятор (оптовый)
-│   ├── calculations/[id]/  — история расчётов + print (PDF КП)
-│   ├── orders/             — заказы MGlass
-│   ├── b2b-orders/         — B2B заказы
-│   ├── b2b-quotes/         — B2B просчёты
-│   └── api/                — API endpoints (Next.js Route Handlers)
-├── lib/
-│   ├── mirrorCalculator.ts — движок ценообразования зеркал ⚠️ КРИТИЧНО
-│   ├── b2bCalculator.ts    — движок ценообразования B2B ⚠️ КРИТИЧНО
-│   ├── glassMatrix.ts      — матрица цен на стекло/зеркала
-│   ├── types.ts            — все общие типы
-│   ├── getRole.ts          — ролевая модель (admin/manager/production/seo/ceo/buyer)
-│   ├── saveCalculation.ts  — сохранение расчётов в БД
-│   ├── useOwnerStrategy.ts — настройки маржи и стратегии
-│   └── supabase-browser.ts / supabase-server.ts
-├── components/
-│   ├── Sidebar.tsx         — навигация + роли ⚠️ КРИТИЧНО
-│   ├── PricingBlock.tsx    — блок маржи/скидки/партнёрки
-│   └── CartSection.tsx     — корзина для B2B
+[ ] INV-1: final_price в CartItem = grandTotal (не finalPrice)
+[ ] INV-1: final_price в handleSave payload = grandTotal
+[ ] INV-2: input_data содержит ВСЕ параметры из таблицы выше
+[ ] INV-3: handleSave не вызывает updateCalculation — только saveCalculation с parent_calc_id
+[ ] INV-4: profit/margin в payload = из calculator lib, не пересчитан вручную с ошибкой
+[ ] INV-5: CartSection использует item.grand_total как final_price
+[ ] INV-6: parent_calc_id передаётся корректно при edit mode
 ```
-
----
-
-## 2. РОЛЕВАЯ МОДЕЛЬ
-
-| Роль         | Доступ |
-|-------------|--------|
-| `admin`     | Всё включая справочники, пользователи, настройки |
-| `ceo`       | Дашборд, аналитика, заказы (без редактирования справочников) |
-| `manager`   | Калькуляторы, история своих расчётов, заказы, клиенты |
-| `production`| Заказы в производстве, маршрутные листы |
-| `buyer`     | Закупки, склад, справочники цен, поставщики |
-| `seo`       | Ограниченный доступ |
-
-**Правило:** При изменении Sidebar.tsx — всегда проверять все 6 ролей. Никогда не удалять пункты без явного указания.
-
----
-
-## 3. КРИТИЧЕСКИЕ ФУНКЦИИ — НЕЛЬЗЯ ЛОМАТЬ
-
-### Калькуляторы
-- `lib/mirrorCalculator.ts` → функция `calculateMirror()` — формула маржи
-- `lib/b2bCalculator.ts` → B2B расчёт стекла
-- `app/calculator/mirror/page.tsx` → useMemo зависимости (включая `expensesPercent`)
-- Формула: `basePrice = totalCost / (1 - margin/100 - tax/100)`
-
-### Сохранение
-- `lib/saveCalculation.ts` → `saveCalculation()` и `updateCalculation()`
-- Поле `final_price` в БД = `grandTotal` (цена изделия + услуги)
-- Поле `created_by` = UUID текущего пользователя (не терять!)
-
-### PDF / КП
-- `app/calculations/[id]/print/page.tsx`
-- `productPrice = final_price - servicesTotal` (вычисляется при отображении)
-- `serviceLines` из `financial_breakdown` — все услуги отдельными строками
-
-### Стекло/матрица цен
-- `glass_price_matrix` — два типа строк: `price_type='cost'` и `price_type='sale'`
-- `b2b_materials` — названия должны совпадать с `glass_price_matrix.name`
-- При переименовании стекла в `glass_price_matrix` → PATCH route синхронизирует `b2b_materials`
-
-### Сложная форма зеркала
-- При `shape === 'complex'`: каркас/профиль НЕ используется и НЕ отображается
-- При `shape === 'complex'`: подложка включается автоматически
-- Три уровня защиты: `inputs.frame=null` (page) + guard (mirrorCalculator.ts × 2)
-
----
-
-## 4. ПРАВИЛА ВНЕДРЕНИЯ НОВЫХ ФУНКЦИЙ
-
-### Перед началом
-1. Прочитать этот файл
-2. Определить, какие модули из раздела 3 затрагиваются
-3. Описать: что меняем / зачем / что может сломаться / как откатить
-
-### Принципы
-- Новый код — **дополнение** к существующему, не замена
-- Не переписывать рабочую логику без необходимости
-- Не менять структуру `input_data`, `cost_breakdown`, `financial_breakdown` — там хранятся исторические данные
-- SQL-миграции: только `ADD COLUMN IF NOT EXISTS`, никогда не `DROP COLUMN`
-- Hooks: все `useMemo`/`useEffect` — **до** условных `return` в компоненте
-
-### После внедрения
-- `npx tsc --noEmit` → 0 ошибок
-- Пройти чеклист раздела 5
-- Проверить dev-сервер на localhost:3000
-
----
-
-## 5. ЧЕКЛИСТ ПОСЛЕ ЛЮБОГО ИЗМЕНЕНИЯ
-
-```
-[ ] Страница открывается без ошибок
-[ ] Калькулятор пересчитывает цену при изменении параметров
-[ ] Расчёт сохраняется (кнопка «Сохранить расчёт»)
-[ ] Сохранённый расчёт открывается из истории (/calculations)
-[ ] PDF генерируется и цифры совпадают с калькулятором
-[ ] Справочники открываются и сохраняют изменения
-[ ] Роли: менеджер не видит admin-разделы
-[ ] Роли: admin видит всё
-[ ] Нет ошибок в консоли браузера
-[ ] npx tsc --noEmit → чисто
-[ ] Нет 404 на ранее работавших маршрутах
-[ ] B2B калькулятор работает
-```
-
----
-
-## 6. ПРАВИЛА ДЛЯ БАЗЫ ДАННЫХ
-
-### Таблицы — критические
-| Таблица | Назначение | Риск |
-|---------|-----------|------|
-| `calculations` | История всех расчётов | Высокий — не менять схему |
-| `glass_price_matrix` | Цены стекла/зеркал | Высокий — синхронизован с b2b_materials |
-| `b2b_materials` | Материалы для B2B | Высокий — калькулятор зависит от names |
-| `orders` | Заказы | Высокий |
-| `users` | Профили пользователей + роли | Критично |
-| `financial_settings` | Настройки налога по типу продукта | Средний |
-| `mirror_lighting_components` | LED-компоненты | Средний |
-| `facet_prices` | Цены фацета | Средний |
-
-### Правила
-- Никогда не `DROP TABLE`, не `DROP COLUMN` в production
-- Переименование стекла: только через `/admin/glass-prices` (PATCH синхронизирует b2b_materials)
-- Новые колонки: `ALTER TABLE x ADD COLUMN IF NOT EXISTS ...`
-
----
-
-## 7. ПРАВИЛА ДЛЯ PDF / КП
-
-- Клиентский текст (`client_text`) — не содержит технических кодов (2835, PCB, Ш=5мм)
-- LED описание: только кельвины (K), ватты (Вт/м), количество LED/м
-- Каркас при сложной форме — не выводится нигде
-- Поставщики, себестоимость, внутренние коды — скрыты от клиента
-
----
-
-## 8. ROLLBACK ПЛАН
-
-При поломке любого модуля:
-1. Остановить новые изменения
-2. `git diff` — найти последнее рабочее состояние
-3. Исправить только сломанный модуль
-4. Только потом продолжать
-
-Перед сложными изменениями:
-```bash
-git add -A && git commit -m "checkpoint: before [название задачи]"
-```
-
----
-
-## 9. КОНТАКТЫ И ОКРУЖЕНИЕ
-
-- Dev-сервер: `localhost:3000`
-- БД: Supabase (project: mglass)
-- Стек: Next.js 14 (App Router), TypeScript, Tailwind CSS, Supabase
-- Роли в системе: admin (Владислав), managers (Наталья, Алина, Александра, Яна), buyer (Семён)
-
----
-
-*Последнее обновление: 2026-05-25*
