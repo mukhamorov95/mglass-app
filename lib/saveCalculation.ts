@@ -1,5 +1,30 @@
 import { createClient } from './supabase-browser'
 
+// ── Integrity guard — INV-1, INV-2, INV-4 ────────────────────────────────────
+// Проверяет инварианты перед каждым сохранением. Не бросает исключений —
+// только console.error, чтобы не ломать UX при граничных случаях.
+function assertPayloadIntegrity(p: {
+  final_price: number; base_price: number; margin: number
+  input_data: Record<string, unknown>; product_type: string
+}) {
+  // INV-1: final_price >= base_price (иначе final_price = product без услуг, а не grandTotal)
+  if (p.final_price > 0 && p.base_price > 0 && p.final_price < p.base_price * 0.8) {
+    console.error(
+      `[MGlass INV-1] ${p.product_type}: final_price (${p.final_price}) < base_price*0.8 (${Math.round(p.base_price * 0.8)})` +
+      ' — вероятно передан finalPrice вместо grandTotal', p
+    )
+  }
+  // INV-4: margin > 90% — признак что profit считается без вычета услуг
+  if (p.margin > 90) {
+    console.error(`[MGlass INV-4] ${p.product_type}: margin=${p.margin}% > 90% — проверь формулу profit`, p)
+  }
+  // INV-2: input_data должна содержать хотя бы основные параметры
+  const keys = Object.keys(p.input_data ?? {}).length
+  if (keys < 4) {
+    console.error(`[MGlass INV-2] ${p.product_type}: input_data содержит только ${keys} поля — snapshot неполный`, p)
+  }
+}
+
 type SavePayload = {
   product_type: 'mirror' | 'loft' | 'shower'
   input_data: Record<string, unknown>
@@ -23,6 +48,7 @@ type SavePayload = {
 export type SaveResult = { id: number; error?: never } | { id?: never; error: string } | null
 
 export async function saveCalculation(payload: SavePayload): Promise<SaveResult> {
+  assertPayloadIntegrity(payload)
   const supabase = createClient()
   const { data: { session } } = await supabase.auth.getSession()
   if (!session?.user) {

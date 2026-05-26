@@ -8,7 +8,7 @@ import {
   type ShowerModelId, type ShowerTier, type ShowerInputs, type ShowerHardwareLine, type ShowerModel,
 } from '@/lib/showerCalculator'
 import { ShowerModelIcon } from '@/components/ShowerModelIcon'
-import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
+import { saveCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
@@ -110,6 +110,7 @@ export default function ShowerCalculatorPage() {
   const [clientPhone, setClientPhone] = useState('')
   const [editCalcId, setEditCalcId]             = useState<number | null>(null)
   const [editOrderGroupId, setEditOrderGroupId] = useState<string | null>(null)
+  const [editCalcOldPrice, setEditCalcOldPrice] = useState<number | null>(null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
   const supplierManuallySet = useRef(false)
@@ -201,8 +202,9 @@ export default function ShowerCalculatorPage() {
           if (p.height)    setHeight(String(p.height))
           if (p.glassType) setGlassType(p.glassType as string)
           if (p.hwColor)   setHwColor(p.hwColor as string)
-          if (p.__editCalcId__)     setEditCalcId(p.__editCalcId__ as number)
-          if (p.__order_group_id__) setEditOrderGroupId(p.__order_group_id__ as string)
+          if (p.__editCalcId__)      setEditCalcId(p.__editCalcId__ as number)
+          if (p.__order_group_id__)  setEditOrderGroupId(p.__order_group_id__ as string)
+          if (p.__old_final_price__) setEditCalcOldPrice(p.__old_final_price__ as number)
         }
       } catch {}
 
@@ -377,11 +379,17 @@ export default function ShowerCalculatorPage() {
     addItem({
       product_type: 'shower',
       label: `${model.label} ${dimStr} мм [${tierCfg.label}]`,
-      input_data: { tier, modelId, width, width2, height, glassType, thickness, hwColor },
+      input_data: {
+        tier, modelId, width, width2, height, dimStr, glassType, thickness, hwColor,
+        stdShowerType, stdGlassCount, stdIsCorner,
+        withMounting, withDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
       base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
-      final_price: result.finalPrice, grand_total: result.grandTotal,
+      // INV-1: grandTotal = product + services (что клиент реально платит)
+      final_price: result.grandTotal, grand_total: result.grandTotal,
       margin: result.margin, profit: result.profit, manager_bonus: result.managerBonus, client_text: result.clientText,
     })
     setAddedToCart(true)
@@ -396,9 +404,13 @@ export default function ShowerCalculatorPage() {
 
     const payload = {
       product_type: 'shower' as const,
-      input_data: tier === 'standard'
-        ? { tier, stdShowerType, stdGlassCount, stdIsCorner, dimStr, glassType, thickness }
-        : { tier, modelId, model: budgetModel.label, dimStr, glassType, thickness, hwColor },
+      input_data: {
+        tier, modelId, width, width2, height, dimStr, glassType, thickness, hwColor,
+        stdShowerType, stdGlassCount, stdIsCorner,
+        withMounting, withDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+        ...(tier === 'budget' ? { model: budgetModel.label } : {}),
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: { expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount, basePrice: result.basePrice, partnerAmount: result.partnerAmount, discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal },
       base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
@@ -407,15 +419,17 @@ export default function ShowerCalculatorPage() {
       client_phone: clientPhone.trim() || undefined,
     }
 
-    if (editCalcId) {
-      const res = await updateCalculation(editCalcId, payload)
-      if (res && 'id' in res) {
-        setSavedId(res.id ?? null)
-        setTimeout(() => { window.location.href = `/calculations/${editCalcId}` }, 800)
+    // INV-3: edit mode НИКОГДА не перезаписывает оригинал — всегда новый расчёт с parent_calc_id
+    const saved = await saveCalculation({
+      ...payload,
+      order_group_id: editOrderGroupId ?? undefined,
+      parent_calc_id: editCalcId ?? undefined,
+    })
+    if (saved && 'id' in saved) {
+      setSavedId(saved.id ?? null)
+      if (editCalcId) {
+        setTimeout(() => { window.location.href = `/calculations/${saved.id}` }, 1200)
       }
-    } else {
-      const saved = await saveCalculation({ ...payload, order_group_id: editOrderGroupId ?? undefined })
-      if (saved && 'id' in saved) setSavedId(saved.id ?? null)
     }
     setSaving(false)
   }
@@ -452,6 +466,18 @@ export default function ShowerCalculatorPage() {
       <div className="max-w-[960px] mx-auto px-5 py-6">
 
         {/* ── Header ────────────────────────────────────────── */}
+        {editCalcId && (
+          <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <span className="text-amber-500 text-lg flex-shrink-0">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-amber-800">Режим пересчёта — расчёт #{editCalcId}</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Оригинал останется нетронутым. Результат сохранится как новый расчёт.
+                {editCalcOldPrice ? ` Было: ${editCalcOldPrice.toLocaleString('ru-RU')} ₽` : ''}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
             <a href="/" className="text-[13px] text-[#0071e3] hover:underline">Главная</a>
@@ -470,7 +496,7 @@ export default function ShowerCalculatorPage() {
             <button onClick={handleSave} disabled={saving || showerBlocked || discountExceeded}
               title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
-              {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : editCalcId ? `Обновить #${editCalcId}` : 'Сохранить расчёт'}
+              {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : editCalcId ? 'Сохранить как новый расчёт' : 'Сохранить расчёт'}
             </button>
             {savedId && (
               <a href={`/calculations/${savedId}`}

@@ -7,7 +7,7 @@ import PricingBlock from '@/components/PricingBlock'
 import { calculateLoft, LoftInputs, LoftSystemType, LoftResult } from '@/lib/loftCalculator'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
-import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
+import { saveCalculation } from '@/lib/saveCalculation'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import ProductVisualization from '@/components/ProductVisualization'
 
@@ -64,6 +64,7 @@ export default function LoftCalculatorPage() {
   const [clientPhone, setClientPhone] = useState('')
   const [editCalcId]        = useState<number | null>(() => (loadSaved().__editCalcId__ as number) ?? null)
   const [editOrderGroupId]  = useState<string | null>(() => (loadSaved().__order_group_id__ as string) ?? null)
+  const [editCalcOldPrice]  = useState<number | null>(() => (loadSaved().__old_final_price__ as number) ?? null)
   const { addItem } = useCart()
   const { strategy } = useOwnerStrategy()
 
@@ -282,7 +283,14 @@ export default function LoftCalculatorPage() {
     addItem({
       product_type: 'loft',
       label: `Лофт ${systemType} ${width}×${height} мм`,
-      input_data: { width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery },
+      input_data: {
+        width, height, sections, divisions, systemType,
+        glassId, glassName: selectedGlass?.name ?? null,
+        glassThickness: selectedGlass ? glassNameToMm(selectedGlass.name) : null,
+        withTempering, withMirrorFilm, withPainting,
+        hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -290,7 +298,8 @@ export default function LoftCalculatorPage() {
         discountAmount: result.discountAmount, serviceLines: result.serviceLines, servicesTotal: result.servicesTotal,
       },
       base_price: result.basePrice, discount: inputs.discount, partner_percent: inputs.partnerPercent,
-      final_price: result.finalPrice, grand_total: result.grandTotal,
+      // INV-1: grandTotal = product + services (что клиент реально платит)
+      final_price: result.grandTotal, grand_total: result.grandTotal,
       margin: result.margin, profit: result.profit, manager_bonus: 0, client_text: result.clientText,
     })
     setMargin(String(settings?.default_margin ?? 40))
@@ -307,7 +316,14 @@ export default function LoftCalculatorPage() {
 
     const payload = {
       product_type: 'loft' as const,
-      input_data: { width, height, sections, divisions, systemType, glassId, withTempering, withMirrorFilm, withPainting, hasInstallation, hasDelivery },
+      input_data: {
+        width, height, sections, divisions, systemType,
+        glassId, glassName: selectedGlass?.name ?? null,
+        glassThickness: selectedGlass ? glassNameToMm(selectedGlass.name) : null,
+        withTempering, withMirrorFilm, withPainting,
+        hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
+        partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
+      },
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -321,15 +337,17 @@ export default function LoftCalculatorPage() {
       client_phone: clientPhone.trim() || undefined,
     }
 
-    if (editCalcId) {
-      const res = await updateCalculation(editCalcId, payload)
-      if (res && 'id' in res) {
-        setSavedId(res.id ?? null)
-        setTimeout(() => { window.location.href = `/calculations/${editCalcId}` }, 800)
+    // INV-3: edit mode НИКОГДА не перезаписывает оригинал — всегда новый расчёт с parent_calc_id
+    const saved = await saveCalculation({
+      ...payload,
+      order_group_id: editOrderGroupId ?? undefined,
+      parent_calc_id: editCalcId ?? undefined,
+    })
+    if (saved && 'id' in saved) {
+      setSavedId(saved.id ?? null)
+      if (editCalcId) {
+        setTimeout(() => { window.location.href = `/calculations/${saved.id}` }, 1200)
       }
-    } else {
-      const saved = await saveCalculation({ ...payload, order_group_id: editOrderGroupId ?? undefined })
-      if (saved && 'id' in saved) setSavedId(saved.id ?? null)
     }
     setSaving(false)
   }
@@ -354,6 +372,18 @@ export default function LoftCalculatorPage() {
       <div className="max-w-[1100px] mx-auto px-4 py-4">
 
         {/* Шапка */}
+        {editCalcId && (
+          <div className="mb-3 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+            <span className="text-amber-500 text-lg flex-shrink-0">⚡</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-[12px] font-semibold text-amber-800">Режим пересчёта — расчёт #{editCalcId}</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                Оригинал останется нетронутым. Результат сохранится как новый расчёт.
+                {editCalcOldPrice ? ` Было: ${editCalcOldPrice.toLocaleString('ru-RU')} ₽` : ''}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
             <a href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</a>
@@ -718,7 +748,7 @@ export default function LoftCalculatorPage() {
                   <button onClick={handleSave} disabled={saving || discountExceeded}
                     title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
-                    {saving ? '...' : savedId ? `#${savedId} ✓` : editCalcId ? `Обновить #${editCalcId}` : 'Сохранить расчёт'}
+                    {saving ? '...' : savedId ? `#${savedId} ✓` : editCalcId ? 'Сохранить как новый расчёт' : 'Сохранить расчёт'}
                   </button>
                   <button onClick={handleCopy}
                     className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] whitespace-nowrap">
