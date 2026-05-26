@@ -38,31 +38,11 @@ function addDays(date: Date, days: number) {
 }
 
 function getProductDescription(calc: Calc): string {
-  if (calc.client_text) {
-    const lines: string[] = []
-    for (const line of calc.client_text.split('\n')) {
-      if (line === '') break
-      if (/Стоимость|Итого с услугами/.test(line)) break
-      if (/ — \d[\d\s]*₽/.test(line)) continue
-      lines.push(line)
-    }
-    if (lines.length > 0) {
-      // Enrich single-line mirror descriptions with material details from input_data
-      if (calc.product_type === 'mirror' && lines.length === 1) {
-        const d = calc.input_data
-        const extras: string[] = []
-        if (d.mirrorName) extras.push(`${d.mirrorName}${d.mirrorMm ? ` ${d.mirrorMm} мм` : ''}`)
-        if (d.hasLighting) extras.push('подсветка')
-        if (d.hasSandblast) extras.push('пескоструй')
-        if (d.hasSubstrate) extras.push('подложка')
-        if (extras.length) lines.push(extras.join(' · '))
-      }
-      return lines.join('\n')
-    }
-  }
   const d = calc.input_data
+
   if (calc.product_type === 'mirror') {
-    const shape = d.shape === 'circle' ? 'круглое' : d.shape === 'oval' ? 'овальное' : d.shape === 'arch' ? 'арочное' : 'прямоугольное'
+    const shapeLabel: Record<string, string> = { circle: 'круглое', oval: 'овальное', arch: 'арочное', complex: 'сложная форма' }
+    const shape = shapeLabel[d.shape as string] ?? 'прямоугольное'
     const dims  = d.shape === 'circle' ? `Ø${d.width} мм` : `${d.width}×${d.height} мм`
     const lines = [`Зеркало ${shape}, ${dims}`]
     const extras: string[] = []
@@ -73,19 +53,30 @@ function getProductDescription(calc: Calc): string {
     if (extras.length) lines.push(extras.join(' · '))
     return lines.join('\n')
   }
+
   if (calc.product_type === 'loft') {
-    return `Лофт-перегородка ${d.width}×${d.height} мм`
+    const systemNames: Record<string, string> = { fixed: 'стационарная', sliding: 'раздвижная', swing: 'распашная' }
+    const system = systemNames[d.systemType as string] ?? ''
+    const extras: string[] = []
+    if (d.glassName) extras.push(d.glassName as string)
+    if (d.withTempering) extras.push('закалка')
+    if (d.withPainting) extras.push('окраска')
+    const line2 = [system, ...extras].filter(Boolean).join(', ')
+    return [`Лофт-перегородка ${d.width}×${d.height} мм`, line2].filter(Boolean).join('\n')
   }
+
   if (calc.product_type.startsWith('shower')) {
-    const dims = (d.dimStr as string) || `${d.width}×${d.height} мм`
+    const dims  = (d.dimStr as string) || `${d.width}×${d.height} мм`
     const glass = d.glassType as string || ''
-    const thick = d.thickness ? `${d.thickness}мм` : '8мм'
+    const thick = d.thickness ? `${d.thickness} мм` : '8 мм'
     const colorLabel: Record<string, string> = { chrome: 'Хром', black: 'Чёрный', bronze: 'Бронза', gold: 'Золото', white: 'Белый' }
     const color = colorLabel[d.hwColor as string] || ''
     return [`Душевая перегородка ${dims}`, glass && `стекло ${thick} ${glass}`, color && `фурнитура ${color}`].filter(Boolean).join('\n')
   }
+
   return 'Изделие из стекла'
 }
+
 
 export default function GroupPrintPage() {
   const { groupId } = useParams<{ groupId: string }>()
@@ -128,103 +119,46 @@ export default function GroupPrintPage() {
     price: number
     total: number
     isService?: boolean
-    isDiscount?: boolean
     isFirst?: boolean
   }
 
-  // Phase 1: product rows + collect all service lines
-  const productRows: Row[] = []
-  // Map: service name → { price per unit, qty accumulated, total accumulated }
-  // Delivery-type services are kept at single-occurrence price (first seen)
-  const svcMap = new Map<string, { price: number; qty: number; total: number; isDelivery: boolean }>()
-  let rowIdx = 1
-  let productRowIdx = 0
+  // Layout: product row → service rows (монтаж, доставка) immediately below.
+  // productPrice = final_price - servicesTotal  (matches "Стоимость изделия" in calculator)
+  // service rows = each svcLine as its own row
+  // grandTotal = Σ final_price = Σ(productPrice + servicesTotal) — matches calculator + history
+  const rows: Row[] = []
+  let itemIdx = 0
 
   for (const calc of calcs) {
-    const svcLines = calc.financial_breakdown?.serviceLines ?? []
-    // Recompute servicesTotal from actual lines (not stored total — can diverge)
-    const servicesTotal   = svcLines.filter(s => s.total > 0).reduce((s, l) => s + l.total, 0)
-    const rawProductPrice = calc.final_price - servicesTotal
+    itemIdx++
+    const svcLines     = ((calc.financial_breakdown?.serviceLines ?? []) as ServiceLine[]).filter(s => s.total > 0)
+    const servicesTotal = svcLines.reduce((s, l) => s + l.total, 0)
+    const productPrice  = calc.final_price - servicesTotal
+    const discountNote  = calc.discount > 0 ? ` (скидка ${calc.discount}%)` : ''
 
-    productRowIdx++
+    rows.push({
+      id:        itemIdx,
+      name:      getProductDescription(calc) + discountNote,
+      qty:       1,
+      price:     productPrice,
+      total:     productPrice,
+      isFirst:   itemIdx === 1,
+    })
 
-    if (rawProductPrice < 0) {
-      // Data inconsistency: services exceed the stored total price.
-      // Show the whole calc as one all-inclusive line; don't add its services separately.
-      productRows.push({
-        id:      rowIdx++,
-        name:    getProductDescription(calc) + '\n(с монтажом и доставкой)',
-        qty:     1,
-        price:   calc.final_price,
-        total:   calc.final_price,
-        isFirst: productRowIdx === 1,
+    for (const svc of svcLines) {
+      rows.push({
+        id:        '',
+        name:      svc.name,
+        qty:       svc.qty ?? 1,
+        price:     svc.price ?? svc.total,
+        total:     svc.total,
+        isService: true,
       })
-    } else {
-      const productPrice   = rawProductPrice
-      const originalPrice  = calc.discount > 0
-        ? Math.round(productPrice / (1 - calc.discount / 100))
-        : productPrice
-      const discountAmount = originalPrice - productPrice
-
-      productRows.push({
-        id:      rowIdx++,
-        name:    getProductDescription(calc),
-        qty:     1,
-        price:   originalPrice,
-        total:   productPrice,
-        isFirst: productRowIdx === 1,
-      })
-
-      if (calc.discount > 0 && discountAmount > 0) {
-        productRows.push({
-          id:         '',
-          name:       `Скидка ${calc.discount}%`,
-          qty:        1,
-          price:      -discountAmount,
-          total:      -discountAmount,
-          isDiscount: true,
-        })
-      }
-
-      for (const svc of svcLines) {
-        if (svc.total <= 0) continue
-        const isDelivery = svc.name.toLowerCase().includes('доставк')
-        const existing   = svcMap.get(svc.name)
-        if (existing) {
-          if (!isDelivery) {
-            // Non-delivery: accumulate (e.g. installation × N items)
-            existing.total += svc.total
-            existing.qty   += svc.qty ?? 1
-          }
-          // Delivery: keep first occurrence only (one delivery per order)
-        } else {
-          svcMap.set(svc.name, {
-            price:      svc.price ?? svc.total,
-            qty:        svc.qty ?? 1,
-            total:      svc.total,
-            isDelivery,
-          })
-        }
-      }
     }
   }
 
-  // Phase 2: build consolidated service rows (after all products)
-  const serviceRows: Row[] = []
-  for (const [name, data] of svcMap) {
-    serviceRows.push({
-      id:        rowIdx++,
-      name,
-      qty:       data.qty,
-      price:     data.price,
-      total:     data.total,
-      isService: true,
-    })
-  }
-
-  const rows: Row[]   = [...productRows, ...serviceRows]
-  // Grand total from displayed rows (delivery already deduplicated)
-  const grandTotal    = rows.reduce((s, r) => s + r.total, 0)
+  // grandTotal = Σ(productPrice + services) = Σ(final_price) ✓
+  const grandTotal = rows.reduce((s, r) => s + r.total, 0)
   const vatAmount   = Math.round(grandTotal / 1.05 * 0.05 * 100) / 100
   const clientName  = first.client_name
   const clientPhone = first.client_phone
@@ -296,18 +230,14 @@ export default function GroupPrintPage() {
           </thead>
           <tbody>
             {rows.map((row, i) => {
-              const bg = row.isDiscount ? '#fffbea' : row.isService ? '#f9f9f8' : '#fff'
+              const bg = row.isService ? '#f9f9f8' : '#fff'
               return (
                 <tr key={i} style={{ background: bg, borderBottom: '1px solid #ebebeb' }}>
-                  <td style={{ ...S.td, textAlign: 'center', color: '#aaa', paddingTop: 11, verticalAlign: 'top' }}>
+                  <td style={{ ...S.td, textAlign: 'center', color: '#aaa', paddingTop: row.isService ? 8 : 11, verticalAlign: 'top' }}>
                     {row.id}
                   </td>
-                  <td style={{ ...S.td, verticalAlign: 'top', paddingLeft: row.isDiscount ? 20 : row.isService ? 20 : 12 }}>
-                    {row.isDiscount ? (
-                      <span style={{ fontStyle: 'italic', color: '#92400e', fontSize: 11 }}>
-                        🏷 {row.name}
-                      </span>
-                    ) : row.isService ? (
+                  <td style={{ ...S.td, verticalAlign: 'top', paddingLeft: row.isService ? 24 : 12 }}>
+                    {row.isService ? (
                       <span style={{ color: '#555', fontSize: 11 }}>{row.name}</span>
                     ) : (
                       row.name.split('\n').map((line, j) => (
@@ -317,14 +247,14 @@ export default function GroupPrintPage() {
                       ))
                     )}
                   </td>
-                  <td style={{ ...S.td, textAlign: 'center', color: '#555', verticalAlign: 'top', paddingTop: 11 }}>
+                  <td style={{ ...S.td, textAlign: 'center', color: '#555', verticalAlign: 'top', paddingTop: row.isService ? 8 : 11, fontSize: row.isService ? 11 : 12 }}>
                     {row.qty}
                   </td>
-                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', color: row.isDiscount ? '#92400e' : '#444', verticalAlign: 'top', paddingTop: 11 }}>
-                    {row.isDiscount ? `− ${fmt(Math.abs(row.price))}` : fmt(row.price)}
+                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', color: '#444', verticalAlign: 'top', paddingTop: row.isService ? 8 : 11, fontSize: row.isService ? 11 : 12 }}>
+                    {fmt(row.price)}
                   </td>
-                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', fontWeight: row.isFirst ? 700 : 500, color: row.isDiscount ? '#92400e' : '#111', verticalAlign: 'top', paddingTop: 11, borderRight: 'none' }}>
-                    {row.isDiscount ? `− ${fmt(Math.abs(row.total))}` : fmt(row.total)}
+                  <td style={{ ...S.td, textAlign: 'right', fontFamily: 'ui-monospace, monospace', fontVariantNumeric: 'tabular-nums', fontWeight: row.isFirst ? 700 : 500, color: '#111', verticalAlign: 'top', paddingTop: row.isService ? 8 : 11, fontSize: row.isService ? 11 : 12, borderRight: 'none' }}>
+                    {fmt(row.total)}
                   </td>
                 </tr>
               )

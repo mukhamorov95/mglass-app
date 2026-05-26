@@ -854,12 +854,30 @@ export default function HealthCheckPage() {
   const [ignoredIds, setIgnoredIds] = useState<Set<string>>(new Set())
   const [fixLog, setFixLog]       = useState<FixLogEntry[]>([])
 
-  // Load fix log
+  // Load fix log — DB first, localStorage as fallback
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem(LOG_KEY)
-      if (raw) setFixLog(JSON.parse(raw))
-    } catch {}
+    fetch('/api/admin/health-fix-log')
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => {
+        if (rows && rows.length > 0) {
+          setFixLog(rows.map((r: Record<string, string>) => ({
+            id: r.id, ts: r.applied_at, userEmail: r.applied_by ?? '',
+            checkName: r.fix_name, action: r.fix_name,
+            result: 'success' as const, before: r.before ?? '', after: '',
+          })))
+        } else {
+          try {
+            const raw = localStorage.getItem(LOG_KEY)
+            if (raw) setFixLog(JSON.parse(raw))
+          } catch {}
+        }
+      })
+      .catch(() => {
+        try {
+          const raw = localStorage.getItem(LOG_KEY)
+          if (raw) setFixLog(JSON.parse(raw))
+        } catch {}
+      })
   }, [])
 
   // Resolve current user role
@@ -942,11 +960,22 @@ export default function HealthCheckPage() {
       try { localStorage.setItem(LOG_KEY, JSON.stringify(updated)) } catch {}
       return updated
     })
+    fetch('/api/admin/health-fix-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fix_id: entry.id,
+        fix_name: entry.action,
+        before: entry.before,
+        applied_by: null,
+      }),
+    }).catch(() => {})
   }
 
   function clearLog() {
     setFixLog([])
     try { localStorage.removeItem(LOG_KEY) } catch {}
+    fetch('/api/admin/health-fix-log', { method: 'DELETE' }).catch(() => {})
   }
 
   // ── Derived state ───────────────────────────────────────────────────────────

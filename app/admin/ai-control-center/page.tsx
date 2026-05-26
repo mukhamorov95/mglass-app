@@ -250,14 +250,43 @@ export default function AIControlCenter() {
         if (data?.role === 'admin' || data?.role === 'ceo') setCanFix(true)
       })
     })
-    try {
-      const raw = localStorage.getItem(LOG_KEY)
-      if (raw) setFixLog(JSON.parse(raw))
-      const rawRecs = localStorage.getItem(REC_KEY)
-      if (rawRecs) setRecs(JSON.parse(rawRecs))
-      const rawLog = localStorage.getItem(IMPL_LOG_KEY)
-      if (rawLog) setImplLog(JSON.parse(rawLog))
-    } catch {}
+    // Load fix log — DB first, localStorage fallback
+    fetch('/api/admin/health-fix-log')
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => {
+        if (rows && rows.length > 0) {
+          setFixLog(rows.map((r: Record<string, string>) => ({
+            id: r.id, ts: r.applied_at, userEmail: r.applied_by ?? '',
+            checkName: r.fix_name, action: r.fix_name,
+            result: 'success' as const, before: r.before ?? '', after: '',
+          })))
+        } else {
+          try { const raw = localStorage.getItem(LOG_KEY); if (raw) setFixLog(JSON.parse(raw)) } catch {}
+        }
+      })
+      .catch(() => { try { const raw = localStorage.getItem(LOG_KEY); if (raw) setFixLog(JSON.parse(raw)) } catch {} })
+
+    // Load recommendations — DB first, localStorage fallback
+    fetch('/api/admin/ai-recommendations')
+      .then(r => r.ok ? r.json() : null)
+      .then(rows => {
+        if (rows && rows.length > 0) {
+          setRecs(rows.map((r: Record<string, string>) => ({
+            id: r.id, title: r.title,
+            priority: r.priority as Recommendation['priority'],
+            category: r.category ?? '',
+            problem: r.description ?? '', impact: '', recommendation: r.title,
+            status: r.status as Recommendation['status'],
+            source: (r.source ?? 'ai') as Recommendation['source'],
+            createdAt: r.created_at,
+          })))
+        } else {
+          try { const raw = localStorage.getItem(REC_KEY); if (raw) setRecs(JSON.parse(raw)) } catch {}
+        }
+      })
+      .catch(() => { try { const raw = localStorage.getItem(REC_KEY); if (raw) setRecs(JSON.parse(raw)) } catch {} })
+
+    try { const rawLog = localStorage.getItem(IMPL_LOG_KEY); if (rawLog) setImplLog(JSON.parse(rawLog)) } catch {}
 
     // Load quick metrics
     const fetchMetrics = async () => {
@@ -309,6 +338,11 @@ export default function AIControlCenter() {
   function appendFixLog(p: { checkName: string; action: string; result: 'success' | 'fail'; before: string; after: string }) {
     const entry: FixLogEntry = { id: Date.now().toString(), ts: new Date().toISOString(), userEmail, ...p }
     setFixLog(prev => { const u = [...prev, entry]; try { localStorage.setItem(LOG_KEY, JSON.stringify(u)) } catch {} return u })
+    fetch('/api/admin/health-fix-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fix_id: entry.id, fix_name: entry.action, before: entry.before, applied_by: null }),
+    }).catch(() => {})
   }
 
   // ── Calculator ──────────────────────────────────────────────────────────────
@@ -389,6 +423,17 @@ export default function AIControlCenter() {
         const toAdd = newRecs.filter(r => !existingTitles.has(r.title))
         const merged = [...prev, ...toAdd]
         try { localStorage.setItem(REC_KEY, JSON.stringify(merged)) } catch {}
+        if (toAdd.length > 0) {
+          fetch('/api/admin/ai-recommendations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(toAdd.map(r => ({
+              id: r.id, title: r.title, description: r.problem || null,
+              priority: r.priority, category: r.category || null,
+              status: r.status, source: r.source,
+            }))),
+          }).catch(() => {})
+        }
         return merged
       })
     } catch (e) { setAiError(String(e)) }
@@ -401,6 +446,18 @@ export default function AIControlCenter() {
     setRecs(prev => {
       const updated = prev.map(r => r.id === id ? { ...r, status } : r)
       try { localStorage.setItem(REC_KEY, JSON.stringify(updated)) } catch {}
+      const rec = updated.find(r => r.id === id)
+      if (rec) {
+        fetch('/api/admin/ai-recommendations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify([{
+            id: rec.id, title: rec.title, description: rec.problem || null,
+            priority: rec.priority, category: rec.category || null,
+            status: rec.status, source: rec.source,
+          }]),
+        }).catch(() => {})
+      }
       return updated
     })
   }
@@ -910,7 +967,7 @@ export default function AIControlCenter() {
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h2 className="text-[13px] font-semibold text-[#4b4b47]">Журнал исправлений</h2>
-                <button onClick={() => { setFixLog([]); try { localStorage.removeItem(LOG_KEY) } catch {} }} className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55]">Очистить</button>
+                <button onClick={() => { setFixLog([]); try { localStorage.removeItem(LOG_KEY) } catch {} fetch('/api/admin/health-fix-log', { method: 'DELETE' }).catch(() => {}) }} className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55]">Очистить</button>
               </div>
               <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
                 <div className="divide-y divide-[#f5f5f3]">

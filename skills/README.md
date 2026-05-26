@@ -24,24 +24,26 @@ Skills (навыки) — это способ разбить систему MGla
 
 ---
 
-## Список всех 14 Skills
+## Список всех 16 Skills
 
-| # | Skill | Файл | Приоритет |
-|---|-------|------|-----------|
-| 1 | Calculation Skill | `calculation-skill.md` | Критично |
-| 2 | Commercial Proposal Skill | `commercial-proposal-skill.md` | Критично |
-| 3 | Pricing Skill | `pricing-skill.md` | Критично |
-| 4 | Order Management Skill | `order-management-skill.md` | Критично |
-| 5 | Health Check Skill | `health-check-skill.md` | Критично |
-| 6 | B2B Skill | `b2b-skill.md` | Следующий этап |
-| 7 | Procurement Skill | `procurement-skill.md` | Следующий этап |
-| 8 | Logistics Skill | `logistics-skill.md` | Следующий этап |
-| 9 | Measurement Skill | `measurement-skill.md` | Следующий этап |
-| 10 | AI Control Center Skill | `ai-control-center-skill.md` | Будущее |
-| 11 | User & Access Skill | `user-access-skill.md` | Основа |
-| 12 | Integration Skill | `integration-skill.md` | Будущее |
-| 13 | Content Skill | `content-skill.md` | Будущее |
-| 14 | CEO Analytics Skill | `ceo-analytics-skill.md` | Будущее |
+| # | Skill | Файл | Статус |
+|---|-------|------|--------|
+| 1 | Calculation Skill | `calculation-skill.md` | ✅ Готов |
+| 2 | Commercial Proposal Skill | `commercial-proposal-skill.md` | ✅ Готов |
+| 3 | Pricing Skill | `pricing-skill.md` | ✅ Готов |
+| 4 | Order Management Skill | `order-management-skill.md` | ✅ Готов |
+| 5 | Health Check Skill | `health-check-skill.md` | ✅ Готов |
+| 6 | B2B Skill | `b2b-skill.md` | ✅ Готов |
+| 7 | Procurement Skill | `procurement-skill.md` | ✅ Готов |
+| 8 | Logistics Skill | `logistics-skill.md` | ✅ Готов |
+| 9 | Measurement Skill | `measurement-skill.md` | ✅ Готов |
+| 10 | AI Control Center Skill | `ai-control-center-skill.md` | ✅ Готов |
+| 11 | User & Access Skill | `user-access-skill.md` | ✅ Готов |
+| 12 | Integration Skill | `integration-skill.md` | ✅ Готов |
+| 13 | Content Skill | `content-skill.md` | ✅ Готов |
+| 14 | CEO Analytics Skill | `ceo-analytics-skill.md` | ✅ Готов |
+| 15 | CFO Skill | `cfo-skill.md` | ✅ Готов |
+| 16 | Sales Monitor Skill | `sales-monitor-skill.md` | ✅ Готов |
 
 ---
 

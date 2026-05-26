@@ -1,83 +1,47 @@
 ## Текущая задача
-Завершено: Snapshot-защита расчётов + документация Skills (в процессе — агент)
+Sales Monitor (AmoCRM) — реализован, ждёт ENV vars
 
 ## Что сделано (сессия 26 мая)
 
-### КРИТИЧЕСКИЙ БАГ-ФИКС: Стабильность сохранённых расчётов
+### КП (app/calculations/order/[groupId]/print/page.tsx)
+- Размеры изделий: `getProductDescription` теперь всегда читает из `input_data` (форма + размер + материал)
+- Формат: Изделие → Монтаж → Доставка — услуги идут отдельными строками сразу под своим изделием
+- Цена изделия = `final_price − servicesTotal` (совпадает с "Стоимость изделия" в калькуляторе)
+- ИТОГО = Σ(final_price) — совпадает с историей расчётов и калькулятором
 
-#### Баг 1 — CartSection сохранял неправильную цену
-- `components/CartSection.tsx` — `final_price: item.grand_total` вместо `item.final_price`
-  (cart хранил цену без услуг, а прямое сохранение — с услугами → расхождение)
+### Sales Monitor (AmoCRM → Telegram)
+- `lib/amocrm.ts` — клиент AmoCRM API v4 (read-only, token refresh, пагинация)
+- `lib/salesMonitor.ts` — сбор метрик по Алине, Семёну, Александре, Яне + РОП-аналитика
+- `app/api/cron/sales-monitor/route.ts` — GET-endpoint, авторизация CRON_SECRET
+- `vercel.json` — добавлен cron `0 15 * * 1-5` (18:00 МСК, пн-пт)
+- `skills/sales-monitor-skill.md` — skill-документация
+- `skills/README.md` — обновлён до 16 Skills
 
-#### Баг 2 — "Пересчитать" перезаписывал оригинальный snapshot
-- `app/calculator/mirror/page.tsx` — Edit mode теперь ВСЕГДА сохраняет как новый расчёт
-  с `parent_calc_id = editCalcId`, никогда не вызывает `updateCalculation`
-- Добавлен баннер "Режим пересчёта #N" с отображением "Было X₽ → Сейчас Y₽ (+/-Δ)"
-- Кнопка меняется на "Сохранить как новый расчёт" (янтарный цвет)
+### DB миграция localStorage (завершена ранее)
+- health-check и ai-control-center: DB-first + localStorage fallback
 
-#### Баг 3 — getPreview() неверно считал profit при наличии услуг
-- `app/calculations/[id]/page.tsx` — `getPreview()` теперь возвращает `calc.profit` и
-  `calc.margin` напрямую из БД если цена/скидка не изменились. Пересчёт только при явном
-  изменении пользователем.
+## Следующий шаг — нужно от пользователя
 
-#### Новый flow: "Пересчитать по актуальным ценам"
-- `app/calculations/[id]/page.tsx`:
-  - Кнопка "Пересчитать" → модальное окно с предупреждением
-  - Модалка: объясняет что оригинал останется нетронутым, новый calc создастся отдельно
-  - `openInCalculator()` теперь передаёт `__old_final_price__` для отображения diff в калькуляторе
-  - Баннер "↩ Это пересчёт расчёта #N" (если есть parent_calc_id)
-  - Баннер "Пересчитан → #N (Y₽ · дата)" (если есть дочерние версии)
-
-#### Полный input_data snapshot
-- `app/calculator/mirror/page.tsx` `handleAddToCart()` и `handleSave()`:
-  теперь включают ВСЕ параметры: voltage, frameId, ledStripId, psuId, diffuserId, hasFrame,
-  mirrorFrameId, hasFacet, facetTypeMm, substratePrice, hasInstallation, hasDelivery, kmFromMkad,
-  partnerId, discount, margin
-
-#### Новая колонка в БД
-- `lib/saveCalculation.ts` — добавлено поле `parent_calc_id?: number` в SavePayload
-
-### ⚠️ SQL МИГРАЦИЯ ДЛЯ ДЕПЛОЯ
-```sql
--- Версионирование расчётов (обязательно перед использованием "Пересчитать по актуальным ценам")
-ALTER TABLE calculations
-  ADD COLUMN IF NOT EXISTS parent_calc_id bigint REFERENCES calculations(id);
-
--- Ранее незадеплоенные (из предыдущей сессии):
-ALTER TABLE b2b_materials
-  ADD COLUMN IF NOT EXISTS supplier_id            bigint REFERENCES suppliers(id),
-  ADD COLUMN IF NOT EXISTS supplier_material_name text;
-
-ALTER TABLE glass_price_matrix
-  ADD COLUMN IF NOT EXISTS supplier_id            bigint REFERENCES suppliers(id),
-  ADD COLUMN IF NOT EXISTS supplier_material_name text;
+Добавить в `.env.local` и Vercel:
+```
+AMOCRM_DOMAIN=yourdomain.amocrm.ru
+AMOCRM_CLIENT_ID=...
+AMOCRM_CLIENT_SECRET=...
+AMOCRM_REFRESH_TOKEN=...
+AMOCRM_REDIRECT_URI=https://yourdomain.vercel.app
+TELEGRAM_OWNER_CHAT_ID=...   # ID чата руководителя (или TELEGRAM_CHAT_ID)
 ```
 
-### Документация Skills (агент работает в фоне)
-- Запущен анализ всего проекта + создание docs/ и skills/ с 16+ файлами
+После — протестировать вручную: `GET /api/cron/sales-monitor` с заголовком `Authorization: Bearer {CRON_SECRET}`
 
-## Что сделано (сессия 25 мая)
+## Контекст
+- AmoCRM токен обновляется автоматически при каждом запуске (refresh → access)
+- Все запросы к AmoCRM только GET — никаких следов в карточках
+- Менеджеры определяются по имени (substring match): Алина, Семён, Александра, Яна
+- Зоны воронки: 1=квалификация, 2=продажа, 3=оплата/производство — мэппинг по названию этапа
+- Красные флаги: 0 активности, зависшие лиды >2д (зона1) / >3д (зона2,3), счёт >5д без оплаты
 
-### Health-check → центр диагностики MGlass
-- `app/admin/health-check/page.tsx` — карточки проблем, автоисправления, инструкции, журнал, роли
-- `app/api/admin/health-check/fix/route.ts` — API автоисправлений (sync_b2b_materials, sync_b2b_from_glass, fix_roles_null)
-- `lib/healthCheckRunner.ts` — shared-модуль: 25 проверок, INITIAL_CHECKS, ISSUE_META, runChecks()
-
-### AI Control Center — единый центр управления MGlass
-- `app/admin/ai-control-center/page.tsx` — 6-вкладочный хаб: обзор, health, калькуляторы, AI-анализ, рекомендации, журнал
-- `app/api/admin/ai-control-center/analyze/route.ts` — Claude API (claude-sonnet-4-6), 5 перспектив, JSON рекомендации
-- `components/Sidebar.tsx` — AI Control Center в OWNER CENTER, health-check убран из Система
-- `lib/getRole.ts` — ceo получил доступ к /admin/ai-control-center
-
-## Изменённые файлы (26 мая)
-- `components/CartSection.tsx` — bug fix: grand_total как final_price
-- `lib/saveCalculation.ts` — добавлен parent_calc_id
-- `app/calculator/mirror/page.tsx` — полный fix: input_data, edit mode, баннер diff
-- `app/calculations/[id]/page.tsx` — fix: getPreview, recalc modal, версионный chain
-
-## Следующие возможные задачи
-- Задеплоить SQL миграции (parent_calc_id + supplier fields)
-- Применить аналогичные фиксы к loft/page.tsx и shower/page.tsx (те же cart/edit bugs)
-- Ознакомиться с документацией Skills после завершения агента
-- Загрузка прайсов к поставщикам (PDF/Excel attachment)
-- История изменений поставщика
+## Открытые вопросы
+- Точные названия этапов воронки в AmoCRM — нужно проверить совпадение с мэппингом в salesMonitor.ts
+- TELEGRAM_OWNER_CHAT_ID — нужен ID чата (не бота), можно узнать через @userinfobot
+- AmoCRM OAuth app нужно создать в аккаунте и получить Client ID + Secret + Refresh Token
