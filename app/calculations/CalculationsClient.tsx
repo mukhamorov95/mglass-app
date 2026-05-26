@@ -95,6 +95,52 @@ function getDesc(c: Calc): string {
   return ''
 }
 
+// ── Glass area helpers ────────────────────────────────────────────────────────
+
+type GlassEntry = { name: string; mm: number | null; areaSqm: number }
+
+function calcItemArea(c: Calc): GlassEntry | null {
+  const d = c.input_data
+  const w = Number(d.width)  || 0
+  const h = Number(d.height) || 0
+  if (!w || !h) return null
+
+  if (c.product_type === 'mirror') {
+    const mm   = Number(d.mirrorMm || d.thickness) || null
+    const name = (d.mirrorName as string || 'Зеркало').replace(/^зеркало\s*/i, '').trim() || 'Зеркало'
+    let area = 0
+    if (d.shape === 'circle') area = Math.PI * (w / 2000) ** 2
+    else if (d.shape === 'oval') area = Math.PI * (w / 1000) * (h / 1000) / 4
+    else area = (w / 1000) * (h / 1000)
+    return { name, mm, areaSqm: area }
+  }
+  if (c.product_type === 'loft') {
+    const mm      = Number(d.glassThickness || d.thickness) || null
+    const name    = (d.glassName as string || 'Стекло').trim() || 'Стекло'
+    const sections = Number(d.sections) || 1
+    return { name, mm, areaSqm: (w / 1000) * (h / 1000) * sections }
+  }
+  if (c.product_type.startsWith('shower')) {
+    const mm   = Number(d.thickness) || null
+    const name = (d.glassType as string || 'Стекло').trim() || 'Стекло'
+    return { name, mm, areaSqm: (w / 1000) * (h / 1000) }
+  }
+  return null
+}
+
+function aggregateGlass(items: Calc[]): (GlassEntry & { count: number })[] {
+  const map = new Map<string, GlassEntry & { count: number }>()
+  for (const c of items) {
+    const g = calcItemArea(c)
+    if (!g || g.areaSqm <= 0) continue
+    const key = `${g.name}|${g.mm ?? ''}`
+    const ex = map.get(key)
+    if (ex) { ex.areaSqm += g.areaSqm; ex.count++ }
+    else map.set(key, { ...g, count: 1 })
+  }
+  return [...map.values()].sort((a, b) => a.name.localeCompare(b.name, 'ru'))
+}
+
 function getProductName(c: Calc): string {
   const d = c.input_data
   const label = PRODUCT_LABELS[c.product_type]?.label ?? c.product_type
@@ -495,10 +541,21 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                             const svcLines = (item.financial_breakdown?.serviceLines ?? []) as { name: string; total: number }[]
                             const svcTotal = svcLines.filter(s => s.total > 0).reduce((s, l) => s + l.total, 0)
                             const productPrice = item.final_price - svcTotal
+                            const glassInfo = calcItemArea(item)
                             return (
                               <div key={item.id} className="flex items-center gap-2 bg-[#fafaf9] rounded-lg px-3 py-1.5">
                                 <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.color}`}>{p.emoji} {p.label}</span>
                                 <span className="text-[12px] text-[#4b4b47]">{getDesc(item)}</span>
+                                {glassInfo?.mm && (
+                                  <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 whitespace-nowrap flex-shrink-0">
+                                    {glassInfo.mm} мм
+                                  </span>
+                                )}
+                                {glassInfo && (
+                                  <span className="text-[10px] text-[#9a9a95] whitespace-nowrap flex-shrink-0">
+                                    {glassInfo.areaSqm.toFixed(2)} м²
+                                  </span>
+                                )}
                                 <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                                   {item.discount > 0 && (
                                     <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
@@ -515,6 +572,25 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                             )
                           })}
                         </div>
+
+                        {/* Glass summary by type + thickness */}
+                        {(() => {
+                          const glass = aggregateGlass(gi)
+                          if (!glass.length) return null
+                          return (
+                            <div className="mb-3 px-3 py-2 bg-slate-50 rounded-lg border border-slate-200 flex flex-wrap gap-x-4 gap-y-1">
+                              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest self-center">Стекло</span>
+                              {glass.map((g, i) => (
+                                <div key={i} className="flex items-center gap-1">
+                                  <span className="text-[11px] text-slate-600 font-medium">{g.name}</span>
+                                  {g.mm && <span className="text-[10px] px-1 py-0.5 rounded bg-slate-200 text-slate-500 font-mono">{g.mm} мм</span>}
+                                  <span className="text-[11px] font-semibold text-slate-700">{g.areaSqm.toFixed(2)} м²</span>
+                                  {g.count > 1 && <span className="text-[10px] text-slate-400">×{g.count}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )
+                        })()}
 
                         {/* Financials */}
                         <div className="flex items-center gap-4 mb-3 flex-wrap">
