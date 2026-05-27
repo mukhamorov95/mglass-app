@@ -18,6 +18,12 @@ type NavEntry = NavItem | NavGroup
 
 function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
 
+// ─── Manager: AmoCRM Dashboard ────────────────────────────────────────────────
+
+const MANAGER_AMO: NavItem[] = [
+  { href: '/manager', label: 'Мои сделки (AmoCRM)', icon: '🎯' },
+]
+
 // ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
 
 const MANAGER_MGLASS: NavEntry[] = [
@@ -124,6 +130,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
+  { href: '/admin/cfo',              label: 'Финдиректор',      icon: '💰' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
@@ -155,6 +162,7 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
+  { href: '/admin/cfo',              label: 'Финдиректор',      icon: '💰' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
@@ -177,6 +185,8 @@ const ADMIN_MARKETING: NavItem[] = [
 ]
 
 const ADMIN_VLADISLAV: NavItem[] = [
+  { href: '/commercial',              label: 'Коммерческий',         icon: '📈' },
+  { href: '/ceo',                     label: 'CEO Обзор',            icon: '👑' },
   { href: '/vladislav',               label: 'Сообщения',            icon: '💬' },
   { href: '/vladislav/calls',         label: 'Анализ звонков',       icon: '📞' },
   { href: '/ai-stats',                label: 'Статистика бота',      icon: '📊' },
@@ -518,11 +528,25 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
   function renderNav() {
     // Manager: MGlass + B2B (filtered by permissions)
+    if (role === 'commercial') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Коммерческий</div>
+        <div className="space-y-px">
+          {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+        </div>
+      </>
+    )
+
     if (role === 'manager') {
       const mglassNav = buildMglassNav()
       const b2bNav    = buildB2bNav()
       return (
         <>
+          <div className="space-y-px mb-2">
+            {MANAGER_AMO.map(item => navItem(item, 'bg-[#f0f0ec] text-[#111110] font-medium'))}
+          </div>
+          <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
           {permissions.see_mglass && workspaceAccordion(
             'mglass', 'MGlass',
             'bg-[#111110]', 'text-[#111110]',

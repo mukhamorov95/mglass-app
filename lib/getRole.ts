@@ -5,7 +5,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial'
 
 export type UserProfile = {
   role:        Role
@@ -18,7 +18,8 @@ export type UserProfile = {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 function isRole(r: unknown): r is Role {
-  return r === 'admin' || r === 'manager' || r === 'production' || r === 'seo' || r === 'ceo' || r === 'buyer'
+  return r === 'admin' || r === 'manager' || r === 'production' ||
+         r === 'seo'   || r === 'ceo'     || r === 'buyer' || r === 'commercial'
 }
 
 export async function getRole(): Promise<Role | null> {
@@ -82,6 +83,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 
   manager: [
     '/',
+    '/manager',
     '/calculator/mirror',
     '/calculator/shower',
     '/calculator/loft',
@@ -140,11 +142,23 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/cutting-settings',
   ],
 
+  commercial: [
+    '/',
+    '/commercial',
+    '/manager',
+    '/ceo',
+    '/admin/users',
+    '/admin/health-check',
+  ],
+
   ceo: [
     '/',
+    '/ceo',
+    '/commercial',
     '/admin/owner',
     '/admin/dashboard',
     '/admin/pnl',
+    '/admin/cfo',
     '/admin/analytics-mglass',
     '/admin/bonus-center',
     '/admin/sales-center',

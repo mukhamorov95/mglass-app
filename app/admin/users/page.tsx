@@ -8,11 +8,13 @@ type User = {
   id: string
   email: string
   name: string | null
-  role: 'admin' | 'manager' | 'buyer'
+  role: 'admin' | 'manager' | 'buyer' | 'ceo' | 'commercial' | 'production' | 'seo'
   active: boolean
   manager_code: number | null
   password_plain: string | null
   see_all_orders: boolean
+  can_view_all_deals: boolean
+  amo_user_id: number | null
   max_discount_percent: number
   can_delete: boolean
   permissions: UserPermissions
@@ -20,9 +22,13 @@ type User = {
 }
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
-  admin:   { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },
-  manager: { label: 'Менеджер',      color: 'bg-blue-50 text-blue-700' },
-  buyer:   { label: 'Закупщик',      color: 'bg-emerald-50 text-emerald-700' },
+  admin:      { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },
+  manager:    { label: 'Менеджер',      color: 'bg-blue-50 text-blue-700' },
+  buyer:      { label: 'Закупщик',      color: 'bg-emerald-50 text-emerald-700' },
+  ceo:        { label: 'CEO',           color: 'bg-amber-50 text-amber-700' },
+  commercial: { label: 'Коммерческий',  color: 'bg-indigo-50 text-indigo-700' },
+  production: { label: 'Производство',  color: 'bg-orange-50 text-orange-700' },
+  seo:        { label: 'SEO',           color: 'bg-rose-50 text-rose-700' },
 }
 
 const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[] = [
@@ -188,6 +194,7 @@ export default function UsersPage() {
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Максимальная скидка %">Скидка</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Право удалять">Удаление</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит все заказы или только свои">Заказы</th>
+                  <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="AmoCRM User ID для раздела Менеджер">AMO ID</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Статус</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Доступ</th>
                 </tr>
@@ -257,6 +264,10 @@ export default function UsersPage() {
                             className={`text-[11px] font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${rl.color}`}>
                             <option value="manager">Менеджер</option>
                             <option value="buyer">Закупщик</option>
+                            <option value="ceo">CEO</option>
+                            <option value="commercial">Коммерческий</option>
+                            <option value="production">Производство</option>
+                            <option value="seo">SEO</option>
                             <option value="admin">Администратор</option>
                           </select>
                         </td>
@@ -313,6 +324,17 @@ export default function UsersPage() {
                               {u.see_all_orders ? 'Все' : 'Свои'}
                             </button>
                           )}
+                        </td>
+
+                        {/* AmoCRM User ID */}
+                        <td className="px-3 py-3 text-center">
+                          <input
+                            type="number" min="0"
+                            value={u.amo_user_id ?? ''}
+                            placeholder="ID"
+                            onChange={e => updateUser(u.id, { amo_user_id: e.target.value ? Number(e.target.value) : null })}
+                            className="w-24 text-center border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110] placeholder-[#c4c4be]"
+                          />
                         </td>
 
                         {/* Статус */}
