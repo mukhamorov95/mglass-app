@@ -89,10 +89,16 @@ export const getUsers = () =>
 export const getPipelines = () =>
   amoGet<{ _embedded: { pipelines: AmoPipeline[] } }>('/pipelines').then(d => d?._embedded?.pipelines ?? [])
 
+export type AmoNote = { id: number; note_type: number; created_by: number; created_at: number }
+
 export const getLeads  = (params: Record<string, string>) =>
   amoGetAll<AmoLead>('/leads', params, 'leads')
 
 export const getEvents = (params: Record<string, string>) =>
   amoGetAll<AmoEvent>('/events', params, 'events')
+
+// note_type: 4 = звонок исходящий, 13 = входящий звонок, 10 = SMS
+export const getLeadNotes = (params: Record<string, string>) =>
+  amoGetAll<AmoNote>('/leads/notes', params, 'notes')
 
 export const getDomain = domain

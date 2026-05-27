@@ -2,8 +2,8 @@
 // READ-ONLY: never writes to CRM cards.
 
 import {
-  getUsers, getPipelines, getLeads, getEvents, getDomain,
-  type AmoUser, type AmoEvent,
+  getUsers, getPipelines, getLeads, getEvents, getLeadNotes, getDomain,
+  type AmoUser, type AmoEvent, type AmoNote,
 } from '@/lib/amocrm'
 
 // ── Stage → zone mapping (по названию этапа) ──────────────────────────────────
@@ -61,12 +61,18 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
-  // Parallel: users, pipelines, today-events, all-active-leads
-  const [users, pipelines, todayEvents, allLeads] = await Promise.all([
+  // Parallel: users, pipelines, today-events, today-notes, all-active-leads
+  const [users, pipelines, todayEvents, todayNotes, allLeads] = await Promise.all([
     getUsers(),
     getPipelines(),
     getEvents({
-      'filter[type]': 'lead_status_changed,note_added,call,outgoing_chat_message,sms',
+      'filter[type]': 'lead_status_changed,incoming_lead_created',
+      'filter[created_at][from]': String(todayStart),
+      'filter[created_at][to]':   String(nowTs),
+    }),
+    // note_type 4=исходящий звонок, 13=входящий, 10=SMS, 1=текстовое примечание
+    getLeadNotes({
+      'filter[note_type]': '4,10,1',
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
     }),
@@ -93,13 +99,12 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
+    const myNotes  = todayNotes.filter((n: AmoNote) => n.created_by === uid)
 
     const newLeadsToday = myEvents.filter(e => e.type === 'incoming_lead_created').length
-    const messagesSent  = myEvents.filter(e =>
-      e.type === 'note_added' || e.type === 'outgoing_chat_message' || e.type === 'sms'
-    ).length
-    const callsMade = myEvents.filter(e => e.type === 'call').length
-    const cardsMoved = myEvents.filter(e => e.type === 'lead_status_changed').length
+    const callsMade     = myNotes.filter(n => n.note_type === 4 || n.note_type === 13).length
+    const messagesSent  = myNotes.filter(n => n.note_type === 10 || n.note_type === 1).length
+    const cardsMoved    = myEvents.filter(e => e.type === 'lead_status_changed').length
 
     const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)
 
