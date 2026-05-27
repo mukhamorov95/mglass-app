@@ -122,42 +122,56 @@ export default function GroupPrintPage() {
     isFirst?: boolean
   }
 
-  // Layout: product row → service rows (монтаж, доставка) immediately below.
-  // productPrice = final_price - servicesTotal  (matches "Стоимость изделия" in calculator)
-  // service rows = each svcLine as its own row
-  // grandTotal = Σ final_price = Σ(productPrice + servicesTotal) — matches calculator + history
+  // Layout: product row → service rows (монтаж etc.) below each item.
+  // Delivery ("Доставка") is shown ONCE per order — not per item.
+  // productPrice = final_price - servicesTotal (matches calculator)
+  // grandTotal = Σ(final_price) - (duplicated deliveries removed)
   const rows: Row[] = []
   let itemIdx = 0
+  // Unique delivery types across all items — shown once after all items
+  const shownDeliveries = new Map<string, { qty: number; price: number; total: number }>()
 
   for (const calc of calcs) {
     itemIdx++
-    const svcLines     = ((calc.financial_breakdown?.serviceLines ?? []) as ServiceLine[]).filter(s => s.total > 0)
+    const svcLines      = ((calc.financial_breakdown?.serviceLines ?? []) as ServiceLine[]).filter(s => s.total > 0)
     const servicesTotal = svcLines.reduce((s, l) => s + l.total, 0)
     const productPrice  = calc.final_price - servicesTotal
     const discountNote  = calc.discount > 0 ? ` (скидка ${calc.discount}%)` : ''
 
     rows.push({
-      id:        itemIdx,
-      name:      getProductDescription(calc) + discountNote,
-      qty:       1,
-      price:     productPrice,
-      total:     productPrice,
-      isFirst:   itemIdx === 1,
+      id:      itemIdx,
+      name:    getProductDescription(calc) + discountNote,
+      qty:     1,
+      price:   productPrice,
+      total:   productPrice,
+      isFirst: itemIdx === 1,
     })
 
     for (const svc of svcLines) {
-      rows.push({
-        id:        '',
-        name:      svc.name,
-        qty:       svc.qty ?? 1,
-        price:     svc.price ?? svc.total,
-        total:     svc.total,
-        isService: true,
-      })
+      if (svc.name.toLowerCase().includes('доставка')) {
+        // Collect delivery — deduplicate by name, show once after all items
+        if (!shownDeliveries.has(svc.name)) {
+          shownDeliveries.set(svc.name, { qty: svc.qty ?? 1, price: svc.price ?? svc.total, total: svc.total })
+        }
+      } else {
+        rows.push({
+          id:        '',
+          name:      svc.name,
+          qty:       svc.qty ?? 1,
+          price:     svc.price ?? svc.total,
+          total:     svc.total,
+          isService: true,
+        })
+      }
     }
   }
 
-  // grandTotal = Σ(productPrice + services) = Σ(final_price) ✓
+  // Add each unique delivery type once at the end
+  for (const [name, d] of shownDeliveries) {
+    rows.push({ id: '', name, qty: d.qty, price: d.price, total: d.total, isService: true })
+  }
+
+  // grandTotal: Σ(productPrice) + Σ(non-delivery services) + ONE delivery per type ✓
   const grandTotal = rows.reduce((s, r) => s + r.total, 0)
   const vatAmount   = Math.round(grandTotal / 1.05 * 0.05 * 100) / 100
   const clientName  = first.client_name
