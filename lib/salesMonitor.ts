@@ -102,8 +102,7 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   ])
 
   const todayEvents = eventsData?._embedded?.events ?? []
-  // Client-side date guard — the Notes API may not respect filter[created_at] reliably
-  const todayNotes  = (notesData?._embedded?.notes ?? []).filter(n => n.created_at >= todayStart)
+  const todayNotes  = notesData?._embedded?.notes ?? []
 
   // Find the main "Продажи" sales pipeline by name (or via AMOCRM_SALES_PIPELINE_ID env var)
   const salesPipeline = pipelines.find(p =>

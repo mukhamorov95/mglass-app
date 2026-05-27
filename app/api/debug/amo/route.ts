@@ -25,7 +25,8 @@ export async function GET() {
     getUsers(),
   ])
 
-  const todayNotes = (notesData?._embedded?.notes ?? []).filter(n => n.created_at >= todayStart)
+  const allNotes   = notesData?._embedded?.notes ?? []
+  const todayNotes = allNotes.filter(n => !n.created_at || n.created_at >= todayStart)
   const managerIds = (process.env.AMOCRM_MANAGERS_IDS ?? '').split(',').map(s => Number(s.trim()))
   const userMap    = new Map(users.map(u => [u.id, u]))
   const leadMap    = new Map(allLeads.map(l => [l.id, l]))
@@ -75,8 +76,16 @@ export async function GET() {
     totalAllLeads:    allLeads.length,
     totalSalesLeads:  salesLeads.length,
     totalActiveLeads: activeLeads.length,
-    todayNotesCount:  todayNotes.length,
-    noteTypesToday:   noteTypes,
+    todayStart,
+    nowTs,
+    allNotesCount:   allNotes.length,
+    todayNotesCount: todayNotes.length,
+    noteTypesToday:  noteTypes,
+    sampleNotes: allNotes.slice(0, 5).map(n => ({
+      id: n.id, entity_id: n.entity_id, note_type: n.note_type,
+      created_by: n.created_by, created_at: (n as AmoNote & { created_at?: number }).created_at,
+      isToday: (n.created_at ?? 0) >= todayStart,
+    })),
     managerStats,
     envPipelineId: process.env.AMOCRM_SALES_PIPELINE_ID ?? '(не задан)',
   })
