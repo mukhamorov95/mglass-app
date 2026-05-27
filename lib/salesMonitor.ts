@@ -140,9 +140,9 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     )
 
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
-    // note_type: 4=исходящий звонок, 13=входящий, 10=SMS, 1=текстовое примечание, 102=Wazzup
-    const callsMade    = myNotes.filter(n => n.note_type === 4 || n.note_type === 13).length
-    const messagesSent = myNotes.filter(n => n.note_type === 10 || n.note_type === 1 || n.note_type === 102).length
+    // AmoCRM v4 returns note_type as string: 'call_out', 'call_in', 'amomail_message', 'common', etc.
+    const callsMade    = myNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
+    const messagesSent = myNotes.filter(n => n.note_type === 'amomail_message' || n.note_type === 'common').length
     const cardsMoved   = myEvents.filter(e => e.type === 'lead_status_changed').length
 
     const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)
