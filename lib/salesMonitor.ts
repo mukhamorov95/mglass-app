@@ -2,7 +2,7 @@
 // READ-ONLY: never writes to CRM cards.
 
 import {
-  getUsers, getPipelines, getLeads, getEvents, getLeadNotes, getDomain,
+  getUsers, getPipelines, getLeads, amoGet, getDomain,
   type AmoUser, type AmoEvent, type AmoNote,
 } from '@/lib/amocrm'
 
@@ -62,23 +62,29 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
   // Parallel: users, pipelines, today-events, today-notes, all-active-leads
-  const [users, pipelines, todayEvents, todayNotes, allLeads] = await Promise.all([
+  // Events and notes use single-page amoGet (limit=250) — one day never exceeds 250 records
+  const [users, pipelines, eventsData, notesData, allLeads] = await Promise.all([
     getUsers(),
     getPipelines(),
-    getEvents({
+    amoGet<{ _embedded: { events: AmoEvent[] } }>('/events', {
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
+      limit: '250',
     }),
     // note_type 4=исходящий звонок, 13=входящий, 10=SMS, 1=текстовое примечание
-    getLeadNotes({
+    amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
       'filter[note_type]': '4,10,1',
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
+      limit: '250',
     }),
     getLeads({
       'filter[responsible_user_id]': managerIds.join(','),
     }),
   ])
+
+  const todayEvents = eventsData?._embedded?.events ?? []
+  const todayNotes  = notesData?._embedded?.notes ?? []
 
   // Stage map: id → { name, zone }
   const stageMap = new Map<number, { name: string; zone: 1 | 2 | 3 | null }>()
