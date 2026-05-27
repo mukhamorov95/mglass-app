@@ -102,7 +102,8 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   ])
 
   const todayEvents = eventsData?._embedded?.events ?? []
-  const todayNotes  = notesData?._embedded?.notes ?? []
+  // Client-side date guard — the Notes API may not respect filter[created_at] reliably
+  const todayNotes  = (notesData?._embedded?.notes ?? []).filter(n => n.created_at >= todayStart)
 
   // Find the main "Продажи" sales pipeline by name (or via AMOCRM_SALES_PIPELINE_ID env var)
   const salesPipeline = pipelines.find(p =>
@@ -134,15 +135,19 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
-    // Attribute notes by lead ownership — Wazzup creates notes as bot, not as manager
-    const myNotes  = todayNotes.filter((n: AmoNote) =>
+
+    // Calls: created_by manager — AmoCRM logs call_out/call_in as the manager who made the call
+    const myCallNotes = todayNotes.filter((n: AmoNote) => n.created_by === uid)
+    // Messages: attribute by lead ownership — Wazzup/email bots create notes as system user (created_by=0)
+    const myMsgNotes  = todayNotes.filter((n: AmoNote) =>
+      leadMap.get(n.entity_id)?.pipeline_id === salesPipeline?.id &&
       leadMap.get(n.entity_id)?.responsible_user_id === uid
     )
 
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
-    // AmoCRM v4 returns note_type as string: 'call_out', 'call_in', 'amomail_message', 'common', etc.
-    const callsMade    = myNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
-    const messagesSent = myNotes.filter(n => n.note_type === 'amomail_message' || n.note_type === 'common').length
+    // AmoCRM v4 returns note_type as string: 'call_out', 'call_in', 'amomail_message'
+    const callsMade    = myCallNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
+    const messagesSent = myMsgNotes.filter(n => n.note_type === 'amomail_message').length
     const cardsMoved   = myEvents.filter(e => e.type === 'lead_status_changed').length
 
     const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)

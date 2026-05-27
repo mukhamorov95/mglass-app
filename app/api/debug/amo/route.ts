@@ -25,7 +25,7 @@ export async function GET() {
     getUsers(),
   ])
 
-  const todayNotes = notesData?._embedded?.notes ?? []
+  const todayNotes = (notesData?._embedded?.notes ?? []).filter(n => n.created_at >= todayStart)
   const managerIds = (process.env.AMOCRM_MANAGERS_IDS ?? '').split(',').map(s => Number(s.trim()))
   const userMap    = new Map(users.map(u => [u.id, u]))
   const leadMap    = new Map(allLeads.map(l => [l.id, l]))
@@ -49,10 +49,14 @@ export async function GET() {
   // Per-manager stats (after pipeline filter)
   const managerStats = managerIds.map(uid => {
     const user       = userMap.get(uid)
-    const myLeads    = activeLeads.filter(l => l.responsible_user_id === uid)
-    const myNotes    = todayNotes.filter(n => leadMap.get(n.entity_id)?.responsible_user_id === uid)
-    const calls      = myNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
-    const messages   = myNotes.filter(n => n.note_type === 'amomail_message').length
+    const myLeads      = activeLeads.filter(l => l.responsible_user_id === uid)
+    const myCallNotes  = todayNotes.filter(n => n.created_by === uid)
+    const myMsgNotes   = todayNotes.filter(n =>
+      leadMap.get(n.entity_id)?.pipeline_id === salesPipeline?.id &&
+      leadMap.get(n.entity_id)?.responsible_user_id === uid
+    )
+    const calls      = myCallNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
+    const messages   = myMsgNotes.filter(n => n.note_type === 'amomail_message').length
     return {
       id:           uid,
       name:         user?.name ?? `Unknown #${uid}`,
