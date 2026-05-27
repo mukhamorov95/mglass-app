@@ -1,4 +1,5 @@
 @AGENTS.md
+@SYSTEM.md
 
 # Autonomous Development Mode
 
