@@ -13,14 +13,21 @@ import {
 
 function stageZone(name: string): 1 | 2 | 3 | null {
   const n = name.toLowerCase()
-  if (n.includes('назначен ответственный') || n.includes('первичный') ||
-      n.includes('выяснение') || n.includes('думает') ||
-      n.includes('в работе') || n.includes('готов купить')) return 1
-  if (n.includes('замер') || n.includes('коммерческое') ||
+  // Zone 1: квалификация
+  if (n.includes('назначен ответственный') || n.includes('проработка') ||
+      n.includes('разговор состоялся') || n.includes('долгострой') ||
+      n.includes('первичный') || n.includes('выяснение') ||
+      n.includes('думает') || n.includes('в работе') ||
+      n.includes('готов купить')) return 1
+  // Zone 2: продажа (замер, согласование, КП, счёт)
+  if (n.includes('замер') || n.includes('согласование после замера') ||
+      n.startsWith('кп') || n.includes('коммерческое') ||
       n.includes('счёт') || n.includes('счет') || n.includes('ждем')) return 2
+  // Zone 3: производство / оплата
   if (n.includes('оплата сделана') || n.includes('чертежи') ||
       n.includes('производстве') || n.includes('доставк') ||
-      n.includes('монтаж') || n.includes('остатка')) return 3
+      n.includes('монтаж') || n.includes('остатка') ||
+      n.includes('оплата получена') || n.includes('согласование после отправки')) return 3
   return null
 }
 
@@ -78,9 +85,9 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
       'filter[created_at][to]':   String(nowTs),
       limit: '250',
     }),
-    getLeads({
-      'filter[responsible_user_id]': managerIds.join(','),
-    }),
+    // Fetch all leads — AmoCRM ignores comma-separated responsible_user_id filter,
+    // so we fetch everything and filter client-side.
+    getLeads({}),
   ])
 
   const todayEvents = eventsData?._embedded?.events ?? []
@@ -94,8 +101,8 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     }
   }
 
-  // Active leads: exclude "Закрыто успешно" (142) and "Не реализовано" (143)
-  const activeLeads = allLeads.filter(l => l.status_id !== 142 && l.status_id !== 143)
+  // Active leads: closed_at === null is authoritative; status_id 142/143 are fallbacks
+  const activeLeads = allLeads.filter(l => l.closed_at === null && l.status_id !== 142 && l.status_id !== 143)
 
   // Map user ID → AmoUser
   const userMap = new Map(users.map(u => [u.id, u]))
