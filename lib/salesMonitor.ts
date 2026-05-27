@@ -66,7 +66,6 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     getUsers(),
     getPipelines(),
     getEvents({
-      'filter[type]': 'lead_status_changed,incoming_lead_created',
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
     }),
@@ -101,7 +100,7 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
     const myNotes  = todayNotes.filter((n: AmoNote) => n.created_by === uid)
 
-    const newLeadsToday = myEvents.filter(e => e.type === 'incoming_lead_created').length
+    const newLeadsToday = allLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
     const callsMade     = myNotes.filter(n => n.note_type === 4 || n.note_type === 13).length
     const messagesSent  = myNotes.filter(n => n.note_type === 10 || n.note_type === 1).length
     const cardsMoved    = myEvents.filter(e => e.type === 'lead_status_changed').length
