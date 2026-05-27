@@ -134,19 +134,21 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
+    const myNotes  = todayNotes.filter(n => n.created_by === uid)
 
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
 
-    // Calls: SIPUNI phone calls appear as events (incoming_call / outgoing_call)
-    // — AmoCRM analytics counts only these, not Wazzup notes
-    const callsMade = myEvents.filter(e =>
-      e.type === 'incoming_call' || e.type === 'outgoing_call' || e.type === 'call'
+    // Phone calls: SIPUNI adds call notes (call_out/call_in) with params.duration > 0.
+    // Wazzup also uses call_out/call_in but without duration. Distinguish by duration.
+    const callsMade = myNotes.filter(n =>
+      (n.note_type === 'call_out' || n.note_type === 'call_in') &&
+      (n.params?.duration ?? 0) > 0
     ).length
 
-    // Messages: Wazzup (call_out/call_in notes) + email (amomail_message), created by manager
-    const messagesSent = todayNotes.filter(n =>
-      n.created_by === uid &&
-      (n.note_type === 'call_out' || n.note_type === 'call_in' || n.note_type === 'amomail_message')
+    // Messages: Wazzup call_out/call_in (no duration) + email (amomail_message)
+    const messagesSent = myNotes.filter(n =>
+      n.note_type === 'amomail_message' ||
+      ((n.note_type === 'call_out' || n.note_type === 'call_in') && !(n.params?.duration))
     ).length
 
     const cardsMoved = myEvents.filter(e => e.type === 'lead_status_changed').length

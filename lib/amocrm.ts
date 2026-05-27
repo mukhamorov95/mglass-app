@@ -89,7 +89,10 @@ export const getUsers = () =>
 export const getPipelines = () =>
   amoGet<{ _embedded: { pipelines: AmoPipeline[] } }>('/leads/pipelines').then(d => d?._embedded?.pipelines ?? [])
 
-export type AmoNote = { id: number; entity_id: number; note_type: string | number; created_by: number; created_at: number }
+export type AmoNote = {
+  id: number; entity_id: number; note_type: string | number; created_by: number; created_at: number
+  params?: { duration?: number; phone?: string; link?: string; }
+}
 
 export const getLeads  = (params: Record<string, string>) =>
   amoGetAll<AmoLead>('/leads', params, 'leads')

@@ -20,7 +20,7 @@ export async function GET() {
     amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
-      limit: '50',
+      limit: '250',
     }),
     getUsers(),
     amoGet<{ _embedded: { events: Array<{ id: string; type: string; created_by: number }> } }>('/events', {
@@ -30,8 +30,7 @@ export async function GET() {
     }),
   ])
 
-  const allNotes    = notesData?._embedded?.notes ?? []
-  const todayNotes  = allNotes.filter(n => !n.created_at || n.created_at >= todayStart)
+  const todayNotes  = notesData?._embedded?.notes ?? []
   const todayEvents = eventsData?._embedded?.events ?? []
 
   // Event type distribution
@@ -39,9 +38,9 @@ export async function GET() {
   for (const e of todayEvents) {
     eventTypes[e.type] = (eventTypes[e.type] ?? 0) + 1
   }
+
   const managerIds = (process.env.AMOCRM_MANAGERS_IDS ?? '').split(',').map(s => Number(s.trim()))
   const userMap    = new Map(users.map(u => [u.id, u]))
-  const leadMap    = new Map(allLeads.map(l => [l.id, l]))
 
   // Find sales pipeline
   const salesPipeline = pipelines.find(p =>
@@ -55,30 +54,49 @@ export async function GET() {
   // Note types seen today
   const noteTypes: Record<string, number> = {}
   for (const n of todayNotes) {
-    const t = String(n.note_type)
-    noteTypes[t] = (noteTypes[t] ?? 0) + 1
+    noteTypes[String(n.note_type)] = (noteTypes[String(n.note_type)] ?? 0) + 1
   }
 
-  // Per-manager stats (after pipeline filter)
+  // call_out/call_in with vs without duration (SIPUNI vs Wazzup)
+  const callOutNotes = todayNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in')
+  const withDuration    = callOutNotes.filter(n => (n.params?.duration ?? 0) > 0).length
+  const withoutDuration = callOutNotes.filter(n => !(n.params?.duration)).length
+
+  // Per-manager stats using new logic (calls = duration > 0, messages = no duration + email)
   const managerStats = managerIds.map(uid => {
-    const user       = userMap.get(uid)
-    const myLeads      = activeLeads.filter(l => l.responsible_user_id === uid)
-    const myCallNotes  = todayNotes.filter(n => n.created_by === uid)
-    const myMsgNotes   = todayNotes.filter(n =>
-      leadMap.get(n.entity_id)?.pipeline_id === salesPipeline?.id &&
-      leadMap.get(n.entity_id)?.responsible_user_id === uid
-    )
-    const calls      = myCallNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
-    const messages   = myMsgNotes.filter(n => n.note_type === 'amomail_message').length
+    const user    = userMap.get(uid)
+    const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)
+    const myNotes = todayNotes.filter(n => n.created_by === uid)
+
+    const calls = myNotes.filter(n =>
+      (n.note_type === 'call_out' || n.note_type === 'call_in') &&
+      (n.params?.duration ?? 0) > 0
+    ).length
+
+    const messages = myNotes.filter(n =>
+      n.note_type === 'amomail_message' ||
+      ((n.note_type === 'call_out' || n.note_type === 'call_in') && !(n.params?.duration))
+    ).length
+
+    const cardsMoved = todayEvents.filter(e => e.created_by === uid && e.type === 'lead_status_changed').length
+
     return {
-      id:           uid,
-      name:         user?.name ?? `Unknown #${uid}`,
-      activeLeads:  myLeads.length,
-      callsToday:   calls,
-      msgsToday:    messages,
-      allPipelinesActive: allLeads.filter(l => l.responsible_user_id === uid && l.closed_at === null && l.status_id !== 142 && l.status_id !== 143).length,
+      id:          uid,
+      name:        user?.name ?? `Unknown #${uid}`,
+      activeLeads: myLeads.length,
+      callsToday:  calls,
+      msgsToday:   messages,
+      cardsMoved,
+      notesCreatedByManager: myNotes.length,
     }
   })
+
+  // Sample call notes to inspect params
+  const sampleCallNotes = callOutNotes.slice(0, 10).map(n => ({
+    id: n.id, note_type: n.note_type, created_by: n.created_by,
+    duration: n.params?.duration, hasDuration: (n.params?.duration ?? 0) > 0,
+    created_at: n.created_at,
+  }))
 
   return NextResponse.json({
     pipelines: pipelines.map(p => ({
@@ -90,14 +108,10 @@ export async function GET() {
     totalActiveLeads: activeLeads.length,
     todayStart,
     nowTs,
-    allNotesCount:   allNotes.length,
-    todayNotesCount: todayNotes.length,
-    noteTypesToday:  noteTypes,
-    sampleNotes: allNotes.slice(0, 5).map(n => ({
-      id: n.id, entity_id: n.entity_id, note_type: n.note_type,
-      created_by: n.created_by, created_at: (n as AmoNote & { created_at?: number }).created_at,
-      isToday: (n.created_at ?? 0) >= todayStart,
-    })),
+    todayNotesCount:   todayNotes.length,
+    noteTypesToday:    noteTypes,
+    callNotes: { total: callOutNotes.length, withDuration, withoutDuration },
+    sampleCallNotes,
     eventTypesToday: eventTypes,
     totalEvents: todayEvents.length,
     managerStats,
