@@ -47,6 +47,7 @@ function getProductDescription(calc: Calc): string {
     const lines = [`Зеркало ${shape}, ${dims}`]
     const extras: string[] = []
     if (d.mirrorName) extras.push(`${d.mirrorName}${d.mirrorMm ? ` ${d.mirrorMm} мм` : ''}`)
+    if (d.hasFacet && d.facetTypeMm) extras.push(`фацет ${d.facetTypeMm} мм`)
     if (d.hasLighting) extras.push('подсветка')
     if (d.hasSandblast) extras.push('пескоструй')
     if (d.hasSubstrate) extras.push('подложка')
