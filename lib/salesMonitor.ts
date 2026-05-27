@@ -81,8 +81,7 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
-  // Parallel: users, pipelines, today-events, today-notes, all-active-leads
-  // Events and notes use single-page amoGet (limit=250) — one day never exceeds 250 records
+  // Parallel: users, pipelines, today-events, today-notes, all-leads
   const [users, pipelines, eventsData, notesData, allLeads] = await Promise.all([
     getUsers(),
     getPipelines(),
@@ -91,31 +90,42 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
       'filter[created_at][to]':   String(nowTs),
       limit: '250',
     }),
-    // note_type 4=исходящий звонок, 13=входящий, 10=SMS, 1=текстовое примечание
+    // No note_type filter — AmoCRM doesn't support comma-separated values reliably.
+    // We filter by type client-side. Wazzup creates notes as the integration bot,
+    // so we attribute notes by lead ownership, not note creator.
     amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
-      'filter[note_type]': '4,10,1',
       'filter[created_at][from]': String(todayStart),
       'filter[created_at][to]':   String(nowTs),
       limit: '250',
     }),
-    // Fetch all leads — AmoCRM ignores comma-separated responsible_user_id filter,
-    // so we fetch everything and filter client-side.
     getLeads({}),
   ])
 
   const todayEvents = eventsData?._embedded?.events ?? []
   const todayNotes  = notesData?._embedded?.notes ?? []
 
-  // Stage map: id → { name, zone }
+  // Find the main "Продажи" sales pipeline by name (or via AMOCRM_SALES_PIPELINE_ID env var)
+  const salesPipeline = pipelines.find(p =>
+    p.name.toLowerCase().includes('продаж') ||
+    String(p.id) === (process.env.AMOCRM_SALES_PIPELINE_ID ?? '')
+  ) ?? pipelines[0]
+
+  // Stage map: only from the sales pipeline — other pipelines have different stage names
   const stageMap = new Map<number, { name: string; zone: 1 | 2 | 3 | null }>()
-  for (const p of pipelines) {
-    for (const s of p._embedded?.statuses ?? []) {
-      stageMap.set(s.id, { name: s.name, zone: stageZone(s.name) })
-    }
+  for (const s of salesPipeline?._embedded?.statuses ?? []) {
+    stageMap.set(s.id, { name: s.name, zone: stageZone(s.name) })
   }
 
-  // Active leads: closed_at === null is authoritative; status_id 142/143 are fallbacks
-  const activeLeads = allLeads.filter(l => l.closed_at === null && l.status_id !== 142 && l.status_id !== 143)
+  // Filter to sales pipeline only — removes B2B and other pipeline leads from counts
+  const salesLeads = salesPipeline
+    ? allLeads.filter(l => l.pipeline_id === salesPipeline.id)
+    : allLeads
+
+  // Active leads: not closed
+  const activeLeads = salesLeads.filter(l => l.closed_at === null && l.status_id !== 142 && l.status_id !== 143)
+
+  // Lead map for attributing notes by lead ownership (handles Wazzup bot-created notes)
+  const leadMap = new Map(allLeads.map(l => [l.id, l]))
 
   // Map user ID → AmoUser
   const userMap = new Map(users.map(u => [u.id, u]))
@@ -124,12 +134,16 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
-    const myNotes  = todayNotes.filter((n: AmoNote) => n.created_by === uid)
+    // Attribute notes by lead ownership — Wazzup creates notes as bot, not as manager
+    const myNotes  = todayNotes.filter((n: AmoNote) =>
+      leadMap.get(n.entity_id)?.responsible_user_id === uid
+    )
 
-    const newLeadsToday = allLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
-    const callsMade     = myNotes.filter(n => n.note_type === 4 || n.note_type === 13).length
-    const messagesSent  = myNotes.filter(n => n.note_type === 10 || n.note_type === 1).length
-    const cardsMoved    = myEvents.filter(e => e.type === 'lead_status_changed').length
+    const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
+    // note_type: 4=исходящий звонок, 13=входящий, 10=SMS, 1=текстовое примечание, 102=Wazzup
+    const callsMade    = myNotes.filter(n => n.note_type === 4 || n.note_type === 13).length
+    const messagesSent = myNotes.filter(n => n.note_type === 10 || n.note_type === 1 || n.note_type === 102).length
+    const cardsMoved   = myEvents.filter(e => e.type === 'lead_status_changed').length
 
     const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)
 
