@@ -14,7 +14,7 @@ export async function GET() {
   const todayStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000)
   const nowTs      = Math.floor(now.getTime() / 1000)
 
-  const [pipelines, allLeads, notesData, users] = await Promise.all([
+  const [pipelines, allLeads, notesData, users, eventsData] = await Promise.all([
     getPipelines(),
     getLeads({}),
     amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
@@ -23,10 +23,22 @@ export async function GET() {
       limit: '50',
     }),
     getUsers(),
+    amoGet<{ _embedded: { events: Array<{ id: string; type: string; created_by: number }> } }>('/events', {
+      'filter[created_at][from]': String(todayStart),
+      'filter[created_at][to]':   String(nowTs),
+      limit: '250',
+    }),
   ])
 
-  const allNotes   = notesData?._embedded?.notes ?? []
-  const todayNotes = allNotes.filter(n => !n.created_at || n.created_at >= todayStart)
+  const allNotes    = notesData?._embedded?.notes ?? []
+  const todayNotes  = allNotes.filter(n => !n.created_at || n.created_at >= todayStart)
+  const todayEvents = eventsData?._embedded?.events ?? []
+
+  // Event type distribution
+  const eventTypes: Record<string, number> = {}
+  for (const e of todayEvents) {
+    eventTypes[e.type] = (eventTypes[e.type] ?? 0) + 1
+  }
   const managerIds = (process.env.AMOCRM_MANAGERS_IDS ?? '').split(',').map(s => Number(s.trim()))
   const userMap    = new Map(users.map(u => [u.id, u]))
   const leadMap    = new Map(allLeads.map(l => [l.id, l]))
@@ -86,6 +98,8 @@ export async function GET() {
       created_by: n.created_by, created_at: (n as AmoNote & { created_at?: number }).created_at,
       isToday: (n.created_at ?? 0) >= todayStart,
     })),
+    eventTypesToday: eventTypes,
+    totalEvents: todayEvents.length,
     managerStats,
     envPipelineId: process.env.AMOCRM_SALES_PIPELINE_ID ?? '(не задан)',
   })

@@ -135,19 +135,21 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
 
-    // Calls: created_by manager — AmoCRM logs call_out/call_in as the manager who made the call
-    const myCallNotes = todayNotes.filter((n: AmoNote) => n.created_by === uid)
-    // Messages: attribute by lead ownership — Wazzup/email bots create notes as system user (created_by=0)
-    const myMsgNotes  = todayNotes.filter((n: AmoNote) =>
-      leadMap.get(n.entity_id)?.pipeline_id === salesPipeline?.id &&
-      leadMap.get(n.entity_id)?.responsible_user_id === uid
-    )
-
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
-    // AmoCRM v4 returns note_type as string: 'call_out', 'call_in', 'amomail_message'
-    const callsMade    = myCallNotes.filter(n => n.note_type === 'call_out' || n.note_type === 'call_in').length
-    const messagesSent = myMsgNotes.filter(n => n.note_type === 'amomail_message').length
-    const cardsMoved   = myEvents.filter(e => e.type === 'lead_status_changed').length
+
+    // Calls: SIPUNI phone calls appear as events (incoming_call / outgoing_call)
+    // — AmoCRM analytics counts only these, not Wazzup notes
+    const callsMade = myEvents.filter(e =>
+      e.type === 'incoming_call' || e.type === 'outgoing_call' || e.type === 'call'
+    ).length
+
+    // Messages: Wazzup (call_out/call_in notes) + email (amomail_message), created by manager
+    const messagesSent = todayNotes.filter(n =>
+      n.created_by === uid &&
+      (n.note_type === 'call_out' || n.note_type === 'call_in' || n.note_type === 'amomail_message')
+    ).length
+
+    const cardsMoved = myEvents.filter(e => e.type === 'lead_status_changed').length
 
     const myLeads = activeLeads.filter(l => l.responsible_user_id === uid)
 
