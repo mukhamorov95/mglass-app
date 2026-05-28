@@ -355,7 +355,9 @@ export default function CfoClient({ months, initialSettings, pricingRows }: Prop
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<string | null>(null)
 
-  const fc = s.fixed_costs.rent + s.fixed_costs.payroll + s.fixed_costs.marketing + s.fixed_costs.other
+  const fc = s.fixed_costs.rent + s.fixed_costs.utilities + s.fixed_costs.payroll +
+             s.fixed_costs.payroll_tax + s.fixed_costs.leasing + s.fixed_costs.credit +
+             s.fixed_costs.marketing + s.fixed_costs.outsource + s.fixed_costs.other
   const splitPct = (s.profit_split.owner_pct + s.profit_split.education_pct + s.profit_split.reserve_pct) / 100
 
   const tb0 = calcTB0(fc, s.avg_variable_pct)
@@ -508,10 +510,15 @@ export default function CfoClient({ months, initialSettings, pricingRows }: Prop
             {/* Fixed costs */}
             <div className="space-y-2">
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">Постоянные расходы</p>
-              {numField('Аренда', s.fixed_costs.rent, v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, rent: v } })))}
-              {numField('Зарплата', s.fixed_costs.payroll, v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, payroll: v } })))}
-              {numField('Маркетинг', s.fixed_costs.marketing, v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, marketing: v } })))}
-              {numField('Прочее', s.fixed_costs.other, v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, other: v } })))}
+              {numField('Аренда',            s.fixed_costs.rent,        v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, rent: v } })))}
+              {numField('Коммунальные',      s.fixed_costs.utilities,   v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, utilities: v } })))}
+              {numField('ФОТ (зарплата)',    s.fixed_costs.payroll,     v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, payroll: v } })))}
+              {numField('Налоги на ФОТ',     s.fixed_costs.payroll_tax, v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, payroll_tax: v } })))}
+              {numField('Лизинг',            s.fixed_costs.leasing,     v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, leasing: v } })))}
+              {numField('Кредиты',           s.fixed_costs.credit,      v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, credit: v } })))}
+              {numField('Маркетинг+реклама', s.fixed_costs.marketing,   v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, marketing: v } })))}
+              {numField('Аутсорс, ПО, банк', s.fixed_costs.outsource,  v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, outsource: v } })))}
+              {numField('Прочее',            s.fixed_costs.other,       v => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, other: v } })))}
               <div className="flex justify-between pt-1 border-t border-[#f5f5f3]">
                 <span className="text-[10px] text-[#9a9a95]">Итого FC</span>
                 <span className="text-xs font-bold font-mono text-[#111110]">{fc.toLocaleString('ru-RU')} ₽</span>
@@ -706,10 +713,10 @@ export default function CfoClient({ months, initialSettings, pricingRows }: Prop
   id                     serial PRIMARY KEY,
   entity_type            text NOT NULL DEFAULT 'ip',
   tax_system             text NOT NULL DEFAULT 'usn_6',
-  fixed_costs            jsonb NOT NULL DEFAULT '{"rent":50000,"payroll":150000,"marketing":30000,"other":20000}',
+  fixed_costs            jsonb NOT NULL DEFAULT '{"rent":475000,"utilities":20000,"payroll":800000,"payroll_tax":181000,"leasing":505200,"credit":344980,"marketing":290000,"outsource":190000,"other":62710}',
   profit_split           jsonb NOT NULL DEFAULT '{"owner_pct":20,"education_pct":5,"reserve_pct":5}',
-  avg_variable_pct       numeric NOT NULL DEFAULT 45,
-  monthly_revenue_target numeric NOT NULL DEFAULT 1000000,
+  avg_variable_pct       numeric NOT NULL DEFAULT 62,
+  monthly_revenue_target numeric NOT NULL DEFAULT 8700000,
   updated_at             timestamptz DEFAULT now()
 );
 INSERT INTO cfo_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;`}</pre>

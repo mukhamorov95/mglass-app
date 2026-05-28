@@ -8,7 +8,17 @@ export type MonthRevenue = { month: string; revenue: number }
 export type CfoSettings = {
   entity_type: string
   tax_system: string
-  fixed_costs: { rent: number; payroll: number; marketing: number; other: number }
+  fixed_costs: {
+    rent: number        // Аренда
+    utilities: number   // Коммунальные
+    payroll: number     // ФОТ (зарплата, льготы)
+    payroll_tax: number // Налоги на ФОТ
+    leasing: number     // Лизинг
+    credit: number      // Кредиты и проценты
+    marketing: number   // Маркетинг + реклама
+    outsource: number   // Аутсорс бух. + ПО + банк
+    other: number       // Прочее
+  }
   profit_split: { owner_pct: number; education_pct: number; reserve_pct: number }
   avg_variable_pct: number
   monthly_revenue_target: number
@@ -23,13 +33,25 @@ export type PricingRow = {
   max_discount_percent: number
 }
 
+// Basis: ТБ1 tab from financial spreadsheet (Nov 2025 plan)
+// Glass 2.4M (VC 43.7%) + MGlass 6.3M (VC 69.1%) → weighted VC ≈ 62%, FC = 2,868,890
 const DEFAULT_SETTINGS: CfoSettings = {
   entity_type: 'ip',
   tax_system: 'usn_6',
-  fixed_costs: { rent: 50000, payroll: 150000, marketing: 30000, other: 20000 },
+  fixed_costs: {
+    rent:        475_000,   // Аренда
+    utilities:    20_000,   // Коммунальные
+    payroll:     800_000,   // ФОТ (зарплата)
+    payroll_tax: 181_000,   // Налоги на ФОТ
+    leasing:     505_200,   // Лизинг
+    credit:      344_980,   // Кредиты и проценты
+    marketing:   290_000,   // Маркетинг 250K + реклама 40K
+    outsource:   190_000,   // Бухгалтерия 135K + ПО 20K + банк 35K
+    other:        62_710,   // ТО, уборка, страхование, взносы ИП и пр.
+  },
   profit_split: { owner_pct: 20, education_pct: 5, reserve_pct: 5 },
-  avg_variable_pct: 45,
-  monthly_revenue_target: 1000000,
+  avg_variable_pct: 62,     // Взвешенный VC без налога (ТБ1 ноябрь 2025)
+  monthly_revenue_target: 8_700_000, // Плановая выручка из ТБ1
 }
 
 export default async function CfoPage() {
@@ -86,7 +108,7 @@ export default async function CfoPage() {
       settings = {
         entity_type: data.entity_type ?? DEFAULT_SETTINGS.entity_type,
         tax_system: data.tax_system ?? DEFAULT_SETTINGS.tax_system,
-        fixed_costs: data.fixed_costs ?? DEFAULT_SETTINGS.fixed_costs,
+        fixed_costs: { ...DEFAULT_SETTINGS.fixed_costs, ...(data.fixed_costs ?? {}) },
         profit_split: data.profit_split ?? DEFAULT_SETTINGS.profit_split,
         avg_variable_pct: data.avg_variable_pct ?? DEFAULT_SETTINGS.avg_variable_pct,
         monthly_revenue_target: data.monthly_revenue_target ?? DEFAULT_SETTINGS.monthly_revenue_target,
