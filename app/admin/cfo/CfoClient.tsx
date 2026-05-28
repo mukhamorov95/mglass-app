@@ -1,11 +1,12 @@
 'use client'
 
 import { useState } from 'react'
-import type { MonthRevenue, CfoSettings } from './page'
+import type { MonthRevenue, CfoSettings, PricingRow } from './page'
 
 type Props = {
   months: MonthRevenue[]
   initialSettings: CfoSettings
+  pricingRows: PricingRow[]
 }
 
 const TAX_SYSTEMS = [
@@ -180,7 +181,175 @@ function RevenueChart({
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function CfoClient({ months, initialSettings }: Props) {
+const PRODUCT_LABELS: Record<string, string> = {
+  mirror:           'Зеркало без подсветки',
+  mirror_light:     'Зеркало с подсветкой',
+  loft:             'Лофт-перегородка',
+  shower_budget:    'Душевая (бюджет)',
+  shower_standard:  'Душевая (стандарт)',
+}
+
+function PricingModelBlock({ rows }: { rows: PricingRow[] }) {
+  const [sampleCost, setSampleCost] = useState(2000)
+  const [activeIdx, setActiveIdx] = useState(0)
+
+  const row = rows[activeIdx]
+  if (!row) return null
+
+  const margin  = row.default_margin
+  const tax     = row.tax_percent
+  const denom   = 1 - margin / 100 - tax / 100
+  const price   = denom > 0 ? Math.round(sampleCost / denom) : 0
+  const taxAmt  = Math.round(price * tax   / 100)
+  const mrgAmt  = Math.round(price * margin / 100)
+  const costPct = Math.round(100 - margin - tax)
+
+  return (
+    <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
+        <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Модель ценообразования</p>
+        <p className="text-[10px] text-[#c4c4be] mt-0.5">
+          Цена клиенту = Себестоимость ÷ (1 − Маржа% − Налог%)
+        </p>
+      </div>
+
+      {/* Product tabs */}
+      <div className="flex border-b border-[#e4e4e0] overflow-x-auto">
+        {rows.map((r, i) => (
+          <button
+            key={r.id}
+            onClick={() => setActiveIdx(i)}
+            className={`px-3 py-2 text-[10px] font-medium whitespace-nowrap border-r border-[#e4e4e0] transition-colors ${
+              i === activeIdx
+                ? 'bg-[#111110] text-white'
+                : 'text-[#6b6b66] hover:bg-[#f5f5f3]'
+            }`}
+          >
+            {PRODUCT_LABELS[r.product_type] ?? r.product_type}
+          </button>
+        ))}
+      </div>
+
+      <div className="p-4 grid grid-cols-[1fr_280px] gap-6">
+        {/* Left: visual decomposition */}
+        <div className="space-y-4">
+          {/* Formula params */}
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: 'Маржа',  value: `${margin}%`,          color: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+              { label: 'Налог',  value: `${tax}%`,             color: 'bg-slate-50 text-slate-600 border-slate-200' },
+              { label: 'Множитель к себест.', value: `×${(1/denom).toFixed(2)}`, color: 'bg-[#f5f5f3] text-[#111110] border-[#e4e4e0]' },
+            ].map(item => (
+              <div key={item.label} className={`rounded-lg border px-3 py-2.5 ${item.color}`}>
+                <p className="text-[10px] opacity-70">{item.label}</p>
+                <p className="text-lg font-bold font-mono mt-0.5">{item.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {/* Stacked bar */}
+          <div>
+            <p className="text-[10px] text-[#9a9a95] mb-1.5">Структура цены клиенту (1 заказ)</p>
+            <div className="flex h-8 rounded-lg overflow-hidden text-white text-[10px] font-bold">
+              <div
+                className="flex items-center justify-center bg-[#2563eb] transition-all"
+                style={{ width: `${costPct}%` }}
+                title="Себестоимость"
+              >
+                {costPct >= 15 && `${costPct}%`}
+              </div>
+              <div
+                className="flex items-center justify-center bg-emerald-500 transition-all"
+                style={{ width: `${margin}%` }}
+                title="Маржа"
+              >
+                {margin >= 10 && `${margin}%`}
+              </div>
+              <div
+                className="flex items-center justify-center bg-slate-400 transition-all"
+                style={{ width: `${tax}%` }}
+                title="Налог"
+              >
+                {tax >= 8 && `${tax}%`}
+              </div>
+            </div>
+            <div className="flex gap-4 mt-1.5">
+              {[
+                { label: 'Себестоимость', color: 'bg-[#2563eb]' },
+                { label: 'Маржа (прибыль)', color: 'bg-emerald-500' },
+                { label: `Налог УСН ${tax}%`, color: 'bg-slate-400' },
+              ].map(item => (
+                <span key={item.label} className="flex items-center gap-1 text-[10px] text-[#6b6b66]">
+                  <span className={`inline-block w-2 h-2 rounded-sm ${item.color}`} />
+                  {item.label}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          {/* Min margin & discount info */}
+          <div className="grid grid-cols-2 gap-3 text-[11px]">
+            <div className="bg-[#fafaf9] rounded-lg border border-[#e4e4e0] px-3 py-2">
+              <p className="text-[10px] text-[#9a9a95]">Минимальная маржа</p>
+              <p className="font-bold text-red-600 font-mono">{row.min_margin}%</p>
+              <p className="text-[10px] text-[#c4c4be] mt-0.5">ниже — продаём в убыток</p>
+            </div>
+            <div className="bg-[#fafaf9] rounded-lg border border-[#e4e4e0] px-3 py-2">
+              <p className="text-[10px] text-[#9a9a95]">Макс. скидка менеджера</p>
+              <p className="font-bold text-amber-600 font-mono">{row.max_discount_percent}%</p>
+              <p className="text-[10px] text-[#c4c4be] mt-0.5">при скидке {row.max_discount_percent}% маржа ≈ {Math.max(0, Math.round(margin - row.max_discount_percent * (1/denom)))}%</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Right: interactive calculator */}
+        <div className="bg-[#fafaf9] rounded-xl border border-[#e4e4e0] p-4 space-y-4">
+          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Калькулятор</p>
+
+          <div>
+            <label className="text-[10px] text-[#9a9a95] block mb-1">Себестоимость изделия, ₽</label>
+            <input
+              type="number"
+              value={sampleCost}
+              onChange={e => setSampleCost(Math.max(0, Number(e.target.value)))}
+              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none focus:border-[#111110] bg-white"
+            />
+          </div>
+
+          <div className="space-y-2 text-xs">
+            {[
+              { label: 'Себестоимость',      value: sampleCost,             color: 'text-[#2563eb]' },
+              { label: `Маржа ${margin}%`,   value: mrgAmt,                 color: 'text-emerald-600' },
+              { label: `Налог ${tax}%`,      value: taxAmt,                 color: 'text-[#6b6b66]' },
+            ].map(row => (
+              <div key={row.label} className="flex justify-between">
+                <span className="text-[#9a9a95]">{row.label}</span>
+                <span className={`font-mono font-medium ${row.color}`}>
+                  {row.value.toLocaleString('ru-RU')} ₽
+                </span>
+              </div>
+            ))}
+            <div className="flex justify-between pt-2 border-t border-[#e4e4e0]">
+              <span className="font-semibold text-[#111110]">Цена клиенту</span>
+              <span className="font-bold font-mono text-[#111110] text-sm">
+                {price.toLocaleString('ru-RU')} ₽
+              </span>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-2 text-[10px] text-[#6b6b66]">
+            <p className="font-mono text-[#111110] mb-1">
+              {sampleCost.toLocaleString('ru-RU')} ÷ {denom.toFixed(2)} = {price.toLocaleString('ru-RU')} ₽
+            </p>
+            <p>знаменатель: 1 − {margin/100} − {tax/100} = {denom.toFixed(2)}</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default function CfoClient({ months, initialSettings, pricingRows }: Props) {
   const [s, setS] = useState<CfoSettings>(initialSettings)
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -305,6 +474,9 @@ export default function CfoClient({ months, initialSettings }: Props) {
             </div>
           ))}
         </div>
+
+        {/* Pricing model */}
+        {pricingRows.length > 0 && <PricingModelBlock rows={pricingRows} />}
 
         {/* Settings + Chart */}
         <div className="grid grid-cols-[280px_1fr] gap-3">

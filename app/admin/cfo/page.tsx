@@ -14,6 +14,15 @@ export type CfoSettings = {
   monthly_revenue_target: number
 }
 
+export type PricingRow = {
+  id: number
+  product_type: string
+  default_margin: number
+  tax_percent: number
+  min_margin: number
+  max_discount_percent: number
+}
+
 const DEFAULT_SETTINGS: CfoSettings = {
   entity_type: 'ip',
   tax_system: 'usn_6',
@@ -32,20 +41,25 @@ export default async function CfoPage() {
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  // Last 12 months of approved revenue from calculations
   const since = new Date()
   since.setMonth(since.getMonth() - 11)
   since.setDate(1)
   since.setHours(0, 0, 0, 0)
 
-  const { data: calcs } = await supabase
-    .from('calculations')
-    .select('created_at, final_price')
-    .eq('status', 'approved')
-    .gte('created_at', since.toISOString())
-    .order('created_at', { ascending: true })
+  const [{ data: calcs }, { data: pricingData }] = await Promise.all([
+    supabase
+      .from('calculations')
+      .select('created_at, final_price')
+      .eq('status', 'approved')
+      .gte('created_at', since.toISOString())
+      .order('created_at', { ascending: true }),
+    supabase
+      .from('financial_settings')
+      .select('id, product_type, default_margin, tax_percent, min_margin, max_discount_percent')
+      .not('product_type', 'is', null)
+      .order('id'),
+  ])
 
-  // Group by YYYY-MM
   const monthMap: Record<string, number> = {}
   for (const c of (calcs ?? [])) {
     const d = new Date(c.created_at)
@@ -53,7 +67,6 @@ export default async function CfoPage() {
     monthMap[key] = (monthMap[key] ?? 0) + (c.final_price ?? 0)
   }
 
-  // Build sorted array for last 12 months (fill missing months with 0)
   const months: MonthRevenue[] = []
   for (let i = 11; i >= 0; i--) {
     const d = new Date()
@@ -62,7 +75,6 @@ export default async function CfoPage() {
     months.push({ month: key, revenue: monthMap[key] ?? 0 })
   }
 
-  // Try to load cfo_settings (may not exist yet)
   let settings: CfoSettings = DEFAULT_SETTINGS
   try {
     const { data } = await supabase
@@ -84,5 +96,11 @@ export default async function CfoPage() {
     // Table not created yet — use defaults
   }
 
-  return <CfoClient months={months} initialSettings={settings} />
+  return (
+    <CfoClient
+      months={months}
+      initialSettings={settings}
+      pricingRows={(pricingData ?? []) as PricingRow[]}
+    />
+  )
 }
