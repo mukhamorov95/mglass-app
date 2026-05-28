@@ -430,33 +430,7 @@ export default function CfoClient({ months, initialSettings, pricingRows }: Prop
             <h1 className="text-sm font-semibold text-[#111110]">Финансовая модель</h1>
             <p className="text-[10px] text-[#9a9a95] mt-0.5">Точки безубыточности · ДДС · Сценарный анализ</p>
           </div>
-          <div className="flex items-center gap-2">
-            {savedAt && <span className="text-[10px] text-[#9a9a95]">Сохранено в {savedAt}</span>}
-            {editing ? (
-              <>
-                <button
-                  onClick={() => { setS(initialSettings); setEditing(false) }}
-                  className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors"
-                >
-                  Отмена
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving}
-                  className="px-3 py-1.5 text-xs bg-[#111110] text-white rounded-lg font-medium disabled:opacity-50 transition-opacity"
-                >
-                  {saving ? 'Сохраняю…' : 'Сохранить'}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setEditing(true)}
-                className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors"
-              >
-                Изменить
-              </button>
-            )}
-          </div>
+          <div />
         </div>
 
         {/* Key metrics */}
@@ -485,7 +459,28 @@ export default function CfoClient({ months, initialSettings, pricingRows }: Prop
 
           {/* Settings panel */}
           <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-4">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Параметры</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Параметры</p>
+              {editing ? (
+                <div className="flex gap-1.5">
+                  <button onClick={() => { setS(initialSettings); setEditing(false) }}
+                    className="px-2 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-[#f5f5f3]">
+                    Отмена
+                  </button>
+                  <button onClick={handleSave} disabled={saving}
+                    className="px-2 py-1 text-[10px] bg-[#111110] text-white rounded font-medium disabled:opacity-50">
+                    {saving ? '…' : 'Сохранить'}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={() => setEditing(true)}
+                  className="px-2 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                  Изменить
+                </button>
+              )}
+            </div>
+
+            {savedAt && <p className="text-[10px] text-emerald-600">Сохранено в {savedAt}</p>}
 
             {/* Tax system */}
             <div>

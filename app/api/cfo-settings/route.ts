@@ -5,7 +5,7 @@ import { getRole } from '@/lib/getRole'
 
 export async function POST(req: NextRequest) {
   const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') {
+  if (role !== 'admin' && role !== 'ceo' && role !== 'cfo') {
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
   }
 
