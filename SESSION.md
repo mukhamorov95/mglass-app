@@ -1,34 +1,27 @@
 ## Текущая задача
-CFO Center MVP — реализован, задокументирован, ждёт деплоя
+CFO Center MVP завершён и задеплоен
 
-## Что сделано (сессия 27 мая)
+## Что сделано (сессия 28 мая)
 
-### CFO Center — новый финансовый раздел
-- `lib/getRole.ts` — добавлена роль `cfo` с маршрутами; `/cfo` добавлен в список CEO
-- `components/Sidebar.tsx` — CFO-блок навигации (Дашборд, Маржинальность, Unit-экономика, Финмодели, Настройки); CEO видит ссылку "CFO Center"
-- `app/cfo/layout.tsx` — guard: только admin/ceo/cfo
-- `app/cfo/page.tsx` — Server Component дашборд: KPI месяца, алерты, последние расчёты, распределение маржи, выручка по продуктам
-- `app/cfo/margins/page.tsx` — Client Component: таблица маржинальности с периодами и фильтрами
-- `app/cfo/unit/page.tsx` — Client Component: unit-экономика, разбивка себестоимость → прибыль
-
-### Документация
-- `PROJECT_RULES.md` — правила разработки (финансовая формула, AmoCRM readonly, роли, стиль)
-- `docs/CFO_CENTER.md` — архитектура CFO Center, маршруты, источники данных, пороги маржи
-- `docs/CFO_PERMISSIONS.md` — матрица доступа, назначение ролей
+### CFO Center — полный редизайн
+- `app/admin/cfo/CfoClient.tsx` — полная перепись: P&L таблица с 6 направлениями, inline план (localStorage), фонды, ТБ0/ТБ1 прогресс-бары, AI-инсайты (7 rule-based условий), 5 вкладок
+- `app/admin/cfo/page.tsx` — MonthActuals из calculations по PRODUCT_TO_DIR, роль cfo в guard
+- `docs/CFO_FINMODEL_ARCHITECTURE.md` — полная архитектурная документация финмодели
+- Коммит: af8d8ab, запушен в main
 
 ## Следующий шаг
-Следующие функции CFO Center (по приоритету):
-1. ДДС с ручным вводом (интерфейс к `/admin/cfo/`)
-2. P&L по периодам (план vs факт)
-3. Удалить финансовые блоки из CEO-раздела (они теперь в CFO Center)
+По приоритетам из SYSTEM.md:
+1. Менеджер (`/manager`) — личный кабинет: мои сделки, задачи на день, активность
+2. Или: вынести VC% направлений из хардкода в cfo_settings (таблица financial_settings)
 
 ## Контекст
-- Налог: 12% для всех продуктов (mirror, mirror_light, loft, shower, shower_standard, shower_budget)
-- Пороги маржи: красный <25%, янтарный 25-35%, зелёный ≥35%
-- Данные берутся из `calculations` таблицы Supabase (cost_breakdown + financial_breakdown JSON)
-- Supabase service role key — только в Server Components
-- TypeScript чистый (кроме pre-existing ошибок в __tests__)
+- CFO Center живёт в `/admin/cfo/` (не `/cfo/`) — это admin-раздел
+- Plan и Funds хранятся в localStorage (ключи: `cfo_rev_plan`, `cfo_funds`)
+- ТБ0 = FC / (1 - weightedVC), ТБ1 = FC / ((1 - weightedVC) × (1 - fundsPct))
+- Дефолты из ТБ1: FC=2 868 890, VC=62%, target=8 700 000
+- TypeScript чистый (ошибки только в pre-existing __tests__)
 
 ## Открытые вопросы
-- Нужно ли убрать финансовые блоки из `/ceo/`? (пока оставлены)
-- Нужна ли страница `/cfo/dds` с ручным вводом ДДС?
+- b2b_glass факт = 0 (нет в calculations, нужен ручной ввод или AmoCRM интеграция)
+- localStorage план теряется в инкогнито — нужна таблица cfo_plan_snapshots
+- VC% направлений захардкожен в REV_DIRS — нужно вынести в настройки
