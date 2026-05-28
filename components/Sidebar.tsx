@@ -123,14 +123,25 @@ const SEO_AI: NavItem[] = [
   { href: '/admin/agents',  label: 'AI-агенты',    icon: '⚡' },
 ]
 
+// ─── CFO role ─────────────────────────────────────────────────────────────────
+
+const CFO_ITEMS: NavItem[] = [
+  { href: '/cfo',          label: 'Дашборд CFO',       icon: '📊' },
+  { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
+  { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
+  { href: '/admin/cfo',    label: 'Финмодели / ДДС',   icon: '💰' },
+  { href: '/admin/settings', label: 'Фин. настройки', icon: '⚙️' },
+]
+
 // ─── CEO role ─────────────────────────────────────────────────────────────────
 
 const CEO_OWNER: NavItem[] = [
   { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
   { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
+  { href: '/cfo',                     label: 'CFO Center',        icon: '💎' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/cfo',              label: 'Финдиректор',      icon: '💰' },
+  { href: '/admin/cfo',              label: 'Финмодели / ДДС',  icon: '💰' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
@@ -285,6 +296,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
 
 function autoOpenRole(pathname: string, role: Role): string[] {
   const open: string[] = []
+  if (role === 'cfo') return open
   if (role === 'buyer') {
     if (inSection(pathname, ['/admin/stock-control'])) open.push('buyer_sklad')
     if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
@@ -528,6 +540,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
   function renderNav() {
     // Manager: MGlass + B2B (filtered by permissions)
+    if (role === 'cfo') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-teal-600">CFO Center</div>
+        <div className="space-y-px">
+          {CFO_ITEMS.map(item => navItem(item, 'bg-teal-50 text-teal-700 font-medium'))}
+        </div>
+      </>
+    )
+
     if (role === 'commercial') return (
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Коммерческий</div>
@@ -685,7 +706,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
               <span className="text-[14px] font-bold text-[#111110] tracking-[-0.02em]">MGlass</span>
               {!isAdmin && role && (
                 <div className="text-[10px] text-[#b0b0aa] leading-tight">
-                  {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : 'CEO'}
+                  {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : role === 'cfo' ? 'CFO' : role === 'commercial' ? 'Коммерческий' : 'CEO'}
                 </div>
               )}
             </div>

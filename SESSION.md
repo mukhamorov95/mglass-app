@@ -1,47 +1,34 @@
 ## Текущая задача
-Sales Monitor (AmoCRM) — реализован, ждёт ENV vars
+CFO Center MVP — реализован, задокументирован, ждёт деплоя
 
-## Что сделано (сессия 26 мая)
+## Что сделано (сессия 27 мая)
 
-### КП (app/calculations/order/[groupId]/print/page.tsx)
-- Размеры изделий: `getProductDescription` теперь всегда читает из `input_data` (форма + размер + материал)
-- Формат: Изделие → Монтаж → Доставка — услуги идут отдельными строками сразу под своим изделием
-- Цена изделия = `final_price − servicesTotal` (совпадает с "Стоимость изделия" в калькуляторе)
-- ИТОГО = Σ(final_price) — совпадает с историей расчётов и калькулятором
+### CFO Center — новый финансовый раздел
+- `lib/getRole.ts` — добавлена роль `cfo` с маршрутами; `/cfo` добавлен в список CEO
+- `components/Sidebar.tsx` — CFO-блок навигации (Дашборд, Маржинальность, Unit-экономика, Финмодели, Настройки); CEO видит ссылку "CFO Center"
+- `app/cfo/layout.tsx` — guard: только admin/ceo/cfo
+- `app/cfo/page.tsx` — Server Component дашборд: KPI месяца, алерты, последние расчёты, распределение маржи, выручка по продуктам
+- `app/cfo/margins/page.tsx` — Client Component: таблица маржинальности с периодами и фильтрами
+- `app/cfo/unit/page.tsx` — Client Component: unit-экономика, разбивка себестоимость → прибыль
 
-### Sales Monitor (AmoCRM → Telegram)
-- `lib/amocrm.ts` — клиент AmoCRM API v4 (read-only, token refresh, пагинация)
-- `lib/salesMonitor.ts` — сбор метрик по Алине, Семёну, Александре, Яне + РОП-аналитика
-- `app/api/cron/sales-monitor/route.ts` — GET-endpoint, авторизация CRON_SECRET
-- `vercel.json` — добавлен cron `0 15 * * 1-5` (18:00 МСК, пн-пт)
-- `skills/sales-monitor-skill.md` — skill-документация
-- `skills/README.md` — обновлён до 16 Skills
+### Документация
+- `PROJECT_RULES.md` — правила разработки (финансовая формула, AmoCRM readonly, роли, стиль)
+- `docs/CFO_CENTER.md` — архитектура CFO Center, маршруты, источники данных, пороги маржи
+- `docs/CFO_PERMISSIONS.md` — матрица доступа, назначение ролей
 
-### DB миграция localStorage (завершена ранее)
-- health-check и ai-control-center: DB-first + localStorage fallback
-
-## Следующий шаг — нужно от пользователя
-
-Добавить в `.env.local` и Vercel:
-```
-AMOCRM_DOMAIN=yourdomain.amocrm.ru
-AMOCRM_CLIENT_ID=...
-AMOCRM_CLIENT_SECRET=...
-AMOCRM_REFRESH_TOKEN=...
-AMOCRM_REDIRECT_URI=https://yourdomain.vercel.app
-TELEGRAM_OWNER_CHAT_ID=...   # ID чата руководителя (или TELEGRAM_CHAT_ID)
-```
-
-После — протестировать вручную: `GET /api/cron/sales-monitor` с заголовком `Authorization: Bearer {CRON_SECRET}`
+## Следующий шаг
+Следующие функции CFO Center (по приоритету):
+1. ДДС с ручным вводом (интерфейс к `/admin/cfo/`)
+2. P&L по периодам (план vs факт)
+3. Удалить финансовые блоки из CEO-раздела (они теперь в CFO Center)
 
 ## Контекст
-- AmoCRM токен обновляется автоматически при каждом запуске (refresh → access)
-- Все запросы к AmoCRM только GET — никаких следов в карточках
-- Менеджеры определяются по имени (substring match): Алина, Семён, Александра, Яна
-- Зоны воронки: 1=квалификация, 2=продажа, 3=оплата/производство — мэппинг по названию этапа
-- Красные флаги: 0 активности, зависшие лиды >2д (зона1) / >3д (зона2,3), счёт >5д без оплаты
+- Налог: 12% для всех продуктов (mirror, mirror_light, loft, shower, shower_standard, shower_budget)
+- Пороги маржи: красный <25%, янтарный 25-35%, зелёный ≥35%
+- Данные берутся из `calculations` таблицы Supabase (cost_breakdown + financial_breakdown JSON)
+- Supabase service role key — только в Server Components
+- TypeScript чистый (кроме pre-existing ошибок в __tests__)
 
 ## Открытые вопросы
-- Точные названия этапов воронки в AmoCRM — нужно проверить совпадение с мэппингом в salesMonitor.ts
-- TELEGRAM_OWNER_CHAT_ID — нужен ID чата (не бота), можно узнать через @userinfobot
-- AmoCRM OAuth app нужно создать в аккаунте и получить Client ID + Secret + Refresh Token
+- Нужно ли убрать финансовые блоки из `/ceo/`? (пока оставлены)
+- Нужна ли страница `/cfo/dds` с ручным вводом ДДС?

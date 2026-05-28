@@ -5,7 +5,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo'
 
 export type UserProfile = {
   role:        Role
@@ -19,7 +19,7 @@ export type UserProfile = {
 
 function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
-         r === 'seo'   || r === 'ceo'     || r === 'buyer' || r === 'commercial'
+         r === 'seo'   || r === 'ceo'     || r === 'buyer' || r === 'commercial' || r === 'cfo'
 }
 
 export async function getRole(): Promise<Role | null> {
@@ -151,8 +151,19 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/health-check',
   ],
 
+  cfo: [
+    '/',
+    '/cfo',
+    '/admin/cfo',
+    '/admin/pnl',
+    '/admin/settings',
+    '/admin/dashboard',
+    '/admin/analytics-mglass',
+  ],
+
   ceo: [
     '/',
+    '/cfo',
     '/ceo',
     '/commercial',
     '/admin/owner',
