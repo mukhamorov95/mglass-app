@@ -5,19 +5,28 @@ import CfoClient from './CfoClient'
 
 export type MonthRevenue = { month: string; revenue: number }
 
+export type MonthActuals = {
+  b2c_mirror:   { revenue: number; cost: number }
+  b2c_shower:   { revenue: number; cost: number }
+  b2c_loft:     { revenue: number; cost: number }
+  b2c_services: { revenue: number; cost: number }
+  b2b_glass:    { revenue: number; cost: number }
+  other:        { revenue: number; cost: number }
+}
+
 export type CfoSettings = {
   entity_type: string
   tax_system: string
   fixed_costs: {
-    rent: number        // Аренда
-    utilities: number   // Коммунальные
-    payroll: number     // ФОТ (зарплата, льготы)
-    payroll_tax: number // Налоги на ФОТ
-    leasing: number     // Лизинг
-    credit: number      // Кредиты и проценты
-    marketing: number   // Маркетинг + реклама
-    outsource: number   // Аутсорс бух. + ПО + банк
-    other: number       // Прочее
+    rent: number
+    utilities: number
+    payroll: number
+    payroll_tax: number
+    leasing: number
+    credit: number
+    marketing: number
+    outsource: number
+    other: number
   }
   profit_split: { owner_pct: number; education_pct: number; reserve_pct: number }
   avg_variable_pct: number
@@ -33,42 +42,56 @@ export type PricingRow = {
   max_discount_percent: number
 }
 
-// Basis: ТБ1 tab from financial spreadsheet (Nov 2025 plan)
-// Glass 2.4M (VC 43.7%) + MGlass 6.3M (VC 69.1%) → weighted VC ≈ 62%, FC = 2,868,890
 const DEFAULT_SETTINGS: CfoSettings = {
   entity_type: 'ip',
   tax_system: 'usn_6',
   fixed_costs: {
-    rent:        475_000,   // Аренда
-    utilities:    20_000,   // Коммунальные
-    payroll:     800_000,   // ФОТ (зарплата)
-    payroll_tax: 181_000,   // Налоги на ФОТ
-    leasing:     505_200,   // Лизинг
-    credit:      344_980,   // Кредиты и проценты
-    marketing:   290_000,   // Маркетинг 250K + реклама 40K
-    outsource:   190_000,   // Бухгалтерия 135K + ПО 20K + банк 35K
-    other:        62_710,   // ТО, уборка, страхование, взносы ИП и пр.
+    rent:        475_000,
+    utilities:    20_000,
+    payroll:     800_000,
+    payroll_tax: 181_000,
+    leasing:     505_200,
+    credit:      344_980,
+    marketing:   290_000,
+    outsource:   190_000,
+    other:        62_710,
   },
   profit_split: { owner_pct: 20, education_pct: 5, reserve_pct: 5 },
-  avg_variable_pct: 62,     // Взвешенный VC без налога (ТБ1 ноябрь 2025)
-  monthly_revenue_target: 8_700_000, // Плановая выручка из ТБ1
+  avg_variable_pct: 62,
+  monthly_revenue_target: 8_700_000,
+}
+
+const PRODUCT_TO_DIR: Record<string, keyof MonthActuals> = {
+  mirror:           'b2c_mirror',
+  mirror_light:     'b2c_mirror',
+  shower:           'b2c_shower',
+  shower_standard:  'b2c_shower',
+  shower_budget:    'b2c_shower',
+  loft:             'b2c_loft',
 }
 
 export default async function CfoPage() {
   const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') redirect('/')
+  if (role !== 'admin' && role !== 'ceo' && role !== 'cfo') redirect('/')
 
   const supabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
   )
 
-  const since = new Date()
+  const now = new Date()
+  const since = new Date(now)
   since.setMonth(since.getMonth() - 11)
   since.setDate(1)
   since.setHours(0, 0, 0, 0)
 
-  const [{ data: calcs }, { data: pricingData }] = await Promise.all([
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+
+  const [
+    { data: calcs },
+    { data: pricingData },
+    { data: monthCalcsAll },
+  ] = await Promise.all([
     supabase
       .from('calculations')
       .select('created_at, final_price')
@@ -80,15 +103,20 @@ export default async function CfoPage() {
       .select('id, product_type, default_margin, tax_percent, min_margin, max_discount_percent')
       .not('product_type', 'is', null)
       .order('id'),
+    supabase
+      .from('calculations')
+      .select('product_type, final_price, cost_breakdown, financial_breakdown')
+      .gte('created_at', monthStart)
+      .neq('status', 'cancelled'),
   ])
 
+  // Build 12-month revenue history
   const monthMap: Record<string, number> = {}
   for (const c of (calcs ?? [])) {
     const d = new Date(c.created_at)
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
     monthMap[key] = (monthMap[key] ?? 0) + (c.final_price ?? 0)
   }
-
   const months: MonthRevenue[] = []
   for (let i = 11; i >= 0; i--) {
     const d = new Date()
@@ -97,6 +125,25 @@ export default async function CfoPage() {
     months.push({ month: key, revenue: monthMap[key] ?? 0 })
   }
 
+  // Aggregate current-month actuals by direction
+  const monthActuals: MonthActuals = {
+    b2c_mirror:   { revenue: 0, cost: 0 },
+    b2c_shower:   { revenue: 0, cost: 0 },
+    b2c_loft:     { revenue: 0, cost: 0 },
+    b2c_services: { revenue: 0, cost: 0 },
+    b2b_glass:    { revenue: 0, cost: 0 },
+    other:        { revenue: 0, cost: 0 },
+  }
+  for (const c of (monthCalcsAll ?? [])) {
+    const dir = PRODUCT_TO_DIR[c.product_type ?? ''] ?? 'other'
+    const cost    = (c.cost_breakdown as { totalCost?: number } | null)?.totalCost ?? 0
+    const svcRev  = (c.financial_breakdown as { servicesTotal?: number } | null)?.servicesTotal ?? 0
+    monthActuals[dir].revenue += (c.final_price ?? 0)
+    monthActuals[dir].cost    += cost
+    monthActuals.b2c_services.revenue += svcRev
+  }
+
+  // Load CFO settings from DB
   let settings: CfoSettings = DEFAULT_SETTINGS
   try {
     const { data } = await supabase
@@ -106,16 +153,16 @@ export default async function CfoPage() {
       .maybeSingle()
     if (data) {
       settings = {
-        entity_type: data.entity_type ?? DEFAULT_SETTINGS.entity_type,
-        tax_system: data.tax_system ?? DEFAULT_SETTINGS.tax_system,
-        fixed_costs: { ...DEFAULT_SETTINGS.fixed_costs, ...(data.fixed_costs ?? {}) },
-        profit_split: data.profit_split ?? DEFAULT_SETTINGS.profit_split,
-        avg_variable_pct: data.avg_variable_pct ?? DEFAULT_SETTINGS.avg_variable_pct,
+        entity_type:            data.entity_type            ?? DEFAULT_SETTINGS.entity_type,
+        tax_system:             data.tax_system             ?? DEFAULT_SETTINGS.tax_system,
+        fixed_costs:            { ...DEFAULT_SETTINGS.fixed_costs, ...(data.fixed_costs ?? {}) },
+        profit_split:           data.profit_split           ?? DEFAULT_SETTINGS.profit_split,
+        avg_variable_pct:       data.avg_variable_pct       ?? DEFAULT_SETTINGS.avg_variable_pct,
         monthly_revenue_target: data.monthly_revenue_target ?? DEFAULT_SETTINGS.monthly_revenue_target,
       }
     }
   } catch {
-    // Table not created yet — use defaults
+    // cfo_settings table may not exist yet
   }
 
   return (
@@ -123,6 +170,8 @@ export default async function CfoPage() {
       months={months}
       initialSettings={settings}
       pricingRows={(pricingData ?? []) as PricingRow[]}
+      monthActuals={monthActuals}
+      monthLabel={now.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
     />
   )
 }
