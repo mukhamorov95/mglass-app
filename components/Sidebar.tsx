@@ -10,7 +10,7 @@ import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
-type ViewMode = 'manager' | 'admin' | 'ceo'
+type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo'
 
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
 type NavGroup = { groupLabel: string }
@@ -321,6 +321,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
 }
 
 function detectModeFromPath(pathname: string): ViewMode {
+  if (pathname.startsWith('/cfo')) return 'cfo'
   if (
     pathname.startsWith('/admin/ai-control-center') ||
     pathname.startsWith('/admin/owner') || pathname.startsWith('/admin/dashboard') ||
@@ -646,6 +647,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       </>
     )
 
+    if (viewMode === 'cfo') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-teal-600">CFO Center</div>
+        <div className="space-y-px">
+          {CFO_ITEMS.map(item => navItem(item, 'bg-teal-50 text-teal-700 font-medium'))}
+        </div>
+      </>
+    )
+
     if (viewMode === 'ceo') return (
       <>
         {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-medium')}
@@ -719,6 +729,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
                   { v: 'manager', l: 'Менеджер' },
                   { v: 'admin',   l: 'Админ'    },
                   { v: 'ceo',     l: 'СЕО'      },
+                  { v: 'cfo',     l: 'CFO'      },
                 ] as { v: ViewMode; l: string }[]).map(({ v, l }) => (
                   <button key={v} onClick={() => switchMode(v)}
                     className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
