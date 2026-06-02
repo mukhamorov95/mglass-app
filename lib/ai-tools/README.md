@@ -26,16 +26,16 @@
 
 ## Текущие tools
 
-| Файл | Tool key | Статус | Описание |
-|---|---|---|---|
-| `quickCalcTool.ts` | `quickCalc` | ✅ Реализован | Быстрая оценка стоимости (mirror / shower / loft) |
+| Файл | Tool key | Режим | Читает | Пишет | Статус | Назначение |
+|---|---|---|---|---|---|---|
+| `quickCalcTool.ts` | `quickCalc` | read_only | materials, services, financial_settings | — | ✅ Реализован | Быстрая оценка стоимости (mirror / shower / loft) |
+| `pricingRulesTool.ts` | `readPricingRules` | read_only | financial_settings | — | ✅ Реализован | Структурированные правила маржи, скидок и расходов для proposal/check-margin |
 
 ## Планируемые tools (этап 2)
 
 | Файл | Tool key | Описание |
 |---|---|---|
 | `generateKpDraftTool.ts` | `generateKpDraft` | Черновик КП через `/api/ai/generate-kp` + Anthropic |
-| `pricingRulesTool.ts` | `readPricingRules` | Чтение `financial_settings`, `pricing_formula` |
 | `productRulesTool.ts` | `readProductRules` | Чтение ограничений по размерам и материалам |
 | `proposalTemplatesTool.ts` | `readProposalTemplates` | Шаблоны оформления КП |
 
@@ -51,4 +51,15 @@ no_db_write:    true
 no_crm_write:   true
 no_client_send: true
 reads_supabase: true   // materials, services, financial_settings — только чтение
+```
+
+## Safety profile pricingRulesTool
+
+```
+no_db_write:         true
+no_crm_write:        true
+no_external_request: true
+no_client_send:      true
+can_change_price:    false
+reads_supabase:      true   // financial_settings — только чтение
 ```

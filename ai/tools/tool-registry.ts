@@ -143,6 +143,10 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     returnsData:              true,
     mutatesData:              false,
     requiresHumanConfirmation: false,
+    implementationStatus: 'implemented',
+    implementationPath:   'lib/ai-tools/pricingRulesTool.ts',
+    runtimeNotes:  'Вызывать runPricingRulesTool(input?). Async — читает Supabase server-side (SUPABASE_SERVICE_ROLE_KEY). Только для Node.js / API routes. Input опциональный: { scope?, tier? }.',
+    safetyNotes:   'no_db_write, no_crm_write, no_external_request, no_client_send, can_change_price: false. Читает только financial_settings. Не изменяет цены. Не вызывает Anthropic/OpenAI.',
   },
 
   // ── Чтение правил продукта ────────────────────────────────────────────────
