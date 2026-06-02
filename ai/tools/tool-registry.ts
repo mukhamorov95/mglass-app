@@ -128,6 +128,10 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     returnsData:              true,
     mutatesData:              false,
     requiresHumanConfirmation: true,
+    implementationStatus: 'implemented',
+    implementationPath:   'lib/ai-tools/generateKpDraftTool.ts',
+    runtimeNotes:  'Draft-only proposal generation wrapper. Current implementation produces structured proposal skeleton without model call (input payload only, no Supabase reads). Call runGenerateKpDraftTool(input). Future: connect to app/api/ai/generate-kp/route.ts via internal service layer after approval flow is in place.',
+    safetyNotes:   'Draft only. approval_required always true. can_send_to_client always false. No CRM writes. No DB writes. No order creation. No client communication. Anthropic model call disabled by default (allowModelCall: false). Model call will NOT be enabled until agent_action_log + Approval UI are implemented.',
   },
 
   // ── Чтение правил ценообразования ────────────────────────────────────────

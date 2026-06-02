@@ -26,16 +26,16 @@
 
 ## Текущие tools
 
-| Файл | Tool key | Режим | Читает | Пишет | Статус | Назначение |
-|---|---|---|---|---|---|---|
-| `quickCalcTool.ts` | `quickCalc` | read_only | materials, services, financial_settings | — | ✅ Реализован | Быстрая оценка стоимости (mirror / shower / loft) |
-| `pricingRulesTool.ts` | `readPricingRules` | read_only | financial_settings | — | ✅ Реализован | Структурированные правила маржи, скидок и расходов для proposal/check-margin |
+| Файл | Tool key | Режим | Читает | Пишет | Approval | Статус | Назначение |
+|---|---|---|---|---|---|---|---|
+| `quickCalcTool.ts` | `quickCalc` | read_only | materials, services, financial_settings | — | не требуется | ✅ Реализован | Быстрая оценка стоимости (mirror / shower / loft) |
+| `pricingRulesTool.ts` | `readPricingRules` | read_only | financial_settings | — | не требуется | ✅ Реализован | Структурированные правила маржи, скидок и расходов |
+| `generateKpDraftTool.ts` | `generateKpDraft` | draft | input payload only | — | **обязательно** | ✅ Реализован | Черновик КП для проверки менеджером (skeleton, без model call) |
 
 ## Планируемые tools (этап 2)
 
 | Файл | Tool key | Описание |
 |---|---|---|
-| `generateKpDraftTool.ts` | `generateKpDraft` | Черновик КП через `/api/ai/generate-kp` + Anthropic |
 | `productRulesTool.ts` | `readProductRules` | Чтение ограничений по размерам и материалам |
 | `proposalTemplatesTool.ts` | `readProposalTemplates` | Шаблоны оформления КП |
 
@@ -63,3 +63,18 @@ no_client_send:      true
 can_change_price:    false
 reads_supabase:      true   // financial_settings — только чтение
 ```
+
+## Safety profile generateKpDraftTool
+
+```
+no_db_write:          true
+no_crm_write:         true
+no_client_send:       true    // ВСЕГДА — черновик никогда не отправляется клиенту
+no_order_create:      true
+reads_supabase:       false   // input payload only, no DB calls
+model_call_executed:  false   // Anthropic/OpenAI не вызывается на текущем этапе
+approval_required:    true    // ВСЕГДА — обязательна проверка менеджером
+```
+
+Future binding: model call будет подключён через внутренний service layer
+(не HTTP fetch) после реализации approval flow (agent_action_log + Approval UI).
