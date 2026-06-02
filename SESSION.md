@@ -1,5 +1,5 @@
 ## Текущая задача
-AI Proposal Approval Flow — production MVP завершён и протестирован. Следующий этап — UI-форма создания черновика КП.
+AI Proposal MVP с UI-формой создания черновика завершён и протестирован на production.
 
 ## Что сделано (сессия 29 мая — 3 июня)
 
@@ -54,65 +54,66 @@ AI Proposal Approval Flow — production MVP завершён и протест�
 - `app/admin/ai-proposals/page.tsx` — список с фильтрами, badges, warnings/errors count
 - `app/admin/ai-proposals/[id]/page.tsx` — detail: safety banner, safety flags, draft content, approve/reject flow, copy buttons
 
+### UI-форма "Создать AI-КП" — ЗАКРЫТО (коммит `e78daf2`)
+- `app/admin/ai-proposals/page.tsx` — добавлена раскрывающаяся форма создания черновика
+- Поля: `client_request`, `product_type`, `width`, `height`, `quantity`, `client_name`, `installation_required`, `delivery_required`, `manager_notes`
+- Submit → POST `/api/ai/proposals/draft` → redirect на detail page
+- Failed with id → inline amber-блок со ссылкой на запись
+- Hard errors → user-friendly сообщение, `console.error` для деталей
+- Форма не обращается к Supabase напрямую; service role не попадает в client component
+- Safety info block внутри формы: явно указано, что КП не отправляется клиенту
+
 ### Production QA — ЗАКРЫТО (3 июня 2026)
 
-| id | Результат | Статус |
-|----|-----------|--------|
-| 1 | mirror payload — quickCalc вернул null (нет материала category='зеркало' в Supabase), корректно сохранён как `failed` | ✅ ожидаемо |
-| 2 | shower draft — создан, одобрен. `approved_at` заполнен, `approved_by = admin@mglass.ru` | ✅ |
-| 3 | shower draft — создан, отклонён. `rejected_at` заполнен, `rejection_reason` сохранён | ✅ |
+| id | Источник | Результат | Статус |
+|----|----------|-----------|--------|
+| 1 | API/console | mirror payload — quickCalc вернул null, корректно сохранён как `failed` | ✅ ожидаемо |
+| 2 | API/console | shower draft — создан, одобрен | ✅ |
+| 3 | API/console | shower draft — создан, отклонён | ✅ |
+| 4 | UI-форма | shower 1200×2000 — создан через форму, detail page открылся, approved | ✅ |
 
-Подтверждено на production:
-- `/admin/ai-proposals` открывается, safety banner отображается
+Подтверждено на production (id 4, UI-форма):
+- `/admin/ai-proposals` открывается, кнопка «+ Создать AI-КП» отображается
+- Форма раскрывается, safety block внутри виден
+- Черновик создан через UI, redirect на `/admin/ai-proposals/4` сработал
 - Safety flags: `approval_required=true`, `can_send_to_client=false`, `can_write_crm=false`, `can_create_order=false`, `model_call_executed=false`
-- Клиенту ничего не отправляется
-- AmoCRM не трогается
-- Заказ не создаётся
-- Anthropic/OpenAI не вызываются
+- Клиенту ничего не отправилось
+- AmoCRM не трогалась
+- Заказ не создавался
+- Anthropic/OpenAI не вызывались
 - RLS: authenticated — только SELECT; writes — только через server API + service role
 
 ## Следующий шаг
 
-Сделать UI-форму **"Создать AI-КП"** на `/admin/ai-proposals` (кнопка/панель над таблицей):
+**Вариант A (рекомендуемый) — Mirror data readiness:**
+1. Проверить таблицу `materials` в Supabase: `SELECT name, category, active, cost_price FROM materials WHERE category = 'зеркало'`
+2. Добавить активный материал если отсутствует: `INSERT INTO materials (name, category, cost_price, active) VALUES ('Зеркало серебро 4мм', 'зеркало', 1200, true)`
+3. Проверить `services` для зеркал
+4. Протестировать mirror AI-КП через UI-форму
 
-**Поля формы:**
-- `client_request` (textarea, обязательное)
-- `product_type` (select: mirror / shower / loft)
-- `width`, `height` (number, мм)
-- `quantity` (number, default 1)
-- `installation_required` (checkbox)
-- `delivery_required` (checkbox)
-- `client_name` (text, необязательное)
-- `manager_notes` (textarea, необязательное)
-
-**Поведение:**
-- Кнопка "Создать черновик" → POST `/api/ai/proposals/draft`
-- После успешного создания → redirect на `/admin/ai-proposals/{id}`
-- При ошибке — показать inline message
-- Без отправки клиенту, без CRM, без create order
-
-**Файлы для изменения:**
-- `app/admin/ai-proposals/page.tsx` — добавить форму (раскрывающаяся панель или отдельный блок)
+**Вариант B — Улучшение качества skeleton-текста:**
+Доработать `lib/ai-tools/generateKpDraftTool.ts` — поля `installation_required` / `delivery_required` должны выводиться как человекочитаемые формулировки вместо boolean-значений.
 
 ## Контекст
 
 - Весь код закоммичен и задеплоен на production (Vercel)
 - agent_action_log миграции применены в Supabase
 - RLS fix применён вручную в SQL Editor
-- Production тест пройден: 3 записи в agent_action_log (id 1, 2, 3)
+- Production тест пройден: 4 записи в agent_action_log (id 1–4)
 - `SESSION.md` — единственный незакоммиченный файл
 
 ## Текущие ограничения (known limitations)
 
-- Создание черновика пока через API/console — нет удобной UI-формы (следующий шаг)
 - mirror payload падает без активного материала `category='зеркало'` в таблице `materials`
+- Нет редактирования черновика перед approve
 - Нет pagination в списке `/admin/ai-proposals`
 - Нет rate limiting на POST `/api/ai/proposals/draft`
-- Нет direct manager role access — UI доступен по текущей admin-модели
-- Anthropic binding намеренно выключен (`allowModelCall: false`)
+- Нет Anthropic binding — генерация детерминированная (`allowModelCall: false`)
+- Нет CRM-read integration — клиент заполняется вручную
+- Skeleton-текст черновика может требовать ручной правки (boolean-поля не форматированы как текст)
 
 ## Открытые вопросы
 
 - RLS на `shower_catalog_items` не настроена явно — ограничение только на уровне маршрута `/admin`
 - `ai/skills/`, `ai/workflows/`, `ai/memory/` — директории не созданы, запланированы для будущих этапов
-- mirror category='зеркало' материал нужно добавить в Supabase для работы mirror-payload
+- mirror category=`зеркало` материал нужно добавить в Supabase для работы mirror-payload
