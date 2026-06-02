@@ -3,7 +3,12 @@
 // Декларативный реестр инструментов AI-агентов M-Glass.
 // ТОЛЬКО типы и описания — без реального выполнения.
 // Нет импортов Supabase, Anthropic или внешних модулей.
-// Реальные реализации подключаются на этапе 2 из lib/ai-tools/.
+//
+// Статусы реализации:
+//   'planned'     — задекларирован, реализация запланирована на этапе 2
+//   'implemented' — реальная функция-обёртка существует в lib/ai-tools/
+//   'deprecated'  — устарел, не использовать в новых skills
+//   'disabled'    — временно отключён (например, зависимость недоступна)
 
 // ─── Ключи агентов ────────────────────────────────────────────────────────────
 
@@ -65,7 +70,20 @@ export type ToolDefinition = {
   returnsData:              boolean
   mutatesData:              boolean
   requiresHumanConfirmation: boolean
+  // ── Метаданные реализации (опциональные) ──────────────────────────────────
+  implementationStatus?: ToolImplementationStatus  // default: 'planned'
+  implementationPath?:   string                    // путь к файлу-обёртке, напр. 'lib/ai-tools/quickCalcTool.ts'
+  runtimeNotes?:         string                    // важные детали для вызывающего агента
+  safetyNotes?:          string                    // примечания по безопасности и ограничениям
 }
+
+// ─── Статус реализации ───────────────────────────────────────────────────────
+
+export type ToolImplementationStatus =
+  | 'planned'      // задекларирован, реализация ещё не создана
+  | 'implemented'  // lib/ai-tools/<toolKey>Tool.ts существует и протестирован
+  | 'deprecated'   // устарел, заменён другим tool
+  | 'disabled'     // временно отключён
 
 // ─── Тип результата проверки ─────────────────────────────────────────────────
 
@@ -91,6 +109,10 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     returnsData:              true,
     mutatesData:              false,
     requiresHumanConfirmation: false,
+    implementationStatus: 'implemented',
+    implementationPath:   'lib/ai-tools/quickCalcTool.ts',
+    runtimeNotes:  'Вызывать runQuickCalcTool(input). Async — читает Supabase server-side (SUPABASE_SERVICE_ROLE_KEY). Только для Node.js / API routes.',
+    safetyNotes:   'no_db_write, no_crm_write, no_client_send. Поддерживаемые типы: mirror | shower | loft. Тип b2b НЕ поддерживается.',
   },
 
   // ── Создание черновика КП через существующий generate-kp ─────────────────
@@ -315,4 +337,22 @@ export function getApprovalRequiredTools(): ToolDefinition[] {
 /** Получить инструменты по уровню риска */
 export function getToolsByRisk(riskLevel: ToolRiskLevel): ToolDefinition[] {
   return TOOL_REGISTRY.filter(t => t.riskLevel === riskLevel)
+}
+
+/** Получить инструменты, реализованные как функции в lib/ai-tools/ */
+export function listImplementedTools(): ToolDefinition[] {
+  return TOOL_REGISTRY.filter(t => t.implementationStatus === 'implemented')
+}
+
+/** Получить инструменты, ещё не имеющие реализации (planned / undefined) */
+export function listPlannedTools(): ToolDefinition[] {
+  return TOOL_REGISTRY.filter(
+    t => t.implementationStatus === 'planned' || t.implementationStatus === undefined,
+  )
+}
+
+/** Получить статус реализации для конкретного tool (undefined → 'planned') */
+export function getToolImplementationStatus(toolKey: string): ToolImplementationStatus {
+  const tool = getToolDefinition(toolKey)
+  return tool?.implementationStatus ?? 'planned'
 }
