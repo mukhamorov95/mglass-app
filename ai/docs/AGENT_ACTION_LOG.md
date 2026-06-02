@@ -124,17 +124,70 @@ model_call_executed:  false   — Anthropic не вызывается на те�
 
 ## RLS / Policies
 
+### Целевая модель (актуальная после rls_fix)
+
 ```
 RLS:          ENABLED
 SELECT:       TO authenticated — менеджеры видят все записи (Approval UI)
-INSERT:       TO authenticated — в практике используется SUPABASE_SERVICE_ROLE_KEY (bypasses RLS)
-UPDATE:       TO authenticated — менеджер переключает статус через Approval UI
-DELETE:       нет policy       — удаление заблокировано на уровне клиента
+INSERT:       нет client policy — только service_role через server API route
+UPDATE:       нет client policy — только service_role через server API route
+DELETE:       нет policy       — удаление заблокировано полностью на уровне клиента
 ```
 
-**Примечание:** `SUPABASE_SERVICE_ROLE_KEY` используемый в `lib/ai-tools/` полностью обходит RLS. Политики защищают только клиентский JWT-доступ (браузер, Approval UI).
+**Все записи в таблицу (INSERT, UPDATE) выполняются исключительно через server-side API routes:**
+- API route проверяет роль вызывающего через `getRole()` / session
+- После app-level авторизации — пишет через `SUPABASE_SERVICE_ROLE_KEY` (bypasses RLS)
+- Браузерный JWT (`authenticated`) имеет доступ только на чтение
 
-**TODO (этап 2):** Ограничить UPDATE так, чтобы только пользователи с ролью `admin` могли менять `status = 'approved'`. Добавить CHECK против `auth.uid()` или перенести approval в API route с проверкой роли через `getRole()`.
+**`SUPABASE_SERVICE_ROLE_KEY` никогда не передаётся на клиент.** Этот ключ используется только в `lib/ai-tools/` и server API routes.
+
+### История применения миграций
+
+| Файл | Что делает | Статус |
+|---|---|---|
+| `20260603_agent_action_log.sql` | Создаёт таблицу, индексы, RLS. Содержит избыточные INSERT/UPDATE policies для `authenticated` | ✅ Применена |
+| `20260603_agent_action_log_rls_fix.sql` | DROP избыточных write policies, оставляет только SELECT для `authenticated` | ⚠️ Нужно применить |
+
+### ⚠️ Требуется применить rls_fix
+
+Исходная миграция создала небезопасные policies:
+- `"Auth insert agent_action_log"` — INSERT для `authenticated` (удалить)
+- `"Auth update agent_action_log"` — UPDATE для `authenticated` (удалить)
+
+Применить fix через Supabase SQL Editor: `supabase/migrations/20260603_agent_action_log_rls_fix.sql`
+
+После применения должна остаться ровно одна policy:
+- `"agent_action_log_select_authenticated"` — SELECT для `authenticated`
+
+### SQL для проверки policies после fix
+
+```sql
+SELECT
+  policyname,
+  cmd,
+  roles,
+  qual,
+  with_check
+FROM pg_policies
+WHERE schemaname = 'public'
+  AND tablename = 'agent_action_log'
+ORDER BY policyname;
+```
+
+Ожидаемый результат: **одна строка**, `policyname = 'agent_action_log_select_authenticated'`, `cmd = 'SELECT'`.
+
+### SQL для проверки RLS включён
+
+```sql
+SELECT
+  relname,
+  relrowsecurity,
+  relforcerowsecurity
+FROM pg_class
+WHERE relname = 'agent_action_log';
+```
+
+Ожидаемый результат: `relrowsecurity = true`.
 
 ---
 
