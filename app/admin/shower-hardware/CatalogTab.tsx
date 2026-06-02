@@ -175,8 +175,9 @@ export function CatalogTab({
   const [editId,     setEditId]     = useState<number | null>(null)
   const [formOpen,   setFormOpen]   = useState(false)
   const [form,       setForm]       = useState<FormState>(EMPTY_FORM)
-  const [formSaving, setFormSaving] = useState(false)
-  const [formError,  setFormError]  = useState('')
+  const [formSaving,     setFormSaving]     = useState(false)
+  const [formError,      setFormError]      = useState('')  // ошибка сохранения — над кнопками
+  const [priceError,     setPriceError]     = useState('')  // ошибка дубля в таблице цен
 
   // Filters
   const [filterCat,  setFilterCat]  = useState('all')
@@ -257,6 +258,7 @@ export function CatalogTab({
     })
     setEditId(item.id)
     setFormError('')
+    setPriceError('')
     setExpandedId(null)
     setFormOpen(true)
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50)
@@ -266,6 +268,7 @@ export function CatalogTab({
     setEditId(null)
     setForm(EMPTY_FORM)
     setFormError('')
+    setPriceError('')
     setFormOpen(false)
   }
 
@@ -274,9 +277,10 @@ export function CatalogTab({
     const valid = form.prices.filter(p => p.supplier_id && p.color_id)
     const keys  = valid.map(p => `${p.supplier_id}-${p.color_id}`)
     if (keys.length !== new Set(keys).size) {
-      setFormError('Дубль: для одного поставщика и цвета цена уже добавлена')
+      setPriceError('Дубль: для одного поставщика и цвета цена уже добавлена')
       return
     }
+    setPriceError('')
     setFormError('')
     setFormSaving(true)
 
@@ -336,8 +340,18 @@ export function CatalogTab({
       cancelForm()
       await load()
     } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? String(e)
-      setFormError(`Ошибка сохранения: ${msg}`)
+      const rawMsg = e instanceof Error ? e.message : (e as { message?: string })?.message ?? String(e)
+      console.error('[CatalogTab] save error:', rawMsg, e)
+      // Показываем понятное сообщение — технические детали только в консоли
+      if (rawMsg.includes('column') || rawMsg.includes('schema') || rawMsg.includes('cache')) {
+        setFormError('Структура базы данных не обновлена. Обратитесь к администратору.')
+      } else if (rawMsg.includes('duplicate') || rawMsg.includes('unique')) {
+        setFormError('Не удалось сохранить: такая позиция уже существует. Проверьте артикул.')
+      } else if (rawMsg.includes('network') || rawMsg.includes('fetch')) {
+        setFormError('Нет соединения с сервером. Проверьте интернет и нажмите «Сохранить позицию» повторно.')
+      } else {
+        setFormError(`Не удалось сохранить позицию. Данные не потеряны — попробуйте ещё раз. Детали: ${rawMsg}`)
+      }
     } finally {
       setFormSaving(false)
     }
@@ -604,7 +618,7 @@ export function CatalogTab({
               <PriceRowsTable
                 rows={form.prices} suppliers={suppliers} colors={colors}
                 onSet={setFormPriceCell} onAdd={addFormPrice} onRemove={removeFormPrice}
-                error={formError}
+                error={priceError}
               />
             </div>
 
@@ -616,6 +630,13 @@ export function CatalogTab({
                 Позиция активна
               </label>
             </div>
+
+            {/* Ошибка сохранения — видна перед кнопками */}
+            {formError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                <p className="text-[12px] text-red-700 font-medium leading-snug">{formError}</p>
+              </div>
+            )}
 
             {/* Кнопки */}
             <div className="flex items-center justify-between pt-1">
