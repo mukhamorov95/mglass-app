@@ -32,6 +32,12 @@
 | `pricingRulesTool.ts` | `readPricingRules` | read_only | financial_settings | — | не требуется | ✅ Реализован | Структурированные правила маржи, скидок и расходов |
 | `generateKpDraftTool.ts` | `generateKpDraft` | draft | input payload only | — | **обязательно** | ✅ Реализован | Черновик КП для проверки менеджером (skeleton, без model call) |
 
+## Orchestrators (runtime combinators)
+
+| Файл | Runtime key | Режим | Вызывает | Approval | Статус | Назначение |
+|---|---|---|---|---|---|---|
+| `createCommercialProposalRuntime.ts` | `create-commercial-proposal` | draft | quickCalcTool → pricingRulesTool → generateKpDraftTool | **обязательно** | ✅ Реализован | Полный pipeline черновика КП — единый вход/выход для proposal-engineer-agent |
+
 ## Планируемые tools (этап 2)
 
 | Файл | Tool key | Описание |
@@ -78,3 +84,20 @@ approval_required:    true    // ВСЕГДА — обязательна про�
 
 Future binding: model call будет подключён через внутренний service layer
 (не HTTP fetch) после реализации approval flow (agent_action_log + Approval UI).
+
+## Safety profile createCommercialProposalRuntime
+
+```
+no_db_write:               true   // orchestrator не пишет сам
+no_crm_write:              true
+no_client_send:            true
+no_order_create:           true
+no_external_http:          true
+reads_supabase_via_tools:  true   // quickCalcTool + pricingRulesTool читают Supabase
+model_call_executed:       false
+approval_required:         true   // ВСЕГДА
+can_send_to_client:        false  // ВСЕГДА
+```
+
+Orchestrator — не tool, а pipeline-координатор. Не объявляется в tool-registry.
+Вызывается proposal-engineer-agent напрямую как entry point для create-commercial-proposal skill.

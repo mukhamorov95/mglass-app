@@ -207,12 +207,42 @@ check('agent_generate_kp', async () => {
 ## 10. Definition of Done для этапа 1
 
 ```
-[x] ai/tools/tool-registry.ts — типы и декларации обновлены
+[x] ai/tools/tool-registry.ts — типы, декларации, ToolImplementationStatus обновлены
 [x] ai/skills/create-commercial-proposal/SKILL.md — создан
 [x] ai/agents/proposal-engineer-agent.md — создан
 [x] ai/docs/PROPOSAL_ENGINEER_RUNTIME_PLAN.md — создан (этот файл)
-[ ] lib/ai-tools/ — реализации (этап 2)
-[ ] agent_action_log миграция — (этап 2, требует подтверждения)
-[ ] Approval UI — (этап 2)
+[x] lib/ai-tools/quickCalcTool.ts — реализован, помечен implemented (6ff033a, 18d3d4f)
+[x] lib/ai-tools/pricingRulesTool.ts — реализован, помечен implemented (a814b01)
+[x] lib/ai-tools/generateKpDraftTool.ts — реализован, draft-only skeleton (26bb48f)
+[x] lib/ai-tools/createCommercialProposalRuntime.ts — orchestrator создан, этап 1 завершён
+[ ] agent_action_log миграция — (этап 2, требует подтверждения Владислава)
+[ ] Approval UI в /admin/ai-proposals — (этап 2, зависит от миграции)
+[ ] model call binding в generateKpDraftTool — (этап 2, зависит от Approval UI)
 [ ] Health checks для агент-tools — (этап 2)
 ```
+
+### Статус этапа 1 (актуально)
+
+Минимальный read-only/draft runtime-контур завершён:
+
+```
+client input
+    │
+    ▼
+createCommercialProposalRuntime (local orchestrator)
+    │
+    ├─ [1] runQuickCalcTool      → calculation (читает Supabase, no writes)
+    ├─ [2] runPricingRulesTool   → pricing_rules (читает Supabase, no writes)
+    └─ [3] runGenerateKpDraftTool → draft (input payload only, no Supabase)
+    │
+    ▼
+{ ok, calculation, pricing_rules, draft, approval_required: true, can_send_to_client: false }
+    │
+    ▼
+[HUMAN REVIEW] — менеджер проверяет и отправляет вручную
+```
+
+Следующие шаги этапа 2:
+1. Supabase-миграция `agent_action_log` — для логирования действий агента
+2. Approval UI в `/admin/ai-proposals` — для review черновиков менеджером
+3. После Approval UI: подключить model call в `generateKpDraftTool` через внутренний service layer
