@@ -178,6 +178,8 @@ export function CatalogTab({
   const [formSaving,     setFormSaving]     = useState(false)
   const [formError,      setFormError]      = useState('')  // ошибка сохранения — над кнопками
   const [priceError,     setPriceError]     = useState('')  // ошибка дубля в таблице цен
+  const [deletingId,     setDeletingId]     = useState<number | null>(null)
+  const [deleteError,    setDeleteError]    = useState('')
 
   // Filters
   const [filterCat,  setFilterCat]  = useState('all')
@@ -373,6 +375,24 @@ export function CatalogTab({
       await db.current.from('shower_catalog_prices').insert(newPrices)
     }
     await load()
+  }
+
+  async function deleteItem(item: Item) {
+    if (!window.confirm(`Удалить «${item.name}»? Это действие нельзя отменить.`)) return
+    setDeletingId(item.id)
+    setDeleteError('')
+    try {
+      const { error } = await db.current.from('shower_catalog_items').delete().eq('id', item.id)
+      if (error) {
+        console.error('Delete shower catalog item failed:', error)
+        setDeleteError('Не удалось удалить позицию. Проверьте соединение или обратитесь к администратору.')
+        return
+      }
+      setItems(prev => prev.filter(i => i.id !== item.id))
+      if (editId === item.id) cancelForm()
+    } finally {
+      setDeletingId(null)
+    }
   }
 
   // ── Price matrix (expanded view) ────────────────────────────────────────────
@@ -681,6 +701,14 @@ export function CatalogTab({
         ))}
       </div>
 
+      {/* Ошибка удаления */}
+      {deleteError && (
+        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 flex items-center justify-between">
+          <p className="text-[12px] text-red-700 font-medium">{deleteError}</p>
+          <button onClick={() => setDeleteError('')} className="text-red-400 hover:text-red-600 text-lg leading-none ml-4">×</button>
+        </div>
+      )}
+
       {/* ── Items list ── */}
       <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
         {loading ? (
@@ -756,6 +784,14 @@ export function CatalogTab({
               <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                 <button onClick={() => startEdit(item)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изм.</button>
                 <button onClick={() => duplicateItem(item)} className="text-[12px] text-[#9a9a95] hover:text-[#4b4b47]" title="Дублировать позицию">Дубль</button>
+                <button
+                  onClick={() => deleteItem(item)}
+                  disabled={deletingId === item.id}
+                  className={`text-[12px] ${deletingId === item.id ? 'text-[#c0c0bb] cursor-not-allowed' : 'text-[#9a9a95] hover:text-red-600'}`}
+                  title="Удалить позицию"
+                >
+                  {deletingId === item.id ? 'Удаление...' : 'Удал.'}
+                </button>
                 <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">
                   {item.active ? 'Скрыть' : 'Показать'}
                 </button>
