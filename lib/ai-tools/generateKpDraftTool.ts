@@ -74,6 +74,7 @@ export type GenerateKpDraftToolInput = {
   product_type:           string          // required — 'mirror' | 'shower' | 'loft' | 'b2b'
   calculation_summary:    KpCalcSummary   // required — output from runQuickCalcTool
   pricing_rules_summary?: KpPricingSummary // optional — output from runPricingRulesTool
+  options?:               Record<string, unknown> // optional — calc options, used for mirror label (hasLighting)
   manager_notes?:         string          // optional — context from the manager
   company_context?:       string          // optional — custom intro (defaults to M-Glass standard)
   allowModelCall?:        boolean         // default false — future: enables Anthropic call
@@ -345,6 +346,12 @@ export async function runGenerateKpDraftTool(
       `Черновик сформирован без специфичного шаблона для этого типа.`,
     )
     productLabel = input.product_type
+  }
+
+  // Mirror label depends on hasLighting option — don't call plain mirror "с подсветкой"
+  if (input.product_type === 'mirror') {
+    const hasLighting = Boolean(input.options?.hasLighting)
+    productLabel = hasLighting ? 'Зеркало с подсветкой' : 'Зеркало'
   }
 
   // No pricing rules → warn, use defaults

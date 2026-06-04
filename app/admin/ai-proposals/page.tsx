@@ -24,6 +24,9 @@ type ProposalListItem = {
 
 type ProductType = 'shower' | 'mirror' | 'loft'
 
+type MirrorType = 'silver' | 'crystal_vision'
+type MirrorShape = 'rectangle' | 'circle' | 'oval'
+
 type CreateFormFields = {
   client_request:        string
   product_type:          ProductType
@@ -34,6 +37,11 @@ type CreateFormFields = {
   installation_required: boolean
   delivery_required:     boolean
   manager_notes:         string
+  // Mirror-specific fields (only used when product_type === 'mirror')
+  mirrorType:            MirrorType
+  thicknessMm:           number
+  hasLighting:           boolean
+  mirrorShape:           MirrorShape
 }
 
 const INITIAL_FORM: CreateFormFields = {
@@ -46,6 +54,10 @@ const INITIAL_FORM: CreateFormFields = {
   installation_required: false,
   delivery_required:     false,
   manager_notes:         '',
+  mirrorType:            'silver',
+  thicknessMm:           4,
+  hasLighting:           false,
+  mirrorShape:           'rectangle',
 }
 
 type SubmitResult = { ok: boolean; id: number; status: string }
@@ -169,6 +181,15 @@ export default function AIProposalsPage() {
 
     setSubmitting(true)
     try {
+      const options: Record<string, unknown> = form.product_type === 'mirror'
+        ? {
+            mirrorType:   form.mirrorType,
+            thicknessMm:  form.thicknessMm,
+            hasLighting:  form.hasLighting,
+            shape:        form.mirrorShape,
+          }
+        : { model: 'M2', tier: 'standard' }
+
       const payload: Record<string, unknown> = {
         client_request:        form.client_request.trim(),
         product_type:          form.product_type,
@@ -177,7 +198,7 @@ export default function AIProposalsPage() {
         quantity,
         installation_required: form.installation_required,
         delivery_required:     form.delivery_required,
-        options:               { model: 'M2', tier: 'standard' },
+        options,
       }
       if (form.client_name.trim())   payload.client_name   = form.client_name.trim()
       if (form.manager_notes.trim()) payload.manager_notes = form.manager_notes.trim()
@@ -345,8 +366,8 @@ export default function AIProposalsPage() {
                     <option value="loft">Перегородка (loft)</option>
                   </select>
                   {form.product_type === 'mirror' && (
-                    <p className="mt-1 text-[10px] text-amber-600">
-                      Для зеркал нужны активные материалы category=&apos;зеркало&apos; в справочнике materials. Без них расчёт вернётся как failed.
+                    <p className="mt-1 text-[10px] text-blue-600">
+                      Цена берётся из glass_price_matrix (тот же источник, что /calculator/mirror).
                     </p>
                   )}
                 </div>
@@ -379,6 +400,68 @@ export default function AIProposalsPage() {
                   />
                 </div>
               </div>
+
+              {/* Mirror-specific options — shown only for product_type=mirror */}
+              {form.product_type === 'mirror' && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 p-3 bg-[#f7f7f6] rounded-lg border border-[#ebebea]">
+                  <div className="col-span-2 sm:col-span-4">
+                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-2">Параметры зеркала</p>
+                  </div>
+
+                  {/* mirrorType */}
+                  <div className="col-span-2">
+                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Тип зеркала</label>
+                    <select
+                      value={form.mirrorType}
+                      onChange={e => setField('mirrorType', e.target.value as MirrorType)}
+                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                    >
+                      <option value="silver">Серебро</option>
+                      <option value="crystal_vision">Осветлённое</option>
+                    </select>
+                  </div>
+
+                  {/* thicknessMm */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Толщина</label>
+                    <select
+                      value={form.thicknessMm}
+                      onChange={e => setField('thicknessMm', Number(e.target.value))}
+                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                    >
+                      <option value={4}>4 мм</option>
+                      <option value={6}>6 мм</option>
+                    </select>
+                  </div>
+
+                  {/* mirrorShape */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Форма</label>
+                    <select
+                      value={form.mirrorShape}
+                      onChange={e => setField('mirrorShape', e.target.value as MirrorShape)}
+                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                    >
+                      <option value="rectangle">Прямоугольное</option>
+                      <option value="circle">Круглое</option>
+                      <option value="oval">Овальное</option>
+                    </select>
+                  </div>
+
+                  {/* hasLighting */}
+                  <div className="col-span-2 sm:col-span-4">
+                    <label className="flex items-center gap-2 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={form.hasLighting}
+                        onChange={e => setField('hasLighting', e.target.checked)}
+                        className="w-3.5 h-3.5 accent-[#111110]"
+                      />
+                      <span className="text-[11px] text-[#4b4b47]">Подсветка</span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               {/* quantity + client_name */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">

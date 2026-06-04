@@ -6,6 +6,7 @@ import {
 } from './showerCalculator'
 import { calculateLoft, type LoftInputs } from './loftCalculator'
 import type { Material, Service, FinancialSettings } from './types'
+import { getMatrixPrice, type GlassMatrixRow } from './glassMatrix'
 
 export type CalcType = 'mirror' | 'loft' | 'shower'
 
@@ -23,6 +24,7 @@ export type CalcOptions = {
   withMounting?: boolean
   shape?: 'rectangle' | 'circle' | 'oval'
   mirrorType?: 'silver' | 'crystal_vision'
+  thicknessMm?: number
   hasSubstrate?: boolean
   substratePrice?: number
 }
@@ -33,6 +35,7 @@ export type QuickCalcResult = {
   description: string
   margin: number
   serviceLines?: Array<{ name: string; total: number }>
+  warnings?: string[]
 }
 
 function db() {
@@ -44,15 +47,17 @@ function db() {
 
 async function loadAll() {
   const supabase = db()
-  const [{ data: mats }, { data: svcs }, { data: fins }] = await Promise.all([
+  const [{ data: mats }, { data: svcs }, { data: fins }, { data: gm }] = await Promise.all([
     supabase.from('materials').select('*').eq('active', true),
     supabase.from('services').select('*').eq('active', true),
     supabase.from('financial_settings').select('*'),
+    supabase.from('glass_price_matrix').select('*').order('name'),
   ])
   return {
-    materials: (mats ?? []) as Material[],
-    services: (svcs ?? []) as Service[],
-    settings: (fins ?? []) as FinancialSettings[],
+    materials:   (mats ?? []) as Material[],
+    services:    (svcs ?? []) as Service[],
+    settings:    (fins ?? []) as FinancialSettings[],
+    glassMatrix: (gm ?? []) as GlassMatrixRow[],
   }
 }
 
@@ -71,7 +76,7 @@ export async function quickCalc(
   height: number,
   options: CalcOptions = {},
 ): Promise<QuickCalcResult | null> {
-  const { materials, services, settings } = await loadAll()
+  const { materials, services, settings, glassMatrix } = await loadAll()
 
   if (type === 'mirror') {
     const cfg = pickSettings(settings, 'mirror_light')
@@ -79,7 +84,25 @@ export async function quickCalc(
     const mirrorMaterial = options.mirrorType === 'crystal_vision'
       ? (allMirrorMats.find(m => m.name.toLowerCase().includes('осветлённое') || m.name.toLowerCase().includes('crystal')) ?? allMirrorMats[0] ?? null)
       : (allMirrorMats.find(m => m.name.toLowerCase().includes('silver') && !m.name.toLowerCase().includes('6 мм') && !m.name.toLowerCase().includes('6мм')) ?? allMirrorMats.find(m => !m.name.toLowerCase().includes('6 мм')) ?? allMirrorMats[0] ?? null)
-    if (!mirrorMaterial) return null
+
+    // Resolve price from glass_price_matrix — primary source, same as /calculator/mirror.
+    // getMatrixPrice is a pure function; no browser client involved.
+    const mirrorMatrixName = options.mirrorType === 'crystal_vision' ? 'Осветлённое' : 'Серебро'
+    const thicknessMm = options.thicknessMm ?? 4
+    const matrixSale = getMatrixPrice(glassMatrix, mirrorMatrixName, thicknessMm, 'sale', 'mirror')
+    const matrixCost = getMatrixPrice(glassMatrix, mirrorMatrixName, thicknessMm, 'cost', 'mirror')
+    const mirrorCostPerM2: number | null = matrixSale ?? matrixCost ?? null
+
+    const mirrorWarnings: string[] = []
+
+    if (mirrorCostPerM2 == null) {
+      // No matrix price — fall back to public.materials; need mirrorMaterial as price source
+      if (!mirrorMaterial) return null
+      mirrorWarnings.push(
+        'Mirror price was calculated using public.materials fallback because glass_price_matrix price was not found.',
+      )
+    }
+    // If mirrorCostPerM2 is set, mirrorMaterial may be null (calculateMirror handles it)
 
     // Web calculator maps round shapes to 'complex' + substrate (bounding-box area, +1500 form, +2000 substrate)
     const isRound = options.shape === 'circle' || options.shape === 'oval'
@@ -89,6 +112,7 @@ export async function quickCalc(
       width,
       height,
       mirrorMaterial,
+      mirrorCostPerM2: mirrorCostPerM2 ?? undefined,
       shape: calcShape,
       hasLighting: Boolean(options.hasLighting),
       buttonType: options.buttonType ?? 'none',
@@ -110,7 +134,14 @@ export async function quickCalc(
     }
     const result = calculateMirror(inputs, materials, services)
     if (!result) return null
-    return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
+    return {
+      price:        result.grandTotal,
+      finalPrice:   result.finalPrice,
+      description:  result.clientText,
+      margin:       result.margin,
+      serviceLines: result.serviceLines,
+      warnings:     mirrorWarnings.length > 0 ? mirrorWarnings : undefined,
+    }
   }
 
   if (type === 'shower') {

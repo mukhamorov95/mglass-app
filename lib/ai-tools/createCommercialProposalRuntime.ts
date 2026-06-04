@@ -403,6 +403,7 @@ export async function runCreateCommercialProposalRuntime(
       product_type:          input.product_type,
       calculation_summary:   kpCalcSummary,
       pricing_rules_summary: kpPricingSummary,
+      options:               input.options as Record<string, unknown> | undefined,
       manager_notes:         input.manager_notes,
       company_context:       input.company_context,
       allowModelCall:        input.allowModelCall ?? false,

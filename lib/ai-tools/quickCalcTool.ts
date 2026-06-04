@@ -230,6 +230,10 @@ export async function runQuickCalcTool(
     calc_source:    'quickCalc',
   }
 
+  if (raw.warnings && raw.warnings.length > 0) {
+    warnings.push(...raw.warnings)
+  }
+
   if (calculation.total_estimate === 0) {
     warnings.push('Итоговая сумма равна 0. Проверьте настройки цен в financial_settings.')
   }
