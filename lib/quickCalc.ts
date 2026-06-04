@@ -6,7 +6,7 @@ import {
 } from './showerCalculator'
 import { calculateLoft, type LoftInputs } from './loftCalculator'
 import type { Material, Service, FinancialSettings } from './types'
-import { getMatrixPrice, type GlassMatrixRow } from './glassMatrix'
+import { getMatrixPrice, getWastePct, type GlassMatrixRow } from './glassMatrix'
 
 export type CalcType = 'mirror' | 'loft' | 'shower'
 
@@ -79,7 +79,12 @@ export async function quickCalc(
   const { materials, services, settings, glassMatrix } = await loadAll()
 
   if (type === 'mirror') {
-    const cfg = pickSettings(settings, 'mirror_light')
+    // Select financial_settings based on hasLighting:
+    // mirror_light (margin=50) only when explicitly requesting a lit mirror;
+    // plain mirror (margin=40) for everything else — matches /calculator/mirror behaviour.
+    const mirrorSettingsType = options.hasLighting ? 'mirror_light' : 'mirror'
+    const cfg = pickSettings(settings, mirrorSettingsType)
+
     const allMirrorMats = materials.filter(m => m.category === 'зеркало')
     const mirrorMaterial = options.mirrorType === 'crystal_vision'
       ? (allMirrorMats.find(m => m.name.toLowerCase().includes('осветлённое') || m.name.toLowerCase().includes('crystal')) ?? allMirrorMats[0] ?? null)
@@ -93,6 +98,9 @@ export async function quickCalc(
     const matrixCost = getMatrixPrice(glassMatrix, mirrorMatrixName, thicknessMm, 'cost', 'mirror')
     const mirrorCostPerM2: number | null = matrixSale ?? matrixCost ?? null
 
+    // Resolve waste % from glass_price_matrix — same source as /calculator/mirror.
+    const mirrorWastePct = getWastePct(glassMatrix, mirrorMatrixName, 'mirror')
+
     const mirrorWarnings: string[] = []
 
     if (mirrorCostPerM2 == null) {
@@ -104,6 +112,25 @@ export async function quickCalc(
     }
     // If mirrorCostPerM2 is set, mirrorMaterial may be null (calculateMirror handles it)
 
+    // Warn if glass_price_matrix row lacks waste_pct (getWastePct defaults to 0)
+    const hasWastePctInMatrix = glassMatrix.some(
+      r => r.name === mirrorMatrixName && r.price_type === 'cost' && r.category === 'mirror' && r.waste_pct != null,
+    )
+    if (!hasWastePctInMatrix) {
+      mirrorWarnings.push(
+        `mirrorWastePct не найден в glass_price_matrix для "${mirrorMatrixName}". Используется 0%.`,
+      )
+    }
+
+    // Warn if exact financial_settings record not found for this mirror type
+    const hasExactFinancialSettings = settings.some(s => s.product_type === mirrorSettingsType)
+    if (!hasExactFinancialSettings) {
+      mirrorWarnings.push(
+        `financial_settings для "${mirrorSettingsType}" не найден. ` +
+        `Используются настройки по умолчанию. Проверьте margin и tax вручную.`,
+      )
+    }
+
     // Web calculator maps round shapes to 'complex' + substrate (bounding-box area, +1500 form, +2000 substrate)
     const isRound = options.shape === 'circle' || options.shape === 'oval'
     const calcShape: MirrorShape = isRound ? 'complex' : (options.shape as MirrorShape) ?? 'rectangle'
@@ -113,6 +140,7 @@ export async function quickCalc(
       height,
       mirrorMaterial,
       mirrorCostPerM2: mirrorCostPerM2 ?? undefined,
+      mirrorWastePct,
       shape: calcShape,
       hasLighting: Boolean(options.hasLighting),
       buttonType: options.buttonType ?? 'none',
@@ -125,7 +153,7 @@ export async function quickCalc(
       discount: 0,
       margin: cfg?.default_margin ?? 40,
       standardMargin: cfg?.default_margin ?? 40,
-      tax: cfg?.tax_percent ?? 11,
+      tax: cfg?.tax_percent ?? 12,
       minMargin: cfg?.min_margin ?? 25,
       hasFacet: false,
       facetTypeMm: null,
