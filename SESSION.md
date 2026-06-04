@@ -1,119 +1,76 @@
 ## Текущая задача
-AI Proposal MVP с UI-формой создания черновика завершён и протестирован на production.
+Mirror matrix QA пройден. Следующий шаг — micro-audit расхождения цен 4 685 ₽ vs 5 016 ₽ или аудит skeleton-текста и lighting компонентов.
 
-## Что сделано (сессия 29 мая — 3 июня)
+## Что сделано (сессия 4 июня 2026)
 
-### Справочник душевой фурнитуры — ЗАКРЫТО
-- `supabase/migrations/20260529_shower_catalog_items_extend.sql` — миграция добавила 10 колонок в `shower_catalog_items`
-- `app/admin/shower-hardware/CatalogTab.tsx` — улучшена обработка ошибок, добавлена безопасная кнопка удаления
-- Production обновлён, ручная проверка пройдена
+### Архитектурный аудит mirror — ЗАКРЫТО
+- Найдено расхождение: quickCalc использовал public.materials, /calculator/mirror — glass_price_matrix
+- Задокументировано 3 варианта (A/B/C), выбран вариант B (rewrite mirror-ветки)
 
-### AI operational layer — ЗАКРЫТО
-- `ai/` — структура: `agents/`, `policies/`, `tools/`, `README.md`
-- `ai/agents/chief-of-staff-agent.md`, `ai/agents/sales-director-agent.md`
-- `ai/policies/ai-safety-policy.md`, `ai/policies/approval-policy.md`, `ai/policies/permissions-policy.md`
-- `ai/tools/README.md`, `ai/tools/tool-registry.ts`
+### fix(ai): mirror proposals use glass price matrix — ЗАКРЫТО (коммит `2071f94`)
 
-### AI skill/code map — ЗАКРЫТО
-- Составлена карта `skill → существующие файлы`
-- `create-commercial-proposal` → `app/calculator/`, `lib/quickCalc.ts`, `lib/mirrorCalculator.ts`, `lib/showerCalculator.ts`, `lib/loftCalculator.ts`
+Что изменено архитектурно:
+- **Раньше:** AI mirror брал цену из `public.materials.sale_price / cost_price`
+- **Теперь:** AI mirror берёт цену из `glass_price_matrix` через `getMatrixPrice()` — тот же источник, что `/calculator/mirror`
+- Fallback на `public.materials` сохранён как safety fallback с explicit warning
+- `/calculator/mirror` и AI Proposal mirror теперь используют один мастер-источник цены
 
-### proposal-engineer foundation — ЗАКРЫТО
-- `lib/ai-tools/agentActionLogTypes.ts` — все типы: `AgentActionLogInsert`, `AgentActionLogRecord`, `AgentSafetySnapshot`, `AgentApprovalSnapshot`
+Файлы коммита:
+- `lib/quickCalc.ts` — `loadAll()` добавил `glass_price_matrix`, mirror-ветка переписана
+- `lib/ai-tools/quickCalcTool.ts` — propagation `raw.warnings`
+- `lib/ai-tools/generateKpDraftTool.ts` — добавлено поле `options?`, label mirror зависит от `hasLighting`
+- `lib/ai-tools/createCommercialProposalRuntime.ts` — передаёт `options` в `runGenerateKpDraftTool`
+- `app/admin/ai-proposals/page.tsx` — mirror-specific поля в форме (mirrorType, thicknessMm, hasLighting, shape)
 
-### quickCalcTool — ЗАКРЫТО
-- `lib/ai-tools/quickCalcTool.ts` — read-only враппер над `lib/quickCalc.ts`
-- Поддерживает: `mirror` | `loft` | `shower`
-- Безопасность: нет DB write, нет CRM write, нет отправки клиенту
+### Production QA mirror matrix — ЗАКРЫТО (4 июня 2026)
 
-### pricingRulesTool — ЗАКРЫТО
-- `lib/ai-tools/pricingRulesTool.ts` — read-only, читает `financial_settings` + `materials` + `services`
+| # | Тест | Параметры | Результат | Статус |
+|---|---|---|---|---|
+| 1 | Baseline /calculator/mirror | Осветлённое, 4 мм, 800×600, без подсветки | 4 685 ₽ | ✅ |
+| 2 | AI Proposal id=7 | Осветлённое, 4 мм, 800×600, без подсветки | 5 016 ₽ | ✅ работает |
+| 3 | Title без подсветки | hasLighting: false | Нет "с подсветкой" в заголовке | ✅ |
+| 4 | Safety flags | id=7, detail page | approval_required=true, can_send=false, can_write_crm=false, can_create_order=false, model_call=false | ✅ |
+| 5 | Безопасность | — | CRM не трогалась, клиенту не отправлялось, заказ не создавался, Anthropic/OpenAI не вызывались | ✅ |
 
-### generateKpDraftTool — ЗАКРЫТО
-- `lib/ai-tools/generateKpDraftTool.ts` — детерминированный генератор черновика КП
-- Anthropic binding намеренно выключен (`allowModelCall: false`)
+**Вывод:** AI Proposal mirror больше не падает. Архитектурная проблема источника цены закрыта.
 
-### createCommercialProposalRuntime — ЗАКРЫТО
-- `lib/ai-tools/createCommercialProposalRuntime.ts` — оркестратор: `quickCalcTool → pricingRulesTool → generateKpDraftTool`
-- Все safety flags hardcoded: `approval_required: true`, `can_send_to_client: false`, `can_write_crm: false`, `can_create_order: false`, `model_call_executed: false`
-
-### agent_action_log schema — ЗАКРЫТО
-- `supabase/migrations/20260603_agent_action_log.sql` — таблица, 9 индексов, CHECK constraints
-- `supabase/migrations/20260603_agent_action_log_rls_fix.sql` — убраны INSERT/UPDATE для authenticated, оставлен только SELECT
-- Применено в Supabase Dashboard
-
-### Proposal Draft API routes — ЗАКРЫТО (коммит `66d7b1f`)
-- `app/api/ai/proposals/draft/route.ts` — POST, сохранение через service role
-- `app/api/ai/proposals/route.ts` — GET list с фильтром по статусу
-- `app/api/ai/proposals/[id]/route.ts` — GET single
-- `app/api/ai/proposals/[id]/approve/route.ts` — POST approve
-- `app/api/ai/proposals/[id]/reject/route.ts` — POST reject
-- `lib/supabase-service.ts` — централизованный service role client
-
-### Approval UI — ЗАКРЫТО (коммит `4c3f8c7`)
-- `app/admin/ai-proposals/page.tsx` — список с фильтрами, badges, warnings/errors count
-- `app/admin/ai-proposals/[id]/page.tsx` — detail: safety banner, safety flags, draft content, approve/reject flow, copy buttons
-
-### UI-форма "Создать AI-КП" — ЗАКРЫТО (коммит `e78daf2`)
-- `app/admin/ai-proposals/page.tsx` — добавлена раскрывающаяся форма создания черновика
-- Поля: `client_request`, `product_type`, `width`, `height`, `quantity`, `client_name`, `installation_required`, `delivery_required`, `manager_notes`
-- Submit → POST `/api/ai/proposals/draft` → redirect на detail page
-- Failed with id → inline amber-блок со ссылкой на запись
-- Hard errors → user-friendly сообщение, `console.error` для деталей
-- Форма не обращается к Supabase напрямую; service role не попадает в client component
-- Safety info block внутри формы: явно указано, что КП не отправляется клиенту
-
-### Production QA — ЗАКРЫТО (3 июня 2026)
-
-| id | Источник | Результат | Статус |
-|----|----------|-----------|--------|
-| 1 | API/console | mirror payload — quickCalc вернул null, корректно сохранён как `failed` | ✅ ожидаемо |
-| 2 | API/console | shower draft — создан, одобрен | ✅ |
-| 3 | API/console | shower draft — создан, отклонён | ✅ |
-| 4 | UI-форма | shower 1200×2000 — создан через форму, detail page открылся, approved | ✅ |
-
-Подтверждено на production (id 4, UI-форма):
-- `/admin/ai-proposals` открывается, кнопка «+ Создать AI-КП» отображается
-- Форма раскрывается, safety block внутри виден
-- Черновик создан через UI, redirect на `/admin/ai-proposals/4` сработал
-- Safety flags: `approval_required=true`, `can_send_to_client=false`, `can_write_crm=false`, `can_create_order=false`, `model_call_executed=false`
-- Клиенту ничего не отправилось
-- AmoCRM не трогалась
-- Заказ не создавался
-- Anthropic/OpenAI не вызывались
-- RLS: authenticated — только SELECT; writes — только через server API + service role
+Разница 5 016 ₽ vs 4 685 ₽ (~331 ₽ / ~7%) — техническое расхождение, требует отдельного micro-audit (rounding, options, состав позиций).
 
 ## Следующий шаг
 
-**Вариант A (рекомендуемый) — Mirror data readiness:**
-1. Проверить таблицу `materials` в Supabase: `SELECT name, category, active, cost_price FROM materials WHERE category = 'зеркало'`
-2. Добавить активный материал если отсутствует: `INSERT INTO materials (name, category, cost_price, active) VALUES ('Зеркало серебро 4мм', 'зеркало', 1200, true)`
-3. Проверить `services` для зеркал
-4. Протестировать mirror AI-КП через UI-форму
+**Вариант A — Mirror pricing parity micro-audit (рекомендуется):**
+1. Сравнить состав cost lines в AI Proposal (draft_payload) с cost lines в /calculator/mirror
+2. Найти источник расхождения 331 ₽ (rounding, waste_pct, комплектующие, сборка)
+3. Проверить, передаются ли mirrorWastePct / shapeModifierPct в quickCalc mirror-ветку
+4. При необходимости — добавить загрузку waste модификаторов в loadAll()
 
-**Вариант B — Улучшение качества skeleton-текста:**
-Доработать `lib/ai-tools/generateKpDraftTool.ts` — поля `installation_required` / `delivery_required` должны выводиться как человекочитаемые формулировки вместо boolean-значений.
+**Вариант B — Skeleton text + lighting components audit:**
+1. Проверить, какие lighting компоненты входят в AI-расчёт при hasLighting=true
+2. Улучшить текст черновика КП: читаемые формулировки вместо технических boolean
+3. Добавить отображение состава позиций в draft_payload.items
 
 ## Контекст
 
-- Весь код закоммичен и задеплоен на production (Vercel)
-- agent_action_log миграции применены в Supabase
-- RLS fix применён вручную в SQL Editor
-- Production тест пройден: 4 записи в agent_action_log (id 1–4)
+- Весь код закоммичен на production (Vercel), коммит `2071f94`
+- `getMatrixPrice` — pure function из `lib/glassMatrix.ts`, вызывается без browser client
+- `loadGlassMatrix()` (browser) не вызывается в quickCalc.ts — запрос идёт через server-side `db()`
+- Shower и loft ветки не тронуты
+- Supabase schema не менялась
 - `SESSION.md` — единственный незакоммиченный файл
 
 ## Текущие ограничения (known limitations)
 
-- mirror payload падает без активного материала `category='зеркало'` в таблице `materials`
+- Разница цены ~7% между `/calculator/mirror` и AI Proposal — требует micro-audit rounding/options
+- Lighting компоненты (LED, профиль, БП, рассеиватель) не загружаются в quickCalc — используются только если передан материал из `materials`
+- Skeleton-текст черновика требует улучшения: boolean-поля не форматированы как текст
 - Нет редактирования черновика перед approve
 - Нет pagination в списке `/admin/ai-proposals`
 - Нет rate limiting на POST `/api/ai/proposals/draft`
-- Нет Anthropic binding — генерация детерминированная (`allowModelCall: false`)
-- Нет CRM-read integration — клиент заполняется вручную
-- Skeleton-текст черновика может требовать ручной правки (boolean-поля не форматированы как текст)
+- RLS на `shower_catalog_items` не настроена явно
 
 ## Открытые вопросы
 
-- RLS на `shower_catalog_items` не настроена явно — ограничение только на уровне маршрута `/admin`
+- Источник расхождения 4 685 ₽ vs 5 016 ₽: rounding? waste_pct? комплектующие зеркала / сборка?
 - `ai/skills/`, `ai/workflows/`, `ai/memory/` — директории не созданы, запланированы для будущих этапов
-- mirror category=`зеркало` материал нужно добавить в Supabase для работы mirror-payload
+- Нет Anthropic binding — генерация детерминированная (`allowModelCall: false`)
+- Нет CRM-read integration — клиент заполняется вручную
