@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { calculateMirror, type MirrorInputs, type MirrorShape } from './mirrorCalculator'
+import { calculateMirror, type MirrorInputs, type MirrorShape, type MirrorLightingComponent } from './mirrorCalculator'
 import {
   calculateShower, SHOWER_MODELS, TIER_CONFIGS, HARDWARE_COLORS,
   type ShowerInputs,
@@ -7,6 +7,36 @@ import {
 import { calculateLoft, type LoftInputs } from './loftCalculator'
 import type { Material, Service, FinancialSettings } from './types'
 import { getMatrixPrice, getWastePct, type GlassMatrixRow } from './glassMatrix'
+
+// Raw row from public.mirror_lighting_components (server-side read)
+type LightingRow = {
+  id:              number
+  component_type:  string
+  name:            string
+  short_name:      string | null
+  voltage:         number | null
+  color_temp:      number | null
+  power_per_meter: number | null
+  max_power:       number | null
+  cost_price:      number
+  unit:            string
+  active:          boolean
+  sort_order:      number
+}
+
+function toLightingComponent(row: LightingRow): MirrorLightingComponent {
+  return {
+    id:              row.id,
+    name:            row.name,
+    short_name:      row.short_name,
+    cost_price:      row.cost_price,
+    unit:            row.unit,
+    voltage:         row.voltage,
+    color_temp:      row.color_temp,
+    power_per_meter: row.power_per_meter,
+    max_power:       row.max_power,
+  }
+}
 
 export type CalcType = 'mirror' | 'loft' | 'shower'
 
@@ -47,17 +77,19 @@ function db() {
 
 async function loadAll() {
   const supabase = db()
-  const [{ data: mats }, { data: svcs }, { data: fins }, { data: gm }] = await Promise.all([
+  const [{ data: mats }, { data: svcs }, { data: fins }, { data: gm }, { data: lc }] = await Promise.all([
     supabase.from('materials').select('*').eq('active', true),
     supabase.from('services').select('*').eq('active', true),
     supabase.from('financial_settings').select('*'),
     supabase.from('glass_price_matrix').select('*').order('name'),
+    supabase.from('mirror_lighting_components').select('*').eq('active', true).order('sort_order').order('id'),
   ])
   return {
-    materials:   (mats ?? []) as Material[],
-    services:    (svcs ?? []) as Service[],
-    settings:    (fins ?? []) as FinancialSettings[],
-    glassMatrix: (gm ?? []) as GlassMatrixRow[],
+    materials:          (mats ?? []) as Material[],
+    services:           (svcs ?? []) as Service[],
+    settings:           (fins ?? []) as FinancialSettings[],
+    glassMatrix:        (gm ?? []) as GlassMatrixRow[],
+    lightingComponents: (lc ?? []) as LightingRow[],
   }
 }
 
@@ -76,7 +108,7 @@ export async function quickCalc(
   height: number,
   options: CalcOptions = {},
 ): Promise<QuickCalcResult | null> {
-  const { materials, services, settings, glassMatrix } = await loadAll()
+  const { materials, services, settings, glassMatrix, lightingComponents } = await loadAll()
 
   if (type === 'mirror') {
     // Select financial_settings based on hasLighting:
@@ -131,6 +163,55 @@ export async function quickCalc(
       )
     }
 
+    // Select default lighting components when hasLighting=true — same defaults as /calculator/mirror.
+    // Mirrors the auto-select logic at calculator page initialisation (first by sort_order/id).
+    let selFrame:       MirrorLightingComponent | null = null
+    let selLedStrip:    MirrorLightingComponent | null = null
+    let selPowerSupply: MirrorLightingComponent | null = null
+    let selDiffuser:    MirrorLightingComponent | null = null
+
+    if (options.hasLighting) {
+      const lcFrame = lightingComponents.find(c => c.component_type === 'frame')
+      if (lcFrame) selFrame = toLightingComponent(lcFrame)
+
+      const lcLed = lightingComponents.find(c => c.component_type === 'led_strip' && c.voltage === 12)
+                 ?? lightingComponents.find(c => c.component_type === 'led_strip')
+      if (lcLed) selLedStrip = toLightingComponent(lcLed)
+
+      const lcDiff = lightingComponents.find(c => c.component_type === 'diffuser')
+      if (lcDiff) selDiffuser = toLightingComponent(lcDiff)
+
+      // Auto-PSU: minimum PSU 12V with max_power >= needed (same formula as calculator)
+      const psus12 = lightingComponents.filter(c => c.component_type === 'power_supply' && (c.voltage ?? 12) === 12)
+      if (selLedStrip?.power_per_meter) {
+        const perimM = 2 * (width + height) / 1000
+        const needed = selLedStrip.power_per_meter * perimM / 0.8
+        const fitPsu = psus12
+          .filter(c => (c.max_power ?? 0) >= needed)
+          .sort((a, b) => (a.max_power ?? 0) - (b.max_power ?? 0))
+        const lcPsu = fitPsu[0]
+          ?? psus12.sort((a, b) => (b.max_power ?? 0) - (a.max_power ?? 0))[0]
+          ?? null
+        if (lcPsu) selPowerSupply = toLightingComponent(lcPsu)
+      } else {
+        // No power_per_meter — fallback to first 12V PSU
+        const lcPsu = psus12[0] ?? null
+        if (lcPsu) selPowerSupply = toLightingComponent(lcPsu)
+      }
+
+      // Warn about missing individual components
+      if (!selLedStrip)    mirrorWarnings.push('LED-лента не найдена в mirror_lighting_components. Стоимость подсветки может быть занижена.')
+      if (!selFrame)       mirrorWarnings.push('Профиль подсветки не найден в mirror_lighting_components.')
+      if (!selPowerSupply) mirrorWarnings.push('Блок питания не найден в mirror_lighting_components. Проверьте мощность LED и наличие БП.')
+      if (!selDiffuser)    mirrorWarnings.push('Рассеиватель не найден в mirror_lighting_components.')
+
+      // Always add standard-kit warning so the manager knows to review
+      mirrorWarnings.push(
+        'Подсветка рассчитана по стандартной комплектации: профиль, LED 12V, автоматический блок питания и рассеиватель. ' +
+        'Проверьте состав вручную перед отправкой клиенту.',
+      )
+    }
+
     // Web calculator maps round shapes to 'complex' + substrate (bounding-box area, +1500 form, +2000 substrate)
     const isRound = options.shape === 'circle' || options.shape === 'oval'
     const calcShape: MirrorShape = isRound ? 'complex' : (options.shape as MirrorShape) ?? 'rectangle'
@@ -143,6 +224,10 @@ export async function quickCalc(
       mirrorWastePct,
       shape: calcShape,
       hasLighting: Boolean(options.hasLighting),
+      frame:       options.hasLighting ? selFrame       : null,
+      ledStrip:    options.hasLighting ? selLedStrip    : null,
+      powerSupply: options.hasLighting ? selPowerSupply : null,
+      diffuser:    options.hasLighting ? selDiffuser    : null,
       buttonType: options.buttonType ?? 'none',
       hasSandblast: Boolean(options.hasSandblast),
       hasSubstrate: isRound || Boolean(options.hasSubstrate),
