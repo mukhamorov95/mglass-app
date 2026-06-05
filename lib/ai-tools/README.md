@@ -40,6 +40,13 @@
 | `createCommercialProposalRuntime.ts` | `create-commercial-proposal` | draft | quickCalcTool → pricingRulesTool → generateKpDraftTool | **обязательно** | ✅ Реализован | Полный pipeline черновика КП — единый вход/выход для proposal-engineer-agent |
 | `createB2BQuickQuoteRuntime.ts` | `b2b-quick-quote-draft` | draft | b2bQuickQuoteTool | **обязательно** | ✅ Реализован | B2B Quick Quote — нормализованный draft для b2b-sales-agent; agent_action_log на следующем этапе |
 
+## API Routes
+
+| Route | Method | Runtime | Auth | DB write | Статус |
+|---|---|---|---|---|---|
+| `app/api/ai/proposals/draft/route.ts` | POST | createCommercialProposalRuntime | admin, manager | agent_action_log INSERT | ✅ Реализован |
+| `app/api/ai/b2b-quote/draft/route.ts` | POST | createB2BQuickQuoteRuntime | admin, manager, buyer | **нет** (Commit 5) | ✅ Реализован |
+
 ## Safety profile createB2BQuickQuoteRuntime
 
 ```
