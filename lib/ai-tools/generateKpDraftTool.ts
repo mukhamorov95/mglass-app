@@ -86,18 +86,23 @@ export type KpDraftContent = {
   proposal_title: string
   client_summary: string
   items:          Array<{
-    name:        string
-    description: string
-    price:       number
+    line_item:   string
+    dimensions?: string
+    quantity:    number
+    unit_price:  number
+    total_price: number
+    note?:       string
   }>
   price_summary: {
-    subtotal: number
-    total:    number
-    note:     string
+    subtotal:      number
+    total:         number
+    currency:      string
+    vat_included?: string
   }
   terms: {
-    production_days: string
-    payment:         string
+    lead_time_days?: [number, number]
+    payment_terms:   string
+    warranty:        string
     validity_days:   number
   }
   exclusions:      string[]
@@ -152,12 +157,13 @@ function buildSkeleton(
   const pricing = input.pricing_rules_summary
 
   // Dimensions string if available
-  const dims = calc.dimensions
-    ? ` ${calc.dimensions.width}×${calc.dimensions.height}мм`
-    : ''
+  const dimsStr = calc.dimensions
+    ? `${calc.dimensions.width}×${calc.dimensions.height} мм`
+    : undefined
+  const dimsLabel = dimsStr ? ` ${dimsStr}` : ''
 
   // ── Title ──────────────────────────────────────────────────────────────────
-  const proposal_title = `Коммерческое предложение — ${productLabel}${dims}`
+  const proposal_title = `Коммерческое предложение — ${productLabel}${dimsLabel}`
 
   // ── Client summary ─────────────────────────────────────────────────────────
   const companyIntro = input.company_context?.trim()
@@ -170,45 +176,54 @@ function buildSkeleton(
     : ''
   const client_summary = `${companyIntro}${requestNote}${managerNote}`
 
-  // ── Items ──────────────────────────────────────────────────────────────────
+  // ── Items — product always first, services after ───────────────────────────
+  const qty = calc.quantity ?? 1
+  const productTotal = calc.total_estimate ?? calc.final_price
   const items: KpDraftContent['items'] = []
+
+  // Main product line — always present regardless of service_lines
+  items.push({
+    line_item:   productLabel,
+    dimensions:  dimsStr,
+    quantity:    qty,
+    unit_price:  calc.final_price,
+    total_price: productTotal,
+  })
+
+  // Service lines (installation, delivery) — appended after product
   if (calc.service_lines && calc.service_lines.length > 0) {
     for (const line of calc.service_lines) {
       items.push({
-        name:        line.name,
-        description: `${productLabel} — ${line.name}`,
-        price:       line.total,
+        line_item:   line.name,
+        quantity:    1,
+        unit_price:  line.total,
+        total_price: line.total,
       })
     }
-  } else {
-    items.push({
-      name:        productLabel,
-      description: calc.description?.trim() ?? `${productLabel}${dims}`,
-      price:       calc.base_price,
-    })
   }
 
   // ── Price summary ──────────────────────────────────────────────────────────
-  const qty   = calc.quantity ?? 1
-  const total = calc.total_estimate ?? calc.final_price
-  const discountNote = pricing?.max_discount_percent
+  const servicesTotal = (calc.service_lines ?? []).reduce((s, l) => s + l.total, 0)
+  const grandTotal    = productTotal + servicesTotal
+  const discountNote  = pricing?.max_discount_percent
     ? ` Максимальная скидка по договорённости: ${pricing.max_discount_percent}%.`
     : ''
-  const qtyNote = qty > 1 ? ` Количество: ${qty} шт.` : ''
   const price_summary: KpDraftContent['price_summary'] = {
-    subtotal: calc.base_price,
-    total,
-    note: `Итоговая стоимость: ${total.toLocaleString('ru-RU')} ₽.${qtyNote}${discountNote} НДС не предусмотрен.`,
+    subtotal:      productTotal,
+    total:         grandTotal,
+    currency:      'RUB',
+    vat_included:  `НДС не предусмотрен.${discountNote}`,
   }
 
   // ── Terms ──────────────────────────────────────────────────────────────────
-  const productionDays = pricing?.sla_days_in_work
-    ? `${pricing.sla_days_in_work} рабочих дней`
-    : '7–14 рабочих дней'
+  const leadTimeDays: [number, number] = pricing?.sla_days_in_work
+    ? [pricing.sla_days_in_work, pricing.sla_days_in_work]
+    : [7, 14]
   const terms: KpDraftContent['terms'] = {
-    production_days: productionDays,
-    payment:         'Предоплата 50% при подтверждении заказа, остаток — при готовности изделия.',
-    validity_days:   KP_VALIDITY_DAYS,
+    lead_time_days: leadTimeDays,
+    payment_terms:  'Предоплата 50% при подтверждении заказа, остаток — при готовности изделия.',
+    warranty:       '12 месяцев',
+    validity_days:  KP_VALIDITY_DAYS,
   }
 
   // ── Exclusions ─────────────────────────────────────────────────────────────
@@ -216,8 +231,8 @@ function buildSkeleton(
     'Доставка в стоимость не включена (уточняйте отдельно)',
   ]
   const hasMounting = items.some(i =>
-    i.name.toLowerCase().includes('монтаж') ||
-    i.name.toLowerCase().includes('installation'),
+    i.line_item.toLowerCase().includes('монтаж') ||
+    i.line_item.toLowerCase().includes('installation'),
   )
   if (!hasMounting) {
     exclusions.push('Монтажные работы в стоимость не включены (уточняйте отдельно)')
@@ -227,8 +242,13 @@ function buildSkeleton(
   }
 
   // ── Manager message ────────────────────────────────────────────────────────
+  const productLine = dimsStr ? `${productLabel}, ${dimsStr}` : productLabel
   const checklistLines = [
     '⚠️ ЧЕРНОВИК — требует проверки перед отправкой клиенту.',
+    `Изделие: ${productLine}`,
+    `Итоговая стоимость: ${grandTotal.toLocaleString('ru-RU')} ₽`,
+    'КП клиенту НЕ отправлено — требуется ручная отправка менеджером.',
+    '',
     'Проверьте перед отправкой:',
     '  • корректность размеров и состава изделия;',
     '  • актуальность цены (расчёт на дату составления);',
