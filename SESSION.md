@@ -1,7 +1,7 @@
 ## Текущая задача
-Mirror matrix QA пройден. Следующий шаг — micro-audit расхождения цен 4 685 ₽ vs 5 016 ₽ или аудит skeleton-текста и lighting компонентов.
+Mirror proposal pricing fully aligned — ЗАКРЫТО. Следующий шаг — AI Proposal quality layer (skeleton-текст, cost breakdown, состав позиций).
 
-## Что сделано (сессия 4 июня 2026)
+## Что сделано (сессия 4–5 июня 2026)
 
 ### Архитектурный аудит mirror — ЗАКРЫТО
 - Найдено расхождение: quickCalc использовал public.materials, /calculator/mirror — glass_price_matrix
@@ -15,54 +15,96 @@ Mirror matrix QA пройден. Следующий шаг — micro-audit ра�
 - Fallback на `public.materials` сохранён как safety fallback с explicit warning
 - `/calculator/mirror` и AI Proposal mirror теперь используют один мастер-источник цены
 
-Файлы коммита:
-- `lib/quickCalc.ts` — `loadAll()` добавил `glass_price_matrix`, mirror-ветка переписана
-- `lib/ai-tools/quickCalcTool.ts` — propagation `raw.warnings`
-- `lib/ai-tools/generateKpDraftTool.ts` — добавлено поле `options?`, label mirror зависит от `hasLighting`
-- `lib/ai-tools/createCommercialProposalRuntime.ts` — передаёт `options` в `runGenerateKpDraftTool`
-- `app/admin/ai-proposals/page.tsx` — mirror-specific поля в форме (mirrorType, thicknessMm, hasLighting, shape)
+### Mirror pricing parity micro-audit — ЗАКРЫТО
 
-### Production QA mirror matrix — ЗАКРЫТО (4 июня 2026)
+SQL-верификация подтвердила:
+- `owner_strategy`: target_margin=40, min_margin=25
+- `financial_settings` mirror: default_margin=40, tax=12, min_margin=25
+- `financial_settings` mirror_light: default_margin=50, tax=12, min_margin=30
+- Причина расхождения: quickCalc безусловно использовал `mirror_light` (margin=50), игнорируя `hasLighting`
+- Дополнительно: `mirrorWastePct` (=18%) не передавался в `calculateMirror`
+
+### fix(ai): align mirror proposal pricing with calculator — ЗАКРЫТО (коммит `76dffa4`)
+
+Что изменено (только `lib/quickCalc.ts`, mirror-ветка):
+- **mirrorWastePct:** берётся из `glass_price_matrix.waste_pct` через `getWastePct()`, передаётся в `calculateMirror`
+- **tax fallback:** выровнен с 11 на 12 (соответствует `financial_settings.tax_percent`)
+- **Warnings:** добавлены для отсутствующих `waste_pct` и `financial_settings`
+- shower/loft ветки — не тронуты
+
+### fix(ai): include default lighting components in mirror proposals — ЗАКРЫТО (коммит `bce1224`)
+
+Что изменено (только `lib/quickCalc.ts`, mirror-ветка):
+- `loadAll()` расширен: теперь запрашивает `mirror_lighting_components` (5-я таблица)
+- При `hasLighting=true` auto-select: frame, LED 12V, PSU (авто-подбор по мощности), diffuser
+- Компоненты передаются в `calculateMirror` — lighting cost учитывается в расчёте
+- Добавлено warning о стандартной комплектации подсветки
+
+### fix(ai): use calculator margin for mirror lighting proposals — ЗАКРЫТО (коммит `21db841`)
+
+Что изменено (только `lib/quickCalc.ts`, mirror-ветка):
+- **До:** `mirrorSettingsType = options.hasLighting ? 'mirror_light' : 'mirror'` → при `hasLighting=true` использовался margin=50%
+- **После:** `mirrorSettingsType = 'mirror'` (константа) → всегда margin=40%, как в `/calculator/mirror`
+- `hasLighting` теперь влияет только на: состав компонентов, label КП, warnings
+- `mirror_light` (margin=50%) больше не используется для AI Proposal mirror pricing
+
+### Production QA mirror lighting + pricing parity — ЗАКРЫТО (5 июня 2026)
 
 | # | Тест | Параметры | Результат | Статус |
 |---|---|---|---|---|
-| 1 | Baseline /calculator/mirror | Осветлённое, 4 мм, 800×600, без подсветки | 4 685 ₽ | ✅ |
-| 2 | AI Proposal id=7 | Осветлённое, 4 мм, 800×600, без подсветки | 5 016 ₽ | ✅ работает |
-| 3 | Title без подсветки | hasLighting: false | Нет "с подсветкой" в заголовке | ✅ |
-| 4 | Safety flags | id=7, detail page | approval_required=true, can_send=false, can_write_crm=false, can_create_order=false, model_call=false | ✅ |
-| 5 | Безопасность | — | CRM не трогалась, клиенту не отправлялось, заказ не создавался, Anthropic/OpenAI не вызывались | ✅ |
+| 1 | Baseline /calculator/mirror без подсветки | Осветлённое, 4 мм, 800×600 | 4 685 ₽ | ✅ |
+| 2 | AI Proposal без подсветки | Осветлённое, 4 мм, 800×600 | 4 685 ₽ | ✅ |
+| 3 | Baseline /calculator/mirror с подсветкой | Серебро, 4 мм, 800×600 | 4 052 ₽ | ✅ |
+| 4 | AI Proposal с подсветкой | Серебро, 4 мм, 800×600, hasLighting=true | 4 052 ₽ | ✅ |
+| 5 | Title без подсветки | hasLighting=false | не содержит "с подсветкой" | ✅ |
+| 6 | Title с подсветкой | hasLighting=true | содержит "Зеркало с подсветкой" | ✅ |
+| 7 | Warnings | hasLighting=true | предупреждение о стандартной комплектации | ✅ |
+| 8 | Safety flags | все proposals | approval_required=true, can_send=false, can_write_crm=false, can_create_order=false, model_call=false | ✅ |
+| 9 | Безопасность | — | CRM не трогалась, клиенту не отправлялось, заказ не создавался, Anthropic/OpenAI не вызывались | ✅ |
 
-**Вывод:** AI Proposal mirror больше не падает. Архитектурная проблема источника цены закрыта.
+**Вывод:** AI Proposal mirror полностью совпадает с `/calculator/mirror` для двух основных сценариев: зеркало без подсветки (4 685 ₽) и зеркало с подсветкой по стандартной комплектации (4 052 ₽).
 
-Разница 5 016 ₽ vs 4 685 ₽ (~331 ₽ / ~7%) — техническое расхождение, требует отдельного micro-audit (rounding, options, состав позиций).
+### Архитектурный итог — mirror proposal pricing fully aligned
+
+Единые источники данных для AI Proposal mirror и `/calculator/mirror`:
+
+| Компонент | Источник |
+|---|---|
+| Цена стекла | `glass_price_matrix` → `getMatrixPrice()` |
+| Waste % | `glass_price_matrix.waste_pct` → `getWastePct()` |
+| Margin / tax | `financial_settings` `product_type='mirror'` (margin=40, tax=12) |
+| Подсветка | `mirror_lighting_components` (auto-select по sort_order/id) |
+
+Цепочка коммитов:
+- `2071f94` — glass_price_matrix как источник цены стекла
+- `76dffa4` — правильный margin/waste, tax=12
+- `bce1224` — default lighting components включены в cost
+- `21db841` — mirror_light margin исключён, используется margin=40 везде
 
 ## Следующий шаг
 
-**Вариант A — Mirror pricing parity micro-audit (рекомендуется):**
-1. Сравнить состав cost lines в AI Proposal (draft_payload) с cost lines в /calculator/mirror
-2. Найти источник расхождения 331 ₽ (rounding, waste_pct, комплектующие, сборка)
-3. Проверить, передаются ли mirrorWastePct / shapeModifierPct в quickCalc mirror-ветку
-4. При необходимости — добавить загрузку waste модификаторов в loadAll()
-
-**Вариант B — Skeleton text + lighting components audit:**
-1. Проверить, какие lighting компоненты входят в AI-расчёт при hasLighting=true
-2. Улучшить текст черновика КП: читаемые формулировки вместо технических boolean
-3. Добавить отображение состава позиций в draft_payload.items
+**AI Proposal quality layer:**
+1. Улучшить skeleton-текст КП — human-readable параметры изделия вместо boolean
+2. Передавать cost breakdown в `draft_payload.items`:
+   - стекло, профиль, LED, БП, рассеиватель, комплектующие, сборка
+   - монтаж / доставка отдельными строками
+3. Показывать полный состав позиции в items (сейчас — одна строка без детализации)
+4. После quality layer — B2B Quick Quote Skill или Follow-up Manager Skill
 
 ## Контекст
 
-- Весь код закоммичен на production (Vercel), коммит `2071f94`
-- `getMatrixPrice` — pure function из `lib/glassMatrix.ts`, вызывается без browser client
-- `loadGlassMatrix()` (browser) не вызывается в quickCalc.ts — запрос идёт через server-side `db()`
-- Shower и loft ветки не тронуты
+- Весь код закоммичен на production (Vercel), ветка `main`
+- `getMatrixPrice` и `getWastePct` — pure functions из `lib/glassMatrix.ts`, server-side
+- `loadAll()` в `quickCalc.ts` запрашивает 5 таблиц: materials, services, financial_settings, glass_price_matrix, mirror_lighting_components
+- `loadGlassMatrix()` (browser) не вызывается в `quickCalc.ts` — используется server-side `db()`
+- Shower и loft ветки не тронуты ни одним из коммитов
 - Supabase schema не менялась
-- `SESSION.md` — единственный незакоммиченный файл
 
 ## Текущие ограничения (known limitations)
 
-- Разница цены ~7% между `/calculator/mirror` и AI Proposal — требует micro-audit rounding/options
-- Lighting компоненты (LED, профиль, БП, рассеиватель) не загружаются в quickCalc — используются только если передан материал из `materials`
-- Skeleton-текст черновика требует улучшения: boolean-поля не форматированы как текст
+- UI пока не даёт выбирать LED/профиль/БП/рассеиватель вручную — используется стандартная комплектация
+- `draft_payload.items` не раскрывает полноценный состав позиции (только итоговая строка)
+- Skeleton-текст КП требует улучшения: boolean-поля не форматированы как читаемый текст
 - Нет редактирования черновика перед approve
 - Нет pagination в списке `/admin/ai-proposals`
 - Нет rate limiting на POST `/api/ai/proposals/draft`
@@ -70,7 +112,6 @@ Mirror matrix QA пройден. Следующий шаг — micro-audit ра�
 
 ## Открытые вопросы
 
-- Источник расхождения 4 685 ₽ vs 5 016 ₽: rounding? waste_pct? комплектующие зеркала / сборка?
 - `ai/skills/`, `ai/workflows/`, `ai/memory/` — директории не созданы, запланированы для будущих этапов
 - Нет Anthropic binding — генерация детерминированная (`allowModelCall: false`)
 - Нет CRM-read integration — клиент заполняется вручную
