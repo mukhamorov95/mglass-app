@@ -359,6 +359,13 @@ export default function AIProposalDetailPage() {
                   {copied === 'draft' ? '✓ Скопировано' : '📄 Скопировать черновик'}
                 </button>
               )}
+
+              {/* Open print / PDF view */}
+              <button
+                onClick={() => window.open(`/admin/ai-proposals/${id}/print`, '_blank')}
+                className="h-8 px-3 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                🖨 Открыть КП для печати
+              </button>
             </div>
 
             {/* Reject form */}
@@ -426,6 +433,11 @@ export default function AIProposalDetailPage() {
                       {copied === 'draft' ? '✓ Скопировано' : '📄 Скопировать черновик'}
                     </button>
                   )}
+                  <button
+                    onClick={() => window.open(`/admin/ai-proposals/${id}/print`, '_blank')}
+                    className="h-7 px-3 rounded-lg text-[11px] border border-emerald-200 text-emerald-700 hover:bg-emerald-100 transition-colors">
+                    🖨 Открыть КП для печати
+                  </button>
                 </div>
               </div>
             )}
