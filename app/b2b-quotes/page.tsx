@@ -162,9 +162,9 @@ function buildTelegramPositionLines(quote: Quote): string[] {
 
     if (isGlass) {
       const grade      = normalizeGlassGrade(matName)
-      const tempSuffix = (item.hasTempering ?? false) ? ' закаленные' : ''
+      const tempSuffix = (item.hasTempering ?? false) ? ' закаленное' : ''
       key   = `glass|${matName}|${thickness}|${item.hasTempering ?? false}`
-      label = `Стекла ${thStr} ${grade}${tempSuffix}`.replace(/\s{2,}/g, ' ').trim()
+      label = `Стекло ${thStr} ${grade}${tempSuffix}`.replace(/\s{2,}/g, ' ').trim()
     } else {
       // Mirror: derive shape from dimensions — equal width/height → round, otherwise rectangular
       const mirrorType = normalizeMirrorType(matName)
@@ -172,7 +172,7 @@ function buildTelegramPositionLines(quote: Quote): string[] {
       const h     = item.height ?? 0
       const shape = w > 0 && h > 0 && w === h ? 'круглое' : 'прямоугольное'
       key   = `mirror|${matName}|${thickness}|${shape}`
-      label = `Зеркало ${shape} ${thStr} ${mirrorType}`.replace(/\s{2,}/g, ' ').trim()
+      label = `Зеркало ${thStr} ${mirrorType} ${shape}`.replace(/\s{2,}/g, ' ').trim()
     }
 
     const g = groups.get(key)
