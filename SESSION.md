@@ -1,5 +1,5 @@
 ## Текущая задача
-Printable B2C proposal page — ЗАКРЫТО. Этап остановлен. Следующий шаг — выбор между server-side PDF и cost breakdown propagation.
+Безопасная остановка. B2B Quick Quote (Tool/Runtime/API) и B2B Telegram work text copy action — ЗАКРЫТЫ. Production QA пройден. Можно переключаться на другой блок.
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -153,47 +153,186 @@ SQL-верификация подтвердила:
 - `ecb8edd` — компактный header, первый round layout alignment
 - `c4be2db` — полный rewrite под M-Glass B2C reference
 
+---
+
+## B2B Quick Quote Tool / Runtime / API — ЗАКРЫТО (5 июня 2026)
+
+### Что реализовано
+
+| Файл | Назначение | Коммит |
+|---|---|---|
+| `lib/ai-tools/b2bQuickQuoteTool.ts` | Read-only tool: mirror/shower/loft + партнёрская скидка | `ab6c0da` |
+| `lib/ai-tools/createB2BQuickQuoteRuntime.ts` | Orchestrator → нормализованный draft-envelope | `455f8df` |
+| `app/api/ai/b2b-quote/draft/route.ts` | POST /api/ai/b2b-quote/draft | `2583fa0` |
+| `lib/ai-tools/b2bQuickQuoteTool.test-plan.md` | 16 тест-кейсов для tool | `ab6c0da` |
+| `lib/ai-tools/createB2BQuickQuoteRuntime.test-plan.md` | 10 тест-кейсов для runtime | `455f8df` |
+| `app/api/ai/b2b-quote/draft/test-plan.md` | 7 тест-кейсов для API route | `2583fa0` |
+
+### Поддерживаемые product_type (Phase 1)
+
+| Тип | Статус |
+|---|---|
+| mirror | ✅ |
+| shower | ✅ |
+| loft | ✅ |
+| glass | ❌ `UNSUPPORTED_PRODUCT_TYPE_PHASE_1` |
+| cutting | ❌ `UNSUPPORTED_PRODUCT_TYPE_PHASE_1` |
+
+### Партнёрская скидка
+
+- `partner_discount_override` — override-скидка вручную (0–100%)
+- `partner_type_id` — читает `partner_types` (SELECT only), берёт `percent`
+- Приоритет: override > partner_types > 0
+
+### Hardcoded safety flags (все response paths)
+
+```
+approval_required:   true
+can_send_to_client:  false
+can_write_crm:       false
+can_create_order:    false
+model_call_executed: false
+```
+
+### Auth
+
+`ALLOWED_ROLES = new Set(['admin', 'manager', 'buyer'])`
+
+### Что НЕ реализовано на этом этапе
+
+- Нет UI для AI B2B Quick Quote (`/admin/ai-b2b-quote`)
+- `agent_action_log` запись не выполняется (подготовлен `output_snapshot` и `draft_payload`)
+- CRM не трогается
+- Заказы не создаются
+- Telegram не вызывается
+
+---
+
+## B2B Telegram work text copy action — ЗАКРЫТО (5 июня 2026)
+
+### Что реализовано
+
+На странице `/b2b-quotes` добавлена кнопка **"ТГ"** рядом с кнопкой PDF.
+
+Файл: `app/b2b-quotes/page.tsx`
+
+Цепочка коммитов:
+- `0a79b9d` — кнопка "ТГ", базовое копирование, clipboard API
+- `9891a2a` — группировка позиций (стёкла суммируются по материалу+толщине+закалке, зеркала по материалу+толщине+форме)
+- `64c2af7` — нормализация порядка слов: `Стекло {мм} {тип} {закаленное}`, `Зеркало {мм} {тип} {форма}`
+
+### Поведение кнопки
+
+- Копирует текст в `navigator.clipboard`
+- Fallback: `window.prompt()` если clipboard недоступен
+- Показывает `✓` 2 секунды + toast "Текст для Telegram скопирован"
+- **Не делает никаких сетевых запросов**
+- **Не меняет статус расчёта**
+- **Не пишет в Supabase / CRM**
+- **Не отправляет сообщение в Telegram автоматически**
+
+### Нормализация имени клиента
+
+`"M GLASS"` / `"MGlass"` → `"МГЛАСС"`
+
+### Формат Telegram-текста
+
+```
+{custom_number || КП-{id}}
+{clientName}
+Стекло {thickness}мм {grade} {закаленное?} - {qty} шт
+Зеркало {thickness}мм {mirrorType} {shape} - {qty} шт
+
+🥝{total} руб
+```
+
+### Production QA — Telegram work text — ЗАКРЫТО (5 июня 2026)
+
+Проверен на расчёте **0150-0**. Подтверждён пользователем как "всё супер".
+
+```
+0150-0
+МГЛАСС
+Стекло 8мм м1 закаленное - 13 шт
+Зеркало 4мм сильвер прямоугольное - 18 шт
+Зеркало 4мм сильвер круглое - 6 шт
+
+🥝77.623 руб
+```
+
+| # | Тест | Результат | Статус |
+|---|---|---|---|
+| 1 | Кнопка "ТГ" присутствует рядом с PDF | ✅ | ✅ |
+| 2 | Позиции группируются (13 стёкол = 1 строка) | ✅ | ✅ |
+| 3 | Клиент M GLASS → МГЛАСС | ✅ | ✅ |
+| 4 | Порядок строк: `Стекло 8мм м1 закаленное` | ✅ | ✅ |
+| 5 | Порядок строк: `Зеркало 4мм сильвер прямоугольное` | ✅ | ✅ |
+| 6 | Сумма: `🥝77.623 руб` | ✅ | ✅ |
+| 7 | PDF-кнопка не сломалась | ✅ | ✅ |
+| 8 | Статус расчёта не меняется | ✅ | ✅ |
+| 9 | Нет сетевых запросов при клике "ТГ" | ✅ | ✅ |
+
+### Safety подтверждение
+
+- Telegram API не подключён, бот не используется
+- Автоматической отправки нет — только clipboard copy
+- PDF-кнопка не изменилась
+- Цена не пересчитывается
+- Статусы расчётов не меняются
+
+---
+
 ## Следующий шаг
 
-Выбрать один из двух вариантов при возвращении:
+Три независимых направления — выбрать одно при возвращении:
 
-**A. Server-side PDF download route:**
-- `components/ProposalPDF.tsx` — PDF-компонент через `@react-pdf/renderer` (уже установлен)
-- `app/api/ai/proposals/[id]/pdf/route.ts` — route с `renderToBuffer`, `runtime='nodejs'`
-- Даст чистый PDF без Chrome headers/footers, скачиваемый напрямую
+**A. AI B2B Quick Quote Admin UI** (`/admin/ai-b2b-quote`)
+- Форма ввода параметров запроса
+- Отображение результата (позиции, цена, скидка, manager_internal)
+- Кнопка копирования ответа партнёру
+- Предварительно: сохранение результата в `agent_action_log` (Commit 5)
 
-**B. Cost breakdown propagation:**
-1. Прокинуть `costLines` из `calculateMirror` / `calculateShower` / `calculateLoft` через `quickCalc` → `QuickCalcResult`
-2. Добавить `costLines` в `QuickCalcToolCalculation`
-3. Передать `costLines` в `KpCalcSummary` через `toKpCalcSummary()`
-4. `generateKpDraftTool` строит `items` из `costLines` (стекло, профиль, LED, БП, рассеиватель, комплектующие, сборка)
-5. Разделить `client_items` (для КП) и `internal_cost_breakdown` (только для менеджера)
+**B. B2B glass/cutting support (Phase 2)**
+- Подключить `lib/b2bCalculator.ts` к `b2bQuickQuoteTool` для `product_type: 'glass' | 'cutting'`
+- Убрать `UNSUPPORTED_PRODUCT_TYPE_PHASE_1` для этих типов
+
+**C. Telegram auto-send Phase 2**
+- `TELEGRAM_BOT_TOKEN` + `TELEGRAM_WORK_CHAT_ID` в ENV
+- Server-side route `POST /api/b2b-quotes/[id]/send-telegram`
+- Confirmation before send
+- Отправка текста + PDF
+- Logging sent status + защита от дублей
+
+**D. Server-side PDF для B2C proposals** (незакрытое из предыдущей сессии)
+- `app/api/ai/proposals/[id]/pdf/route.ts` через `@react-pdf/renderer`
+- Чистый PDF без Chrome headers/footers
 
 ## Контекст
 
 - Весь код закоммичен на production (Vercel), ветка `main`
 - `getMatrixPrice` и `getWastePct` — pure functions из `lib/glassMatrix.ts`, server-side
 - `loadAll()` в `quickCalc.ts` запрашивает 5 таблиц: materials, services, financial_settings, glass_price_matrix, mirror_lighting_components
-- `loadGlassMatrix()` (browser) не вызывается в `quickCalc.ts` — используется server-side `db()`
-- Shower и loft ветки не тронуты ни одним из коммитов
-- Supabase schema не менялась
+- Shower и loft ветки не тронуты ни одним из зеркальных коммитов
 - `@react-pdf/renderer` v4.5.1 уже установлен — готов к server-side PDF route
+- `b2bQuickQuoteTool` читает `partner_types` (SELECT only) + вызывает `quickCalcTool`
+- `output_snapshot` и `draft_payload` готовы к сохранению в `agent_action_log` (следующий этап)
 
 ## Текущие ограничения (known limitations)
 
 - Print page — HTML + браузерный Print / Save as PDF; нет `/api/ai/proposals/[id]/pdf`
 - Chrome headers/footers нужно отключать вручную перед сохранением PDF
-- Финальная pixel-perfect верстка может быть улучшена позже при необходимости
-- Internal cost breakdown пока не выведен в print page
-- UI пока не даёт выбирать LED/профиль/БП/рассеиватель вручную — используется стандартная комплектация
+- UI пока не даёт выбирать LED/профиль/БП/рассеиватель вручную — стандартная комплектация
 - `draft_payload.items` не раскрывает полноценный состав позиции (только итоговая строка)
 - Нет редактирования черновика перед approve
 - Нет pagination в списке `/admin/ai-proposals`
-- Нет rate limiting на POST `/api/ai/proposals/draft`
-- RLS на `shower_catalog_items` не настроена явно
+- Нет rate limiting на POST `/api/ai/proposals/draft` и `/api/ai/b2b-quote/draft`
+- AI B2B Quick Quote: нет UI, нет `agent_action_log` записи, нет Telegram отправки
+- B2B Telegram: только clipboard copy, Telegram API не подключён, нет авто-отправки
+- `product_type: 'glass' | 'cutting'` не поддерживается в `b2bQuickQuoteTool` (Phase 2)
 
 ## Открытые вопросы
 
 - `ai/skills/`, `ai/workflows/`, `ai/memory/` — директории не созданы, запланированы для будущих этапов
 - Нет Anthropic binding — генерация детерминированная (`allowModelCall: false`)
 - Нет CRM-read integration — клиент заполняется вручную
+- RLS на `shower_catalog_items` не настроена явно
