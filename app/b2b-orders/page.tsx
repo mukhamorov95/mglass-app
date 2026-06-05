@@ -22,6 +22,21 @@ const STAGES = [
 
 type StageKey = typeof STAGES[number]['key']
 
+type DetailStageKey = 'cutting' | 'polishing' | 'drilling' | 'tempering' | 'packaging' | 'problem'
+
+type DetailStageState = {
+  status: 'done' | 'problem'
+  updated_at: string
+  updated_by: string
+  updated_by_email?: string
+}
+
+type DetailStages = {
+  [itemIndex: string]: {
+    [stage in DetailStageKey]?: DetailStageState
+  }
+}
+
 const STAGE_FILTERS = [
   { key: 'all_active',  label: 'Все активные', desc: '' },
   { key: 'cut',         label: 'Нарезка',      prev: 'printed'          as StageKey, curr: 'cut'           as StageKey },
@@ -47,6 +62,7 @@ type NotesData = {
   production_days?: number
   user_notes?: string
   stages?: Partial<Record<StageKey, string | null>>
+  detail_stages?: DetailStages
 }
 
 type Order = {
@@ -96,6 +112,53 @@ function getOrderNum(pn: NotesData): string {
   const notes = pn.user_notes ?? ''
   const m = notes.match(/[Зз]аказ\s*([\w\-]+)/)
   return m ? m[1] : ''
+}
+
+const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
+
+function isMirrorItem(item: Record<string, unknown>): boolean {
+  return MIRROR_RE.test(`${item.materialName ?? ''} ${item.category ?? ''}`)
+}
+
+function itemNeedsTempering(item: Record<string, unknown>): boolean {
+  return item.hasTempering === true && !isMirrorItem(item)
+}
+
+// Progress is tracked per position (itemIndex), not per piece count.
+// A position with quantity=13 counts as 1, not 13 — detail_stages is keyed by itemIndex.
+function getProductionProgress(order: Order) {
+  const items         = order.items as Record<string, unknown>[]
+  const detailStages  = (order.parsedNotes.detail_stages ?? {}) as DetailStages
+  const totalItems    = items.length
+  const temperingTotal = items.filter(i => itemNeedsTempering(i)).length
+
+  const counts = { cutting: 0, polishing: 0, drilling: 0, tempering: 0, packaging: 0, problem: 0 }
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const s = detailStages[String(idx)]
+    if (!s) continue
+    if (s.cutting?.status   === 'done')    counts.cutting++
+    if (s.polishing?.status === 'done')    counts.polishing++
+    if (s.drilling?.status  === 'done')    counts.drilling++
+    if (s.tempering?.status === 'done')    counts.tempering++
+    if (s.packaging?.status === 'done')    counts.packaging++
+    if (s.problem?.status   === 'problem') counts.problem++
+  }
+
+  const hasAnyMark = (counts.cutting + counts.polishing + counts.drilling +
+                      counts.tempering + counts.packaging + counts.problem) > 0
+
+  const stages = [
+    { key: 'cutting',   label: 'Резка',     done: counts.cutting,   total: totalItems },
+    { key: 'polishing', label: 'Полировка', done: counts.polishing, total: totalItems },
+    { key: 'drilling',  label: 'Сверление', done: counts.drilling,  total: totalItems },
+    ...(temperingTotal > 0
+      ? [{ key: 'tempering', label: 'Закалка', done: counts.tempering, total: temperingTotal }]
+      : []),
+    { key: 'packaging', label: 'Упаковка',  done: counts.packaging, total: totalItems },
+  ]
+
+  return { stages, problemCount: counts.problem, hasAnyMark }
 }
 
 function buildProductionMessage(order: Order): string {
@@ -566,6 +629,42 @@ export default function B2BOrdersPage() {
             🖨 Лист
           </a>
         </div>
+
+        {/* Прогресс по деталям */}
+        {(() => {
+          const prog = getProductionProgress(order)
+          return (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">
+                Прогресс по деталям
+              </p>
+              {!prog.hasAnyMark ? (
+                <p className="text-[11px] text-[#b0b0aa]">Отметок по деталям пока нет</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {prog.stages.map(s => {
+                    const pct = s.total > 0 ? s.done / s.total : 0
+                    const cls = pct === 1
+                      ? 'bg-green-50 text-green-700 border-green-200'
+                      : pct > 0
+                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-[#f4f4f0] text-[#9a9a95] border-[#e4e4e0]'
+                    return (
+                      <span key={s.key} className={`text-[10px] font-medium px-2 py-0.5 rounded-md border whitespace-nowrap ${cls}`}>
+                        {s.label} {s.done}/{s.total}
+                      </span>
+                    )
+                  })}
+                  {prog.problemCount > 0 && (
+                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-md border bg-red-50 text-red-700 border-red-200 whitespace-nowrap">
+                      ⚠️ Проблема {prog.problemCount}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {/* Даты */}
         <div className="flex gap-4 flex-wrap text-[11px]">
