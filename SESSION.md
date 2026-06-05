@@ -1,5 +1,5 @@
 ## Текущая задача
-Mirror proposal pricing fully aligned — ЗАКРЫТО. Следующий шаг — AI Proposal quality layer (skeleton-текст, cost breakdown, состав позиций).
+KP draft payload schema alignment — ЗАКРЫТО. Следующий шаг — cost breakdown propagation (costLines из calculators → quickCalc → KpCalcSummary → items).
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -81,15 +81,43 @@ SQL-верификация подтвердила:
 - `bce1224` — default lighting components включены в cost
 - `21db841` — mirror_light margin исключён, используется margin=40 везде
 
+### fix(ai): align KP draft payload with approval UI schema — ЗАКРЫТО (коммит `f370b7a`)
+
+Файл изменён: только `lib/ai-tools/generateKpDraftTool.ts`
+
+Что изменено:
+- **`KpDraftContent.items`** приведён к схеме `DraftItem`, которую ждёт Approval UI:
+  - `line_item`, `dimensions?`, `quantity`, `unit_price`, `total_price`, `note?`
+- **Bug fix:** продукт теперь всегда первая строка `items` — раньше при наличии service_lines продукт выпадал
+- **service_lines** добавляются после продукта (монтаж, доставка)
+- **`terms`** приведён к UI-схеме: `lead_time_days`, `payment_terms`, `warranty`, `validity_days`
+- **`price_summary`** приведён к UI-схеме: `subtotal`, `total`, `currency: 'RUB'`, `vat_included`
+- **`manager_message`** стал человекочитаемым: содержит изделие, размер, итоговую цену
+- Расчёт цены не менялся. `quickCalc.ts` не тронут. Safety invariants не изменялись.
+
+### Production QA — KP draft payload schema alignment — ЗАКРЫТО (5 июня 2026)
+
+| # | Тест | Параметры | Результат | Статус |
+|---|---|---|---|---|
+| 1 | Позиции mirror с подсветкой | Серебро, 4 мм, 800×600, hasLighting=true | "Зеркало с подсветкой", 800×600 мм, qty=1, price заполнен | ✅ |
+| 2 | Цена с подсветкой | — | 4 052 ₽ (не изменилась) | ✅ |
+| 3 | Mirror без подсветки | Осветлённое, 4 мм, 800×600 | "Зеркало", 4 685 ₽ | ✅ |
+| 4 | Terms отображаются | — | Срок 7–14 дн., оплата, гарантия 12 мес., действие 14 дн. | ✅ |
+| 5 | Copy draft | кнопка "Скопировать черновик" | текст без `undefined` | ✅ |
+| 6 | Shower proposal | любой shower | proposal создаётся, items отображаются | ✅ |
+| 7 | Safety flags | все proposals | approval_required=true, can_send=false, can_write_crm=false, can_create_order=false, model_call=false | ✅ |
+
+**Вывод:** Таблица позиций в Approval UI заполнена корректно. Copy draft работает без артефактов. Цены не изменились.
+
 ## Следующий шаг
 
-**AI Proposal quality layer:**
-1. Улучшить skeleton-текст КП — human-readable параметры изделия вместо boolean
-2. Передавать cost breakdown в `draft_payload.items`:
-   - стекло, профиль, LED, БП, рассеиватель, комплектующие, сборка
-   - монтаж / доставка отдельными строками
-3. Показывать полный состав позиции в items (сейчас — одна строка без детализации)
-4. После quality layer — B2B Quick Quote Skill или Follow-up Manager Skill
+**Cost breakdown propagation:**
+1. Прокинуть `costLines` из `calculateMirror` / `calculateShower` / `calculateLoft` через `quickCalc` → `QuickCalcResult`
+2. Добавить `costLines` в `QuickCalcToolCalculation`
+3. Передать `costLines` в `KpCalcSummary` через `toKpCalcSummary()`
+4. `generateKpDraftTool` строит `items` из `costLines` (стекло, профиль, LED, БП, рассеиватель, комплектующие, сборка)
+5. UI detail page показывает полный breakdown аккуратно
+6. После cost breakdown — B2B Quick Quote Skill или Follow-up Manager Skill
 
 ## Контекст
 
