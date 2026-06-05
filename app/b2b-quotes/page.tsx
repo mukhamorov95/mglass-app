@@ -114,6 +114,34 @@ function getPayAmount(q: Quote): number {
 
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 
+// ─── Telegram helpers ─────────────────────────────────────────────────────────
+
+function formatTelegramRub(value: number): string {
+  // Dot as thousands separator, no ₽ symbol — matches Telegram work text convention.
+  return Math.round(value).toLocaleString('ru-RU').replace(/[\s ]/g, '.') + ' руб'
+}
+
+function formatQuoteItemForTelegram(item: OrderItem): string {
+  const name   = (item.materialName || item.category || 'Позиция').trim()
+  const suffix = item.hasTempering ? ' закаленные' : ''
+  const qty    = item.quantity ?? 1
+  return `${name}${suffix} - ${qty} шт`
+}
+
+function buildTelegramWorkText(quote: Quote): string {
+  const quoteNumber = quote.custom_number?.trim() || `КП-${quote.id}`
+  const clientName  = quote.client_name?.trim() || 'Без клиента'
+  const finalPrice  = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+  const lines       = [quoteNumber, clientName]
+  if (quote.items.length > 0) {
+    for (const item of quote.items) lines.push(formatQuoteItemForTelegram(item))
+  } else {
+    lines.push('Расчёт B2B - см. PDF')
+  }
+  lines.push('', `🥝${formatTelegramRub(finalPrice)}`)
+  return lines.join('\n')
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function B2BQuotesPage() {
@@ -147,6 +175,21 @@ export default function B2BQuotesPage() {
   // Toast
   const [toast, setToast] = useState<string | null>(null)
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
+
+  // Telegram copy — clipboard only, no network request
+  // Future: replace copy-only flow with Telegram Bot API send after explicit confirmation.
+  const [copiedId, setCopiedId] = useState<number | null>(null)
+  async function copyTelegramText(q: Quote) {
+    const text = buildTelegramWorkText(q)
+    try {
+      await navigator.clipboard.writeText(text)
+      setCopiedId(q.id)
+      setTimeout(() => setCopiedId(null), 2000)
+      showToast('Текст для Telegram скопирован')
+    } catch {
+      window.prompt('Скопируйте текст для Telegram:', text)
+    }
+  }
 
   // ── Payment status ──────────────────────────────────────────────────────────
   const [payEditId, setPayEditId]   = useState<number | null>(null)
@@ -576,6 +619,13 @@ export default function B2BQuotesPage() {
                         className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
                         📄 PDF
                       </a>
+                      {/* ТГ — copy Telegram work text to clipboard */}
+                      <button
+                        onClick={() => copyTelegramText(quote)}
+                        title="Скопировать текст для Telegram"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        {copiedId === quote.id ? '✓' : 'ТГ'}
+                      </button>
                       {/* КП */}
                       <Link href={`/b2b-quotes/${quote.id}/kp`} target="_blank"
                         title="Открыть КП для печати"
