@@ -134,6 +134,22 @@ function itemWeightKg(item: OrderItem): number {
   return area > 0 && t > 0 ? area * t * 2.5 : 0
 }
 
+// ─── Route helpers ───────────────────────────────────────────────────────────
+
+const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
+
+function isMirrorItem(item: OrderItem): boolean {
+  return MIRROR_RE.test(`${item.materialName ?? ''} ${item.category ?? ''}`)
+}
+
+function itemNeedsTempering(item: OrderItem): boolean {
+  return item.hasTempering === true && !isMirrorItem(item)
+}
+
+function getVisibleStagesForItem(item: OrderItem) {
+  return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
+}
+
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 
 function ItemCard({
@@ -145,12 +161,14 @@ function ItemCard({
   selected: boolean
   onToggle: () => void
 }) {
-  const svcs  = Array.isArray(item.services) ? item.services.map(s => s.name) : []
-  const facet = item.hasFacet
+  const svcs          = Array.isArray(item.services) ? item.services.map(s => s.name) : []
+  const facet         = item.hasFacet
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
+  const needsTempering = itemNeedsTempering(item)
+  const visibleStages  = getVisibleStagesForItem(item)
   const tags = [
-    item.hasTempering ? 'Закалка' : null,
+    needsTempering ? 'Закалка' : null,
     facet,
     ...svcs,
   ].filter(Boolean) as string[]
@@ -241,7 +259,7 @@ function ItemCard({
       {/* Stages row */}
       <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-[#fafaf9]'}`}>
         <div className="flex gap-1.5 flex-wrap">
-          {ITEM_STAGES.map(stage => {
+          {visibleStages.map(stage => {
             const sd     = stages?.[stage.key]
             const isDone = sd?.status === 'done'
             return (
@@ -322,6 +340,17 @@ export default function MobileOrderWorkPage() {
   async function markStage(stageKey: DetailStageKey) {
     if (!order || !currentUser || selectedItems.size === 0 || saving) return
 
+    // For tempering: only apply to items that actually need it (not mirrors)
+    const effectiveItems = stageKey === 'tempering'
+      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
+      : [...selectedItems]
+
+    if (effectiveItems.length === 0) {
+      setToast({ msg: 'В выбранных позициях нет закалки', ok: false })
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+
     setSaving(true)
 
     // Parse existing notes object, preserving all fields (status, stages, etc.)
@@ -337,7 +366,7 @@ export default function MobileOrderWorkPage() {
     const now   = new Date().toISOString()
     const newStages: DetailStages = { ...existingStages }
 
-    for (const idx of selectedItems) {
+    for (const idx of effectiveItems) {
       const stageState: DetailStageState = {
         status:            stageKey === 'problem' ? 'problem' : 'done',
         updated_at:        now,
@@ -366,10 +395,14 @@ export default function MobileOrderWorkPage() {
       return
     }
 
-    const count = selectedItems.size
+    const count = effectiveItems.length
+    const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
+    const msg = partial
+      ? `Закалка: ${count} из ${selectedItems.size} поз.`
+      : `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     setSelectedItems(new Set())
-    setToast({ msg: `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`, ok: true })
+    setToast({ msg, ok: true })
     setTimeout(() => setToast(null), 3000)
     setSaving(false)
   }
@@ -410,7 +443,8 @@ export default function MobileOrderWorkPage() {
   const itemsWeight  = order.items.reduce((s, i) => s + itemWeightKg(i), 0)
   const totalArea    = itemsArea   > 0 ? itemsArea   : (order.total_area   ?? 0)
   const totalWeight  = itemsWeight > 0 ? itemsWeight : (order.total_weight ?? 0)
-  const allSelected  = order.items.length > 0 && selectedItems.size === order.items.length
+  const allSelected           = order.items.length > 0 && selectedItems.size === order.items.length
+  const selectedNeedTempering = [...selectedItems].some(idx => itemNeedsTempering(order.items[idx]))
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -554,7 +588,9 @@ export default function MobileOrderWorkPage() {
 
             <div className="space-y-2">
               {GROUP_ACTIONS.map(action => {
-                const isDisabled = selectedItems.size === 0 || saving
+                const isDisabled = action.key === 'tempering'
+                  ? (selectedItems.size === 0 || saving || !selectedNeedTempering)
+                  : (selectedItems.size === 0 || saving)
                 return (
                   <button
                     key={action.key}
