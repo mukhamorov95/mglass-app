@@ -1,5 +1,5 @@
 ## Текущая задача
-Безопасная остановка. B2B Quick Quote (Tool/Runtime/API) и B2B Telegram work text copy action — ЗАКРЫТЫ. Production QA пройден. Можно переключаться на другой блок.
+Безопасная остановка. Production Detail Tracker MVP — ЗАКРЫТ. Мобильная страница `/p/o/{id}` и сохранение этапов работают. Правило "у зеркал нет закалки" исправлено и подтверждено. Готов к следующему блоку.
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -282,9 +282,106 @@ model_call_executed: false
 
 ---
 
+## Production Detail Tracker MVP — ЗАКРЫТО (5 июня 2026)
+
+### Цепочка коммитов
+
+| Коммит | Описание |
+|---|---|
+| `de02012` | docs(production): add production detail tracker plan |
+| `08851b9` | feat(production): add B2B production sheet with QR |
+| `3bd51f7` | feat(production): add mobile order work page |
+| `02d3a0b` | feat(production): save detail stages and fix mobile totals |
+| `829d84e` | fix(production): hide tempering stage for mirrors |
+
+### Рабочий flow
+
+`/b2b-orders` → кнопка "🖨 Лист" → `/b2b-orders/{id}/production-sheet` → QR → `/p/o/{id}` → выбор позиций → отметка этапа → `b2b_orders.notes.detail_stages`
+
+### Архитектура (Variant A — без миграции)
+
+- Статусы деталей хранятся в `b2b_orders.notes.detail_stages` (TEXT-колонка, JSON)
+- Ключ позиции = `itemIndex` (строковый индекс из `b2b_orders.items` JSONB)
+- QR кодирует заказ целиком (`/p/o/{orderId}`), не отдельную деталь
+- Нет отдельной таблицы `b2b_order_details` — Variant A намеренно
+- `/b2b-production` считается устаревшей для нового production flow
+- Основной production flow строится вокруг `/b2b-orders`
+
+### Этапы
+
+| Ключ | Название | Ограничение |
+|---|---|---|
+| `cutting` | Резка | Все позиции |
+| `polishing` | Полировка | Все позиции |
+| `drilling` | Сверление | Все позиции (временно — признаков отверстий в данных нет) |
+| `tempering` | Закалка | Только `hasTempering=true` и не зеркало (`isMirrorItem=false`) |
+| `packaging` | Упаковка | Все позиции |
+| `problem` | Проблема | Все позиции |
+
+### Определение зеркала
+
+```typescript
+const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
+isMirrorItem(item)       → MIRROR_RE.test(`${materialName} ${category}`)
+itemNeedsTempering(item) → hasTempering === true && !isMirrorItem(item)
+```
+
+### Структура `notes.detail_stages`
+
+```json
+{
+  "status": "...",
+  "launched_at": "...",
+  "detail_stages": {
+    "0": {
+      "cutting": { "status": "done", "updated_at": "...", "updated_by": "uuid", "updated_by_email": "..." }
+    }
+  }
+}
+```
+
+Merge: `{ ...notesObj, detail_stages: newStages }` — `notes.status`, `notes.stages`, `notes.work_started_at` не затираются.
+
+### Итоги позиций (исправлено в `02d3a0b`)
+
+```typescript
+itemAreaM2(item)   → totalAreaNet || (w × h / 1_000_000 × qty)
+itemWeightKg(item) → totalWeight  || (area × thickness × 2.5)
+totalArea          → sum(itemAreaM2) сначала, fallback order.total_area
+totalWeight        → sum(itemWeightKg) сначала, fallback order.total_weight
+```
+
+### Production QA — ПРОЙДЕН (5 июня 2026)
+
+- Мобильная страница `/p/o/{id}`: позиции, итоги, выбор, отметка этапов — работает
+- After reload: статусы сохраняются
+- Правило "у зеркал нет закалки" — исправлено, подтверждено пользователем
+- Safety: SELECT при загрузке, UPDATE notes только по клику; нет Telegram, CRM, AI call, создания заказов
+
+### Known limitations
+
+- `itemIndex` нестабилен, если порядок `items` изменится
+- Нет отдельной таблицы `b2b_order_details` и истории событий
+- Нет ролей production
+- Нет прогресса этапов в `/b2b-orders`
+- Нет undo / отмены отметки
+- Нет optimistic locking при одновременной работе двух пользователей
+- `drilling` виден универсально — признаков отверстий/вырезов в данных пока нет
+
+---
+
 ## Следующий шаг
 
-Три независимых направления — выбрать одно при возвращении:
+Четыре независимых направления + рекомендованное production-продолжение:
+
+**E. Production Detail Tracker — прогресс этапов в /b2b-orders** ← рекомендуется следующим
+- Показывать под каждым заказом: Резка X/Y · Полировка X/Y · Закалка X/Y · Упаковка X/Y · Проблема N
+- `X` = позиций с `detail_stages[idx][stage].status === 'done'`
+- `Y` = всего позиций (для Закалки — только `hasTempering=true && !isMirrorItem`)
+- Только чтение `b2b_orders.notes.detail_stages` (SELECT only, нет migrations)
+- Изменяется только `app/b2b-orders/page.tsx`
+
+Остальные направления:
 
 **A. AI B2B Quick Quote Admin UI** (`/admin/ai-b2b-quote`)
 - Форма ввода параметров запроса
