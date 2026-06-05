@@ -1,5 +1,5 @@
 ## Текущая задача
-KP draft payload schema alignment — ЗАКРЫТО. Следующий шаг — cost breakdown propagation (costLines из calculators → quickCalc → KpCalcSummary → items).
+Printable B2C proposal page — ЗАКРЫТО. Этап остановлен. Следующий шаг — выбор между server-side PDF и cost breakdown propagation.
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -109,15 +109,65 @@ SQL-верификация подтвердила:
 
 **Вывод:** Таблица позиций в Approval UI заполнена корректно. Copy draft работает без артефактов. Цены не изменились.
 
+### feat(ai): add printable B2C proposal page — ЗАКРЫТО (коммит `84e5e90`)
+
+Что реализовано:
+- Создан `/admin/ai-proposals/[id]/print` — отдельная HTML print страница
+- Добавлена кнопка "Открыть КП для печати" на detail page (`[id]/page.tsx`)
+- Страница рендерит B2C КП: шапка, клиентский блок, таблица позиций, итоги, условия, footer
+- Backward compatibility: `normItem()` поддерживает старую схему `{name, price}` и новую `{line_item, unit_price, total_price}`
+- Подсказка про отключение Chrome headers/footers
+
+### fix(ai): align printable proposal layout with B2C reference — ЗАКРЫТО (коммит `ecb8edd`)
+
+Что изменено:
+- Компактный header: бренд, контакты, метаданные в одну строку
+- Убран тёмный card-стиль шапки
+
+### fix(ai): match printable proposal to M-Glass B2C reference — ЗАКРЫТО (коммит `c4be2db`)
+
+Что изменено (только `app/admin/ai-proposals/[id]/print/page.tsx`):
+- Убран `[M]` box-icon — заменён plain-текстом `M GLASS` (17px, weight 800)
+- Убран Georgia-шрифт полностью
+- Layout шапки переделан на HTML `<table>` (3 ячейки: бренд | контакты | мета)
+- Клиентский блок — HTML `<table>`
+- Блок итогов — HTML `<table>`
+- ИТОГО: plain жирная строка таблицы, без бежевого badge / background
+- Footer: только `"Благодарим за обращение!"` right-aligned
+- `@page { margin: 12mm 14mm }`
+
+### Production QA — Printable B2C proposal page — ЗАКРЫТО (5 июня 2026)
+
+| # | Тест | Результат | Статус |
+|---|---|---|---|
+| 1 | `/admin/ai-proposals/9/print` открывается | Страница загружается | ✅ |
+| 2 | Визуал | Подтверждён пользователем как похожий на рабочее КП M-Glass | ✅ |
+| 3 | Таблица позиций | Заполнена из `draft_payload.items` | ✅ |
+| 4 | Итог | Совпадает с `draft_payload.price_summary.total` | ✅ |
+| 5 | Print preview | Работает через Cmd+P / браузерный диалог | ✅ |
+| 6 | Статус proposal | Не меняется при открытии print page | ✅ |
+| 7 | Safety | GET-only, CRM не трогается, заказ не создаётся, model call не выполняется | ✅ |
+
+Цепочка коммитов print-блока:
+- `84e5e90` — создан print page + кнопка на detail page
+- `ecb8edd` — компактный header, первый round layout alignment
+- `c4be2db` — полный rewrite под M-Glass B2C reference
+
 ## Следующий шаг
 
-**Cost breakdown propagation:**
+Выбрать один из двух вариантов при возвращении:
+
+**A. Server-side PDF download route:**
+- `components/ProposalPDF.tsx` — PDF-компонент через `@react-pdf/renderer` (уже установлен)
+- `app/api/ai/proposals/[id]/pdf/route.ts` — route с `renderToBuffer`, `runtime='nodejs'`
+- Даст чистый PDF без Chrome headers/footers, скачиваемый напрямую
+
+**B. Cost breakdown propagation:**
 1. Прокинуть `costLines` из `calculateMirror` / `calculateShower` / `calculateLoft` через `quickCalc` → `QuickCalcResult`
 2. Добавить `costLines` в `QuickCalcToolCalculation`
 3. Передать `costLines` в `KpCalcSummary` через `toKpCalcSummary()`
 4. `generateKpDraftTool` строит `items` из `costLines` (стекло, профиль, LED, БП, рассеиватель, комплектующие, сборка)
-5. UI detail page показывает полный breakdown аккуратно
-6. После cost breakdown — B2B Quick Quote Skill или Follow-up Manager Skill
+5. Разделить `client_items` (для КП) и `internal_cost_breakdown` (только для менеджера)
 
 ## Контекст
 
@@ -127,12 +177,16 @@ SQL-верификация подтвердила:
 - `loadGlassMatrix()` (browser) не вызывается в `quickCalc.ts` — используется server-side `db()`
 - Shower и loft ветки не тронуты ни одним из коммитов
 - Supabase schema не менялась
+- `@react-pdf/renderer` v4.5.1 уже установлен — готов к server-side PDF route
 
 ## Текущие ограничения (known limitations)
 
+- Print page — HTML + браузерный Print / Save as PDF; нет `/api/ai/proposals/[id]/pdf`
+- Chrome headers/footers нужно отключать вручную перед сохранением PDF
+- Финальная pixel-perfect верстка может быть улучшена позже при необходимости
+- Internal cost breakdown пока не выведен в print page
 - UI пока не даёт выбирать LED/профиль/БП/рассеиватель вручную — используется стандартная комплектация
 - `draft_payload.items` не раскрывает полноценный состав позиции (только итоговая строка)
-- Skeleton-текст КП требует улучшения: boolean-поля не форматированы как читаемый текст
 - Нет редактирования черновика перед approve
 - Нет pagination в списке `/admin/ai-proposals`
 - Нет rate limiting на POST `/api/ai/proposals/draft`
