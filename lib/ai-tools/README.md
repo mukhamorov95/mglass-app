@@ -31,12 +31,28 @@
 | `quickCalcTool.ts` | `quickCalc` | read_only | materials, services, financial_settings | — | не требуется | ✅ Реализован | Быстрая оценка стоимости (mirror / shower / loft) |
 | `pricingRulesTool.ts` | `readPricingRules` | read_only | financial_settings | — | не требуется | ✅ Реализован | Структурированные правила маржи, скидок и расходов |
 | `generateKpDraftTool.ts` | `generateKpDraft` | draft | input payload only | — | **обязательно** | ✅ Реализован | Черновик КП для проверки менеджером (skeleton, без model call) |
+| `b2bQuickQuoteTool.ts` | `b2bQuickQuote` | read_only | partner_types + quickCalcTool | — | **обязательно** | ✅ Реализован | B2B быстрый расчёт (mirror/shower/loft) + партнёрская скидка, черновик ответа |
 
 ## Orchestrators (runtime combinators)
 
 | Файл | Runtime key | Режим | Вызывает | Approval | Статус | Назначение |
 |---|---|---|---|---|---|---|
 | `createCommercialProposalRuntime.ts` | `create-commercial-proposal` | draft | quickCalcTool → pricingRulesTool → generateKpDraftTool | **обязательно** | ✅ Реализован | Полный pipeline черновика КП — единый вход/выход для proposal-engineer-agent |
+
+## Safety profile b2bQuickQuoteTool
+
+```
+no_db_write:     true
+no_crm_write:    true
+no_client_send:  true    // ВСЕГДА — client_message_draft не отправляется автоматически
+no_order_create: true
+reads_supabase:  true    // partner_types — SELECT only; quickCalcTool читает materials/services/financial_settings
+model_call_executed: false
+approval_required:   true  // ВСЕГДА — черновик требует проверки менеджером
+```
+
+Phase 1: mirror/shower/loft через quickCalcTool. Партнёрская скидка применяется post-calculation.  
+Phase 2 (planned): glass/cutting через lib/b2bCalculator.ts.
 
 ## Планируемые tools (этап 2)
 
