@@ -111,10 +111,10 @@ export async function quickCalc(
   const { materials, services, settings, glassMatrix, lightingComponents } = await loadAll()
 
   if (type === 'mirror') {
-    // Select financial_settings based on hasLighting:
-    // mirror_light (margin=50) only when explicitly requesting a lit mirror;
-    // plain mirror (margin=40) for everything else — matches /calculator/mirror behaviour.
-    const mirrorSettingsType = options.hasLighting ? 'mirror_light' : 'mirror'
+    // Always use 'mirror' financial_settings (margin=40) regardless of hasLighting —
+    // matches /calculator/mirror which reads margin from owner_strategy.target_margin=40,
+    // not from mirror_light (margin=50). hasLighting affects components and label only.
+    const mirrorSettingsType = 'mirror'
     const cfg = pickSettings(settings, mirrorSettingsType)
 
     const allMirrorMats = materials.filter(m => m.category === 'зеркало')
