@@ -555,6 +555,18 @@ export default function B2BOrdersPage() {
           </div>
         </div>
 
+        {/* Быстрые действия */}
+        <div className="flex gap-2">
+          <a
+            href={`/b2b-orders/${order.id}/production-sheet`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7] transition-colors"
+          >
+            🖨 Лист
+          </a>
+        </div>
+
         {/* Даты */}
         <div className="flex gap-4 flex-wrap text-[11px]">
           <div>
