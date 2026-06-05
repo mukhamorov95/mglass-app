@@ -118,26 +118,75 @@ const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 
 function formatTelegramRub(value: number): string {
   // Dot as thousands separator, no ₽ symbol — matches Telegram work text convention.
-  return Math.round(value).toLocaleString('ru-RU').replace(/[\s ]/g, '.') + ' руб'
+  return Math.round(value).toLocaleString('ru-RU').replace(/\s/g, '.') + ' руб'
 }
 
-function formatQuoteItemForTelegram(item: OrderItem): string {
-  const name   = (item.materialName || item.category || 'Позиция').trim()
-  const suffix = item.hasTempering ? ' закаленные' : ''
-  const qty    = item.quantity ?? 1
-  return `${name}${suffix} - ${qty} шт`
+function formatTelegramClientName(name: string): string {
+  if (!name?.trim()) return 'Без клиента'
+  const n = name.trim()
+  if (/^m[\s-]?glass$/i.test(n) || /^мгласс$/i.test(n)) return 'МГЛАСС'
+  return n
+}
+
+function normalizeGlassGrade(materialName: string): string {
+  if (/м1|m1/i.test(materialName)) return 'м1'
+  if (/прозрачн/i.test(materialName)) return 'м1'
+  return materialName.trim().toLowerCase()
+}
+
+function normalizeMirrorType(materialName: string): string {
+  const n = materialName.trim().toLowerCase()
+  if (/серебр|silver|сильвер/.test(n)) return 'сильвер'
+  if (/осветл/.test(n)) return 'осветленное'
+  if (/crystal|кристал|vision|вижн/.test(n)) return 'кристал вижн'
+  // Strip leading "зеркало " prefix — we already add "Зеркало" in the label
+  return n.replace(/^зеркало\s+/i, '').trim() || n
+}
+
+type TgGroup = { label: string; qty: number }
+
+function buildTelegramPositionLines(quote: Quote): string[] {
+  if (quote.items.length === 0) return ['Расчёт B2B - см. PDF']
+
+  const groups = new Map<string, TgGroup>()
+
+  for (const item of quote.items) {
+    const qty       = item.quantity ?? 1
+    const matName   = (item.materialName || '').trim()
+    const isGlass   = item.category !== 'зеркало'
+    const thickness = item.thickness ?? 0
+    const thStr     = thickness > 0 ? `${thickness}мм` : ''
+
+    let key: string
+    let label: string
+
+    if (isGlass) {
+      const grade      = normalizeGlassGrade(matName)
+      const tempSuffix = (item.hasTempering ?? false) ? ' закаленные' : ''
+      key   = `glass|${matName}|${thickness}|${item.hasTempering ?? false}`
+      label = `Стекла ${thStr} ${grade}${tempSuffix}`.replace(/\s{2,}/g, ' ').trim()
+    } else {
+      // Mirror: derive shape from dimensions — equal width/height → round, otherwise rectangular
+      const mirrorType = normalizeMirrorType(matName)
+      const w     = item.width  ?? 0
+      const h     = item.height ?? 0
+      const shape = w > 0 && h > 0 && w === h ? 'круглое' : 'прямоугольное'
+      key   = `mirror|${matName}|${thickness}|${shape}`
+      label = `Зеркало ${shape} ${thStr} ${mirrorType}`.replace(/\s{2,}/g, ' ').trim()
+    }
+
+    const g = groups.get(key)
+    if (g) { g.qty += qty } else { groups.set(key, { label, qty }) }
+  }
+
+  return Array.from(groups.values()).map(g => `${g.label} - ${g.qty} шт`)
 }
 
 function buildTelegramWorkText(quote: Quote): string {
   const quoteNumber = quote.custom_number?.trim() || `КП-${quote.id}`
-  const clientName  = quote.client_name?.trim() || 'Без клиента'
+  const clientName  = formatTelegramClientName(quote.client_name ?? '')
   const finalPrice  = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
-  const lines       = [quoteNumber, clientName]
-  if (quote.items.length > 0) {
-    for (const item of quote.items) lines.push(formatQuoteItemForTelegram(item))
-  } else {
-    lines.push('Расчёт B2B - см. PDF')
-  }
+  const lines       = [quoteNumber, clientName, ...buildTelegramPositionLines(quote)]
   lines.push('', `🥝${formatTelegramRub(finalPrice)}`)
   return lines.join('\n')
 }
