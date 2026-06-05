@@ -1,5 +1,5 @@
 ## Текущая задача
-Безопасная остановка. Production Detail Tracker MVP — ЗАКРЫТ. Мобильная страница `/p/o/{id}` и сохранение этапов работают. Правило "у зеркал нет закалки" исправлено и подтверждено. Готов к следующему блоку.
+Ожидание следующей задачи. Весь Production Detail Tracker MVP закрыт (включая прогресс в /b2b-orders). Готов к A/B/C/D.
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -372,16 +372,9 @@ totalWeight        → sum(itemWeightKg) сначала, fallback order.total_we
 
 ## Следующий шаг
 
-Четыре независимых направления + рекомендованное production-продолжение:
+**E. Production Detail Tracker — прогресс этапов в /b2b-orders** — ЗАКРЫТО (коммит `834aa69`)
 
-**E. Production Detail Tracker — прогресс этапов в /b2b-orders** ← рекомендуется следующим
-- Показывать под каждым заказом: Резка X/Y · Полировка X/Y · Закалка X/Y · Упаковка X/Y · Проблема N
-- `X` = позиций с `detail_stages[idx][stage].status === 'done'`
-- `Y` = всего позиций (для Закалки — только `hasTempering=true && !isMirrorItem`)
-- Только чтение `b2b_orders.notes.detail_stages` (SELECT only, нет migrations)
-- Изменяется только `app/b2b-orders/page.tsx`
-
-Остальные направления:
+Четыре независимых направления:
 
 **A. AI B2B Quick Quote Admin UI** (`/admin/ai-b2b-quote`)
 - Форма ввода параметров запроса
