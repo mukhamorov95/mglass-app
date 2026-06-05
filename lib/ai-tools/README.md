@@ -38,6 +38,23 @@
 | Файл | Runtime key | Режим | Вызывает | Approval | Статус | Назначение |
 |---|---|---|---|---|---|---|
 | `createCommercialProposalRuntime.ts` | `create-commercial-proposal` | draft | quickCalcTool → pricingRulesTool → generateKpDraftTool | **обязательно** | ✅ Реализован | Полный pipeline черновика КП — единый вход/выход для proposal-engineer-agent |
+| `createB2BQuickQuoteRuntime.ts` | `b2b-quick-quote-draft` | draft | b2bQuickQuoteTool | **обязательно** | ✅ Реализован | B2B Quick Quote — нормализованный draft для b2b-sales-agent; agent_action_log на следующем этапе |
+
+## Safety profile createB2BQuickQuoteRuntime
+
+```
+no_db_write:            true   // runtime не пишет сам
+no_crm_write:           true
+no_client_send:         true   // draft_payload.client_message_draft не отправляется автоматически
+no_order_create:        true
+no_agent_action_log:    true   // на текущем этапе; следующий этап — API route сохраняет результат
+reads_supabase:         true   // через b2bQuickQuoteTool (partner_types + quickCalcTool)
+model_call_executed:    false
+approval_required:      true   // ВСЕГДА
+can_send_to_client:     false  // ВСЕГДА
+```
+
+output_snapshot и draft_payload готовы к сохранению в agent_action_log через API route (Commit 4).
 
 ## Safety profile b2bQuickQuoteTool
 

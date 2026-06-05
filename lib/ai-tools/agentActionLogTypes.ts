@@ -24,6 +24,7 @@ export type AgentActionType =
   | 'calculation_run'          // standalone runQuickCalcTool call
   | 'pricing_rules_read'       // standalone runPricingRulesTool call
   | 'kp_draft_generated'       // standalone runGenerateKpDraftTool call
+  | 'b2b_quote_draft_created'  // createB2BQuickQuoteRuntime completed ok (B2B Quick Quote skill)
   | 'runtime_completed'        // full orchestrator run recorded (all steps ok)
   | 'error'                    // failed action (tool error or validation failure)
   | (string & {})              // allow future action types without breaking existing code
