@@ -59,17 +59,18 @@ type Quote = {
   created_by: string | null
 }
 
-type QuoteStatus   = 'quote' | 'sent' | 'agreed' | 'rejected' | 'confirmed'
+type QuoteStatus   = 'quote' | 'sent' | 'agreed' | 'rejected' | 'confirmed' | 'pending_approval'
 type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<QuoteStatus, { label: string; bg: string; text: string }> = {
-  quote:     { label: 'Черновик',         bg: 'bg-[#f0f0ec]',  text: 'text-[#6b6b66]'  },
-  sent:      { label: 'В работе',          bg: 'bg-blue-50',    text: 'text-blue-700'    },
-  agreed:    { label: 'Согласовано',       bg: 'bg-emerald-50', text: 'text-emerald-700' },
-  rejected:  { label: 'Отказ',            bg: 'bg-red-50',     text: 'text-red-600'     },
-  confirmed: { label: 'Запущено в заказ', bg: 'bg-purple-50',  text: 'text-purple-700'  },
+  quote:            { label: 'Черновик',         bg: 'bg-[#f0f0ec]',  text: 'text-[#6b6b66]'  },
+  sent:             { label: 'В работе',          bg: 'bg-blue-50',    text: 'text-blue-700'    },
+  agreed:           { label: 'Согласовано',       bg: 'bg-emerald-50', text: 'text-emerald-700' },
+  rejected:         { label: 'Отказ',            bg: 'bg-red-50',     text: 'text-red-600'     },
+  confirmed:        { label: 'Запущено в заказ', bg: 'bg-purple-50',  text: 'text-purple-700'  },
+  pending_approval: { label: 'На согласовании',  bg: 'bg-amber-50',   text: 'text-amber-700'   },
 }
 
 const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: string; short: string }> = {
@@ -79,11 +80,12 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
 }
 
 const ALL_TABS: { key: QuoteStatus | 'all'; label: string }[] = [
-  { key: 'all',      label: 'Все' },
-  { key: 'quote',    label: 'Черновики' },
-  { key: 'sent',     label: 'В работе' },
-  { key: 'agreed',   label: 'Согласовано' },
-  { key: 'rejected', label: 'Отказ' },
+  { key: 'all',              label: 'Все' },
+  { key: 'quote',            label: 'Черновики' },
+  { key: 'sent',             label: 'В работе' },
+  { key: 'agreed',           label: 'Согласовано' },
+  { key: 'rejected',         label: 'Отказ' },
+  { key: 'pending_approval', label: 'На согласовании' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -96,10 +98,11 @@ function parseNotes(notes: string | null): Record<string, unknown> {
 
 function getStatus(q: Quote): QuoteStatus {
   const s = parseNotes(q.notes)?.status
-  if (s === 'confirmed') return 'confirmed'
-  if (s === 'agreed')    return 'agreed'
-  if (s === 'sent')      return 'sent'
-  if (s === 'rejected')  return 'rejected'
+  if (s === 'confirmed')        return 'confirmed'
+  if (s === 'agreed')           return 'agreed'
+  if (s === 'sent')             return 'sent'
+  if (s === 'rejected')         return 'rejected'
+  if (s === 'pending_approval') return 'pending_approval'
   return 'quote'
 }
 
@@ -201,6 +204,8 @@ export default function B2BQuotesPage() {
   const [expanded, setExpanded]       = useState<number | null>(null)
   const [tab, setTab]                 = useState<QuoteStatus | 'all'>('all')
   const [page, setPage]               = useState(1)
+  const [userRole, setUserRole]       = useState<string | null>(null)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // "В работу" — inline date picker
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
@@ -344,6 +349,25 @@ export default function B2BQuotesPage() {
     setWorkDateId(null)
   }
 
+  async function approveQuote(id: number) {
+    const q = quotes.find(q => q.id === id)
+    if (!q) return
+    const parsed = parseNotes(q.notes)
+    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
+    history.push({ from: 'pending_approval', to: 'agreed', date: new Date().toISOString(), comment: null })
+    const newNotes = JSON.stringify({
+      ...parsed,
+      status: 'agreed',
+      approved_at: new Date().toISOString(),
+      approved_by: currentUserId,
+      status_history: history,
+    })
+    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
+    if (error) { showToast('Ошибка при согласовании'); return }
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes } : x))
+    showToast('Согласовано ✓')
+  }
+
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadQuotes() {
     const sb = createClient()
@@ -356,6 +380,8 @@ export default function B2BQuotesPage() {
       .eq('id', user.id)
       .single()
 
+    setUserRole(profile?.role ?? null)
+    setCurrentUserId(user.id)
     const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
 
     let ordersQuery = sb
@@ -633,6 +659,18 @@ export default function B2BQuotesPage() {
                           className="text-[11px] font-medium px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors whitespace-nowrap">
                           В работу →
                         </button>
+                      )}
+                      {status === 'pending_approval' && (userRole === 'admin' || userRole === 'ceo') && (
+                        <button
+                          onClick={() => approveQuote(quote.id)}
+                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap">
+                          Согласовать ✓
+                        </button>
+                      )}
+                      {status === 'pending_approval' && userRole !== 'admin' && userRole !== 'ceo' && (
+                        <span className="text-[11px] px-2 py-1 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 whitespace-nowrap">
+                          Ожидает согласования
+                        </span>
                       )}
                       {status === 'sent' && (<>
                         <button onClick={() => requestStatusChange(quote.id, 'agreed')}
