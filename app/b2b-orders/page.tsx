@@ -71,6 +71,33 @@ const MATERIAL_STATUS_TRIGGERS_ORDERED = new Set<MaterialStatus>([
   'ordered', 'invoice_received', 'paid', 'shipped', 'received',
 ])
 
+type MatFull = MatLight & {
+  id: number
+  category?: string | null
+  supplier_id?: number | null
+}
+
+type MatReqGroup = {
+  materialKey: string
+  materialName: string
+  category: string
+  thickness: number
+  sheetWidth: number | null
+  sheetHeight: number | null
+  wastePercent: number
+  areaM2: number
+  weightKg: number
+  itemCount: number
+  orderNums: string[]
+  orderIds: number[]
+  unmatched: boolean
+  costPrice: number | null
+  requiredAreaWithWaste: number
+  sheetAreaM2: number | null
+  sheetsCount: number | null
+  estimatedCost: number | null
+}
+
 const PROGRESS_STAGES = STAGES.slice(0, 10) as readonly { key: StageKey; label: string }[]
 
 function calcProgress(stages: Partial<Record<StageKey, string | null>>): number {
@@ -258,7 +285,7 @@ export default function B2BOrdersPage() {
   const [savingNum, setSavingNum]           = useState(false)
 
   // Production extras
-  const [materials, setMaterials]     = useState<MatLight[]>([])
+  const [materials, setMaterials]     = useState<MatFull[]>([])
   const [managerCode, setManagerCode] = useState<number>(0)
   const [canDelete, setCanDelete]     = useState(false)
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
@@ -267,6 +294,8 @@ export default function B2BOrdersPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [toastMsg, setToastMsg]       = useState<string | null>(null)
   const [toastError, setToastError]   = useState(false)
+  const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
+  const [showMaterialReq, setShowMaterialReq]   = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -380,11 +409,11 @@ export default function B2BOrdersPage() {
       const [{ data }, { data: mats }] = await Promise.all([
         query,
         sb.from('b2b_materials')
-          .select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent')
+          .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id')
           .eq('active', true),
       ])
 
-      setMaterials((mats ?? []) as MatLight[])
+      setMaterials((mats ?? []) as MatFull[])
 
       const parsed = (data ?? []).map(o => ({
         ...o,
@@ -510,6 +539,117 @@ export default function B2BOrdersPage() {
       setToastMsg('Статус материала обновлён')
     }
     setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  function toggleOrderSelection(orderId: number) {
+    setSelectedOrderIds(prev => {
+      const next = new Set(prev)
+      next.has(orderId) ? next.delete(orderId) : next.add(orderId)
+      return next
+    })
+  }
+
+  function normalizeName(s: string): string {
+    return s.toLowerCase().trim().replace(/\s+/g, ' ')
+  }
+
+  function findMatchingMaterial(item: Record<string, unknown>, mats: MatFull[]): MatFull | null {
+    const itemMaterialId = item.materialId as number | undefined
+    const itemName       = normalizeName(String(item.materialName ?? ''))
+    const itemThickness  = Number(item.thickness ?? 0)
+    if (itemMaterialId) {
+      const byId = mats.find(m => m.id === itemMaterialId)
+      if (byId) return byId
+    }
+    const exact = mats.find(m => normalizeName(m.name) === itemName && m.thickness === itemThickness)
+    if (exact) return exact
+    return mats.find(m => {
+      const mn = normalizeName(m.name)
+      return m.thickness === itemThickness && (itemName.includes(mn) || mn.includes(itemName))
+    }) ?? null
+  }
+
+  function getItemAreaM2(item: Record<string, unknown>): number {
+    const net = Number(item.totalAreaNet ?? 0)
+    if (net > 0) return net
+    const w   = Number(item.width ?? 0)
+    const h   = Number(item.height ?? 0)
+    const qty = Number(item.quantity ?? 1)
+    return w * h / 1_000_000 * qty
+  }
+
+  function getItemWeightKg(item: Record<string, unknown>, areaM2: number): number {
+    const tw = Number(item.totalWeight ?? 0)
+    if (tw > 0) return tw
+    return areaM2 * Number(item.thickness ?? 0) * 2.5
+  }
+
+  function computeMaterialRequirement(
+    selectedIds: Set<number>,
+    allOrders: Order[],
+    mats: MatFull[],
+  ): MatReqGroup[] {
+    const groupMap = new Map<string, MatReqGroup>()
+
+    for (const order of allOrders) {
+      if (!selectedIds.has(order.id)) continue
+      const orderNum = order.custom_number ?? order.client_order_number ?? `#${order.id}`
+
+      for (const rawItem of order.items as Record<string, unknown>[]) {
+        const matched       = findMatchingMaterial(rawItem, mats)
+        const materialName  = String(rawItem.materialName ?? 'Неизвестный материал')
+        const category      = String(rawItem.category ?? '')
+        const thickness     = Number(rawItem.thickness ?? 0)
+        const areaM2        = getItemAreaM2(rawItem)
+        const weightKg      = getItemWeightKg(rawItem, areaM2)
+        const matKey        = matched ? String(matched.id) : `${materialName}|${category}|${thickness}`
+
+        if (!groupMap.has(matKey)) {
+          const waste       = matched?.waste_percent ?? (Number(rawItem.wastePercent ?? 0) || 10)
+          const sheetW      = matched?.sheet_width ?? null
+          const sheetH      = matched?.sheet_height ?? null
+          const sheetAreaM2 = sheetW && sheetH ? sheetW * sheetH / 1_000_000 : null
+          groupMap.set(matKey, {
+            materialKey: matKey,
+            materialName: matched ? matched.name : materialName,
+            category: matched?.category ?? category,
+            thickness: matched ? matched.thickness : thickness,
+            sheetWidth: sheetW,
+            sheetHeight: sheetH,
+            wastePercent: waste,
+            areaM2: 0, weightKg: 0, itemCount: 0,
+            orderNums: [], orderIds: [],
+            unmatched: !matched,
+            costPrice: matched?.cost_price ?? null,
+            requiredAreaWithWaste: 0,
+            sheetAreaM2,
+            sheetsCount: null,
+            estimatedCost: null,
+          })
+        }
+
+        const g = groupMap.get(matKey)!
+        g.areaM2    += areaM2
+        g.weightKg  += weightKg
+        g.itemCount++
+        if (!g.orderIds.includes(order.id)) {
+          g.orderIds.push(order.id)
+          g.orderNums.push(orderNum)
+        }
+      }
+    }
+
+    for (const g of groupMap.values()) {
+      g.requiredAreaWithWaste = g.areaM2 * (1 + g.wastePercent / 100)
+      if (g.sheetAreaM2 && g.sheetAreaM2 > 0) {
+        g.sheetsCount = Math.ceil(g.requiredAreaWithWaste / g.sheetAreaM2)
+        if (g.costPrice != null) g.estimatedCost = g.sheetsCount * g.sheetAreaM2 * g.costPrice
+      } else if (g.costPrice != null) {
+        g.estimatedCost = g.areaM2 * g.costPrice
+      }
+    }
+
+    return Array.from(groupMap.values()).sort((a, b) => a.materialName.localeCompare(b.materialName, 'ru'))
   }
 
   // Точный раскрой через оптимайзер для развёрнутого заказа
@@ -936,10 +1076,18 @@ export default function B2BOrdersPage() {
             {orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽
           </p>
         </div>
-        <Link href="/calculator/b2b"
-          className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
-          + Новый просчёт
-        </Link>
+        <div className="flex items-center gap-2">
+          <button
+            disabled={selectedOrderIds.size === 0}
+            onClick={() => setShowMaterialReq(true)}
+            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            📦 Материал{selectedOrderIds.size > 0 ? ` (${selectedOrderIds.size})` : ''}
+          </button>
+          <Link href="/calculator/b2b"
+            className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
+            + Новый просчёт
+          </Link>
+        </div>
       </div>
 
       {/* Панель фильтров */}
@@ -1014,6 +1162,12 @@ export default function B2BOrdersPage() {
                   <div key={order.id} className="px-4 py-2.5">
                     <div className="flex items-center justify-between gap-3 mb-2">
                       <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <input
+                          type="checkbox"
+                          checked={selectedOrderIds.has(order.id)}
+                          onChange={() => toggleOrderSelection(order.id)}
+                          className="flex-shrink-0 cursor-pointer accent-[#111110] w-3.5 h-3.5"
+                        />
                         {order.custom_number && (
                           <span className="text-[11px] font-bold text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded font-mono flex-shrink-0">
                             {order.custom_number}
@@ -1134,6 +1288,14 @@ export default function B2BOrdersPage() {
                               className="w-full px-4 py-2 flex items-center justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
                               onClick={() => setExpanded(isOpen ? null : order.id)}>
                               <div className="flex items-center gap-2 flex-1 min-w-0">
+                                <span onClick={e => e.stopPropagation()} className="flex-shrink-0 flex items-center">
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedOrderIds.has(order.id)}
+                                    onChange={() => toggleOrderSelection(order.id)}
+                                    className="cursor-pointer accent-[#111110] w-3.5 h-3.5"
+                                  />
+                                </span>
                                 <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{orderIdx + 1}</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
@@ -1208,6 +1370,126 @@ export default function B2BOrdersPage() {
           </div>
         )
       )}
+
+      {/* Material Requirement Modal */}
+      {showMaterialReq && (() => {
+        const groups    = computeMaterialRequirement(selectedOrderIds, orders, materials)
+        const totalArea = groups.reduce((s, g) => s + g.areaM2, 0)
+        const totalWeight = groups.reduce((s, g) => s + g.weightKg, 0)
+        const totalCost = groups.reduce((s, g) => s + (g.estimatedCost ?? 0), 0)
+        const hasCost   = groups.some(g => g.estimatedCost != null)
+        return (
+          <div
+            className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowMaterialReq(false)}>
+            <div
+              className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+              onClick={e => e.stopPropagation()}>
+
+              {/* Header */}
+              <div className="px-5 py-4 border-b border-[#e4e4e0] flex items-center justify-between flex-shrink-0">
+                <div>
+                  <h2 className="text-[16px] font-semibold text-[#111110]">Ориентировочная потребность материала</h2>
+                  <p className="text-[12px] text-[#9a9a95] mt-0.5">Выбрано заказов: {selectedOrderIds.size}</p>
+                </div>
+                <button onClick={() => setShowMaterialReq(false)} className="text-[#c4c4be] hover:text-[#111110] text-[20px] leading-none px-1">✕</button>
+              </div>
+
+              {groups.length === 0 ? (
+                <div className="p-10 text-center text-[13px] text-[#9a9a95]">В выбранных заказах нет позиций</div>
+              ) : (
+                <>
+                  {/* Totals */}
+                  <div className="px-5 py-3 bg-[#fafaf9] border-b border-[#e4e4e0] flex flex-wrap gap-6 flex-shrink-0 text-[12px]">
+                    <div>
+                      <span className="text-[#9a9a95]">Всего м²: </span>
+                      <span className="font-semibold">{totalArea.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}</span>
+                    </div>
+                    <div>
+                      <span className="text-[#9a9a95]">Всего кг: </span>
+                      <span className="font-semibold">{totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</span>
+                    </div>
+                    {hasCost && (
+                      <div>
+                        <span className="text-[#9a9a95]">Ориент. стоимость: </span>
+                        <span className="font-semibold text-[#111110]">{totalCost.toLocaleString('ru-RU')} ₽</span>
+                      </div>
+                    )}
+                    <div>
+                      <span className="text-[#9a9a95]">Групп материалов: </span>
+                      <span className="font-semibold">{groups.length}</span>
+                    </div>
+                  </div>
+
+                  {/* Warning */}
+                  <div className="mx-5 mt-3 mb-1 flex-shrink-0 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-start gap-2">
+                    <span className="flex-shrink-0 mt-0.5">⚠</span>
+                    <span>Расчёт ориентировочный: листы считаются по площади с учётом отхода, без точной раскладки деталей на листе. Для точного раскроя используйте раздел <b>B2B Раскрой</b>.</span>
+                  </div>
+
+                  {/* Table */}
+                  <div className="overflow-auto flex-1">
+                    <table className="w-full text-[12px]">
+                      <thead className="bg-[#fafaf9] border-b border-[#e4e4e0] sticky top-0 z-10">
+                        <tr>
+                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Материал</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Толщина</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Формат листа</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">м² деталей</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Отход %</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Вес кг</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость</th>
+                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[#f4f4f0]">
+                        {groups.map(g => (
+                          <tr key={g.materialKey} className={`hover:bg-[#fafaf9] ${g.unmatched ? 'bg-amber-50/30' : ''}`}>
+                            <td className="px-3 py-2.5 min-w-[160px]">
+                              <p className="font-medium text-[#111110]">{g.materialName}</p>
+                              {g.category && <p className="text-[10px] text-[#9a9a95]">{g.category}</p>}
+                              {g.unmatched && (
+                                <p className="text-[10px] text-amber-700 mt-0.5">⚠ Не найден в справочнике</p>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66] whitespace-nowrap">{g.thickness} мм</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[#6b6b66] whitespace-nowrap">
+                              {g.sheetWidth && g.sheetHeight ? `${g.sheetWidth}×${g.sheetHeight}` : '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110]">
+                              {g.areaM2.toLocaleString('ru-RU', { maximumFractionDigits: 3 })}
+                            </td>
+                            <td className="px-3 py-2.5 text-right text-[#6b6b66]">{g.wastePercent}%</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110]">
+                              {g.sheetsCount != null ? g.sheetsCount : '—'}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">
+                              {g.weightKg.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}
+                            </td>
+                            <td className="px-3 py-2.5 text-right font-mono whitespace-nowrap">
+                              {g.estimatedCost != null
+                                ? <span className="font-semibold text-[#111110]">{g.estimatedCost.toLocaleString('ru-RU')} ₽</span>
+                                : <span className="text-[#c4c4be]">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5 min-w-[120px]">
+                              <div className="flex flex-wrap gap-1">
+                                {g.orderNums.map((n, i) => (
+                                  <span key={i} className="text-[10px] font-mono bg-[#f0f0ec] px-1.5 py-px rounded whitespace-nowrap">{n}</span>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Toast */}
       {toastMsg && (
