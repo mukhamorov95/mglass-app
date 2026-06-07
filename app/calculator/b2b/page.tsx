@@ -93,6 +93,7 @@ export default function B2BCalculatorPage() {
   const [loading, setLoading]           = useState(true)
   const [saving, setSaving]       = useState(false)
   const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
+  const [savedAsPending, setSavedAsPending] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [managerEmail, setManagerEmail] = useState<string | null>(null)
   const [managerId, setManagerId]       = useState<string | null>(null)
@@ -584,13 +585,15 @@ export default function B2BCalculatorPage() {
     if (items.length === 0 || !selectedClient) return
     setSaving(true)
     setSaveError(null)
+    setSavedAsPending(false)
+    const approvalRequired = !isAdmin && discount > maxDiscount
     const sb = createClient()
     const t = totals!
     const avgMargin = items.length > 0
       ? Math.round(items.reduce((s, i) => s + i.margin, 0) / items.length)
       : 0
     const orderNotes = JSON.stringify({
-      status: 'quote',
+      status: approvalRequired ? 'pending_approval' : 'quote',
       quote_date: new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
@@ -639,6 +642,7 @@ export default function B2BCalculatorPage() {
         }
       }
       setSavedOrderId(saved.id)
+      setSavedAsPending(approvalRequired)
     }
     setSaving(false)
   }
@@ -1213,11 +1217,11 @@ export default function B2BCalculatorPage() {
                 </details>
 
                 {discount > maxDiscount && !isAdmin && (
-                  <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-[12px] text-red-700 font-medium">
-                    ⚠️ Скидка клиента {discount}% превышает ваш лимит {maxDiscount}%. Согласуйте с руководителем.
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
+                    ⚠️ Скидка клиента {discount}% превышает ваш лимит {maxDiscount}%. Просчёт можно сохранить — он попадёт на согласование руководителю.
                   </div>
                 )}
-                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || (!isAdmin && discount > maxDiscount)}
+                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0}
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
                 </button>
@@ -1231,7 +1235,9 @@ export default function B2BCalculatorPage() {
 
                 {savedOrderId && (
                   <div className="border border-emerald-200 bg-emerald-50 rounded-xl p-3 flex flex-col gap-2">
-                    <p className="text-[12px] font-semibold text-emerald-800">Расчёт сохранён ✓</p>
+                    <p className="text-[12px] font-semibold text-emerald-800">
+                      {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : 'Расчёт сохранён ✓'}
+                    </p>
                     <div className="flex gap-2">
                       <a
                         href={`/api/quotes/${savedOrderId}/pdf`}
