@@ -48,6 +48,29 @@ const STAGE_FILTERS = [
   { key: 'shipped',     label: 'Отгружены',    prev: 'shipped'          as StageKey, curr: null },
 ] as const
 
+type MaterialStatus =
+  | 'not_checked'
+  | 'need_to_buy'
+  | 'ordered'
+  | 'invoice_received'
+  | 'paid'
+  | 'shipped'
+  | 'received'
+
+const MATERIAL_STATUS_META: Record<MaterialStatus, { label: string; badge: string }> = {
+  not_checked:      { label: 'Не проверен',     badge: 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]' },
+  need_to_buy:      { label: 'Нужно купить',     badge: 'bg-red-50 text-red-700 border-red-200' },
+  ordered:          { label: 'Заказан',          badge: 'bg-blue-50 text-blue-700 border-blue-200' },
+  invoice_received: { label: 'Счёт получен',     badge: 'bg-amber-50 text-amber-700 border-amber-200' },
+  paid:             { label: 'Оплачен',          badge: 'bg-teal-50 text-teal-700 border-teal-200' },
+  shipped:          { label: 'В пути / забрать', badge: 'bg-purple-50 text-purple-700 border-purple-200' },
+  received:         { label: 'Принят',           badge: 'bg-green-50 text-green-700 border-green-200' },
+}
+
+const MATERIAL_STATUS_TRIGGERS_ORDERED = new Set<MaterialStatus>([
+  'ordered', 'invoice_received', 'paid', 'shipped', 'received',
+])
+
 const PROGRESS_STAGES = STAGES.slice(0, 10) as readonly { key: StageKey; label: string }[]
 
 function calcProgress(stages: Partial<Record<StageKey, string | null>>): number {
@@ -63,6 +86,9 @@ type NotesData = {
   user_notes?: string
   stages?: Partial<Record<StageKey, string | null>>
   detail_stages?: DetailStages
+  material_status?: MaterialStatus
+  material_status_updated_at?: string
+  material_status_updated_by?: string
 }
 
 type Order = {
@@ -238,6 +264,9 @@ export default function B2BOrdersPage() {
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
   const [msgOpenId, setMsgOpenId]     = useState<number | null>(null)
   const [copiedMsg, setCopiedMsg]     = useState(false)
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [toastMsg, setToastMsg]       = useState<string | null>(null)
+  const [toastError, setToastError]   = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -324,6 +353,7 @@ export default function B2BOrdersPage() {
       const sb = createClient()
       const { data: { user } } = await sb.auth.getUser()
       if (!user) { setLoading(false); return }
+      setCurrentUserId(user.id)
 
       const { data: profile } = await sb
         .from('users')
@@ -443,6 +473,43 @@ export default function B2BOrdersPage() {
     if (error) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
     }
+  }
+
+  async function updateMaterialStatus(orderId: number, newStatus: MaterialStatus) {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+
+    const now = new Date().toISOString()
+    const currentStages = { ...(order.parsedNotes.stages ?? {}) } as Partial<Record<StageKey, string | null>>
+
+    const newStages = MATERIAL_STATUS_TRIGGERS_ORDERED.has(newStatus)
+      ? { ...currentStages, material_ordered: currentStages.material_ordered ?? now.slice(0, 10) }
+      : currentStages
+
+    const newParsed: NotesData = {
+      ...order.parsedNotes,
+      stages: newStages,
+      material_status: newStatus,
+      material_status_updated_at: now,
+      material_status_updated_by: currentUserId ?? undefined,
+    }
+
+    setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
+
+    const { error } = await createClient()
+      .from('b2b_orders')
+      .update({ notes: JSON.stringify(newParsed) })
+      .eq('id', orderId)
+
+    if (error) {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
+      setToastError(true)
+      setToastMsg('Ошибка обновления статуса материала')
+    } else {
+      setToastError(false)
+      setToastMsg('Статус материала обновлён')
+    }
+    setTimeout(() => setToastMsg(null), 3000)
   }
 
   // Точный раскрой через оптимайзер для развёрнутого заказа
@@ -616,6 +683,37 @@ export default function B2BOrdersPage() {
               )
             })}
           </div>
+        </div>
+
+        {/* Статус материала */}
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Материал</p>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const status = (pn.material_status ?? 'not_checked') as MaterialStatus
+              const meta = MATERIAL_STATUS_META[status]
+              return (
+                <>
+                  <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap ${meta.badge}`}>
+                    {meta.label}
+                  </span>
+                  <select
+                    value={status}
+                    onChange={e => updateMaterialStatus(order.id, e.target.value as MaterialStatus)}
+                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 text-[#111110] outline-none focus:border-[#111110] bg-white cursor-pointer">
+                    {(Object.entries(MATERIAL_STATUS_META) as [MaterialStatus, { label: string; badge: string }][]).map(([val, m]) => (
+                      <option key={val} value={val}>{m.label}</option>
+                    ))}
+                  </select>
+                </>
+              )
+            })()}
+          </div>
+          {pn.material_status_updated_at && (
+            <p className="text-[10px] text-[#b0b0aa] mt-1">
+              Обновлено: {new Date(pn.material_status_updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+            </p>
+          )}
         </div>
 
         {/* Быстрые действия */}
@@ -1109,6 +1207,13 @@ export default function B2BOrdersPage() {
             })}
           </div>
         )
+      )}
+
+      {/* Toast */}
+      {toastMsg && (
+        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[12px] font-medium text-white transition-all ${toastError ? 'bg-red-600' : 'bg-[#111110]'}`}>
+          {toastMsg}
+        </div>
       )}
 
       {/* Диалог архивирования */}
