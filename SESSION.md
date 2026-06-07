@@ -1,5 +1,50 @@
 ## Текущая задача
-Ожидание следующей задачи. Весь Production Detail Tracker MVP закрыт (включая прогресс в /b2b-orders). Готов к A/B/C/D.
+Ожидание следующей задачи. B2B Discount Approval Flow закрыт (611cabe + 1fc2f42). Готов к A/B/C/D.
+
+## Что сделано (сессия 7 июня 2026)
+
+### B2B Discount Approval Flow — ЗАКРЫТО (7 июня 2026)
+
+**Цепочка:** manager save → `pending_approval` → `/b2b-quotes` «На согласовании» → admin/ceo «Согласовать» → `agreed`
+
+#### Коммиты
+
+| Коммит | Описание |
+|---|---|
+| `611cabe` | fix(b2b): allow managers to save quotes pending discount approval |
+| `1fc2f42` | feat(b2b): add discount approval flow for quotes |
+
+#### Что реализовано
+
+1. Кнопка «Сохранить просчёт» больше не блокируется при `discount > maxDiscount`.
+2. При превышении лимита просчёт сохраняется с `notes.status = 'pending_approval'`.
+3. В `/b2b-quotes` добавлена вкладка «На согласовании» (фильтр: `getStatus(q) === 'pending_approval'`).
+4. `pending_approval` отображается amber-бейджем «На согласовании» (добавлен в `STATUS_META`).
+5. Manager не может запустить `pending_approval` «В работу» — видит спэн «Ожидает согласования».
+6. Admin/ceo видит кнопку «Согласовать ✓».
+7. По клику admin/ceo выполняется `UPDATE b2b_orders SET notes = { ...oldNotes, status: 'agreed', approved_at: ISO, approved_by: userId }`.
+8. Старые поля `notes` не затираются. CRM, Telegram, создание заказов — не тронуты.
+9. `userRole` и `currentUserId` загружаются из `users` таблицы в `loadQuotes()` и хранятся в state.
+
+#### Зафиксированная бизнес-логика
+
+- Сохранение просчёта нельзя блокировать только из-за превышения скидки.
+- При превышении лимита просчёт сохраняется на согласование, не отклоняется.
+- Запуск «В работу» запрещён до согласования.
+- Согласование (переход в `agreed`) доступно только `admin` / `ceo`.
+
+#### Known limitations
+
+- Нет отдельного notification для руководителя при появлении `pending_approval`.
+- Нет отдельной истории approval events — только запись в `status_history` внутри `notes`.
+- RLS пока не разделяет manager/admin на уровне `b2b_orders` — это будущий hardening.
+- Нужно проверить/заполнить `users.max_discount_percent` для всех менеджеров: `null`-значение триггерит fallback 5%, что может быть слишком жёстким.
+
+#### Production QA — ПРОЙДЕНО (7 июня 2026)
+
+Подтверждено пользователем: «всё отлично, проверил — работает».
+
+---
 
 ## Что сделано (сессия 4–5 июня 2026)
 
@@ -371,6 +416,11 @@ totalWeight        → sum(itemWeightKg) сначала, fallback order.total_we
 ---
 
 ## Следующий шаг
+
+**Рекомендованный первый шаг:** Проверить и привести лимиты менеджеров в `/admin/users`:
+- `max_discount_percent` не должен быть `null` — иначе срабатывает fallback 5%
+- Fallback 5% может быть слишком жёстким для реальной работы
+- Целевой лимит нужно задать явно для каждого менеджера
 
 **E. Production Detail Tracker — прогресс этапов в /b2b-orders** — ЗАКРЫТО (коммит `834aa69`)
 
