@@ -1,7 +1,50 @@
 ## Текущая задача
-Ожидание следующей задачи. Готов к A/B/C/D (см. ниже).
+Ожидание следующей задачи. Следующий рекомендуемый шаг — Material Requirement by selected B2B orders (см. ниже).
 
 ## Что сделано (сессия 7 июня 2026)
+
+### Material Status Tracking in B2B Orders — ЗАКРЫТО (7 июня 2026, коммит `ccdde96`)
+
+**Цепочка:** `b2b_orders.notes.material_status` → блок «МАТЕРИАЛ» в `/b2b-orders` → при `ordered+` синхронизация `stages.material_ordered` → `/b2b-cutting` видит «Материал заказан»
+
+#### Что реализовано
+
+1. В `/b2b-orders` в раскрытой карточке заказа добавлен блок **«МАТЕРИАЛ»** с select и цветным бейджем.
+2. Статус материала хранится в `b2b_orders.notes.material_status` (JSONB, без миграции).
+3. Статусы:
+
+| Ключ | Лейбл | Цвет |
+|---|---|---|
+| `not_checked` | Не проверен | серый |
+| `need_to_buy` | Нужно купить | красный |
+| `ordered` | Заказан | синий |
+| `invoice_received` | Счёт получен | amber |
+| `paid` | Оплачен | teal |
+| `shipped` | В пути / забрать | purple |
+| `received` | Принят | green |
+
+4. При `ordered / invoice_received / paid / shipped / received` — автовыставление `notes.stages.material_ordered` (только если было пустым).
+5. Откат на `not_checked / need_to_buy` — `stages.material_ordered` **не очищается** (обратная совместимость с `/b2b-cutting`).
+6. Не создаются закупочные заявки. `purchase_orders` не тронуты. CRM/Telegram не вызываются.
+7. Изменён только `app/b2b-orders/page.tsx`.
+
+#### Текущая архитектура (первый MVP)
+
+- Первый MVP без миграции — статус в `notes.material_status`
+- `stages.material_ordered` сохранён для обратной совместимости
+- `purchase_orders` пока не связаны с `b2b_orders` (нет FK)
+- Procurement kanban `/admin/procurement` не тронут
+
+#### Known limitations
+
+- Нет FK-связи `purchase_orders ↔ b2b_orders`
+- Нет `material_requests` / `material_request_items`
+- Нет автоматической закупочной заявки
+- Нет полноценного склада, остатков и резервирования
+- `notes` JSONB обновляется целиком → last-write-wins при одновременной работе двух пользователей
+- Откат `material_status` на «Нужно купить» не очищает `stages.material_ordered`
+
+---
 
 ### fix(admin/users): явное отображение null лимитов скидок — ЗАКРЫТО (7 июня 2026, коммит `2580913`)
 
@@ -424,11 +467,17 @@ totalWeight        → sum(itemWeightKg) сначала, fallback order.total_we
 
 ## Следующий шаг
 
-Четыре независимых направления (выбери любое):
+**Рекомендуемый следующий: Material Requirement by selected B2B orders**
+
+- Выбрать несколько B2B-заказов (чекбоксы)
+- Нажать «Сформировать материал»
+- Сгруппировать потребность по `b2b_materials` (материал + толщина): м², листы, вес, стоимость
+- Показать, из каких заказов складывается потребность
+- Первый этап — без сохранения в БД (только расчёт на клиенте)
+
+**Другие независимые направления:**
 
 **E. Production Detail Tracker — прогресс этапов в /b2b-orders** — ЗАКРЫТО (коммит `834aa69`)
-
-Четыре независимых направления:
 
 **A. AI B2B Quick Quote Admin UI** (`/admin/ai-b2b-quote`)
 - Форма ввода параметров запроса
