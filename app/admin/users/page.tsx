@@ -15,7 +15,7 @@ type User = {
   see_all_orders: boolean
   can_view_all_deals: boolean
   amo_user_id: number | null
-  max_discount_percent: number
+  max_discount_percent: number | null
   can_delete: boolean
   permissions: UserPermissions
   created_at: string
@@ -178,6 +178,21 @@ export default function UsersPage() {
           <span><span className="font-semibold text-[#111110]">Доступ</span> — разделы меню которые видит менеджер</span>
         </div>
 
+        {/* Warning: managers with no discount limit set */}
+        {(() => {
+          const noLimit = users.filter(u => u.role !== 'admin' && u.max_discount_percent === null)
+          if (!noLimit.length) return null
+          return (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 mb-4 text-[12px] text-amber-800 flex items-start gap-2">
+              <span className="mt-0.5 flex-shrink-0">⚠️</span>
+              <span>
+                <span className="font-semibold">{noLimit.length} {noLimit.length === 1 ? 'менеджер' : 'менеджера/менеджеров'}</span> без лимита скидки: {noLimit.map(u => u.name ?? u.email).join(', ')}.
+                Без явного лимита используется fallback 5% — установите значение вручную.
+              </span>
+            </div>
+          )
+        })()}
+
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -287,11 +302,18 @@ export default function UsersPage() {
                         <td className="px-3 py-3 text-center">
                           {isAdmin ? (
                             <span className="text-[11px] text-[#9a9a95] font-mono">∞</span>
+                          ) : u.max_discount_percent === null ? (
+                            <button
+                              onClick={() => updateUser(u.id, { max_discount_percent: 10 })}
+                              className="text-[11px] px-2.5 py-1 rounded-full font-medium bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-200"
+                              title="Нажми чтобы задать лимит 10%">
+                              не задан
+                            </button>
                           ) : (
                             <div className="flex items-center justify-center gap-1">
                               <input
                                 type="number" min="0" max="100"
-                                value={u.max_discount_percent ?? 5}
+                                value={u.max_discount_percent}
                                 onChange={e => updateUser(u.id, { max_discount_percent: Math.max(0, Math.min(100, Number(e.target.value) || 0)) })}
                                 className="w-14 text-center border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]"
                               />
