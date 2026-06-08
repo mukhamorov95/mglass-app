@@ -167,6 +167,14 @@ function needsTintClarification(item: PurchaseItem): boolean {
   )
 }
 
+function usedAreaOnOrders(item: PurchaseItem): number | null {
+  return num(item.area_m2) ?? num(item.required_area_m2)
+}
+
+function hasTintClarificationIssues(items: unknown): boolean {
+  return safeItems(items).some(needsTintClarification)
+}
+
 function normalizeOrder(row: unknown): Order {
   const r = row as Record<string, unknown>
   const allowedStatuses: string[] = STATUSES.map(s => s.key)
@@ -209,6 +217,119 @@ function normalizeOrder(row: unknown): Order {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+function buildSupplierPdfRows(items: unknown) {
+  return safeItems(items).map((item, index) => {
+    const thicknessNum = num(item.thickness)
+    return {
+      index: index + 1,
+      material: text(item.material_name, 'Материал не указан'),
+      thickness: thicknessNum !== null ? `${thicknessNum} мм` : '—',
+      sheetFormat: sheetFormat(item),
+      sheets: formatSheets(item.sheets_count),
+      sheetArea: formatM2(sheetAreaTotal(item)),
+      sheetWeight: formatKg(sheetWeightTotal(item)),
+    }
+  })
+}
+
+function buildSupplierPdfHtml(items: unknown): string {
+  const rows = buildSupplierPdfRows(items)
+  const list = safeItems(items)
+
+  const totalSheets = list.reduce((sum, item) => {
+    const sheets = num(item.sheets_count)
+    return sum + (sheets !== null ? Math.ceil(sheets) : 0)
+  }, 0)
+  const totalArea   = list.reduce((sum, item) => sum + (sheetAreaTotal(item) ?? 0), 0)
+  const totalWeight = list.reduce((sum, item) => sum + (sheetWeightTotal(item) ?? 0), 0)
+
+  const today = new Date().toLocaleDateString('ru-RU')
+
+  const tableRows = rows.map(row =>
+    `<tr>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;">${row.index}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;font-weight:600;">${row.material}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;">${row.thickness}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;">${row.sheetFormat}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;font-weight:600;">${row.sheets}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;">${row.sheetArea}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #e4e4e0;">${row.sheetWeight}</td>
+    </tr>`
+  ).join('\n')
+
+  return `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Заявка на закупку — M-Glass</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; font-size: 13px; color: #111110; padding: 32px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+    .sub { font-size: 14px; color: #6b6b66; margin-bottom: 2px; }
+    .date { font-size: 12px; color: #9a9a95; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    thead tr { background: #f8f8f7; }
+    th { padding: 10px 12px; text-align: left; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #6b6b66; border-bottom: 2px solid #e4e4e0; }
+    .totals { margin-top: 16px; padding: 10px 14px; background: #f8f8f7; border-radius: 6px; font-weight: 600; }
+    .footer { margin-top: 40px; font-size: 11px; color: #9a9a95; }
+    @media print { body { padding: 16px; } }
+  </style>
+</head>
+<body>
+  <h1>Заявка на закупку материалов</h1>
+  <div class="sub">M-Glass</div>
+  <div class="date">Дата: ${today}</div>
+  <table>
+    <thead>
+      <tr>
+        <th>№</th>
+        <th>Материал</th>
+        <th>Толщина</th>
+        <th>Формат листа</th>
+        <th>Кол-во листов</th>
+        <th>Общая площадь листов</th>
+        <th>Общий вес</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${tableRows}
+    </tbody>
+  </table>
+  <div class="totals">Итого: ${totalSheets} листов · ${formatM2(totalArea)} · ${formatKg(totalWeight)}</div>
+  <div class="footer">Документ сформирован автоматически</div>
+</body>
+</html>`
+}
+
+function printSupplierPdf(items: unknown) {
+  const list = safeItems(items)
+
+  if (list.length === 0) {
+    alert('Нельзя сформировать PDF: материалы не указаны')
+    return
+  }
+
+  if (hasTintClarificationIssues(items)) {
+    alert('Нельзя сформировать PDF: есть материал с неоднозначной тонировкой. Уточните бронза или графит.')
+    return
+  }
+
+  const html = buildSupplierPdfHtml(items)
+  const win = window.open('', '_blank')
+
+  if (!win) {
+    alert('Не удалось открыть окно печати. Проверьте блокировку всплывающих окон.')
+    return
+  }
+
+  win.document.open()
+  win.document.write(html)
+  win.document.close()
+  win.focus()
+  win.print()
+}
+
 function MaterialItemsSummary({ items }: { items: unknown }) {
   const list = safeItems(items)
 
@@ -240,6 +361,11 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
     return sum + (cost ?? 0)
   }, 0)
 
+  const totalUsedArea = list.reduce((sum, item) => {
+    const area = usedAreaOnOrders(item)
+    return sum + (area ?? 0)
+  }, 0)
+
   return (
     <div className="mt-4 rounded-xl border border-[#e4e4e0] bg-white p-4">
       <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#9a9a95]">
@@ -247,13 +373,14 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
       </div>
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[760px] text-left text-xs">
+        <table className="w-full min-w-[980px] text-left text-xs">
           <thead>
             <tr className="border-b border-[#e4e4e0] text-[#9a9a95]">
               <th className="py-2 pr-3 font-semibold">Материал</th>
               <th className="py-2 pr-3 font-semibold">Толщина</th>
               <th className="py-2 pr-3 font-semibold">Формат листа</th>
               <th className="py-2 pr-3 font-semibold">К закупке</th>
+              <th className="py-2 pr-3 font-semibold">Используется на заказы</th>
               <th className="py-2 pr-3 font-semibold">Площадь листов</th>
               <th className="py-2 pr-3 font-semibold">Вес листов</th>
               <th className="py-2 pr-3 font-semibold">Стоимость листов</th>
@@ -294,6 +421,9 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
                   <td className="py-3 pr-3 align-top font-semibold">
                     {formatSheets(item.sheets_count)}
                   </td>
+                  <td className="py-3 pr-3 align-top text-[#6b6b66]">
+                    {formatM2(usedAreaOnOrders(item))}
+                  </td>
                   <td className="py-3 pr-3 align-top">
                     {formatM2(sheetAreaTotal(item))}
                   </td>
@@ -324,7 +454,8 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
       </div>
 
       <div className="mt-3 rounded-lg bg-[#fafaf8] px-3 py-2 text-sm font-semibold text-[#111110]">
-        Итого: {totalSheets} листов · {formatM2(totalArea)} · {formatKg(totalWeight)} · {formatMoney(totalCost)}
+        <div>Итого: {totalSheets} листов · {formatM2(totalArea)} · {formatKg(totalWeight)} · {formatMoney(totalCost)}</div>
+        <div className="mt-1 text-[12px] font-medium text-[#6b6b66]">Используется на заказы: {formatM2(totalUsedArea)}</div>
       </div>
     </div>
   )
@@ -495,7 +626,7 @@ export default function ProcurementPage() {
       {/* Detail modal */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-3xl shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-semibold text-[#111110]">{detail.supplier_name}</h2>
@@ -519,6 +650,7 @@ export default function ProcurementPage() {
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={() => openEdit(detail)} className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
+              <button type="button" onClick={() => printSupplierPdf(detail.items)} className="flex-1 bg-[#f0f0ec] text-[#111110] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Сформировать PDF поставщику</button>
               <button onClick={() => deleteOrder(detail.id)} className="px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 rounded-lg">Удалить</button>
               <button onClick={() => setDetail(null)} className="px-4 py-2 text-[13px] text-[#6b6b66] hover:bg-[#f0f0ec] rounded-lg">Закрыть</button>
             </div>
