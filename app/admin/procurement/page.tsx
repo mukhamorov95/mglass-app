@@ -15,6 +15,23 @@ const STATUSES = [
 
 type Status = typeof STATUSES[number]['key']
 
+type PurchaseItem = {
+  material_name: string
+  category: string | null
+  thickness: number | null
+  sheet_width: number | null
+  sheet_height: number | null
+  area_m2: number
+  required_area_m2: number
+  sheets_count: number | null
+  weight_kg: number
+  estimated_cost: number | null
+  waste_percent: number
+  order_ids: number[]
+  order_refs: string[]
+  unmatched: boolean
+}
+
 type Order = {
   id: number
   supplier_name: string
@@ -29,6 +46,7 @@ type Order = {
   issue_notes: string | null
   comment: string | null
   order_refs: string[] | null
+  items: PurchaseItem[] | null
   created_at: string
 }
 
@@ -184,7 +202,7 @@ export default function ProcurementPage() {
       {/* Detail modal */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-semibold text-[#111110]">{detail.supplier_name}</h2>
@@ -205,6 +223,77 @@ export default function ProcurementPage() {
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
+
+            {/* Материалы к закупке */}
+            {(() => {
+              const purchaseItems = detail.items ?? []
+              return (
+                <div className="mt-4">
+                  <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Материалы к закупке</p>
+                  {purchaseItems.length === 0 ? (
+                    <p className="text-[12px] text-[#b0b0aa]">Материалы не указаны</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-[#e4e4e0]">
+                      <table className="w-full text-[11px]">
+                        <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+                          <tr>
+                            <th className="text-left px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Материал</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">Толщина</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">Формат</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">м²</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Вес</th>
+                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость</th>
+                            <th className="text-left px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#f4f4f0]">
+                          {purchaseItems.map((item, idx) => (
+                            <tr key={idx} className={`hover:bg-[#fafaf9] ${item.unmatched ? 'bg-amber-50/40' : ''}`}>
+                              <td className="px-2.5 py-2 min-w-[120px]">
+                                <p className="font-medium text-[#111110]">{item.material_name}</p>
+                                {item.category && <p className="text-[9px] text-[#9a9a95]">{item.category}</p>}
+                                {item.unmatched && (
+                                  <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Не найден в справочнике</span>
+                                )}
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                {item.thickness != null ? `${item.thickness} мм` : '—'}
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                {item.sheet_width && item.sheet_height ? `${item.sheet_width}×${item.sheet_height}` : '—'}
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                                {item.area_m2.toFixed(2)}
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110]">
+                                {item.sheets_count != null ? item.sheets_count : '—'}
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                {item.weight_kg.toFixed(1)} кг
+                              </td>
+                              <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
+                                {item.estimated_cost != null
+                                  ? <span className="font-semibold text-[#111110]">{item.estimated_cost.toLocaleString('ru-RU')} ₽</span>
+                                  : <span className="text-[#c4c4be]">—</span>}
+                              </td>
+                              <td className="px-2.5 py-2 min-w-[80px]">
+                                <div className="flex flex-wrap gap-1">
+                                  {(item.order_refs ?? []).map((ref, i) => (
+                                    <span key={i} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-px rounded whitespace-nowrap">{ref}</span>
+                                  ))}
+                                </div>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+
             <div className="flex gap-2 mt-5">
               <button onClick={() => openEdit(detail)} className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
               <button onClick={() => deleteOrder(detail.id)} className="px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 rounded-lg">Удалить</button>
