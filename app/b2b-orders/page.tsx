@@ -296,6 +296,7 @@ export default function B2BOrdersPage() {
   const [toastError, setToastError]   = useState(false)
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
   const [showMaterialReq, setShowMaterialReq]   = useState(false)
+  const [creatingPurchaseOrder, setCreatingPurchaseOrder] = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -650,6 +651,73 @@ export default function B2BOrdersPage() {
     }
 
     return Array.from(groupMap.values()).sort((a, b) => a.materialName.localeCompare(b.materialName, 'ru'))
+  }
+
+  function buildPurchaseOrderPayload(groups: MatReqGroup[]) {
+    const knownCostGroups = groups.filter(g => g.estimatedCost != null)
+    const totalKnownCost  = knownCostGroups.reduce((s, g) => s + (g.estimatedCost ?? 0), 0)
+    const hasPartialCost  = knownCostGroups.length < groups.length
+    const allOrderRefs    = Array.from(new Set(groups.flatMap(g => g.orderNums)))
+
+    const items = groups.map(g => ({
+      material_name:    g.materialName,
+      category:         g.category ?? null,
+      thickness:        g.thickness,
+      sheet_width:      g.sheetWidth,
+      sheet_height:     g.sheetHeight,
+      area_m2:          g.areaM2,
+      required_area_m2: g.requiredAreaWithWaste,
+      sheets_count:     g.sheetsCount,
+      weight_kg:        g.weightKg,
+      estimated_cost:   g.estimatedCost,
+      waste_percent:    g.wastePercent,
+      order_ids:        g.orderIds,
+      order_refs:       g.orderNums,
+      unmatched:        g.unmatched,
+    }))
+
+    let comment = 'Создано из ориентировочной потребности материала'
+    if (hasPartialCost) comment += '. Стоимость частичная: есть материалы без цены/справочника'
+
+    return {
+      supplier_name:  'Не выбран',
+      invoice_number: null,
+      invoice_date:   null,
+      amount:         knownCostGroups.length > 0 ? totalKnownCost : null,
+      status:         'invoice_received',
+      order_refs:     allOrderRefs,
+      b2b_order_ids:  [...selectedOrderIds],
+      items,
+      created_by:     currentUserId,
+      comment,
+    }
+  }
+
+  async function handleCreatePurchaseOrder(groups: MatReqGroup[]) {
+    if (!window.confirm('Создать закупочную заявку для выбранных заказов?')) return
+    setCreatingPurchaseOrder(true)
+    try {
+      const sb = createClient()
+      const payload = buildPurchaseOrderPayload(groups)
+      const { data, error } = await sb
+        .from('purchase_orders')
+        .insert(payload)
+        .select('id')
+        .single()
+      if (error) {
+        setToastError(true)
+        setToastMsg(`Ошибка создания закупки: ${error.message}`)
+      } else {
+        setToastError(false)
+        setToastMsg(`Закупочная заявка создана${data?.id ? ` (ID ${data.id})` : ''}`)
+      }
+    } catch {
+      setToastError(true)
+      setToastMsg('Ошибка создания закупки')
+    } finally {
+      setCreatingPurchaseOrder(false)
+    }
+    setTimeout(() => setToastMsg(null), 4000)
   }
 
   // Точный раскрой через оптимайзер для развёрнутого заказа
@@ -1483,6 +1551,21 @@ export default function B2BOrdersPage() {
                         ))}
                       </tbody>
                     </table>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="px-5 py-3 border-t border-[#e4e4e0] flex items-center justify-between flex-shrink-0">
+                    <button
+                      onClick={() => setShowMaterialReq(false)}
+                      className="text-[12px] text-[#9a9a95] hover:text-[#111110] transition-colors px-3 py-1.5">
+                      Закрыть
+                    </button>
+                    <button
+                      onClick={() => handleCreatePurchaseOrder(groups)}
+                      disabled={creatingPurchaseOrder || groups.length === 0 || selectedOrderIds.size === 0}
+                      className="text-[12px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      {creatingPurchaseOrder ? 'Создаём...' : '📋 Передать в закупку'}
+                    </button>
                   </div>
                 </>
               )}
