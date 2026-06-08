@@ -15,23 +15,6 @@ const STATUSES = [
 
 type Status = typeof STATUSES[number]['key']
 
-type PurchaseItem = {
-  material_name: string
-  category: string | null
-  thickness: number | null
-  sheet_width: number | null
-  sheet_height: number | null
-  area_m2: number
-  required_area_m2: number
-  sheets_count: number | null
-  weight_kg: number
-  estimated_cost: number | null
-  waste_percent: number
-  order_ids: number[]
-  order_refs: string[]
-  unmatched: boolean
-}
-
 type Order = {
   id: number
   supplier_name: string
@@ -46,7 +29,6 @@ type Order = {
   issue_notes: string | null
   comment: string | null
   order_refs: string[] | null
-  items?: PurchaseItem[] | null
   created_at: string
 }
 
@@ -55,23 +37,6 @@ const EMPTY_FORM = {
   amount: '', approved_by: '', payment_date: '', payment_amount: '',
   pickup_by: '', pickup_date: '', issue_notes: '', comment: '', order_refs: '',
   status: 'invoice_received' as Status,
-}
-
-function getPurchaseItems(order: Order | null): PurchaseItem[] {
-  if (!order || !Array.isArray(order.items)) return []
-  return order.items
-}
-
-function formatMaybeNumber(value: unknown, digits = 2): string {
-  if (value == null) return '—'
-  const n = Number(value)
-  return Number.isFinite(n) ? n.toFixed(digits) : '—'
-}
-
-function formatMoney(value: unknown): string {
-  if (value == null) return '—'
-  const n = Number(value)
-  return Number.isFinite(n) ? `${n.toLocaleString('ru-RU')} ₽` : '—'
 }
 
 export default function ProcurementPage() {
@@ -240,80 +205,6 @@ export default function ProcurementPage() {
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
-
-            {/* Материалы к закупке */}
-            {(() => {
-              const purchaseItems = getPurchaseItems(detail)
-              return (
-                <div className="mt-4">
-                  <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Материалы к закупке</p>
-                  {purchaseItems.length === 0 ? (
-                    <p className="text-[12px] text-[#b0b0aa]">Материалы не указаны</p>
-                  ) : (
-                    <div className="overflow-x-auto rounded-lg border border-[#e4e4e0]">
-                      <table className="w-full text-[11px]">
-                        <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
-                          <tr>
-                            <th className="text-left px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Материал</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">Толщина</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">Формат</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">м²</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Вес</th>
-                            <th className="text-right px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость</th>
-                            <th className="text-left px-2.5 py-2 text-[9px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y divide-[#f4f4f0]">
-                          {purchaseItems.map((item, idx) => {
-                            const refs = Array.isArray(item.order_refs) ? item.order_refs : []
-                            const isUnmatched = Boolean(item.unmatched)
-                            return (
-                              <tr key={idx} className={`hover:bg-[#fafaf9] ${isUnmatched ? 'bg-amber-50/40' : ''}`}>
-                                <td className="px-2.5 py-2 min-w-[120px]">
-                                  <p className="font-medium text-[#111110]">{String(item.material_name ?? '—')}</p>
-                                  {item.category && <p className="text-[9px] text-[#9a9a95]">{item.category}</p>}
-                                  {isUnmatched && (
-                                    <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Не найден в справочнике</span>
-                                  )}
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                  {item.thickness != null ? `${item.thickness} мм` : '—'}
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                  {item.sheet_width && item.sheet_height ? `${item.sheet_width}×${item.sheet_height}` : '—'}
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
-                                  {formatMaybeNumber(item.area_m2, 2)}
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110]">
-                                  {item.sheets_count != null && Number.isFinite(Number(item.sheets_count)) ? item.sheets_count : '—'}
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                  {formatMaybeNumber(item.weight_kg, 1)} кг
-                                </td>
-                                <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
-                                  {item.estimated_cost != null
-                                    ? <span className="font-semibold text-[#111110]">{formatMoney(item.estimated_cost)}</span>
-                                    : <span className="text-[#c4c4be]">—</span>}
-                                </td>
-                                <td className="px-2.5 py-2 min-w-[80px]">
-                                  <div className="flex flex-wrap gap-1">
-                                    {refs.map((ref, i) => (
-                                      <span key={i} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-px rounded whitespace-nowrap">{ref}</span>
-                                    ))}
-                                  </div>
-                                </td>
-                              </tr>
-                            )
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </div>
-              )
-            })()}
 
             <div className="flex gap-2 mt-5">
               <button onClick={() => openEdit(detail)} className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
