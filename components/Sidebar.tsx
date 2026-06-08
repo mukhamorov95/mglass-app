@@ -149,6 +149,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
   { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
+  { href: '/admin/procurement',      label: 'Закупки',         icon: '🗂️' },
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
@@ -236,8 +237,9 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
   { groupLabel: 'Закупки' },
-  { href: '/admin/suppliers',         label: 'Поставщики',    icon: '🏭', indent: true },
-  { href: '/admin/suppliers/eleganz', label: 'Прайс Eleganz', icon: '💡', indent: true },
+  { href: '/admin/procurement',       label: 'Канбан закупок', icon: '🗂️', indent: true },
+  { href: '/admin/suppliers',         label: 'Поставщики',     icon: '🏭', indent: true },
+  { href: '/admin/suppliers/eleganz', label: 'Прайс Eleganz',  icon: '💡', indent: true },
   { groupLabel: 'Производство' },
   { href: '/admin/materials', label: 'Материалы', icon: '📦', indent: true },
   { href: '/admin/services',  label: 'Услуги',    icon: '🔧', indent: true },
@@ -287,7 +289,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials'])) open.push('b2b')
     if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
   }
@@ -313,7 +315,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }

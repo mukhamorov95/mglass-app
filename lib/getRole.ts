@@ -176,6 +176,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/b2b-development',
     '/admin/org',
     '/admin/users',
+    '/admin/procurement',
     '/vladislav',
     '/b2b-analytics',
     '/marketing',
