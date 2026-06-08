@@ -29,6 +29,7 @@ type Order = {
   issue_notes: string | null
   comment: string | null
   order_refs: string[]
+  items_count: number
   created_at: string
 }
 
@@ -102,6 +103,7 @@ function normalizeOrder(row: unknown): Order {
     issue_notes:    safeNullableString(r?.issue_notes),
     comment:        safeNullableString(r?.comment),
     order_refs:     safeArrayOfStrings(r?.order_refs),
+    items_count:    Array.isArray(r?.items) ? r.items.length : 0,
     created_at:     safeDateString(r?.created_at) ?? new Date().toISOString(),
   }
 }
@@ -291,6 +293,7 @@ export default function ProcurementPage() {
               {detail.pickup_by && <Row label="Забирает" value={detail.pickup_by} />}
               {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
               {detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
+              {detail.items_count > 0 && <Row label="Материалы" value={`${detail.items_count} позиц.`} />}
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
