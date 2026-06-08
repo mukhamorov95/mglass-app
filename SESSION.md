@@ -1,5 +1,75 @@
 ## Текущая задача
-Ожидание следующей задачи. Следующий рекомендуемый шаг — Material Requirement by selected B2B orders (см. ниже).
+Ожидание следующей задачи. Следующий рекомендуемый шаг — Procurement Page / Material Requests для Веры (см. ниже).
+
+## Что сделано (сессия 8 июня 2026)
+
+### Estimated Material Requirement in B2B Orders — ЗАКРЫТО (8 июня 2026)
+
+**Коммиты:** `ee99a36`, `41ff95a`
+
+**Файл:** только `app/b2b-orders/page.tsx`
+
+#### Что реализовано
+
+- В `/b2b-orders` можно выбрать несколько заказов чекбоксами
+- Кнопка **«📦 Материал (N)»** открывает модалку «Ориентировочная потребность материала»
+- Расчёт группирует позиции по `materialName + thickness` из `b2b_orders.items`
+- Модалка показывает: м² деталей, вес кг, листов к закупке, стоимость листов, заказы
+- Расчёт выполняется на клиенте — без записи в БД, без сетевых запросов
+- Warning поясняет: расчёт по площади с `waste_percent`, без точной раскладки деталей
+- Warning поясняет: стоимость считается по целым листам (минимум 1 лист)
+- Для точного раскроя указывается ссылка на `/b2b-cutting`
+
+#### Архитектура
+
+- Листы: `Math.ceil(areaNet * (1 + waste/100) / sheetArea)` — площадной метод
+- Стоимость: `sheetsCount * sheetAreaM2 * costPrice`
+- Материалы берутся из `b2b_materials` (SELECT, загружены при загрузке страницы)
+- Если материал не найден в справочнике — флаг `unmatched` + предупреждение в таблице
+
+#### Known limitations
+
+- Не использует `runCuttingOptimizer` — площадная оценка, погрешность 5–15%
+- Нет сохранения результата в БД (нет `material_requests` / `material_request_items`)
+- Нет закупочной заявки для Веры
+- Нет связи `purchase_orders ↔ b2b_orders`
+- Нет склада, остатков, резервирования
+
+---
+
+### Cutting Oversized / Unplaced Safety Fix — ЗАКРЫТО (8 июня 2026)
+
+**Коммиты:** `7e321f3` (алгоритм), `8f19db9` (UI)
+
+**Файлы:** `lib/cuttingOptimizer.ts`, `app/b2b-cutting/page.tsx`
+
+#### Проблема (исправлена)
+
+В `packWithOrder` и `packStrip`: если деталь не влезала на лист даже после открытия нового — она молча пропадала (`continue` без сохранения).
+
+#### Что изменено в `lib/cuttingOptimizer.ts`
+
+- `packWithOrder` → `{ sheets, unplaced }`: oversized деталь добавляется в `unplaced[]` вместо silent `continue`
+- `packStrip` → `{ sheets, unplaced }`: внутренняя переменная переименована в `remaining` (устранён variable shadowing), oversized → `unplaced.push(...todo, ...leftover)`
+- `optimizePack` → `{ sheets, unplaced, strategiesChecked }`: unplaced от победившей стратегии
+- `buildResult` принимает `unplacedPieces: CuttingPiece[]`, прописывает `unplacedPieces` и `unplacedCount` в `MaterialCuttingResult`
+- `MaterialCuttingResult` расширен двумя полями: `unplacedPieces: CuttingPiece[]`, `unplacedCount: number`
+
+#### Что изменено в `app/b2b-cutting/page.tsx`
+
+- **Глобальный баннер** над «Список закупки»: если есть unplaced хотя бы в одном материале
+- **Карточка материала**: красная рамка (`border-red-300`) + бейдж `"⚠ N не влезло"` (видно без раскрытия)
+- **Expanded-блок**: список неразмещённых деталей с размером, label, clientName + пояснение причины
+- Совместимость со старыми `cutting_plans` (поля читаются через `?? []` / `?? 0`)
+
+#### Known limitations в раскрое (общие)
+
+- Точный раскрой пока не сохраняет `settings` (gap, margin) вместе с `cutting_plans`
+- Ручные правки `ManualCuttingEditor` не сохраняются в план
+- Sequential guillotine feasibility не проверяется (будущее улучшение)
+- Учёт полезных остатков между заказами не реализован
+
+---
 
 ## Что сделано (сессия 7 июня 2026)
 
@@ -467,13 +537,16 @@ totalWeight        → sum(itemWeightKg) сначала, fallback order.total_we
 
 ## Следующий шаг
 
-**Рекомендуемый следующий: Material Requirement by selected B2B orders**
+**Рекомендуемый следующий: Procurement Page / Material Requests для Веры**
 
-- Выбрать несколько B2B-заказов (чекбоксы)
-- Нажать «Сформировать материал»
-- Сгруппировать потребность по `b2b_materials` (материал + толщина): м², листы, вес, стоимость
-- Показать, из каких заказов складывается потребность
-- Первый этап — без сохранения в БД (только расчёт на клиенте)
+Создать закупочную заявку на основе Material Requirement или ручного выбора материалов:
+
+- Страница `/procurement` или `/admin/procurement` (или отдельная вкладка в `/b2b-orders`)
+- Строки материала: название, толщина, листов, стоимость
+- Статусы строки закупки: `draft → submitted → ordered → received`
+- Связь заявки с `b2b_orders` (orderId[])
+- Исполнитель — Вера (роль `buyer`)
+- Первый этап — без полноценного склада и резервирования
 
 **Другие независимые направления:**
 
