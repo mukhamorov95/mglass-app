@@ -28,7 +28,7 @@ type Order = {
   pickup_date: string | null
   issue_notes: string | null
   comment: string | null
-  order_refs: string[] | null
+  order_refs: string[]
   created_at: string
 }
 
@@ -39,22 +39,105 @@ const EMPTY_FORM = {
   status: 'invoice_received' as Status,
 }
 
+// ─── Safe helpers ─────────────────────────────────────────────────────────────
+
+function safeString(value: unknown, fallback = ''): string {
+  return typeof value === 'string' ? value : fallback
+}
+
+function safeNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function safeNumberOrNull(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function safeArrayOfStrings(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  if (typeof value === 'string' && value.trim()) {
+    return value.split(',').map(s => s.trim()).filter(Boolean)
+  }
+  return []
+}
+
+function safeDateString(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null
+  const d = new Date(value)
+  return Number.isNaN(d.getTime()) ? null : value
+}
+
+function formatMoney(value: unknown): string {
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toLocaleString('ru-RU')} ₽` : '—'
+}
+
+function formatDate(value: unknown): string {
+  if (typeof value !== 'string' || !value) return '—'
+  const d = new Date(value)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString('ru-RU')
+}
+
+function normalizeOrder(row: unknown): Order {
+  const r = row as Record<string, unknown>
+  const allowedStatuses: string[] = STATUSES.map(s => s.key)
+  const rawStatus = String(r?.status ?? '')
+  const status: Status = allowedStatuses.includes(rawStatus)
+    ? (rawStatus as Status)
+    : 'invoice_received'
+
+  return {
+    id:             Number(r?.id),
+    supplier_name:  safeString(r?.supplier_name, 'Не указан'),
+    invoice_number: safeNullableString(r?.invoice_number),
+    amount:         safeNumberOrNull(r?.amount),
+    status,
+    approved_by:    safeNullableString(r?.approved_by),
+    payment_date:   safeDateString(r?.payment_date),
+    payment_amount: safeNumberOrNull(r?.payment_amount),
+    pickup_by:      safeNullableString(r?.pickup_by),
+    pickup_date:    safeDateString(r?.pickup_date),
+    issue_notes:    safeNullableString(r?.issue_notes),
+    comment:        safeNullableString(r?.comment),
+    order_refs:     safeArrayOfStrings(r?.order_refs),
+    created_at:     safeDateString(r?.created_at) ?? new Date().toISOString(),
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ProcurementPage() {
-  const [orders,  setOrders]  = useState<Order[]>([])
-  const [loading, setLoading] = useState(true)
-  const [modal,   setModal]   = useState(false)
-  const [form,    setForm]    = useState(EMPTY_FORM)
-  const [editId,  setEditId]  = useState<number | null>(null)
-  const [saving,  setSaving]  = useState(false)
-  const [detail,  setDetail]  = useState<Order | null>(null)
+  const [orders,    setOrders]    = useState<Order[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
+  const [modal,     setModal]     = useState(false)
+  const [form,      setForm]      = useState(EMPTY_FORM)
+  const [editId,    setEditId]    = useState<number | null>(null)
+  const [saving,    setSaving]    = useState(false)
+  const [detail,    setDetail]    = useState<Order | null>(null)
 
   useEffect(() => { load() }, [])
 
   async function load() {
     setLoading(true)
-    const res = await fetch('/api/admin/purchase-orders')
-    setOrders(res.ok ? await res.json() : [])
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const res = await fetch('/api/admin/purchase-orders')
+      if (!res.ok) {
+        setLoadError(`Ошибка загрузки: ${res.status} ${res.statusText}`)
+        setOrders([])
+        return
+      }
+      const data: unknown = await res.json()
+      setOrders(Array.isArray(data) ? data.map(normalizeOrder) : [])
+    } catch (err) {
+      setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки закупок')
+      setOrders([])
+    } finally {
+      setLoading(false)
+    }
   }
 
   function openNew() {
@@ -73,7 +156,7 @@ export default function ProcurementPage() {
       pickup_date:    o.pickup_date ?? '',
       issue_notes:    o.issue_notes ?? '',
       comment:        o.comment ?? '',
-      order_refs:     (o.order_refs ?? []).join(', '),
+      order_refs:     o.order_refs.join(', '),
       status:         o.status,
     })
     setEditId(o.id); setDetail(null); setModal(true)
@@ -136,6 +219,12 @@ export default function ProcurementPage() {
         </button>
       </div>
 
+      {loadError && (
+        <div className="mx-6 mt-4 bg-red-50 border border-red-100 rounded-lg px-4 py-3 text-[13px] text-red-700">
+          ⚠ {loadError}
+        </div>
+      )}
+
       {/* Kanban board */}
       <div className="overflow-x-auto pb-6">
         <div className="flex gap-3 px-6 pt-5" style={{ minWidth: STATUSES.length * 248 + 48 }}>
@@ -156,10 +245,10 @@ export default function ProcurementPage() {
                           onClick={() => setDetail(o)}>
                           <p className="text-[12px] font-semibold text-[#111110] leading-snug">{o.supplier_name}</p>
                           {o.invoice_number && <p className="text-[10px] text-[#9a9a95] mt-0.5">№{o.invoice_number}</p>}
-                          {o.amount && <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{Number(o.amount).toLocaleString('ru-RU')} ₽</p>}
+                          {o.amount != null && <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{formatMoney(o.amount)}</p>}
                           {o.issue_notes && <p className="text-[10px] text-red-600 mt-1 bg-red-50 px-1.5 py-0.5 rounded">⚠ {o.issue_notes}</p>}
                           {o.comment && <p className="text-[10px] text-[#6b6b66] mt-1 truncate">{o.comment}</p>}
-                          {o.order_refs && o.order_refs.length > 0 && (
+                          {o.order_refs.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {o.order_refs.map(r => <span key={r} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{r}</span>)}
                             </div>
@@ -190,18 +279,18 @@ export default function ProcurementPage() {
                 <h2 className="text-[15px] font-semibold text-[#111110]">{detail.supplier_name}</h2>
                 {detail.invoice_number && <p className="text-[12px] text-[#9a9a95]">Счёт №{detail.invoice_number}</p>}
               </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${STATUSES.find(s => s.key === detail.status)?.bg}`}>
-                {STATUSES.find(s => s.key === detail.status)?.label}
+              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${STATUSES.find(s => s.key === detail.status)?.bg ?? 'bg-gray-50'}`}>
+                {STATUSES.find(s => s.key === detail.status)?.label ?? detail.status}
               </span>
             </div>
             <div className="space-y-2 text-[13px]">
-              {detail.amount && <Row label="Сумма" value={`${Number(detail.amount).toLocaleString('ru-RU')} ₽`} />}
+              {detail.amount != null && <Row label="Сумма" value={formatMoney(detail.amount)} />}
               {detail.approved_by && <Row label="Согласовал" value={detail.approved_by} />}
-              {detail.payment_date && <Row label="Дата оплаты" value={detail.payment_date} />}
-              {detail.payment_amount && <Row label="Оплачено" value={`${Number(detail.payment_amount).toLocaleString('ru-RU')} ₽`} />}
+              {detail.payment_date && <Row label="Дата оплаты" value={formatDate(detail.payment_date)} />}
+              {detail.payment_amount != null && <Row label="Оплачено" value={formatMoney(detail.payment_amount)} />}
               {detail.pickup_by && <Row label="Забирает" value={detail.pickup_by} />}
-              {detail.pickup_date && <Row label="Дата забора" value={detail.pickup_date} />}
-              {detail.order_refs && detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
+              {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
+              {detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
@@ -235,8 +324,8 @@ export default function ProcurementPage() {
                 <Field label="Кто забирает"><input value={form.pickup_by} onChange={ff('pickup_by')} placeholder="Сергей" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Дата оплаты"><input type="date" value={form.payment_date} onChange={ff('payment_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-                <Field label="Дата забора"><input type="date" value={form.pickup_date} onChange={ff('pickup_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+                <Field label="Дата оплаты"><input type="date" value={form.payment_date ?? ''} onChange={ff('payment_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+                <Field label="Дата забора"><input type="date" value={form.pickup_date ?? ''} onChange={ff('pickup_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
               </div>
               <Field label="Привязка к заказам (через запятую)"><input value={form.order_refs} onChange={ff('order_refs')} placeholder="1795, 1796" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
               <Field label="Проблема / брак"><input value={form.issue_notes} onChange={ff('issue_notes')} placeholder="Описание проблемы..." className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
