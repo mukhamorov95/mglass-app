@@ -46,7 +46,7 @@ type Order = {
   issue_notes: string | null
   comment: string | null
   order_refs: string[] | null
-  items: PurchaseItem[] | null
+  items?: PurchaseItem[] | null
   created_at: string
 }
 
@@ -55,6 +55,23 @@ const EMPTY_FORM = {
   amount: '', approved_by: '', payment_date: '', payment_amount: '',
   pickup_by: '', pickup_date: '', issue_notes: '', comment: '', order_refs: '',
   status: 'invoice_received' as Status,
+}
+
+function getPurchaseItems(order: Order | null): PurchaseItem[] {
+  if (!order || !Array.isArray(order.items)) return []
+  return order.items
+}
+
+function formatMaybeNumber(value: unknown, digits = 2): string {
+  if (value == null) return '—'
+  const n = Number(value)
+  return Number.isFinite(n) ? n.toFixed(digits) : '—'
+}
+
+function formatMoney(value: unknown): string {
+  if (value == null) return '—'
+  const n = Number(value)
+  return Number.isFinite(n) ? `${n.toLocaleString('ru-RU')} ₽` : '—'
 }
 
 export default function ProcurementPage() {
@@ -226,7 +243,7 @@ export default function ProcurementPage() {
 
             {/* Материалы к закупке */}
             {(() => {
-              const purchaseItems = detail.items ?? []
+              const purchaseItems = getPurchaseItems(detail)
               return (
                 <div className="mt-4">
                   <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Материалы к закупке</p>
@@ -248,44 +265,48 @@ export default function ProcurementPage() {
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#f4f4f0]">
-                          {purchaseItems.map((item, idx) => (
-                            <tr key={idx} className={`hover:bg-[#fafaf9] ${item.unmatched ? 'bg-amber-50/40' : ''}`}>
-                              <td className="px-2.5 py-2 min-w-[120px]">
-                                <p className="font-medium text-[#111110]">{item.material_name}</p>
-                                {item.category && <p className="text-[9px] text-[#9a9a95]">{item.category}</p>}
-                                {item.unmatched && (
-                                  <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Не найден в справочнике</span>
-                                )}
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                {item.thickness != null ? `${item.thickness} мм` : '—'}
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                {item.sheet_width && item.sheet_height ? `${item.sheet_width}×${item.sheet_height}` : '—'}
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
-                                {item.area_m2.toFixed(2)}
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110]">
-                                {item.sheets_count != null ? item.sheets_count : '—'}
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
-                                {item.weight_kg.toFixed(1)} кг
-                              </td>
-                              <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
-                                {item.estimated_cost != null
-                                  ? <span className="font-semibold text-[#111110]">{item.estimated_cost.toLocaleString('ru-RU')} ₽</span>
-                                  : <span className="text-[#c4c4be]">—</span>}
-                              </td>
-                              <td className="px-2.5 py-2 min-w-[80px]">
-                                <div className="flex flex-wrap gap-1">
-                                  {(item.order_refs ?? []).map((ref, i) => (
-                                    <span key={i} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-px rounded whitespace-nowrap">{ref}</span>
-                                  ))}
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
+                          {purchaseItems.map((item, idx) => {
+                            const refs = Array.isArray(item.order_refs) ? item.order_refs : []
+                            const isUnmatched = Boolean(item.unmatched)
+                            return (
+                              <tr key={idx} className={`hover:bg-[#fafaf9] ${isUnmatched ? 'bg-amber-50/40' : ''}`}>
+                                <td className="px-2.5 py-2 min-w-[120px]">
+                                  <p className="font-medium text-[#111110]">{String(item.material_name ?? '—')}</p>
+                                  {item.category && <p className="text-[9px] text-[#9a9a95]">{item.category}</p>}
+                                  {isUnmatched && (
+                                    <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Не найден в справочнике</span>
+                                  )}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                  {item.thickness != null ? `${item.thickness} мм` : '—'}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                  {item.sheet_width && item.sheet_height ? `${item.sheet_width}×${item.sheet_height}` : '—'}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                                  {formatMaybeNumber(item.area_m2, 2)}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono font-semibold text-[#111110]">
+                                  {item.sheets_count != null && Number.isFinite(Number(item.sheets_count)) ? item.sheets_count : '—'}
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">
+                                  {formatMaybeNumber(item.weight_kg, 1)} кг
+                                </td>
+                                <td className="px-2.5 py-2 text-right font-mono whitespace-nowrap">
+                                  {item.estimated_cost != null
+                                    ? <span className="font-semibold text-[#111110]">{formatMoney(item.estimated_cost)}</span>
+                                    : <span className="text-[#c4c4be]">—</span>}
+                                </td>
+                                <td className="px-2.5 py-2 min-w-[80px]">
+                                  <div className="flex flex-wrap gap-1">
+                                    {refs.map((ref, i) => (
+                                      <span key={i} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-px rounded whitespace-nowrap">{ref}</span>
+                                    ))}
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                       </table>
                     </div>
