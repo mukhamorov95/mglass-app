@@ -1424,7 +1424,7 @@ export default function B2BOrdersPage() {
                   {/* Warning */}
                   <div className="mx-5 mt-3 mb-1 flex-shrink-0 px-3 py-2.5 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-800 flex items-start gap-2">
                     <span className="flex-shrink-0 mt-0.5">⚠</span>
-                    <span>Расчёт ориентировочный: листы считаются по площади с учётом отхода, без точной раскладки деталей на листе. Для точного раскроя используйте раздел <b>B2B Раскрой</b>.</span>
+                    <span>Расчёт ориентировочный: листы считаются по площади с учётом отхода, без точной раскладки деталей на листе. Стоимость считается по целым листам — для маленьких заказов может отображаться минимум 1 лист. Для точного раскроя используйте раздел <b>B2B Раскрой</b>.</span>
                   </div>
 
                   {/* Table */}
@@ -1437,9 +1437,9 @@ export default function B2BOrdersPage() {
                           <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Формат листа</th>
                           <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">м² деталей</th>
                           <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Отход %</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов к закупке</th>
                           <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Вес кг</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость листов</th>
                           <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы</th>
                         </tr>
                       </thead>
