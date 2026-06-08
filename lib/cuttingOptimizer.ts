@@ -53,6 +53,8 @@ export type MaterialCuttingResult = {
   totalSheetArea: number
   avgEfficiency: number
   strategiesChecked?: number   // how many sort strategies were tried
+  unplacedPieces: CuttingPiece[]
+  unplacedCount: number
 }
 
 export type CuttingSettings = {
@@ -156,12 +158,13 @@ function packWithOrder(
   sheetW: number,
   sheetH: number,
   settings: CuttingSettings,
-): CuttingSheet[] {
+): { sheets: CuttingSheet[]; unplaced: CuttingPiece[] } {
   const { gap_between_pieces: gap, edge_margin: e, allow_rotation: rotate } = settings
   const sw = sheetW - 2 * e
   const sh = sheetH - 2 * e
 
   const sheets: CuttingSheet[] = []
+  const unplaced: CuttingPiece[] = []
   let curPieces: PlacedPiece[] = []
   let freeRects: FreeRect[] = [{ x: e, y: e, w: sw, h: sh }]
 
@@ -183,14 +186,14 @@ function packWithOrder(
 
     let p = tryPlace(piece, freeRects, gap, rotate, colorIndex)
     if (!p) { pushSheet(); p = tryPlace(piece, freeRects, gap, rotate, colorIndex) }
-    if (!p) continue
+    if (!p) { unplaced.push(piece); continue }
 
     applyPlacement(p, freeRects, gap)
     curPieces.push(p.placed)
   }
 
   pushSheet()
-  return sheets
+  return { sheets, unplaced }
 }
 
 // ─── Strip packing (NFDH — Next Fit Decreasing Height) ───────────────────────
@@ -205,9 +208,10 @@ function packStrip(
   sheetH: number,
   settings: CuttingSettings,
   preferShortHeight = false,
-): CuttingSheet[] {
+): { sheets: CuttingSheet[]; unplaced: CuttingPiece[] } {
   const { gap_between_pieces: gap, edge_margin: e, allow_rotation: rotate } = settings
   const sheets: CuttingSheet[] = []
+  const unplaced: CuttingPiece[] = []
   const ocm = new Map<number, number>()
   let nc = 0
   const col = (id: number) => { if (!ocm.has(id)) ocm.set(id, nc++); return ocm.get(id)! }
@@ -219,17 +223,17 @@ function packStrip(
     const leftover: CuttingPiece[] = []
     const frects: FreeRect[] = []
     let Y = e
-    let unplaced = [...todo]
+    let remaining = [...todo]
     let anyPlaced = false
 
     // Fill sheet strip by strip
-    while (unplaced.length > 0) {
+    while (remaining.length > 0) {
       let X = e
       let H = 0            // strip height, set by first placed piece
       const notInStrip: CuttingPiece[] = []
       let stripStarted = false
 
-      for (const p of unplaced) {
+      for (const p of remaining) {
         let pw = p.width + gap, ph = p.height + gap, rot = false
         if (rotate && p.canRotate && p.width !== p.height) {
           const rpw = p.height + gap, rph = p.width + gap
@@ -263,21 +267,25 @@ function packStrip(
       if (rw >= MIN_REMNANT_MM && H >= MIN_REMNANT_MM) frects.push({ x: X, y: Y, w: rw, h: H })
 
       Y += H
-      unplaced = notInStrip
+      remaining = notInStrip
     }
 
     // Bottom remnant
     const bh = sheetH - e - Y
     if (bh >= MIN_REMNANT_MM) frects.push({ x: e, y: Y, w: sheetW - 2 * e, h: bh })
 
-    if (!anyPlaced) break  // pieces too large for any sheet — stop
+    if (!anyPlaced) {
+      // Nothing was placed on a fresh sheet — all remaining pieces are oversized
+      unplaced.push(...todo, ...leftover)
+      break
+    }
 
     const usedArea = cur.reduce((s, p) => s + p.w * p.h, 0)
     sheets.push({ index: sheets.length, pieces: cur, usedArea, totalArea: sheetW * sheetH, efficiency: Math.round(usedArea / (sheetW * sheetH) * 100), remnants: significantRemnants(frects, e) })
     todo = leftover
   }
 
-  return sheets
+  return { sheets, unplaced }
 }
 
 // ─── Sort strategies ──────────────────────────────────────────────────────────
@@ -343,8 +351,8 @@ function optimizePack(
   sheetH: number,
   settings: CuttingSettings,
   maxMs = 1500,
-): { sheets: CuttingSheet[]; strategiesChecked: number } {
-  let bestSheets: CuttingSheet[] = packWithOrder(pieces, sheetW, sheetH, settings)
+): { sheets: CuttingSheet[]; unplaced: CuttingPiece[]; strategiesChecked: number } {
+  let best = packWithOrder(pieces, sheetW, sheetH, settings)
   let checked = 1
   const deadline = Date.now() + maxMs
 
@@ -354,7 +362,7 @@ function optimizePack(
     const sorted = [...pieces].sort(s.fn)
     const result = packWithOrder(sorted, sheetW, sheetH, settings)
     checked++
-    if (isBetter(result, bestSheets)) bestSheets = result
+    if (isBetter(result.sheets, best.sheets)) best = result
   }
 
   // Try seeded shuffles
@@ -363,14 +371,14 @@ function optimizePack(
     const shuffled = seededShuffle(pieces, seed)
     const result = packWithOrder(shuffled, sheetW, sheetH, settings)
     checked++
-    if (isBetter(result, bestSheets)) bestSheets = result
+    if (isBetter(result.sheets, best.sheets)) best = result
 
     // Also try: sort by area, then shuffle ties
     if (Date.now() > deadline) break
     const sortedShuffled = seededShuffle([...pieces].sort(SORT_STRATEGIES[0].fn), seed)
     const result2 = packWithOrder(sortedShuffled, sheetW, sheetH, settings)
     checked++
-    if (isBetter(result2, bestSheets)) bestSheets = result2
+    if (isBetter(result2.sheets, best.sheets)) best = result2
   }
 
   // Try strip packing strategies — better for similar-sized pieces
@@ -382,11 +390,11 @@ function optimizePack(
       const sorted = [...pieces].sort(fn)
       const result = packStrip(sorted, sheetW, sheetH, settings, preferShort)
       checked++
-      if (isBetter(result, bestSheets)) bestSheets = result
+      if (isBetter(result.sheets, best.sheets)) best = result
     }
   }
 
-  return { sheets: bestSheets, strategiesChecked: checked }
+  return { sheets: best.sheets, unplaced: best.unplaced, strategiesChecked: checked }
 }
 
 // ─── Public API ────────────────────────────────────────────────────────────────
@@ -404,6 +412,7 @@ function buildResult(
   materialKey: string,
   group: PieceGroup,
   sheets: CuttingSheet[],
+  unplacedPieces: CuttingPiece[],
   strategiesChecked?: number,
 ): MaterialCuttingResult {
   const totalUsedArea  = sheets.reduce((s, sh) => s + sh.usedArea, 0)
@@ -414,6 +423,7 @@ function buildResult(
     sheetWidth: group.sheetWidth, sheetHeight: group.sheetHeight, patternDirection: group.patternDirection,
     sheets, totalPieces: group.pieces.length, sheetsNeeded: sheets.length,
     totalUsedArea, totalSheetArea, avgEfficiency, strategiesChecked,
+    unplacedPieces, unplacedCount: unplacedPieces.length,
   }
 }
 
@@ -437,8 +447,11 @@ export function runCuttingOptimizer(
     const guillotine  = packWithOrder(byArea, group.sheetWidth, group.sheetHeight, eff)
     const stripNormal = packStrip(byHeight, group.sheetWidth, group.sheetHeight, eff, false)
     const stripShort  = packStrip(byHeight, group.sheetWidth, group.sheetHeight, eff, true)
-    const sheets = [stripNormal, stripShort].reduce((best, s) => isBetter(s, best) ? s : best, guillotine)
-    results.push(buildResult(materialKey, group, sheets))
+    const best = [stripNormal, stripShort].reduce(
+      (b, s) => isBetter(s.sheets, b.sheets) ? s : b,
+      guillotine,
+    )
+    results.push(buildResult(materialKey, group, best.sheets, best.unplaced))
   }
 
   return results.sort((a, b) => a.materialLabel.localeCompare(b.materialLabel))
@@ -454,8 +467,8 @@ export function runCuttingOptimizerOptimized(
 
   for (const [materialKey, group] of groups) {
     const { settings: eff, pieces } = effectiveSettings(group, settings)
-    const { sheets, strategiesChecked } = optimizePack(pieces, group.sheetWidth, group.sheetHeight, eff, timeLimitPerGroupMs)
-    results.push(buildResult(materialKey, group, sheets, strategiesChecked))
+    const { sheets, unplaced, strategiesChecked } = optimizePack(pieces, group.sheetWidth, group.sheetHeight, eff, timeLimitPerGroupMs)
+    results.push(buildResult(materialKey, group, sheets, unplaced, strategiesChecked))
   }
 
   return results.sort((a, b) => a.materialLabel.localeCompare(b.materialLabel))
