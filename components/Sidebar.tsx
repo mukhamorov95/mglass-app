@@ -253,6 +253,7 @@ const ADMIN_B2B: NavEntry[] = [
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
   { href: '/admin/archive',          label: 'Архив расчётов',    icon: '📁' },
+  { href: '/admin/ai-b2b-quote',     label: 'AI B2B Quote',      icon: '⚡' },
 ]
 
 const ADMIN_OPERATIONS: NavItem[] = [
@@ -290,7 +291,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
-    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials'])) open.push('b2b')
+    if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
   }
   return open
