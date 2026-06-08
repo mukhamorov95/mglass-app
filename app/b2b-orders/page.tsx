@@ -682,7 +682,6 @@ export default function B2BOrdersPage() {
     return {
       supplier_name:  'Не выбран',
       invoice_number: null,
-      invoice_date:   null,
       amount:         knownCostGroups.length > 0 ? totalKnownCost : null,
       status:         'invoice_received',
       order_refs:     allOrderRefs,
