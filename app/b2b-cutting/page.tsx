@@ -452,8 +452,11 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
     result.patternDirection === 'along_length' ? '↔ Волна по длине (фиксировано)' :
     result.patternDirection === 'along_width'  ? '↕ Волна по ширине (фиксировано)' : null
 
+  const unplacedPieces = result.unplacedPieces ?? []
+  const unplacedCount  = result.unplacedCount  ?? unplacedPieces.length
+
   return (
-    <div className="border border-[#e4e4e0] rounded-xl overflow-hidden">
+    <div className={`border rounded-xl overflow-hidden ${unplacedCount > 0 ? 'border-red-300' : 'border-[#e4e4e0]'}`}>
       <button
         onClick={onToggle}
         className="w-full flex items-center gap-3 px-4 py-3 bg-[#fafaf9] hover:bg-[#f5f5f3] transition-colors text-left"
@@ -462,6 +465,11 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
         <div className="flex items-center gap-3 flex-shrink-0">
           {patLabel && (
             <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">{patLabel}</span>
+          )}
+          {unplacedCount > 0 && (
+            <span className="text-[11px] px-2 py-0.5 rounded bg-red-50 text-red-700 border border-red-200 font-semibold">
+              ⚠ {unplacedCount} не влезло
+            </span>
           )}
           <span className="text-[13px] font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
             {result.sheetsNeeded} {result.sheetsNeeded === 1 ? 'лист' : result.sheetsNeeded < 5 ? 'листа' : 'листов'}
@@ -478,6 +486,27 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
 
       {expanded && (
         <div className="p-4 space-y-4">
+          {/* Unplaced pieces warning */}
+          {unplacedCount > 0 && (
+            <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-3">
+              <div className="text-[12px] font-semibold text-red-700 mb-2">
+                ⚠ {unplacedCount} {unplacedCount === 1 ? 'деталь не помещается' : unplacedCount < 5 ? 'детали не помещаются' : 'деталей не помещаются'} в формат листа {result.sheetWidth}×{result.sheetHeight} мм
+              </div>
+              <div className="flex flex-col gap-1">
+                {unplacedPieces.map((p, i) => (
+                  <div key={p.id ?? i} className="flex items-center gap-2 text-[11px] text-red-800 font-mono">
+                    <span className="px-1.5 py-0.5 bg-red-100 rounded font-semibold">{p.width}×{p.height}</span>
+                    <span className="text-red-600">{p.label}</span>
+                    {p.orderClientName && <span className="text-red-500">· {p.orderClientName}</span>}
+                  </div>
+                ))}
+              </div>
+              <p className="text-[10px] text-red-500 mt-2">
+                Эти детали превышают рабочую область листа с учётом кромки и зазора. Замените на другой формат листа или разбейте деталь.
+              </p>
+            </div>
+          )}
+
           {orders.length > 1 && (
             <div className="flex flex-wrap gap-2">
               {orders.map(([orderId, clientName], i) => (
@@ -849,6 +878,23 @@ export default function B2BCuttingPage() {
                       : <span className="font-semibold">Исходный раскрой уже оптимален</span>
                     }
                     <span className="ml-2 text-[11px] opacity-70">перебрано {totalStrategies} вариантов</span>
+                  </div>
+                </div>
+              )
+            })()}
+
+            {/* Global unplaced warning */}
+            {(() => {
+              const totalUnplaced = results.reduce((s, r) => s + (r.unplacedCount ?? (r.unplacedPieces?.length ?? 0)), 0)
+              if (totalUnplaced === 0) return null
+              return (
+                <div className="bg-red-50 border border-red-300 rounded-xl px-4 py-3 flex items-start gap-3 text-[13px] text-red-800">
+                  <span className="text-[18px] flex-shrink-0">⚠</span>
+                  <div>
+                    <span className="font-semibold">
+                      {totalUnplaced} {totalUnplaced === 1 ? 'деталь не помещается' : totalUnplaced < 5 ? 'детали не помещаются' : 'деталей не помещаются'} ни на один лист
+                    </span>
+                    <span className="ml-1 text-red-600 text-[12px]">— раскройте карту материала для подробностей</span>
                   </div>
                 </div>
               )
