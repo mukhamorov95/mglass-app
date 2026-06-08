@@ -15,6 +15,8 @@ const STATUSES = [
 
 type Status = typeof STATUSES[number]['key']
 
+type OrderItem = { name: string; thickness: number; sheets: number }
+
 type Order = {
   id: number
   supplier_name: string
@@ -30,6 +32,7 @@ type Order = {
   comment: string | null
   order_refs: string[]
   items_count: number
+  items_list: OrderItem[]
   created_at: string
 }
 
@@ -104,6 +107,18 @@ function normalizeOrder(row: unknown): Order {
     comment:        safeNullableString(r?.comment),
     order_refs:     safeArrayOfStrings(r?.order_refs),
     items_count:    Array.isArray(r?.items) ? r.items.length : 0,
+    items_list:     Array.isArray(r?.items)
+      ? (r.items as unknown[]).map(it => {
+          const i = it as Record<string, unknown>
+          const thickness = Number(i?.thickness)
+          const sheets    = Number(i?.sheets_count)
+          return {
+            name:      safeString(i?.material_name, 'Без названия'),
+            thickness: Number.isFinite(thickness) ? thickness : 0,
+            sheets:    Number.isFinite(sheets)    ? sheets    : 0,
+          }
+        })
+      : [],
     created_at:     safeDateString(r?.created_at) ?? new Date().toISOString(),
   }
 }
@@ -293,7 +308,18 @@ export default function ProcurementPage() {
               {detail.pickup_by && <Row label="Забирает" value={detail.pickup_by} />}
               {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
               {detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
-              {detail.items_count > 0 && <Row label="Материалы" value={`${detail.items_count} позиц.`} />}
+              {detail.items_list.length > 0 && (
+                <div>
+                  <p className="text-[#9a9a95] text-[12px] mb-1">Материалы ({detail.items_count} позиц.)</p>
+                  <ul className="space-y-0.5">
+                    {detail.items_list.map((it, i) => (
+                      <li key={i} className="text-[12px] text-[#111110]">
+                        {it.name}{it.thickness ? ` ${it.thickness} мм` : ''}{it.sheets ? ` — ${it.sheets} л.` : ''}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
