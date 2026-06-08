@@ -17,6 +17,20 @@ type Status = typeof STATUSES[number]['key']
 
 type OrderItem = { name: string; thickness: number; sheets: number }
 
+type PurchaseItem = {
+  material_name?: unknown
+  category?: unknown
+  thickness?: unknown
+  sheet_width?: unknown
+  sheet_height?: unknown
+  area_m2?: unknown
+  required_area_m2?: unknown
+  sheets_count?: unknown
+  estimated_cost?: unknown
+  order_refs?: unknown
+  unmatched?: unknown
+}
+
 type Order = {
   id: number
   supplier_name: string
@@ -33,6 +47,7 @@ type Order = {
   order_refs: string[]
   items_count: number
   items_list: OrderItem[]
+  items?: unknown[] | null
   created_at: string
 }
 
@@ -74,7 +89,7 @@ function safeDateString(value: unknown): string | null {
 
 function formatMoney(value: unknown): string {
   const n = Number(value)
-  return Number.isFinite(n) ? `${n.toLocaleString('ru-RU')} ₽` : '—'
+  return Number.isFinite(n) ? `${n.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} ₽` : '—'
 }
 
 function formatDate(value: unknown): string {
@@ -82,6 +97,74 @@ function formatDate(value: unknown): string {
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
   return d.toLocaleDateString('ru-RU')
+}
+
+// ─── Material purchase table helpers ──────────────────────────────────────────
+
+function safeItems(value: unknown): PurchaseItem[] {
+  return Array.isArray(value) ? (value as PurchaseItem[]) : []
+}
+
+function num(value: unknown): number | null {
+  const n = Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+function text(value: unknown, fallback = '—'): string {
+  return typeof value === 'string' && value.trim() ? value : fallback
+}
+
+function formatM2(value: number | null): string {
+  return value !== null
+    ? `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`
+    : '—'
+}
+
+function formatKg(value: number | null): string {
+  return value !== null
+    ? `${value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг`
+    : '—'
+}
+
+function formatSheets(value: unknown): string {
+  const n = num(value)
+  return n !== null ? `${Math.ceil(n)} шт` : '—'
+}
+
+function orderRefs(value: unknown): string[] {
+  if (Array.isArray(value)) return value.map(String).filter(Boolean)
+  if (typeof value === 'string' && value.trim()) return [value]
+  return []
+}
+
+function sheetFormat(item: PurchaseItem): string {
+  const w = num(item.sheet_width)
+  const h = num(item.sheet_height)
+  return w !== null && h !== null ? `${w}×${h}` : '—'
+}
+
+function sheetAreaTotal(item: PurchaseItem): number | null {
+  const w = num(item.sheet_width)
+  const h = num(item.sheet_height)
+  const sheets = num(item.sheets_count)
+  if (w === null || h === null || sheets === null) return null
+  return (w * h / 1_000_000) * Math.ceil(sheets)
+}
+
+function sheetWeightTotal(item: PurchaseItem): number | null {
+  const area = sheetAreaTotal(item)
+  const thickness = num(item.thickness)
+  if (area === null || thickness === null) return null
+  return area * thickness * 2.5
+}
+
+function needsTintClarification(item: PurchaseItem): boolean {
+  const name = text(item.material_name, '').toLowerCase()
+  return (
+    name.includes('бронза/графит') ||
+    name.includes('бронза или графит') ||
+    name.includes('bronze/graphite')
+  )
 }
 
 function normalizeOrder(row: unknown): Order {
@@ -119,11 +202,133 @@ function normalizeOrder(row: unknown): Order {
           }
         })
       : [],
+    items:          Array.isArray(r?.items) ? r.items : null,
     created_at:     safeDateString(r?.created_at) ?? new Date().toISOString(),
   }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+
+function MaterialItemsSummary({ items }: { items: unknown }) {
+  const list = safeItems(items)
+
+  if (list.length === 0) {
+    return (
+      <div className="mt-4 rounded-xl border border-[#e4e4e0] bg-[#fafaf8] p-4 text-sm text-[#8a8a85]">
+        Материалы не указаны
+      </div>
+    )
+  }
+
+  const totalSheets = list.reduce((sum, item) => {
+    const sheets = num(item.sheets_count)
+    return sum + (sheets !== null ? Math.ceil(sheets) : 0)
+  }, 0)
+
+  const totalArea = list.reduce((sum, item) => {
+    const area = sheetAreaTotal(item)
+    return sum + (area ?? 0)
+  }, 0)
+
+  const totalWeight = list.reduce((sum, item) => {
+    const weight = sheetWeightTotal(item)
+    return sum + (weight ?? 0)
+  }, 0)
+
+  const totalCost = list.reduce((sum, item) => {
+    const cost = num(item.estimated_cost)
+    return sum + (cost ?? 0)
+  }, 0)
+
+  return (
+    <div className="mt-4 rounded-xl border border-[#e4e4e0] bg-white p-4">
+      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#9a9a95]">
+        Материалы к закупке
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[760px] text-left text-xs">
+          <thead>
+            <tr className="border-b border-[#e4e4e0] text-[#9a9a95]">
+              <th className="py-2 pr-3 font-semibold">Материал</th>
+              <th className="py-2 pr-3 font-semibold">Толщина</th>
+              <th className="py-2 pr-3 font-semibold">Формат листа</th>
+              <th className="py-2 pr-3 font-semibold">К закупке</th>
+              <th className="py-2 pr-3 font-semibold">Площадь листов</th>
+              <th className="py-2 pr-3 font-semibold">Вес листов</th>
+              <th className="py-2 pr-3 font-semibold">Стоимость листов</th>
+              <th className="py-2 font-semibold">Заказы</th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((item, index) => {
+              const refs = orderRefs(item.order_refs)
+              const ambiguousTint = needsTintClarification(item)
+              const thicknessNum = num(item.thickness)
+              return (
+                <tr key={index} className="border-b border-[#ededeb] last:border-0">
+                  <td className="py-3 pr-3 align-top">
+                    <div className="font-semibold text-[#111110]">
+                      {text(item.material_name, 'Материал не указан')}
+                    </div>
+                    <div className="mt-1 text-[11px] text-[#8a8a85]">
+                      {text(item.category, 'категория не указана')}
+                    </div>
+                    {Boolean(item.unmatched) && (
+                      <div className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                        Не найден в справочнике
+                      </div>
+                    )}
+                    {ambiguousTint && (
+                      <div className="mt-1 inline-flex rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700">
+                        Уточнить оттенок
+                      </div>
+                    )}
+                  </td>
+                  <td className="py-3 pr-3 align-top font-semibold">
+                    {thicknessNum !== null ? `${thicknessNum} мм` : '—'}
+                  </td>
+                  <td className="py-3 pr-3 align-top">
+                    {sheetFormat(item)}
+                  </td>
+                  <td className="py-3 pr-3 align-top font-semibold">
+                    {formatSheets(item.sheets_count)}
+                  </td>
+                  <td className="py-3 pr-3 align-top">
+                    {formatM2(sheetAreaTotal(item))}
+                  </td>
+                  <td className="py-3 pr-3 align-top">
+                    {formatKg(sheetWeightTotal(item))}
+                  </td>
+                  <td className="py-3 pr-3 align-top font-semibold">
+                    {formatMoney(item.estimated_cost)}
+                  </td>
+                  <td className="py-3 align-top">
+                    {refs.length > 0 ? (
+                      <div className="flex flex-wrap gap-1">
+                        {refs.map((ref) => (
+                          <span key={ref} className="rounded bg-blue-50 px-2 py-1 text-[11px] font-semibold text-blue-700">
+                            {ref}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span className="text-[#9a9a95]">—</span>
+                    )}
+                  </td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-3 rounded-lg bg-[#fafaf8] px-3 py-2 text-sm font-semibold text-[#111110]">
+        Итого: {totalSheets} листов · {formatM2(totalArea)} · {formatKg(totalWeight)} · {formatMoney(totalCost)}
+      </div>
+    </div>
+  )
+}
 
 export default function ProcurementPage() {
   const [orders,    setOrders]    = useState<Order[]>([])
@@ -290,7 +495,7 @@ export default function ProcurementPage() {
       {/* Detail modal */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-md shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-3xl shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
                 <h2 className="text-[15px] font-semibold text-[#111110]">{detail.supplier_name}</h2>
@@ -308,18 +513,7 @@ export default function ProcurementPage() {
               {detail.pickup_by && <Row label="Забирает" value={detail.pickup_by} />}
               {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
               {detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
-              {detail.items_list.length > 0 && (
-                <div>
-                  <p className="text-[#9a9a95] text-[12px] mb-1">Материалы ({detail.items_count} позиц.)</p>
-                  <ul className="space-y-0.5">
-                    {detail.items_list.map((it, i) => (
-                      <li key={i} className="text-[12px] text-[#111110]">
-                        {it.name}{it.thickness ? ` ${it.thickness} мм` : ''}{it.sheets ? ` — ${it.sheets} л.` : ''}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              <MaterialItemsSummary items={detail.items} />
               {detail.comment && <Row label="Комментарий" value={detail.comment} />}
               {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
             </div>
