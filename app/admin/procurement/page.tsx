@@ -19,7 +19,6 @@ type Order = {
   id: number
   supplier_name: string
   invoice_number: string | null
-  invoice_date: string | null
   amount: number | null
   status: Status
   approved_by: string | null
@@ -34,7 +33,7 @@ type Order = {
 }
 
 const EMPTY_FORM = {
-  supplier_name: '', invoice_number: '', invoice_date: '',
+  supplier_name: '', invoice_number: '',
   amount: '', approved_by: '', payment_date: '', payment_amount: '',
   pickup_by: '', pickup_date: '', issue_notes: '', comment: '', order_refs: '',
   status: 'invoice_received' as Status,
@@ -66,7 +65,6 @@ export default function ProcurementPage() {
     setForm({
       supplier_name:  o.supplier_name,
       invoice_number: o.invoice_number ?? '',
-      invoice_date:   o.invoice_date ?? '',
       amount:         o.amount != null ? String(o.amount) : '',
       approved_by:    o.approved_by ?? '',
       payment_date:   o.payment_date ?? '',
@@ -87,7 +85,6 @@ export default function ProcurementPage() {
     const body = {
       supplier_name:  form.supplier_name.trim(),
       invoice_number: form.invoice_number || null,
-      invoice_date:   form.invoice_date   || null,
       amount:         form.amount         ? Number(form.amount)         : null,
       status:         form.status,
       approved_by:    form.approved_by    || null,
@@ -199,7 +196,6 @@ export default function ProcurementPage() {
             </div>
             <div className="space-y-2 text-[13px]">
               {detail.amount && <Row label="Сумма" value={`${Number(detail.amount).toLocaleString('ru-RU')} ₽`} />}
-              {detail.invoice_date && <Row label="Дата счёта" value={detail.invoice_date} />}
               {detail.approved_by && <Row label="Согласовал" value={detail.approved_by} />}
               {detail.payment_date && <Row label="Дата оплаты" value={detail.payment_date} />}
               {detail.payment_amount && <Row label="Оплачено" value={`${Number(detail.payment_amount).toLocaleString('ru-RU')} ₽`} />}
@@ -225,10 +221,7 @@ export default function ProcurementPage() {
             <h2 className="text-[15px] font-semibold text-[#111110] mb-4">{editId ? 'Редактировать закупку' : 'Новая закупка'}</h2>
             <div className="space-y-3">
               <Field label="Поставщик *" required><input value={form.supplier_name} onChange={ff('supplier_name')} placeholder="Название поставщика" className="inp" /></Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Номер счёта"><input value={form.invoice_number} onChange={ff('invoice_number')} placeholder="INV-001" className="inp" /></Field>
-                <Field label="Дата счёта"><input type="date" value={form.invoice_date} onChange={ff('invoice_date')} className="inp" /></Field>
-              </div>
+              <Field label="Номер счёта"><input value={form.invoice_number} onChange={ff('invoice_number')} placeholder="INV-001" className="inp" /></Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Сумма (₽)"><input type="number" value={form.amount} onChange={ff('amount')} placeholder="0" className="inp" /></Field>
                 <Field label="Статус">
