@@ -98,6 +98,8 @@ export default function B2BCalculatorPage() {
   const [fFilmSel, setFFilmSel]         = useState<Record<number, number>>({})
   const [eFilmSel, setEFilmSel]         = useState<Record<number, number>>({})
   const [loading, setLoading]           = useState(true)
+  const [loadError, setLoadError]       = useState<string | null>(null)
+  const [isBuyer, setIsBuyer]           = useState(false)
   const [saving, setSaving]       = useState(false)
   const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
   const [savedAsPending, setSavedAsPending] = useState(false)
@@ -164,76 +166,87 @@ export default function B2BCalculatorPage() {
 
   useEffect(() => {
     async function load() {
-      const sb = createClient()
-      const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: { user } }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
-        sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
-        sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
-        sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
-        sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
-        sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
-        sb.auth.getUser(),
-        sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
-        sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
-        sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
-      ])
-      if (psData) setProdSettings(psData as ProductionSettings)
-      setFilms((filmsData ?? []) as B2BFilm[])
-      setFacetPrices((facetData ?? []) as FacetPrice[])
-      if (user?.email) setManagerEmail(user.email)
-      if (user?.id) setManagerId(user.id)
+      try {
+        const sb = createClient()
 
-      // Load role + manager_code
-      let userIsAdmin = false
-      let userManagerCode: number | null = null
-      if (user?.id) {
-        const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent').eq('id', user.id).single()
-        userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
-        userManagerCode = profile?.manager_code ?? null
-        if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
-      }
-      setIsAdmin(userIsAdmin)
-      setManagerCode(userManagerCode)
+        // Auth + role check first — lightweight, before the heavy 8-query Promise.all
+        const { data: { user } } = await sb.auth.getUser()
+        if (user?.email) setManagerEmail(user.email)
+        if (user?.id) setManagerId(user.id)
 
-      const totals = new Map<number, number>()
-      for (const o of orders ?? []) {
-        totals.set(o.client_id, (totals.get(o.client_id) ?? 0) + o.total_after_discount)
-      }
-      // Non-admin managers see only their own clients
-      const allClients = (cls ?? []) as B2BClient[]
-      const visibleClients = userIsAdmin
-        ? allClients
-        : allClients.filter(c => c.manager_id === user?.id)
-      const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
-      setClients(sorted)
-
-      // Override sale_price from glass_price_matrix where available
-      const matrix = glassMatrix ?? []
-      const parsed = (mats ?? []).map(m => {
-        const base = parseSalePrice(m)
-        const mm = Math.round(m.thickness)
-        const cat = ['зеркало'].includes(m.category) ? 'mirror' : 'glass'
-        const matrixSale = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'sale')
-        const matrixCost = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'cost')
-        const matrixPrice = matrixSale ? (matrixSale as Record<string, unknown>)[`t${mm}`] as number | null : null
-        // waste_pct lives on cost rows — single source of truth
-        const matrixWaste = (matrixCost as Record<string, unknown> | undefined)?.waste_pct as number | null ?? null
-        return {
-          ...base,
-          ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
-          // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
-          ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
+        let userIsAdmin = false
+        let userManagerCode: number | null = null
+        if (user?.id) {
+          const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent').eq('id', user.id).single()
+          if (profile?.role === 'buyer') {
+            setIsBuyer(true)
+            return
+          }
+          userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
+          userManagerCode = profile?.manager_code ?? null
+          if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
         }
-      })
-      setMaterials(parsed)
-      setServices(svcs ?? [])
-      if (parsed.length > 0) {
-        const sc = SUPER_CATS[0]
-        setFSuperCat(sc.value)
-        const superMats = parsed.filter(m => (sc.cats as readonly string[]).includes(m.category))
-        const mat = pickDefault(superMats, sc.value)
-        if (mat) { setFThickness(mat.thickness); setFMatId(mat.id); setFWaste(mat.waste_percent) }
+        setIsAdmin(userIsAdmin)
+        setManagerCode(userManagerCode)
+
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
+          sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
+          sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
+          sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
+          sb.from('b2b_orders').select('client_id,total_after_discount').gte('created_at', '2026-01-01'),
+          sb.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
+          sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
+          sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
+          sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
+        ])
+        if (psData) setProdSettings(psData as ProductionSettings)
+        setFilms((filmsData ?? []) as B2BFilm[])
+        setFacetPrices((facetData ?? []) as FacetPrice[])
+
+        const totals = new Map<number, number>()
+        for (const o of orders ?? []) {
+          totals.set(o.client_id, (totals.get(o.client_id) ?? 0) + o.total_after_discount)
+        }
+        // Non-admin managers see only their own clients
+        const allClients = (cls ?? []) as B2BClient[]
+        const visibleClients = userIsAdmin
+          ? allClients
+          : allClients.filter(c => c.manager_id === user?.id)
+        const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
+        setClients(sorted)
+
+        // Override sale_price from glass_price_matrix where available
+        const matrix = glassMatrix ?? []
+        const parsed = (mats ?? []).map(m => {
+          const base = parseSalePrice(m)
+          const mm = Math.round(m.thickness)
+          const cat = ['зеркало'].includes(m.category) ? 'mirror' : 'glass'
+          const matrixSale = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'sale')
+          const matrixCost = matrix.find(r => r.name === m.name && r.category === cat && r.price_type === 'cost')
+          const matrixPrice = matrixSale ? (matrixSale as Record<string, unknown>)[`t${mm}`] as number | null : null
+          // waste_pct lives on cost rows — single source of truth
+          const matrixWaste = (matrixCost as Record<string, unknown> | undefined)?.waste_pct as number | null ?? null
+          return {
+            ...base,
+            ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
+            // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
+            ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
+          }
+        })
+        setMaterials(parsed)
+        setServices(svcs ?? [])
+        if (parsed.length > 0) {
+          const sc = SUPER_CATS[0]
+          setFSuperCat(sc.value)
+          const superMats = parsed.filter(m => (sc.cats as readonly string[]).includes(m.category))
+          const mat = pickDefault(superMats, sc.value)
+          if (mat) { setFThickness(mat.thickness); setFMatId(mat.id); setFWaste(mat.waste_percent) }
+        }
+      } catch (err) {
+        setLoadError(err instanceof Error ? err.message : 'Ошибка загрузки данных')
+      } finally {
+        setLoading(false)
       }
-      setLoading(false)
     }
     load()
   }, [])
@@ -670,6 +683,30 @@ export default function B2BCalculatorPage() {
     }
     setSaving(false)
   }
+
+  if (isBuyer) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <p className="text-[15px] font-medium text-[#111110]">У вас нет доступа к B2B-калькулятору</p>
+        <a href="/admin/procurement"
+          className="inline-block bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
+          Открыть закупки
+        </a>
+      </div>
+    </div>
+  )
+
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center space-y-3">
+        <p className="text-[14px] text-red-600">{loadError}</p>
+        <button onClick={() => window.location.reload()}
+          className="text-[13px] font-medium px-4 py-2 bg-[#f0f0ec] rounded-lg hover:bg-[#e8e8e4] text-[#111110]">
+          Повторить
+        </button>
+      </div>
+    </div>
+  )
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>

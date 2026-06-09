@@ -180,6 +180,7 @@ export function CatalogTab({
   const [priceError,     setPriceError]     = useState('')  // ошибка дубля в таблице цен
   const [deletingId,     setDeletingId]     = useState<number | null>(null)
   const [deleteError,    setDeleteError]    = useState('')
+  const [loadError,      setLoadError]      = useState<string | null>(null)
 
   // Filters
   const [filterCat,  setFilterCat]  = useState('all')
@@ -201,9 +202,15 @@ export function CatalogTab({
 
   async function load() {
     setLoading(true)
-    const { data } = await db.current.from('shower_catalog_items').select('*').order('category').order('name')
-    setItems((data ?? []) as Item[])
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const { data } = await db.current.from('shower_catalog_items').select('*').order('category').order('name')
+      setItems((data ?? []) as Item[])
+    } catch {
+      setLoadError('Не удалось загрузить фурнитуру душевых')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadPrices(itemId: number) {
@@ -711,7 +718,12 @@ export function CatalogTab({
 
       {/* ── Items list ── */}
       <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        {loading ? (
+        {loadError ? (
+          <div className="p-8 text-center text-[13px]">
+            <p className="text-red-600 mb-3">{loadError}</p>
+            <button onClick={load} className="text-[12px] font-medium px-3 py-1.5 bg-[#f0f0ec] rounded-lg hover:bg-[#e8e8e4] text-[#111110]">Повторить</button>
+          </div>
+        ) : loading ? (
           <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
         ) : filtered.length === 0 ? (
           <div className="p-8 text-center text-[#9a9a95] text-[13px]">Нет позиций</div>

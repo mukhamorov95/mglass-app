@@ -30,6 +30,7 @@ export default function HardwareAdminPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [saving, setSaving]     = useState(false)
   const [error, setError]       = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [filterType, setFilterType] = useState<'all' | HardwareItem['system_type']>('all')
 
   const [kits, setKits]         = useState<ShowerKit[]>([])
@@ -42,11 +43,17 @@ export default function HardwareAdminPage() {
 
   async function load() {
     setLoading(true)
-    const supabase = createClient()
-    const { data, error } = await supabase.from('hardware_items').select('*').order('system_type').order('name')
-    if (error) setError(error.message)
-    else setItems(data ?? [])
-    setLoading(false)
+    setLoadError(null)
+    try {
+      const supabase = createClient()
+      const { data, error } = await supabase.from('hardware_items').select('*').order('system_type').order('name')
+      if (error) setError(error.message)
+      else setItems(data ?? [])
+    } catch {
+      setLoadError('Не удалось загрузить фурнитуру лофт')
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function loadKits() {
@@ -191,7 +198,12 @@ export default function HardwareAdminPage() {
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-          {loading ? (
+          {loadError ? (
+            <div className="p-8 text-center text-[13px]">
+              <p className="text-red-600 mb-3">{loadError}</p>
+              <button onClick={load} className="text-[12px] font-medium px-3 py-1.5 bg-[#f0f0ec] rounded-lg hover:bg-[#e8e8e4] text-[#111110]">Повторить</button>
+            </div>
+          ) : loading ? (
             <div className="p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
           ) : filtered.length === 0 ? (
             <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет позиций</div>

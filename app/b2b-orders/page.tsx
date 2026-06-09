@@ -391,7 +391,7 @@ export default function B2BOrdersPage() {
         .eq('id', user.id)
         .single()
 
-      const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+      const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
       setManagerCode(profile?.manager_code ?? 0)
       setCanDelete(profile?.role === 'admin' || profile?.can_delete === true)
 
