@@ -17,6 +17,7 @@ type Supplier = {
   work_hours:      string | null
   materials:       string | null
   type:            string | null
+  supplier_type:   string | null
   notes:           string | null
   active:          boolean
   has_vat:         boolean
@@ -28,7 +29,21 @@ type Supplier = {
 
 type FormState = Omit<Supplier, 'id' | 'updated_at'>
 
-const SUPPLIER_TYPES = ['стекло', 'зеркало', 'фурнитура', 'LED', 'упаковка', 'профиль', 'расходники', 'логистика', 'прочее']
+const LEGACY_TYPES = ['стекло', 'зеркало', 'фурнитура', 'LED', 'упаковка', 'профиль', 'расходники', 'логистика', 'прочее']
+
+const SUPPLIER_TYPES = [
+  { value: 'glass_mirror',      label: 'Стекло и зеркала' },
+  { value: 'hardware',          label: 'Фурнитура' },
+  { value: 'lighting',          label: 'Свет / электрика' },
+  { value: 'consumables',       label: 'Расходники производства' },
+  { value: 'external_services', label: 'Внешние услуги' },
+  { value: 'logistics',         label: 'Логистика' },
+  { value: 'other',             label: 'Другое' },
+] as const
+
+function supplierTypeLabel(value?: string | null): string {
+  return SUPPLIER_TYPES.find((t) => t.value === value)?.label ?? 'Другое'
+}
 
 const STATUS_META: Record<SupplierStatus, { label: string; cls: string }> = {
   active:   { label: 'Активный',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
@@ -45,7 +60,7 @@ const PRIORITY_META: Record<number, { label: string; cls: string }> = {
 
 const EMPTY: FormState = {
   name: '', contact: '', phone: '', email: '', whatsapp: '', telegram: '',
-  address: '', city: '', work_hours: '', materials: '', type: '',
+  address: '', city: '', work_hours: '', materials: '', type: '', supplier_type: 'other',
   notes: '', active: true, has_vat: true, status: 'active', priority: 2, lead_time_days: null,
 }
 
@@ -89,7 +104,8 @@ export default function SuppliersPage() {
       name: s.name, contact: s.contact ?? '', phone: s.phone ?? '', email: s.email ?? '',
       whatsapp: s.whatsapp ?? '', telegram: s.telegram ?? '', address: s.address ?? '',
       city: s.city ?? '', work_hours: s.work_hours ?? '', materials: s.materials ?? '',
-      type: s.type ?? '', notes: s.notes ?? '', active: s.active, has_vat: s.has_vat,
+      type: s.type ?? '', supplier_type: s.supplier_type ?? 'other',
+      notes: s.notes ?? '', active: s.active, has_vat: s.has_vat,
       status: s.status, priority: s.priority, lead_time_days: s.lead_time_days,
     })
     setError('')
@@ -144,7 +160,7 @@ export default function SuppliersPage() {
   const visible = useMemo(() => {
     return suppliers.filter(s => {
       if (filterStatus !== 'all' && s.status !== filterStatus) return false
-      if (filterType !== 'all' && s.type !== filterType) return false
+      if (filterType !== 'all' && (s.supplier_type ?? 'other') !== filterType) return false
       if (search.trim()) {
         const q = search.toLowerCase()
         const haystack = [s.name, s.contact, s.phone, s.city, s.materials, s.type].join(' ').toLowerCase()
@@ -212,7 +228,7 @@ export default function SuppliersPage() {
             value={filterType} onChange={e => setFilterType(e.target.value)}
             className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white">
             <option value="all">Все типы</option>
-            {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+            {SUPPLIER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </div>
 
@@ -237,9 +253,7 @@ export default function SuppliersPage() {
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <p className="text-[14px] font-semibold text-[#111110]">{s.name}</p>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sm.cls}`}>{sm.label}</span>
-                        {s.type && (
-                          <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{s.type}</span>
-                        )}
+                        <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{supplierTypeLabel(s.supplier_type)}</span>
                         {s.priority === 1 && (
                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full border ${pm.cls}`}>★ {pm.label}</span>
                         )}
@@ -292,10 +306,17 @@ export default function SuppliersPage() {
               </div>
 
               <div>
-                <Label>Тип поставок</Label>
+                <Label>Тип поставщика</Label>
+                <select value={form.supplier_type ?? 'other'} onChange={e => setForm(f => ({...f, supplier_type: e.target.value}))} className={inp}>
+                  {SUPPLIER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                </select>
+              </div>
+
+              <div>
+                <Label>Тип поставок (детали)</Label>
                 <select value={form.type ?? ''} onChange={e => setForm(f => ({...f, type: e.target.value}))} className={inp}>
                   <option value="">— выбери —</option>
-                  {SUPPLIER_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                  {LEGACY_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
 
@@ -396,9 +417,7 @@ export default function SuppliersPage() {
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_META[selected.status]?.cls ?? ''}`}>
                     {STATUS_META[selected.status]?.label}
                   </span>
-                  {selected.type && (
-                    <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{selected.type}</span>
-                  )}
+                  <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{supplierTypeLabel(selected.supplier_type)}</span>
                   {!selected.has_vat && (
                     <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">без НДС</span>
                   )}

@@ -104,6 +104,7 @@ function sanitize(body: Record<string, unknown>) {
     work_hours:      str(body.work_hours),
     materials:       str(body.materials),
     type:            str(body.type),
+    supplier_type:   str(body.supplier_type),
     notes:           str(body.notes),
     active:          body.active != null ? Boolean(body.active) : undefined,
     has_vat:         body.has_vat != null ? Boolean(body.has_vat) : undefined,

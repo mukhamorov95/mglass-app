@@ -43,6 +43,7 @@ export async function PATCH(
   if (body.work_hours    !== undefined) update.work_hours     = str(body.work_hours)
   if (body.materials     !== undefined) update.materials      = str(body.materials)
   if (body.type          !== undefined) update.type           = str(body.type)
+  if (body.supplier_type !== undefined) update.supplier_type  = str(body.supplier_type)
   if (body.notes         !== undefined) update.notes          = str(body.notes)
   if (body.active        !== undefined) update.active         = Boolean(body.active)
   if (body.has_vat       !== undefined) update.has_vat        = Boolean(body.has_vat)
