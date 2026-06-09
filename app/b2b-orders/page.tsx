@@ -71,10 +71,22 @@ const MATERIAL_STATUS_TRIGGERS_ORDERED = new Set<MaterialStatus>([
   'ordered', 'invoice_received', 'paid', 'shipped', 'received',
 ])
 
+type SheetVariantMin = {
+  id: number
+  material_id: number
+  sheet_width: number
+  sheet_height: number
+  supplier_id: string | null
+  supplier_material_name: string | null
+  is_default: boolean
+  active: boolean
+}
+
 type MatFull = MatLight & {
   id: number
   category?: string | null
   supplier_id?: number | null
+  supplier_material_name?: string | null
 }
 
 type MatReqGroup = {
@@ -96,6 +108,10 @@ type MatReqGroup = {
   sheetAreaM2: number | null
   sheetsCount: number | null
   estimatedCost: number | null
+  sheetVariantId: number | null
+  sheetFormatSource: 'variant_default' | 'variant_first_active' | 'material_fallback'
+  supplierId: string | null
+  supplierMaterialName: string | null
 }
 
 const PROGRESS_STAGES = STAGES.slice(0, 10) as readonly { key: StageKey; label: string }[]
@@ -286,6 +302,7 @@ export default function B2BOrdersPage() {
 
   // Production extras
   const [materials, setMaterials]     = useState<MatFull[]>([])
+  const [variantsByMaterialId, setVariantsByMaterialId] = useState<Record<number, SheetVariantMin[]>>({})
   const [managerCode, setManagerCode] = useState<number>(0)
   const [canDelete, setCanDelete]     = useState(false)
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
@@ -407,13 +424,24 @@ export default function B2BOrdersPage() {
         query = query.eq('created_by', user.id)
       }
 
-      const [{ data }, { data: mats }] = await Promise.all([
+      const [{ data }, { data: mats }, { data: varData }] = await Promise.all([
         query,
         sb.from('b2b_materials')
-          .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id')
+          .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id,supplier_material_name')
           .eq('active', true),
+        sb.from('b2b_material_sheet_variants')
+          .select('id,material_id,sheet_width,sheet_height,supplier_id,supplier_material_name,is_default,active')
+          .eq('active', true)
+          .order('sort_order')
+          .order('id'),
       ])
 
+      const groupedVariants: Record<number, SheetVariantMin[]> = {}
+      for (const v of (varData ?? []) as SheetVariantMin[]) {
+        if (!groupedVariants[v.material_id]) groupedVariants[v.material_id] = []
+        groupedVariants[v.material_id].push(v)
+      }
+      setVariantsByMaterialId(groupedVariants)
       setMaterials((mats ?? []) as MatFull[])
 
       const parsed = (data ?? []).map(o => ({
@@ -585,10 +613,46 @@ export default function B2BOrdersPage() {
     return areaM2 * Number(item.thickness ?? 0) * 2.5
   }
 
+  function resolveSheetVariantForMaterial(
+    material: MatFull,
+    variantsByMatId: Record<number, SheetVariantMin[]>,
+  ): {
+    sheetVariantId: number | null
+    sheetWidth: number
+    sheetHeight: number
+    sheetFormatSource: 'variant_default' | 'variant_first_active' | 'material_fallback'
+    supplierId: string | null
+    supplierMaterialName: string | null
+  } {
+    const variants = variantsByMatId[material.id] ?? []
+    const defaultVariant = variants.find(v => v.is_default && v.active)
+    const firstActive    = variants.find(v => v.active)
+    const chosen = defaultVariant ?? firstActive ?? null
+    if (chosen) {
+      return {
+        sheetVariantId:       chosen.id,
+        sheetWidth:           chosen.sheet_width,
+        sheetHeight:          chosen.sheet_height,
+        sheetFormatSource:    defaultVariant ? 'variant_default' : 'variant_first_active',
+        supplierId:           chosen.supplier_id,
+        supplierMaterialName: chosen.supplier_material_name,
+      }
+    }
+    return {
+      sheetVariantId:       null,
+      sheetWidth:           material.sheet_width ?? 3210,
+      sheetHeight:          material.sheet_height ?? 2250,
+      sheetFormatSource:    'material_fallback',
+      supplierId:           null,
+      supplierMaterialName: material.supplier_material_name ?? null,
+    }
+  }
+
   function computeMaterialRequirement(
     selectedIds: Set<number>,
     allOrders: Order[],
     mats: MatFull[],
+    variantsByMatId: Record<number, SheetVariantMin[]> = {},
   ): MatReqGroup[] {
     const groupMap = new Map<string, MatReqGroup>()
 
@@ -606,9 +670,22 @@ export default function B2BOrdersPage() {
         const matKey        = matched ? String(matched.id) : `${materialName}|${category}|${thickness}`
 
         if (!groupMap.has(matKey)) {
-          const waste       = matched?.waste_percent ?? (Number(rawItem.wastePercent ?? 0) || 10)
-          const sheetW      = matched?.sheet_width ?? null
-          const sheetH      = matched?.sheet_height ?? null
+          const waste = matched?.waste_percent ?? (Number(rawItem.wastePercent ?? 0) || 10)
+          let sheetW: number | null = null
+          let sheetH: number | null = null
+          let sheetVariantId: number | null = null
+          let sheetFormatSource: MatReqGroup['sheetFormatSource'] = 'material_fallback'
+          let supplierId: string | null = null
+          let supplierMaterialName: string | null = null
+          if (matched) {
+            const resolved = resolveSheetVariantForMaterial(matched, variantsByMatId)
+            sheetW               = resolved.sheetWidth
+            sheetH               = resolved.sheetHeight
+            sheetVariantId       = resolved.sheetVariantId
+            sheetFormatSource    = resolved.sheetFormatSource
+            supplierId           = resolved.supplierId
+            supplierMaterialName = resolved.supplierMaterialName
+          }
           const sheetAreaM2 = sheetW && sheetH ? sheetW * sheetH / 1_000_000 : null
           groupMap.set(matKey, {
             materialKey: matKey,
@@ -626,6 +703,10 @@ export default function B2BOrdersPage() {
             sheetAreaM2,
             sheetsCount: null,
             estimatedCost: null,
+            sheetVariantId,
+            sheetFormatSource,
+            supplierId,
+            supplierMaterialName,
           })
         }
 
@@ -660,20 +741,24 @@ export default function B2BOrdersPage() {
     const allOrderRefs    = Array.from(new Set(groups.flatMap(g => g.orderNums)))
 
     const items = groups.map(g => ({
-      material_name:    g.materialName,
-      category:         g.category ?? null,
-      thickness:        g.thickness,
-      sheet_width:      g.sheetWidth,
-      sheet_height:     g.sheetHeight,
-      area_m2:          g.areaM2,
-      required_area_m2: g.requiredAreaWithWaste,
-      sheets_count:     g.sheetsCount,
-      weight_kg:        g.weightKg,
-      estimated_cost:   g.estimatedCost,
-      waste_percent:    g.wastePercent,
-      order_ids:        g.orderIds,
-      order_refs:       g.orderNums,
-      unmatched:        g.unmatched,
+      material_name:          g.materialName,
+      category:               g.category ?? null,
+      thickness:              g.thickness,
+      sheet_width:            g.sheetWidth,
+      sheet_height:           g.sheetHeight,
+      area_m2:                g.areaM2,
+      required_area_m2:       g.requiredAreaWithWaste,
+      sheets_count:           g.sheetsCount,
+      weight_kg:              g.weightKg,
+      estimated_cost:         g.estimatedCost,
+      waste_percent:          g.wastePercent,
+      order_ids:              g.orderIds,
+      order_refs:             g.orderNums,
+      unmatched:              g.unmatched,
+      sheet_variant_id:       g.sheetVariantId,
+      sheet_format_source:    g.sheetFormatSource,
+      supplier_id:            g.supplierId,
+      supplier_material_name: g.supplierMaterialName,
     }))
 
     let comment = 'Создано из ориентировочной потребности материала'
@@ -1440,7 +1525,7 @@ export default function B2BOrdersPage() {
 
       {/* Material Requirement Modal */}
       {showMaterialReq && (() => {
-        const groups    = computeMaterialRequirement(selectedOrderIds, orders, materials)
+        const groups    = computeMaterialRequirement(selectedOrderIds, orders, materials, variantsByMaterialId)
         const totalArea = groups.reduce((s, g) => s + g.areaM2, 0)
         const totalWeight = groups.reduce((s, g) => s + g.weightKg, 0)
         const totalCost = groups.reduce((s, g) => s + (g.estimatedCost ?? 0), 0)
@@ -1522,7 +1607,14 @@ export default function B2BOrdersPage() {
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66] whitespace-nowrap">{g.thickness} мм</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[#6b6b66] whitespace-nowrap">
-                              {g.sheetWidth && g.sheetHeight ? `${g.sheetWidth}×${g.sheetHeight}` : '—'}
+                              {g.sheetWidth && g.sheetHeight ? (
+                                <span>
+                                  {g.sheetWidth}×{g.sheetHeight}
+                                  {g.sheetFormatSource === 'material_fallback' && (
+                                    <span className="ml-1 text-[9px] text-amber-600 font-normal">базовый</span>
+                                  )}
+                                </span>
+                              ) : '—'}
                             </td>
                             <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110]">
                               {g.areaM2.toLocaleString('ru-RU', { maximumFractionDigits: 3 })}
