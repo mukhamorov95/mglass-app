@@ -93,6 +93,8 @@ export async function POST() {
           cost_price: costPrice,
           vat_rate: 22,
           waste_percent: wastePct,
+          supplier_id: costRow.supplier_id ?? null,
+          supplier_material_name: costRow.supplier_material_name ?? null,
           active: true,
           notes: buildNotes(salePrice),
         })
@@ -110,9 +112,27 @@ export async function POST() {
   let inserted = 0
   let insertError: string | null = null
   if (toInsert.length > 0) {
-    const { error, data } = await supabase.from('b2b_materials').insert(toInsert).select('id')
-    if (error) insertError = error.message
-    else inserted = data?.length ?? toInsert.length
+    const { error, data } = await supabase
+      .from('b2b_materials')
+      .insert(toInsert)
+      .select('id, supplier_id, supplier_material_name')
+    if (error) {
+      insertError = error.message
+    } else {
+      inserted = data?.length ?? toInsert.length
+      if (data && data.length > 0) {
+        const newVariants = (data as { id: number; supplier_id: string | null; supplier_material_name: string | null }[]).map(mat => ({
+          material_id: mat.id,
+          sheet_width: 3210,
+          sheet_height: 2250,
+          supplier_id: mat.supplier_id ?? null,
+          supplier_material_name: mat.supplier_material_name ?? null,
+          is_default: true,
+          active: true,
+        }))
+        await supabase.from('b2b_material_sheet_variants').insert(newVariants)
+      }
+    }
   }
 
   return NextResponse.json({ ok: !insertError, updated, inserted, total: updated + inserted, error: insertError })

@@ -44,6 +44,8 @@ interface GlassRow {
 }
 
 type RowSupplier = { supplier_id: string | null; supplier_material_name: string | null }
+type B2bMatRow = { id: number; name: string; thickness: number; category: string; active: boolean }
+type SheetVariant = { id: number; material_id: number; sheet_width: number; sheet_height: number; supplier_id: string | null; supplier_material_name: string | null; is_default: boolean; active: boolean; sort_order: number }
 
 interface MarginInfo {
   effectiveCost: number
@@ -98,6 +100,13 @@ export default function GlassPricesPage() {
   const [isOwner, setIsOwner]   = useState(false)
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
   const [rowSupplier, setRowSupplier] = useState<Record<string, RowSupplier>>({})
+  const [b2bMaterials, setB2bMaterials] = useState<B2bMatRow[]>([])
+  const [sheetVariants, setSheetVariants] = useState<Record<number, SheetVariant[]>>({})
+  const [variantsModal, setVariantsModal] = useState<{ name: string; thickness: number; materialId: number | null } | null>(null)
+  const [newVarWidth, setNewVarWidth] = useState(3210)
+  const [newVarHeight, setNewVarHeight] = useState(2250)
+  const [newVarSupplierId, setNewVarSupplierId] = useState<string | null>(null)
+  const [newVarSupplierMatName, setNewVarSupplierMatName] = useState<string | null>(null)
 
   // Formula tab
   const [formula, setFormula]         = useState<FormulaParam[]>([])
@@ -152,7 +161,22 @@ export default function GlassPricesPage() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  const loadB2BData = useCallback(async () => {
+    const supabase = createClient()
+    const [{ data: matData }, { data: varData }] = await Promise.all([
+      supabase.from('b2b_materials').select('id, name, category, thickness, active'),
+      supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
+    ])
+    setB2bMaterials((matData ?? []) as B2bMatRow[])
+    const grouped: Record<number, SheetVariant[]> = {}
+    for (const v of (varData ?? []) as SheetVariant[]) {
+      if (!grouped[v.material_id]) grouped[v.material_id] = []
+      grouped[v.material_id].push(v)
+    }
+    setSheetVariants(grouped)
+  }, [])
+
+  useEffect(() => { load(); loadB2BData() }, [load, loadB2BData])
 
   useEffect(() => {
     createClient().auth.getUser().then(({ data: { user } }) => {
@@ -433,6 +457,68 @@ export default function GlassPricesPage() {
     load()
   }
 
+  function openVariantsModal(name: string, thickness: number) {
+    const b2bCategory = curCat === 'mirror' ? 'зеркало' : undefined
+    const mat = b2bMaterials.find(
+      m => m.name === name &&
+           Number(m.thickness) === Number(thickness) &&
+           (b2bCategory ? m.category === b2bCategory : m.category !== 'зеркало')
+    )
+    const sup = rowSupplier[name]
+    setNewVarWidth(3210)
+    setNewVarHeight(2250)
+    setNewVarSupplierId(sup?.supplier_id ?? null)
+    setNewVarSupplierMatName(sup?.supplier_material_name ?? null)
+    setVariantsModal({ name, thickness, materialId: mat?.id ?? null })
+  }
+
+  async function addSheetVariantFromModal(materialId: number) {
+    if (!newVarWidth || !newVarHeight) return
+    const sb = createClient()
+    const existing = sheetVariants[materialId] ?? []
+    const isFirst = existing.filter(v => v.active).length === 0
+    const { data, error } = await sb
+      .from('b2b_material_sheet_variants')
+      .insert({
+        material_id: materialId,
+        sheet_width: newVarWidth,
+        sheet_height: newVarHeight,
+        supplier_id: newVarSupplierId || null,
+        supplier_material_name: newVarSupplierMatName || null,
+        is_default: isFirst,
+      })
+      .select()
+      .single()
+    if (error) { showToast(`Ошибка: ${error.message}`); return }
+    setSheetVariants(sv => ({
+      ...sv,
+      [materialId]: [...(sv[materialId] ?? []), data as SheetVariant],
+    }))
+  }
+
+  async function setDefaultVariant(materialId: number, variantId: number) {
+    const sb = createClient()
+    await sb.from('b2b_material_sheet_variants').update({ is_default: false }).eq('material_id', materialId)
+    const { error } = await sb.from('b2b_material_sheet_variants').update({ is_default: true }).eq('id', variantId)
+    if (error) { showToast(`Ошибка: ${error.message}`); return }
+    setSheetVariants(sv => ({
+      ...sv,
+      [materialId]: (sv[materialId] ?? []).map(v => ({ ...v, is_default: v.id === variantId })),
+    }))
+  }
+
+  async function toggleVariantActive(materialId: number, variant: SheetVariant) {
+    const sb = createClient()
+    const update: { active: boolean; is_default?: boolean } = { active: !variant.active }
+    if (variant.is_default && variant.active) update.is_default = false
+    const { error } = await sb.from('b2b_material_sheet_variants').update(update).eq('id', variant.id)
+    if (error) { showToast(`Ошибка: ${error.message}`); return }
+    setSheetVariants(sv => ({
+      ...sv,
+      [materialId]: (sv[materialId] ?? []).map(v => v.id === variant.id ? { ...v, ...update } : v),
+    }))
+  }
+
   // Render a price/waste cell
   function renderCell(
     name: string,
@@ -678,6 +764,30 @@ export default function GlassPricesPage() {
           onClose={() => setPopover(null)}
         />
       )}
+      {variantsModal !== null && (() => {
+        const matId = variantsModal.materialId
+        return (
+          <SheetVariantsModal
+            matName={variantsModal.name}
+            thickness={variantsModal.thickness}
+            materialId={matId}
+            variants={matId !== null ? (sheetVariants[matId] ?? []) : []}
+            suppliers={suppliers}
+            newVarWidth={newVarWidth}
+            newVarHeight={newVarHeight}
+            newVarSupplierId={newVarSupplierId}
+            newVarSupplierMatName={newVarSupplierMatName}
+            onWidthChange={setNewVarWidth}
+            onHeightChange={setNewVarHeight}
+            onSupplierChange={setNewVarSupplierId}
+            onSupplierMatNameChange={setNewVarSupplierMatName}
+            onAdd={matId !== null ? () => addSheetVariantFromModal(matId) : undefined}
+            onSetDefault={matId !== null ? (id) => setDefaultVariant(matId, id) : undefined}
+            onToggleActive={matId !== null ? (v) => toggleVariantActive(matId, v) : undefined}
+            onClose={() => setVariantsModal(null)}
+          />
+        )
+      })()}
 
       <div className="mb-6">
         <div className="flex items-start justify-between">
@@ -916,6 +1026,14 @@ export default function GlassPricesPage() {
                                 style={{ color: getMarginColor(realMargin, mInfo.recMargin, mInfo.minMargin) }}
                                 title="Детальный расчёт маржи">
                                 {realMargin.toFixed(1)}%
+                              </button>
+                            )}
+                            {isCostTab && dbVal != null && (
+                              <button
+                                onClick={e => { e.stopPropagation(); openVariantsModal(origName, t) }}
+                                className="block mx-auto mt-0.5 text-[10px] font-medium text-[#0071e3] hover:underline leading-none whitespace-nowrap"
+                                title="Форматы листов">
+                                Листы
                               </button>
                             )}
                           </td>
@@ -1205,6 +1323,147 @@ function CalcRow({ label, value, sub, bold, separator }: {
         {isNeg ? `−${Math.abs(value).toLocaleString('ru-RU')}` : value.toLocaleString('ru-RU')} ₽
       </td>
     </tr>
+  )
+}
+
+// ─── SheetVariantsModal ───────────────────────────────────────────────────────
+
+function SheetVariantsModal({
+  matName, thickness, materialId, variants, suppliers,
+  newVarWidth, newVarHeight, newVarSupplierId, newVarSupplierMatName,
+  onWidthChange, onHeightChange, onSupplierChange, onSupplierMatNameChange,
+  onAdd, onSetDefault, onToggleActive, onClose,
+}: {
+  matName: string
+  thickness: number
+  materialId: number | null
+  variants: SheetVariant[]
+  suppliers: { id: string; name: string }[]
+  newVarWidth: number
+  newVarHeight: number
+  newVarSupplierId: string | null
+  newVarSupplierMatName: string | null
+  onWidthChange: (v: number) => void
+  onHeightChange: (v: number) => void
+  onSupplierChange: (v: string | null) => void
+  onSupplierMatNameChange: (v: string | null) => void
+  onAdd?: () => void
+  onSetDefault?: (id: number) => void
+  onToggleActive?: (v: SheetVariant) => void
+  onClose: () => void
+}) {
+  return (
+    <div className="fixed z-50 inset-0 bg-black/25 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-xl shadow-2xl border border-[#e4e4e0] w-[480px] max-h-[80vh] overflow-y-auto"
+        onClick={e => e.stopPropagation()}>
+
+        {/* Header */}
+        <div className="px-4 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between sticky top-0">
+          <div>
+            <div className="text-[13px] font-semibold text-[#111110]">Форматы листов</div>
+            <div className="text-[11px] text-[#8a8a85] mt-0.5">{matName} — {thickness} мм</div>
+          </div>
+          <button onClick={onClose} className="text-[#8a8a85] hover:text-[#111110] text-xl leading-none ml-3">×</button>
+        </div>
+
+        <div className="px-4 py-4 space-y-3">
+          {/* Warning */}
+          <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-700">
+            Пока расчёт потребности материала ещё не использует эти варианты. Подключение к расчёту будет следующим этапом.
+          </div>
+
+          {/* No material found */}
+          {materialId === null && (
+            <div className="px-4 py-4 bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg text-[13px] text-[#6b6b66] text-center">
+              Материал ещё не создан в B2B.
+              <br />
+              <span className="text-[12px]">Нажмите <strong>«⟳ Синхр. в B2B»</strong>, затем вернитесь к форматам.</span>
+            </div>
+          )}
+
+          {/* Variants list + add form */}
+          {materialId !== null && (
+            <>
+              {variants.length === 0 ? (
+                <p className="text-[12px] text-[#9a9a95] text-center py-1">Форматы листов не заданы. Добавьте первый формат.</p>
+              ) : (
+                <div className="space-y-1">
+                  {variants.map(v => (
+                    <div key={v.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${v.active ? 'bg-white border-[#e4e4e0]' : 'bg-[#f8f8f7] border-[#e4e4e0] opacity-50'}`}>
+                      <span className="font-mono text-[13px] text-[#111110] flex-1">{v.sheet_width} × {v.sheet_height} мм</span>
+                      {v.supplier_material_name && (
+                        <span className="text-[11px] text-[#8a8a85] truncate max-w-[90px]" title={v.supplier_material_name}>{v.supplier_material_name}</span>
+                      )}
+                      {v.is_default && v.active
+                        ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-600 flex-shrink-0">основной</span>
+                        : v.active && (
+                          <button onClick={() => onSetDefault?.(v.id)}
+                            className="text-[11px] text-blue-500 hover:text-blue-700 transition-colors flex-shrink-0">
+                            основным
+                          </button>
+                        )
+                      }
+                      <button onClick={() => onToggleActive?.(v)}
+                        className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors flex-shrink-0">
+                        {v.active ? 'скрыть' : 'показать'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Add form */}
+              <div className="border-t border-[#f0f0ec] pt-3">
+                <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Добавить формат</div>
+                <div className="grid grid-cols-2 gap-2 mb-3">
+                  <div>
+                    <label className="block text-[11px] text-[#9a9a95] mb-1">Длина, мм</label>
+                    <input type="number" min="100" max="9000"
+                      className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                      value={newVarWidth}
+                      onChange={e => onWidthChange(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#9a9a95] mb-1">Ширина, мм</label>
+                    <input type="number" min="100" max="9000"
+                      className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                      value={newVarHeight}
+                      onChange={e => onHeightChange(Number(e.target.value))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#9a9a95] mb-1">Поставщик</label>
+                    <select
+                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      value={newVarSupplierId ?? ''}
+                      onChange={e => onSupplierChange(e.target.value || null)}>
+                      <option value="">— не выбран —</option>
+                      {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[11px] text-[#9a9a95] mb-1">Наим. у поставщика</label>
+                    <input
+                      className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      value={newVarSupplierMatName ?? ''}
+                      onChange={e => onSupplierMatNameChange(e.target.value || null)}
+                      placeholder="Необязательно"
+                    />
+                  </div>
+                </div>
+                <button
+                  onClick={onAdd}
+                  disabled={!newVarWidth || !newVarHeight}
+                  className="bg-[#111110] text-white text-[12px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  + Добавить формат
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   )
 }
 
