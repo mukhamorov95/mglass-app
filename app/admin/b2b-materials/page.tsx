@@ -74,6 +74,7 @@ export default function B2BMaterialsPage() {
       .from('suppliers')
       .select('id, name, status')
       .neq('status', 'inactive')
+      .eq('supplier_type', 'glass_mirror')
       .order('name')
       .then(({ data }) => setSuppliers((data ?? []) as SupplierOption[]))
   }, [])
@@ -306,12 +307,21 @@ export default function B2BMaterialsPage() {
                     value={form.supplier_id ?? ''}
                     onChange={e => setForm(f => ({ ...f, supplier_id: e.target.value || null }))}>
                     <option value="">— не выбран —</option>
+                    {form.supplier_id && !suppliers.find(s => s.id === form.supplier_id) && (
+                      <option value={form.supplier_id}>⚠ Текущий поставщик (не тип Стекло и зеркала)</option>
+                    )}
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                   </select>
                   <a href="/admin/suppliers" target="_blank"
                     className="flex items-center px-2 py-2 text-[12px] text-[#0071e3] border border-[#e4e4e0] rounded-lg hover:bg-[#f0f7ff] transition-colors whitespace-nowrap"
                     title="Добавить поставщика">+ поставщик</a>
                 </div>
+                {suppliers.length === 0 && (
+                  <p className="text-[11px] text-amber-600 mt-1.5">
+                    Нет поставщиков типа «Стекло и зеркала».{' '}
+                    <a href="/admin/suppliers" target="_blank" className="underline">Назначьте тип поставщика</a>.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] text-[#9a9a95] mb-1">Наименование у поставщика</label>

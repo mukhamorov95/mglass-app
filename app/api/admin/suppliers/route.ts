@@ -19,14 +19,19 @@ async function requireAuth() {
 
 const ALLOWED_WRITE = ['admin', 'buyer']
 
-export async function GET() {
+const VALID_SUPPLIER_TYPES = ['glass_mirror','hardware','lighting','consumables','external_services','logistics','other']
+
+export async function GET(req: NextRequest) {
   const { user } = await requireAuth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
-  const { data, error } = await svc()
-    .from('suppliers')
-    .select('*')
-    .order('name')
+  const supplierType = req.nextUrl.searchParams.get('supplier_type')
+  const base = svc().from('suppliers').select('*').order('name')
+  const { data, error } = await (
+    supplierType && VALID_SUPPLIER_TYPES.includes(supplierType)
+      ? base.eq('supplier_type', supplierType)
+      : base
+  )
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data ?? [])
 }

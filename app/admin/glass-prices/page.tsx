@@ -161,7 +161,7 @@ export default function GlassPricesPage() {
   }, [])
 
   useEffect(() => {
-    fetch('/api/admin/suppliers')
+    fetch('/api/admin/suppliers?supplier_type=glass_mirror')
       .then(r => r.ok ? r.json() : [])
       .then((data: { id: string; name: string; status: string }[]) =>
         setSuppliers(data.filter(s => s.status !== 'inactive').map(s => ({ id: s.id, name: s.name })))
@@ -863,6 +863,9 @@ export default function GlassPricesPage() {
                                 saveRowSupplierImmediate(origName, val, current.supplier_material_name)
                               }}>
                               <option value="">— поставщик —</option>
+                              {suppliers.length === 0 && (
+                                <option value="__no_suppliers__" disabled>Нет поставщиков типа Стекло и зеркала — назначьте в разделе Поставщики</option>
+                              )}
                               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                             <input
