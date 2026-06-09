@@ -1,6 +1,21 @@
 ## Текущая задача
-Procurement Material Requests MVP задокументирован как стабильная рабочая точка.
-Следующий шаг — ручная проверка на production, затем правило минимальной стоимости малых деталей в B2B-калькуляторе.
+B2B минимальная стоимость строки — MVP реализован, ожидает подтверждения коммита.
+
+---
+
+### B2B Minimum Line Price MVP — РЕАЛИЗОВАНО, ещё не закоммичено
+
+**Файлы изменены:**
+- `lib/b2bCalculator.ts` — добавлены MIN_LINE_PRICES, MinPriceReason, resolveMinLinePrice(), расширен B2BOrderItem, обновлён calcItem()
+- `app/calculator/b2b/page.tsx` — добавлены minPriceReasonLabel(), totalMinPriceDelta, бэдж в строке, зачёркнутая старая цена, блок «Доп. выручка мин. цен»
+
+**Логика:**
+- `resolveMinLinePrice(category, width, height, hasTempering)` возвращает `{ minPricePerPiece, reason } | null`
+- Пороги: узкая деталь < 250 мм → 3000 ₽/шт; тонировка+закалка → 3000; стекло+закалка → 2500; зеркало без закалки → 1500
+- В `calcItem()`: если `saleIncVat < minPricePerPiece × quantity` → saleIncVat поднимается до минимума, записываются `minPriceApplied, minPriceReason, originalLinePrice, minLinePrice, minPriceDelta`
+- `saleExVat`, `outputVat`, `margin` пересчитываются из поднятого saleIncVat
+- UI: бэдж amber в строке с причиной; зачёркнутая цена в колонке "Сумма"; блок «N поз. с мин. ценой +X ₽» в итогах
+- Нет миграции БД — `b2b_orders.items` JSONB хранит новые поля автоматически
 
 ---
 
