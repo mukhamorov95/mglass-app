@@ -1,5 +1,5 @@
 ## Текущая задача
-Buyer access fix + infinite loading fix — закоммичено (2d1b7ac).
+Sheet variants для B2B материалов — закоммичено (91b9818).
 
 ---
 
