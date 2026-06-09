@@ -638,19 +638,6 @@ export default function ProcurementPage() {
         .order('id', { ascending: true })
       const newPayments = (payData ?? []) as PurchaseOrderPayment[]
       setPaymentsByOrderId(prev => ({ ...prev, [orderId]: newPayments }))
-      // Compute new aggregate
-      const newTotal  = newPayments.reduce((s, p) => s + Number(p.amount || 0), 0)
-      const lastDate  = [...newPayments].reverse().find(p => p.payment_date)?.payment_date ?? null
-      // Sync aggregate back to purchase_orders for backward compat
-      await fetch('/api/admin/purchase-orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: orderId, payment_amount: newTotal, payment_date: lastDate }),
-      })
-      const update = (o: Order) =>
-        o.id === orderId ? { ...o, payment_amount: newTotal, payment_date: lastDate } : o
-      setOrders(prev => prev.map(update))
-      setDetail(prev => prev?.id === orderId ? update(prev) : prev)
       setNewPaymentForm({ amount: '', date: '', comment: '' })
     } finally {
       setAddingPayment(false)
