@@ -171,6 +171,67 @@ function getDeadline(launched_at: string | undefined, production_days: number | 
   return d
 }
 
+type DeadlineStatus = 'overdue' | 'today' | 'tomorrow' | 'normal' | 'ready' | 'shipped' | 'unknown'
+
+const DEADLINE_FILTER_OPTIONS: { key: DeadlineStatus | 'all'; label: string }[] = [
+  { key: 'all',      label: 'Все' },
+  { key: 'overdue',  label: 'Просрочены' },
+  { key: 'today',    label: 'Сегодня' },
+  { key: 'tomorrow', label: 'Завтра' },
+  { key: 'normal',   label: 'В сроке' },
+  { key: 'ready',    label: 'Готовы' },
+  { key: 'shipped',  label: 'Отгружены' },
+  { key: 'unknown',  label: 'Без срока' },
+]
+
+const DEADLINE_BADGE: Record<DeadlineStatus, string> = {
+  overdue:  'bg-red-50 text-red-600',
+  today:    'bg-amber-50 text-amber-700',
+  tomorrow: 'bg-yellow-50 text-yellow-700',
+  normal:   'bg-[#f0f0ec] text-[#6b6b66]',
+  ready:    'bg-emerald-50 text-emerald-700',
+  shipped:  'bg-[#f0f0ec] text-[#9a9a95]',
+  unknown:  'bg-[#f8f8f7] text-[#b0b0aa]',
+}
+
+const DEADLINE_RISK_ORDER: Record<DeadlineStatus | 'all', number> = {
+  overdue: 0, today: 1, tomorrow: 2, normal: 3, ready: 4, shipped: 5, unknown: 6, all: 7,
+}
+
+function getPlannedReadyDate(pn: NotesData, createdAt: string): Date {
+  const explicit = getDeadline(pn.launched_at, pn.production_days)
+  if (explicit) return explicit
+  if (pn.launched_at) {
+    const d = new Date(pn.launched_at)
+    d.setDate(d.getDate() + 7)
+    return d
+  }
+  const d = new Date(createdAt)
+  d.setDate(d.getDate() + 10)
+  return d
+}
+
+function getDeadlineStatus(order: Order): {
+  status: DeadlineStatus
+  label: string
+  plannedReadyDate: string | null
+  daysDiff: number | null
+} {
+  const pn = order.parsedNotes
+  const stages = pn.stages ?? {}
+  if (stages.shipped)  return { status: 'shipped', label: 'Отгружен',         plannedReadyDate: null, daysDiff: null }
+  if (stages.packaged) return { status: 'ready',   label: 'Готов / упакован', plannedReadyDate: null, daysDiff: null }
+  const planned = getPlannedReadyDate(pn, order.created_at)
+  const today   = new Date(); today.setHours(0, 0, 0, 0)
+  const planDay = new Date(planned); planDay.setHours(0, 0, 0, 0)
+  const daysDiff = Math.round((planDay.getTime() - today.getTime()) / 86400000)
+  const plannedReadyDate = planned.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  if (daysDiff < 0)  return { status: 'overdue',  label: `Просрочен на ${Math.abs(daysDiff)} дн.`, plannedReadyDate, daysDiff }
+  if (daysDiff === 0) return { status: 'today',   label: 'Срок сегодня',                           plannedReadyDate, daysDiff }
+  if (daysDiff === 1) return { status: 'tomorrow', label: 'Срок завтра',                            plannedReadyDate, daysDiff }
+  return { status: 'normal', label: 'В сроке', plannedReadyDate, daysDiff }
+}
+
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 function fmtDate(s: string) {
@@ -394,6 +455,7 @@ export default function B2BOrdersPage() {
   const [stageFilter, setStageFilter] = useState('all_active')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [deadlineFilter, setDeadlineFilter] = useState<DeadlineStatus | 'all'>('all')
 
   useEffect(() => {
     async function load() {
@@ -459,10 +521,10 @@ export default function B2BOrdersPage() {
     load()
   }, [])
 
-  const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== ''
+  const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all'
 
   const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
+    const filtered = orders.filter(o => {
       const pn = o.parsedNotes
       const stages = pn.stages ?? {}
       const isShipped = !!stages.shipped
@@ -481,6 +543,11 @@ export default function B2BOrdersPage() {
       if (dateFrom && launchedAt < dateFrom) return false
       if (dateTo && launchedAt > dateTo) return false
 
+      // Deadline filter overrides stageFilter (allows showing shipped/ready via deadline tab)
+      if (deadlineFilter !== 'all') {
+        return getDeadlineStatus(o).status === deadlineFilter
+      }
+
       const sf = STAGE_FILTERS.find(f => f.key === stageFilter)
       if (!sf) return true
 
@@ -493,7 +560,14 @@ export default function B2BOrdersPage() {
       }
       return !!stages[f.prev] && !stages[f.curr!]
     })
-  }, [orders, search, stageFilter, dateFrom, dateTo])
+
+    if (deadlineFilter !== 'all') {
+      return [...filtered].sort((a, b) =>
+        DEADLINE_RISK_ORDER[getDeadlineStatus(a).status] - DEADLINE_RISK_ORDER[getDeadlineStatus(b).status]
+      )
+    }
+    return filtered
+  }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo])
 
   const monthGroups = useMemo(() => {
     const groups: { key: string; label: string; orders: Order[]; total: number }[] = []
@@ -1267,7 +1341,7 @@ export default function B2BOrdersPage() {
           </div>
           {isFiltered && (
             <button
-              onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo('') }}
+              onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all') }}
               className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
               Сбросить
             </button>
@@ -1287,6 +1361,21 @@ export default function B2BOrdersPage() {
             </button>
           ))}
         </div>
+        <div className="flex flex-wrap gap-1 items-center border-t border-[#f4f4f0] pt-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#b0b0aa] mr-1">Срок:</span>
+          {DEADLINE_FILTER_OPTIONS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setDeadlineFilter(f.key)}
+              className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${
+                deadlineFilter === f.key
+                  ? 'bg-[#111110] text-white border-[#111110]'
+                  : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+              }`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Результат */}
@@ -1297,7 +1386,14 @@ export default function B2BOrdersPage() {
           </p>
           {filteredOrders.length === 0 ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
-              Нет заказов по выбранным фильтрам
+              {deadlineFilter === 'overdue'  ? 'Просроченных заказов нет' :
+               deadlineFilter === 'today'    ? 'Заказов со сроком сегодня нет' :
+               deadlineFilter === 'tomorrow' ? 'Заказов со сроком завтра нет' :
+               deadlineFilter === 'normal'   ? 'Заказов в нормальном сроке нет' :
+               deadlineFilter === 'ready'    ? 'Готовых заказов нет' :
+               deadlineFilter === 'shipped'  ? 'Отгруженных заказов нет' :
+               deadlineFilter === 'unknown'  ? 'Заказов без определённого срока нет' :
+               'Нет заказов по выбранным фильтрам'}
             </div>
           ) : (
             <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden divide-y divide-[#f8f8f7]">
@@ -1307,8 +1403,7 @@ export default function B2BOrdersPage() {
                 const finalPrice = getFinalPrice(order)
                 const progress = calcProgress(pn.stages ?? {})
                 const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : fmtDate(order.created_at)
-                const deadline = getDeadline(pn.launched_at, pn.production_days)
-                const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
+                const ds = getDeadlineStatus(order)
 
                 return (
                   <div key={order.id} className="px-4 py-2.5">
@@ -1331,15 +1426,11 @@ export default function B2BOrdersPage() {
                           </span>
                         )}
                         <span className="text-[12px] font-semibold text-[#111110] truncate">{order.client_name}</span>
-                        {isShipped ? (
-                          <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700 flex-shrink-0">отгружен</span>
-                        ) : daysLeft !== null && !isShipped ? (
-                          daysLeft < 0 ? (
-                            <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600 flex-shrink-0">просрочен {Math.abs(daysLeft)} д.</span>
-                          ) : daysLeft <= 2 ? (
-                            <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-orange-50 text-orange-600 flex-shrink-0">осталось {daysLeft} д.</span>
-                          ) : null
-                        ) : null}
+                        {ds.status !== 'normal' && ds.status !== 'unknown' && (
+                          <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
+                            {ds.label}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {!isShipped && (
@@ -1426,10 +1517,8 @@ export default function B2BOrdersPage() {
                         const pn = order.parsedNotes
                         const quoteDate = fmtDate(order.created_at)
                         const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
-                        const deadline = getDeadline(pn.launched_at, pn.production_days)
-                        const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null
-                        const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
                         const isShipped = !!pn.stages?.shipped
+                        const ds = getDeadlineStatus(order)
                         const finalPrice = getFinalPrice(order)
                         const lastDoneIdx = STAGES.map((s, i) => pn.stages?.[s.key] ? i : -1).reduce((max, i) => Math.max(max, i), -1)
                         const progress = calcProgress(pn.stages ?? {})
@@ -1462,17 +1551,11 @@ export default function B2BOrdersPage() {
                                       </span>
                                     )}
                                     <p className="text-[12px] font-semibold text-[#111110]">{order.client_name}</p>
-                                    {isShipped ? (
-                                      <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700">отгружен</span>
-                                    ) : deadline && daysLeft !== null && launchedDate ? (
-                                      daysLeft < 0 ? (
-                                        <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600">просрочен {Math.abs(daysLeft)} д.</span>
-                                      ) : daysLeft <= 2 ? (
-                                        <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-orange-50 text-orange-600">осталось {daysLeft} д.</span>
-                                      ) : (
-                                        <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-blue-50 text-blue-600">до {deadlineStr}</span>
-                                      )
-                                    ) : null}
+                                    {ds.status !== 'normal' && ds.status !== 'unknown' && (
+                                      <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
+                                        {ds.label}
+                                      </span>
+                                    )}
                                     {lastDoneIdx >= 0 && !isShipped && (
                                       <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>
                                     )}
