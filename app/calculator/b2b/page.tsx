@@ -49,7 +49,7 @@ const SUPER_CATS = [
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
   calcItem, calcTotals, WASTE_OPTIONS, TEMPERING_COST, VAT,
-  type B2BOrderItem, type B2BOrderTotals, type FacetPrice,
+  type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
@@ -66,6 +66,13 @@ function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
   const afterDisc = item.saleIncVat * (1 - discountPct / 100)
   const exVat = afterDisc * 100 / (100 + VAT)
   return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
+}
+
+function minPriceReasonLabel(reason: MinPriceReason): string {
+  if (reason === 'glass_tempering')     return 'мин. цена (стекло+закалка)'
+  if (reason === 'tinted_tempering')    return 'мин. цена (тонировка+закалка)'
+  if (reason === 'mirror_no_tempering') return 'мин. цена (зеркало)'
+  return 'мин. цена (узкая деталь)'
 }
 
 function parseSalePrice(m: B2BMaterial): B2BMaterial {
@@ -463,6 +470,21 @@ export default function B2BCalculatorPage() {
     return calcTotals(items, discount)
   }, [items, discount])
 
+  const totalMinPriceDelta = useMemo(
+    () => items.reduce((s, i) => s + (i.minPriceDelta ?? 0), 0),
+    [items],
+  )
+
+  const totalMinLinePrice = useMemo(
+    () => items.reduce((sum, i) => sum + Number(i.minLinePrice ?? 0), 0),
+    [items],
+  )
+
+  const totalAfterDiscountWouldBreakMin = useMemo(
+    () => totalMinLinePrice > 0 && !!totals && totals.totalAfterDiscount < totalMinLinePrice,
+    [totalMinLinePrice, totals],
+  )
+
   // Cutting analysis — computed from current items + material sheet sizes
   const cuttingResults = useMemo(() => {
     if (items.length === 0) return null
@@ -586,7 +608,9 @@ export default function B2BCalculatorPage() {
     setSaving(true)
     setSaveError(null)
     setSavedAsPending(false)
-    const approvalRequired = !isAdmin && discount > maxDiscount
+    const discountApprovalRequired = !isAdmin && discount > maxDiscount
+    const minPriceApprovalRequired = !isAdmin && totalAfterDiscountWouldBreakMin
+    const approvalRequired = discountApprovalRequired || minPriceApprovalRequired
     const sb = createClient()
     const t = totals!
     const avgMargin = items.length > 0
@@ -1052,7 +1076,7 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
                               <div className="font-medium text-[#111110]">{item.materialName}</div>
-                              {(item.hasTempering || item.hasFacet || item.services.length > 0) && (
+                              {(item.hasTempering || item.hasFacet || item.services.length > 0 || item.minPriceApplied) && (
                                 <div className="flex gap-1 mt-0.5 flex-wrap">
                                   {item.hasTempering && (
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-orange-50 text-orange-600">закалка</span>
@@ -1063,6 +1087,9 @@ export default function B2BCalculatorPage() {
                                   {item.services.map(s => (
                                     <span key={s.id} className="text-[9px] font-medium px-1 py-0.5 rounded bg-blue-50 text-blue-600">{s.name}</span>
                                   ))}
+                                  {item.minPriceApplied && item.minPriceReason && (
+                                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-amber-50 text-amber-700">{minPriceReasonLabel(item.minPriceReason)}</span>
+                                  )}
                                 </div>
                               )}
                             </td>
@@ -1075,7 +1102,19 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{fmtN(item.totalWeight, 1)}</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.pricePerM2.toLocaleString('ru-RU')}</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{discount > 0 ? `${discount}%` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemAfterDiscount.toLocaleString('ru-RU')} ₽</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                              {item.minPriceApplied && item.originalLinePrice !== undefined
+                                ? (
+                                  <>
+                                    <span className="line-through text-[10px] text-[#c4c4be] block leading-tight">
+                                      {item.originalLinePrice.toLocaleString('ru-RU')} ₽
+                                    </span>
+                                    {item.saleIncVat.toLocaleString('ru-RU')} ₽
+                                  </>
+                                )
+                                : <>{itemAfterDiscount.toLocaleString('ru-RU')} ₽</>
+                              }
+                            </td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{item.costExVat.toLocaleString('ru-RU')} ₽</td>
                             <td className="px-3 py-2.5 text-right">
                               <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
@@ -1216,9 +1255,23 @@ export default function B2BCalculatorPage() {
                   </div>
                 </details>
 
+                {totalMinPriceDelta > 0 && (
+                  <div className="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-amber-50 border border-amber-100">
+                    <span className="text-[12px] text-amber-700">{items.filter(i => i.minPriceApplied).length} поз. с мин. ценой</span>
+                    <span className="ml-auto text-[12px] font-semibold font-mono text-amber-800">+{fmt(totalMinPriceDelta)}</span>
+                    <span className="text-[11px] text-amber-600">доп. выручка</span>
+                  </div>
+                )}
+
                 {discount > maxDiscount && !isAdmin && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
                     ⚠️ Скидка клиента {discount}% превышает ваш лимит {maxDiscount}%. Просчёт можно сохранить — он попадёт на согласование руководителю.
+                  </div>
+                )}
+
+                {totalAfterDiscountWouldBreakMin && !isAdmin && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
+                    ⚠️ Скидка снижает итоговую сумму ниже минимальной стоимости позиций. После сохранения просчёт уйдёт на согласование.
                   </div>
                 )}
                 <button onClick={handleSave} disabled={saving || !clientId || items.length === 0}

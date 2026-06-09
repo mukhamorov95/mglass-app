@@ -39,6 +39,41 @@ export const WASTE_OPTIONS = [
   { value: 50, label: '50% — специальный' },
 ]
 
+// Минимальная стоимость позиции за штуку (₽, вкл. НДС)
+export const MIN_LINE_PRICES = {
+  glass_tempering:     2500,
+  tinted_tempering:    3000,
+  mirror_no_tempering: 1500,
+  narrow_detail:       3000,
+} as const
+
+export type MinPriceReason = keyof typeof MIN_LINE_PRICES
+
+function isTintedOrSpecialMaterial(category: string): boolean {
+  return ['тонированное', 'сатин', 'рифленое', 'декоративное'].includes(category)
+}
+
+export function resolveMinLinePrice(
+  category: string,
+  width: number,
+  height: number,
+  hasTempering: boolean,
+): { minPricePerPiece: number; reason: MinPriceReason } | null {
+  if (Math.min(width, height) < 250) {
+    return { minPricePerPiece: MIN_LINE_PRICES.narrow_detail, reason: 'narrow_detail' }
+  }
+  if (hasTempering && isTintedOrSpecialMaterial(category)) {
+    return { minPricePerPiece: MIN_LINE_PRICES.tinted_tempering, reason: 'tinted_tempering' }
+  }
+  if (hasTempering) {
+    return { minPricePerPiece: MIN_LINE_PRICES.glass_tempering, reason: 'glass_tempering' }
+  }
+  if (category === 'зеркало') {
+    return { minPricePerPiece: MIN_LINE_PRICES.mirror_no_tempering, reason: 'mirror_no_tempering' }
+  }
+  return null
+}
+
 export type ItemService = {
   id: number
   name: string
@@ -91,6 +126,12 @@ export type B2BOrderItem = {
   saleExVat: number       // продажа с услугами, без НДС
   outputVat: number
   saleIncVat: number      // итого к оплате клиентом
+  // минимальная стоимость строки (когда деталь слишком мала)
+  minPriceApplied?:   boolean
+  minPriceReason?:    MinPriceReason
+  originalLinePrice?: number
+  minLinePrice?:      number
+  minPriceDelta?:     number
 }
 
 export type B2BOrderTotals = {
@@ -176,7 +217,28 @@ export function calcItem(
   const inputVatFull    = Math.round(costWithVatFull * VAT / (100 + VAT))
   const costExVatFull   = costWithVatFull - inputVatFull
 
-  const saleIncVat = baseSaleIncVat + servicesCost + saleFacet
+  let saleIncVat = baseSaleIncVat + servicesCost + saleFacet
+
+  // Применяем минимальную стоимость строки (per-piece × quantity)
+  const minResolved = resolveMinLinePrice(mat.category, width, height, hasTempering)
+  let minPriceApplied: boolean | undefined
+  let minPriceReason:  MinPriceReason | undefined
+  let originalLinePrice: number | undefined
+  let minLinePrice:    number | undefined
+  let minPriceDelta:   number | undefined
+
+  if (minResolved) {
+    const minTotal = minResolved.minPricePerPiece * quantity
+    if (saleIncVat < minTotal) {
+      originalLinePrice = saleIncVat
+      minLinePrice      = minTotal
+      minPriceDelta     = minTotal - saleIncVat
+      saleIncVat        = minTotal
+      minPriceApplied   = true
+      minPriceReason    = minResolved.reason
+    }
+  }
+
   const saleExVat  = Math.round(saleIncVat * 100 / (100 + VAT))
   const outputVat  = saleIncVat - saleExVat
 
@@ -193,6 +255,7 @@ export function calcItem(
     costWithVat: costWithVatFull, inputVat: inputVatFull, costExVat: costExVatFull,
     pricePerM2, margin, vatRate: VAT, servicesCost, baseSaleExVat,
     saleExVat, outputVat, saleIncVat,
+    ...(minPriceApplied ? { minPriceApplied, minPriceReason, originalLinePrice, minLinePrice, minPriceDelta } : {}),
   }
 }
 
