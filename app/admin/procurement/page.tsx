@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase-browser'
 
 const STATUSES = [
   { key: 'invoice_received', label: 'Счёт получен',        color: 'border-t-gray-400',   bg: 'bg-gray-50'   },
@@ -62,6 +63,16 @@ type Order = {
   items_list: OrderItem[]
   items?: unknown[] | null
   created_at: string
+}
+
+type PurchaseOrderPayment = {
+  id: number
+  purchase_order_id: number
+  amount: number
+  payment_date: string | null
+  comment: string | null
+  created_at?: string
+  created_by?: string | null
 }
 
 const EMPTY_FORM = {
@@ -490,30 +501,25 @@ export default function ProcurementPage() {
   const [saving,       setSaving]       = useState(false)
   const [detail,       setDetail]       = useState<Order | null>(null)
 
-  // Payment inline edit
-  const [paymentForm,    setPaymentForm]    = useState({ amount: '', paid: '', date: '' })
-  const [savingPayment,  setSavingPayment]  = useState(false)
-  const [paymentEditOpen, setPaymentEditOpen] = useState(false)
+  // Payment history
+  const [paymentsByOrderId, setPaymentsByOrderId] = useState<Record<number, PurchaseOrderPayment[]>>({})
+  const [newPaymentForm,    setNewPaymentForm]    = useState({ amount: '', date: '', comment: '' })
+  const [addingPayment,     setAddingPayment]     = useState(false)
 
   // Pickup inline edit
   const [pickupForm,   setPickupForm]   = useState({ by: '', date: '' })
   const [savingPickup, setSavingPickup] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load(); loadPayments() }, [])
 
   // Reset inline forms when a different card is opened
   useEffect(() => {
     if (!detail) return
-    setPaymentForm({
-      amount: detail.amount         != null ? String(detail.amount)         : '',
-      paid:   detail.payment_amount != null ? String(detail.payment_amount) : '',
-      date:   detail.payment_date   ?? '',
-    })
     setPickupForm({
       by:   detail.pickup_by   ?? '',
       date: detail.pickup_date ?? '',
     })
-    setPaymentEditOpen(false)
+    setNewPaymentForm({ amount: '', date: '', comment: '' })
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detail?.id])
 
@@ -584,27 +590,77 @@ export default function ProcurementPage() {
     setSaving(false); setModal(false); load()
   }
 
+  async function loadPayments() {
+    try {
+      const sb = createClient()
+      const { data } = await sb
+        .from('purchase_order_payments')
+        .select('*')
+        .order('payment_date', { ascending: true })
+        .order('id', { ascending: true })
+      const grouped: Record<number, PurchaseOrderPayment[]> = {}
+      for (const p of (data ?? []) as PurchaseOrderPayment[]) {
+        if (!grouped[p.purchase_order_id]) grouped[p.purchase_order_id] = []
+        grouped[p.purchase_order_id].push(p)
+      }
+      setPaymentsByOrderId(grouped)
+    } catch {
+      // non-critical: page works without history on error
+    }
+  }
+
+  function getPaidTotal(orderId: number, order: Order): number {
+    const payments = paymentsByOrderId[orderId]
+    if (payments && payments.length > 0) {
+      return payments.reduce((sum, p) => sum + Number(p.amount || 0), 0)
+    }
+    return Number(order.payment_amount ?? 0)
+  }
+
+  async function addPayment(orderId: number) {
+    const amount = newPaymentForm.amount ? Number(newPaymentForm.amount) : null
+    if (!amount || amount <= 0) return
+    setAddingPayment(true)
+    try {
+      const sb = createClient()
+      await sb.from('purchase_order_payments').insert({
+        purchase_order_id: orderId,
+        amount,
+        payment_date: newPaymentForm.date || null,
+        comment:      newPaymentForm.comment || null,
+      })
+      // Reload payments for this order
+      const { data: payData } = await sb
+        .from('purchase_order_payments')
+        .select('*')
+        .eq('purchase_order_id', orderId)
+        .order('payment_date', { ascending: true })
+        .order('id', { ascending: true })
+      const newPayments = (payData ?? []) as PurchaseOrderPayment[]
+      setPaymentsByOrderId(prev => ({ ...prev, [orderId]: newPayments }))
+      // Compute new aggregate
+      const newTotal  = newPayments.reduce((s, p) => s + Number(p.amount || 0), 0)
+      const lastDate  = [...newPayments].reverse().find(p => p.payment_date)?.payment_date ?? null
+      // Sync aggregate back to purchase_orders for backward compat
+      await fetch('/api/admin/purchase-orders', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: orderId, payment_amount: newTotal, payment_date: lastDate }),
+      })
+      const update = (o: Order) =>
+        o.id === orderId ? { ...o, payment_amount: newTotal, payment_date: lastDate } : o
+      setOrders(prev => prev.map(update))
+      setDetail(prev => prev?.id === orderId ? update(prev) : prev)
+      setNewPaymentForm({ amount: '', date: '', comment: '' })
+    } finally {
+      setAddingPayment(false)
+    }
+  }
+
   async function moveStatus(id: number, newStatus: Status) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
     setDetail(prev => prev?.id === id ? { ...prev, status: newStatus } : prev)
     await fetch('/api/admin/purchase-orders', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: newStatus }) })
-  }
-
-  async function savePayment(id: number) {
-    setSavingPayment(true)
-    const amount = paymentForm.amount ? Number(paymentForm.amount) : null
-    const paid   = paymentForm.paid   ? Number(paymentForm.paid)   : null
-    const date   = paymentForm.date   || null
-    await fetch('/api/admin/purchase-orders', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, amount, payment_amount: paid, payment_date: date }),
-    })
-    const update = (o: Order) => o.id === id ? { ...o, amount, payment_amount: paid, payment_date: date } : o
-    setOrders(prev => prev.map(update))
-    setDetail(prev => prev?.id === id ? update(prev) : prev)
-    setSavingPayment(false)
-    setPaymentEditOpen(false)
   }
 
   async function savePickup(id: number) {
@@ -675,10 +731,30 @@ export default function ProcurementPage() {
                           onClick={() => setDetail(o)}>
                           <p className="text-[12px] font-semibold text-[#111110] leading-snug">{o.supplier_name}</p>
                           {o.invoice_number && <p className="text-[10px] text-[#9a9a95] mt-0.5">№{o.invoice_number}</p>}
-                          {o.amount != null && <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{formatMoney(o.amount)}</p>}
                           {o.amount != null && (() => {
-                            const b = paymentBadge(o.amount, o.payment_amount)
-                            return <span className={`inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full border mt-0.5 ${b.cls}`}>{b.label}</span>
+                            const a    = Number(o.amount)
+                            const paid = getPaidTotal(o.id, o)
+                            const debt = Math.max(a - paid, 0)
+                            return (
+                              <>
+                                <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{formatMoney(a)}</p>
+                                {paid <= 0 ? (
+                                  <div className="mt-1 rounded bg-red-50 px-2 py-1">
+                                    <p className="text-[9px] font-bold uppercase text-red-700 leading-tight">Не оплачен</p>
+                                    <p className="text-[10px] font-mono text-red-600">Осталось {formatMoney(a)}</p>
+                                  </div>
+                                ) : paid < a ? (
+                                  <div className="mt-1 rounded bg-red-50 px-2 py-1">
+                                    <p className="text-[9px] font-bold uppercase text-red-700 leading-tight">Частично оплачен — {formatMoney(paid)}</p>
+                                    <p className="text-[10px] font-mono text-red-600">Осталось {formatMoney(debt)}</p>
+                                  </div>
+                                ) : (
+                                  <div className="mt-1 rounded bg-green-50 px-2 py-1">
+                                    <p className="text-[9px] font-bold uppercase text-green-700 leading-tight">Оплачено — {formatMoney(paid)}</p>
+                                  </div>
+                                )}
+                              </>
+                            )
                           })()}
                           {o.issue_notes && <p className="text-[10px] text-red-600 mt-1 bg-red-50 px-1.5 py-0.5 rounded">⚠ {o.issue_notes}</p>}
                           {o.comment && <p className="text-[10px] text-[#6b6b66] mt-1 truncate">{o.comment}</p>}
@@ -722,9 +798,9 @@ export default function ProcurementPage() {
               {/* ── Financial block ─────────────────────────────────────────── */}
               {(() => {
                 const a    = Number(detail.amount ?? 0)
-                const p    = Number(detail.payment_amount ?? 0)
+                const p    = getPaidTotal(detail.id, detail)
                 const debt = Math.max(a - p, 0)
-                const b    = paymentBadge(detail.amount, detail.payment_amount)
+                const b    = paymentBadge(detail.amount, p > 0 ? p : detail.payment_amount)
                 return (
                   <div className="rounded-xl border border-[#e4e4e0] bg-[#fafaf9] px-4 py-3 space-y-2">
                     <div className="flex items-center justify-between">
@@ -745,53 +821,75 @@ export default function ProcurementPage() {
                         <p className={`font-semibold ${debt > 0 ? 'text-red-600' : 'text-[#9a9a95]'}`}>{debt > 0 ? formatMoney(debt) : '0 ₽'}</p>
                       </div>
                     </div>
-                    {detail.payment_date && (
-                      <p className="text-[11px] text-[#9a9a95]">Дата оплаты: {formatDate(detail.payment_date)}</p>
-                    )}
                   </div>
                 )
               })()}
 
-              {/* ── Payment edit ─────────────────────────────────────────────── */}
+              {/* ── Payment history + add payment ────────────────────────────── */}
               <div className="rounded-xl border border-[#e4e4e0] overflow-hidden">
-                <button
-                  onClick={() => setPaymentEditOpen(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-2.5 bg-[#fafaf9] hover:bg-[#f0f0ec] text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide transition-colors">
-                  <span>Внести оплату</span>
-                  <span className="text-[10px]">{paymentEditOpen ? '▲' : '▼'}</span>
-                </button>
-                {paymentEditOpen && (
-                  <div className="px-4 py-3 space-y-2 border-t border-[#e4e4e0]">
-                    <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Сумма счёта</label>
-                        <input type="number" value={paymentForm.amount}
-                          onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
-                          placeholder="0"
-                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Оплачено</label>
-                        <input type="number" value={paymentForm.paid}
-                          onChange={e => setPaymentForm(f => ({ ...f, paid: e.target.value }))}
-                          placeholder="0"
-                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Дата оплаты</label>
-                        <input type="date" value={paymentForm.date}
-                          onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))}
-                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                      </div>
+                <div className="px-4 py-2.5 bg-[#fafaf9] border-b border-[#e4e4e0]">
+                  <span className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">История оплат</span>
+                </div>
+                <div className="divide-y divide-[#f4f4f0]">
+                  {(paymentsByOrderId[detail.id] ?? []).length === 0 ? (
+                    <p className="px-4 py-3 text-[12px] text-[#9a9a95]">Платежей пока нет</p>
+                  ) : (
+                    <>
+                      {(paymentsByOrderId[detail.id] ?? []).map(pmt => (
+                        <div key={pmt.id} className="px-4 py-2.5 flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-[12px] text-[#6b6b66]">{pmt.payment_date ? formatDate(pmt.payment_date) : '—'}</p>
+                            {pmt.comment && <p className="text-[10px] text-[#9a9a95] mt-0.5">{pmt.comment}</p>}
+                          </div>
+                          <span className="text-[13px] font-semibold font-mono text-[#111110] flex-shrink-0">{formatMoney(pmt.amount)}</span>
+                        </div>
+                      ))}
+                      {(() => {
+                        const paid = getPaidTotal(detail.id, detail)
+                        const debt = Math.max(Number(detail.amount ?? 0) - paid, 0)
+                        return (
+                          <div className="px-4 py-2.5 bg-[#fafaf9] flex justify-between text-[12px]">
+                            <div className="space-y-0.5">
+                              <p className="text-[#9a9a95]">Итого оплачено</p>
+                              {debt > 0 && <p className="font-semibold text-red-600">Остаток: {formatMoney(debt)}</p>}
+                            </div>
+                            <span className="font-semibold text-emerald-700">{formatMoney(paid)}</span>
+                          </div>
+                        )
+                      })()}
+                    </>
+                  )}
+                </div>
+
+                {/* Add payment form */}
+                <div className="px-4 py-3 border-t border-[#e4e4e0] space-y-2 bg-white">
+                  <p className="text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide">Добавить платёж</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[#9a9a95] mb-1">Сумма</label>
+                      <input type="number" value={newPaymentForm.amount}
+                        onChange={e => setNewPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                        placeholder="0"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
                     </div>
-                    <button
-                      onClick={() => savePayment(detail.id)}
-                      disabled={savingPayment}
-                      className="w-full bg-[#111110] text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28] disabled:opacity-40">
-                      {savingPayment ? 'Сохранение...' : 'Сохранить оплату'}
-                    </button>
+                    <div>
+                      <label className="block text-[10px] text-[#9a9a95] mb-1">Дата</label>
+                      <input type="date" value={newPaymentForm.date}
+                        onChange={e => setNewPaymentForm(f => ({ ...f, date: e.target.value }))}
+                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                    </div>
                   </div>
-                )}
+                  <input value={newPaymentForm.comment}
+                    onChange={e => setNewPaymentForm(f => ({ ...f, comment: e.target.value }))}
+                    placeholder="Комментарий (необязательно)"
+                    className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                  <button
+                    onClick={() => addPayment(detail.id)}
+                    disabled={addingPayment || !newPaymentForm.amount}
+                    className="w-full bg-[#111110] text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28] disabled:opacity-40">
+                    {addingPayment ? 'Сохранение...' : 'Добавить платёж'}
+                  </button>
+                </div>
               </div>
 
               {/* ── Pickup block ─────────────────────────────────────────────── */}
