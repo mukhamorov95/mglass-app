@@ -121,6 +121,19 @@ function calcProgress(stages: Partial<Record<StageKey, string | null>>): number 
   return Math.round(done / PROGRESS_STAGES.length * 100)
 }
 
+type DeadlineControl = {
+  reason?: string
+  next_action?: string
+  responsible?: string
+  next_check_date?: string
+  updated_at?: string
+}
+
+const DC_REASONS = [
+  'Материал', 'Закалка', 'Фацет / триплекс', 'Производство',
+  'Упаковка', 'Ожидание клиента', 'Логистика', 'Другое',
+] as const
+
 type NotesData = {
   status?: string
   quote_date?: string
@@ -132,6 +145,7 @@ type NotesData = {
   material_status?: MaterialStatus
   material_status_updated_at?: string
   material_status_updated_by?: string
+  deadline_control?: DeadlineControl
 }
 
 type Order = {
@@ -375,6 +389,8 @@ export default function B2BOrdersPage() {
   const [selectedOrderIds, setSelectedOrderIds] = useState<Set<number>>(new Set())
   const [showMaterialReq, setShowMaterialReq]   = useState(false)
   const [creatingPurchaseOrder, setCreatingPurchaseOrder] = useState(false)
+  const [dcEdit, setDcEdit]   = useState<Record<number, Partial<DeadlineControl>>>({})
+  const [dcSaving, setDcSaving] = useState<number | null>(null)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -640,6 +656,34 @@ export default function B2BOrdersPage() {
     } else {
       setToastError(false)
       setToastMsg('Статус материала обновлён')
+    }
+    setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  async function saveDeadlineControl(orderId: number) {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    setDcSaving(orderId)
+    const draft = dcEdit[orderId] ?? {}
+    const merged: DeadlineControl = {
+      ...(order.parsedNotes.deadline_control ?? {}),
+      ...draft,
+      updated_at: new Date().toISOString(),
+    }
+    const newParsed: NotesData = { ...order.parsedNotes, deadline_control: merged }
+    const { error } = await createClient()
+      .from('b2b_orders')
+      .update({ notes: JSON.stringify(newParsed) })
+      .eq('id', orderId)
+    setDcSaving(null)
+    if (error) {
+      setToastError(true)
+      setToastMsg('Ошибка сохранения контроля срока')
+    } else {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
+      setDcEdit(prev => { const next = { ...prev }; delete next[orderId]; return next })
+      setToastError(false)
+      setToastMsg('Контроль срока сохранён')
     }
     setTimeout(() => setToastMsg(null), 3000)
   }
@@ -1157,6 +1201,89 @@ export default function B2BOrdersPage() {
           )}
         </div>
 
+        {/* Контроль срока */}
+        {(() => {
+          const ds = getDeadlineStatus(order)
+          const dc = pn.deadline_control
+          const isRisky = ds.status === 'overdue' || ds.status === 'today' || ds.status === 'tomorrow'
+          const setField = (field: keyof DeadlineControl, value: string) =>
+            setDcEdit(prev => ({ ...prev, [order.id]: { ...(prev[order.id] ?? dc ?? {}), [field]: value } }))
+          const fieldVal = (field: keyof Omit<DeadlineControl, 'updated_at'>): string =>
+            (dcEdit[order.id]?.[field] ?? dc?.[field] ?? '') as string
+
+          return (
+            <div className={`rounded-lg border p-3 space-y-2 ${isRisky ? 'border-amber-200 bg-amber-50/30' : 'border-[#e4e4e0] bg-white'}`}>
+              <div className="flex items-center gap-2">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Контроль срока</p>
+                {isRisky && (
+                  <span className="text-[9px] font-medium text-amber-700 bg-amber-100 px-1.5 py-px rounded">Требует контроля</span>
+                )}
+                {dc?.updated_at && !isRisky && (
+                  <span className="text-[10px] text-[#b0b0aa]">заполнен</span>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Причина риска</p>
+                  <select
+                    value={fieldVal('reason')}
+                    onChange={e => setField('reason', e.target.value)}
+                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white">
+                    <option value="">— не выбрано —</option>
+                    {DC_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Ответственный</p>
+                  <input
+                    type="text"
+                    value={fieldVal('responsible')}
+                    onChange={e => setField('responsible', e.target.value)}
+                    placeholder="Влад / Вера / Никита / Дима"
+                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующее действие</p>
+                <input
+                  type="text"
+                  value={fieldVal('next_action')}
+                  onChange={e => setField('next_action', e.target.value)}
+                  placeholder="Например: уточнить у закалки готовность партии, передать в упаковку"
+                  className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
+                />
+              </div>
+
+              <div className="flex items-end gap-2 flex-wrap">
+                <div>
+                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующий контроль</p>
+                  <input
+                    type="date"
+                    value={fieldVal('next_check_date')}
+                    onChange={e => setField('next_check_date', e.target.value)}
+                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white"
+                  />
+                </div>
+                <button
+                  onClick={() => saveDeadlineControl(order.id)}
+                  disabled={dcSaving === order.id}
+                  className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                  {dcSaving === order.id ? 'Сохр...' : 'Сохранить контроль'}
+                </button>
+              </div>
+
+              {dc?.updated_at && (
+                <p className="text-[10px] text-[#b0b0aa]">
+                  Обновлено: {new Date(dc.updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+          )
+        })()}
+
         {/* Позиции */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Позиции</p>
@@ -1431,6 +1558,9 @@ export default function B2BOrdersPage() {
                             {ds.label}
                           </span>
                         )}
+                        {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
+                          <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                        )}
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {!isShipped && (
@@ -1555,6 +1685,9 @@ export default function B2BOrdersPage() {
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                                         {ds.label}
                                       </span>
+                                    )}
+                                    {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
+                                      <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66]">📝 Контроль</span>
                                     )}
                                     {lastDoneIdx >= 0 && !isShipped && (
                                       <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>
