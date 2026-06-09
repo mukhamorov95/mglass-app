@@ -15,6 +15,18 @@ const PATTERN_OPTIONS: { value: PatternDirection; label: string }[] = [
 
 type SupplierOption = { id: string; name: string }
 
+type SheetVariant = {
+  id: number
+  material_id: number
+  sheet_width: number
+  sheet_height: number
+  supplier_id: string | null
+  supplier_material_name: string | null
+  is_default: boolean
+  active: boolean
+  sort_order: number
+}
+
 const EMPTY: Omit<B2BMaterial, 'id' | 'created_at'> = {
   name: '', category: 'стекло', thickness: 6, cost_price: 0, sale_price: 0,
   vat_rate: 22, waste_percent: 15, passthrough: false, active: true, notes: null,
@@ -67,6 +79,9 @@ export default function B2BMaterialsPage() {
   const [error, setError] = useState<string | null>(null)
   const [filterCat, setFilterCat] = useState<string>('all')
   const [suppliers, setSuppliers] = useState<SupplierOption[]>([])
+  const [sheetVariants, setSheetVariants] = useState<Record<number, SheetVariant[]>>({})
+  const [newVariantWidth, setNewVariantWidth] = useState(3210)
+  const [newVariantHeight, setNewVariantHeight] = useState(2250)
 
   useEffect(() => {
     load()
@@ -82,13 +97,20 @@ export default function B2BMaterialsPage() {
   async function load() {
     setLoading(true)
     const supabase = createClient()
-    const { data, error } = await supabase
-      .from('b2b_materials')
-      .select('*')
-      .order('name')
-      .order('thickness')
+    const [{ data, error }, { data: varData }] = await Promise.all([
+      supabase.from('b2b_materials').select('*').order('name').order('thickness'),
+      supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
+    ])
     if (error) setError(error.message)
-    else setItems((data ?? []).map(parseNotes))
+    else {
+      setItems((data ?? []).map(parseNotes))
+      const grouped: Record<number, SheetVariant[]> = {}
+      for (const v of (varData ?? []) as SheetVariant[]) {
+        if (!grouped[v.material_id]) grouped[v.material_id] = []
+        grouped[v.material_id].push(v)
+      }
+      setSheetVariants(grouped)
+    }
     setLoading(false)
   }
 
@@ -155,6 +177,43 @@ export default function B2BMaterialsPage() {
     })
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  async function addSheetVariant(materialId: number) {
+    if (!newVariantWidth || !newVariantHeight) return
+    const sb = createClient()
+    const existing = sheetVariants[materialId] ?? []
+    const isFirst = existing.filter(v => v.active).length === 0
+    const { data, error } = await sb
+      .from('b2b_material_sheet_variants')
+      .insert({ material_id: materialId, sheet_width: newVariantWidth, sheet_height: newVariantHeight, is_default: isFirst })
+      .select()
+      .single()
+    if (error) { setError(error.message); return }
+    setSheetVariants(sv => ({ ...sv, [materialId]: [...(sv[materialId] ?? []), data as SheetVariant] }))
+  }
+
+  async function setDefaultSheetVariant(materialId: number, variantId: number) {
+    const sb = createClient()
+    await sb.from('b2b_material_sheet_variants').update({ is_default: false }).eq('material_id', materialId)
+    const { error } = await sb.from('b2b_material_sheet_variants').update({ is_default: true }).eq('id', variantId)
+    if (error) { setError(error.message); return }
+    setSheetVariants(sv => ({
+      ...sv,
+      [materialId]: (sv[materialId] ?? []).map(v => ({ ...v, is_default: v.id === variantId })),
+    }))
+  }
+
+  async function toggleSheetVariantActive(materialId: number, variant: SheetVariant) {
+    const sb = createClient()
+    const update: { active: boolean; is_default?: boolean } = { active: !variant.active }
+    if (variant.is_default && variant.active) update.is_default = false
+    const { error } = await sb.from('b2b_material_sheet_variants').update(update).eq('id', variant.id)
+    if (error) { setError(error.message); return }
+    setSheetVariants(sv => ({
+      ...sv,
+      [materialId]: (sv[materialId] ?? []).map(v => v.id === variant.id ? { ...v, ...update } : v),
+    }))
   }
 
   function handleCategoryChange(cat: string) {
@@ -334,6 +393,64 @@ export default function B2BMaterialsPage() {
               </div>
             </div>
           </div>
+
+          {/* Форматы листов */}
+          {editingId !== null && (
+            <div className="col-span-4">
+              <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2 pt-1 border-t border-[#f0f0ec] mt-1">
+                Форматы листов
+              </div>
+              <p className="text-[11px] text-amber-600 mb-2">
+                Расчёты пока используют основной формат из полей материала. Варианты форматов будут подключены в следующем этапе (закупка, раскрой).
+              </p>
+              {(sheetVariants[editingId] ?? []).length === 0 ? (
+                <p className="text-[12px] text-[#9a9a95] mb-2">Нет добавленных форматов</p>
+              ) : (
+                <div className="space-y-1 mb-3">
+                  {(sheetVariants[editingId] ?? []).map(v => (
+                    <div key={v.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${v.active ? 'bg-white border-[#e4e4e0]' : 'bg-[#f8f8f7] border-[#e4e4e0] opacity-50'}`}>
+                      <span className="font-mono text-[13px] text-[#111110] flex-1">{v.sheet_width} × {v.sheet_height} мм</span>
+                      {v.is_default && v.active
+                        ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-600">основной</span>
+                        : v.active && (
+                          <button onClick={() => setDefaultSheetVariant(editingId, v.id)}
+                            className="text-[11px] text-blue-500 hover:text-blue-700 transition-colors">сделать основным</button>
+                        )
+                      }
+                      <button onClick={() => toggleSheetVariantActive(editingId, v)}
+                        className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                        {v.active ? 'скрыть' : 'показать'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div className="flex items-end gap-2">
+                <div>
+                  <label className="block text-[11px] text-[#9a9a95] mb-1">Длина, мм</label>
+                  <input type="number" min="100" max="9000"
+                    className="w-24 border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={newVariantWidth}
+                    onChange={e => setNewVariantWidth(Number(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[11px] text-[#9a9a95] mb-1">Ширина, мм</label>
+                  <input type="number" min="100" max="9000"
+                    className="w-24 border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    value={newVariantHeight}
+                    onChange={e => setNewVariantHeight(Number(e.target.value))}
+                  />
+                </div>
+                <button
+                  onClick={() => addSheetVariant(editingId)}
+                  disabled={!newVariantWidth || !newVariantHeight}
+                  className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  + Добавить формат
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="col-span-2">
             <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Примечание</label>
