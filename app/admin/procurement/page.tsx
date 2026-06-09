@@ -3,15 +3,28 @@
 import { useEffect, useState } from 'react'
 
 const STATUSES = [
-  { key: 'invoice_received', label: 'Счёт получен',     color: 'border-t-gray-400',   bg: 'bg-gray-50' },
-  { key: 'pending_approval', label: 'На согласовании',  color: 'border-t-yellow-400', bg: 'bg-yellow-50' },
-  { key: 'waiting_payment',  label: 'Ожидает оплаты',   color: 'border-t-orange-400', bg: 'bg-orange-50' },
-  { key: 'partially_paid',   label: 'Частично оплачен', color: 'border-t-blue-400',   bg: 'bg-blue-50' },
-  { key: 'paid',             label: 'Оплачен',          color: 'border-t-teal-400',   bg: 'bg-teal-50' },
-  { key: 'in_transit',       label: 'В пути',           color: 'border-t-purple-400', bg: 'bg-purple-50' },
-  { key: 'picked_up',        label: 'Забран',           color: 'border-t-green-400',  bg: 'bg-green-50' },
-  { key: 'closed',           label: 'Закрыто',          color: 'border-t-gray-300',   bg: 'bg-gray-50' },
+  { key: 'invoice_received', label: 'Счёт получен',        color: 'border-t-gray-400',   bg: 'bg-gray-50'   },
+  { key: 'sent_to_payment',  label: 'Отправлен на оплату',  color: 'border-t-orange-400', bg: 'bg-orange-50' },
+  { key: 'paid_ready',       label: 'Оплачен / к забору',   color: 'border-t-teal-400',   bg: 'bg-teal-50'   },
+  { key: 'picked_up',        label: 'Материал забран',      color: 'border-t-green-400',  bg: 'bg-green-50'  },
+  { key: 'closed',           label: 'Закрыто',              color: 'border-t-gray-300',   bg: 'bg-gray-50'   },
 ] as const
+
+// Maps legacy DB status values to current canonical columns
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  pending_approval: 'invoice_received',
+  waiting_payment:  'sent_to_payment',
+  partially_paid:   'sent_to_payment',
+  paid:             'paid_ready',
+  in_transit:       'picked_up',
+}
+
+function normalizeProcurementColumn(raw: string): Status {
+  const allowed = STATUSES.map(s => s.key) as string[]
+  if (allowed.includes(raw)) return raw as Status
+  const mapped = LEGACY_STATUS_MAP[raw]
+  return (mapped as Status | undefined) ?? 'invoice_received'
+}
 
 type Status = typeof STATUSES[number]['key']
 
@@ -99,6 +112,15 @@ function formatDate(value: unknown): string {
   return d.toLocaleDateString('ru-RU')
 }
 
+function paymentBadge(amount: number | null, paid: number | null): { label: string; cls: string } {
+  const a = Number(amount ?? 0)
+  const p = Number(paid ?? 0)
+  if (a <= 0) return { label: 'Сумма не указана',  cls: 'bg-gray-100 text-gray-500 border-gray-200' }
+  if (p <= 0)  return { label: 'Не оплачено',       cls: 'bg-red-100 text-red-700 border-red-200' }
+  if (p < a)   return { label: 'Частично оплачено', cls: 'bg-amber-100 text-amber-700 border-amber-200' }
+  return { label: 'Оплачено', cls: 'bg-green-100 text-green-700 border-green-200' }
+}
+
 // ─── Material purchase table helpers ──────────────────────────────────────────
 
 function safeItems(value: unknown): PurchaseItem[] {
@@ -177,11 +199,8 @@ function hasTintClarificationIssues(items: unknown): boolean {
 
 function normalizeOrder(row: unknown): Order {
   const r = row as Record<string, unknown>
-  const allowedStatuses: string[] = STATUSES.map(s => s.key)
   const rawStatus = String(r?.status ?? '')
-  const status: Status = allowedStatuses.includes(rawStatus)
-    ? (rawStatus as Status)
-    : 'invoice_received'
+  const status    = normalizeProcurementColumn(rawStatus)
 
   return {
     id:             Number(r?.id),
@@ -462,16 +481,41 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
 }
 
 export default function ProcurementPage() {
-  const [orders,    setOrders]    = useState<Order[]>([])
-  const [loading,   setLoading]   = useState(true)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  const [modal,     setModal]     = useState(false)
-  const [form,      setForm]      = useState(EMPTY_FORM)
-  const [editId,    setEditId]    = useState<number | null>(null)
-  const [saving,    setSaving]    = useState(false)
-  const [detail,    setDetail]    = useState<Order | null>(null)
+  const [orders,       setOrders]       = useState<Order[]>([])
+  const [loading,      setLoading]      = useState(true)
+  const [loadError,    setLoadError]    = useState<string | null>(null)
+  const [modal,        setModal]        = useState(false)
+  const [form,         setForm]         = useState(EMPTY_FORM)
+  const [editId,       setEditId]       = useState<number | null>(null)
+  const [saving,       setSaving]       = useState(false)
+  const [detail,       setDetail]       = useState<Order | null>(null)
+
+  // Payment inline edit
+  const [paymentForm,    setPaymentForm]    = useState({ amount: '', paid: '', date: '' })
+  const [savingPayment,  setSavingPayment]  = useState(false)
+  const [paymentEditOpen, setPaymentEditOpen] = useState(false)
+
+  // Pickup inline edit
+  const [pickupForm,   setPickupForm]   = useState({ by: '', date: '' })
+  const [savingPickup, setSavingPickup] = useState(false)
 
   useEffect(() => { load() }, [])
+
+  // Reset inline forms when a different card is opened
+  useEffect(() => {
+    if (!detail) return
+    setPaymentForm({
+      amount: detail.amount         != null ? String(detail.amount)         : '',
+      paid:   detail.payment_amount != null ? String(detail.payment_amount) : '',
+      date:   detail.payment_date   ?? '',
+    })
+    setPickupForm({
+      by:   detail.pickup_by   ?? '',
+      date: detail.pickup_date ?? '',
+    })
+    setPaymentEditOpen(false)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detail?.id])
 
   async function load() {
     setLoading(true)
@@ -542,7 +586,40 @@ export default function ProcurementPage() {
 
   async function moveStatus(id: number, newStatus: Status) {
     setOrders(prev => prev.map(o => o.id === id ? { ...o, status: newStatus } : o))
+    setDetail(prev => prev?.id === id ? { ...prev, status: newStatus } : prev)
     await fetch('/api/admin/purchase-orders', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status: newStatus }) })
+  }
+
+  async function savePayment(id: number) {
+    setSavingPayment(true)
+    const amount = paymentForm.amount ? Number(paymentForm.amount) : null
+    const paid   = paymentForm.paid   ? Number(paymentForm.paid)   : null
+    const date   = paymentForm.date   || null
+    await fetch('/api/admin/purchase-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, amount, payment_amount: paid, payment_date: date }),
+    })
+    const update = (o: Order) => o.id === id ? { ...o, amount, payment_amount: paid, payment_date: date } : o
+    setOrders(prev => prev.map(update))
+    setDetail(prev => prev?.id === id ? update(prev) : prev)
+    setSavingPayment(false)
+    setPaymentEditOpen(false)
+  }
+
+  async function savePickup(id: number) {
+    setSavingPickup(true)
+    const by   = pickupForm.by   || null
+    const date = pickupForm.date || new Date().toISOString().slice(0, 10)
+    await fetch('/api/admin/purchase-orders', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, pickup_by: by, pickup_date: date, status: 'picked_up' }),
+    })
+    const update = (o: Order) => o.id === id ? { ...o, pickup_by: by, pickup_date: date, status: 'picked_up' as Status } : o
+    setOrders(prev => prev.map(update))
+    setDetail(prev => prev?.id === id ? update(prev) : prev)
+    setSavingPickup(false)
   }
 
   async function deleteOrder(id: number) {
@@ -599,6 +676,10 @@ export default function ProcurementPage() {
                           <p className="text-[12px] font-semibold text-[#111110] leading-snug">{o.supplier_name}</p>
                           {o.invoice_number && <p className="text-[10px] text-[#9a9a95] mt-0.5">№{o.invoice_number}</p>}
                           {o.amount != null && <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{formatMoney(o.amount)}</p>}
+                          {o.amount != null && (() => {
+                            const b = paymentBadge(o.amount, o.payment_amount)
+                            return <span className={`inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full border mt-0.5 ${b.cls}`}>{b.label}</span>
+                          })()}
                           {o.issue_notes && <p className="text-[10px] text-red-600 mt-1 bg-red-50 px-1.5 py-0.5 rounded">⚠ {o.issue_notes}</p>}
                           {o.comment && <p className="text-[10px] text-[#6b6b66] mt-1 truncate">{o.comment}</p>}
                           {o.order_refs.length > 0 && (
@@ -636,18 +717,150 @@ export default function ProcurementPage() {
                 {STATUSES.find(s => s.key === detail.status)?.label ?? detail.status}
               </span>
             </div>
-            <div className="space-y-2 text-[13px]">
-              {detail.amount != null && <Row label="Сумма" value={formatMoney(detail.amount)} />}
+            <div className="space-y-3 text-[13px]">
+
+              {/* ── Financial block ─────────────────────────────────────────── */}
+              {(() => {
+                const a    = Number(detail.amount ?? 0)
+                const p    = Number(detail.payment_amount ?? 0)
+                const debt = Math.max(a - p, 0)
+                const b    = paymentBadge(detail.amount, detail.payment_amount)
+                return (
+                  <div className="rounded-xl border border-[#e4e4e0] bg-[#fafaf9] px-4 py-3 space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">Оплата</span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${b.cls}`}>{b.label}</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3">
+                      <div>
+                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Сумма счёта</p>
+                        <p className="font-semibold text-[#111110]">{a > 0 ? formatMoney(a) : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Оплачено</p>
+                        <p className="font-semibold text-emerald-700">{p > 0 ? formatMoney(p) : '—'}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Остаток</p>
+                        <p className={`font-semibold ${debt > 0 ? 'text-red-600' : 'text-[#9a9a95]'}`}>{debt > 0 ? formatMoney(debt) : '0 ₽'}</p>
+                      </div>
+                    </div>
+                    {detail.payment_date && (
+                      <p className="text-[11px] text-[#9a9a95]">Дата оплаты: {formatDate(detail.payment_date)}</p>
+                    )}
+                  </div>
+                )
+              })()}
+
+              {/* ── Payment edit ─────────────────────────────────────────────── */}
+              <div className="rounded-xl border border-[#e4e4e0] overflow-hidden">
+                <button
+                  onClick={() => setPaymentEditOpen(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-2.5 bg-[#fafaf9] hover:bg-[#f0f0ec] text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide transition-colors">
+                  <span>Внести оплату</span>
+                  <span className="text-[10px]">{paymentEditOpen ? '▲' : '▼'}</span>
+                </button>
+                {paymentEditOpen && (
+                  <div className="px-4 py-3 space-y-2 border-t border-[#e4e4e0]">
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Сумма счёта</label>
+                        <input type="number" value={paymentForm.amount}
+                          onChange={e => setPaymentForm(f => ({ ...f, amount: e.target.value }))}
+                          placeholder="0"
+                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Оплачено</label>
+                        <input type="number" value={paymentForm.paid}
+                          onChange={e => setPaymentForm(f => ({ ...f, paid: e.target.value }))}
+                          placeholder="0"
+                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">Дата оплаты</label>
+                        <input type="date" value={paymentForm.date}
+                          onChange={e => setPaymentForm(f => ({ ...f, date: e.target.value }))}
+                          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => savePayment(detail.id)}
+                      disabled={savingPayment}
+                      className="w-full bg-[#111110] text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28] disabled:opacity-40">
+                      {savingPayment ? 'Сохранение...' : 'Сохранить оплату'}
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── Pickup block ─────────────────────────────────────────────── */}
+              <div className="rounded-xl border border-[#e4e4e0] px-4 py-3 space-y-2">
+                <p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">Вывоз материала</p>
+                {detail.pickup_date || detail.pickup_by ? (
+                  <div className="space-y-1">
+                    {detail.pickup_by   && <Row label="Забрал"     value={detail.pickup_by} />}
+                    {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-[#9a9a95] mb-1">Кто забирает</label>
+                      <input value={pickupForm.by}
+                        onChange={e => setPickupForm(f => ({ ...f, by: e.target.value }))}
+                        placeholder="Сергей"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-[#9a9a95] mb-1">Дата вывоза</label>
+                      <input type="date" value={pickupForm.date}
+                        onChange={e => setPickupForm(f => ({ ...f, date: e.target.value }))}
+                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                    </div>
+                  </div>
+                )}
+                {detail.status !== 'picked_up' && detail.status !== 'closed' && (
+                  <button
+                    onClick={() => savePickup(detail.id)}
+                    disabled={savingPickup}
+                    className="w-full bg-green-600 text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-green-700 disabled:opacity-40">
+                    {savingPickup ? 'Сохранение...' : 'Материал забран'}
+                  </button>
+                )}
+              </div>
+
+              {/* ── Status action buttons ────────────────────────────────────── */}
+              <div className="flex flex-wrap gap-2">
+                {detail.status !== 'sent_to_payment' && detail.status !== 'paid_ready' && detail.status !== 'picked_up' && detail.status !== 'closed' && (
+                  <button onClick={() => moveStatus(detail.id, 'sent_to_payment')}
+                    className="flex-1 min-w-[130px] bg-orange-50 text-orange-700 border border-orange-200 text-[12px] font-medium rounded-lg py-1.5 hover:bg-orange-100">
+                    Отправить на оплату
+                  </button>
+                )}
+                {detail.status !== 'paid_ready' && detail.status !== 'picked_up' && detail.status !== 'closed' && (
+                  <button onClick={() => moveStatus(detail.id, 'paid_ready')}
+                    className="flex-1 min-w-[130px] bg-teal-50 text-teal-700 border border-teal-200 text-[12px] font-medium rounded-lg py-1.5 hover:bg-teal-100">
+                    Готов к забору
+                  </button>
+                )}
+                {detail.status !== 'closed' && (
+                  <button onClick={() => moveStatus(detail.id, 'closed')}
+                    className="flex-1 min-w-[130px] bg-gray-50 text-gray-600 border border-gray-200 text-[12px] font-medium rounded-lg py-1.5 hover:bg-gray-100">
+                    Закрыть
+                  </button>
+                )}
+              </div>
+
+              {/* ── Other info ───────────────────────────────────────────────── */}
               {detail.approved_by && <Row label="Согласовал" value={detail.approved_by} />}
-              {detail.payment_date && <Row label="Дата оплаты" value={formatDate(detail.payment_date)} />}
-              {detail.payment_amount != null && <Row label="Оплачено" value={formatMoney(detail.payment_amount)} />}
-              {detail.pickup_by && <Row label="Забирает" value={detail.pickup_by} />}
-              {detail.pickup_date && <Row label="Дата забора" value={formatDate(detail.pickup_date)} />}
               {detail.order_refs.length > 0 && <Row label="Заказы" value={detail.order_refs.join(', ')} />}
               <MaterialItemsSummary items={detail.items} />
-              {detail.comment && <Row label="Комментарий" value={detail.comment} />}
-              {detail.issue_notes && <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>}
+              {detail.comment    && <Row label="Комментарий" value={detail.comment} />}
+              {detail.issue_notes && (
+                <div className="bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-red-700">⚠ {detail.issue_notes}</div>
+              )}
             </div>
+
             <div className="flex gap-2 mt-5">
               <button onClick={() => openEdit(detail)} className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
               <button type="button" onClick={() => printSupplierPdf(detail.items)} className="flex-1 bg-[#f0f0ec] text-[#111110] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Сформировать PDF поставщику</button>
