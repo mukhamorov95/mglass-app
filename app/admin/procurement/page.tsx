@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 
 const STATUSES = [
   { key: 'invoice_received', label: 'Счёт получен',        color: 'border-t-gray-400',   bg: 'bg-gray-50'   },
@@ -592,14 +591,11 @@ export default function ProcurementPage() {
 
   async function loadPayments() {
     try {
-      const sb = createClient()
-      const { data } = await sb
-        .from('purchase_order_payments')
-        .select('*')
-        .order('payment_date', { ascending: true })
-        .order('id', { ascending: true })
+      const res = await fetch('/api/admin/purchase-order-payments')
+      if (!res.ok) return
+      const data = (await res.json()) as PurchaseOrderPayment[]
       const grouped: Record<number, PurchaseOrderPayment[]> = {}
-      for (const p of (data ?? []) as PurchaseOrderPayment[]) {
+      for (const p of data ?? []) {
         if (!grouped[p.purchase_order_id]) grouped[p.purchase_order_id] = []
         grouped[p.purchase_order_id].push(p)
       }
@@ -622,22 +618,28 @@ export default function ProcurementPage() {
     if (!amount || amount <= 0) return
     setAddingPayment(true)
     try {
-      const sb = createClient()
-      await sb.from('purchase_order_payments').insert({
-        purchase_order_id: orderId,
-        amount,
-        payment_date: newPaymentForm.date || null,
-        comment:      newPaymentForm.comment || null,
+      const res = await fetch('/api/admin/purchase-order-payments', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          purchase_order_id: orderId,
+          amount,
+          payment_date: newPaymentForm.date    || null,
+          comment:      newPaymentForm.comment || null,
+        }),
       })
-      // Reload payments for this order
-      const { data: payData } = await sb
-        .from('purchase_order_payments')
-        .select('*')
-        .eq('purchase_order_id', orderId)
-        .order('payment_date', { ascending: true })
-        .order('id', { ascending: true })
-      const newPayments = (payData ?? []) as PurchaseOrderPayment[]
-      setPaymentsByOrderId(prev => ({ ...prev, [orderId]: newPayments }))
+      const json = await res.json()
+      if (!res.ok || json.error) {
+        console.error('Failed to add purchase order payment', json.error)
+        alert(`Не удалось сохранить платёж: ${json.error ?? res.statusText}`)
+        return
+      }
+      // Reload payments for this order from server
+      const listRes = await fetch(`/api/admin/purchase-order-payments?purchase_order_id=${orderId}`)
+      if (listRes.ok) {
+        const newPayments = (await listRes.json()) as PurchaseOrderPayment[]
+        setPaymentsByOrderId(prev => ({ ...prev, [orderId]: newPayments }))
+      }
       setNewPaymentForm({ amount: '', date: '', comment: '' })
     } finally {
       setAddingPayment(false)
