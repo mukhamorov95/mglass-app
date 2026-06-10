@@ -391,6 +391,7 @@ export default function B2BOrdersPage() {
   const [creatingPurchaseOrder, setCreatingPurchaseOrder] = useState(false)
   const [dcEdit, setDcEdit]   = useState<Record<number, Partial<DeadlineControl>>>({})
   const [dcSaving, setDcSaving] = useState<number | null>(null)
+  const [productionDayMode, setProductionDayMode] = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -600,6 +601,27 @@ export default function B2BOrdersPage() {
     }
     return groups
   }, [orders])
+
+  const productionDayGroups = useMemo(() => {
+    const base = search.trim()
+      ? orders.filter(o => {
+          const q = search.trim().toLowerCase()
+          const pn = o.parsedNotes
+          return (
+            o.client_name.toLowerCase().includes(q) ||
+            (o.custom_number ?? '').toLowerCase().includes(q) ||
+            (o.client_order_number ?? '').toLowerCase().includes(q) ||
+            getOrderNum(pn).toLowerCase().includes(q)
+          )
+        })
+      : orders
+    return {
+      overdue:  base.filter(o => getDeadlineStatus(o).status === 'overdue'),
+      today:    base.filter(o => getDeadlineStatus(o).status === 'today'),
+      tomorrow: base.filter(o => getDeadlineStatus(o).status === 'tomorrow'),
+      ready:    base.filter(o => getDeadlineStatus(o).status === 'ready'),
+    }
+  }, [orders, search])
 
   function toggleMonth(key: string) {
     setExpandedMonths(prev => {
@@ -1431,6 +1453,15 @@ export default function B2BOrdersPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setProductionDayMode(v => !v)}
+            className={`text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+              productionDayMode
+                ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                : 'border-[#e4e4e0] text-[#6b6b66] hover:border-amber-500 hover:text-amber-700'
+            }`}>
+            🏭 Производственный день
+          </button>
+          <button
             disabled={selectedOrderIds.size === 0}
             onClick={() => setShowMaterialReq(true)}
             className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
@@ -1506,7 +1537,108 @@ export default function B2BOrdersPage() {
       </div>
 
       {/* Результат */}
-      {isFiltered ? (
+      {productionDayMode ? (() => {
+        const groups = productionDayGroups
+        const totalCritical = groups.overdue.length + groups.today.length + groups.tomorrow.length + groups.ready.length
+        const sections = [
+          { emoji: '🔥', label: 'Просрочено',        key: 'overdue',   orders: groups.overdue,   color: 'text-red-600',     hdr: 'bg-red-50/50' },
+          { emoji: '🟠', label: 'Срок сегодня',      key: 'today',     orders: groups.today,     color: 'text-amber-700',   hdr: 'bg-amber-50/50' },
+          { emoji: '🟡', label: 'Срок завтра',       key: 'tomorrow',  orders: groups.tomorrow,  color: 'text-yellow-700',  hdr: 'bg-yellow-50/50' },
+          { emoji: '✅', label: 'Готово / упаковано', key: 'ready',     orders: groups.ready,     color: 'text-emerald-700', hdr: 'bg-emerald-50/50' },
+        ] as const
+        if (totalCritical === 0) {
+          return (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
+              <p className="text-[15px] font-medium text-emerald-700">✅ На сегодня критичных B2B-заказов нет</p>
+            </div>
+          )
+        }
+        return (
+          <div className="space-y-3">
+            {/* Сводка */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-2.5 flex flex-wrap gap-5 text-[12px] items-center">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#b0b0aa]">Сегодня</span>
+              <span><span className="text-[#9a9a95]">Просрочено:</span><span className="font-bold text-red-600 ml-1">{groups.overdue.length}</span></span>
+              <span><span className="text-[#9a9a95]">Сегодня:</span><span className="font-bold text-amber-700 ml-1">{groups.today.length}</span></span>
+              <span><span className="text-[#9a9a95]">Завтра:</span><span className="font-bold text-yellow-700 ml-1">{groups.tomorrow.length}</span></span>
+              <span><span className="text-[#9a9a95]">Готово:</span><span className="font-bold text-emerald-700 ml-1">{groups.ready.length}</span></span>
+            </div>
+            {/* Группы */}
+            {sections.map(sec => (
+              <div key={sec.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className={`px-4 py-2 flex items-center gap-1.5 border-b border-[#f0f0ec] ${sec.hdr}`}>
+                  <span className="text-[13px] font-bold text-[#111110]">{sec.emoji} {sec.label} —</span>
+                  <span className={`text-[13px] font-bold ${sec.color}`}>{sec.orders.length}</span>
+                </div>
+                {sec.orders.length === 0 ? (
+                  <p className="px-4 py-3 text-[12px] text-[#b0b0aa]">Нет заказов</p>
+                ) : (
+                  <div className="divide-y divide-[#f8f8f7]">
+                    {sec.orders.map(order => {
+                      const pn = order.parsedNotes
+                      const isOpen = expanded === order.id
+                      const finalPrice = getFinalPrice(order)
+                      const progress = calcProgress(pn.stages ?? {})
+                      const ds = getDeadlineStatus(order)
+                      const dc = pn.deadline_control
+                      return (
+                        <div key={order.id}>
+                          <div
+                            className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
+                            onClick={() => setExpanded(isOpen ? null : order.id)}>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {order.custom_number && (
+                                  <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
+                                    {order.custom_number}
+                                  </span>
+                                )}
+                                {order.client_order_number && (
+                                  <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
+                                    кл.{order.client_order_number}
+                                  </span>
+                                )}
+                                <span className="text-[12px] font-semibold text-[#111110]">{order.client_name}</span>
+                                <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
+                                  {ds.label}
+                                </span>
+                                {(dc?.next_action || dc?.reason) && (
+                                  <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                                )}
+                              </div>
+                              {dc && (dc.next_action || dc.responsible || dc.next_check_date) && (
+                                <div className="mt-1 text-[10px] text-[#6b6b66] flex flex-wrap gap-x-3 gap-y-0.5">
+                                  {dc.next_action && <span>→ {dc.next_action}</span>}
+                                  {dc.responsible && <span className="font-medium text-[#111110]">{dc.responsible}</span>}
+                                  {dc.next_check_date && (
+                                    <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                              {!pn.stages?.shipped && progress > 0 && (
+                                <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
+                                  {progress}%
+                                </span>
+                              )}
+                              <span className="text-[12px] font-semibold font-mono text-[#111110]">{fmt(finalPrice)}</span>
+                              <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                              </svg>
+                            </div>
+                          </div>
+                          {isOpen && renderOrderBody(order)}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )
+      })() : isFiltered ? (
         <div>
           <p className="text-[11px] text-[#8a8a85] mb-2 px-1">
             {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов`}
