@@ -1,5 +1,27 @@
 ## Текущая задача
-B2B Production Day v2 — закрыт и закоммичен (2ee4d7e).
+Monthly bulk shipped cleanup — закрыт и закоммичен (3fcc00d), pushed.
+
+---
+
+### Monthly Bulk Shipped Cleanup — ЗАКРЫТО (10 июня 2026)
+
+**Коммит:** `3fcc00d`
+
+**Файл:** только `app/b2b-orders/page.tsx`
+
+**Что реализовано:**
+- `BulkAction` тип + `NotesData.bulk_actions?: BulkAction[]`
+- `getOrderMonthKey(order)` — group key: `launched_at` → `created_at`
+- `formatMonthKey(key)` — `"2026-05"` → `"Май 2026"`
+- `bulkActionLoading: string | null` — state по monthKey
+- `bulkMarkMonthAsShipped(monthKey, orders)` — последовательный update с audit log
+- Секция 🔥 Просрочено в Production Day: месячные подгруппы + кнопка «Отметить месяц отгруженным»
+- Safety guard: `if (getDeadlineStatus(order).status !== 'overdue') continue`
+- `packaged` не перезаписывается если уже был
+- `detail_stages`, `deadline_control` не трогаются (spread)
+- `bulk_actions[]` накапливается в notes, отображается в карточке заказа
+- `JSON.stringify(nextNotes)` сохранён намеренно — `b2b_orders.notes` является TEXT-колонкой
+- Заметки safety-fix отклонены: замена `.update({ notes: nextNotes })` сломала бы TEXT-поле
 
 ---
 
