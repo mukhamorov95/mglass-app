@@ -1,5 +1,50 @@
 ## Текущая задача
-Sheet variants подключены к расчёту потребности материала в /b2b-orders — закоммичено (7c5ebb2).
+B2B Production Day / Deadline Control — закрыт и закоммичен (8dde4d2).
+
+---
+
+### B2B Production Day / Deadline Control — ЗАКРЫТО (10 июня 2026)
+
+**Коммиты:**
+
+| Коммит | Описание |
+|---|---|
+| `111ad58` | feat(b2b-orders): add deadline risk badges |
+| `b15de57` | feat(b2b-orders): add deadline control notes |
+| `8dde4d2` | feat(b2b-orders): add production day view |
+
+**Файл:** только `app/b2b-orders/page.tsx`
+
+**Что реализовано:**
+
+- Deadline risk badges в каждой строке заказа: Просрочен / Срок сегодня / Срок завтра / Готов / Отгружен
+- Плановая дата готовности рассчитывается:
+  - `launched_at + production_days` — если оба поля заполнены (авторитетный дедлайн)
+  - `launched_at + 7 дней` — если нет `production_days`
+  - `created_at + 10 дней` — если нет `launched_at`
+- Статусы `DeadlineStatus`: `overdue | today | tomorrow | normal | ready | shipped | unknown`
+- Фильтр по срокам (отдельная строка под stage-фильтром): Все / Просрочены / Сегодня / Завтра / В сроке / Готовы / Отгружены / Без срока
+- Сортировка по риску в flat-view: overdue → today → tomorrow → normal → ready → shipped
+- `notes.deadline_control` — поле в `b2b_orders.notes` (без миграции):
+  - `reason` — причина риска (select: Материал / Закалка / Фацет / Производство / Упаковка / Ожидание клиента / Логистика / Другое)
+  - `next_action` — следующее действие
+  - `responsible` — ответственный
+  - `next_check_date` — дата следующего контроля
+  - `updated_at` — ISO timestamp сохранения
+- `deadline_control` сохраняется через `{ ...order.parsedNotes, deadline_control: merged }` — `notes.stages`, `notes.detail_stages`, `material_status` не перезаписываются
+- Блок «Контроль срока» в раскрытой карточке заказа: форма с полями, кнопка «Сохранить контроль», amber-фон для overdue/today/tomorrow
+- Индикатор `📝 Контроль` в строке заказа если `deadline_control.reason` или `next_action` заполнены
+- Режим `🏭 Производственный день` — кнопка-переключатель в шапке:
+  - Сводка: Просрочено / Сегодня / Завтра / Готово
+  - 4 секции: 🔥 Просрочено, 🟠 Срок сегодня, 🟡 Срок завтра, ✅ Готово / упаковано
+  - Внутри строки: deadline badge + 📝 Контроль + `→ next_action / responsible / 📅 next_check_date`
+  - Заказы раскрываются с полной карточкой включая «Контроль срока»
+  - Режим строится на `orders` с фильтром только по search — без stageFilter/deadlineFilter
+- Без новых таблиц и миграций
+- Не трогались: `/admin/procurement`, закупки, платежи, material requirement, Production Sheet, `/p/o/{id}`, `notes.detail_stages`, `notes.stages`
+
+**Следующий рекомендуемый шаг:**
+Production Day v2: добавить быстрые действия из режима «Производственный день» — открыть контроль срока прямо из строки, поставить `next_check_date` в один клик, отфильтровать заказы без назначенного контроля.
 
 ---
 
@@ -153,7 +198,7 @@ Sheet variants подключены к расчёту потребности м�
 
 ## Контекст
 
-- Весь код закоммичен, ветка `main`, HEAD = `0926073`
+- Весь код закоммичен, ветка `main`, HEAD = `8dde4d2`
 - `/admin/procurement` работает на production — стабилизирован
 - `purchase_orders.items` JSONB структура: `{ material_name, category, thickness, sheet_width, sheet_height, area_m2, required_area_m2, sheets_count, weight_kg, estimated_cost, waste_percent, order_ids, order_refs, unmatched }`
 - `getMatrixPrice` и `getWastePct` — pure functions из `lib/glassMatrix.ts`, server-side
