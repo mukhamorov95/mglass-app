@@ -246,10 +246,26 @@ function getDeadlineStatus(order: Order): {
   return { status: 'normal', label: 'В сроке', plannedReadyDate, daysDiff }
 }
 
+function hasDeadlineControl(order: Order): boolean {
+  const dc = order.parsedNotes.deadline_control
+  return Boolean(dc?.reason || dc?.next_action)
+}
+
+function requiresDeadlineControl(order: Order): boolean {
+  const status = getDeadlineStatus(order).status
+  return (status === 'overdue' || status === 'today' || status === 'tomorrow') && !hasDeadlineControl(order)
+}
+
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 function fmtDate(s: string) {
   return new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+}
+
+function tomorrowDateStr() {
+  const d = new Date()
+  d.setDate(d.getDate() + 1)
+  return d.toISOString().split('T')[0]
 }
 
 function getOrderNum(pn: NotesData): string {
@@ -392,6 +408,7 @@ export default function B2BOrdersPage() {
   const [dcEdit, setDcEdit]   = useState<Record<number, Partial<DeadlineControl>>>({})
   const [dcSaving, setDcSaving] = useState<number | null>(null)
   const [productionDayMode, setProductionDayMode] = useState(false)
+  const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -706,6 +723,32 @@ export default function B2BOrdersPage() {
       setDcEdit(prev => { const next = { ...prev }; delete next[orderId]; return next })
       setToastError(false)
       setToastMsg('Контроль срока сохранён')
+    }
+    setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  async function quickPatchDc(orderId: number, patch: Partial<DeadlineControl>) {
+    const order = orders.find(o => o.id === orderId)
+    if (!order) return
+    setDcSaving(orderId)
+    const merged: DeadlineControl = {
+      ...(order.parsedNotes.deadline_control ?? {}),
+      ...patch,
+      updated_at: new Date().toISOString(),
+    }
+    const newParsed: NotesData = { ...order.parsedNotes, deadline_control: merged }
+    const { error } = await createClient()
+      .from('b2b_orders')
+      .update({ notes: JSON.stringify(newParsed) })
+      .eq('id', orderId)
+    setDcSaving(null)
+    if (error) {
+      setToastError(true)
+      setToastMsg('Ошибка сохранения')
+    } else {
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
+      setToastError(false)
+      setToastMsg('Следующий контроль: завтра')
     }
     setTimeout(() => setToastMsg(null), 3000)
   }
@@ -1453,7 +1496,7 @@ export default function B2BOrdersPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setProductionDayMode(v => !v)}
+            onClick={() => { const next = !productionDayMode; setProductionDayMode(next); if (!next) setShowOnlyNeedsControl(false) }}
             className={`text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-colors ${
               productionDayMode
                 ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
@@ -1540,16 +1583,35 @@ export default function B2BOrdersPage() {
       {productionDayMode ? (() => {
         const groups = productionDayGroups
         const totalCritical = groups.overdue.length + groups.today.length + groups.tomorrow.length + groups.ready.length
+        const needsControlCount =
+          groups.overdue.filter(requiresDeadlineControl).length +
+          groups.today.filter(requiresDeadlineControl).length +
+          groups.tomorrow.filter(requiresDeadlineControl).length
+        const displayGroups = showOnlyNeedsControl
+          ? {
+              overdue:  groups.overdue.filter(requiresDeadlineControl),
+              today:    groups.today.filter(requiresDeadlineControl),
+              tomorrow: groups.tomorrow.filter(requiresDeadlineControl),
+              ready:    [] as Order[],
+            }
+          : groups
         const sections = [
-          { emoji: '🔥', label: 'Просрочено',        key: 'overdue',   orders: groups.overdue,   color: 'text-red-600',     hdr: 'bg-red-50/50' },
-          { emoji: '🟠', label: 'Срок сегодня',      key: 'today',     orders: groups.today,     color: 'text-amber-700',   hdr: 'bg-amber-50/50' },
-          { emoji: '🟡', label: 'Срок завтра',       key: 'tomorrow',  orders: groups.tomorrow,  color: 'text-yellow-700',  hdr: 'bg-yellow-50/50' },
-          { emoji: '✅', label: 'Готово / упаковано', key: 'ready',     orders: groups.ready,     color: 'text-emerald-700', hdr: 'bg-emerald-50/50' },
+          { emoji: '🔥', label: 'Просрочено',        key: 'overdue',   orders: displayGroups.overdue,   color: 'text-red-600',     hdr: 'bg-red-50/50' },
+          { emoji: '🟠', label: 'Срок сегодня',      key: 'today',     orders: displayGroups.today,     color: 'text-amber-700',   hdr: 'bg-amber-50/50' },
+          { emoji: '🟡', label: 'Срок завтра',       key: 'tomorrow',  orders: displayGroups.tomorrow,  color: 'text-yellow-700',  hdr: 'bg-yellow-50/50' },
+          { emoji: '✅', label: 'Готово / упаковано', key: 'ready',     orders: displayGroups.ready,     color: 'text-emerald-700', hdr: 'bg-emerald-50/50' },
         ] as const
         if (totalCritical === 0) {
           return (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
               <p className="text-[15px] font-medium text-emerald-700">✅ На сегодня критичных B2B-заказов нет</p>
+            </div>
+          )
+        }
+        if (showOnlyNeedsControl && needsControlCount === 0) {
+          return (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
+              <p className="text-[14px] font-medium text-emerald-700">✅ Все срочные заказы уже взяты в контроль</p>
             </div>
           )
         }
@@ -1562,6 +1624,19 @@ export default function B2BOrdersPage() {
               <span><span className="text-[#9a9a95]">Сегодня:</span><span className="font-bold text-amber-700 ml-1">{groups.today.length}</span></span>
               <span><span className="text-[#9a9a95]">Завтра:</span><span className="font-bold text-yellow-700 ml-1">{groups.tomorrow.length}</span></span>
               <span><span className="text-[#9a9a95]">Готово:</span><span className="font-bold text-emerald-700 ml-1">{groups.ready.length}</span></span>
+              <span>
+                <span className="text-[#9a9a95]">Требуют контроля:</span>
+                <span className={`font-bold ml-1 ${needsControlCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{needsControlCount}</span>
+              </span>
+              <button
+                onClick={() => setShowOnlyNeedsControl(v => !v)}
+                className={`ml-auto text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${
+                  showOnlyNeedsControl
+                    ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
+                    : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-red-400 hover:text-red-600'
+                }`}>
+                ⚠️ Требуют контроля
+              </button>
             </div>
             {/* Группы */}
             {sections.map(sec => (
@@ -1604,6 +1679,17 @@ export default function B2BOrdersPage() {
                                 </span>
                                 {(dc?.next_action || dc?.reason) && (
                                   <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                                )}
+                                {requiresDeadlineControl(order) && (
+                                  <>
+                                    <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600 border border-red-100 flex-shrink-0">⚠️ Нет контроля</span>
+                                    <button
+                                      onClick={e => { e.stopPropagation(); quickPatchDc(order.id, { next_check_date: tomorrowDateStr() }) }}
+                                      disabled={dcSaving === order.id}
+                                      className="text-[9px] font-medium px-1.5 py-px rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                                      {dcSaving === order.id ? '...' : '📅 завтра'}
+                                    </button>
+                                  </>
                                 )}
                               </div>
                               {dc && (dc.next_action || dc.responsible || dc.next_check_date) && (
