@@ -1,5 +1,24 @@
 ## Текущая задача
-B2B Production Day / Deadline Control — закрыт и закоммичен (8dde4d2).
+B2B Production Day v2 — закрыт и закоммичен (2ee4d7e).
+
+---
+
+### B2B Production Day v2 — ЗАКРЫТО (10 июня 2026)
+
+**Коммит:** `2ee4d7e`
+
+**Файл:** только `app/b2b-orders/page.tsx`
+
+**Что реализовано:**
+- `requiresDeadlineControl(order)` — overdue/today/tomorrow без заполненного deadline_control
+- `hasDeadlineControl(order)` — проверка наличия reason/next_action
+- `tomorrowDateStr()` — утилита для дата+1
+- `quickPatchDc(orderId, patch)` — прямое сохранение частичного DeadlineControl в Supabase без формы
+- Фильтр «⚠️ Требуют контроля» в шапке Production Day Mode
+- Счётчик «Требуют контроля: N» в сводке, красный/зелёный
+- «⚠️ Нет контроля» badge в строке заказа
+- «📅 завтра» — кнопка одним кликом ставит next_check_date на завтра без раскрытия карточки
+- Empty state «Все срочные заказы уже взяты в контроль» при включённом фильтре и count=0
 
 ---
 
@@ -173,18 +192,9 @@ Production Day v2: добавить быстрые действия из реж�
 
 ## Следующий шаг
 
-**Не трогать procurement до ручной проверки на production:**
-- открыть карточку закупки, созданную из `/b2b-orders`
-- убедиться, что таблица материалов отображается корректно
-- проверить PDF-экспорт
+**Рекомендуемое следующее направление:**
 
-**После проверки — рекомендуемое следующее направление:**
-
-**A. Правило минимальной стоимости малых деталей в B2B-калькуляторе**
-- Проблема: маленькие детали (узкие полосы) дешевле листа — нужно минимальное ценовое правило
-- Файл: `lib/b2bCalculator.ts`
-
-**B. B2B glass/cutting support (Phase 2)**
+**A. B2B glass/cutting support (Phase 2)**
 - Подключить `lib/b2bCalculator.ts` к `b2bQuickQuoteTool` для `product_type: 'glass' | 'cutting'`
 - Убрать `UNSUPPORTED_PRODUCT_TYPE_PHASE_1`
 
