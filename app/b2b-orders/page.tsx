@@ -129,6 +129,16 @@ type DeadlineControl = {
   updated_at?: string
 }
 
+type BulkAction = {
+  type: 'bulk_mark_shipped'
+  scope: 'production_day_month'
+  month_key: string
+  order_id: number
+  previous_stages: Partial<Record<StageKey, string | null>>
+  created_at: string
+  created_by: string
+}
+
 const DC_REASONS = [
   'Материал', 'Закалка', 'Фацет / триплекс', 'Производство',
   'Упаковка', 'Ожидание клиента', 'Логистика', 'Другое',
@@ -146,6 +156,7 @@ type NotesData = {
   material_status_updated_at?: string
   material_status_updated_by?: string
   deadline_control?: DeadlineControl
+  bulk_actions?: BulkAction[]
 }
 
 type Order = {
@@ -266,6 +277,18 @@ function tomorrowDateStr() {
   const d = new Date()
   d.setDate(d.getDate() + 1)
   return d.toISOString().split('T')[0]
+}
+
+function getOrderMonthKey(order: Order): string {
+  const pn = order.parsedNotes
+  const dateStr = pn.launched_at || order.created_at
+  const d = new Date(dateStr)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function formatMonthKey(key: string): string {
+  const [year, month] = key.split('-')
+  return `${MONTH_NAMES[parseInt(month) - 1]} ${year}`
 }
 
 function getOrderNum(pn: NotesData): string {
@@ -409,6 +432,7 @@ export default function B2BOrdersPage() {
   const [dcSaving, setDcSaving] = useState<number | null>(null)
   const [productionDayMode, setProductionDayMode] = useState(false)
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
+  const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
 
   function startEditNum(order: Order) {
     setEditNumId(order.id)
@@ -751,6 +775,57 @@ export default function B2BOrdersPage() {
       setToastMsg('Следующий контроль: завтра')
     }
     setTimeout(() => setToastMsg(null), 3000)
+  }
+
+  async function bulkMarkMonthAsShipped(monthKey: string, ordersToUpdate: Order[]) {
+    setBulkActionLoading(monthKey)
+    const now = new Date().toISOString()
+    let updatedCount = 0
+
+    for (const order of ordersToUpdate) {
+      if (getDeadlineStatus(order).status !== 'overdue') continue
+
+      const currentNotes = order.parsedNotes
+      const nextNotes: NotesData = {
+        ...currentNotes,
+        stages: {
+          ...(currentNotes.stages || {}),
+          packaged: currentNotes.stages?.packaged || now,
+          shipped: now,
+        },
+        bulk_actions: [
+          ...(Array.isArray(currentNotes.bulk_actions) ? currentNotes.bulk_actions : []),
+          {
+            type: 'bulk_mark_shipped' as const,
+            scope: 'production_day_month' as const,
+            month_key: monthKey,
+            order_id: order.id,
+            previous_stages: currentNotes.stages || {},
+            created_at: now,
+            created_by: currentUserId || 'unknown',
+          },
+        ],
+      }
+
+      const { error } = await createClient()
+        .from('b2b_orders')
+        .update({ notes: JSON.stringify(nextNotes) })
+        .eq('id', order.id)
+
+      if (error) {
+        setBulkActionLoading(null)
+        alert(`Ошибка при обновлении заказа #${order.id}. Успешно обновлено: ${updatedCount} из ${ordersToUpdate.length}.`)
+        return
+      }
+
+      setOrders(prev => prev.map(o => o.id === order.id ? { ...o, parsedNotes: nextNotes } : o))
+      updatedCount++
+    }
+
+    setBulkActionLoading(null)
+    setToastError(false)
+    setToastMsg(`Отгружено: ${updatedCount} заказов`)
+    setTimeout(() => setToastMsg(null), 4000)
   }
 
   function toggleOrderSelection(orderId: number) {
@@ -1479,6 +1554,15 @@ export default function B2BOrdersPage() {
         {userNotes && (
           <p className="text-[11px] text-[#6b6b66] italic">{userNotes}</p>
         )}
+
+        {Array.isArray(pn.bulk_actions) && pn.bulk_actions.length > 0 && (() => {
+          const last = pn.bulk_actions[pn.bulk_actions.length - 1]
+          return (
+            <p className="text-[10px] text-[#b0b0aa]">
+              Массово отгружен: {new Date(last.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} · {formatMonthKey(last.month_key)} · {last.created_by}
+            </p>
+          )
+        })()}
       </div>
     )
   }
@@ -1639,89 +1723,136 @@ export default function B2BOrdersPage() {
               </button>
             </div>
             {/* Группы */}
-            {sections.map(sec => (
-              <div key={sec.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-                <div className={`px-4 py-2 flex items-center gap-1.5 border-b border-[#f0f0ec] ${sec.hdr}`}>
-                  <span className="text-[13px] font-bold text-[#111110]">{sec.emoji} {sec.label} —</span>
-                  <span className={`text-[13px] font-bold ${sec.color}`}>{sec.orders.length}</span>
-                </div>
-                {sec.orders.length === 0 ? (
-                  <p className="px-4 py-3 text-[12px] text-[#b0b0aa]">Нет заказов</p>
-                ) : (
-                  <div className="divide-y divide-[#f8f8f7]">
-                    {sec.orders.map(order => {
-                      const pn = order.parsedNotes
-                      const isOpen = expanded === order.id
-                      const finalPrice = getFinalPrice(order)
-                      const progress = calcProgress(pn.stages ?? {})
-                      const ds = getDeadlineStatus(order)
-                      const dc = pn.deadline_control
-                      return (
-                        <div key={order.id}>
-                          <div
-                            className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
-                            onClick={() => setExpanded(isOpen ? null : order.id)}>
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                {order.custom_number && (
-                                  <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
-                                    {order.custom_number}
-                                  </span>
-                                )}
-                                {order.client_order_number && (
-                                  <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
-                                    кл.{order.client_order_number}
-                                  </span>
-                                )}
-                                <span className="text-[12px] font-semibold text-[#111110]">{order.client_name}</span>
-                                <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
-                                  {ds.label}
-                                </span>
-                                {(dc?.next_action || dc?.reason) && (
-                                  <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
-                                )}
-                                {requiresDeadlineControl(order) && (
-                                  <>
-                                    <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600 border border-red-100 flex-shrink-0">⚠️ Нет контроля</span>
-                                    <button
-                                      onClick={e => { e.stopPropagation(); quickPatchDc(order.id, { next_check_date: tomorrowDateStr() }) }}
-                                      disabled={dcSaving === order.id}
-                                      className="text-[9px] font-medium px-1.5 py-px rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0 hover:bg-amber-100 transition-colors disabled:opacity-50">
-                                      {dcSaving === order.id ? '...' : '📅 завтра'}
-                                    </button>
-                                  </>
-                                )}
-                              </div>
-                              {dc && (dc.next_action || dc.responsible || dc.next_check_date) && (
-                                <div className="mt-1 text-[10px] text-[#6b6b66] flex flex-wrap gap-x-3 gap-y-0.5">
-                                  {dc.next_action && <span>→ {dc.next_action}</span>}
-                                  {dc.responsible && <span className="font-medium text-[#111110]">{dc.responsible}</span>}
-                                  {dc.next_check_date && (
-                                    <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-2 flex-shrink-0">
-                              {!pn.stages?.shipped && progress > 0 && (
-                                <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
-                                  {progress}%
-                                </span>
-                              )}
-                              <span className="text-[12px] font-semibold font-mono text-[#111110]">{fmt(finalPrice)}</span>
-                              <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                              </svg>
-                            </div>
+            {(() => {
+              function renderPdRow(order: Order) {
+                const pn = order.parsedNotes
+                const isOpen = expanded === order.id
+                const finalPrice = getFinalPrice(order)
+                const progress = calcProgress(pn.stages ?? {})
+                const ds = getDeadlineStatus(order)
+                const dc = pn.deadline_control
+                return (
+                  <div key={order.id}>
+                    <div
+                      className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
+                      onClick={() => setExpanded(isOpen ? null : order.id)}>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          {order.custom_number && (
+                            <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
+                              {order.custom_number}
+                            </span>
+                          )}
+                          {order.client_order_number && (
+                            <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
+                              кл.{order.client_order_number}
+                            </span>
+                          )}
+                          <span className="text-[12px] font-semibold text-[#111110]">{order.client_name}</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
+                            {ds.label}
+                          </span>
+                          {(dc?.next_action || dc?.reason) && (
+                            <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                          )}
+                          {requiresDeadlineControl(order) && (
+                            <>
+                              <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600 border border-red-100 flex-shrink-0">⚠️ Нет контроля</span>
+                              <button
+                                onClick={e => { e.stopPropagation(); quickPatchDc(order.id, { next_check_date: tomorrowDateStr() }) }}
+                                disabled={dcSaving === order.id}
+                                className="text-[9px] font-medium px-1.5 py-px rounded-full bg-amber-50 text-amber-700 border border-amber-200 flex-shrink-0 hover:bg-amber-100 transition-colors disabled:opacity-50">
+                                {dcSaving === order.id ? '...' : '📅 завтра'}
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        {dc && (dc.next_action || dc.responsible || dc.next_check_date) && (
+                          <div className="mt-1 text-[10px] text-[#6b6b66] flex flex-wrap gap-x-3 gap-y-0.5">
+                            {dc.next_action && <span>→ {dc.next_action}</span>}
+                            {dc.responsible && <span className="font-medium text-[#111110]">{dc.responsible}</span>}
+                            {dc.next_check_date && (
+                              <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
+                            )}
                           </div>
-                          {isOpen && renderOrderBody(order)}
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        {!pn.stages?.shipped && progress > 0 && (
+                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
+                            {progress}%
+                          </span>
+                        )}
+                        <span className="text-[12px] font-semibold font-mono text-[#111110]">{fmt(finalPrice)}</span>
+                        <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      </div>
+                    </div>
+                    {isOpen && renderOrderBody(order)}
+                  </div>
+                )
+              }
+              return sections.map(sec => (
+                <div key={sec.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                  <div className={`px-4 py-2 flex items-center gap-1.5 border-b border-[#f0f0ec] ${sec.hdr}`}>
+                    <span className="text-[13px] font-bold text-[#111110]">{sec.emoji} {sec.label} —</span>
+                    <span className={`text-[13px] font-bold ${sec.color}`}>{sec.orders.length}</span>
+                  </div>
+                  {sec.orders.length === 0 ? (
+                    <p className="px-4 py-3 text-[12px] text-[#b0b0aa]">Нет заказов</p>
+                  ) : sec.key === 'overdue' ? (
+                    (() => {
+                      const byMonth = new Map<string, Order[]>()
+                      for (const o of sec.orders) {
+                        const mk = getOrderMonthKey(o)
+                        const existing = byMonth.get(mk)
+                        if (existing) existing.push(o)
+                        else byMonth.set(mk, [o])
+                      }
+                      const sortedMonths = [...byMonth.keys()].sort((a, b) => b.localeCompare(a))
+                      return (
+                        <div className="divide-y divide-[#f0f0ec]">
+                          {sortedMonths.map(monthKey => {
+                            const monthOrders = byMonth.get(monthKey)!
+                            const monthLabel = formatMonthKey(monthKey)
+                            const isBulkLoading = bulkActionLoading === monthKey
+                            return (
+                              <div key={monthKey}>
+                                <div className="px-4 py-2 bg-red-50/40 flex items-center gap-2">
+                                  <span className="text-[11px] font-semibold text-red-700">{monthLabel}</span>
+                                  <span className="text-[11px] text-red-400">— {monthOrders.length} зак.</span>
+                                  <button
+                                    onClick={() => {
+                                      if (isBulkLoading) return
+                                      const confirmed = window.confirm(
+                                        `Вы точно хотите отметить все просроченные заказы за ${monthLabel} как отгруженные?\nБудет изменено: ${monthOrders.length} заказов.\nДействие будет записано в историю notes.bulk_actions.`
+                                      )
+                                      if (!confirmed) return
+                                      bulkMarkMonthAsShipped(monthKey, monthOrders)
+                                    }}
+                                    disabled={isBulkLoading}
+                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors disabled:opacity-50">
+                                    {isBulkLoading ? 'Обновляем...' : 'Отметить месяц отгруженным'}
+                                  </button>
+                                </div>
+                                <div className="divide-y divide-[#f8f8f7]">
+                                  {monthOrders.map(renderPdRow)}
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       )
-                    })}
-                  </div>
-                )}
-              </div>
-            ))}
+                    })()
+                  ) : (
+                    <div className="divide-y divide-[#f8f8f7]">
+                      {sec.orders.map(renderPdRow)}
+                    </div>
+                  )}
+                </div>
+              ))
+            })()}
           </div>
         )
       })() : isFiltered ? (
