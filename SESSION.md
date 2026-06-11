@@ -1,5 +1,27 @@
 ## Текущая задача
-B2B Quotes / Orders UX Separation — закрыт и закоммичен (f367e3b), pushed.
+Payment Status Badge в /b2b-orders — реализован, не закоммичен. Ждёт подтверждения пользователя.
+
+---
+
+### Payment Status Badge в /b2b-orders — РЕАЛИЗОВАН, ещё не закоммичен
+
+**Файл:** только `app/b2b-orders/page.tsx`
+
+**Что добавлено:**
+- `OrderPayStatus = 'paid' | 'partial' | 'unpaid' | 'unknown'`
+- `PAY_BADGE` — цвета и лейблы: `Оплачен` (emerald), `Частично` (amber), `Не опл.` (red), unknown = null (не показывать)
+- `getOrderPayStatus(order)` — читает `pn.stages.invoice_paid`, `pn.payment_status`, `pn.stages.invoice_sent`
+- Бейдж вставлен в три точки рендеринга:
+  - `renderPdRow` (Production Day mode) — после `📝 Контроль`
+  - `filteredOrders.map` (плоский список) — после `📝 Контроль`
+  - Групповой вид (по клиентам) — после `📝 Контроль`
+- `payStatus` вычисляется отдельной переменной в каждом map/function
+- TypeScript clean: только pre-existing ошибки в `__tests__/calculators/mirror.test.ts`
+
+**Источник данных оплаты:**
+- `notes.stages.invoice_paid` — ставится вручную в чекбоксе Production Day
+- `notes.payment_status` — переносится из b2b-quotes при подтверждении заказа (`{ ...parsed, status: 'confirmed', ... }`)
+- `notes.stages.invoice_sent` → unpaid (счёт выставлен, не оплачен)
 
 ---
 

@@ -157,6 +157,8 @@ type NotesData = {
   material_status_updated_by?: string
   deadline_control?: DeadlineControl
   bulk_actions?: BulkAction[]
+  payment_status?: string
+  prepayment_amount?: number
 }
 
 type Order = {
@@ -289,6 +291,29 @@ function getOrderMonthKey(order: Order): string {
 function formatMonthKey(key: string): string {
   const [year, month] = key.split('-')
   return `${MONTH_NAMES[parseInt(month) - 1]} ${year}`
+}
+
+type OrderPayStatus = 'paid' | 'partial' | 'unpaid' | 'unknown'
+
+const PAY_BADGE: Record<OrderPayStatus, { label: string; cls: string } | null> = {
+  paid:    { label: 'Оплачен',    cls: 'bg-emerald-50 text-emerald-700 border border-emerald-200' },
+  partial: { label: 'Частично',   cls: 'bg-amber-50 text-amber-700 border border-amber-200' },
+  unpaid:  { label: 'Не опл.',    cls: 'bg-red-50 text-red-600 border border-red-100' },
+  unknown: null,
+}
+
+function getOrderPayStatus(order: Order): OrderPayStatus {
+  const pn = order.parsedNotes
+  const stages = pn.stages ?? {}
+  // Production stage invoice_paid is the strongest signal
+  if (stages.invoice_paid)              return 'paid'
+  // payment_status carried over from b2b-quotes flow
+  if (pn.payment_status === 'paid')     return 'paid'
+  if (pn.payment_status === 'partial')  return 'partial'
+  if (pn.payment_status === 'unpaid')   return 'unpaid'
+  // invoice sent but not yet paid
+  if (stages.invoice_sent)              return 'unpaid'
+  return 'unknown'
 }
 
 function getOrderNum(pn: NotesData): string {
@@ -1730,6 +1755,7 @@ export default function B2BOrdersPage() {
                 const finalPrice = getFinalPrice(order)
                 const progress = calcProgress(pn.stages ?? {})
                 const ds = getDeadlineStatus(order)
+                const payStatus = getOrderPayStatus(order)
                 const dc = pn.deadline_control
                 return (
                   <div key={order.id}>
@@ -1757,6 +1783,9 @@ export default function B2BOrdersPage() {
                           {(dc?.next_action || dc?.reason) && (
                             <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                           )}
+                          {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
+                            <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                          ) : null })()}
                           {requiresDeadlineControl(order) && (
                             <>
                               <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600 border border-red-100 flex-shrink-0">⚠️ Нет контроля</span>
@@ -1882,6 +1911,7 @@ export default function B2BOrdersPage() {
                 const progress = calcProgress(pn.stages ?? {})
                 const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : fmtDate(order.created_at)
                 const ds = getDeadlineStatus(order)
+                const payStatus = getOrderPayStatus(order)
 
                 return (
                   <div key={order.id} className="px-4 py-2.5">
@@ -1916,6 +1946,9 @@ export default function B2BOrdersPage() {
                             {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                               <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
                             )}
+                            {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
+                              <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                            ) : null })()}
                           </div>
                           <p className="text-[11px] text-[#9a9a95] mt-0.5">
                             {launchedDate}
@@ -2010,6 +2043,7 @@ export default function B2BOrdersPage() {
                         const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
                         const isShipped = !!pn.stages?.shipped
                         const ds = getDeadlineStatus(order)
+                        const payStatus = getOrderPayStatus(order)
                         const finalPrice = getFinalPrice(order)
                         const lastDoneIdx = STAGES.map((s, i) => pn.stages?.[s.key] ? i : -1).reduce((max, i) => Math.max(max, i), -1)
                         const progress = calcProgress(pn.stages ?? {})
@@ -2050,6 +2084,9 @@ export default function B2BOrdersPage() {
                                     {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
                                       <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66]">📝 Контроль</span>
                                     )}
+                                    {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
+                                      <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
+                                    ) : null })()}
                                     {lastDoneIdx >= 0 && !isShipped && (
                                       <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>
                                     )}
