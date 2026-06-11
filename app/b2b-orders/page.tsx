@@ -1738,17 +1738,19 @@ export default function B2BOrdersPage() {
                       onClick={() => setExpanded(isOpen ? null : order.id)}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          {order.custom_number && (
-                            <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
+                          {order.custom_number ? (
+                            <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
                               {order.custom_number}
                             </span>
+                          ) : (
+                            <span className="text-[11px] font-mono text-[#b0b0aa] flex-shrink-0">#{order.id}</span>
                           )}
                           {order.client_order_number && (
                             <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
                               кл.{order.client_order_number}
                             </span>
                           )}
-                          <span className="text-[12px] font-semibold text-[#111110]">{order.client_name}</span>
+                          <span className="text-[13px] font-semibold text-[#111110]">{order.client_name}</span>
                           <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                             {ds.label}
                           </span>
@@ -1883,42 +1885,52 @@ export default function B2BOrdersPage() {
 
                 return (
                   <div key={order.id} className="px-4 py-2.5">
-                    <div className="flex items-center justify-between gap-3 mb-2">
-                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex items-start gap-2 min-w-0 flex-1">
                         <input
                           type="checkbox"
                           checked={selectedOrderIds.has(order.id)}
                           onChange={() => toggleOrderSelection(order.id)}
-                          className="flex-shrink-0 cursor-pointer accent-[#111110] w-3.5 h-3.5"
+                          className="flex-shrink-0 cursor-pointer accent-[#111110] w-3.5 h-3.5 mt-[3px]"
                         />
-                        {order.custom_number && (
-                          <span className="text-[11px] font-bold text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded font-mono flex-shrink-0">
-                            {order.custom_number}
-                          </span>
-                        )}
-                        {order.client_order_number && (
-                          <span className="text-[10px] text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded font-mono flex-shrink-0">
-                            кл.{order.client_order_number}
-                          </span>
-                        )}
-                        <span className="text-[12px] font-semibold text-[#111110] truncate">{order.client_name}</span>
-                        {ds.status !== 'normal' && ds.status !== 'unknown' && (
-                          <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
-                            {ds.label}
-                          </span>
-                        )}
-                        {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
-                          <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
-                        )}
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            {order.custom_number ? (
+                              <span className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0">
+                                {order.custom_number}
+                              </span>
+                            ) : (
+                              <span className="text-[11px] font-mono text-[#b0b0aa] flex-shrink-0">#{order.id}</span>
+                            )}
+                            {order.client_order_number && (
+                              <span className="text-[10px] text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded font-mono flex-shrink-0">
+                                кл.{order.client_order_number}
+                              </span>
+                            )}
+                            <span className="text-[13px] font-semibold text-[#111110] truncate">{order.client_name}</span>
+                            {ds.status !== 'normal' && ds.status !== 'unknown' && (
+                              <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
+                                {ds.label}
+                              </span>
+                            )}
+                            {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
+                              <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                            {launchedDate}
+                            {' · '}{order.items.length} поз.
+                            {(order.total_area ?? 0) > 0 && ` · ${order.total_area.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`}
+                          </p>
+                        </div>
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
-                        {!isShipped && (
+                        {!isShipped && progress > 0 && (
                           <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
                             {progress}%
                           </span>
                         )}
-                        <span className="text-[11px] text-[#9a9a95]">{launchedDate}</span>
-                        <span className="text-[12px] font-semibold text-[#111110] font-mono">{fmt(finalPrice)}</span>
+                        <span className="text-[13px] font-semibold text-[#111110] font-mono">{fmt(finalPrice)}</span>
                         {canDelete && (
                           <button
                             onClick={() => setDeletingId(order.id)}
@@ -2020,7 +2032,7 @@ export default function B2BOrdersPage() {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {order.custom_number && (
-                                      <span className="text-[11px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-1.5 py-px rounded flex-shrink-0">
+                                      <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
                                         {order.custom_number}
                                       </span>
                                     )}
@@ -2029,7 +2041,7 @@ export default function B2BOrdersPage() {
                                         кл.{order.client_order_number}
                                       </span>
                                     )}
-                                    <p className="text-[12px] font-semibold text-[#111110]">{order.client_name}</p>
+                                    <p className="text-[13px] font-semibold text-[#111110]">{order.client_name}</p>
                                     {ds.status !== 'normal' && ds.status !== 'unknown' && (
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                                         {ds.label}

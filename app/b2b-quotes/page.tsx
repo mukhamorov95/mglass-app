@@ -627,20 +627,11 @@ export default function B2BQuotesPage() {
                       </span>
                     )}
 
-                    {/* Status badge */}
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sMeta.bg} ${sMeta.text}`}>
-                      {sMeta.label}
-                    </span>
-
-                    {/* Payment badge — click to toggle edit */}
-                    {status !== 'quote' && (
-                      <button
-                        onClick={() => { setPayEditId(isPayEditThis ? null : quote.id); setPayAmount('') }}
-                        title="Статус оплаты"
-                        className={`text-[10px] font-semibold px-2 py-0.5 rounded-full transition-colors ${pMeta.bg} ${pMeta.text} hover:opacity-80`}>
-                        {pMeta.short} {pMeta.label}
-                        {payStatus === 'partial' && getPayAmount(quote) > 0 && ` ${getPayAmount(quote).toLocaleString('ru-RU')} ₽`}
-                      </button>
+                    {/* "На согласовании" — только этот статус показываем плашкой, он требует action */}
+                    {status === 'pending_approval' && (
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sMeta.bg} ${sMeta.text}`}>
+                        {sMeta.label}
+                      </span>
                     )}
 
                     {/* Price */}
