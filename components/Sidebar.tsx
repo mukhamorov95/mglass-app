@@ -149,8 +149,9 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
   { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
-  { href: '/admin/procurement',      label: 'Закупки',         icon: '🗂️' },
-  { href: '/production-app',         label: 'Production App',  icon: '📱' },
+  { href: '/admin/procurement',            label: 'Закупки',             icon: '🗂️' },
+  { href: '/production-app',               label: 'Production App',      icon: '📱' },
+  { href: '/production-app/supervisor',    label: 'Панель производства',  icon: '🔭' },
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
@@ -182,8 +183,9 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
-  { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
-  { href: '/production-app',         label: 'Production App',  icon: '📱' },
+  { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
+  { href: '/production-app',              label: 'Production App',      icon: '📱' },
+  { href: '/production-app/supervisor',   label: 'Панель производства',  icon: '🔭' },
 ]
 
 const ADMIN_MARKETING: NavItem[] = [
@@ -286,7 +288,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
@@ -318,7 +320,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }
