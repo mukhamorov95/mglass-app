@@ -1,31 +1,30 @@
 ## Текущая задача
-Production App Step 2 завершён — каркас создан, ждём подтверждения для commit
+Production App Steps 3-5 завершены — роли, главный экран и экран заказа работают с реальными данными
 
 ## Что сделано (эта сессия)
-- can_view_all_clients toggle → supabase/migrations/20260615_add_can_view_all_clients_to_users.sql, app/api/admin/users/route.ts, app/admin/users/page.tsx, app/calculator/b2b/page.tsx
-- Loading Safety Stage 1 → app/b2b-quotes/page.tsx, app/b2b-orders/page.tsx
-- Loading Safety Stage 2 → app/admin/glass-prices/page.tsx
-- Production App архитектурный документ → ai/docs/PRODUCTION_APP_PLAN.md
-- Production App skeleton (Step 2/10):
-  - lib/getRole.ts → /production-app добавлен в manager, production, ceo
-  - components/Sidebar.tsx → /production-app добавлен в PRODUCTION_ITEMS, MANAGER_B2B, CEO_OWNER, ADMIN_OWNER
-  - app/production-app/layout.tsx → создан (role check: admin|ceo|manager|production)
-  - app/production-app/page.tsx → создан (4 stat cards + demo link)
-  - app/production-app/orders/[id]/page.tsx → создан (5 stage checkboxes skeleton)
+- Step 3 — роли и доступ:
+  - lib/getRole.ts → убран /b2b-orders из роли production
+  - middleware.ts → production-пользователь с / редиректится на /production-app
+- Step 4 — главный экран:
+  - app/production-app/page.tsx → server component, загружает b2b_orders, считает 4 счётчика, список заказов по дедлайну
+- Step 5 — экран заказа:
+  - app/production-app/orders/[id]/page.tsx → полный client component (порт из /p/o/{id}), список деталей, групповые действия, запись в notes.detail_stages
 
 ## Следующий шаг
-После commit Step 2 → Step 3 из плана:
-Подключить реальные данные: загрузить b2b_orders со статусами detail_stages, показать список заказов на главной странице
+Step 6 из плана:
+Интеграция с QR /p/o/{id} — убедиться что оба интерфейса пишут в одну структуру, не конфликтуют
+(Скорее всего оба уже используют notes.detail_stages с одинаковым форматом — нужно только проверить)
 
 ## Контекст
-- Commit message для Step 2: feat(production-app): add mobile app skeleton
-- tsc --noEmit чист (только pre-existing ошибки в __tests__/calculators/mirror.test.ts)
-- Production App — мобильный PWA для производственных рабочих
-- Маршруты: /production-app (главная), /production-app/orders/[id] (детали заказа)
-- Этапы: Резка / Полировка / Сверловка / Вырезы / Упаковка
-- Роли с доступом: admin, ceo, manager, production
+- Production App пишет в notes.detail_stages — тот же формат что и /p/o/{id}
+- Главный экран: server component (no 'use client'), загружает данные серверно
+- Фильтрация активных заказов: .not('notes', 'ilike', '%"status":"quote"%') + .is('archived_at', null)
+- Отгруженные (stages.shipped) исключаются из показа на главном экране
+- Счётчики: Активных / Просрочено / Проблемы / Упаковано
+- Сортировка: overdue → today → tomorrow → normal → ready → shipped
 
 ## Открытые вопросы
-- Step 3: откуда брать данные о заказах — b2b_orders.notes.detail_stages или notes.stages?
-- PWA manifest / service worker — нужен ли уже на Step 3 или позже?
-- Нужна ли отдельная мобильная навигация (bottom bar) или sidebar достаточен?
+- Step 6: /p/o/{id} имеет back link к /b2b-orders — нужно ли добавить альтернативу для production-app?
+- Step 7 (Проблемы): нужна отдельная страница фиксации проблем с выбором причины из списка
+- Step 8 (Панель начальника): отдельный view для admin/ceo с агрегацией по всем заказам
+- PWA manifest: добавить на шаге 10
