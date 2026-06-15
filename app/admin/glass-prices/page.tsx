@@ -474,33 +474,36 @@ export default function GlassPricesPage() {
 
   async function addSheetVariantFromModal(materialId: number) {
     if (!newVarWidth || !newVarHeight) return
-    const sb = createClient()
     const existing = sheetVariants[materialId] ?? []
     const isFirst = existing.filter(v => v.active).length === 0
-    const { data, error } = await sb
-      .from('b2b_material_sheet_variants')
-      .insert({
-        material_id: materialId,
-        sheet_width: newVarWidth,
-        sheet_height: newVarHeight,
-        supplier_id: newVarSupplierId || null,
+    const res = await fetch('/api/admin/b2b-material-sheet-variants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        material_id:            materialId,
+        sheet_width:            newVarWidth,
+        sheet_height:           newVarHeight,
+        supplier_id:            newVarSupplierId || null,
         supplier_material_name: newVarSupplierMatName || null,
-        is_default: isFirst,
-      })
-      .select()
-      .single()
-    if (error) { showToast(`Ошибка: ${error.message}`); return }
+        is_default:             isFirst,
+      }),
+    })
+    const json = await res.json()
+    if (!json.ok) { showToast(`Ошибка: ${json.error}`); return }
     setSheetVariants(sv => ({
       ...sv,
-      [materialId]: [...(sv[materialId] ?? []), data as SheetVariant],
+      [materialId]: [...(sv[materialId] ?? []), json.variant as SheetVariant],
     }))
   }
 
   async function setDefaultVariant(materialId: number, variantId: number) {
-    const sb = createClient()
-    await sb.from('b2b_material_sheet_variants').update({ is_default: false }).eq('material_id', materialId)
-    const { error } = await sb.from('b2b_material_sheet_variants').update({ is_default: true }).eq('id', variantId)
-    if (error) { showToast(`Ошибка: ${error.message}`); return }
+    const res = await fetch(`/api/admin/b2b-material-sheet-variants/${variantId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ is_default: true }),
+    })
+    const json = await res.json()
+    if (!json.ok) { showToast(`Ошибка: ${json.error}`); return }
     setSheetVariants(sv => ({
       ...sv,
       [materialId]: (sv[materialId] ?? []).map(v => ({ ...v, is_default: v.id === variantId })),
@@ -508,14 +511,19 @@ export default function GlassPricesPage() {
   }
 
   async function toggleVariantActive(materialId: number, variant: SheetVariant) {
-    const sb = createClient()
-    const update: { active: boolean; is_default?: boolean } = { active: !variant.active }
-    if (variant.is_default && variant.active) update.is_default = false
-    const { error } = await sb.from('b2b_material_sheet_variants').update(update).eq('id', variant.id)
-    if (error) { showToast(`Ошибка: ${error.message}`); return }
+    const nextActive = !variant.active
+    const body: Record<string, unknown> = { active: nextActive }
+    if (variant.is_default && variant.active) body.is_default = false
+    const res = await fetch(`/api/admin/b2b-material-sheet-variants/${variant.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    const json = await res.json()
+    if (!json.ok) { showToast(`Ошибка: ${json.error}`); return }
     setSheetVariants(sv => ({
       ...sv,
-      [materialId]: (sv[materialId] ?? []).map(v => v.id === variant.id ? { ...v, ...update } : v),
+      [materialId]: (sv[materialId] ?? []).map(v => v.id === variant.id ? { ...v, ...json.variant } : v),
     }))
   }
 
