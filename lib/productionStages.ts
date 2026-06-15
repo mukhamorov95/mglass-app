@@ -15,8 +15,23 @@ export type DetailStageState = {
   updated_at:        string
   updated_by:        string
   updated_by_email?: string
+  reason?:           string
   note?:             string
 }
+
+export const PROBLEM_REASONS = [
+  'Скол при резке',
+  'Трещина',
+  'Царапина',
+  'Неверный размер',
+  'Брак материала',
+  'Брак закалки',
+  'Брак полировки',
+  'Брак сверления',
+  'Другое',
+] as const
+
+export type ProblemReason = typeof PROBLEM_REASONS[number]
 
 export type DetailStages = {
   [itemIndex: string]: { [stage in DetailStageKey]?: DetailStageState }

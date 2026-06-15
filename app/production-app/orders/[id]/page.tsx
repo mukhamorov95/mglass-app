@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering } from '@/lib/productionStages'
+import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS } from '@/lib/productionStages'
 
 type OrderItem = {
   materialName?: string
@@ -105,6 +105,105 @@ function itemWeightKg(item: OrderItem): number {
   if ((item.totalWeight ?? 0) > 0) return item.totalWeight!
   const area = itemAreaM2(item); const t = item.thickness ?? 0
   return area > 0 && t > 0 ? area * t * 2.5 : 0
+}
+
+// ─── ProblemModal ─────────────────────────────────────────────────────────────
+
+function ProblemModal({
+  itemCount,
+  saving,
+  onConfirm,
+  onCancel,
+}: {
+  itemCount: number
+  saving:    boolean
+  onConfirm: (reason: string, note: string) => void
+  onCancel:  () => void
+}) {
+  const [reason, setReason] = useState('')
+  const [note,   setNote]   = useState('')
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]">
+      <div className="w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+
+        {/* Header */}
+        <div className="px-5 pt-5 pb-3 border-b border-[#f0f0ec]">
+          <div className="flex items-center justify-between mb-0.5">
+            <h2 className="text-[16px] font-bold text-[#111110]">Фиксация проблемы</h2>
+            <button onClick={onCancel} className="p-1 -mr-1 text-[#9a9a95] hover:text-[#111110] transition-colors">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
+                <path d="M18 6L6 18M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <p className="text-[12px] text-[#9a9a95]">
+            {itemCount} {itemCount === 1 ? 'позиция' : itemCount < 5 ? 'позиции' : 'позиций'}
+          </p>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+
+          {/* Reason list */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Причина</p>
+            <div className="space-y-1.5">
+              {PROBLEM_REASONS.map(r => (
+                <button
+                  key={r}
+                  onClick={() => setReason(prev => prev === r ? '' : r)}
+                  className={`w-full text-left px-3.5 py-2.5 rounded-xl text-[13px] font-medium border transition-all ${
+                    reason === r
+                      ? 'border-red-400 bg-red-50 text-red-700'
+                      : 'border-[#e8e8e4] bg-[#fafaf9] text-[#3a3a35] hover:border-[#c4c4be] hover:bg-white'
+                  }`}
+                >
+                  {reason === r && (
+                    <span className="mr-1.5 text-red-500">✓</span>
+                  )}
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Comment */}
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Комментарий (необязательно)</p>
+            <textarea
+              value={note}
+              onChange={e => setNote(e.target.value)}
+              rows={2}
+              placeholder="Уточните деталь, номер позиции и т.д."
+              className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8e4] bg-[#fafaf9] text-[13px] text-[#111110] placeholder-[#c4c4be] resize-none focus:outline-none focus:border-[#9a9a95]"
+            />
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="px-5 pb-5 pt-2 flex gap-2.5">
+          <button
+            onClick={onCancel}
+            disabled={saving}
+            className="flex-1 py-3 rounded-xl border border-[#e8e8e4] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f4f4f0] transition-colors"
+          >
+            Отмена
+          </button>
+          <button
+            onClick={() => onConfirm(reason, note)}
+            disabled={saving || !reason}
+            className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-all ${
+              saving || !reason
+                ? 'bg-red-100 text-red-300 cursor-not-allowed'
+                : 'bg-red-600 text-white hover:bg-red-700 active:bg-red-800'
+            }`}
+          >
+            {saving ? 'Сохранение...' : 'Зафиксировать'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
@@ -250,6 +349,7 @@ export default function ProductionOrderPage() {
   const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set())
   const [saving,        setSaving]        = useState(false)
   const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null)
+  const [problemModal,  setProblemModal]  = useState<{ items: number[] } | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -275,22 +375,14 @@ export default function ProductionOrderPage() {
     else { setError('Неверный ID заказа'); setLoading(false) }
   }, [id])
 
-  // ─── Mark stage ───────────────────────────────────────────────────────────
+  // ─── Persist stage update ─────────────────────────────────────────────────
 
-  async function markStage(stageKey: DetailStageKey) {
-    if (!order || !currentUser || selectedItems.size === 0 || saving) return
-
-    const effectiveItems = stageKey === 'tempering'
-      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
-      : [...selectedItems]
-
-    if (effectiveItems.length === 0) {
-      setToast({ msg: 'В выбранных позициях нет закалки', ok: false })
-      setTimeout(() => setToast(null), 3000)
-      return
-    }
-
-    setSaving(true)
+  async function persistStageUpdate(
+    stageKey: DetailStageKey,
+    targetItems: number[],
+    extraFields?: { reason?: string; note?: string },
+  ) {
+    if (!order || !currentUser) return
 
     let notesObj: Record<string, unknown> = {}
     if (order.notes) {
@@ -304,7 +396,7 @@ export default function ProductionOrderPage() {
     const now            = new Date().toISOString()
     const newStages: DetailStages = { ...existingStages }
 
-    for (const idx of effectiveItems) {
+    for (const idx of targetItems) {
       newStages[String(idx)] = {
         ...newStages[String(idx)],
         [stageKey]: {
@@ -312,6 +404,7 @@ export default function ProductionOrderPage() {
           updated_at:       now,
           updated_by:       currentUser.id,
           updated_by_email: currentUser.email,
+          ...extraFields,
         },
       }
     }
@@ -326,22 +419,69 @@ export default function ProductionOrderPage() {
     if (updateErr) {
       setToast({ msg: 'Ошибка сохранения', ok: false })
       setTimeout(() => setToast(null), 3000)
-      setSaving(false)
       return
     }
 
-    const count = effectiveItems.length
-    const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
-    setSelectedItems(new Set())
-    setToast({
-      msg: partial
-        ? `Закалка: ${count} из ${selectedItems.size} поз.`
-        : `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`,
-      ok: true,
-    })
-    setTimeout(() => setToast(null), 3000)
+    return updatedNotes
+  }
+
+  // ─── Mark stage ───────────────────────────────────────────────────────────
+
+  async function markStage(stageKey: DetailStageKey) {
+    if (!order || !currentUser || selectedItems.size === 0 || saving) return
+
+    if (stageKey === 'problem') {
+      setProblemModal({ items: [...selectedItems] })
+      return
+    }
+
+    const effectiveItems = stageKey === 'tempering'
+      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
+      : [...selectedItems]
+
+    if (effectiveItems.length === 0) {
+      setToast({ msg: 'В выбранных позициях нет закалки', ok: false })
+      setTimeout(() => setToast(null), 3000)
+      return
+    }
+
+    setSaving(true)
+    const result = await persistStageUpdate(stageKey, effectiveItems)
     setSaving(false)
+
+    if (result) {
+      const count   = effectiveItems.length
+      const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
+      setSelectedItems(new Set())
+      setToast({
+        msg: partial
+          ? `Закалка: ${count} из ${selectedItems.size} поз.`
+          : `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`,
+        ok: true,
+      })
+      setTimeout(() => setToast(null), 3000)
+    }
+  }
+
+  // ─── Save problem ─────────────────────────────────────────────────────────
+
+  async function saveProblem(reason: string, note: string) {
+    if (!problemModal || !order || !currentUser) return
+    setSaving(true)
+    const result = await persistStageUpdate('problem', problemModal.items, {
+      reason: reason || undefined,
+      note:   note.trim() || undefined,
+    })
+    setSaving(false)
+    setProblemModal(null)
+
+    if (result) {
+      const count = problemModal.items.length
+      setSelectedItems(new Set())
+      setToast({ msg: `Проблема зафиксирована (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`, ok: false })
+      setTimeout(() => setToast(null), 4000)
+    }
   }
 
   // ─── Loading / error states ────────────────────────────────────────────────
@@ -385,8 +525,17 @@ export default function ProductionOrderPage() {
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold whitespace-nowrap pointer-events-none ${
           toast.ok ? 'bg-[#111110] text-white' : 'bg-red-600 text-white'
         }`}>
-          {toast.ok ? '✓ ' : '✗ '}{toast.msg}
+          {toast.ok ? '✓ ' : '⚠ '}{toast.msg}
         </div>
+      )}
+
+      {problemModal && (
+        <ProblemModal
+          itemCount={problemModal.items.length}
+          saving={saving}
+          onConfirm={saveProblem}
+          onCancel={() => setProblemModal(null)}
+        />
       )}
 
       <div className="min-h-screen bg-[#f8f8f7] pb-32">
