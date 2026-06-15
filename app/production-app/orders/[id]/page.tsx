@@ -110,6 +110,17 @@ function fmtDateShort(s: string): string {
   return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+function fmtDateTime(s: string | undefined): string {
+  if (!s) return '—'
+  try {
+    const d = new Date(s)
+    if (isNaN(d.getTime())) return '—'
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  } catch {
+    return '—'
+  }
+}
+
 function plural(n: number, one: string, few: string, many: string): string {
   const m10 = n % 10; const m100 = n % 100
   if (m100 >= 11 && m100 <= 14) return many
@@ -694,6 +705,13 @@ export default function ProductionOrderPage() {
   const totalWeight    = itemsWeight > 0 ? itemsWeight : (order.total_weight ?? 0)
   const allSelected    = order.items.length > 0 && selectedItems.size === order.items.length
   const selNeedTemp    = [...selectedItems].some(idx => itemNeedsTempering(order.items[idx]))
+  const auditLog       = [...(Array.isArray(pn.detail_stage_audit) ? pn.detail_stage_audit : [])]
+    .sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+      return tb - ta
+    })
+    .slice(0, 10)
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -896,6 +914,58 @@ export default function ProductionOrderPage() {
               })}
             </div>
           </div>
+
+          {/* Audit trail */}
+          {auditLog.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2.5 px-0.5">
+                История изменений
+              </p>
+              <div className="bg-white border border-[#e8e8e4] rounded-xl overflow-hidden divide-y divide-[#f0f0ec]">
+                {auditLog.map((entry, i) => (
+                  <div key={i} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[11px] font-semibold text-[#111110]">
+                          Поз.{(entry.item_index ?? 0) + 1}
+                        </span>
+                        <span className="text-[10px] text-[#c4c4be]">—</span>
+                        <span className="text-[11px] font-medium text-[#111110]">
+                          {STAGE_LABELS[entry.stage_key] ?? entry.stage_key}
+                        </span>
+                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded border bg-[#f4f4f0] text-[#6b6b66] border-[#e8e8e4]">
+                          отмена
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-[#9a9a95] whitespace-nowrap flex-shrink-0">
+                        {fmtDateTime(entry.created_at)}
+                      </span>
+                    </div>
+                    {entry.reason && (
+                      <p className="text-[11px] text-[#6b6b66] leading-snug mb-0.5">
+                        Причина: {entry.reason}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
+                      {entry.created_by_email && (
+                        <span className="text-[10px] text-[#9a9a95]">
+                          Кто: {entry.created_by_email}
+                        </span>
+                      )}
+                      {entry.previous_value && (
+                        <span className="text-[10px] text-[#9a9a95]">
+                          Было: {entry.previous_value.status === 'done' ? 'выполнено' : 'проблема'}
+                          {entry.previous_value.updated_at
+                            ? ` от ${fmtDateTime(entry.previous_value.updated_at)}`
+                            : ''}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </div>
       </div>
