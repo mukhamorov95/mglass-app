@@ -13,6 +13,7 @@ type User = {
   manager_code: number | null
   password_plain: string | null
   see_all_orders: boolean
+  can_view_all_clients: boolean
   can_view_all_deals: boolean
   amo_user_id: number | null
   max_discount_percent: number | null
@@ -175,6 +176,7 @@ export default function UsersPage() {
           <span><span className="font-semibold text-[#111110]">Скидка</span> — максимальный % который менеджер может дать клиенту</span>
           <span><span className="font-semibold text-[#111110]">Удаление</span> — право удалять заказы и расчёты</span>
           <span><span className="font-semibold text-[#111110]">Заказы</span> — все или только свои</span>
+          <span><span className="font-semibold text-[#111110]">Клиенты</span> — все или только свои</span>
           <span><span className="font-semibold text-[#111110]">Доступ</span> — разделы меню которые видит менеджер</span>
         </div>
 
@@ -209,6 +211,7 @@ export default function UsersPage() {
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Максимальная скидка %">Скидка</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Право удалять">Удаление</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит все заказы или только свои">Заказы</th>
+                  <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит всех клиентов или только своих">Клиенты</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="AmoCRM User ID для раздела Менеджер">AMO ID</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Статус</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Доступ</th>
@@ -348,6 +351,19 @@ export default function UsersPage() {
                           )}
                         </td>
 
+                        {/* Видимость клиентов */}
+                        <td className="px-3 py-3 text-center">
+                          {isAdmin ? (
+                            <span className="text-[11px] font-semibold text-emerald-600">Все</span>
+                          ) : (
+                            <button
+                              onClick={() => updateUser(u.id, { can_view_all_clients: !u.can_view_all_clients })}
+                              className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${u.can_view_all_clients ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                              {u.can_view_all_clients ? 'Все' : 'Свои'}
+                            </button>
+                          )}
+                        </td>
+
                         {/* AmoCRM User ID */}
                         <td className="px-3 py-3 text-center">
                           <input
@@ -399,7 +415,7 @@ export default function UsersPage() {
                       {/* Permissions expansion row */}
                       {!isAdmin && !isBuyer && permsExpanded && (
                         <tr key={`${u.id}-perms`} className="bg-[#fafaf9]">
-                          <td colSpan={9} className="px-6 py-4 border-t border-[#f0f0ec]">
+                          <td colSpan={10} className="px-6 py-4 border-t border-[#f0f0ec]">
                             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2.5">Разделы меню</p>
                             <div className="flex flex-wrap gap-2">
                               {PERM_LABELS.map(p => {

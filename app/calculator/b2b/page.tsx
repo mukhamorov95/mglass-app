@@ -175,9 +175,10 @@ export default function B2BCalculatorPage() {
         if (user?.id) setManagerId(user.id)
 
         let userIsAdmin = false
+        let userCanSeeAllClients = false
         let userManagerCode: number | null = null
         if (user?.id) {
-          const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent').eq('id', user.id).single()
+          const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent,can_view_all_clients').eq('id', user.id).single()
           if (profile?.role === 'buyer') {
             setIsBuyer(true)
             return
@@ -185,6 +186,7 @@ export default function B2BCalculatorPage() {
           userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
           userManagerCode = profile?.manager_code ?? null
           if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
+          userCanSeeAllClients = userIsAdmin || (profile?.can_view_all_clients === true)
         }
         setIsAdmin(userIsAdmin)
         setManagerCode(userManagerCode)
@@ -207,9 +209,9 @@ export default function B2BCalculatorPage() {
         for (const o of orders ?? []) {
           totals.set(o.client_id, (totals.get(o.client_id) ?? 0) + o.total_after_discount)
         }
-        // Non-admin managers see only their own clients
+        // Non-admin managers without can_view_all_clients see only their own clients
         const allClients = (cls ?? []) as B2BClient[]
-        const visibleClients = userIsAdmin
+        const visibleClients = userCanSeeAllClients
           ? allClients
           : allClients.filter(c => c.manager_id === user?.id)
         const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
