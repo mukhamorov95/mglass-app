@@ -65,12 +65,6 @@ function fmt(n: number): string {
   return Math.round(n ?? 0).toLocaleString('ru-RU') + ' ₽'
 }
 
-function kpNumber(id: number, dateStr: string): string {
-  const d = new Date(dateStr)
-  const y = d.getFullYear()
-  const m = String(d.getMonth() + 1).padStart(2, '0')
-  return `КП-${y}${m}-${String(id).padStart(4, '0')}`
-}
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -126,9 +120,9 @@ export default function KPPrintPage() {
 
   const notes       = parseNotes(order.notes)
   const userNotes   = (notes.user_notes as string) || ''
-  const quoteDate   = order.created_at
-  const validUntil  = addDays(quoteDate, 7)
-  const kpNum       = kpNumber(order.id, quoteDate)
+  const quoteDate   = (notes.quote_date as string) || order.created_at
+  const validUntil  = addDays(quoteDate, 14)
+  const kpDisplay   = order.custom_number?.trim() || String(order.id).padStart(5, '0')
   const discount    = order.discount_percent || 0
   const totalFinal  = order.total_after_discount || order.total_sale_inc_vat
   const totalBase   = order.total_sale_inc_vat
@@ -180,14 +174,12 @@ export default function KPPrintPage() {
               </div>
             </div>
             <div className="text-right">
-              {order.custom_number && (
-                <div className="text-[20px] font-bold text-[#1a1a18] font-mono">{order.custom_number}</div>
-              )}
+              <div className="text-[10px] uppercase tracking-wide text-[#9b9b96] mb-0.5">КП №</div>
+              <div className="text-[20px] font-bold text-[#1a1a18] font-mono">{kpDisplay}</div>
               {order.client_order_number && (
-                <div className="text-[11px] text-[#6b6b66] font-mono">№ клиента: {order.client_order_number}</div>
+                <div className="text-[11px] text-[#6b6b66] font-mono mt-0.5">№ клиента: {order.client_order_number}</div>
               )}
-              <div className="text-[13px] font-semibold text-[#1a1a18]">{kpNum}</div>
-              <div className="text-[11px] text-[#6b6b66] mt-0.5">от {fmtDate(quoteDate)}</div>
+              <div className="text-[11px] text-[#6b6b66] mt-1.5">от {fmtDate(quoteDate)}</div>
               <div className="text-[11px] text-[#6b6b66]">действует до {validUntil}</div>
             </div>
           </div>
@@ -197,6 +189,12 @@ export default function KPPrintPage() {
               <div className="text-[10px] uppercase tracking-wide text-[#9b9b96] mb-1">Коммерческое предложение для</div>
               <div className="text-[15px] font-semibold">{order.client_name}</div>
             </div>
+            {discount > 0 && (
+              <div className="text-right">
+                <div className="text-[10px] uppercase tracking-wide text-[#9b9b96] mb-0.5">Персональная скидка</div>
+                <div className="text-[15px] font-bold text-emerald-600">{discount}%</div>
+              </div>
+            )}
           </div>
         </div>
 
