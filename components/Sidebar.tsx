@@ -49,6 +49,7 @@ const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
   { href: '/admin/archive',  label: 'Архив расчётов',  icon: '📁' },
+  { href: '/production-app', label: 'Production App',  icon: '📱' },
 ]
 
 // ─── Buyer role ───────────────────────────────────────────────────────────────
@@ -93,6 +94,7 @@ const PRODUCTION_ITEMS: NavItem[] = [
   { href: '/b2b-cutting',       label: 'Раскрой стекла',    icon: '✂️' },
   { href: '/production',        label: 'Производство',      icon: '⚙️' },
   { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
+  { href: '/production-app',    label: 'Production App',    icon: '📱' },
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────
@@ -150,6 +152,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
   { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
   { href: '/admin/procurement',      label: 'Закупки',         icon: '🗂️' },
+  { href: '/production-app',         label: 'Production App',  icon: '📱' },
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
@@ -182,6 +185,7 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
   { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
+  { href: '/production-app',         label: 'Production App',  icon: '📱' },
 ]
 
 const ADMIN_MARKETING: NavItem[] = [

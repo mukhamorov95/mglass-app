@@ -98,6 +98,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-quotes',
     '/b2b-orders',
     '/b2b-cutting',
+    '/production-app',
   ],
 
   production: [
@@ -107,6 +108,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/production',
     '/b2b-orders',
     '/manager-dashboard',
+    '/production-app',
   ],
 
   seo: [
@@ -188,6 +190,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/pricing-manual',
     '/admin/health-check',
     '/admin/ai-control-center',
+    '/production-app',
   ],
 }
 
