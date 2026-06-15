@@ -107,6 +107,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-production',
     '/production',
     '/production-app',
+    '/p/o',
   ],
 
   seo: [

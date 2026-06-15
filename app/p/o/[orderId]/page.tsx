@@ -392,8 +392,8 @@ export default function MobileOrderWorkPage() {
         <p className="text-[13px] text-[#8a8a85] mb-5">
           Попробуйте открыть производственный лист и сканировать QR ещё раз.
         </p>
-        <Link href="/b2b-orders" className="text-[13px] text-blue-600 underline underline-offset-2">
-          Перейти к списку заказов
+        <Link href="/production-app" className="text-[13px] text-blue-600 underline underline-offset-2">
+          К списку заказов
         </Link>
       </div>
     </div>
@@ -432,7 +432,7 @@ export default function MobileOrderWorkPage() {
         <div className="sticky top-0 z-10 bg-white border-b border-[#e4e4e0] px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Link
-              href="/b2b-orders"
+              href="/production-app"
               className="text-[#6b6b66] hover:text-[#111110] transition-colors p-1 -ml-1"
               aria-label="Назад"
             >
