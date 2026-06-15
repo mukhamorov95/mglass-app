@@ -1,5 +1,76 @@
 ## Текущая задача
-B2B HTML Proposal Alignment — закрыт и закоммичен (ce6bf2a), pushed.
+Admin Users: All Clients Access Toggle — закрыт и закоммичен (f32ace6), pushed.
+
+---
+
+## Admin Users: All Clients Access Toggle — ЗАКРЫТО (15 июня 2026)
+
+### 1. Коммит
+
+`f32ace6` — feat(admin-users): add all clients access toggle
+
+### 2. Причина
+
+В `/admin/users` было только право:
+
+- **Заказы:** Все / Свои (`see_all_orders`)
+
+Но не было отдельного права:
+
+- **Клиенты:** Все / Свои
+
+Из-за этого пользователь мог видеть все заказы, но в `/calculator/b2b` всё равно видел только своих клиентов.
+
+### 3. Новая модель доступа
+
+- **Заказы:** Все / Свои — `see_all_orders`
+- **Клиенты:** Все / Свои — `can_view_all_clients`
+
+Это независимые права. Можно включить одно без другого.
+
+### 4. Новое поле
+
+```
+can_view_all_clients boolean NOT NULL DEFAULT false
+```
+
+Миграция: `supabase/migrations/20260615_add_can_view_all_clients_to_users.sql`
+
+SQL для production (применить вручную в Supabase SQL Editor):
+```sql
+ALTER TABLE users ADD COLUMN IF NOT EXISTS can_view_all_clients boolean NOT NULL DEFAULT false;
+```
+
+### 5. Что изменено
+
+**`/admin/users` (`app/admin/users/page.tsx`):**
+- Добавлен столбец «Клиенты»
+- Переключатель «Все / Свои» (тот же паттерн что «Заказы»)
+- Работает независимо от столбца «Заказы»
+- `colSpan` расширен до 10
+
+**`app/api/admin/users/route.ts`:**
+- `can_view_all_clients` добавлен в SELECT полного запроса
+
+**`/calculator/b2b` (`app/calculator/b2b/page.tsx`):**
+- `can_view_all_clients` добавлен в profile SELECT
+- `userCanSeeAllClients = userIsAdmin || profile?.can_view_all_clients === true`
+- `visibleClients` фильтруется по `userCanSeeAllClients` (не по `userIsAdmin`)
+
+### 6. Что не трогалось
+
+`/b2b-orders`, `/b2b-quotes`, PDF КП, HTML КП, `/admin/procurement`, закупки, платежи, Production Day, glass-prices sheet variants
+
+### 7. Production test-plan
+
+1. Применить миграцию в Supabase SQL Editor.
+2. Открыть `/admin/users` — убедиться что появился столбец «Клиенты».
+3. Для Дмитрия поставить «Клиенты: Все».
+4. Обновить страницу — значение должно сохраниться.
+5. Зайти под Дмитрием в `/calculator/b2b`.
+6. Убедиться что видны все B2B-клиенты.
+7. Вернуть «Клиенты: Свои» — должны остаться только свои.
+8. Проверить что «Заказы: Все» работает независимо.
 
 ---
 
