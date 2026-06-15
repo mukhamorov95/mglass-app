@@ -96,6 +96,7 @@ function dirtyKey(name: string, field: string, pt: PriceType, cat: Category) {
 export default function GlassPricesPage() {
   const [rows, setRows]         = useState<GlassRow[]>([])
   const [loading, setLoading]   = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [tab, setTab]           = useState<TabKey>('cost_glass')
   const [isOwner, setIsOwner]   = useState(false)
   const [suppliers, setSuppliers] = useState<{ id: string; name: string }[]>([])
@@ -146,34 +147,47 @@ export default function GlassPricesPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const res = await fetch('/api/admin/glass-prices')
-    if (res.ok) {
-      const data: GlassRow[] = await res.json()
-      setRows(data)
-      const sup: Record<string, RowSupplier> = {}
-      for (const r of data) {
-        if (r.price_type === 'cost') {
-          sup[r.name] = { supplier_id: r.supplier_id ?? null, supplier_material_name: r.supplier_material_name ?? null }
+    setLoadError(null)
+    try {
+      const res = await fetch('/api/admin/glass-prices')
+      if (res.ok) {
+        const data: GlassRow[] = await res.json()
+        setRows(data)
+        const sup: Record<string, RowSupplier> = {}
+        for (const r of data) {
+          if (r.price_type === 'cost') {
+            sup[r.name] = { supplier_id: r.supplier_id ?? null, supplier_material_name: r.supplier_material_name ?? null }
+          }
         }
+        setRowSupplier(sup)
+      } else {
+        setLoadError(`Ошибка загрузки: ${res.status} ${res.statusText}`)
       }
-      setRowSupplier(sup)
+    } catch (err) {
+      console.error('[glass-prices] load error:', err)
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить справочник стекла')
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   const loadB2BData = useCallback(async () => {
-    const supabase = createClient()
-    const [{ data: matData }, { data: varData }] = await Promise.all([
-      supabase.from('b2b_materials').select('id, name, category, thickness, active'),
-      supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
-    ])
-    setB2bMaterials((matData ?? []) as B2bMatRow[])
-    const grouped: Record<number, SheetVariant[]> = {}
-    for (const v of (varData ?? []) as SheetVariant[]) {
-      if (!grouped[v.material_id]) grouped[v.material_id] = []
-      grouped[v.material_id].push(v)
+    try {
+      const supabase = createClient()
+      const [{ data: matData }, { data: varData }] = await Promise.all([
+        supabase.from('b2b_materials').select('id, name, category, thickness, active'),
+        supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
+      ])
+      setB2bMaterials((matData ?? []) as B2bMatRow[])
+      const grouped: Record<number, SheetVariant[]> = {}
+      for (const v of (varData ?? []) as SheetVariant[]) {
+        if (!grouped[v.material_id]) grouped[v.material_id] = []
+        grouped[v.material_id].push(v)
+      }
+      setSheetVariants(grouped)
+    } catch (err) {
+      console.error('[glass-prices] loadB2BData error:', err)
     }
-    setSheetVariants(grouped)
   }, [])
 
   useEffect(() => { load(); loadB2BData() }, [load, loadB2BData])
@@ -880,6 +894,14 @@ export default function GlassPricesPage() {
       {/* ── Price matrix tabs ── */}
       {tab !== 'formula' && loading ? (
         <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
+      ) : tab !== 'formula' && loadError ? (
+        <div className="py-12 flex flex-col items-center gap-3 text-center">
+          <p className="text-[13px] text-red-600">Не удалось загрузить справочник стекла</p>
+          <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
+          <button onClick={load} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+            Повторить
+          </button>
+        </div>
       ) : tab !== 'formula' && (
         <>
           {/* Banner: empty sale cells that have cost data */}
