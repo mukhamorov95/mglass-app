@@ -1,10 +1,57 @@
 ## Текущая задача
-Step 11 — Stage Undo with Audit Trail — ЗАКРЫТО
+Step 12 — Detail Stage Audit Visibility — ЗАКРЫТО
 
 ## Что сделано (эта сессия)
 - Step 7 — экран фиксации проблем (ЗАКРЫТО)
 - Step 10 — Supervisor Panel (ЗАКРЫТО): /production-app/supervisor
 - Step 11 — Stage Undo (ЗАКРЫТО): кнопка ✕ на этапах + UndoModal + audit trail
+- Step 12 — Audit Visibility (ЗАКРЫТО): read-only блок "История изменений" в экране заказа
+
+## Production App: Step 12 Detail Stage Audit Visibility — ЗАКРЫТО
+
+### Коммит
+5abbb94 — feat(production-app): show stage audit trail
+
+### Что добавлено
+
+- На странице /production-app/orders/[id] появился read-only блок "История изменений".
+- Блок показывается только если в notes.detail_stage_audit есть записи.
+- Показываются последние 10 записей, отсортированных по created_at по убыванию.
+- Если audit пустой — блок не показывается.
+
+### Что отображается в истории
+
+Для каждой записи:
+- дата/время;
+- позиция (Поз.N);
+- этап (из STAGE_LABELS);
+- бейдж "отмена";
+- причина;
+- кто отменил (created_by_email, если есть);
+- предыдущий статус (previous_value, если есть).
+
+### Безопасность
+
+- Блок только читает notes.detail_stage_audit.
+- Новых .update() не добавлено.
+- Новых insert/delete/upsert нет.
+- Существующие .update({ notes: JSON.stringify(updatedNotes) }) остались только в persistStageUpdate и unsetStage.
+- notes.detail_stages не менялся.
+- Stage keys не менялись.
+- QR route не менялся.
+- Supervisor panel не менялась.
+- Миграций нет.
+
+### Production test-plan
+
+На заказе #609:
+
+1. Открыть /production-app/orders/609.
+2. Если ранее была отмена этапа — проверить, что внизу появился блок "История изменений".
+3. Проверить запись: позиция, этап, дата/время, причина, кто отменил, предыдущий статус.
+4. Открыть заказ без отмен — блок должен отсутствовать.
+5. Выполнить новую отмену этапа — история обновляется сразу (без перезагрузки).
+6. Проверить, что постановка и отмена этапов продолжают работать.
 
 ## Production App: Step 11 Stage Undo with Audit Trail — ЗАКРЫТО
 
@@ -117,11 +164,11 @@ be4f698 — fix(access): restrict root route matching
 Теперь p === '/' разрешает только pathname === '/'.
 
 ## Следующий шаг
-Step 12 — Detail Stage Audit Visibility:
-- Read-only просмотр истории изменений по детали/заказу
-- Кто поставил этап / кто отменил / когда / причина / предыдущий статус
-- Данные уже пишутся в notes.detail_stage_audit — нужен UI для их отображения
-- Лучше делать до новых крупных фич, пока audit свежий
+Step 13 — Supervisor Panel: Audit / Recent Changes indicator:
+- В /production-app/supervisor добавить read-only индикатор по заказам с отменами
+- Показывать: есть ли отмены, когда последняя, кто отменил, ссылка "Открыть заказ"
+- Данные уже в notes.detail_stage_audit — новых записей в БД не потребуется
+- Усиливает контроль начальника производства без изменения схемы данных
 
 ## Контекст
 - Production App: /production-app (главный экран) + /production-app/orders/{id} (экран заказа)
@@ -135,4 +182,4 @@ Step 12 — Detail Stage Audit Visibility:
 
 ## Открытые вопросы
 - PWA manifest: добавить на позднем шаге
-- Step 12: UI просмотра audit trail
+- Step 13: Audit indicator в supervisor panel
