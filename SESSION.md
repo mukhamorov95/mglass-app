@@ -1,5 +1,59 @@
 ## Текущая задача
-Loading Safety Audit — этап 1 — закрыт и закоммичен (b7b9daa), pushed.
+Loading Safety Audit — этап 2 — закрыт и закоммичен (24e0230), pushed.
+
+---
+
+## Loading Safety Audit — этап 2 — ЗАКРЫТО (15 июня 2026)
+
+### 1. Коммит
+
+`24e0230` — fix(admin): add loading error recovery to operations pages
+
+### 2. Страницы этапа
+
+- `/admin/glass-prices`
+- `/admin/procurement`
+
+### 3. Что было найдено
+
+**`/admin/procurement`:**
+- уже имел `loadError` state
+- уже имел `try/catch/finally` в `load()`
+- уже имел error banner в UI
+- `loadPayments()` имеет намеренный non-critical `catch` с комментарием
+- файл не менялся в этом этапе
+
+**`/admin/glass-prices`:**
+- `load()` не имел `try/catch/finally` — `fetch('/api/admin/glass-prices')` мог упасть до `setLoading(false)` → вечный spinner
+- `loadB2BData()` — `Promise.all` без защиты → unhandled rejection при сетевой ошибке
+- нет `loadError` state, нет error block, нет Retry
+
+### 4. Что изменено в /admin/glass-prices
+
+- добавлен `loadError` state
+- `load()` обёрнут в `try/catch/finally`; `finally` всегда снимает `loading`
+- non-ok response теперь переводится в `loadError` (ветка `else`)
+- добавлен error block "Не удалось загрузить справочник стекла" + кнопка "Повторить"
+- `loadB2BData()` обёрнут в `try/catch` с `console.error` (нет своего loading state — Retry не нужен)
+
+### 5. Что не трогалось
+
+Бизнес-логика `/admin/procurement`: статусы, платежи, история, PDF поставщику.
+Бизнес-логика `/admin/glass-prices`: save/edit цен, форматы листов, сделать основным, скрыть/показать, sync b2b materials.
+`/b2b-orders`, `/b2b-quotes`, `/calculator/b2b`, `/admin/users`, migrations, `package.json`.
+
+### 6. Production test-plan
+
+1. Открыть `/admin/glass-prices` — матрица цен загружается, "Загрузка..." исчезает.
+2. DevTools → Network → Offline → перезагрузить `/admin/glass-prices`.
+3. Должен появиться блок "Не удалось загрузить справочник стекла".
+4. Вернуть сеть → нажать "Повторить" → данные загружаются.
+5. Проверить цены, поставщиков, форматы листов, "Сделать основным", "Скрыть/Показать", sync b2b materials.
+6. Открыть `/admin/procurement` — канбан, платежи, история, PDF поставщику работают.
+
+### 7. Итоговое правило
+
+Критичные админ-страницы должны иметь recoverable loading: `loading` + `error` state + Retry, или уже существующий error banner.
 
 ---
 
