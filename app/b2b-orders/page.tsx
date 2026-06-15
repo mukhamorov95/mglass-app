@@ -428,6 +428,7 @@ function buildProductionMessage(order: Order): string {
 export default function B2BOrdersPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
 
@@ -540,11 +541,13 @@ export default function B2BOrdersPage() {
   const [dateTo, setDateTo] = useState('')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineStatus | 'all'>('all')
 
-  useEffect(() => {
-    async function load() {
-      const sb = createClient()
+  async function loadOrders() {
+    setLoading(true)
+    setLoadError(null)
+    const sb = createClient()
+    try {
       const { data: { user } } = await sb.auth.getUser()
-      if (!user) { setLoading(false); return }
+      if (!user) { return }
       setCurrentUserId(user.id)
 
       const { data: profile } = await sb
@@ -599,10 +602,15 @@ export default function B2BOrdersPage() {
       const now = new Date()
       const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
       setExpandedMonths(new Set([currentKey]))
+    } catch (err) {
+      console.error('[b2b-orders] load error:', err)
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
+    } finally {
       setLoading(false)
     }
-    load()
-  }, [])
+  }
+
+  useEffect(() => { loadOrders() }, [])
 
   const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all'
 
@@ -1137,6 +1145,16 @@ export default function B2BOrdersPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  )
+
+  if (loadError) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
+      <p className="text-[13px] text-red-600">Не удалось загрузить данные</p>
+      <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
+      <button onClick={loadOrders} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+        Повторить
+      </button>
+    </div>
   )
 
   const totalSum = orders.reduce((s, o) => s + getFinalPrice(o), 0)

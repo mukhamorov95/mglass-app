@@ -201,6 +201,7 @@ export default function B2BQuotesPage() {
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [materials, setMaterials]     = useState<MatLight[]>([])
   const [loading, setLoading]         = useState(true)
+  const [loadError, setLoadError]     = useState<string | null>(null)
   const [expanded, setExpanded]       = useState<number | null>(null)
   const [tab, setTab]                 = useState<QuoteStatus | 'all'>('all')
   const [page, setPage]               = useState(1)
@@ -370,52 +371,60 @@ export default function B2BQuotesPage() {
 
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadQuotes() {
+    setLoading(true)
+    setLoadError(null)
     const sb = createClient()
-    const { data: { user } } = await sb.auth.getUser()
-    if (!user) { setLoading(false); return }
+    try {
+      const { data: { user } } = await sb.auth.getUser()
+      if (!user) { return }
 
-    const { data: profile } = await sb
-      .from('users')
-      .select('role, see_all_orders')
-      .eq('id', user.id)
-      .single()
+      const { data: profile } = await sb
+        .from('users')
+        .select('role, see_all_orders')
+        .eq('id', user.id)
+        .single()
 
-    setUserRole(profile?.role ?? null)
-    setCurrentUserId(user.id)
-    const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+      setUserRole(profile?.role ?? null)
+      setCurrentUserId(user.id)
+      const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
 
-    let ordersQuery = sb
-      .from('b2b_orders')
-      .select('*')
-      .is('archived_at', null)
-      .order('created_at', { ascending: false })
-      .limit(2000)
+      let ordersQuery = sb
+        .from('b2b_orders')
+        .select('*')
+        .is('archived_at', null)
+        .order('created_at', { ascending: false })
+        .limit(2000)
 
-    if (!canSeeAll) {
-      // Show quotes created by this manager OR for clients assigned to this manager
-      const { data: myClients } = await sb
-        .from('b2b_clients')
-        .select('id')
-        .eq('manager_id', user.id)
-      const myClientIds = (myClients ?? []).map((c: { id: number }) => c.id)
-      if (myClientIds.length > 0) {
-        ordersQuery = ordersQuery.or(`created_by.eq.${user.id},client_id.in.(${myClientIds.join(',')})`)
-      } else {
-        ordersQuery = ordersQuery.eq('created_by', user.id)
+      if (!canSeeAll) {
+        // Show quotes created by this manager OR for clients assigned to this manager
+        const { data: myClients } = await sb
+          .from('b2b_clients')
+          .select('id')
+          .eq('manager_id', user.id)
+        const myClientIds = (myClients ?? []).map((c: { id: number }) => c.id)
+        if (myClientIds.length > 0) {
+          ordersQuery = ordersQuery.or(`created_by.eq.${user.id},client_id.in.(${myClientIds.join(',')})`)
+        } else {
+          ordersQuery = ordersQuery.eq('created_by', user.id)
+        }
       }
-    }
 
-    const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
-      ordersQuery,
-      sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
-      sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
-    ])
-    setQuotes((orders ?? []).map(q => ({
-      ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
-    })))
-    setAttachments(attaches ?? [])
-    setMaterials((mats ?? []) as MatLight[])
-    setLoading(false)
+      const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
+        ordersQuery,
+        sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
+        sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
+      ])
+      setQuotes((orders ?? []).map(q => ({
+        ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
+      })))
+      setAttachments(attaches ?? [])
+      setMaterials((mats ?? []) as MatLight[])
+    } catch (err) {
+      console.error('[b2b-quotes] load error:', err)
+      setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
+    } finally {
+      setLoading(false)
+    }
   }
 
   useEffect(() => { loadQuotes() }, [])
@@ -503,6 +512,16 @@ export default function B2BQuotesPage() {
 
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  )
+
+  if (loadError) return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
+      <p className="text-[13px] text-red-600">Не удалось загрузить данные</p>
+      <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
+      <button onClick={loadQuotes} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+        Повторить
+      </button>
+    </div>
   )
 
   // ── Render ─────────────────────────────────────────────────────────────────
