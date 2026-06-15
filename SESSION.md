@@ -1,9 +1,56 @@
 ## Текущая задача
-Payment Status Badge в /b2b-orders — реализован, не закоммичен. Ждёт подтверждения пользователя.
+Glass Prices Sheet Variants RLS Fix — закрыт и закоммичен (e40dd3e), pushed.
 
 ---
 
-### Payment Status Badge в /b2b-orders — РЕАЛИЗОВАН, ещё не закоммичен
+### Glass Prices Sheet Variants RLS Fix — ЗАКРЫТО (15 июня 2026)
+
+**Коммит:** `e40dd3e`
+
+**Файлы:**
+- `app/admin/glass-prices/page.tsx`
+- `app/api/admin/b2b-material-sheet-variants/route.ts` (создан)
+- `app/api/admin/b2b-material-sheet-variants/[id]/route.ts` (создан)
+
+**Production issue:**
+В `/admin/glass-prices` при добавлении формата листа появлялась ошибка:
+`new row violates row-level security policy for table "b2b_material_sheet_variants"`
+
+**Причина:**
+`app/admin/glass-prices/page.tsx` — client component. Write-операции (`INSERT`, `UPDATE`) в `b2b_material_sheet_variants` шли через browser Supabase client и блокировались RLS.
+
+**Решение:**
+Добавлены admin API routes с проверкой роли `admin` / `ceo` и записью через service role key:
+- `GET /api/admin/b2b-material-sheet-variants` — список вариантов по material_id
+- `POST /api/admin/b2b-material-sheet-variants` — добавить формат
+- `PATCH /api/admin/b2b-material-sheet-variants/[id]` — сделать основным / скрыть / показать
+- `DELETE /api/admin/b2b-material-sheet-variants/[id]` — soft delete (active=false, не физический DELETE)
+
+**Операции через API:**
+- Добавить формат → `POST`
+- Сделать основным → `PATCH { is_default: true }` (сначала сбрасывает default у других active)
+- Скрыть → `PATCH { active: false }` (сбрасывает is_default если был)
+- Показать → `PATCH { active: true }`
+
+**Что не трогалось:**
+- `/b2b-orders`, `/b2b-quotes`, `/admin/procurement`
+- закупки, платежи, material requirement, Production Sheet
+- Структура таблицы `b2b_material_sheet_variants`
+- Миграции
+
+**Production test-plan:**
+1. `/admin/glass-prices` → вкладка "Себестоимость Стекло" → "Листы"
+2. Добавить формат 3300×2000, поставщик "ООО КСЗ", имя "Mopy Crystal Clear"
+3. RLS error не появляется, строка видна в списке
+4. "Сделать основным" → звёздочка переместилась
+5. "скрыть" → opacity-50, строка осталась в БД (не удалена)
+6. "показать" → вернулась в активные
+
+---
+
+### Payment Status Badge в /b2b-orders — ЗАКРЫТО (15 июня 2026)
+
+**Коммит:** `0ebaf63`
 
 **Файл:** только `app/b2b-orders/page.tsx`
 
