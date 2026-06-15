@@ -557,16 +557,18 @@ export default function ProductionOrderPage() {
               <p className="text-[15px] font-bold text-[#111110] leading-none">{orderLabel}</p>
             </div>
           </div>
-          <div className="text-right">
-            <p className="text-[11px] text-[#9a9a95]">
-              {order.items.length}&nbsp;{plural(order.items.length, 'позиция', 'позиции', 'позиций')}
-            </p>
-            {selectedItems.size > 0 && (
-              <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
-            )}
+          <div className="flex items-center gap-2">
+            <div className="text-right">
+              <p className="text-[11px] text-[#9a9a95]">
+                {order.items.length}&nbsp;{plural(order.items.length, 'позиция', 'позиции', 'позиций')}
+              </p>
+              {selectedItems.size > 0 && (
+                <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
+              )}
+            </div>
             <Link
               href={`/p/o/${order.id}`}
-              className="text-[10px] text-blue-500 hover:text-blue-700 underline underline-offset-1"
+              className="inline-flex items-center rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors whitespace-nowrap"
             >
               QR-экран
             </Link>
