@@ -1,5 +1,5 @@
 ## Текущая задача
-Step 8 — Manual Production Validation — ЗАКРЫТО
+Access Control: Root Route Matching Fix — ЗАКРЫТО
 
 ## Что сделано (эта сессия)
 - Step 7 — экран фиксации проблем:
@@ -101,10 +101,61 @@ Production App ↔ QR-экран ↔ B2B Orders
 1. Панель начальника производства: список проблем и заказов с риском.
 2. Возможность снять ошибочную отметку этапа.
 3. История изменений по детали: кто/когда отметил этап.
-4. Улучшение access-control: отдельно исправить баг p === '/' в canAccess, но только отдельным безопасным refactor-коммитом.
+
+## Access Control: Root Route Matching Fix — ЗАКРЫТО
+
+### Коммит
+
+be4f698 — fix(access): restrict root route matching
+
+### Что было не так
+
+`'/'` в ROLE_ALLOWED фактически открывал все маршруты, потому что `p === '/'` всегда возвращал `true` внутри `allowed.some(...)`.
+
+### Что исправлено
+
+Теперь `p === '/'` разрешает только `pathname === '/'`.
+
+Остальные маршруты работают через:
+
+```ts
+pathname === p || pathname.startsWith(p + '/')
+```
+
+### Почему это важно
+
+Это закрывает опасную дыру в role-based access control: production-role больше не получает доступ к управленческим и административным страницам только из-за наличия `'/'` в allowed routes.
+
+### Что проверять на production
+
+Production-role должен иметь доступ:
+
+- /production-app
+- /production-app/orders/609
+- /p/o/609
+
+Production-role НЕ должен иметь доступ:
+
+- /b2b-orders
+- /b2b-quotes
+- /admin/users
+- /calculator/b2b
+
+Manager/admin/ceo/buyer должны сохранить свои разрешённые маршруты согласно ROLE_ALLOWED.
+
+### Что НЕ трогалось
+
+- Production App UI
+- QR route UI
+- notes
+- detail_stages
+- stage tracking
+- Supabase
+- RLS
+- middleware redirects
 
 ## Следующий шаг
-Step 9 — панель начальника производства (supervisor view):
+Step 10 — Supervisor Panel / Панель начальника производства:
   - Маршрут: /production-app/supervisor (или /admin/production)
   - Показывает все активные заказы со статусами этапов
   - Фильтр по проблемам (быстро найти позиции с браком)
@@ -119,6 +170,5 @@ Step 9 — панель начальника производства (superviso
 - Сортировка: overdue → today → tomorrow → normal → ready → shipped
 
 ## Открытые вопросы
-- Step 9: панель начальника производства — отдельный view для admin/ceo
-- access-control: исправить баг p === '/' в canAccess() — отдельным безопасным refactor-коммитом
-- PWA manifest: добавить на шаге 10
+- Step 10: панель начальника производства — отдельный view для admin/ceo
+- PWA manifest: добавить на позднем шаге
