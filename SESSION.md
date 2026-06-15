@@ -1,5 +1,5 @@
 ## Текущая задача
-Access Control: Root Route Matching Fix — ЗАКРЫТО
+Step 10 — Supervisor Panel — РЕАЛИЗОВАНО, ожидает подтверждения и коммита
 
 ## Что сделано (эта сессия)
 - Step 7 — экран фиксации проблем:
@@ -19,6 +19,35 @@ Access Control: Root Route Matching Fix — ЗАКРЫТО
   - lib/productionStages.ts → создан общий helper с типами и логикой этапов
   - app/p/o/[orderId]/page.tsx → переведён на импорт из productionStages
   - app/production-app/orders/[id]/page.tsx → переведён на импорт, добавлена ссылка "QR-экран" → /p/o/{id}
+- Step 10 — Supervisor Panel (НОВОЕ):
+  - app/production-app/supervisor/page.tsx → СОЗДАН (server component)
+  - components/Sidebar.tsx → добавлена "Панель производства" в CEO_OWNER и ADMIN_OWNER
+  - components/Sidebar.tsx → /production-app добавлен в autoOpenAdmin (ceo mode) и autoOpenRole (ceo role)
+
+## Step 10 — Supervisor Panel — детали
+
+### Маршрут
+/production-app/supervisor
+
+### Доступ
+- admin: всегда (canAccess → return true)
+- ceo: через /production-app в ROLE_ALLOWED.ceo (уже покрывает /production-app/*)
+- production/manager: redirect → /production-app (проверка role внутри страницы)
+
+### Что показывает
+- Статкарды: Активных / Просрочено / Проблемы / Упаковано
+- Табы-фильтры: Все / Просрочено / Проблемы / Сегодня—Завтра / Упаковано (URL searchParams)
+- Список заказов: сортировка overdue → today → tomorrow → normal → ready, проблемные наверх внутри группы
+- Карточка заказа: лейбл + клиент + дедлайн-бейдж + прогресс-бар упаковки + список проблем с позицией и причиной
+- Ссылки на каждой карточке: → Заказ (/production-app/orders/{id}) + → QR-экран (/p/o/{id})
+
+### Сайдбар
+- CEO_OWNER: добавлена "Панель производства" 🔭 после "Production App"
+- ADMIN_OWNER (CEO-view для admin): то же
+- autoOpen: /production-app в списке owner-аккордеона для обоих режимов
+
+### TypeScript
+Ошибок в новом коде нет. Pre-existing ошибки в __tests__/calculators/mirror.test.ts — не затронуты.
 
 ## Production App: QR Compatibility Check — ЗАКРЫТО
 
@@ -31,51 +60,12 @@ be0ed58 — feat(production-app): align order screen with qr workflow
 ### Новый общий helper
 lib/productionStages.ts
 
-Содержит:
-- DetailStageKey
-- DetailStageState
-- DetailStages
-- isMirrorItem
-- itemNeedsTempering
-
-### Зачем это важно
-Раньше логика этапов, зеркал и закалки была продублирована в двух интерфейсах.
-Теперь изменение формата этапов или логики зеркал можно делать в одном месте.
-Это снижает риск расхождения между QR-интерфейсом и Production App.
-
-### Что не изменилось
-- Формат notes.detail_stages не изменён
-- Stage keys не изменены
-- Item indexes не изменены
-- Запись notes осталась через JSON.stringify(updatedNotes)
-- Миграций нет
-
-### Production test-plan
-1. Открыть /production-app/orders/{id}
-2. Нажать "QR-экран"
-3. Проверить переход на /p/o/{id}
-4. Отметить этап в Production App
-5. Открыть тот же заказ в /p/o/{id}
-6. Убедиться, что отметка видна
-7. Отметить этап в /p/o/{id}
-8. Обновить Production App
-9. Убедиться, что отметка видна
-10. Проверить, что у зеркал не доступна закалка
-
 ## Production App: Step 8 Manual Production Validation — ЗАКРЫТО
 
 ### Проверенный заказ
-
 #609
 
-### Проверенные маршруты
-
-- /production-app/orders/609
-- /p/o/609
-- /b2b-orders
-
 ### Что подтвердили
-
 - Production App открывает реальный заказ;
 - QR-ссылка открывает /p/o/609;
 - QR-экран загружает тот же заказ;
@@ -84,85 +74,23 @@ lib/productionStages.ts
 - общий формат notes.detail_stages работает;
 - back-link на QR-экране ведёт в /production-app.
 
-### Что исправили во время Step 8
-
-- e784c67 — увеличена кликабельная зона QR-ссылки;
-- 0266cb7 — QR-ссылка заменена на нативный <a href>, чтобы обойти нестабильность soft navigation;
-- 46e98be — /p/o явно разрешён для production-role, ссылки назад исправлены с /b2b-orders на /production-app.
-
-### Важный вывод
-
-Первый рабочий контур Production App подтверждён:
-
-Production App ↔ QR-экран ↔ B2B Orders
-
-### Следующие возможные шаги
-
-1. Панель начальника производства: список проблем и заказов с риском.
-2. Возможность снять ошибочную отметку этапа.
-3. История изменений по детали: кто/когда отметил этап.
-
 ## Access Control: Root Route Matching Fix — ЗАКРЫТО
 
 ### Коммит
-
 be4f698 — fix(access): restrict root route matching
 
 ### Что было не так
-
-`'/'` в ROLE_ALLOWED фактически открывал все маршруты, потому что `p === '/'` всегда возвращал `true` внутри `allowed.some(...)`.
+'/' в ROLE_ALLOWED фактически открывал все маршруты (p === '/' всегда true внутри allowed.some).
 
 ### Что исправлено
-
-Теперь `p === '/'` разрешает только `pathname === '/'`.
-
-Остальные маршруты работают через:
-
-```ts
-pathname === p || pathname.startsWith(p + '/')
-```
-
-### Почему это важно
-
-Это закрывает опасную дыру в role-based access control: production-role больше не получает доступ к управленческим и административным страницам только из-за наличия `'/'` в allowed routes.
-
-### Что проверять на production
-
-Production-role должен иметь доступ:
-
-- /production-app
-- /production-app/orders/609
-- /p/o/609
-
-Production-role НЕ должен иметь доступ:
-
-- /b2b-orders
-- /b2b-quotes
-- /admin/users
-- /calculator/b2b
-
-Manager/admin/ceo/buyer должны сохранить свои разрешённые маршруты согласно ROLE_ALLOWED.
-
-### Что НЕ трогалось
-
-- Production App UI
-- QR route UI
-- notes
-- detail_stages
-- stage tracking
-- Supabase
-- RLS
-- middleware redirects
+Теперь p === '/' разрешает только pathname === '/'.
 
 ## Следующий шаг
-Step 10 — Supervisor Panel / Панель начальника производства:
-  - Маршрут: /production-app/supervisor (или /admin/production)
-  - Показывает все активные заказы со статусами этапов
-  - Фильтр по проблемам (быстро найти позиции с браком)
-  - Счётчики: Активных / Просрочено / Проблемы / Упаковано
+Дать отчёт пользователю и ждать подтверждения для коммита.
 
 ## Контекст
 - Production App: /production-app (главный экран) + /production-app/orders/{id} (экран заказа)
+- Supervisor Panel: /production-app/supervisor (только admin/ceo)
 - Данные: b2b_orders.notes.detail_stages — единый источник для обоих интерфейсов
 - lib/productionStages.ts — общий helper для типов и логики зеркал/закалки
 - Главный экран: server component, фильтрует по notes.status != 'quote' + archived_at IS NULL
@@ -170,5 +98,6 @@ Step 10 — Supervisor Panel / Панель начальника произво�
 - Сортировка: overdue → today → tomorrow → normal → ready → shipped
 
 ## Открытые вопросы
-- Step 10: панель начальника производства — отдельный view для admin/ceo
 - PWA manifest: добавить на позднем шаге
+- Снятие ошибочной отметки этапа (undo)
+- История изменений по детали (кто/когда)
