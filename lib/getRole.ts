@@ -202,5 +202,8 @@ export function canAccess(role: Role, pathname: string): boolean {
     pathname === '/login' ||
     pathname === '/access-denied'
   ) return true
-  return allowed.some(p => p === '/' || pathname === p || pathname.startsWith(p + '/'))
+  return allowed.some(p => {
+    if (p === '/') return pathname === '/'
+    return pathname === p || pathname.startsWith(p + '/')
+  })
 }
