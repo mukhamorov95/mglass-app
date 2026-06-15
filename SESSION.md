@@ -1,5 +1,75 @@
 ## Текущая задача
-Admin Users: All Clients Access Toggle — закрыт и закоммичен (f32ace6), pushed.
+Loading Safety Audit — этап 1 — закрыт и закоммичен (b7b9daa), pushed.
+
+---
+
+## Loading Safety Audit — этап 1 — ЗАКРЫТО (15 июня 2026)
+
+### 1. Коммит
+
+`b7b9daa` — fix(b2b): add loading error recovery to main pages
+
+### 2. Страницы
+
+- `/b2b-quotes`
+- `/b2b-orders`
+
+### 3. Причина
+
+`Promise.all` из нескольких Supabase-запросов мог упасть, после чего `loading` не снимался и страница зависала на "Загрузка..." без возможности восстановления.
+
+### 4. Что изменено
+
+**`/b2b-quotes`:**
+- `loadQuotes()` — добавлен `loadError` state
+- обёрнут в `try/catch/finally`; `finally` всегда вызывает `setLoading(false)`
+- добавлен `setLoading(true)` в начало (для Retry)
+- добавлен error block "Не удалось загрузить данные" + кнопка "Повторить"
+
+**`/b2b-orders`:**
+- inline `load()` из useEffect вынесен в компонентную функцию `loadOrders()`
+- добавлен `loadError` state
+- обёрнут в `try/catch/finally`
+- `useEffect` упрощён до `useEffect(() => { loadOrders() }, [])`
+- добавлен error block "Не удалось загрузить данные" + кнопка "Повторить"
+
+### 5. Правило на будущее
+
+Для основных загрузок страниц использовать pattern:
+
+```ts
+setLoading(true)
+setLoadError(null)
+
+try {
+  // load data
+} catch (error) {
+  console.error(...)
+  setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить данные')
+} finally {
+  setLoading(false)
+}
+```
+
+### 6. Production test-plan
+
+1. Открыть `/b2b-quotes` — список загружается, "Загрузка..." исчезает.
+2. Открыть `/b2b-orders` — список загружается, "Загрузка..." исчезает.
+3. DevTools → Network → Offline → перезагрузить страницу.
+4. Должен появиться блок "Не удалось загрузить данные".
+5. Вернуть сеть.
+6. Нажать "Повторить".
+7. Данные должны загрузиться.
+8. В `/b2b-quotes` проверить: В работу, Отказ, PDF, КП.
+9. В `/b2b-orders` проверить: Production Day, deadline badges, 📦 Материал.
+
+### 7. Что не трогалось
+
+Бизнес-логика `/b2b-quotes` и `/b2b-orders`: В работу, Отказ, PDF, HTML КП, approval flow, Production Day, deadline control, bulk cleanup, material requirement, payment badges, `/admin/procurement`, `/admin/glass-prices`, migrations, `package.json`.
+
+### 8. Следующий этап
+
+Loading Safety Audit — этап 2: `/admin/procurement`, `/admin/glass-prices`
 
 ---
 
