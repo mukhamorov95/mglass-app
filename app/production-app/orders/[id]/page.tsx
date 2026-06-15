@@ -566,12 +566,13 @@ export default function ProductionOrderPage() {
                 <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
               )}
             </div>
-            <Link
+            <a
               href={`/p/o/${order.id}`}
-              className="inline-flex items-center rounded-full border border-blue-200 px-3 py-1.5 text-[11px] font-medium text-blue-600 hover:bg-blue-50 active:bg-blue-100 transition-colors whitespace-nowrap"
+              className="inline-flex min-h-10 items-center justify-center rounded-full border border-blue-200 px-4 py-2 text-xs font-semibold text-blue-600 hover:bg-blue-50"
+              onClick={(event) => event.stopPropagation()}
             >
               QR-экран
-            </Link>
+            </a>
           </div>
         </div>
 
