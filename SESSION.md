@@ -1,53 +1,101 @@
 ## Текущая задача
-Step 10 — Supervisor Panel — РЕАЛИЗОВАНО, ожидает подтверждения и коммита
+Step 11 — Stage Undo with Audit Trail — ЗАКРЫТО
 
 ## Что сделано (эта сессия)
-- Step 7 — экран фиксации проблем:
-  - lib/productionStages.ts → добавлены PROBLEM_REASONS (9 причин) + поле reason в DetailStageState
-  - app/production-app/orders/[id]/page.tsx → ProblemModal компонент (выбор причины + комментарий)
-  - markStage('problem') теперь открывает модал вместо немедленной записи
-  - saveProblem(reason, note) сохраняет reason + note в notes.detail_stages[idx].problem
-- Step 3 — роли и доступ:
-  - lib/getRole.ts → убран /b2b-orders из роли production
-  - middleware.ts → production-пользователь с / редиректится на /production-app
-  - components/Sidebar.tsx → убраны мёртвые ссылки /b2b-orders и /manager-dashboard из PRODUCTION_ITEMS
-- Step 4 — главный экран:
-  - app/production-app/page.tsx → server component, загружает b2b_orders, считает 4 счётчика, список заказов по дедлайну
-- Step 5 — экран заказа:
-  - app/production-app/orders/[id]/page.tsx → полный client component, список деталей, групповые действия, запись в notes.detail_stages
-- Step 6 — QR Compatibility Check:
-  - lib/productionStages.ts → создан общий helper с типами и логикой этапов
-  - app/p/o/[orderId]/page.tsx → переведён на импорт из productionStages
-  - app/production-app/orders/[id]/page.tsx → переведён на импорт, добавлена ссылка "QR-экран" → /p/o/{id}
-- Step 10 — Supervisor Panel (НОВОЕ):
-  - app/production-app/supervisor/page.tsx → СОЗДАН (server component)
-  - components/Sidebar.tsx → добавлена "Панель производства" в CEO_OWNER и ADMIN_OWNER
-  - components/Sidebar.tsx → /production-app добавлен в autoOpenAdmin (ceo mode) и autoOpenRole (ceo role)
+- Step 7 — экран фиксации проблем (ЗАКРЫТО)
+- Step 10 — Supervisor Panel (ЗАКРЫТО): /production-app/supervisor
+- Step 11 — Stage Undo (ЗАКРЫТО): кнопка ✕ на этапах + UndoModal + audit trail
 
-## Step 10 — Supervisor Panel — детали
+## Production App: Step 11 Stage Undo with Audit Trail — ЗАКРЫТО
+
+### Коммит
+0bd9fa7 — feat(production-app): add stage undo with audit trail
+
+### Что добавлено
+
+- На карточках позиций в /production-app/orders/[id] рядом с выполненными этапами появилась кнопка отмены ✕.
+- Отменять можно обычные этапы: cutting / polishing / drilling / tempering / packaging.
+- Также можно отменить problem.
+- При отмене открывается UndoModal (textarea для причины + кнопка подтверждения).
+- Без причины отмена не сохраняется.
+- После отмены stage key удаляется из notes.detail_stages[itemIndex][stageKey].
+
+### Audit trail
+
+Отмена не удаляет историю бесследно.
+
+При каждой отмене создаётся запись в:
+
+```
+notes.detail_stage_audit
+```
+
+Формат audit-записи:
+
+```ts
+{
+  type: 'stage_unset',
+  item_index: number,
+  stage_key: DetailStageKey,
+  previous_value: DetailStageState,
+  reason: string,
+  created_at: string,
+  created_by: string,
+  created_by_email: string
+}
+```
+
+Если `notes.detail_stage_audit` уже есть — запись дозаписывается. Если нет — создаётся массив.
+
+### Почему это важно
+
+В производстве рабочий или руководитель может ошибочно отметить не тот этап или не ту позицию. Теперь ошибочную отметку можно снять, но с сохранением следа: кто, когда, какой этап снял и по какой причине.
+
+### Что НЕ изменилось
+
+- Stage keys не изменялись.
+- lib/productionStages.ts не менялся.
+- /p/o/[orderId] не менялся.
+- /production-app/supervisor не менялся.
+- notes по-прежнему пишется через JSON.stringify(updatedNotes).
+- Миграций нет.
+- RLS не трогался.
+- Middleware не трогался.
+
+### Что проверить на production
+
+На заказе #609:
+
+1. Открыть /production-app/orders/609.
+2. Найти выполненный этап, например "Полировка".
+3. Нажать ✕ рядом с бейджем.
+4. Ввести причину: Тестовая отмена ошибочной отметки.
+5. Нажать "Отменить этап".
+6. Убедиться, что бейдж этапа исчез, toast показал `✓ Отмена: Полировка (поз.N)`.
+7. Открыть /p/o/609 — этап тоже исчез.
+8. Открыть /b2b-orders — прогресс этапа уменьшился.
+9. Убедиться, что остальные этапы не пропали.
+10. Заново поставить этап — сохраняется корректно.
+
+## Production App: Step 10 Supervisor Panel — ЗАКРЫТО
+
+### Коммит
+3d3a42f — feat(production-app): add supervisor panel
 
 ### Маршрут
 /production-app/supervisor
 
 ### Доступ
 - admin: всегда (canAccess → return true)
-- ceo: через /production-app в ROLE_ALLOWED.ceo (уже покрывает /production-app/*)
-- production/manager: redirect → /production-app (проверка role внутри страницы)
+- ceo: через /production-app в ROLE_ALLOWED.ceo (покрывает /production-app/*)
+- production/manager: redirect → /production-app
 
 ### Что показывает
 - Статкарды: Активных / Просрочено / Проблемы / Упаковано
-- Табы-фильтры: Все / Просрочено / Проблемы / Сегодня—Завтра / Упаковано (URL searchParams)
+- Табы-фильтры через URL searchParams: Все / Просрочено / Проблемы / Сегодня—Завтра / Упаковано
 - Список заказов: сортировка overdue → today → tomorrow → normal → ready, проблемные наверх внутри группы
-- Карточка заказа: лейбл + клиент + дедлайн-бейдж + прогресс-бар упаковки + список проблем с позицией и причиной
-- Ссылки на каждой карточке: → Заказ (/production-app/orders/{id}) + → QR-экран (/p/o/{id})
-
-### Сайдбар
-- CEO_OWNER: добавлена "Панель производства" 🔭 после "Production App"
-- ADMIN_OWNER (CEO-view для admin): то же
-- autoOpen: /production-app в списке owner-аккордеона для обоих режимов
-
-### TypeScript
-Ошибок в новом коде нет. Pre-existing ошибки в __tests__/calculators/mirror.test.ts — не затронуты.
+- Карточка: лейбл + клиент + дедлайн-бейдж + прогресс-бар + список проблем с позицией и причиной
+- Ссылки: → Заказ + → QR-экран
 
 ## Production App: QR Compatibility Check — ЗАКРЫТО
 
@@ -55,24 +103,7 @@ Step 10 — Supervisor Panel — РЕАЛИЗОВАНО, ожидает подт
 be0ed58 — feat(production-app): align order screen with qr workflow
 
 ### Что закрыто
-/p/o/{id} и /production-app/orders/{id} теперь используют общий источник типов и логики этапов.
-
-### Новый общий helper
-lib/productionStages.ts
-
-## Production App: Step 8 Manual Production Validation — ЗАКРЫТО
-
-### Проверенный заказ
-#609
-
-### Что подтвердили
-- Production App открывает реальный заказ;
-- QR-ссылка открывает /p/o/609;
-- QR-экран загружает тот же заказ;
-- отметки этапов синхронизируются между Production App и QR-экраном;
-- отметки видны в /b2b-orders в прогрессе по деталям;
-- общий формат notes.detail_stages работает;
-- back-link на QR-экране ведёт в /production-app.
+/p/o/{id} и /production-app/orders/{id} используют общий источник типов и логики этапов через lib/productionStages.ts.
 
 ## Access Control: Root Route Matching Fix — ЗАКРЫТО
 
@@ -86,12 +117,17 @@ be4f698 — fix(access): restrict root route matching
 Теперь p === '/' разрешает только pathname === '/'.
 
 ## Следующий шаг
-Дать отчёт пользователю и ждать подтверждения для коммита.
+Step 12 — Detail Stage Audit Visibility:
+- Read-only просмотр истории изменений по детали/заказу
+- Кто поставил этап / кто отменил / когда / причина / предыдущий статус
+- Данные уже пишутся в notes.detail_stage_audit — нужен UI для их отображения
+- Лучше делать до новых крупных фич, пока audit свежий
 
 ## Контекст
 - Production App: /production-app (главный экран) + /production-app/orders/{id} (экран заказа)
 - Supervisor Panel: /production-app/supervisor (только admin/ceo)
 - Данные: b2b_orders.notes.detail_stages — единый источник для обоих интерфейсов
+- Audit: b2b_orders.notes.detail_stage_audit — лог отмен этапов
 - lib/productionStages.ts — общий helper для типов и логики зеркал/закалки
 - Главный экран: server component, фильтрует по notes.status != 'quote' + archived_at IS NULL
 - Счётчики: Активных / Просрочено / Проблемы / Упаковано
@@ -99,5 +135,4 @@ be4f698 — fix(access): restrict root route matching
 
 ## Открытые вопросы
 - PWA manifest: добавить на позднем шаге
-- Снятие ошибочной отметки этапа (undo)
-- История изменений по детали (кто/когда)
+- Step 12: UI просмотра audit trail
