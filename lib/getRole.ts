@@ -106,8 +106,6 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-pipeline',
     '/b2b-production',
     '/production',
-    '/b2b-orders',
-    '/manager-dashboard',
     '/production-app',
   ],
 

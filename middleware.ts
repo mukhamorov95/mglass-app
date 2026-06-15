@@ -69,6 +69,13 @@ export async function middleware(request: NextRequest) {
       }
     }
 
+    // Redirect production workers from the home page to their app
+    if (role === 'production' && pathname === '/') {
+      const url = request.nextUrl.clone()
+      url.pathname = '/production-app'
+      return NextResponse.redirect(url)
+    }
+
     if (role && !canAccess(role, pathname)) {
       const url = request.nextUrl.clone()
       url.pathname = '/access-denied'

@@ -88,13 +88,11 @@ const BUYER_POMOSH: NavItem[] = [
 // ─── Production role ──────────────────────────────────────────────────────────
 
 const PRODUCTION_ITEMS: NavItem[] = [
-  { href: '/manager-dashboard', label: 'Дашборд менеджера', icon: '🎯' },
-  { href: '/b2b-pipeline',      label: 'Воронка продаж',    icon: '📌' },
-  { href: '/b2b-production',    label: 'Производство B2B',  icon: '🔧' },
-  { href: '/b2b-cutting',       label: 'Раскрой стекла',    icon: '✂️' },
-  { href: '/production',        label: 'Производство',      icon: '⚙️' },
-  { href: '/b2b-orders',        label: 'B2B Заказы',        icon: '📦' },
-  { href: '/production-app',    label: 'Production App',    icon: '📱' },
+  { href: '/b2b-pipeline',   label: 'Воронка продаж',    icon: '📌' },
+  { href: '/b2b-production', label: 'Производство B2B',  icon: '🔧' },
+  { href: '/b2b-cutting',    label: 'Раскрой стекла',    icon: '✂️' },
+  { href: '/production',     label: 'Производство',      icon: '⚙️' },
+  { href: '/production-app', label: 'Production App',    icon: '📱' },
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────
