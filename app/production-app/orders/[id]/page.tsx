@@ -4,22 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type DetailStageKey = 'cutting' | 'polishing' | 'drilling' | 'tempering' | 'packaging' | 'problem'
-
-type DetailStageState = {
-  status:            'done' | 'problem'
-  updated_at:        string
-  updated_by:        string
-  updated_by_email?: string
-  note?:             string
-}
-
-type DetailStages = {
-  [itemIndex: string]: { [stage in DetailStageKey]?: DetailStageState }
-}
+import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering } from '@/lib/productionStages'
 
 type OrderItem = {
   materialName?: string
@@ -79,18 +64,8 @@ const GROUP_ACTIONS: { key: DetailStageKey; label: string; danger?: boolean }[] 
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
-
-function isMirror(item: OrderItem): boolean {
-  return MIRROR_RE.test(`${item.materialName ?? ''} ${item.category ?? ''}`)
-}
-
-function needsTempering(item: OrderItem): boolean {
-  return item.hasTempering === true && !isMirror(item)
-}
-
 function getVisibleStages(item: OrderItem) {
-  return ITEM_STAGES.filter(s => s.key !== 'tempering' || needsTempering(item))
+  return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
 }
 
 function parseNotes(notes: string | null): NotesData {
@@ -148,7 +123,7 @@ function ItemCard({
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
   const visibleStages = getVisibleStages(item)
-  const tags          = [needsTempering(item) ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
+  const tags          = [itemNeedsTempering(item) ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
   const comment       = item.comment?.trim() || null
   const hasProblem    = stages?.problem?.status === 'problem'
 
@@ -306,7 +281,7 @@ export default function ProductionOrderPage() {
     if (!order || !currentUser || selectedItems.size === 0 || saving) return
 
     const effectiveItems = stageKey === 'tempering'
-      ? [...selectedItems].filter(idx => needsTempering(order.items[idx]))
+      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
       : [...selectedItems]
 
     if (effectiveItems.length === 0) {
@@ -400,7 +375,7 @@ export default function ProductionOrderPage() {
   const totalArea      = itemsArea   > 0 ? itemsArea   : (order.total_area   ?? 0)
   const totalWeight    = itemsWeight > 0 ? itemsWeight : (order.total_weight ?? 0)
   const allSelected    = order.items.length > 0 && selectedItems.size === order.items.length
-  const selNeedTemp    = [...selectedItems].some(idx => needsTempering(order.items[idx]))
+  const selNeedTemp    = [...selectedItems].some(idx => itemNeedsTempering(order.items[idx]))
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -440,6 +415,12 @@ export default function ProductionOrderPage() {
             {selectedItems.size > 0 && (
               <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
             )}
+            <Link
+              href={`/p/o/${order.id}`}
+              className="text-[10px] text-blue-500 hover:text-blue-700 underline underline-offset-1"
+            >
+              QR-экран
+            </Link>
           </div>
         </div>
 

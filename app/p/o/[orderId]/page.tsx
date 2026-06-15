@@ -4,30 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type DetailStageKey =
-  | 'cutting'
-  | 'polishing'
-  | 'drilling'
-  | 'tempering'
-  | 'packaging'
-  | 'problem'
-
-type DetailStageState = {
-  status: 'done' | 'problem'
-  updated_at: string
-  updated_by: string
-  updated_by_email?: string
-  note?: string
-}
-
-type DetailStages = {
-  [itemIndex: string]: {
-    [stage in DetailStageKey]?: DetailStageState
-  }
-}
+import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering } from '@/lib/productionStages'
 
 type OrderItem = {
   materialName?: string
@@ -135,16 +112,6 @@ function itemWeightKg(item: OrderItem): number {
 }
 
 // ─── Route helpers ───────────────────────────────────────────────────────────
-
-const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
-
-function isMirrorItem(item: OrderItem): boolean {
-  return MIRROR_RE.test(`${item.materialName ?? ''} ${item.category ?? ''}`)
-}
-
-function itemNeedsTempering(item: OrderItem): boolean {
-  return item.hasTempering === true && !isMirrorItem(item)
-}
 
 function getVisibleStagesForItem(item: OrderItem) {
   return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
