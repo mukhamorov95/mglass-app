@@ -1,5 +1,61 @@
 ## Текущая задача
-Glass Prices Sheet Variants RLS Fix — закрыт и закоммичен (e40dd3e), pushed.
+B2B PDF Proposal Alignment — закрыт и закоммичен (f4ceaf8), pushed.
+
+---
+
+### B2B PDF Proposal Alignment — ЗАКРЫТО (15 июня 2026)
+
+**Коммит:** `f4ceaf8`
+
+**Файлы:**
+- `components/QuotePDF.tsx`
+- `app/api/quotes/[id]/pdf/route.ts`
+
+**Решение по процессу:**
+- `/b2b-quotes` — источник правды по B2B-просчёту
+- PDF КП — клиентская печатная версия этого же просчёта; данные не пересчитываются, только маппинг
+
+**Что исправлено:**
+- `app/api/quotes/[id]/pdf/route.ts` теперь выбирает `custom_number`, `client_order_number` из `b2b_orders`
+- `QuotePDFProps` расширен: `customNumber?`, `clientOrderNumber?`, `services?` в items
+- КП № берётся из `customNumber?.trim()`, fallback — `id.padStart(5, '0')`
+- `client_order_number` показывается под КП № в шапке PDF
+- `services[]` передаются в PDF items и отображаются как sub-rows `↳ {name}` под основной строкой материала
+- `saleIncVat` уже включает стоимость услуг → материальная строка = `saleIncVat − svcTotal`, каждая услуга — отдельный sub-row; итог позиции не меняется
+
+**Что теперь совпадает между /b2b-quotes и PDF:**
+- Клиент, КП №, № клиента
+- Позиции (количество, размеры, м²)
+- Вес
+- Скидка %
+- Итого к оплате
+- Услуги (закалка, фигурная обработка и т.д.)
+
+**Что НЕ попадает в PDF:**
+- Себестоимость (`costExVat`)
+- Предварительная закупка (`computeProductionSummary`)
+- Supplier / cost данные (`cost_price`, `supplier_material_name`)
+- Маржа (`margin_percent`)
+- Payment status, production status, deadline_control, bulk_actions
+
+**Production test-plan:**
+1. `/b2b-quotes` → расчёт LoLegko / КП 00590 → нажать `📄 PDF`
+2. PDF показывает:
+   - КП № **00590** (из `custom_number`)
+   - Клиент: **LoLegko**
+   - 3 позиции
+   - Площадь **3,164 м²**
+   - Вес **63,3 кг**
+   - Скидка **10%**
+   - Итого **19 892 ₽**
+   - Услуги как sub-rows под материалом
+   - Без себестоимости, поставщика, маржи, статусов
+
+**Что не трогалось:**
+- `/b2b-orders`, `/admin/procurement`, закупки, Production Day
+- Калькулятор (`lib/b2bCalculator.ts`)
+- HTML КП (`/b2b-quotes/[id]/kp/page.tsx`)
+- Структура `b2b_orders`, миграции
 
 ---
 
