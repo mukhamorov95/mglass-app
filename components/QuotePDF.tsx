@@ -75,6 +75,8 @@ const s = StyleSheet.create({
 
 export type QuotePDFProps = {
   id: number
+  customNumber?: string | null
+  clientOrderNumber?: string | null
   clientName: string
   contact: string | null
   phone: string | null
@@ -90,6 +92,7 @@ export type QuotePDFProps = {
     saleIncVat?: number
     hasTempering?: boolean
     comment?: string
+    services?: { name: string; cost: number }[]
   }[]
   totalSaleIncVat: number
   totalAfterDiscount: number
@@ -127,7 +130,10 @@ export default function QuotePDF(p: QuotePDFProps) {
           </View>
           <View style={s.metaBlock}>
             <Text style={s.metaLabel}>КП №</Text>
-            <Text style={s.metaValue}>{String(p.id).padStart(5, '0')}</Text>
+            <Text style={s.metaValue}>{p.customNumber?.trim() || String(p.id).padStart(5, '0')}</Text>
+            {p.clientOrderNumber && (
+              <Text style={[s.metaLabel, { marginTop: 2 }]}>№ клиента: {p.clientOrderNumber}</Text>
+            )}
             <Text style={[s.metaLabel, { marginTop: 4 }]}>Дата</Text>
             <Text style={s.metaValue}>{date}</Text>
           </View>
@@ -180,23 +186,41 @@ export default function QuotePDF(p: QuotePDFProps) {
               <Text style={[s.theadTxt, s.c5, s.txtR]}>Сумма</Text>
             </View>
             {p.items.map((item, idx) => {
-              const qty   = item.quantity ?? 1
-              const area  = item.totalAreaNet ?? 0
-              const total = item.saleIncVat ?? 0  // already total for all qty
-              const row   = idx % 2 === 0 ? s.trow : s.trowAlt
+              const qty      = item.quantity ?? 1
+              const area     = item.totalAreaNet ?? 0
+              const svcs     = item.services ?? []
+              const svcTotal = svcs.reduce((sum, sv) => sum + (sv.cost ?? 0), 0)
+              const itemTotal = item.saleIncVat ?? 0
+              const matTotal  = itemTotal - svcTotal  // material-only portion
+              const row       = idx % 2 === 0 ? s.trow : s.trowAlt
+              const svcRow    = idx % 2 === 0
+                ? { ...s.trow, paddingTop: 2, paddingBottom: 3 }
+                : { ...s.trowAlt, paddingTop: 2, paddingBottom: 3 }
               const desc  = [item.materialName, item.thickness ? `${item.thickness}мм` : null]
                 .filter(Boolean).join(', ')
               const temper = item.hasTempering ? ' [закалка]' : ''
               const size  = (item.width && item.height) ? `${item.width} × ${item.height}` : '—'
               return (
-                <View key={idx} style={row}>
-                  <Text style={[s.c0, { color: MUTED }]}>{idx + 1}</Text>
-                  <Text style={s.c1}>{desc}{temper}{item.comment ? `\n${item.comment}` : ''}</Text>
-                  <Text style={s.c2}>{size}</Text>
-                  <Text style={[s.c3, s.txtR]}>{qty}</Text>
-                  <Text style={[s.c4, s.txtR]}>{fmtN(area)}</Text>
-                  <Text style={[s.c5, s.txtR, s.bold]}>{fmt(total)}</Text>
-                </View>
+                <React.Fragment key={idx}>
+                  <View style={row}>
+                    <Text style={[s.c0, { color: MUTED }]}>{idx + 1}</Text>
+                    <Text style={s.c1}>{desc}{temper}{item.comment ? `\n${item.comment}` : ''}</Text>
+                    <Text style={s.c2}>{size}</Text>
+                    <Text style={[s.c3, s.txtR]}>{qty}</Text>
+                    <Text style={[s.c4, s.txtR]}>{fmtN(area)}</Text>
+                    <Text style={[s.c5, s.txtR, s.bold]}>{fmt(svcs.length > 0 ? matTotal : itemTotal)}</Text>
+                  </View>
+                  {svcs.map((svc, si) => (
+                    <View key={`svc-${idx}-${si}`} style={svcRow}>
+                      <Text style={s.c0} />
+                      <Text style={[s.c1, { color: MUTED, fontSize: 8 }]}>  ↳ {svc.name}</Text>
+                      <Text style={s.c2} />
+                      <Text style={s.c3} />
+                      <Text style={s.c4} />
+                      <Text style={[s.c5, s.txtR, { color: MUTED, fontSize: 8 }]}>{fmt(svc.cost ?? 0)}</Text>
+                    </View>
+                  ))}
+                </React.Fragment>
               )
             })}
           </View>

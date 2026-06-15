@@ -26,7 +26,7 @@ export async function GET(
 
   const { data: order, error } = await sb
     .from('b2b_orders')
-    .select('id,client_id,client_name,discount_percent,items,total_area,total_weight,total_sale_inc_vat,total_after_discount,notes,created_at,created_by')
+    .select('id,client_id,client_name,custom_number,client_order_number,discount_percent,items,total_area,total_weight,total_sale_inc_vat,total_after_discount,notes,created_at,created_by')
     .eq('id', orderId)
     .single()
 
@@ -57,16 +57,18 @@ export async function GET(
   const userNotes   = (notes.user_notes as string | null) ?? null
 
   const props: QuotePDFProps = {
-    id:               order.id,
-    clientName:       order.client_name,
+    id:                 order.id,
+    customNumber:       (order.custom_number as string | null) ?? null,
+    clientOrderNumber:  (order.client_order_number as string | null) ?? null,
+    clientName:         order.client_name,
     contact,
     phone,
-    discountPercent:  order.discount_percent ?? 0,
-    items:            Array.isArray(order.items) ? order.items : [],
-    totalSaleIncVat:  order.total_sale_inc_vat ?? 0,
+    discountPercent:    order.discount_percent ?? 0,
+    items:              Array.isArray(order.items) ? order.items : [],
+    totalSaleIncVat:    order.total_sale_inc_vat ?? 0,
     totalAfterDiscount: order.total_after_discount ?? 0,
-    totalArea:        order.total_area ?? 0,
-    totalWeight:      order.total_weight ?? 0,
+    totalArea:          order.total_area ?? 0,
+    totalWeight:        order.total_weight ?? 0,
     managerName,
     productionDays,
     quoteDate,
