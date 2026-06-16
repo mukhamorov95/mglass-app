@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-import { type DetailStageKey, type DetailStageState, type DetailStages, itemNeedsTempering } from '@/lib/productionStages'
+import { type DetailStageKey, type DetailStageState, type DetailStages, itemNeedsTempering, getApplicableStages } from '@/lib/productionStages'
 
 type OrderItem = {
   materialName?: string
@@ -44,15 +44,6 @@ type Order = {
 }
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-
-// Used for display badges on ItemCard
-const ITEM_STAGES = [
-  { key: 'cutting',   label: 'Резка'     },
-  { key: 'polishing', label: 'Полировка' },
-  { key: 'drilling',  label: 'Сверление' },
-  { key: 'tempering', label: 'Закалка'   },
-  { key: 'packaging', label: 'Упаковка'  },
-] as const
 
 // Used for the batch-stage checklist — excludes 'problem' (separate action)
 const BATCH_STAGES: { key: Exclude<DetailStageKey, 'problem'>; label: string; icon: string }[] = [
@@ -108,10 +99,6 @@ function itemWeightKg(item: OrderItem): number {
   return area > 0 && t > 0 ? area * t * 2.5 : 0
 }
 
-function getVisibleStagesForItem(item: OrderItem) {
-  return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
-}
-
 // ─── ItemCard ─────────────────────────────────────────────────────────────────
 
 function ItemCard({
@@ -128,7 +115,7 @@ function ItemCard({
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
   const needsTempering = itemNeedsTempering(item)
-  const visibleStages  = getVisibleStagesForItem(item)
+  const visibleStages  = getApplicableStages(item)
   const tags           = [needsTempering ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
   const comment        = item.comment?.trim() || null
   const hasProblem     = stages?.problem?.status === 'problem'

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS } from '@/lib/productionStages'
+import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS, STAGE_LABELS, getApplicableStages } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -59,13 +59,7 @@ type Order = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ITEM_STAGES = [
-  { key: 'cutting',   label: 'Резка'     },
-  { key: 'polishing', label: 'Полировка' },
-  { key: 'drilling',  label: 'Сверление' },
-  { key: 'tempering', label: 'Закалка'   },
-  { key: 'packaging', label: 'Упаковка'  },
-] as const
+// PRODUCTION_STAGES, STAGE_LABELS, getApplicableStages — imported from lib/productionStages
 
 const GROUP_ACTIONS: { key: DetailStageKey; label: string; danger?: boolean }[] = [
   { key: 'cutting',   label: 'Резка выполнена'     },
@@ -76,20 +70,7 @@ const GROUP_ACTIONS: { key: DetailStageKey; label: string; danger?: boolean }[] 
   { key: 'problem',   label: 'Проблема',  danger: true },
 ]
 
-const STAGE_LABELS: Record<DetailStageKey, string> = {
-  cutting:   'Резка',
-  polishing: 'Полировка',
-  drilling:  'Сверление',
-  tempering: 'Закалка',
-  packaging: 'Упаковка',
-  problem:   'Проблема',
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function getVisibleStages(item: OrderItem) {
-  return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
-}
 
 function parseNotes(notes: string | null): NotesData {
   if (!notes) return {}
@@ -326,7 +307,7 @@ function ItemCard({
   const facet         = item.hasFacet
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
-  const visibleStages = getVisibleStages(item)
+  const visibleStages = getApplicableStages(item)
   const tags          = [itemNeedsTempering(item) ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
   const comment       = item.comment?.trim() || null
   const hasProblem    = stages?.problem?.status === 'problem'

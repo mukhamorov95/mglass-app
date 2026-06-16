@@ -2,7 +2,7 @@ import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { getRole } from '@/lib/getRole'
-import type { DetailStages } from '@/lib/productionStages'
+import { type DetailStages, STAGE_LABELS } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -54,14 +54,7 @@ type Filter = 'all' | 'overdue' | 'problems' | 'urgent' | 'ready' | 'audit'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const STAGE_LABELS: Record<string, string> = {
-  cutting:   'Резка',
-  polishing: 'Полировка',
-  drilling:  'Сверление',
-  tempering: 'Закалка',
-  packaging: 'Упаковка',
-  problem:   'Проблема',
-}
+// STAGE_LABELS imported from lib/productionStages
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -395,7 +388,7 @@ export default async function SupervisorPage(props: {
                       </div>
                       <p className="text-[10px] text-[#6b6b66] leading-snug">
                         Поз.{(auditSummary.latest.item_index ?? 0) + 1}
-                        {' — '}{STAGE_LABELS[auditSummary.latest.stage_key] ?? auditSummary.latest.stage_key}
+                        {' — '}{(STAGE_LABELS as Record<string, string>)[auditSummary.latest.stage_key] ?? auditSummary.latest.stage_key}
                         {auditSummary.latest.reason ? `: ${auditSummary.latest.reason}` : ''}
                       </p>
                       {auditSummary.latest.created_by_email && (

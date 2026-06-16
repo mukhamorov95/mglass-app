@@ -1,11 +1,8 @@
 import { createClient } from '@/lib/supabase-server'
 import Link from 'next/link'
+import { type DetailStages, calcOrderProgress } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type DetailStageKey = 'cutting' | 'polishing' | 'drilling' | 'tempering' | 'packaging' | 'problem'
-type DetailStageState = { status: 'done' | 'problem'; updated_at: string }
-type DetailStages = { [itemIndex: string]: { [stage in DetailStageKey]?: DetailStageState } }
 
 type NotesData = {
   status?: string
@@ -76,21 +73,13 @@ function getDeadlineStatus(order: Order): {
   return { status: 'normal', label: `${daysDiff} дн.`, daysDiff }
 }
 
-function getProgress(order: Order): { done: number; total: number; hasProblems: boolean } {
-  const items = Array.isArray(order.items) ? order.items : []
-  const ds    = order.parsedNotes.detail_stages ?? {}
-  const total = items.length
-  if (total === 0) return { done: 0, total: 0, hasProblems: false }
+type ProgressItem = { hasTempering?: boolean; materialName?: string; category?: string }
 
-  let done = 0
-  let hasProblems = false
-  for (let i = 0; i < total; i++) {
-    const s = ds[String(i)]
-    if (!s) continue
-    if (s.packaging?.status === 'done')   done++
-    if (s.problem?.status  === 'problem') hasProblems = true
-  }
-  return { done, total, hasProblems }
+function getProgress(order: Order) {
+  return calcOrderProgress(
+    (Array.isArray(order.items) ? order.items : []) as ProgressItem[],
+    order.parsedNotes.detail_stages ?? {},
+  )
 }
 
 const STATUS_ORDER: Record<DeadlineStatus, number> = {
@@ -141,7 +130,7 @@ export default async function ProductionAppPage() {
     problems: active.filter(o => pgMap.get(o.id)?.hasProblems).length,
     ready:    active.filter(o => {
       const p = pgMap.get(o.id)!
-      return p.total > 0 && p.done === p.total
+      return p.totalItems > 0 && p.packedItems === p.totalItems
     }).length,
   }
 
@@ -204,16 +193,16 @@ export default async function ProductionAppPage() {
                     </span>
                   </div>
 
-                  {prog.total > 0 && (
+                  {prog.totalItems > 0 && (
                     <div className="flex items-center gap-2">
                       <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
                         <div
                           className="h-full bg-[#111110] rounded-full"
-                          style={{ width: `${(prog.done / prog.total) * 100}%` }}
+                          style={{ width: `${(prog.packedItems / prog.totalItems) * 100}%` }}
                         />
                       </div>
                       <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">
-                        {prog.done}/{prog.total} уп.
+                        {prog.packedItems}/{prog.totalItems} уп.
                       </span>
                       {prog.hasProblems && (
                         <span className="text-[11px] text-red-500 font-bold">!</span>

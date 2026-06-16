@@ -1,7 +1,32 @@
 ## Текущая задача
-Пауза — production testing. Новые фичи не начинать без отдельного решения.
+Два фикса sales-monitor задеплоены (333b451, 70688a3). Следующий шаг — ручная проверка отчёта после деплоя.
 
 ## Что сделано (эта сессия)
+- fix(sales-monitor) #1 — timezone МСК, пагинация, noteTypeIs, Wazzup attr → коммит 333b451
+- fix(sales-monitor) #2 — split dateFilter, messagesSent → events outgoing_chat_message → коммит 70688a3
+
+## Sales Monitor Fix — ЗАКРЫТО
+
+### Коммит
+333b451 — fix(sales-monitor): improve daily manager metrics accuracy
+
+### Что исправлено
+1. `todayStart` — теперь через `getMoscowDayStartUnix()` (полночь Europe/Moscow, не UTC)
+2. events и notes — через `getEvents()` / `getLeadNotes()` (обёртки над `amoGetAll`, нет обрезания на 250)
+3. `note_type` — нормализация через `noteTypeIs()`, поддержка строк и чисел (4, 13)
+4. Wazzup attribution — `noteBelongsToManager()`, ноты бота идут по `responsible_user_id` сделки
+5. Дата в заголовке отчёта — `timeZone: 'Europe/Moscow'` добавлен
+
+### Что НЕ изменялось
+- lib/amocrm.ts, lib/telegram.ts, lib/wazzup.ts — не трогались
+- app/ — не трогалась
+- supabase/ — миграций нет
+- package.json — не менялся
+
+### Требует ручного обновления в Vercel
+- AMO_WAZZUP_BOT_USER_ID — узнать ID Wazzup-бота через GET /api/v4/users в AmoCRM
+- AMOCRM_MANAGERS_IDS — добавить недостающих менеджеров (9309142, 9811890, 11789378, 12273478, 8114644, 8272783) после уточнения у Владислава, кто активен
+
 - Step 7 — экран фиксации проблем (ЗАКРЫТО)
 - Step 10 — Supervisor Panel (ЗАКРЫТО): /production-app/supervisor
 - Step 11 — Stage Undo (ЗАКРЫТО): кнопка ✕ на этапах + UndoModal + audit trail
