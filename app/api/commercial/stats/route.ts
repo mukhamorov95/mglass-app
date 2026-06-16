@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { collectAllMetrics } from '@/lib/salesMonitor'
+import { getDomain } from '@/lib/amocrm'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
 export const runtime     = 'nodejs'
@@ -23,7 +24,8 @@ export async function GET(req: Request) {
   // Today: real-time from AmoCRM
   if (period === 'today') {
     const metrics = await collectAllMetrics()
-    return NextResponse.json({ period: 'today', managers: metrics.map(m => ({
+    const domain  = getDomain()
+    return NextResponse.json({ period: 'today', domain, managers: metrics.map(m => ({
       id:           m.user.id,
       name:         m.user.name,
       newLeads:     m.newLeadsToday,
@@ -32,8 +34,14 @@ export async function GET(req: Request) {
       cardsMoved:   m.cardsMoved,
       activeLeads:  m.activeLeads,
       zone1: m.zone1, zone2: m.zone2, zone3: m.zone3,
-      staleZone1: m.staleZone1.length, staleZone2: m.staleZone2.length,
-      staleZone3: m.staleZone3.length, invoiceStale: m.invoiceStale.length,
+      staleZone1:       m.staleZone1.length,
+      staleZone2:       m.staleZone2.length,
+      staleZone3:       m.staleZone3.length,
+      invoiceStale:     m.invoiceStale.length,
+      staleZone1Deals:  m.staleZone1,
+      staleZone2Deals:  m.staleZone2,
+      staleZone3Deals:  m.staleZone3,
+      invoiceStaleDeals: m.invoiceStale,
     })) })
   }
 
@@ -115,5 +123,5 @@ export async function GET(req: Request) {
     }
   })
 
-  return NextResponse.json({ period, managers, fromDate })
+  return NextResponse.json({ period, domain: getDomain(), managers, fromDate })
 }

@@ -4,6 +4,13 @@ import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 
 type Period = 'today' | 'week' | 'month' | 'year'
 
+type StaleInfoItem = {
+  id: number
+  name: string
+  daysStale: number
+  stageName: string
+}
+
 type ManagerStat = {
   id: number
   name: string
@@ -20,10 +27,15 @@ type ManagerStat = {
   staleZone3: number
   invoiceStale: number
   days?: number
+  staleZone1Deals?: StaleInfoItem[]
+  staleZone2Deals?: StaleInfoItem[]
+  staleZone3Deals?: StaleInfoItem[]
+  invoiceStaleDeals?: StaleInfoItem[]
 }
 
 type StatsData = {
   period: Period
+  domain?: string
   managers: ManagerStat[]
   noData?: boolean
   fromDate?: string
@@ -35,6 +47,10 @@ type DrawerTab = 'overview' | 'stale1' | 'stale2' | 'stale3' | 'longstale'
 function normalise(raw: Record<string, unknown>): ManagerStat {
   const n = (key1: string, key2: string): number =>
     Number((raw[key1] ?? raw[key2]) ?? 0)
+  const arr = (key: string): StaleInfoItem[] | undefined => {
+    const v = raw[key]
+    return Array.isArray(v) ? (v as StaleInfoItem[]) : undefined
+  }
   return {
     id:           Number(raw.id ?? 0),
     name:         String(raw.name ?? ''),
@@ -51,6 +67,10 @@ function normalise(raw: Record<string, unknown>): ManagerStat {
     staleZone3:   n('staleZone3',   'stale_zone3'),
     invoiceStale: n('invoiceStale', 'invoice_stale'),
     days:         raw.days !== undefined ? Number(raw.days) : undefined,
+    staleZone1Deals:   arr('staleZone1Deals'),
+    staleZone2Deals:   arr('staleZone2Deals'),
+    staleZone3Deals:   arr('staleZone3Deals'),
+    invoiceStaleDeals: arr('invoiceStaleDeals'),
   }
 }
 
@@ -121,24 +141,70 @@ function SkeletonRow() {
   )
 }
 
-// ── Drawer ────────────────────────────────────────────────────────────────────
+// ── Drawer stale list ─────────────────────────────────────────────────────────
 
-function DrawerPlaceholder({ count }: { count: number }) {
+function DrawerStaleList({
+  deals,
+  domain,
+  emptyText,
+  badgeColor,
+  noDetailNote,
+}: {
+  deals?: StaleInfoItem[]
+  domain?: string
+  emptyText: string
+  badgeColor: string
+  noDetailNote?: boolean
+}) {
+  if (noDetailNote || !deals) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <p className="text-[13px] font-medium text-[#6b6b66] mb-1">Текущие данные</p>
+        <p className="text-[12px] text-[#9a9a95] max-w-[340px]">
+          Детализация сделок доступна только в режиме «Сегодня» (данные в реальном времени из AmoCRM).
+        </p>
+      </div>
+    )
+  }
+
+  if (deals.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+        <div className="text-2xl mb-2">✅</div>
+        <p className="text-[13px] font-medium text-green-700">{emptyText}</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-      {count > 0 && (
-        <div className="mb-4 text-[28px] font-bold font-mono text-[#c4c4be]">{count}</div>
-      )}
-      <p className="text-[13px] font-medium text-[#6b6b66] mb-1">
-        {count > 0 ? `${count} сделок в этой категории` : 'Нет данных'}
-      </p>
-      <p className="text-[12px] text-[#9a9a95] max-w-[340px]">
-        Детализация сделок будет добавлена следующим шагом.
-        Сейчас <span className="font-mono text-[#6b6b66]">/api/commercial/stats</span> отдаёт только агрегаты без списка сделок.
-      </p>
+    <div className="divide-y divide-[#f0f0ec]">
+      {deals.map(d => (
+        <div key={d.id} className="flex items-center justify-between px-5 py-3 hover:bg-[#fafaf9] transition-colors">
+          <div className="min-w-0 flex-1 pr-3">
+            {domain ? (
+              <a
+                href={`https://${domain}/leads/detail/${d.id}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-[13px] font-medium text-[#111110] hover:text-blue-600 transition-colors truncate block"
+              >
+                {d.name || `Сделка #${d.id}`}
+              </a>
+            ) : (
+              <p className="text-[13px] font-medium text-[#111110] truncate">{d.name || `Сделка #${d.id}`}</p>
+            )}
+            <p className="text-[11px] text-[#9a9a95] mt-0.5 truncate">{d.stageName}</p>
+          </div>
+          <span className={`flex-shrink-0 text-[11px] font-bold px-2 py-1 rounded ${badgeColor}`}>
+            {d.daysStale}д
+          </span>
+        </div>
+      ))}
     </div>
   )
 }
+
+// ── Drawer ────────────────────────────────────────────────────────────────────
 
 function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
   const flags = redFlags(m, period)
@@ -238,10 +304,12 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
 function ManagerDrawer({
   manager,
   period,
+  domain,
   onClose,
 }: {
   manager: ManagerStat | null
   period: Period
+  domain?: string
   onClose: () => void
 }) {
   const [tab, setTab] = useState<DrawerTab>('overview')
@@ -267,6 +335,12 @@ function ManagerDrawer({
   if (!manager) return null
 
   const firstName = manager.name.split(' ')[0]
+  const isToday = period === 'today'
+
+  // Долгострой = lids in stale zone1 stale > 7d OR in Долгострой stage
+  const longstaleDeals = manager.staleZone1Deals?.filter(
+    d => d.daysStale >= 7 || d.stageName.toLowerCase().includes('долгострой')
+  )
 
   function renderTabContent() {
     if (!manager) return null
@@ -274,13 +348,45 @@ function ManagerDrawer({
       case 'overview':
         return <DrawerOverview m={manager} period={period} />
       case 'stale1':
-        return <DrawerPlaceholder count={manager.staleZone1} />
+        return (
+          <DrawerStaleList
+            deals={manager.staleZone1Deals}
+            domain={domain}
+            emptyText="Нет лидов без касания"
+            badgeColor="bg-red-50 text-red-600"
+            noDetailNote={!isToday}
+          />
+        )
       case 'stale2':
-        return <DrawerPlaceholder count={manager.staleZone2} />
+        return (
+          <DrawerStaleList
+            deals={manager.staleZone2Deals}
+            domain={domain}
+            emptyText="Нет зависших сделок в зоне 2"
+            badgeColor="bg-orange-50 text-orange-600"
+            noDetailNote={!isToday}
+          />
+        )
       case 'stale3':
-        return <DrawerPlaceholder count={manager.staleZone3} />
+        return (
+          <DrawerStaleList
+            deals={manager.staleZone3Deals}
+            domain={domain}
+            emptyText="Нет зависших в производстве"
+            badgeColor="bg-yellow-50 text-yellow-700"
+            noDetailNote={!isToday}
+          />
+        )
       case 'longstale':
-        return <DrawerPlaceholder count={0} />
+        return (
+          <DrawerStaleList
+            deals={isToday ? (longstaleDeals ?? []) : undefined}
+            domain={domain}
+            emptyText="Нет долгостроев (>7 дней)"
+            badgeColor="bg-purple-50 text-purple-700"
+            noDetailNote={!isToday}
+          />
+        )
     }
   }
 
@@ -331,7 +437,6 @@ function ManagerDrawer({
                 }`}
               >
                 {t.label}
-                {/* Count badge on stale tabs */}
                 {t.id === 'stale1' && manager.staleZone1 > 0 && (
                   <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone1}</span>
                 )}
@@ -340,6 +445,9 @@ function ManagerDrawer({
                 )}
                 {t.id === 'stale3' && manager.staleZone3 > 0 && (
                   <span className="ml-1.5 text-[10px] bg-yellow-100 text-yellow-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone3}</span>
+                )}
+                {t.id === 'longstale' && (longstaleDeals?.length ?? 0) > 0 && (
+                  <span className="ml-1.5 text-[10px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded font-semibold">{longstaleDeals!.length}</span>
                 )}
               </button>
             ))}
@@ -370,7 +478,7 @@ export default function SalesControlPage() {
     setError(null)
     fetch(`/api/commercial/stats?period=${p}`)
       .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json() })
-      .then((raw: { period: Period; managers: Record<string, unknown>[]; noData?: boolean; fromDate?: string }) => {
+      .then((raw: { period: Period; domain?: string; managers: Record<string, unknown>[]; noData?: boolean; fromDate?: string }) => {
         setData({ ...raw, managers: (raw.managers ?? []).map(normalise) })
         setManagerFilter('all')
       })
@@ -626,6 +734,7 @@ export default function SalesControlPage() {
       <ManagerDrawer
         manager={selectedManager}
         period={period}
+        domain={data?.domain}
         onClose={() => setSelectedManager(null)}
       />
     </div>
