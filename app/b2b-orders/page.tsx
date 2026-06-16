@@ -342,6 +342,98 @@ function getProductionProgress(order: Order) {
   return { stages, problemCount, hasAnyMark, progressPct }
 }
 
+// ── Production board ──────────────────────────────────────────────────────────
+// Counts active (non-shipped, non-quote) orders by production state.
+// Uses calcOrderProgress — single source of truth. No new API calls.
+
+type BoardBucket = 'not_started' | 'in_progress' | 'ready_for_tempering' | 'on_packaging' | 'packed'
+
+function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCount: number } {
+  const prog = calcOrderProgress(
+    order.items as ProgressItem[],
+    order.parsedNotes.detail_stages ?? {},
+  )
+  const { items, packedItems, totalItems } = prog
+
+  const problemCount = items.filter(p => p.hasProblem).length
+
+  if (totalItems === 0) return { bucket: 'not_started', problemCount }
+
+  // All items packaged
+  if (packedItems === totalItems) return { bucket: 'packed', problemCount }
+
+  // No marks at all
+  const hasAnyMark = items.some(p => p.doneStages > 0 || p.hasProblem)
+  if (!hasAnyMark) return { bucket: 'not_started', problemCount }
+
+  // All items awaiting packaging or already packaged
+  const awaitingPackaging = items.filter(p => !p.packagingDone && p.doneStages >= p.totalStages - 1)
+  if (awaitingPackaging.length + packedItems === totalItems) {
+    return { bucket: 'on_packaging', problemCount }
+  }
+
+  // All tempering items have cutting+polishing done but tempering not yet done
+  const temperingItems = items.filter(p => p.totalStages === PRODUCTION_STAGES.length)
+  if (temperingItems.length > 0 && temperingItems.every(p => {
+    const keys = p.completedKeys as string[]
+    return keys.includes('cutting') && keys.includes('polishing') && !keys.includes('tempering')
+  })) {
+    return { bucket: 'ready_for_tempering', problemCount }
+  }
+
+  return { bucket: 'in_progress', problemCount }
+}
+
+const BOARD_SLOTS: { bucket: BoardBucket; label: string; numCls: string; bgCls: string; borderCls: string }[] = [
+  { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-[#6b6b66]',  bgCls: 'bg-[#f8f8f7]',  borderCls: 'border-[#e4e4e0]'  },
+  { bucket: 'in_progress',         label: 'В работе',   numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200'   },
+  { bucket: 'ready_for_tempering', label: 'К закалке',  numCls: 'text-orange-700',  bgCls: 'bg-orange-50',   borderCls: 'border-orange-200' },
+  { bucket: 'on_packaging',        label: 'Упаковка',   numCls: 'text-purple-700',  bgCls: 'bg-purple-50',   borderCls: 'border-purple-200' },
+  { bucket: 'packed',              label: 'Упаковано',  numCls: 'text-emerald-700', bgCls: 'bg-emerald-50',  borderCls: 'border-emerald-200'},
+]
+
+function ProductionBoard({ orders }: { orders: Order[] }) {
+  const active = orders.filter(o => {
+    const stages = o.parsedNotes.stages ?? {}
+    return !stages.shipped && o.parsedNotes.status !== 'quote'
+  })
+  if (active.length === 0) return null
+
+  const counts: Record<BoardBucket, number> = {
+    not_started: 0, in_progress: 0, ready_for_tempering: 0, on_packaging: 0, packed: 0,
+  }
+  let totalProblems = 0
+  for (const o of active) {
+    const { bucket, problemCount } = classifyOrderForBoard(o)
+    counts[bucket]++
+    totalProblems += problemCount
+  }
+
+  return (
+    <div className="mb-3">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">
+        Производственное табло
+        <span className="ml-2 font-normal text-[#c4c4be] normal-case tracking-normal">· {active.length} заказов</span>
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {BOARD_SLOTS.map(slot => (
+          <div key={slot.bucket}
+            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${slot.bgCls} ${slot.borderCls}`}>
+            <span className={`text-[11px] font-medium ${slot.numCls}`}>{slot.label}</span>
+            <span className={`text-[17px] font-bold font-mono leading-none ${slot.numCls}`}>{counts[slot.bucket]}</span>
+          </div>
+        ))}
+        {totalProblems > 0 && (
+          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-red-50 border-red-200">
+            <span className="text-[11px] font-medium text-red-700">Проблемы</span>
+            <span className="text-[17px] font-bold font-mono leading-none text-red-700">{totalProblems}</span>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function buildProductionMessage(order: Order): string {
   const items = order.items as Record<string, unknown>[]
   const finalPrice = getFinalPrice(order)
@@ -1630,6 +1722,9 @@ export default function B2BOrdersPage() {
           </Link>
         </div>
       </div>
+
+      {/* Производственное табло */}
+      <ProductionBoard orders={orders} />
 
       {/* Панель фильтров */}
       <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-3 space-y-2.5">
