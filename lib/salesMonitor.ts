@@ -125,9 +125,15 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
-  const dateFilter = {
+  // /events correctly filters by created_at.
+  // /leads/notes ignores filter[created_at] and requires filter[updated_at] to return today's notes.
+  const eventsDateFilter = {
     'filter[created_at][from]': String(todayStart),
     'filter[created_at][to]':   String(nowTs),
+  }
+  const notesDateFilter = {
+    'filter[updated_at][from]': String(todayStart),
+    'filter[updated_at][to]':   String(nowTs),
   }
 
   // Parallel: users, pipelines, today-events, today-notes, all-leads.
@@ -135,8 +141,8 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   const [users, pipelines, todayEvents, todayNotes, allLeads] = await Promise.all([
     getUsers(),
     getPipelines(),
-    getEvents(dateFilter),
-    getLeadNotes(dateFilter),
+    getEvents(eventsDateFilter),
+    getLeadNotes(notesDateFilter),
     getLeads({}),
   ])
 
@@ -181,11 +187,11 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
       (n.params?.duration ?? 0) > 0
     ).length
 
-    // Messages: email (amomail_message) + Wazzup call notes without duration.
-    const messagesSent = myNotes.filter(n =>
-      noteTypeIs(n.note_type, 'amomail_message') ||
-      ((noteTypeIs(n.note_type, 'call_out', 4) || noteTypeIs(n.note_type, 'call_in', 13)) && !(n.params?.duration))
-    ).length
+    // Messages: outgoing_chat_message events created directly by the manager.
+    // Wazzup does not write notes to /leads/notes — chat activity only appears in /events.
+    // myEvents is already filtered to created_by === uid, so this counts only the manager's own sends.
+    // Events with created_by=0 (system/bot) are excluded automatically.
+    const messagesSent = myEvents.filter(e => e.type === 'outgoing_chat_message').length
 
     const cardsMoved = myEvents.filter(e => e.type === 'lead_status_changed').length
 
