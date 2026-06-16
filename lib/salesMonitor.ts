@@ -116,12 +116,12 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
   const wazzupBotUserId = Number(process.env.AMO_WAZZUP_BOT_USER_ID || 0)
 
-  // Manager IDs from env — exclude owner (AMO_VLADISLAV_USER_ID)
-  const ownerIdStr  = process.env.AMO_VLADISLAV_USER_ID ?? ''
-  const managerIds  = (process.env.AMOCRM_MANAGERS_IDS ?? '')
+  // All IDs from AMOCRM_MANAGERS_IDS appear in the report — no exclusions.
+  // To remove a manager from the report, remove them from the env var.
+  const managerIds = (process.env.AMOCRM_MANAGERS_IDS ?? '')
     .split(',')
     .map(s => Number(s.trim()))
-    .filter(id => id && String(id) !== ownerIdStr)
+    .filter(id => id > 0)
 
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
@@ -173,7 +173,7 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   const userMap = new Map(users.map(u => [u.id, u]))
 
   return managerIds.map(uid => {
-    const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
+    const user = userMap.get(uid) ?? { id: uid, name: `Менеджер #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
     const myNotes  = todayNotes.filter(n => noteBelongsToManager(n, uid, leadMap, wazzupBotUserId))
@@ -181,7 +181,6 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
 
     // Phone calls: call notes (call_out/call_in or legacy 4/13) with params.duration > 0.
-    // Wazzup reuses the same note types but without duration — distinguished below.
     const callsMade = myNotes.filter(n =>
       (noteTypeIs(n.note_type, 'call_out', 4) || noteTypeIs(n.note_type, 'call_in', 13)) &&
       (n.params?.duration ?? 0) > 0
@@ -245,56 +244,108 @@ function link(id: number, name: string) {
   return `<a href="https://${getDomain()}/leads/detail/${id}">${name}</a>`
 }
 
-function staleLines(items: StaleInfo[], limit = 2) {
-  return items.slice(0, limit)
-    .map(s => `    └ ${link(s.id, s.name)} — ${s.daysStale}д (${s.stageName})`)
+// Top N stale deals across all zones, sorted by days descending.
+// Marks "Долгострой" stage with 🧊 to distinguish chronic from fresh stale.
+function topProblems(m: ManagerMetrics, limit = 2): string {
+  const all = [...m.staleZone1, ...m.invoiceStale, ...m.staleZone2, ...m.staleZone3]
+    .sort((a, b) => b.daysStale - a.daysStale)
+  const seen = new Set<number>()
+  const unique = all.filter(s => {
+    if (seen.has(s.id)) return false
+    seen.add(s.id)
+    return true
+  })
+  if (unique.length === 0) return ''
+  return unique.slice(0, limit)
+    .map((s, i) => {
+      const isDolgo = s.stageName.toLowerCase().includes('долгострой')
+      return `  ${i + 1}. ${link(s.id, s.name)} — ${s.daysStale}д, ${s.stageName}${isDolgo ? ' 🧊' : ''}`
+    })
     .join('\n')
 }
 
 function ropFlags(m: ManagerMetrics): string[] {
   const flags: string[] = []
 
-  if (m.messagesSent === 0 && m.callsMade === 0)
-    flags.push('🔴 Ноль исходящей активности за день')
-  else if (m.messagesSent === 0)
-    flags.push('🟡 Нет сообщений — только звонки, нет письменных договорённостей')
+  if (m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0)
+    flags.push('🔴 Нулевая исходящая активность')
+  else if (m.messagesSent === 0 && m.callsMade > 0)
+    flags.push('🟡 Нет сообщений — только звонки')
   else if (m.callsMade === 0 && m.activeLeads > 5)
     flags.push('🟡 Нет звонков при большом портфеле')
 
   if (m.cardsMoved === 0 && m.activeLeads > 3)
-    flags.push('🔴 Ни одного перемещения — сделки стоят на месте')
+    flags.push('🔴 Ни одного перемещения — сделки стоят')
 
-  if (m.staleZone1.length > 0) {
-    flags.push(`🔴 Зона 1: ${m.staleZone1.length} лид(ов) без касания >2д\n${staleLines(m.staleZone1)}`)
-  }
-  if (m.invoiceStale.length > 0) {
-    flags.push(`🔴 Счёт без оплаты >5д (${m.invoiceStale.length} шт)\n${staleLines(m.invoiceStale)}`)
-  }
-  if (m.staleZone2.length > 0) {
-    flags.push(`🟠 Зона 2: ${m.staleZone2.length} сделок без движения >3д\n${staleLines(m.staleZone2)}`)
-  }
-  if (m.staleZone3.length > 0) {
-    flags.push(`🟡 Зона 3: ${m.staleZone3.length} производственных без обновления >3д\n${staleLines(m.staleZone3)}`)
-  }
+  if (m.staleZone1.length > 0)
+    flags.push(`🔴 ${m.staleZone1.length} лидов без касания >2д`)
 
-  if (flags.length === 0) flags.push('✅ Флагов нет')
+  if (m.invoiceStale.length > 0)
+    flags.push(`🔴 Счёт без оплаты >5д — ${m.invoiceStale.length} шт`)
+
+  if (m.staleZone2.length > 0)
+    flags.push(`🟠 ${m.staleZone2.length} сделок без движения >3д (зона2)`)
+
+  if (m.staleZone3.length > 0)
+    flags.push(`🟡 ${m.staleZone3.length} производственных без обновления >3д`)
+
+  if (m.activeLeads >= 50)
+    flags.push(`⚠️ Высокая нагрузка: ${m.activeLeads} активных сделок`)
+
   return flags
 }
 
 export function buildReport(metrics: ManagerMetrics[]): string {
   const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
-  const lines = [`📊 <b>Отчёт ОП — ${date}, 18:00</b>`]
+  const lines: string[] = []
 
+  // ── Header ────────────────────────────────────────────────────────────────────
+  lines.push(`📊 <b>Отчёт ОП — ${date}, 18:00</b>`)
+
+  // ── Team totals ───────────────────────────────────────────────────────────────
+  const totalLeads  = metrics.reduce((s, m) => s + m.newLeadsToday, 0)
+  const totalMsgs   = metrics.reduce((s, m) => s + m.messagesSent, 0)
+  const totalCalls  = metrics.reduce((s, m) => s + m.callsMade, 0)
+  const totalMoves  = metrics.reduce((s, m) => s + m.cardsMoved, 0)
+  const totalActive = metrics.reduce((s, m) => s + m.activeLeads, 0)
+  const redCount    = metrics.filter(m => ropFlags(m).some(f => f.startsWith('🔴'))).length
+
+  lines.push('<b>ИТОГО:</b>')
+  lines.push(`Лидов: ${totalLeads} | Сообщ: ${totalMsgs} | Звонков: ${totalCalls} | Движений: ${totalMoves}`)
+  lines.push(`Активных сделок: ${totalActive}`)
+  if (redCount > 0) lines.push(`🔴 Красных флагов: ${redCount}`)
+
+  // ── Per manager ───────────────────────────────────────────────────────────────
   for (const m of metrics) {
-    const name = m.user.name.split(' ')[0]
+    const firstName = m.user.name.split(' ')[0]
+    const flags     = ropFlags(m)
+    const problems  = topProblems(m)
+
     lines.push('')
     lines.push('━━━━━━━━━━━━━━━━━━')
-    lines.push(`👤 <b>${name}</b>  |  активных сделок: <b>${m.activeLeads}</b>`)
-    lines.push(`Лидов: <b>${m.newLeadsToday}</b>  Сообщ: <b>${m.messagesSent}</b>  Звонков: <b>${m.callsMade}</b>  Перемещений: <b>${m.cardsMoved}</b>`)
-    lines.push(`🔵 Квалификация: ${m.zone1}  🟠 Продажа: ${m.zone2}  🟢 Оплата/Пр-во: ${m.zone3}`)
-    for (const f of ropFlags(m)) lines.push(f)
+    lines.push(`👤 <b>${firstName}</b>`)
+    lines.push(`Активность: лиды ${m.newLeadsToday} | сообщ ${m.messagesSent} | звонки ${m.callsMade} | движ ${m.cardsMoved}`)
+    lines.push(`Сделки: активные ${m.activeLeads} | квалиф ${m.zone1} | продажа ${m.zone2} | оплата/пр-во ${m.zone3}`)
+
+    const staleTotal = m.staleZone1.length + m.staleZone2.length + m.staleZone3.length + m.invoiceStale.length
+    if (staleTotal > 0) {
+      const invoicePart = m.invoiceStale.length > 0 ? ` | счета ${m.invoiceStale.length}` : ''
+      lines.push(`Риски: зона1 ${m.staleZone1.length} | зона2 ${m.staleZone2.length} | зона3 ${m.staleZone3.length}${invoicePart}`)
+    }
+
+    if (flags.length > 0) {
+      lines.push('⚠️ <b>Главное:</b>')
+      for (const f of flags) lines.push(`• ${f}`)
+      if (problems) {
+        lines.push('Топ проблем:')
+        lines.push(problems)
+      }
+    } else {
+      lines.push('✅ Критичных зависаний нет')
+    }
   }
 
+  // ── Summary ───────────────────────────────────────────────────────────────────
   lines.push('')
   lines.push('━━━━━━━━━━━━━━━━━━')
   lines.push(ropSummary(metrics))
@@ -304,19 +355,32 @@ export function buildReport(metrics: ManagerMetrics[]): string {
 function ropSummary(metrics: ManagerMetrics[]): string {
   const bullets: string[] = []
 
-  const inactive = metrics.filter(m => m.messagesSent + m.callsMade === 0)
-  if (inactive.length)
-    bullets.push(`${inactive.map(m => m.user.name.split(' ')[0]).join(', ')} — нулевая исходящая активность, разобрать на утро`)
+  // Zero activity — only flag managers who have active deals but did nothing today
+  for (const m of metrics) {
+    if (m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0) {
+      bullets.push(`Нет активности: ${m.user.name.split(' ')[0]} — 0 звонков, 0 сообщений`)
+    }
+  }
 
-  const [top, ...rest] = [...metrics].sort((a, b) => b.activeLeads - a.activeLeads)
-  if (rest.length && top.activeLeads - rest[rest.length - 1].activeLeads > 10)
-    bullets.push(`Дисбаланс нагрузки: у ${top.user.name.split(' ')[0]} на ${top.activeLeads - rest[rest.length - 1].activeLeads} сделок больше`)
+  // Overload — manager with significantly more active deals than the team average
+  const avgActive = metrics.reduce((s, m) => s + m.activeLeads, 0) / (metrics.length || 1)
+  for (const m of metrics) {
+    if (m.activeLeads > Math.max(avgActive * 1.5, avgActive + 20)) {
+      bullets.push(`Перегруз по активным сделкам: ${m.user.name.split(' ')[0]} — ${m.activeLeads}`)
+    }
+  }
 
+  // Most stale leads (fresh leads only — exclude if all stale are "долгострой")
   const mostStale = [...metrics].sort(
-    (a, b) => (b.staleZone1.length + b.staleZone2.length) - (a.staleZone1.length + a.staleZone2.length)
+    (a, b) => (b.staleZone1.length + b.staleZone2.length) - (a.staleZone1.length + a.staleZone2.length),
   )[0]
-  if (mostStale && mostStale.staleZone1.length + mostStale.staleZone2.length >= 3)
-    bullets.push(`${mostStale.user.name.split(' ')[0]} — больше всего зависших лидов, начать завтра с разбора`)
+  if (mostStale) {
+    const freshStale = mostStale.staleZone1.filter(s => !s.stageName.toLowerCase().includes('долгострой')).length
+      + mostStale.staleZone2.length
+    if (freshStale >= 3) {
+      bullets.push(`Зависших лидов больше всего: ${mostStale.user.name.split(' ')[0]} — ${freshStale} (свежие зона1+2)`)
+    }
+  }
 
   if (!bullets.length) return '🧠 <b>Вывод РОП:</b> Команда в норме. Следите за счетами.'
   return '🧠 <b>Вывод РОП:</b>\n' + bullets.map(b => `• ${b}`).join('\n')
