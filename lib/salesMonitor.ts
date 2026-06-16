@@ -86,24 +86,119 @@ function stageZone(name: string): 1 | 2 | 3 | null {
   return null
 }
 
+// ── Activity window helpers ────────────────────────────────────────────────────
+
+type ManagerActivityEvent = {
+  source:    'event'
+  type:      string
+  timestamp: number
+  managerId: number
+  leadId?:   number
+}
+
+// Events that indicate client action or system noise, not manager initiative.
+const EXCLUDED_ACTIVITY_EVENT_TYPES = new Set([
+  'incoming_chat_message',
+  'talk_missed_event',
+  'call_missed',
+])
+
+function getActivityTimeline(myEvents: AmoEvent[], todayStart: number): ManagerActivityEvent[] {
+  return myEvents
+    .filter(event => event.created_at >= todayStart)
+    .filter(event => !EXCLUDED_ACTIVITY_EVENT_TYPES.has(event.type))
+    .map(event => ({
+      source:    'event' as const,
+      type:      event.type,
+      timestamp: event.created_at,
+      managerId: event.created_by,
+      leadId:    event.entity_type === 'leads' ? event.entity_id : undefined,
+    }))
+    .sort((a, b) => a.timestamp - b.timestamp)
+}
+
+function formatMoscowTime(ts: number): string {
+  return new Date(ts * 1000).toLocaleTimeString('ru-RU', {
+    hour:     '2-digit',
+    minute:   '2-digit',
+    timeZone: 'Europe/Moscow',
+  })
+}
+
+function formatMinutes(totalMinutes: number): string {
+  const hours   = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours <= 0) return `${minutes}м`
+  return minutes > 0 ? `${hours}ч${minutes}м` : `${hours}ч`
+}
+
+function computeActivityGaps(
+  timeline:         ManagerActivityEvent[],
+  todayStart:       number,
+  thresholdMinutes = 90,
+): { bigPausesCount: number; maxPauseMinutes: number } {
+  const workStart  = todayStart + 9  * 3600
+  const workEnd    = todayStart + 18 * 3600
+  const workEvents = timeline.filter(event => event.timestamp >= workStart && event.timestamp < workEnd)
+  let bigPausesCount  = 0
+  let maxPauseMinutes = 0
+  for (let index = 1; index < workEvents.length; index++) {
+    const gapMinutes = Math.floor(
+      (workEvents[index].timestamp - workEvents[index - 1].timestamp) / 60,
+    )
+    if (gapMinutes > thresholdMinutes) {
+      bigPausesCount++
+      maxPauseMinutes = Math.max(maxPauseMinutes, gapMinutes)
+    }
+  }
+  return { bigPausesCount, maxPauseMinutes }
+}
+
+function computeActivityTimeBlocks(
+  timeline:   ManagerActivityEvent[],
+  todayStart: number,
+): { morningEvents: number; dayEvents: number; eveningEvents: number } {
+  const morningStart = todayStart + 9  * 3600
+  const dayStart     = todayStart + 12 * 3600
+  const eveningStart = todayStart + 16 * 3600
+  const eveningEnd   = todayStart + 20 * 3600
+  let morningEvents = 0
+  let dayEvents     = 0
+  let eveningEvents = 0
+  for (const event of timeline) {
+    if      (event.timestamp >= morningStart && event.timestamp < dayStart)     morningEvents++
+    else if (event.timestamp >= dayStart     && event.timestamp < eveningStart) dayEvents++
+    else if (event.timestamp >= eveningStart && event.timestamp < eveningEnd)   eveningEvents++
+  }
+  return { morningEvents, dayEvents, eveningEvents }
+}
+
 // ── Types ──────────────────────────────────────────────────────────────────────
 
 type StaleInfo = { id: number; name: string; daysStale: number; stageName: string }
 
 export type ManagerMetrics = {
-  user:          AmoUser
-  newLeadsToday: number
-  messagesSent:  number
-  callsMade:     number
-  cardsMoved:    number
-  activeLeads:   number
-  zone1:         number
-  zone2:         number
-  zone3:         number
-  staleZone1:    StaleInfo[]
-  staleZone2:    StaleInfo[]
-  staleZone3:    StaleInfo[]
-  invoiceStale:  StaleInfo[]
+  user:                AmoUser
+  newLeadsToday:       number
+  messagesSent:        number
+  callsMade:           number
+  cardsMoved:          number
+  activeLeads:         number
+  zone1:               number
+  zone2:               number
+  zone3:               number
+  staleZone1:          StaleInfo[]
+  staleZone2:          StaleInfo[]
+  staleZone3:          StaleInfo[]
+  invoiceStale:        StaleInfo[]
+  firstActivityAt:     number | null
+  lastActivityAt:      number | null
+  activityEventsCount: number
+  bigPausesCount:      number
+  maxPauseMinutes:     number
+  morningEvents:       number
+  dayEvents:           number
+  eveningEvents:       number
 }
 
 // ── Collect ────────────────────────────────────────────────────────────────────
@@ -178,6 +273,12 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
     const myNotes  = todayNotes.filter(n => noteBelongsToManager(n, uid, leadMap, wazzupBotUserId))
 
+    const activityTimeline   = getActivityTimeline(myEvents, todayStart)
+    const firstActivityAt    = activityTimeline[0]?.timestamp ?? null
+    const lastActivityAt     = activityTimeline[activityTimeline.length - 1]?.timestamp ?? null
+    const { bigPausesCount, maxPauseMinutes } = computeActivityGaps(activityTimeline, todayStart)
+    const { morningEvents, dayEvents, eveningEvents } = computeActivityTimeBlocks(activityTimeline, todayStart)
+
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
 
     // Phone calls: call notes (call_out/call_in or legacy 4/13) with params.duration > 0.
@@ -226,14 +327,22 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
       messagesSent,
       callsMade,
       cardsMoved,
-      activeLeads:   myLeads.length,
-      zone1:         myLeads.filter(l => stageMap.get(l.status_id)?.zone === 1).length,
-      zone2:         myLeads.filter(l => stageMap.get(l.status_id)?.zone === 2).length,
-      zone3:         myLeads.filter(l => stageMap.get(l.status_id)?.zone === 3).length,
-      staleZone1:    staleZone1.sort(sort),
-      staleZone2:    staleZone2.sort(sort),
-      staleZone3:    staleZone3.sort(sort),
-      invoiceStale:  invoiceStale.sort(sort),
+      activeLeads:         myLeads.length,
+      zone1:               myLeads.filter(l => stageMap.get(l.status_id)?.zone === 1).length,
+      zone2:               myLeads.filter(l => stageMap.get(l.status_id)?.zone === 2).length,
+      zone3:               myLeads.filter(l => stageMap.get(l.status_id)?.zone === 3).length,
+      staleZone1:          staleZone1.sort(sort),
+      staleZone2:          staleZone2.sort(sort),
+      staleZone3:          staleZone3.sort(sort),
+      invoiceStale:        invoiceStale.sort(sort),
+      firstActivityAt,
+      lastActivityAt,
+      activityEventsCount: activityTimeline.length,
+      bigPausesCount,
+      maxPauseMinutes,
+      morningEvents,
+      dayEvents,
+      eveningEvents,
     }
   })
 }
@@ -264,7 +373,7 @@ function topProblems(m: ManagerMetrics, limit = 2): string {
     .join('\n')
 }
 
-function ropFlags(m: ManagerMetrics): string[] {
+function ropFlags(m: ManagerMetrics, todayStart: number): string[] {
   const flags: string[] = []
 
   if (m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0)
@@ -292,11 +401,34 @@ function ropFlags(m: ManagerMetrics): string[] {
   if (m.activeLeads >= 50)
     flags.push(`⚠️ Высокая нагрузка: ${m.activeLeads} активных сделок`)
 
+  // CRM activity flags — show when manager has zero events but the outgoing flag
+  // (calls + messages) hasn't already signalled the same case.
+  const outgoingAlreadyFlagged = m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0
+  if (m.activityEventsCount === 0 && m.activeLeads > 0 && !outgoingAlreadyFlagged)
+    flags.push('🔴 Нулевая активность в AmoCRM')
+
+  if (m.firstActivityAt && m.firstActivityAt > todayStart + 11 * 3600)
+    flags.push('🔴 Первая активность в CRM после 11:00')
+
+  if (m.lastActivityAt && m.lastActivityAt < todayStart + 15 * 3600 && m.activeLeads > 3)
+    flags.push('🔴 Активность в CRM до 15:00 — ранний выход')
+
+  if (m.bigPausesCount > 0)
+    flags.push(`🟠 Пауза без активности >90м${m.bigPausesCount > 1 ? ` (${m.bigPausesCount}×)` : ''}`)
+
+  if (m.activityEventsCount > 0 && m.activityEventsCount < 10 && m.activeLeads > 3)
+    flags.push(`🟠 Мало событий в CRM за день: ${m.activityEventsCount}`)
+
+  if (m.eveningEvents === 0 && m.activeLeads > 5 && m.activityEventsCount > 0)
+    flags.push('🟡 Нет активности в CRM после 16:00')
+
   return flags
 }
 
 export function buildReport(metrics: ManagerMetrics[]): string {
-  const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
+  const now        = new Date()
+  const todayStart = getMoscowDayStartUnix(now)
+  const date       = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
   const lines: string[] = []
 
   // ── Header ────────────────────────────────────────────────────────────────────
@@ -308,7 +440,7 @@ export function buildReport(metrics: ManagerMetrics[]): string {
   const totalCalls  = metrics.reduce((s, m) => s + m.callsMade, 0)
   const totalMoves  = metrics.reduce((s, m) => s + m.cardsMoved, 0)
   const totalActive = metrics.reduce((s, m) => s + m.activeLeads, 0)
-  const redCount    = metrics.filter(m => ropFlags(m).some(f => f.startsWith('🔴'))).length
+  const redCount    = metrics.filter(m => ropFlags(m, todayStart).some(f => f.startsWith('🔴'))).length
 
   lines.push('<b>ИТОГО:</b>')
   lines.push(`Лидов: ${totalLeads} | Сообщ: ${totalMsgs} | Звонков: ${totalCalls} | Движений: ${totalMoves}`)
@@ -318,13 +450,19 @@ export function buildReport(metrics: ManagerMetrics[]): string {
   // ── Per manager ───────────────────────────────────────────────────────────────
   for (const m of metrics) {
     const firstName = m.user.name.split(' ')[0]
-    const flags     = ropFlags(m)
+    const flags     = ropFlags(m, todayStart)
     const problems  = topProblems(m)
 
     lines.push('')
     lines.push('━━━━━━━━━━━━━━━━━━')
     lines.push(`👤 <b>${firstName}</b>`)
     lines.push(`Активность: лиды ${m.newLeadsToday} | сообщ ${m.messagesSent} | звонки ${m.callsMade} | движ ${m.cardsMoved}`)
+    if (m.activityEventsCount > 0 && m.firstActivityAt && m.lastActivityAt) {
+      lines.push(
+        `Активность CRM: ${formatMoscowTime(m.firstActivityAt)}–${formatMoscowTime(m.lastActivityAt)}` +
+        ` | событий ${m.activityEventsCount} | пауз >90м: ${m.bigPausesCount}`,
+      )
+    }
     lines.push(`Сделки: активные ${m.activeLeads} | квалиф ${m.zone1} | продажа ${m.zone2} | оплата/пр-во ${m.zone3}`)
 
     const staleTotal = m.staleZone1.length + m.staleZone2.length + m.staleZone3.length + m.invoiceStale.length
