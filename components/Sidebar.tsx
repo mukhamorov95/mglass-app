@@ -10,7 +10,7 @@ import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
-type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo'
+type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production'
 
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
 type NavGroup = { groupLabel: string }
@@ -269,6 +269,26 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
 ]
 
+// ─── Production mode (admin viewMode) ────────────────────────────────────────
+
+const PRODUCTION_NAV_ORDERS: NavItem[] = [
+  { href: '/b2b-orders',     label: 'B2B Заказы',        icon: '📦' },
+  { href: '/b2b-production', label: 'Производство B2B',  icon: '🔧' },
+  { href: '/b2b-cutting',    label: 'Раскрой стекла',    icon: '✂️' },
+]
+
+const PRODUCTION_NAV_APP: NavItem[] = [
+  { href: '/production-app',            label: 'Production App',      icon: '📱' },
+  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭' },
+]
+
+const PRODUCTION_NAV_REF: NavItem[] = [
+  { href: '/admin/materials',     label: 'Материалы',     icon: '📦' },
+  { href: '/admin/services',      label: 'Услуги',        icon: '🔧' },
+  { href: '/admin/b2b-materials', label: 'Материалы B2B', icon: '🪟' },
+  { href: '/admin/b2b-services',  label: 'Услуги B2B',    icon: '🔧' },
+]
+
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const MGLASS_PATHS = [
@@ -289,6 +309,10 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   if (mode === 'manager') {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
+  } else if (mode === 'production') {
+    if (inSection(pathname, ['/b2b-orders', '/b2b-production', '/b2b-cutting'])) open.push('prod_orders')
+    if (inSection(pathname, ['/production-app'])) open.push('prod_app')
+    if (inSection(pathname, ['/admin/materials', '/admin/services', '/admin/b2b-materials', '/admin/b2b-services'])) open.push('prod_ref')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -331,6 +355,11 @@ function autoOpenRole(pathname: string, role: Role): string[] {
 
 function detectModeFromPath(pathname: string): ViewMode {
   if (pathname.startsWith('/cfo')) return 'cfo'
+  if (
+    pathname.startsWith('/b2b-orders') ||
+    pathname.startsWith('/production-app') ||
+    pathname.startsWith('/b2b-production')
+  ) return 'production'
   if (
     pathname.startsWith('/admin/ai-control-center') ||
     pathname.startsWith('/admin/owner') || pathname.startsWith('/admin/dashboard') ||
@@ -676,6 +705,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       </>
     )
 
+    if (viewMode === 'production') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
+        {accordion('prod_orders', 'Заказы',        'text-orange-600', 'text-orange-400', PRODUCTION_NAV_ORDERS, 'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_app',    'Production App', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_APP,    'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_ref',    'Справочники',   'text-[#6b6b66]',  'text-[#c4c4be]',  PRODUCTION_NAV_REF,    'bg-[#f5f5f3] text-[#111110] font-medium')}
+      </>
+    )
+
     // Admin directories view
     return (
       <>
@@ -736,10 +774,11 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
             <div className="px-3 pb-3">
               <div className="flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px]">
                 {([
-                  { v: 'manager', l: 'Менеджер' },
-                  { v: 'admin',   l: 'Админ'    },
-                  { v: 'ceo',     l: 'СЕО'      },
-                  { v: 'cfo',     l: 'CFO'      },
+                  { v: 'manager',    l: 'Менеджер' },
+                  { v: 'admin',      l: 'Админ'    },
+                  { v: 'ceo',        l: 'СЕО'      },
+                  { v: 'cfo',        l: 'CFO'      },
+                  { v: 'production', l: 'Произв.'  },
                 ] as { v: ViewMode; l: string }[]).map(({ v, l }) => (
                   <button key={v} onClick={() => switchMode(v)}
                     className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
