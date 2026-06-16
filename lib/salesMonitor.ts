@@ -2,9 +2,51 @@
 // READ-ONLY: never writes to CRM cards.
 
 import {
-  getUsers, getPipelines, getLeads, amoGet, getDomain,
-  type AmoUser, type AmoEvent, type AmoNote,
+  getUsers, getPipelines, getLeads, getEvents, getLeadNotes, getDomain,
+  type AmoUser, type AmoEvent, type AmoNote, type AmoLead,
 } from '@/lib/amocrm'
+
+// ── Moscow timezone helper ─────────────────────────────────────────────────────
+// Vercel servers run UTC. todayStart must be 00:00:00 Europe/Moscow, not UTC.
+// Strategy: convert `now` to Moscow wall-clock components via toLocaleString,
+// then build a Date.UTC timestamp for that calendar date and subtract +3h offset.
+// Example: 02:30 MSK June 16 → moscowDate = June 16 → result = June 15 21:00 UTC
+//                                                                = June 16 00:00 MSK ✓
+function getMoscowDayStartUnix(now = new Date()): number {
+  const moscowDate = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/Moscow' }))
+  return Math.floor(
+    Date.UTC(moscowDate.getFullYear(), moscowDate.getMonth(), moscowDate.getDate()) / 1000,
+  ) - 3 * 3600
+}
+
+// ── note_type normalizer ───────────────────────────────────────────────────────
+// AmoCRM API may return note_type as a string ("call_out") or a legacy number (4).
+// Strict === would silently fail for numeric values. Always compare via String().
+function noteTypeIs(
+  noteType: string | number | undefined | null,
+  ...expected: Array<string | number>
+): boolean {
+  return expected.some(e => String(noteType) === String(e))
+}
+
+// ── Wazzup note attribution ────────────────────────────────────────────────────
+// Wazzup integration pushes notes into AmoCRM under its own service-account user,
+// not under the responsible manager. If AMO_WAZZUP_BOT_USER_ID is set, those notes
+// are attributed to whoever owns the lead — matching the comment in the old code.
+// If the env var is absent (= 0) the function falls back to created_by only,
+// preserving the previous behaviour without breaking anything.
+function noteBelongsToManager(
+  note: AmoNote,
+  managerId: number,
+  leadMap: Map<number, AmoLead>,
+  wazzupBotUserId: number,
+): boolean {
+  if (note.created_by === managerId) return true
+  if (wazzupBotUserId > 0 && note.created_by === wazzupBotUserId) {
+    return leadMap.get(note.entity_id)?.responsible_user_id === managerId
+  }
+  return false
+}
 
 // ── Stage → zone mapping (воронка "Продажи", точные названия этапов) ──────────
 // Зона 1 — квалификация:  Получена новая заявка … Готов купить
@@ -68,9 +110,11 @@ export type ManagerMetrics = {
 
 export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   const now        = new Date()
-  const todayStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000)
+  const todayStart = getMoscowDayStartUnix(now)   // 00:00:00 Europe/Moscow
   const nowTs      = Math.floor(now.getTime() / 1000)
   const DAY        = 86400
+
+  const wazzupBotUserId = Number(process.env.AMO_WAZZUP_BOT_USER_ID || 0)
 
   // Manager IDs from env — exclude owner (AMO_VLADISLAV_USER_ID)
   const ownerIdStr  = process.env.AMO_VLADISLAV_USER_ID ?? ''
@@ -81,28 +125,20 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
   if (managerIds.length === 0) throw new Error('AMOCRM_MANAGERS_IDS is empty or not set')
 
-  // Parallel: users, pipelines, today-events, today-notes, all-leads
-  const [users, pipelines, eventsData, notesData, allLeads] = await Promise.all([
+  const dateFilter = {
+    'filter[created_at][from]': String(todayStart),
+    'filter[created_at][to]':   String(nowTs),
+  }
+
+  // Parallel: users, pipelines, today-events, today-notes, all-leads.
+  // getEvents / getLeadNotes use amoGetAll internally — no 250-item cap.
+  const [users, pipelines, todayEvents, todayNotes, allLeads] = await Promise.all([
     getUsers(),
     getPipelines(),
-    amoGet<{ _embedded: { events: AmoEvent[] } }>('/events', {
-      'filter[created_at][from]': String(todayStart),
-      'filter[created_at][to]':   String(nowTs),
-      limit: '250',
-    }),
-    // No note_type filter — AmoCRM doesn't support comma-separated values reliably.
-    // We filter by type client-side. Wazzup creates notes as the integration bot,
-    // so we attribute notes by lead ownership, not note creator.
-    amoGet<{ _embedded: { notes: AmoNote[] } }>('/leads/notes', {
-      'filter[created_at][from]': String(todayStart),
-      'filter[created_at][to]':   String(nowTs),
-      limit: '250',
-    }),
+    getEvents(dateFilter),
+    getLeadNotes(dateFilter),
     getLeads({}),
   ])
-
-  const todayEvents = eventsData?._embedded?.events ?? []
-  const todayNotes  = notesData?._embedded?.notes ?? []
 
   // Find the main "Продажи" sales pipeline by name (or via AMOCRM_SALES_PIPELINE_ID env var)
   const salesPipeline = pipelines.find(p =>
@@ -124,7 +160,7 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
   // Active leads: not closed
   const activeLeads = salesLeads.filter(l => l.closed_at === null && l.status_id !== 142 && l.status_id !== 143)
 
-  // Lead map for attributing notes by lead ownership (handles Wazzup bot-created notes)
+  // Lead map for Wazzup note attribution (note.entity_id → lead)
   const leadMap = new Map(allLeads.map(l => [l.id, l]))
 
   // Map user ID → AmoUser
@@ -134,21 +170,21 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
     const user = userMap.get(uid) ?? { id: uid, name: `Manager #${uid}`, email: '' }
 
     const myEvents = todayEvents.filter((e: AmoEvent) => e.created_by === uid)
-    const myNotes  = todayNotes.filter(n => n.created_by === uid)
+    const myNotes  = todayNotes.filter(n => noteBelongsToManager(n, uid, leadMap, wazzupBotUserId))
 
     const newLeadsToday = salesLeads.filter(l => l.responsible_user_id === uid && l.created_at >= todayStart).length
 
-    // Phone calls: SIPUNI adds call notes (call_out/call_in) with params.duration > 0.
-    // Wazzup also uses call_out/call_in but without duration. Distinguish by duration.
+    // Phone calls: call notes (call_out/call_in or legacy 4/13) with params.duration > 0.
+    // Wazzup reuses the same note types but without duration — distinguished below.
     const callsMade = myNotes.filter(n =>
-      (n.note_type === 'call_out' || n.note_type === 'call_in') &&
+      (noteTypeIs(n.note_type, 'call_out', 4) || noteTypeIs(n.note_type, 'call_in', 13)) &&
       (n.params?.duration ?? 0) > 0
     ).length
 
-    // Messages: Wazzup call_out/call_in (no duration) + email (amomail_message)
+    // Messages: email (amomail_message) + Wazzup call notes without duration.
     const messagesSent = myNotes.filter(n =>
-      n.note_type === 'amomail_message' ||
-      ((n.note_type === 'call_out' || n.note_type === 'call_in') && !(n.params?.duration))
+      noteTypeIs(n.note_type, 'amomail_message') ||
+      ((noteTypeIs(n.note_type, 'call_out', 4) || noteTypeIs(n.note_type, 'call_in', 13)) && !(n.params?.duration))
     ).length
 
     const cardsMoved = myEvents.filter(e => e.type === 'lead_status_changed').length
@@ -240,7 +276,7 @@ function ropFlags(m: ManagerMetrics): string[] {
 }
 
 export function buildReport(metrics: ManagerMetrics[]): string {
-  const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })
+  const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'Europe/Moscow' })
   const lines = [`📊 <b>Отчёт ОП — ${date}, 18:00</b>`]
 
   for (const m of metrics) {
