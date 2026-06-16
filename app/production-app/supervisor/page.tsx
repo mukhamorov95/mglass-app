@@ -6,12 +6,29 @@ import type { DetailStages } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+type AuditEntry = {
+  type:              string
+  item_index:        number
+  stage_key:         string
+  previous_value?:   { status?: string; updated_at?: string }
+  reason?:           string
+  created_at?:       string
+  created_by?:       string
+  created_by_email?: string
+}
+
+type AuditSummary = {
+  count:  number
+  latest: AuditEntry | null
+}
+
 type NotesData = {
-  status?: string
-  launched_at?: string
-  production_days?: number
-  stages?: Partial<Record<string, string | null>>
-  detail_stages?: DetailStages
+  status?:             string
+  launched_at?:        string
+  production_days?:    number
+  stages?:             Partial<Record<string, string | null>>
+  detail_stages?:      DetailStages
+  detail_stage_audit?: AuditEntry[]
 }
 
 type Order = {
@@ -33,7 +50,18 @@ type ProblemEntry = {
   note?: string
 }
 
-type Filter = 'all' | 'overdue' | 'problems' | 'urgent' | 'ready'
+type Filter = 'all' | 'overdue' | 'problems' | 'urgent' | 'ready' | 'audit'
+
+// ─── Constants ────────────────────────────────────────────────────────────────
+
+const STAGE_LABELS: Record<string, string> = {
+  cutting:   'Резка',
+  polishing: 'Полировка',
+  drilling:  'Сверление',
+  tempering: 'Закалка',
+  packaging: 'Упаковка',
+  problem:   'Проблема',
+}
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -44,6 +72,17 @@ function parseNotes(notes: string | null): NotesData {
     if (typeof p === 'object' && p !== null) return p as NotesData
   } catch {}
   return {}
+}
+
+function fmtDateTime(s: string | undefined): string {
+  if (!s) return '—'
+  try {
+    const d = new Date(s)
+    if (isNaN(d.getTime())) return '—'
+    return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+  } catch {
+    return '—'
+  }
 }
 
 function getPlannedDeadline(pn: NotesData, createdAt: string): Date {
@@ -109,6 +148,21 @@ function getProgress(order: Order): {
   return { done, total, hasProblems: problems.length > 0, problems }
 }
 
+function getAuditSummary(order: Order): AuditSummary {
+  const raw = order.parsedNotes.detail_stage_audit
+  if (!Array.isArray(raw) || raw.length === 0) return { count: 0, latest: null }
+
+  const entries = raw
+    .filter(e => e?.type === 'stage_unset')
+    .sort((a, b) => {
+      const ta = a.created_at ? new Date(a.created_at).getTime() : 0
+      const tb = b.created_at ? new Date(b.created_at).getTime() : 0
+      return tb - ta
+    })
+
+  return { count: entries.length, latest: entries[0] ?? null }
+}
+
 const STATUS_ORDER: Record<DeadlineStatus, number> = {
   overdue: 0, today: 1, tomorrow: 2, normal: 3, ready: 4, shipped: 5,
 }
@@ -128,9 +182,10 @@ const FILTER_LABELS: Record<Filter, string> = {
   problems: 'Проблемы',
   urgent:   'Сегодня / Завтра',
   ready:    'Упаковано',
+  audit:    'С отменами',
 }
 
-const VALID_FILTERS: Filter[] = ['all', 'overdue', 'problems', 'urgent', 'ready']
+const VALID_FILTERS: Filter[] = ['all', 'overdue', 'problems', 'urgent', 'ready', 'audit']
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -163,6 +218,7 @@ export default async function SupervisorPage(props: {
   const active = allOrders.filter(o => !o.parsedNotes.stages?.shipped)
   const dsMap  = new Map(active.map(o => [o.id, getDeadlineStatus(o)]))
   const pgMap  = new Map(active.map(o => [o.id, getProgress(o)]))
+  const auMap  = new Map(active.map(o => [o.id, getAuditSummary(o)]))
 
   const counts = {
     tasks:    active.length,
@@ -172,6 +228,7 @@ export default async function SupervisorPage(props: {
       const p = pgMap.get(o.id)!
       return p.total > 0 && p.done === p.total
     }).length,
+    audits:   active.filter(o => auMap.get(o.id)!.count > 0).length,
   }
 
   const sp     = await props.searchParams
@@ -186,6 +243,7 @@ export default async function SupervisorPage(props: {
     if (filter === 'problems') return pg.hasProblems
     if (filter === 'urgent')   return ds.status === 'today' || ds.status === 'tomorrow'
     if (filter === 'ready')    return ds.status === 'ready' || (pg.total > 0 && pg.done === pg.total)
+    if (filter === 'audit')    return auMap.get(o.id)!.count > 0
     return true
   })
 
@@ -242,6 +300,9 @@ export default async function SupervisorPage(props: {
               {f === 'problems' && counts.problems > 0 && (
                 <span className={`ml-1 ${filter === f ? 'text-orange-300' : 'text-orange-500'}`}>{counts.problems}</span>
               )}
+              {f === 'audit' && counts.audits > 0 && (
+                <span className={`ml-1 ${filter === f ? 'text-blue-300' : 'text-blue-500'}`}>{counts.audits}</span>
+              )}
             </Link>
           ))}
         </div>
@@ -256,10 +317,11 @@ export default async function SupervisorPage(props: {
         ) : (
           <div className="space-y-3">
             {sorted.map(order => {
-              const ds   = dsMap.get(order.id)!
-              const prog = pgMap.get(order.id)!
-              const label = order.custom_number?.trim() || `#${order.id}`
-              const pct   = prog.total > 0 ? (prog.done / prog.total) * 100 : 0
+              const ds           = dsMap.get(order.id)!
+              const prog         = pgMap.get(order.id)!
+              const auditSummary = auMap.get(order.id)!
+              const label        = order.custom_number?.trim() || `#${order.id}`
+              const pct          = prog.total > 0 ? (prog.done / prog.total) * 100 : 0
 
               return (
                 <div
@@ -278,6 +340,11 @@ export default async function SupervisorPage(props: {
                       {prog.hasProblems && (
                         <span className="text-[10px] font-bold px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200">
                           ⚠ {prog.problems.length}
+                        </span>
+                      )}
+                      {auditSummary.count > 0 && (
+                        <span className="text-[10px] font-medium px-2 py-1 rounded-full border bg-blue-50 text-blue-600 border-blue-200">
+                          ↩ {auditSummary.count}
                         </span>
                       )}
                       <span className={`text-[10px] font-medium px-2 py-1 rounded-full border ${DEADLINE_BADGE[ds.status]}`}>
@@ -305,12 +372,37 @@ export default async function SupervisorPage(props: {
 
                   {/* Problem entries */}
                   {prog.problems.length > 0 && (
-                    <div className="mb-2.5 space-y-0.5">
+                    <div className="mb-2 space-y-0.5">
                       {prog.problems.map(p => (
                         <p key={p.itemIndex} className="text-[11px] text-orange-700 leading-snug">
                           ⚠ Поз.{p.itemIndex + 1}{p.reason ? ` — ${p.reason}` : ''}{p.note ? ` (${p.note})` : ''}
                         </p>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Audit indicator */}
+                  {auditSummary.count > 0 && auditSummary.latest && (
+                    <div className="mb-2 px-3 py-2 rounded-lg bg-[#f8f8f7] border border-[#ebebе8]">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                        <span className="text-[10px] font-semibold text-[#6b6b66]">
+                          ↩ Отмены: {auditSummary.count}
+                        </span>
+                        <span className="text-[10px] text-[#c4c4be]">·</span>
+                        <span className="text-[10px] text-[#9a9a95]">
+                          {fmtDateTime(auditSummary.latest.created_at)}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-[#6b6b66] leading-snug">
+                        Поз.{(auditSummary.latest.item_index ?? 0) + 1}
+                        {' — '}{STAGE_LABELS[auditSummary.latest.stage_key] ?? auditSummary.latest.stage_key}
+                        {auditSummary.latest.reason ? `: ${auditSummary.latest.reason}` : ''}
+                      </p>
+                      {auditSummary.latest.created_by_email && (
+                        <p className="text-[10px] text-[#9a9a95] mt-0.5">
+                          Кто: {auditSummary.latest.created_by_email}
+                        </p>
+                      )}
                     </div>
                   )}
 
