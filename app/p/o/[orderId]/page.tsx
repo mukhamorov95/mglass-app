@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
-import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering } from '@/lib/productionStages'
+import { type DetailStageKey, type DetailStageState, type DetailStages, itemNeedsTempering } from '@/lib/productionStages'
 
 type OrderItem = {
   materialName?: string
@@ -45,23 +45,22 @@ type Order = {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
+// Used for display badges on ItemCard
 const ITEM_STAGES = [
-  { key: 'cutting',   label: 'Резка',     },
-  { key: 'polishing', label: 'Полировка', },
-  { key: 'drilling',  label: 'Сверление', },
-  { key: 'tempering', label: 'Закалка',   },
-  { key: 'packaging', label: 'Упаковка',  },
+  { key: 'cutting',   label: 'Резка'     },
+  { key: 'polishing', label: 'Полировка' },
+  { key: 'drilling',  label: 'Сверление' },
+  { key: 'tempering', label: 'Закалка'   },
+  { key: 'packaging', label: 'Упаковка'  },
 ] as const
 
-type GroupAction = { key: DetailStageKey; label: string; icon: string; danger?: boolean }
-
-const GROUP_ACTIONS: GroupAction[] = [
-  { key: 'cutting',   label: 'Резка выполнена',     icon: '✂️' },
-  { key: 'polishing', label: 'Полировка выполнена', icon: '🔲' },
-  { key: 'drilling',  label: 'Сверление выполнено', icon: '🔩' },
-  { key: 'tempering', label: 'Закалка выполнена',   icon: '🔥' },
-  { key: 'packaging', label: 'Упаковано',           icon: '📦' },
-  { key: 'problem',   label: 'Проблема',            icon: '⚠️', danger: true },
+// Used for the batch-stage checklist — excludes 'problem' (separate action)
+const BATCH_STAGES: { key: Exclude<DetailStageKey, 'problem'>; label: string; icon: string }[] = [
+  { key: 'cutting',   label: 'Резка',     icon: '✂️' },
+  { key: 'polishing', label: 'Полировка', icon: '🔲' },
+  { key: 'drilling',  label: 'Сверление', icon: '🔩' },
+  { key: 'tempering', label: 'Закалка',   icon: '🔥' },
+  { key: 'packaging', label: 'Упаковка',  icon: '📦' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -86,7 +85,7 @@ function fmtDateShort(s: string): string {
 }
 
 function plural(n: number, one: string, few: string, many: string): string {
-  const mod10 = n % 10
+  const mod10  = n % 10
   const mod100 = n % 100
   if (mod100 >= 11 && mod100 <= 14) return many
   if (mod10 === 1) return one
@@ -94,7 +93,6 @@ function plural(n: number, one: string, few: string, many: string): string {
   return many
 }
 
-// Returns total area m² for one line item, falling back to w×h÷1_000_000×qty
 function itemAreaM2(item: OrderItem): number {
   if ((item.totalAreaNet ?? 0) > 0) return item.totalAreaNet!
   const w = item.width ?? 0
@@ -103,15 +101,12 @@ function itemAreaM2(item: OrderItem): number {
   return w > 0 && h > 0 ? (w * h / 1_000_000) * q : 0
 }
 
-// Returns total weight kg for one line item, falling back to area×thickness×2.5
 function itemWeightKg(item: OrderItem): number {
   if ((item.totalWeight ?? 0) > 0) return item.totalWeight!
   const area = itemAreaM2(item)
   const t = item.thickness ?? 0
   return area > 0 && t > 0 ? area * t * 2.5 : 0
 }
-
-// ─── Route helpers ───────────────────────────────────────────────────────────
 
 function getVisibleStagesForItem(item: OrderItem) {
   return ITEM_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
@@ -122,25 +117,21 @@ function getVisibleStagesForItem(item: OrderItem) {
 function ItemCard({
   item, index, stages, selected, onToggle,
 }: {
-  item: OrderItem
-  index: number
-  stages: { [stage in DetailStageKey]?: DetailStageState } | undefined
+  item:    OrderItem
+  index:   number
+  stages:  { [stage in DetailStageKey]?: DetailStageState } | undefined
   selected: boolean
   onToggle: () => void
 }) {
-  const svcs          = Array.isArray(item.services) ? item.services.map(s => s.name) : []
-  const facet         = item.hasFacet
+  const svcs           = Array.isArray(item.services) ? item.services.map(s => s.name) : []
+  const facet          = item.hasFacet
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
   const needsTempering = itemNeedsTempering(item)
   const visibleStages  = getVisibleStagesForItem(item)
-  const tags = [
-    needsTempering ? 'Закалка' : null,
-    facet,
-    ...svcs,
-  ].filter(Boolean) as string[]
-  const comment    = item.comment?.trim() || null
-  const hasProblem = stages?.problem?.status === 'problem'
+  const tags           = [needsTempering ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
+  const comment        = item.comment?.trim() || null
+  const hasProblem     = stages?.problem?.status === 'problem'
 
   return (
     <div
@@ -223,7 +214,7 @@ function ItemCard({
         </div>
       </div>
 
-      {/* Stages row */}
+      {/* Stage badges */}
       <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-[#fafaf9]'}`}>
         <div className="flex gap-1.5 flex-wrap">
           {visibleStages.map(stage => {
@@ -267,13 +258,14 @@ export default function MobileOrderWorkPage() {
   const { orderId } = useParams<{ orderId: string }>()
   const id = Number(orderId)
 
-  const [order,         setOrder]         = useState<Order | null>(null)
-  const [loading,       setLoading]       = useState(true)
-  const [error,         setError]         = useState<string | null>(null)
-  const [currentUser,   setCurrentUser]   = useState<{ id: string; email?: string } | null>(null)
-  const [selectedItems, setSelectedItems] = useState<Set<number>>(new Set())
-  const [saving,        setSaving]        = useState(false)
-  const [toast,         setToast]         = useState<{ msg: string; ok: boolean } | null>(null)
+  const [order,          setOrder]          = useState<Order | null>(null)
+  const [loading,        setLoading]        = useState(true)
+  const [error,          setError]          = useState<string | null>(null)
+  const [currentUser,    setCurrentUser]    = useState<{ id: string; email?: string } | null>(null)
+  const [selectedItems,  setSelectedItems]  = useState<Set<number>>(new Set())
+  const [selectedStages, setSelectedStages] = useState<Set<Exclude<DetailStageKey, 'problem'>>>(new Set())
+  const [saving,         setSaving]         = useState(false)
+  const [toast,          setToast]          = useState<{ msg: string; ok: boolean } | null>(null)
 
   useEffect(() => {
     async function load() {
@@ -302,53 +294,53 @@ export default function MobileOrderWorkPage() {
     else { setError('Неверный ID заказа'); setLoading(false) }
   }, [id])
 
-  // ─── Save stage to notes.detail_stages ────────────────────────────────────
+  // ─── Helpers ───────────────────────────────────────────────────────────────
 
-  async function markStage(stageKey: DetailStageKey) {
-    if (!order || !currentUser || selectedItems.size === 0 || saving) return
+  function buildNotesObj(): Record<string, unknown> {
+    if (!order?.notes) return {}
+    try {
+      const p = JSON.parse(order.notes)
+      if (typeof p === 'object' && p !== null) return { ...p }
+    } catch {}
+    return {}
+  }
 
-    // For tempering: only apply to items that actually need it (not mirrors)
-    const effectiveItems = stageKey === 'tempering'
-      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
-      : [...selectedItems]
+  function showToast(msg: string, ok: boolean, ms = 3500) {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), ms)
+  }
 
-    if (effectiveItems.length === 0) {
-      setToast({ msg: 'В выбранных позициях нет закалки', ok: false })
-      setTimeout(() => setToast(null), 3000)
-      return
-    }
+  // ─── Batch stage save ──────────────────────────────────────────────────────
+
+  async function markSelectedStages() {
+    if (!order || !currentUser || selectedItems.size === 0 || selectedStages.size === 0 || saving) return
 
     setSaving(true)
+    const notesObj   = buildNotesObj()
+    const existingDs = (notesObj.detail_stages ?? {}) as DetailStages
+    const now        = new Date().toISOString()
+    const newStages: DetailStages = { ...existingDs }
 
-    // Parse existing notes object, preserving all fields (status, stages, etc.)
-    let notesObj: Record<string, unknown> = {}
-    if (order.notes) {
-      try {
-        const p = JSON.parse(order.notes)
-        if (typeof p === 'object' && p !== null) notesObj = { ...p }
-      } catch {}
-    }
+    for (const stageKey of selectedStages) {
+      // Tempering: only items that actually need it (non-mirror with hasTempering=true)
+      const effectiveItems = stageKey === 'tempering'
+        ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
+        : [...selectedItems]
 
-    const existingStages = (notesObj.detail_stages ?? {}) as DetailStages
-    const now   = new Date().toISOString()
-    const newStages: DetailStages = { ...existingStages }
-
-    for (const idx of effectiveItems) {
-      const stageState: DetailStageState = {
-        status:            stageKey === 'problem' ? 'problem' : 'done',
-        updated_at:        now,
-        updated_by:        currentUser.id,
-        updated_by_email:  currentUser.email,
-      }
-      newStages[String(idx)] = {
-        ...newStages[String(idx)],
-        [stageKey]: stageState,
+      for (const idx of effectiveItems) {
+        newStages[String(idx)] = {
+          ...newStages[String(idx)],
+          [stageKey]: {
+            status:           'done',
+            updated_at:       now,
+            updated_by:       currentUser.id,
+            updated_by_email: currentUser.email,
+          } satisfies DetailStageState,
+        }
       }
     }
 
-    // Merge detail_stages into notes, keeping all other fields untouched
     const updatedNotes = { ...notesObj, detail_stages: newStages }
-
     const sb = createClient()
     const { error: updateErr } = await sb
       .from('b2b_orders')
@@ -356,22 +348,82 @@ export default function MobileOrderWorkPage() {
       .eq('id', order.id)
 
     if (updateErr) {
-      setToast({ msg: 'Ошибка сохранения', ok: false })
-      setTimeout(() => setToast(null), 3000)
+      showToast('Ошибка сохранения', false)
       setSaving(false)
       return
     }
 
-    const count = effectiveItems.length
-    const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
-    const msg = partial
-      ? `Закалка: ${count} из ${selectedItems.size} поз.`
-      : `Сохранено (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`
+    const itemCount  = selectedItems.size
+    const stageCount = selectedStages.size
+    // Check if tempering was skipped for some items
+    const temperingSelected = selectedStages.has('tempering')
+    const temperingEffective = temperingSelected
+      ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx])).length
+      : 0
+    const temperingSkipped = temperingSelected && temperingEffective < selectedItems.size
+
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     setSelectedItems(new Set())
-    setToast({ msg, ok: true })
-    setTimeout(() => setToast(null), 3000)
+    setSelectedStages(new Set())
+
+    const suffix = temperingSkipped ? ` · закалка: ${temperingEffective} из ${itemCount} поз.` : ''
+    showToast(`Сохранено: ${stageCount} эт. × ${itemCount} ${plural(itemCount, 'поз.', 'поз.', 'поз.')}${suffix}`, true)
     setSaving(false)
+  }
+
+  // ─── Problem save ──────────────────────────────────────────────────────────
+
+  async function markProblem() {
+    if (!order || !currentUser || selectedItems.size === 0 || saving) return
+
+    setSaving(true)
+    const notesObj   = buildNotesObj()
+    const existingDs = (notesObj.detail_stages ?? {}) as DetailStages
+    const now        = new Date().toISOString()
+    const newStages: DetailStages = { ...existingDs }
+
+    for (const idx of selectedItems) {
+      newStages[String(idx)] = {
+        ...newStages[String(idx)],
+        problem: {
+          status:           'problem',
+          updated_at:       now,
+          updated_by:       currentUser.id,
+          updated_by_email: currentUser.email,
+        } satisfies DetailStageState,
+      }
+    }
+
+    const updatedNotes = { ...notesObj, detail_stages: newStages }
+    const sb = createClient()
+    const { error: updateErr } = await sb
+      .from('b2b_orders')
+      .update({ notes: JSON.stringify(updatedNotes) })
+      .eq('id', order.id)
+
+    if (updateErr) {
+      showToast('Ошибка сохранения', false)
+      setSaving(false)
+      return
+    }
+
+    const count = selectedItems.size
+    setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
+    setSelectedItems(new Set())
+    setSelectedStages(new Set())
+    showToast(`⚠️ Проблема зафиксирована (${count} ${plural(count, 'поз.', 'поз.', 'поз.')})`, true)
+    setSaving(false)
+  }
+
+  // ─── Toggle stage checkbox ──────────────────────────────────────────────────
+
+  function toggleStage(key: Exclude<DetailStageKey, 'problem'>) {
+    setSelectedStages(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
   }
 
   // ─── Loading ───────────────────────────────────────────────────────────────
@@ -399,7 +451,7 @@ export default function MobileOrderWorkPage() {
     </div>
   )
 
-  // ─── Derived values ────────────────────────────────────────────────────────
+  // ─── Derived ───────────────────────────────────────────────────────────────
 
   const pn           = parseNotes(order.notes)
   const detailStages = pn.detail_stages ?? {}
@@ -410,8 +462,11 @@ export default function MobileOrderWorkPage() {
   const itemsWeight  = order.items.reduce((s, i) => s + itemWeightKg(i), 0)
   const totalArea    = itemsArea   > 0 ? itemsArea   : (order.total_area   ?? 0)
   const totalWeight  = itemsWeight > 0 ? itemsWeight : (order.total_weight ?? 0)
-  const allSelected           = order.items.length > 0 && selectedItems.size === order.items.length
+  const allSelected  = order.items.length > 0 && selectedItems.size === order.items.length
+
   const selectedNeedTempering = [...selectedItems].some(idx => itemNeedsTempering(order.items[idx]))
+
+  const canSave = selectedItems.size > 0 && selectedStages.size > 0 && !saving
 
   // ─── Render ────────────────────────────────────────────────────────────────
 
@@ -422,7 +477,7 @@ export default function MobileOrderWorkPage() {
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold whitespace-nowrap pointer-events-none ${
           toast.ok ? 'bg-[#111110] text-white' : 'bg-red-600 text-white'
         }`}>
-          {toast.ok ? '✓ ' : '✗ '}{toast.msg}
+          {toast.msg}
         </div>
       )}
 
@@ -536,51 +591,121 @@ export default function MobileOrderWorkPage() {
             )}
           </div>
 
-          {/* ── Group actions ──────────────────────────────────────────────── */}
+          {/* ── Batch stage selection ─────────────────────────────────────── */}
           <div>
             <div className="flex items-center justify-between mb-2.5 px-0.5">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">
-                Групповые действия
+                Отметить выполненные этапы
               </p>
               {saving && (
                 <span className="text-[11px] text-[#9a9a95]">Сохранение...</span>
               )}
             </div>
 
-            {selectedItems.size === 0 && (
-              <p className="text-[11px] text-[#b0b0aa] mb-2 px-0.5">
-                Выберите позиции выше, чтобы отметить этап
-              </p>
-            )}
+            {selectedItems.size === 0 ? (
+              <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-4 text-center">
+                <p className="text-[13px] text-[#9a9a95]">
+                  Выберите позиции выше, чтобы отметить этапы
+                </p>
+              </div>
+            ) : (
+              <>
+                {/* Selection summary */}
+                <div className="flex items-center gap-2 mb-3 px-0.5">
+                  <span className="text-[12px] text-[#6b6b66]">
+                    Выбрано позиций:
+                  </span>
+                  <span className="text-[13px] font-bold text-[#111110]">{selectedItems.size}</span>
+                  {selectedStages.size > 0 && (
+                    <>
+                      <span className="text-[#c4c4be]">·</span>
+                      <span className="text-[12px] text-[#6b6b66]">этапов:</span>
+                      <span className="text-[13px] font-bold text-[#111110]">{selectedStages.size}</span>
+                    </>
+                  )}
+                </div>
 
-            <div className="space-y-2">
-              {GROUP_ACTIONS.map(action => {
-                const isDisabled = action.key === 'tempering'
-                  ? (selectedItems.size === 0 || saving || !selectedNeedTempering)
-                  : (selectedItems.size === 0 || saving)
-                return (
-                  <button
-                    key={action.key}
-                    onClick={() => markStage(action.key)}
-                    disabled={isDisabled}
-                    className={`w-full flex items-center gap-3 px-4 py-3.5 rounded-xl text-[13px] font-medium border transition-all ${
-                      action.danger
-                        ? isDisabled
-                          ? 'border-red-100 text-red-300 bg-red-50 cursor-not-allowed'
-                          : 'border-red-300 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200'
-                        : isDisabled
-                          ? 'border-[#e8e8e4] text-[#c4c4be] bg-[#f8f8f7] cursor-not-allowed'
-                          : 'border-[#111110] text-[#111110] bg-white hover:bg-[#f4f4f0] active:bg-[#ebebeb] shadow-sm'
-                    }`}
-                  >
-                    <span className={`text-[16px] leading-none ${isDisabled ? 'opacity-40' : ''}`}>
-                      {action.icon}
-                    </span>
-                    <span>{action.label}</span>
-                  </button>
-                )
-              })}
-            </div>
+                {/* Stage checkboxes */}
+                <div className="bg-white border border-[#e8e8e4] rounded-xl overflow-hidden mb-3">
+                  {BATCH_STAGES.map((stage, i) => {
+                    const isTempering = stage.key === 'tempering'
+                    const isDisabled  = isTempering && !selectedNeedTempering
+                    const isChecked   = selectedStages.has(stage.key)
+
+                    return (
+                      <label
+                        key={stage.key}
+                        className={`flex items-center gap-3.5 px-4 py-4 transition-colors select-none ${
+                          i > 0 ? 'border-t border-[#f0f0ec]' : ''
+                        } ${
+                          isDisabled
+                            ? 'opacity-40 cursor-not-allowed'
+                            : 'cursor-pointer hover:bg-[#fafaf9] active:bg-[#f4f4f0]'
+                        }`}
+                      >
+                        {/* Large checkbox */}
+                        <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
+                          isChecked
+                            ? 'bg-[#111110] border-[#111110]'
+                            : 'border-[#d4d4d0] bg-white'
+                        }`}>
+                          {isChecked && (
+                            <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
+                              <path d="M2 6l3 3 5-5" stroke="white" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+                            </svg>
+                          )}
+                        </div>
+                        <input
+                          type="checkbox"
+                          className="sr-only"
+                          checked={isChecked}
+                          disabled={isDisabled}
+                          onChange={() => { if (!isDisabled) toggleStage(stage.key) }}
+                        />
+                        <span className="text-[20px] leading-none flex-shrink-0">{stage.icon}</span>
+                        <div className="flex-1">
+                          <p className="text-[15px] font-medium text-[#111110]">{stage.label}</p>
+                          {isTempering && !selectedNeedTempering && (
+                            <p className="text-[11px] text-[#9a9a95] mt-0.5">не требуется для выбранных позиций</p>
+                          )}
+                        </div>
+                        {isChecked && (
+                          <span className="text-[11px] text-green-600 font-semibold flex-shrink-0">✓</span>
+                        )}
+                      </label>
+                    )
+                  })}
+                </div>
+
+                {/* Save button */}
+                <button
+                  onClick={markSelectedStages}
+                  disabled={!canSave}
+                  className={`w-full py-4 rounded-xl text-[15px] font-semibold transition-all ${
+                    canSave
+                      ? 'bg-[#111110] text-white active:bg-[#333] shadow-sm'
+                      : 'bg-[#e8e8e4] text-[#b0b0aa] cursor-not-allowed'
+                  }`}
+                >
+                  {saving
+                    ? 'Сохранение...'
+                    : selectedStages.size === 0
+                      ? 'Выберите этапы выше'
+                      : `Сохранить ${selectedStages.size} ${plural(selectedStages.size, 'этап', 'этапа', 'этапов')} · ${selectedItems.size} ${plural(selectedItems.size, 'позиция', 'позиции', 'позиций')}`
+                  }
+                </button>
+
+                {/* Problem — separate action */}
+                <button
+                  onClick={markProblem}
+                  disabled={saving}
+                  className="w-full mt-2.5 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-medium border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <span className="text-[16px]">⚠️</span>
+                  Зафиксировать проблему
+                </button>
+              </>
+            )}
           </div>
 
         </div>
