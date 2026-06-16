@@ -2,7 +2,7 @@
 // READ-ONLY: never writes to CRM cards.
 
 import {
-  getUsers, getPipelines, getLeads, getEvents, getLeadNotes, getDomain,
+  getUsers, getPipelines, getLeads, getEvents, getLeadNotes,
   type AmoUser, type AmoEvent, type AmoNote, type AmoLead,
 } from '@/lib/amocrm'
 
@@ -135,7 +135,7 @@ function formatMinutes(totalMinutes: number): string {
 function computeActivityGaps(
   timeline:         ManagerActivityEvent[],
   todayStart:       number,
-  thresholdMinutes = 90,
+  thresholdMinutes = 60,
 ): { bigPausesCount: number; maxPauseMinutes: number } {
   const workStart  = todayStart + 9  * 3600
   const workEnd    = todayStart + 18 * 3600
@@ -349,30 +349,6 @@ export async function collectAllMetrics(): Promise<ManagerMetrics[]> {
 
 // ── Report ─────────────────────────────────────────────────────────────────────
 
-function link(id: number, name: string) {
-  return `<a href="https://${getDomain()}/leads/detail/${id}">${name}</a>`
-}
-
-// Top N stale deals across all zones, sorted by days descending.
-// Marks "Долгострой" stage with 🧊 to distinguish chronic from fresh stale.
-function topProblems(m: ManagerMetrics, limit = 2): string {
-  const all = [...m.staleZone1, ...m.invoiceStale, ...m.staleZone2, ...m.staleZone3]
-    .sort((a, b) => b.daysStale - a.daysStale)
-  const seen = new Set<number>()
-  const unique = all.filter(s => {
-    if (seen.has(s.id)) return false
-    seen.add(s.id)
-    return true
-  })
-  if (unique.length === 0) return ''
-  return unique.slice(0, limit)
-    .map((s, i) => {
-      const isDolgo = s.stageName.toLowerCase().includes('долгострой')
-      return `  ${i + 1}. ${link(s.id, s.name)} — ${s.daysStale}д, ${s.stageName}${isDolgo ? ' 🧊' : ''}`
-    })
-    .join('\n')
-}
-
 function ropFlags(m: ManagerMetrics, todayStart: number): string[] {
   const flags: string[] = []
 
@@ -414,7 +390,7 @@ function ropFlags(m: ManagerMetrics, todayStart: number): string[] {
     flags.push('🔴 Активность в CRM до 15:00 — ранний выход')
 
   if (m.bigPausesCount > 0)
-    flags.push(`🟠 Пауза без активности >90м${m.bigPausesCount > 1 ? ` (${m.bigPausesCount}×)` : ''}`)
+    flags.push(`🟠 Пауза без активности >60м${m.bigPausesCount > 1 ? ` (${m.bigPausesCount}×)` : ''}`)
 
   if (m.activityEventsCount > 0 && m.activityEventsCount < 10 && m.activeLeads > 3)
     flags.push(`🟠 Мало событий в CRM за день: ${m.activityEventsCount}`)
@@ -450,8 +426,6 @@ export function buildReport(metrics: ManagerMetrics[]): string {
   // ── Per manager ───────────────────────────────────────────────────────────────
   for (const m of metrics) {
     const firstName = m.user.name.split(' ')[0]
-    const flags     = ropFlags(m, todayStart)
-    const problems  = topProblems(m)
 
     lines.push('')
     lines.push('━━━━━━━━━━━━━━━━━━')
@@ -459,28 +433,11 @@ export function buildReport(metrics: ManagerMetrics[]): string {
     lines.push(`Активность: лиды ${m.newLeadsToday} | сообщ ${m.messagesSent} | звонки ${m.callsMade} | движ ${m.cardsMoved}`)
     if (m.activityEventsCount > 0 && m.firstActivityAt && m.lastActivityAt) {
       lines.push(
-        `Активность CRM: ${formatMoscowTime(m.firstActivityAt)}–${formatMoscowTime(m.lastActivityAt)}` +
-        ` | событий ${m.activityEventsCount} | пауз >90м: ${m.bigPausesCount}`,
+        `CRM: ${formatMoscowTime(m.firstActivityAt)}–${formatMoscowTime(m.lastActivityAt)}` +
+        ` | событий ${m.activityEventsCount} | пауз >60м: ${m.bigPausesCount}`,
       )
     }
     lines.push(`Сделки: активные ${m.activeLeads} | квалиф ${m.zone1} | продажа ${m.zone2} | оплата/пр-во ${m.zone3}`)
-
-    const staleTotal = m.staleZone1.length + m.staleZone2.length + m.staleZone3.length + m.invoiceStale.length
-    if (staleTotal > 0) {
-      const invoicePart = m.invoiceStale.length > 0 ? ` | счета ${m.invoiceStale.length}` : ''
-      lines.push(`Риски: зона1 ${m.staleZone1.length} | зона2 ${m.staleZone2.length} | зона3 ${m.staleZone3.length}${invoicePart}`)
-    }
-
-    if (flags.length > 0) {
-      lines.push('⚠️ <b>Главное:</b>')
-      for (const f of flags) lines.push(`• ${f}`)
-      if (problems) {
-        lines.push('Топ проблем:')
-        lines.push(problems)
-      }
-    } else {
-      lines.push('✅ Критичных зависаний нет')
-    }
   }
 
   // ── Summary ───────────────────────────────────────────────────────────────────
@@ -492,34 +449,21 @@ export function buildReport(metrics: ManagerMetrics[]): string {
 
 function ropSummary(metrics: ManagerMetrics[]): string {
   const bullets: string[] = []
-
-  // Zero activity — only flag managers who have active deals but did nothing today
-  for (const m of metrics) {
-    if (m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0) {
-      bullets.push(`Нет активности: ${m.user.name.split(' ')[0]} — 0 звонков, 0 сообщений`)
-    }
-  }
-
-  // Overload — manager with significantly more active deals than the team average
   const avgActive = metrics.reduce((s, m) => s + m.activeLeads, 0) / (metrics.length || 1)
+
   for (const m of metrics) {
-    if (m.activeLeads > Math.max(avgActive * 1.5, avgActive + 20)) {
-      bullets.push(`Перегруз по активным сделкам: ${m.user.name.split(' ')[0]} — ${m.activeLeads}`)
-    }
+    const name = m.user.name.split(' ')[0]
+
+    if (m.messagesSent === 0 && m.callsMade === 0 && m.activeLeads > 0)
+      bullets.push(`${name} — 0 звонков, 0 сообщений`)
+
+    if (m.activeLeads > Math.max(avgActive * 1.5, avgActive + 20))
+      bullets.push(`${name} — высокая нагрузка: ${m.activeLeads} активных сделок`)
+
+    if (m.bigPausesCount > 0)
+      bullets.push(`${name} — пауза без активности >60м`)
   }
 
-  // Most stale leads (fresh leads only — exclude if all stale are "долгострой")
-  const mostStale = [...metrics].sort(
-    (a, b) => (b.staleZone1.length + b.staleZone2.length) - (a.staleZone1.length + a.staleZone2.length),
-  )[0]
-  if (mostStale) {
-    const freshStale = mostStale.staleZone1.filter(s => !s.stageName.toLowerCase().includes('долгострой')).length
-      + mostStale.staleZone2.length
-    if (freshStale >= 3) {
-      bullets.push(`Зависших лидов больше всего: ${mostStale.user.name.split(' ')[0]} — ${freshStale} (свежие зона1+2)`)
-    }
-  }
-
-  if (!bullets.length) return '🧠 <b>Вывод РОП:</b> Команда в норме. Следите за счетами.'
+  if (!bullets.length) return '🧠 <b>Вывод РОП:</b> Команда в норме.'
   return '🧠 <b>Вывод РОП:</b>\n' + bullets.map(b => `• ${b}`).join('\n')
 }
