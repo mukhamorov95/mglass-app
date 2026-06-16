@@ -145,6 +145,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
+  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
@@ -180,6 +181,7 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
+  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
@@ -288,7 +290,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
@@ -320,7 +322,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement', '/production-app'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }
@@ -334,6 +336,7 @@ function detectModeFromPath(pathname: string): ViewMode {
     pathname.startsWith('/admin/owner') || pathname.startsWith('/admin/dashboard') ||
     pathname.startsWith('/admin/pnl')   || pathname.startsWith('/admin/analytics-mglass') ||
     pathname.startsWith('/admin/bonus-center') || pathname.startsWith('/admin/sales-center') ||
+    pathname.startsWith('/admin/sales-control') ||
     pathname.startsWith('/admin/b2b-development') || pathname.startsWith('/admin/org') ||
     pathname.startsWith('/admin/users') || pathname.startsWith('/admin/product-line') ||
     pathname.startsWith('/admin/b2b-presentation') || pathname.startsWith('/admin/roadmap') ||
