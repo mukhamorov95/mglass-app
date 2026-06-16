@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
+import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -21,21 +22,6 @@ const STAGES = [
 ] as const
 
 type StageKey = typeof STAGES[number]['key']
-
-type DetailStageKey = 'cutting' | 'polishing' | 'drilling' | 'tempering' | 'packaging' | 'problem'
-
-type DetailStageState = {
-  status: 'done' | 'problem'
-  updated_at: string
-  updated_by: string
-  updated_by_email?: string
-}
-
-type DetailStages = {
-  [itemIndex: string]: {
-    [stage in DetailStageKey]?: DetailStageState
-  }
-}
 
 const STAGE_FILTERS = [
   { key: 'all_active',  label: 'Все активные', desc: '' },
@@ -322,51 +308,38 @@ function getOrderNum(pn: NotesData): string {
   return m ? m[1] : ''
 }
 
-const MIRROR_RE = /зеркало|mirror|silver|серебро|сильвер/i
-
-function isMirrorItem(item: Record<string, unknown>): boolean {
-  return MIRROR_RE.test(`${item.materialName ?? ''} ${item.category ?? ''}`)
-}
-
-function itemNeedsTempering(item: Record<string, unknown>): boolean {
-  return item.hasTempering === true && !isMirrorItem(item)
-}
-
 // Progress is tracked per position (itemIndex), not per piece count.
 // A position with quantity=13 counts as 1, not 13 — detail_stages is keyed by itemIndex.
+// Future: source will move to b2b_order_details table.
+type ProgressItem = { hasTempering?: boolean; materialName?: string; category?: string }
+
 function getProductionProgress(order: Order) {
-  const items         = order.items as Record<string, unknown>[]
-  const detailStages  = (order.parsedNotes.detail_stages ?? {}) as DetailStages
-  const totalItems    = items.length
-  const temperingTotal = items.filter(i => itemNeedsTempering(i)).length
+  const orderProg  = calcOrderProgress(
+    order.items as ProgressItem[],
+    order.parsedNotes.detail_stages ?? {},
+  )
+  const { items, totalItems } = orderProg
 
-  const counts = { cutting: 0, polishing: 0, drilling: 0, tempering: 0, packaging: 0, problem: 0 }
+  // Items with tempering applicable have totalStages === PRODUCTION_STAGES.length (5),
+  // items without have one fewer stage (4).
+  const temperingTotal = items.filter(p => p.totalStages === PRODUCTION_STAGES.length).length
 
-  for (let idx = 0; idx < items.length; idx++) {
-    const s = detailStages[String(idx)]
-    if (!s) continue
-    if (s.cutting?.status   === 'done')    counts.cutting++
-    if (s.polishing?.status === 'done')    counts.polishing++
-    if (s.drilling?.status  === 'done')    counts.drilling++
-    if (s.tempering?.status === 'done')    counts.tempering++
-    if (s.packaging?.status === 'done')    counts.packaging++
-    if (s.problem?.status   === 'problem') counts.problem++
-  }
+  const stages = PRODUCTION_STAGES.map(st => ({
+    key:   st.key,
+    label: st.label,
+    done:  items.filter(p => (p.completedKeys as string[]).includes(st.key)).length,
+    total: st.key === 'tempering' ? temperingTotal : totalItems,
+  })).filter(s => s.key !== 'tempering' || s.total > 0)
 
-  const hasAnyMark = (counts.cutting + counts.polishing + counts.drilling +
-                      counts.tempering + counts.packaging + counts.problem) > 0
+  const problemCount = items.filter(p => p.hasProblem).length
+  const hasAnyMark   = items.some(p => p.doneStages > 0 || p.hasProblem)
 
-  const stages = [
-    { key: 'cutting',   label: 'Резка',     done: counts.cutting,   total: totalItems },
-    { key: 'polishing', label: 'Полировка', done: counts.polishing, total: totalItems },
-    { key: 'drilling',  label: 'Сверление', done: counts.drilling,  total: totalItems },
-    ...(temperingTotal > 0
-      ? [{ key: 'tempering', label: 'Закалка', done: counts.tempering, total: temperingTotal }]
-      : []),
-    { key: 'packaging', label: 'Упаковка',  done: counts.packaging, total: totalItems },
-  ]
+  // Weighted percentage: total done stage-slots / total possible stage-slots
+  const totalDone     = stages.reduce((sum, s) => sum + s.done, 0)
+  const totalPossible = stages.reduce((sum, s) => sum + s.total, 0)
+  const progressPct   = totalPossible > 0 ? Math.round(totalDone / totalPossible * 100) : 0
 
-  return { stages, problemCount: counts.problem, hasAnyMark }
+  return { stages, problemCount, hasAnyMark, progressPct }
 }
 
 function buildProductionMessage(order: Order): string {
@@ -1324,11 +1297,23 @@ export default function B2BOrdersPage() {
         {/* Прогресс по деталям */}
         {(() => {
           const prog = getProductionProgress(order)
+          const pctColor = prog.progressPct === 100
+            ? 'text-emerald-600'
+            : prog.progressPct >= 50
+            ? 'text-blue-600'
+            : prog.progressPct > 0
+            ? 'text-orange-600'
+            : 'text-[#9a9a95]'
           return (
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">
-                Прогресс по деталям
-              </p>
+              <div className="flex items-center gap-2 mb-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+                  Производство
+                </p>
+                <span className={`text-[11px] font-bold ${pctColor}`}>
+                  {!prog.hasAnyMark ? 'не начато' : `${prog.progressPct}%`}
+                </span>
+              </div>
               {!prog.hasAnyMark ? (
                 <p className="text-[11px] text-[#b0b0aa]">Отметок по деталям пока нет</p>
               ) : (
@@ -1337,6 +1322,8 @@ export default function B2BOrdersPage() {
                     const pct = s.total > 0 ? s.done / s.total : 0
                     const cls = pct === 1
                       ? 'bg-green-50 text-green-700 border-green-200'
+                      : pct >= 0.5
+                      ? 'bg-blue-50 text-blue-700 border-blue-200'
                       : pct > 0
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
                       : 'bg-[#f4f4f0] text-[#9a9a95] border-[#e4e4e0]'
