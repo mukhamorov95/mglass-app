@@ -458,6 +458,7 @@ export default function GlassPricesPage() {
     setSyncingB2B(false)
     if (!res.ok) { showToast(`Ошибка: ${data.error}`); return }
     showToast(`✅ B2B обновлён: +${data.inserted} новых, ${data.updated} обновлено`)
+    await loadB2BData()
   }
 
   async function migrateFromMaterials() {
