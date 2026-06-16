@@ -1,9 +1,12 @@
 ## Текущая задача
-Два фикса sales-monitor задеплоены (333b451, 70688a3). Следующий шаг — ручная проверка отчёта после деплоя.
+Архитектурный рефакторинг production stage helpers — ЗАКРЫТО (b582925).
 
 ## Что сделано (эта сессия)
-- fix(sales-monitor) #1 — timezone МСК, пагинация, noteTypeIs, Wazzup attr → коммит 333b451
-- fix(sales-monitor) #2 — split dateFilter, messagesSent → events outgoing_chat_message → коммит 70688a3
+- refactor(production) — centralise stage helpers → коммит b582925
+- feat(admin) — sales-control dashboard MVP v1 → b5a8def
+- chore(admin) — sales-control в sidebar → 1045fbd
+- feat(admin) — sales-control Drawer placeholder → a67050b
+- feat(production) — batch stage updates on mobile order page → c5dd1b3
 
 ## Sales Monitor Fix — ЗАКРЫТО
 
