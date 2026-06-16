@@ -1,11 +1,53 @@
 ## Текущая задача
-Step 12 — Detail Stage Audit Visibility — ЗАКРЫТО
+Пауза — production testing. Новые фичи не начинать без отдельного решения.
 
 ## Что сделано (эта сессия)
 - Step 7 — экран фиксации проблем (ЗАКРЫТО)
 - Step 10 — Supervisor Panel (ЗАКРЫТО): /production-app/supervisor
 - Step 11 — Stage Undo (ЗАКРЫТО): кнопка ✕ на этапах + UndoModal + audit trail
 - Step 12 — Audit Visibility (ЗАКРЫТО): read-only блок "История изменений" в экране заказа
+- Step 13 — Supervisor Audit Indicators (ЗАКРЫТО): бейдж ↩ N + фильтр "С отменами" + детальный блок
+
+## Production App: Step 13 Supervisor Panel Audit Indicator — ЗАКРЫТО
+
+### Коммит
+b94b274 — feat(production-app): show audit indicators in supervisor panel
+
+### Что добавлено
+
+- В /production-app/supervisor показывается индикатор отмен этапов по заказу.
+- Если у заказа есть notes.detail_stage_audit, отображается синий бейдж ↩ N.
+- Добавлен фильтр "С отменами" в горизонтальной полосе табов со счётчиком.
+- В карточке заказа отображается последняя отмена:
+  - позиция;
+  - этап;
+  - дата/время;
+  - причина;
+  - кто отменил, если есть email.
+- Экран supervisor остаётся read-only: нет .update/.insert/.delete/.upsert.
+- Новых записей в БД нет. Stage keys, QR route, order page, undo logic не менялись.
+
+### Итог блока Production App
+
+Весь блок завершён:
+- рабочий экран заказа;
+- QR-экран;
+- supervisor panel;
+- постановка этапов;
+- фиксация проблем;
+- отмена ошибочных отметок;
+- audit trail;
+- отображение audit trail в заказе;
+- audit indicators в supervisor panel.
+
+### Production test-plan
+
+1. Открыть /production-app/supervisor (admin или ceo).
+2. Найти заказ с отменой этапа (например #609) — убедиться, что есть синий бейдж ↩ N.
+3. В карточке заказа проверить серый блок: дата, позиция, этап, причина, кто отменил.
+4. Открыть таб "С отменами" — фильтрует только заказы с отменами.
+5. Открыть заказ без отмен — бейдж ↩ и блок отсутствуют.
+6. Выполнить новую отмену → перезагрузить supervisor → счётчик увеличился.
 
 ## Production App: Step 12 Detail Stage Audit Visibility — ЗАКРЫТО
 
@@ -164,11 +206,7 @@ be4f698 — fix(access): restrict root route matching
 Теперь p === '/' разрешает только pathname === '/'.
 
 ## Следующий шаг
-Step 13 — Supervisor Panel: Audit / Recent Changes indicator:
-- В /production-app/supervisor добавить read-only индикатор по заказам с отменами
-- Показывать: есть ли отмены, когда последняя, кто отменил, ссылка "Открыть заказ"
-- Данные уже в notes.detail_stage_audit — новых записей в БД не потребуется
-- Усиливает контроль начальника производства без изменения схемы данных
+Пауза / production testing. Новые фичи не начинать без отдельного решения.
 
 ## Контекст
 - Production App: /production-app (главный экран) + /production-app/orders/{id} (экран заказа)
@@ -182,4 +220,3 @@ Step 13 — Supervisor Panel: Audit / Recent Changes indicator:
 
 ## Открытые вопросы
 - PWA manifest: добавить на позднем шаге
-- Step 13: Audit indicator в supervisor panel
