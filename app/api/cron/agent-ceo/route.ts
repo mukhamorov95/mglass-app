@@ -73,13 +73,15 @@ export async function GET(req: Request) {
     const orderCount   = orders24?.length ?? 0
     const orderRevenue = orders24?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
 
-    const b2bQuoteRows24 = (allB2b24 ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
-    const b2bOrderRows24 = (allB2b24 ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
-    const b2bRevenue     = b2bOrderRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
-    const totalRevenue   = orderRevenue + b2bRevenue
-    const convRate       = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
-    const b2bCount       = b2bQuoteRows24.length
-    const inProdCount    = inProd?.length ?? 0
+    const b2bQuoteRows24    = (allB2b24 ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
+    const b2bOrderRows24    = (allB2b24 ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
+    const b2bRevenue        = b2bOrderRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+    const b2bQuoteRevenue24 = b2bQuoteRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+    const totalRevenue      = orderRevenue + b2bRevenue
+    const convRate          = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
+    const b2bCount          = b2bQuoteRows24.length
+    const b2bOrdCount24     = b2bOrderRows24.length
+    const inProdCount       = inProd?.length ?? 0
 
     const pendingFollowup = calcs24?.filter(c => c.client_phone && !c.followup_sent_at).length ?? 0
 
@@ -109,9 +111,9 @@ export async function GET(req: Request) {
 МЕТРИКИ 24Ч:
 - Расчётов: ${calcCount} | Заказов: ${orderCount} | Конверсия: ${convRate}%
 - Выручка B2C: ${orderRevenue.toLocaleString('ru-RU')} ₽
-- Выручка B2B: ${b2bRevenue.toLocaleString('ru-RU')} ₽
-- ИТОГО: ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
-- B2B просчётов: ${b2bCount}
+- B2B просчётов в работе: ${b2bCount} на сумму ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
+- B2B заказов подтверждено: ${b2bOrdCount24} на выручку ${b2bRevenue.toLocaleString('ru-RU')} ₽
+- ИТОГО выручка (B2C + B2B-заказы): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
 - В производстве: ${inProdCount} заказов
 - Ждут followup: ${pendingFollowup} клиентов
 - Темп к месяцу: ~${monthlyPace.toLocaleString('ru-RU')} ₽/мес (цель: ${GOAL_MONTHLY.toLocaleString('ru-RU')} ₽)
@@ -125,8 +127,11 @@ ${recentLogs || 'нет активности'}
 ПРЕДЫДУЩИЙ ФОКУС: ${memory.last_focus ?? 'нет'}
 ПРЕДЫДУЩИЙ УЗКИЙ ГОРЛЫШКО: ${memory.last_bottleneck ?? 'нет'}
 
+ВАЖНО — B2B-специфика:
+Цикл согласования B2B занимает 2–7 дней. Если просчётов > 0 и заказов = 0 — это НЕ узкое место само по себе. Не называть это "сломанной воронкой". Смотреть на объём просчётов в работе как на потенциальный pipeline.
+
 ЗАДАЧА:
-1. Определи ОДНО главное узкое место прямо сейчас (конверсия? followup? B2B? производство?)
+1. Определи ОДНО главное узкое место прямо сейчас (конверсия? followup? B2B-pipeline? производство?)
 2. Реши: какому агенту дать задачу и какую именно
 3. Если нужно решение владельца — сформулируй ОДИН конкретный вопрос
 4. Дай прогноз: при текущем темпе когда достигнем 15М?

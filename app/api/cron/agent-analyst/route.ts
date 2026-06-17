@@ -55,11 +55,12 @@ export async function GET(req: Request) {
     const orderCount   = orders?.length ?? 0
     const orderRevenue = orders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
 
-    const b2bQuoteRows = (allB2b ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
-    const b2bOrderRows = (allB2b ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
-    const b2bCount     = b2bQuoteRows.length
-    const b2bOrdCount  = b2bOrderRows.length
-    const b2bOrdRev    = b2bOrderRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+    const b2bQuoteRows    = (allB2b ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
+    const b2bOrderRows    = (allB2b ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
+    const b2bCount        = b2bQuoteRows.length
+    const b2bOrdCount     = b2bOrderRows.length
+    const b2bQuoteRevenue = b2bQuoteRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+    const b2bOrdRev       = b2bOrderRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
     const totalRevenue = orderRevenue + b2bOrdRev
     const convRate     = calcCount > 0 ? ((orderCount / calcCount) * 100).toFixed(1) : '0'
 
@@ -80,16 +81,25 @@ export async function GET(req: Request) {
 - Расчётов B2C: ${calcCount} (сумма: ${calcRevenue.toLocaleString('ru-RU')} ₽)
 - Заказов B2C: ${orderCount} (выручка: ${orderRevenue.toLocaleString('ru-RU')} ₽)
 - Конверсия расчёт→заказ: ${convRate}%
-- Просчётов B2B: ${b2bCount} · Заказов B2B: ${b2bOrdCount} (выручка: ${b2bOrdRev.toLocaleString('ru-RU')} ₽)
+- B2B просчётов в работе: ${b2bCount} на сумму ${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽ (статусы: quote/sent/pending_approval)
+- B2B заказов подтверждено: ${b2bOrdCount} на выручку ${b2bOrdRev.toLocaleString('ru-RU')} ₽ (статусы: confirmed/agreed)
 - Итого выручка: ${totalRevenue.toLocaleString('ru-RU')} ₽
 - Лучший день в памяти: ${(memory.best_day_revenue ?? 0).toLocaleString('ru-RU')} ₽ (${memory.best_day_date ?? 'нет данных'})
 - Расчёты по продуктам:\n${productLines || '  нет данных'}
 
 Цель: 15 млн ₽/мес = ~500 000 ₽/день
 
+ВАЖНО — B2B-специфика (строго соблюдать):
+Цикл согласования B2B занимает от 2 до 7 дней. Просчёт → согласование → заказ — это многодневный процесс.
+Правила интерпретации:
+- Если B2B-просчётов > 0 и B2B-заказов = 0 → это НЕ проблема. Писать: "B2B-активность есть: N просчётов на Y ₽. Заказов в 24ч нет — для B2B это норма. Проверить: просчёты старше 2–3 дней и статусы согласования."
+- Если B2B-просчётов = 0 и B2B-заказов = 0 → писать: "Нет новой B2B-активности за сутки. Проверить входящие лиды и загрузку менеджеров."
+- Если B2B-заказов > 0 → писать: "B2B дал выручку Y ₽ по M заказам."
+ЗАПРЕЩЕНО использовать: "воронка сломана", "провалены", "системный сбой", "срочно" — если есть B2B-просчёты.
+
 Формат — 3 блока:
-1. Одна строка: как день относительно цели 500К/день
-2. Главное узкое место (1 предложение)
+1. Одна строка: как день относительно цели 500К/день (только факт выручки заказов, без B2B-просчётов)
+2. Главное узкое место (1 предложение, B2B-специфику соблюдать)
 3. Конкретное действие на сегодня (1 предложение)
 
 Без лишних слов. Только факты.`
@@ -114,8 +124,8 @@ export async function GET(req: Request) {
       `Выручка B2C: <b>${orderRevenue.toLocaleString('ru-RU')} ₽</b>`,
       ``,
       `<b>B2B за 24ч</b>`,
-      `Просчётов: ${b2bCount} · Заказов: ${b2bOrdCount}`,
-      `Выручка B2B: <b>${b2bOrdRev.toLocaleString('ru-RU')} ₽</b>`,
+      `Просчётов: ${b2bCount} · Сумма: <b>${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽</b>`,
+      `Заказов: ${b2bOrdCount} · Выручка: <b>${b2bOrdRev.toLocaleString('ru-RU')} ₽</b>`,
       ``,
       `<b>Итого: ${totalRevenue.toLocaleString('ru-RU')} ₽</b> / цель 500К`,
       ``,
