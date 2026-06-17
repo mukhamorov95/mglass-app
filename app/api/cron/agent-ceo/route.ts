@@ -11,12 +11,25 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-function parseB2bStatus(notes: unknown): string {
-  if (!notes) return 'quote'
+function getMoscowTodayStart(now = new Date()): Date {
+  const moscowOffsetMs = 3 * 60 * 60 * 1000
+  const moscowNow = new Date(now.getTime() + moscowOffsetMs)
+  return new Date(
+    Date.UTC(moscowNow.getUTCFullYear(), moscowNow.getUTCMonth(), moscowNow.getUTCDate())
+    - moscowOffsetMs
+  )
+}
+
+function parseB2bNotes(notes: unknown): Record<string, unknown> {
+  if (!notes) return {}
   try {
     const obj = typeof notes === 'string' ? JSON.parse(notes) : notes
-    return (obj as Record<string, unknown>).status as string ?? 'quote'
-  } catch { return 'quote' }
+    return typeof obj === 'object' && obj !== null ? (obj as Record<string, unknown>) : {}
+  } catch { return {} }
+}
+
+function parseB2bStatus(notes: unknown): string {
+  return (parseB2bNotes(notes).status as string) ?? 'quote'
 }
 
 const GOAL_MONTHLY = 15_000_000
@@ -40,8 +53,9 @@ export async function GET(req: Request) {
       pending_questions: string[]
     }>('ceo')
 
-    const supabase = db()
+    const supabase  = db()
     const now       = new Date()
+    const todayStart = getMoscowTodayStart(now)
     const today     = new Date(now); today.setHours(0, 0, 0, 0)
     const since24h  = new Date(now.getTime() - 24 * 60 * 60 * 1000)
     const since7d   = new Date(now.getTime() - 7  * 24 * 60 * 60 * 1000)
@@ -51,7 +65,8 @@ export async function GET(req: Request) {
     const [
       { data: calcs24 },
       { data: orders24 },
-      { data: allB2b24, error: b2bErr24 },
+      { data: todayB2b,  error: b2bErrToday },
+      { data: activeB2b, error: b2bErrActive },
       { data: inProd },
       { data: agentSettings },
       { data: logsToday },
@@ -59,29 +74,65 @@ export async function GET(req: Request) {
     ] = await Promise.all([
       supabase.from('calculations').select('id, product_type, final_price, client_phone, followup_sent_at').gte('created_at', since24h.toISOString()),
       supabase.from('orders').select('id, total_sale_price, status').gte('created_at', since24h.toISOString()),
-      supabase.from('b2b_orders').select('id, total_after_discount, notes').gte('created_at', since24h.toISOString()),
+      // B2B-записи, созданные сегодня по Москве — для просчётов
+      supabase.from('b2b_orders')
+        .select('id, total_after_discount, notes')
+        .gte('created_at', todayStart.toISOString())
+        .is('archived_at', null),
+      // Все активные B2B-заказы — для paid today и остатка к оплате
+      supabase.from('b2b_orders')
+        .select('id, total_after_discount, notes')
+        .is('archived_at', null),
       supabase.from('orders').select('id, status, created_at').in('status', ['confirmed', 'in_production']),
       supabase.from('agent_settings').select('agent_key, enabled, is_running, last_action_text, last_run_at, memory, total_runs'),
       supabase.from('agent_logs').select('agent_key, level, message, ran_at').gte('ran_at', today.toISOString()).order('ran_at', { ascending: false }).limit(50),
       supabase.from('calculations').select('final_price, created_at').gte('created_at', since7d.toISOString()),
     ])
 
-    if (b2bErr24) console.error('agent-ceo b2b metrics error:', b2bErr24)
+    if (b2bErrToday)  console.error('agent-ceo b2b today error:', b2bErrToday)
+    if (b2bErrActive) console.error('agent-ceo b2b active error:', b2bErrActive)
 
     // ── Считаем KPI ──────────────────────────────────────────────────────────
     const calcCount    = calcs24?.length ?? 0
     const orderCount   = orders24?.length ?? 0
     const orderRevenue = orders24?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
 
-    const b2bQuoteRows24    = (allB2b24 ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
-    const b2bOrderRows24    = (allB2b24 ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
-    const b2bRevenue        = b2bOrderRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
-    const b2bQuoteRevenue24 = b2bQuoteRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
-    const totalRevenue      = orderRevenue + b2bRevenue
-    const convRate          = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
-    const b2bCount          = b2bQuoteRows24.length
-    const b2bOrdCount24     = b2bOrderRows24.length
-    const inProdCount       = inProd?.length ?? 0
+    // B2B просчёты сегодня
+    const b2bQuoteRows = (todayB2b ?? []).filter(o =>
+      ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes))
+    )
+    const b2bCount          = b2bQuoteRows.length
+    const b2bQuoteRevenue24 = b2bQuoteRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+
+    // Оплачено сегодня: только paid с paid_at >= начало дня Москвы
+    const todayStartISO = todayStart.toISOString()
+    const paidTodayRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      if (!['confirmed', 'agreed'].includes(n.status as string)) return false
+      if (n.payment_status !== 'paid') return false
+      const paidAt = n.paid_at as string | undefined
+      return !!paidAt && paidAt >= todayStartISO
+    })
+    const b2bPaidCount   = paidTodayRows.length
+    const b2bPaidRevenue = paidTodayRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+
+    // Осталось к оплате: все активные confirmed/agreed без full payment
+    const unpaidRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      return ['confirmed', 'agreed'].includes(n.status as string)
+        && n.payment_status !== 'paid'
+    })
+    const unpaidOrderCount = unpaidRows.length
+    const unpaidAmount = unpaidRows.reduce((s, o) => {
+      const n       = parseB2bNotes(o.notes)
+      const total   = Number(o.total_after_discount ?? 0)
+      const prepaid = n.payment_status === 'partial' ? Number(n.prepayment_amount ?? 0) : 0
+      return s + Math.max(total - prepaid, 0)
+    }, 0)
+
+    const totalRevenue = orderRevenue + b2bPaidRevenue
+    const convRate     = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
+    const inProdCount  = inProd?.length ?? 0
 
     const pendingFollowup = calcs24?.filter(c => c.client_phone && !c.followup_sent_at).length ?? 0
 
@@ -108,15 +159,16 @@ export async function GET(req: Request) {
 
     const analysisPrompt = `Ты — AI CEO MGlass. Проанализируй текущее состояние бизнеса и прими решение.
 
-МЕТРИКИ 24Ч:
-- Расчётов: ${calcCount} | Заказов: ${orderCount} | Конверсия: ${convRate}%
+МЕТРИКИ СЕГОДНЯ (00:00 Москвы → сейчас):
+- Расчётов (B2C, 24ч): ${calcCount} | Заказов: ${orderCount} | Конверсия: ${convRate}%
 - Выручка B2C: ${orderRevenue.toLocaleString('ru-RU')} ₽
-- B2B просчётов в работе: ${b2bCount} на сумму ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
-- B2B заказов подтверждено: ${b2bOrdCount24} на выручку ${b2bRevenue.toLocaleString('ru-RU')} ₽
-- ИТОГО выручка (B2C + B2B-заказы): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
+- B2B просчётов сегодня: ${b2bCount} на сумму ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
+- B2B оплачено сегодня: ${b2bPaidCount} заказов · ${b2bPaidRevenue.toLocaleString('ru-RU')} ₽
+- B2B остаток к оплате (все активные): ${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽
+- ИТОГО оплачено (B2C + B2B paid): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
 - В производстве: ${inProdCount} заказов
 - Ждут followup: ${pendingFollowup} клиентов
-- Темп к месяцу: ~${monthlyPace.toLocaleString('ru-RU')} ₽/мес (цель: ${GOAL_MONTHLY.toLocaleString('ru-RU')} ₽)
+- Темп к месяцу (7д): ~${monthlyPace.toLocaleString('ru-RU')} ₽/мес (цель: ${GOAL_MONTHLY.toLocaleString('ru-RU')} ₽)
 
 КОМАНДА:
 ${Object.entries(agents).map(([k, v]) => `- ${k}: ${v.enabled ? '🟢 активен' : '⚪ выкл'} | ${v.last_action}`).join('\n')}
@@ -128,7 +180,7 @@ ${recentLogs || 'нет активности'}
 ПРЕДЫДУЩИЙ УЗКИЙ ГОРЛЫШКО: ${memory.last_bottleneck ?? 'нет'}
 
 ВАЖНО — B2B-специфика:
-Цикл согласования B2B занимает 2–7 дней. Если просчётов > 0 и заказов = 0 — это НЕ узкое место само по себе. Не называть это "сломанной воронкой". Смотреть на объём просчётов в работе как на потенциальный pipeline.
+Цикл согласования B2B занимает 2–7 дней. Просчёты ≠ мгновенная оплата. Если просчётов > 0 и оплат сегодня = 0 — это НОРМА, не узкое место. Оценивать pipeline по "остаток к оплате". Не называть "воронка сломана" при наличии просчётов.
 
 ЗАДАЧА:
 1. Определи ОДНО главное узкое место прямо сейчас (конверсия? followup? B2B-pipeline? производство?)

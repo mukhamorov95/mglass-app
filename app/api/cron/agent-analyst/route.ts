@@ -11,12 +11,32 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-function parseB2bStatus(notes: unknown): string {
-  if (!notes) return 'quote'
+// 00:00 текущего дня Europe/Moscow, выраженный в UTC
+function getMoscowTodayStart(now = new Date()): Date {
+  const moscowOffsetMs = 3 * 60 * 60 * 1000
+  const moscowNow = new Date(now.getTime() + moscowOffsetMs)
+  return new Date(
+    Date.UTC(moscowNow.getUTCFullYear(), moscowNow.getUTCMonth(), moscowNow.getUTCDate())
+    - moscowOffsetMs
+  )
+}
+
+function parseB2bNotes(notes: unknown): Record<string, unknown> {
+  if (!notes) return {}
   try {
     const obj = typeof notes === 'string' ? JSON.parse(notes) : notes
-    return (obj as Record<string, unknown>).status as string ?? 'quote'
-  } catch { return 'quote' }
+    return typeof obj === 'object' && obj !== null ? (obj as Record<string, unknown>) : {}
+  } catch { return {} }
+}
+
+function parseB2bStatus(notes: unknown): string {
+  return (parseB2bNotes(notes).status as string) ?? 'quote'
+}
+
+function fmtMoscowHm(iso: string): string {
+  return new Date(iso).toLocaleTimeString('ru-RU', {
+    timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit',
+  })
 }
 
 export async function GET(req: Request) {
@@ -34,72 +54,108 @@ export async function GET(req: Request) {
       best_day_date: string
     }>('analyst')
 
-    const supabase = db()
-    const now   = new Date()
-    const since = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+    const supabase   = db()
+    const now        = new Date()
+    const todayStart = getMoscowTodayStart(now)
 
     const [
       { data: calcs },
       { data: orders },
-      { data: allB2b, error: b2bErr },
+      { data: todayB2b,  error: b2bErr },
+      { data: activeB2b, error: activeB2bErr },
     ] = await Promise.all([
-      supabase.from('calculations').select('id, product_type, final_price, status').gte('created_at', since.toISOString()),
-      supabase.from('orders').select('id, total_sale_price, status').gte('created_at', since.toISOString()),
-      supabase.from('b2b_orders').select('id, total_after_discount, notes').gte('created_at', since.toISOString()),
+      supabase.from('calculations').select('id, final_price, status').gte('created_at', todayStart.toISOString()),
+      supabase.from('orders').select('id, total_sale_price').gte('created_at', todayStart.toISOString()),
+      // B2B-записи, созданные сегодня — для просчётов
+      supabase.from('b2b_orders')
+        .select('id, created_at, total_after_discount, notes')
+        .gte('created_at', todayStart.toISOString())
+        .is('archived_at', null),
+      // Все активные B2B-заказы — для paid today и остатка к оплате
+      supabase.from('b2b_orders')
+        .select('id, total_after_discount, notes')
+        .is('archived_at', null),
     ])
 
-    if (b2bErr) console.error('agent-analyst b2b metrics error:', b2bErr)
+    if (b2bErr)       console.error('agent-analyst b2b today error:', b2bErr)
+    if (activeB2bErr) console.error('agent-analyst b2b active error:', activeB2bErr)
 
+    // ── B2C (фон, сохраняется в логах) ──────────────────────────────────────
     const calcCount    = calcs?.length ?? 0
-    const calcRevenue  = calcs?.reduce((s, c) => s + (c.final_price ?? 0), 0) ?? 0
     const orderCount   = orders?.length ?? 0
     const orderRevenue = orders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
 
-    const b2bQuoteRows    = (allB2b ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
-    const b2bOrderRows    = (allB2b ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
-    const b2bCount        = b2bQuoteRows.length
-    const b2bOrdCount     = b2bOrderRows.length
+    // ── Новые B2B-просчёты сегодня (по created_at) ──────────────────────────
+    const b2bQuoteRows = (todayB2b ?? []).filter(o =>
+      ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes))
+    )
+    const b2bQuoteCount   = b2bQuoteRows.length
     const b2bQuoteRevenue = b2bQuoteRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
-    const b2bOrdRev       = b2bOrderRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
-    const totalRevenue = orderRevenue + b2bOrdRev
-    const convRate     = calcCount > 0 ? ((orderCount / calcCount) * 100).toFixed(1) : '0'
 
-    const byProduct: Record<string, number> = {}
-    for (const c of calcs ?? []) {
-      const k = c.product_type ?? 'unknown'
-      byProduct[k] = (byProduct[k] ?? 0) + 1
-    }
-    const productLines = Object.entries(byProduct)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `  ${k}: ${v}`)
-      .join('\n')
+    const sortedQuotes = [...b2bQuoteRows].sort(
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+    )
+    const firstQuoteAt = sortedQuotes.length > 0
+      ? fmtMoscowHm(sortedQuotes[0].created_at) : '—'
+    const lastQuoteAt  = sortedQuotes.length > 1
+      ? fmtMoscowHm(sortedQuotes[sortedQuotes.length - 1].created_at)
+      : (sortedQuotes.length === 1 ? fmtMoscowHm(sortedQuotes[0].created_at) : '—')
 
+    // ── Оплачено сегодня: только paid (paid_at timestamp есть) ───────────────
+    // partial не считаем — у предоплат нет автоматического timestamp
+    const todayStartISO = todayStart.toISOString()
+    const paidTodayRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      if (!['confirmed', 'agreed'].includes(n.status as string)) return false
+      if (n.payment_status !== 'paid') return false
+      const paidAt = n.paid_at as string | undefined
+      return !!paidAt && paidAt >= todayStartISO
+    })
+    const paidTodayCount   = paidTodayRows.length
+    const paidTodayRevenue = paidTodayRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+
+    // ── Осталось к оплате: все активные confirmed/agreed без full payment ─────
+    const unpaidRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      return ['confirmed', 'agreed'].includes(n.status as string)
+        && n.payment_status !== 'paid'
+    })
+    const unpaidOrderCount = unpaidRows.length
+    const unpaidAmount = unpaidRows.reduce((s, o) => {
+      const n       = parseB2bNotes(o.notes)
+      const total   = Number(o.total_after_discount ?? 0)
+      const prepaid = n.payment_status === 'partial' ? Number(n.prepayment_amount ?? 0) : 0
+      return s + Math.max(total - prepaid, 0)
+    }, 0)
+
+    const pctGoal = Math.round(paidTodayRevenue / 500_000 * 100)
+
+    // ── AI анализ ─────────────────────────────────────────────────────────────
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-    const prompt = `Ты — аналитик MGlass. Дай краткий анализ за последние 24 часа.
+    const dateLabel = now.toLocaleString('ru-RU', {
+      timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
+    })
+    const prompt = `Ты — аналитик MGlass. Дай краткий анализ B2B за сегодня (${dateLabel}).
 
 ДАННЫЕ:
-- Расчётов B2C: ${calcCount} (сумма: ${calcRevenue.toLocaleString('ru-RU')} ₽)
-- Заказов B2C: ${orderCount} (выручка: ${orderRevenue.toLocaleString('ru-RU')} ₽)
-- Конверсия расчёт→заказ: ${convRate}%
-- B2B просчётов в работе: ${b2bCount} на сумму ${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽ (статусы: quote/sent/pending_approval)
-- B2B заказов подтверждено: ${b2bOrdCount} на выручку ${b2bOrdRev.toLocaleString('ru-RU')} ₽ (статусы: confirmed/agreed)
-- Итого выручка: ${totalRevenue.toLocaleString('ru-RU')} ₽
+- Новые B2B-просчёты сегодня: ${b2bQuoteCount} шт · ${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽
+- Оплачено сегодня (paid): ${paidTodayCount} заказов · ${paidTodayRevenue.toLocaleString('ru-RU')} ₽
+- Осталось к оплате (все активные): ${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽
+- B2C: расчётов ${calcCount}, заказов ${orderCount} (${orderRevenue.toLocaleString('ru-RU')} ₽)
 - Лучший день в памяти: ${(memory.best_day_revenue ?? 0).toLocaleString('ru-RU')} ₽ (${memory.best_day_date ?? 'нет данных'})
-- Расчёты по продуктам:\n${productLines || '  нет данных'}
-
-Цель: 15 млн ₽/мес = ~500 000 ₽/день
+- Выполнение цели дня: ${pctGoal}% от 500 000 ₽
 
 ВАЖНО — B2B-специфика (строго соблюдать):
-Цикл согласования B2B занимает от 2 до 7 дней. Просчёт → согласование → заказ — это многодневный процесс.
+Цикл согласования B2B занимает от 2 до 7 дней. Просчёт ≠ мгновенная оплата.
 Правила интерпретации:
-- Если B2B-просчётов > 0 и B2B-заказов = 0 → это НЕ проблема. Писать: "B2B-активность есть: N просчётов на Y ₽. Заказов в 24ч нет — для B2B это норма. Проверить: просчёты старше 2–3 дней и статусы согласования."
-- Если B2B-просчётов = 0 и B2B-заказов = 0 → писать: "Нет новой B2B-активности за сутки. Проверить входящие лиды и загрузку менеджеров."
-- Если B2B-заказов > 0 → писать: "B2B дал выручку Y ₽ по M заказам."
-ЗАПРЕЩЕНО использовать: "воронка сломана", "провалены", "системный сбой", "срочно" — если есть B2B-просчёты.
+- Если просчётов > 0 и оплат = 0 → НЕ паниковать. Писать: "B2B-активность есть: N просчётов на Y ₽. Оплат сегодня нет — для B2B это норма. Проверить неоплаченные заказы (N шт · Y ₽)."
+- Если просчётов = 0 и оплат = 0 → "Нет новой B2B-активности. Проверить входящие лиды."
+- Если оплаты есть → "B2B принёс X ₽ оплатой сегодня. Pipeline: Y ₽ в просчётах."
+ЗАПРЕЩЕНО: "воронка сломана", "провал дня", "системный сбой", "срочно" — если есть просчёты.
 
 Формат — 3 блока:
-1. Одна строка: как день относительно цели 500К/день (только факт выручки заказов, без B2B-просчётов)
-2. Главное узкое место (1 предложение, B2B-специфику соблюдать)
+1. Одна строка: факт оплаты относительно цели 500К/день
+2. Главное узкое место (1 предложение)
 3. Конкретное действие на сегодня (1 предложение)
 
 Без лишних слов. Только факты.`
@@ -115,40 +171,46 @@ export async function GET(req: Request) {
       analysis = 'Анализ недоступен'
     }
 
+    const timeLabel = now.toLocaleString('ru-RU', {
+      timeZone: 'Europe/Moscow',
+      day: '2-digit', month: '2-digit', year: 'numeric',
+      hour: '2-digit', minute: '2-digit',
+    })
     const msg = [
-      `📊 <b>MGlass — Отчёт аналитика</b>`,
-      `<i>${now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}</i>`,
+      `📊 <b>MGlass — B2B сегодня</b>`,
+      `<i>${timeLabel}</i>`,
       ``,
-      `<b>B2C за 24ч</b>`,
-      `Расчётов: ${calcCount} · Заказов: ${orderCount} · Конверсия: ${convRate}%`,
-      `Выручка B2C: <b>${orderRevenue.toLocaleString('ru-RU')} ₽</b>`,
+      `<b>Новые просчёты:</b>`,
+      `${b2bQuoteCount} шт · <b>${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽</b>`,
+      `Первый: ${firstQuoteAt} · Последний: ${lastQuoteAt}`,
       ``,
-      `<b>B2B за 24ч</b>`,
-      `Просчётов: ${b2bCount} · Сумма: <b>${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽</b>`,
-      `Заказов: ${b2bOrdCount} · Выручка: <b>${b2bOrdRev.toLocaleString('ru-RU')} ₽</b>`,
+      `<b>Оплачено сегодня:</b>`,
+      `${paidTodayCount} заказ(ов) · <b>${paidTodayRevenue.toLocaleString('ru-RU')} ₽</b>`,
       ``,
-      `<b>Итого: ${totalRevenue.toLocaleString('ru-RU')} ₽</b> / цель 500К`,
+      `<b>Осталось к оплате:</b>`,
+      `${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽`,
+      ``,
+      `<b>Итого оплачено: ${paidTodayRevenue.toLocaleString('ru-RU')} ₽</b> / цель 500К (${pctGoal}%)`,
       ``,
       `🤖 <i>${analysis}</i>`,
     ].join('\n')
 
     await notifyAdmins(msg)
 
-    // Обновляем рекорд дня
-    const newBest = totalRevenue > (memory.best_day_revenue ?? 0)
+    const newBest = paidTodayRevenue > (memory.best_day_revenue ?? 0)
     await writeMemory('analyst', {
       total_reports_sent: (memory.total_reports_sent ?? 0) + 1,
-      last_report_at: now.toISOString(),
-      last_revenue: totalRevenue,
-      ...(newBest ? { best_day_revenue: totalRevenue, best_day_date: now.toISOString().slice(0, 10) } : {}),
+      last_report_at:     now.toISOString(),
+      last_revenue:       paidTodayRevenue,
+      ...(newBest ? { best_day_revenue: paidTodayRevenue, best_day_date: now.toISOString().slice(0, 10) } : {}),
     })
 
     await writeLog('analyst', 'success',
-      `Отчёт отправлен — выручка ${totalRevenue.toLocaleString('ru-RU')} ₽`,
-      { calcCount, orderCount, totalRevenue, convRate })
+      `B2B сегодня — оплачено ${paidTodayRevenue.toLocaleString('ru-RU')} ₽, просчётов ${b2bQuoteCount}`,
+      { b2bQuoteCount, b2bQuoteRevenue, paidTodayCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount })
 
-    await finishRun('analyst', `📊 ${totalRevenue.toLocaleString('ru-RU')} ₽ / конверсия ${convRate}%`)
-    return NextResponse.json({ ok: true, metrics: { calcCount, orderCount, totalRevenue, convRate } })
+    await finishRun('analyst', `📊 B2B: ${paidTodayRevenue.toLocaleString('ru-RU')} ₽ оплачено · ${b2bQuoteCount} просчётов`)
+    return NextResponse.json({ ok: true, metrics: { b2bQuoteCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount } })
 
   } catch (err) {
     await failRun('analyst', String(err))
