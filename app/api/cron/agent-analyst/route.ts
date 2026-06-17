@@ -101,24 +101,42 @@ export async function GET(req: Request) {
       ? fmtMoscowHm(sortedQuotes[sortedQuotes.length - 1].created_at)
       : (sortedQuotes.length === 1 ? fmtMoscowHm(sortedQuotes[0].created_at) : '—')
 
-    // ── Оплачено сегодня: только paid (paid_at timestamp есть) ───────────────
-    // partial не считаем — у предоплат нет автоматического timestamp
-    const todayStartISO = todayStart.toISOString()
+    // ── Перенесено в B2B-заказы сегодня (по approved_at) ─────────────────────
+    const todayStartISO      = todayStart.toISOString()
+    // Дата сегодня в Москве "YYYY-MM-DD" для сравнения с notes.stages.invoice_paid
+    const todayMoscowDateStr = new Date(todayStart.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+    const todayOrderRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      if (!['agreed', 'confirmed'].includes(n.status as string)) return false
+      const approvedAt = n.approved_at as string | undefined
+      return !!approvedAt && approvedAt >= todayStartISO
+    })
+    const todayOrderCount   = todayOrderRows.length
+    const todayOrderRevenue = todayOrderRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+
+    // ── Оплачено сегодня: два механизма ──────────────────────────────────────
+    // Механизм 1 (b2b-quotes): notes.payment_status='paid' + notes.paid_at (ISO)
+    // Механизм 2 (b2b-orders): notes.stages.invoice_paid='YYYY-MM-DD'
     const paidTodayRows = (activeB2b ?? []).filter(o => {
       const n = parseB2bNotes(o.notes)
       if (!['confirmed', 'agreed'].includes(n.status as string)) return false
-      if (n.payment_status !== 'paid') return false
       const paidAt = n.paid_at as string | undefined
-      return !!paidAt && paidAt >= todayStartISO
+      if (n.payment_status === 'paid' && paidAt && paidAt >= todayStartISO) return true
+      const stages = n.stages as Record<string, string | null | undefined> | undefined
+      const invoicePaid = stages?.invoice_paid
+      return !!invoicePaid && invoicePaid >= todayMoscowDateStr
     })
     const paidTodayCount   = paidTodayRows.length
     const paidTodayRevenue = paidTodayRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
 
-    // ── Осталось к оплате: все активные confirmed/agreed без full payment ─────
+    // ── Осталось к оплате: confirmed/agreed без оплаты по обоим механизмам ───
     const unpaidRows = (activeB2b ?? []).filter(o => {
       const n = parseB2bNotes(o.notes)
-      return ['confirmed', 'agreed'].includes(n.status as string)
-        && n.payment_status !== 'paid'
+      if (!['confirmed', 'agreed'].includes(n.status as string)) return false
+      const isPaid = n.payment_status === 'paid'
+        || Boolean((n.stages as Record<string, string | null | undefined> | undefined)?.invoice_paid)
+      return !isPaid
     })
     const unpaidOrderCount = unpaidRows.length
     const unpaidAmount = unpaidRows.reduce((s, o) => {
@@ -138,8 +156,9 @@ export async function GET(req: Request) {
     const prompt = `Ты — аналитик MGlass. Дай краткий анализ B2B за сегодня (${dateLabel}).
 
 ДАННЫЕ:
-- Новые B2B-просчёты сегодня: ${b2bQuoteCount} шт · ${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽
-- Оплачено сегодня (paid): ${paidTodayCount} заказов · ${paidTodayRevenue.toLocaleString('ru-RU')} ₽
+- Новые просчёты (pipeline): ${b2bQuoteCount} шт · ${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽
+- Перенесено в B2B-заказы (конверсия): ${todayOrderCount} шт · ${todayOrderRevenue.toLocaleString('ru-RU')} ₽
+- Оплачено сегодня: ${paidTodayCount} заказов · ${paidTodayRevenue.toLocaleString('ru-RU')} ₽
 - Осталось к оплате (все активные): ${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽
 - B2C: расчётов ${calcCount}, заказов ${orderCount} (${orderRevenue.toLocaleString('ru-RU')} ₽)
 - Лучший день в памяти: ${(memory.best_day_revenue ?? 0).toLocaleString('ru-RU')} ₽ (${memory.best_day_date ?? 'нет данных'})
@@ -147,15 +166,18 @@ export async function GET(req: Request) {
 
 ВАЖНО — B2B-специфика (строго соблюдать):
 Цикл согласования B2B занимает от 2 до 7 дней. Просчёт ≠ мгновенная оплата.
+Воронка: просчёт → перенесено в заказ → оплата | pipeline к оплате.
 Правила интерпретации:
-- Если просчётов > 0 и оплат = 0 → НЕ паниковать. Писать: "B2B-активность есть: N просчётов на Y ₽. Оплат сегодня нет — для B2B это норма. Проверить неоплаченные заказы (N шт · Y ₽)."
+- Если перенесено > 0 и оплат = 0 → "Сегодня N заказов запущено. Оплат нет — норма, цикл 2-7 дней."
+- Если просчётов > 0 и перенесено = 0 → "Pipeline: N просчётов на Y ₽. Конверсии в заказ сегодня нет."
 - Если просчётов = 0 и оплат = 0 → "Нет новой B2B-активности. Проверить входящие лиды."
-- Если оплаты есть → "B2B принёс X ₽ оплатой сегодня. Pipeline: Y ₽ в просчётах."
-ЗАПРЕЩЕНО: "воронка сломана", "провал дня", "системный сбой", "срочно" — если есть просчёты.
+- Если оплаты есть → "B2B принёс X ₽. Pipeline к оплате: Y ₽."
+ЗАПРЕЩЕНО: "воронка сломана", "провал дня", "системный сбой", "срочно" — если есть просчёты или заказы.
+ЗАПРЕЩЕНО: писать "нет оплат" или "оплаты отсутствуют", если paidTodayCount > 0.
 
 Формат — 3 блока:
-1. Одна строка: факт оплаты относительно цели 500К/день
-2. Главное узкое место (1 предложение)
+1. Одна строка: статус оплаты относительно цели 500К/день
+2. Оценка конверсии: просчёты → заказы → оплата (1 предложение)
 3. Конкретное действие на сегодня (1 предложение)
 
 Без лишних слов. Только факты.`
@@ -184,6 +206,9 @@ export async function GET(req: Request) {
       `${b2bQuoteCount} шт · <b>${b2bQuoteRevenue.toLocaleString('ru-RU')} ₽</b>`,
       `Первый: ${firstQuoteAt} · Последний: ${lastQuoteAt}`,
       ``,
+      `<b>Перенесено в B2B-заказы:</b>`,
+      `${todayOrderCount} шт · <b>${todayOrderRevenue.toLocaleString('ru-RU')} ₽</b>`,
+      ``,
       `<b>Оплачено сегодня:</b>`,
       `${paidTodayCount} заказ(ов) · <b>${paidTodayRevenue.toLocaleString('ru-RU')} ₽</b>`,
       ``,
@@ -206,11 +231,11 @@ export async function GET(req: Request) {
     })
 
     await writeLog('analyst', 'success',
-      `B2B сегодня — оплачено ${paidTodayRevenue.toLocaleString('ru-RU')} ₽, просчётов ${b2bQuoteCount}`,
-      { b2bQuoteCount, b2bQuoteRevenue, paidTodayCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount })
+      `B2B сегодня — оплачено ${paidTodayRevenue.toLocaleString('ru-RU')} ₽, просчётов ${b2bQuoteCount}, заказов ${todayOrderCount}`,
+      { b2bQuoteCount, b2bQuoteRevenue, todayOrderCount, todayOrderRevenue, paidTodayCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount })
 
-    await finishRun('analyst', `📊 B2B: ${paidTodayRevenue.toLocaleString('ru-RU')} ₽ оплачено · ${b2bQuoteCount} просчётов`)
-    return NextResponse.json({ ok: true, metrics: { b2bQuoteCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount } })
+    await finishRun('analyst', `📊 B2B: ${paidTodayRevenue.toLocaleString('ru-RU')} ₽ оплачено · ${b2bQuoteCount} просчётов · ${todayOrderCount} заказов`)
+    return NextResponse.json({ ok: true, metrics: { b2bQuoteCount, todayOrderCount, paidTodayRevenue, unpaidOrderCount, unpaidAmount } })
 
   } catch (err) {
     await failRun('analyst', String(err))

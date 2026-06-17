@@ -104,23 +104,42 @@ export async function GET(req: Request) {
     const b2bCount          = b2bQuoteRows.length
     const b2bQuoteRevenue24 = b2bQuoteRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
 
-    // Оплачено сегодня: только paid с paid_at >= начало дня Москвы
-    const todayStartISO = todayStart.toISOString()
+    // Перенесено в B2B-заказы сегодня (по approved_at)
+    const todayStartISO      = todayStart.toISOString()
+    // Дата сегодня в Москве "YYYY-MM-DD" для сравнения с notes.stages.invoice_paid
+    const todayMoscowDateStr = new Date(todayStart.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+
+    const todayOrderRows = (activeB2b ?? []).filter(o => {
+      const n = parseB2bNotes(o.notes)
+      if (!['agreed', 'confirmed'].includes(n.status as string)) return false
+      const approvedAt = n.approved_at as string | undefined
+      return !!approvedAt && approvedAt >= todayStartISO
+    })
+    const b2bLaunchedCount   = todayOrderRows.length
+    const b2bLaunchedRevenue = todayOrderRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+
+    // Оплачено сегодня: два механизма
+    // Механизм 1 (b2b-quotes): notes.payment_status='paid' + notes.paid_at (ISO)
+    // Механизм 2 (b2b-orders): notes.stages.invoice_paid='YYYY-MM-DD'
     const paidTodayRows = (activeB2b ?? []).filter(o => {
       const n = parseB2bNotes(o.notes)
       if (!['confirmed', 'agreed'].includes(n.status as string)) return false
-      if (n.payment_status !== 'paid') return false
       const paidAt = n.paid_at as string | undefined
-      return !!paidAt && paidAt >= todayStartISO
+      if (n.payment_status === 'paid' && paidAt && paidAt >= todayStartISO) return true
+      const stages = n.stages as Record<string, string | null | undefined> | undefined
+      const invoicePaid = stages?.invoice_paid
+      return !!invoicePaid && invoicePaid >= todayMoscowDateStr
     })
     const b2bPaidCount   = paidTodayRows.length
     const b2bPaidRevenue = paidTodayRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
 
-    // Осталось к оплате: все активные confirmed/agreed без full payment
+    // Осталось к оплате: confirmed/agreed без оплаты по обоим механизмам
     const unpaidRows = (activeB2b ?? []).filter(o => {
       const n = parseB2bNotes(o.notes)
-      return ['confirmed', 'agreed'].includes(n.status as string)
-        && n.payment_status !== 'paid'
+      if (!['confirmed', 'agreed'].includes(n.status as string)) return false
+      const isPaid = n.payment_status === 'paid'
+        || Boolean((n.stages as Record<string, string | null | undefined> | undefined)?.invoice_paid)
+      return !isPaid
     })
     const unpaidOrderCount = unpaidRows.length
     const unpaidAmount = unpaidRows.reduce((s, o) => {
@@ -162,7 +181,8 @@ export async function GET(req: Request) {
 МЕТРИКИ СЕГОДНЯ (00:00 Москвы → сейчас):
 - Расчётов (B2C, 24ч): ${calcCount} | Заказов: ${orderCount} | Конверсия: ${convRate}%
 - Выручка B2C: ${orderRevenue.toLocaleString('ru-RU')} ₽
-- B2B просчётов сегодня: ${b2bCount} на сумму ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
+- B2B просчёты (pipeline): ${b2bCount} шт · ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
+- B2B перенесено в заказы (конверсия): ${b2bLaunchedCount} шт · ${b2bLaunchedRevenue.toLocaleString('ru-RU')} ₽
 - B2B оплачено сегодня: ${b2bPaidCount} заказов · ${b2bPaidRevenue.toLocaleString('ru-RU')} ₽
 - B2B остаток к оплате (все активные): ${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽
 - ИТОГО оплачено (B2C + B2B paid): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
@@ -180,7 +200,10 @@ ${recentLogs || 'нет активности'}
 ПРЕДЫДУЩИЙ УЗКИЙ ГОРЛЫШКО: ${memory.last_bottleneck ?? 'нет'}
 
 ВАЖНО — B2B-специфика:
-Цикл согласования B2B занимает 2–7 дней. Просчёты ≠ мгновенная оплата. Если просчётов > 0 и оплат сегодня = 0 — это НОРМА, не узкое место. Оценивать pipeline по "остаток к оплате". Не называть "воронка сломана" при наличии просчётов.
+Воронка: просчёт → перенесено в заказ → оплата | pipeline к оплате.
+Цикл 2–7 дней: просчёты ≠ мгновенная оплата. Если перенесено > 0 и оплат = 0 — НОРМА, не узкое место.
+Оценивать здоровье pipeline по "остаток к оплате". Не называть "воронка сломана" при наличии просчётов или заказов.
+ЗАПРЕЩЕНО: писать "нет оплат" если b2bPaidCount > 0.
 
 ЗАДАЧА:
 1. Определи ОДНО главное узкое место прямо сейчас (конверсия? followup? B2B-pipeline? производство?)
