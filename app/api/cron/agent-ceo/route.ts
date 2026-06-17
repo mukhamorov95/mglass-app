@@ -11,6 +11,14 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
+function parseB2bStatus(notes: unknown): string {
+  if (!notes) return 'quote'
+  try {
+    const obj = typeof notes === 'string' ? JSON.parse(notes) : notes
+    return (obj as Record<string, unknown>).status as string ?? 'quote'
+  } catch { return 'quote' }
+}
+
 const GOAL_MONTHLY = 15_000_000
 const GOAL_DAILY   = Math.round(GOAL_MONTHLY / 30) // 500 000
 
@@ -43,8 +51,7 @@ export async function GET(req: Request) {
     const [
       { data: calcs24 },
       { data: orders24 },
-      { data: b2bOrders24 },
-      { data: b2bQuotes24 },
+      { data: allB2b24, error: b2bErr24 },
       { data: inProd },
       { data: agentSettings },
       { data: logsToday },
@@ -52,23 +59,27 @@ export async function GET(req: Request) {
     ] = await Promise.all([
       supabase.from('calculations').select('id, product_type, final_price, client_phone, followup_sent_at').gte('created_at', since24h.toISOString()),
       supabase.from('orders').select('id, total_sale_price, status').gte('created_at', since24h.toISOString()),
-      supabase.from('b2b_orders').select('id, total_amount').gte('created_at', since24h.toISOString()),
-      supabase.from('b2b_quotes').select('id, total_after_discount').gte('created_at', since24h.toISOString()),
+      supabase.from('b2b_orders').select('id, total_after_discount, notes').gte('created_at', since24h.toISOString()),
       supabase.from('orders').select('id, status, created_at').in('status', ['confirmed', 'in_production']),
       supabase.from('agent_settings').select('agent_key, enabled, is_running, last_action_text, last_run_at, memory, total_runs'),
       supabase.from('agent_logs').select('agent_key, level, message, ran_at').gte('ran_at', today.toISOString()).order('ran_at', { ascending: false }).limit(50),
       supabase.from('calculations').select('final_price, created_at').gte('created_at', since7d.toISOString()),
     ])
 
+    if (b2bErr24) console.error('agent-ceo b2b metrics error:', b2bErr24)
+
     // ── Считаем KPI ──────────────────────────────────────────────────────────
     const calcCount    = calcs24?.length ?? 0
     const orderCount   = orders24?.length ?? 0
     const orderRevenue = orders24?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
-    const b2bRevenue   = b2bOrders24?.reduce((s, o) => s + (o.total_amount ?? 0), 0) ?? 0
-    const totalRevenue = orderRevenue + b2bRevenue
-    const convRate     = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
-    const b2bCount     = b2bQuotes24?.length ?? 0
-    const inProdCount  = inProd?.length ?? 0
+
+    const b2bQuoteRows24 = (allB2b24 ?? []).filter(o => ['quote', 'sent', 'pending_approval'].includes(parseB2bStatus(o.notes)))
+    const b2bOrderRows24 = (allB2b24 ?? []).filter(o => ['confirmed', 'agreed'].includes(parseB2bStatus(o.notes)))
+    const b2bRevenue     = b2bOrderRows24.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
+    const totalRevenue   = orderRevenue + b2bRevenue
+    const convRate       = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
+    const b2bCount       = b2bQuoteRows24.length
+    const inProdCount    = inProd?.length ?? 0
 
     const pendingFollowup = calcs24?.filter(c => c.client_phone && !c.followup_sent_at).length ?? 0
 

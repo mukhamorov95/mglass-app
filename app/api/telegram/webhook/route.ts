@@ -78,14 +78,14 @@ async function handleDashboard(chatId: number, msgId?: number) {
   ] = await Promise.all([
     supabase.from('calculations').select('*', { count: 'exact', head: true }).gte('created_at', todayStart.toISOString()),
     supabase.from('orders').select('total_sale_price').gte('created_at', todayStart.toISOString()),
-    supabase.from('b2b_orders').select('total_amount').gte('created_at', todayStart.toISOString()),
+    supabase.from('b2b_orders').select('total_after_discount').gte('created_at', todayStart.toISOString()),
     supabase.from('orders').select('*', { count: 'exact', head: true }).in('status', ['confirmed', 'in_production']),
     supabase.from('agent_settings').select('agent_key, enabled, last_action_text, last_run_at'),
     supabase.from('calculations').select('id', { count: 'exact', head: true }).is('followup_sent_at', null).not('client_phone', 'is', null),
   ])
 
   const orderRevenue = orders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
-  const b2bRevenue   = b2bOrders?.reduce((s, o) => s + (o.total_amount ?? 0), 0) ?? 0
+  const b2bRevenue   = b2bOrders?.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0) ?? 0
   const totalRevenue = orderRevenue + b2bRevenue
   const activeAgents = agentRows?.filter(a => a.enabled).length ?? 0
   const pendingFollowup = followupRows ?? 0
