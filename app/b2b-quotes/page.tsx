@@ -255,6 +255,15 @@ export default function B2BQuotesPage() {
     if (payEditId !== null) setTimeout(() => payAmountRef.current?.focus(), 50)
   }, [payEditId])
 
+  // ── Discount edit ──────────────────────────────────────────────────────────
+  const [discountEditId, setDiscountEditId] = useState<number | null>(null)
+  const [discountInput, setDiscountInput]   = useState('')
+  const discountInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (discountEditId !== null) setTimeout(() => discountInputRef.current?.focus(), 50)
+  }, [discountEditId])
+
   async function savePayStatus(id: number, status: PaymentStatus, amount?: number) {
     const q = quotes.find(q => q.id === id)
     if (!q) return
@@ -463,6 +472,39 @@ export default function B2BQuotesPage() {
     showToast('Просчёт архивирован')
   }
 
+  async function saveDiscount(id: number) {
+    const q = quotes.find(x => x.id === id)
+    if (!q) return
+    const newDiscount = Math.min(50, Math.max(0, Number(discountInput) || 0))
+    const baseTotal   = q.total_sale_inc_vat
+    const newTotal    = Math.round(baseTotal * (1 - newDiscount / 100))
+    const parsed      = parseNotes(q.notes)
+    const history     = Array.isArray(parsed.discount_history) ? [...(parsed.discount_history as unknown[])] : []
+    history.push({
+      old_discount: q.discount_percent,
+      new_discount: newDiscount,
+      old_total:    q.total_after_discount ?? q.total_sale_inc_vat,
+      new_total:    newTotal,
+      changed_at:   new Date().toISOString(),
+      changed_by:   currentUserId ?? undefined,
+    })
+    const newNotes = JSON.stringify({ ...parsed, discount_history: history })
+    const { error } = await createClient().from('b2b_orders').update({
+      discount_percent:     newDiscount,
+      total_after_discount: newTotal,
+      notes:                newNotes,
+    }).eq('id', id)
+    if (error) { showToast('Ошибка сохранения скидки'); return }
+    setQuotes(prev => prev.map(x => x.id === id ? {
+      ...x,
+      discount_percent:     newDiscount,
+      total_after_discount: newTotal,
+      notes:                newNotes,
+    } : x))
+    setDiscountEditId(null)
+    showToast(`Скидка обновлена: ${newDiscount}%`)
+  }
+
   async function handleConfirm() {
     if (!confirmingId) return
     setConfirming(true)
@@ -599,10 +641,19 @@ export default function B2BQuotesPage() {
             const userNotes  = typeof parsed.user_notes === 'string' ? parsed.user_notes : null
             const statusComment = typeof parsed.status_comment === 'string' ? parsed.status_comment : null
             const hasAttach  = attachments.some(a => a.order_id === quote.id)
-            const isPendingThis  = pendingChange?.quoteId === quote.id
-            const isPayEditThis  = payEditId === quote.id
-            const isWorkDateThis = workDateId === quote.id
-            const workStartedAt  = parsed.work_started_at ? String(parsed.work_started_at) : null
+            const isPendingThis      = pendingChange?.quoteId === quote.id
+            const isPayEditThis      = payEditId === quote.id
+            const isWorkDateThis     = workDateId === quote.id
+            const isDiscountEditThis = discountEditId === quote.id
+            const workStartedAt      = parsed.work_started_at ? String(parsed.work_started_at) : null
+
+            // Discount preview — computed once per row, cheap arithmetic
+            const discBase      = quote.total_sale_inc_vat
+            const discNewPct    = Math.min(50, Math.max(0, Number(discountInput) || 0))
+            const discNewTotal  = Math.round(discBase * (1 - discNewPct / 100))
+            const discCost      = quote.total_cost_net ?? 0
+            const discProfit    = discNewTotal - discCost
+            const discMargin    = discNewTotal > 0 ? (discProfit / discNewTotal * 100) : 0
 
             return (
               <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
@@ -656,9 +707,14 @@ export default function B2BQuotesPage() {
                     {/* Price */}
                     <div className="text-right min-w-[80px]">
                       <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
-                      {(quote.discount_percent ?? 0) > 0 && (
-                        <p className="text-[10px] text-emerald-600">−{quote.discount_percent}%</p>
-                      )}
+                      <button
+                        onClick={() => {
+                          setDiscountEditId(isDiscountEditThis ? null : quote.id)
+                          setDiscountInput(String(quote.discount_percent ?? 0))
+                        }}
+                        className="text-[10px] leading-tight text-emerald-600 hover:text-emerald-800 hover:underline">
+                        {(quote.discount_percent ?? 0) > 0 ? `−${quote.discount_percent}% · изм.` : '% скидка'}
+                      </button>
                     </div>
 
                     {/* Status actions */}
@@ -779,6 +835,65 @@ export default function B2BQuotesPage() {
                     </div>
                     <button onClick={() => { setPayEditId(null); setPayAmount('') }}
                       className="ml-auto text-[#9a9a95] hover:text-[#111110] text-sm transition-colors">✕</button>
+                  </div>
+                )}
+
+                {/* ── Discount edit panel ────────────────────────────────── */}
+                {isDiscountEditThis && (
+                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-[#fafaf9] space-y-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Скидка по просчёту</p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[11px] text-[#6b6b66]">
+                        Текущая: <span className="font-semibold">{quote.discount_percent ?? 0}%</span>
+                      </span>
+                      <span className="text-[#c4c4be] select-none">→</span>
+                      <span className="text-[11px] text-[#6b6b66]">Новая:</span>
+                      <div className="flex items-center gap-1">
+                        <input
+                          ref={discountInputRef}
+                          type="number" min="0" max="50" step="1"
+                          className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none focus:border-[#111110] transition-colors"
+                          value={discountInput}
+                          onChange={e => setDiscountInput(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && saveDiscount(quote.id)}
+                        />
+                        <span className="text-[12px] text-[#6b6b66]">%</span>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[220px]">
+                      <span className="text-[#9a9a95]">Было к оплате</span>
+                      <span className="font-mono text-right text-[#6b6b66]">{finalPrice.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[#9a9a95]">Станет к оплате</span>
+                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : 'text-[#111110]'}`}>
+                        {discNewTotal.toLocaleString('ru-RU')} ₽
+                      </span>
+                      <span className="text-[#9a9a95]">Себестоимость</span>
+                      <span className="font-mono text-right text-[#6b6b66]">{discCost.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[#9a9a95]">Прибыль</span>
+                      <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
+                        {discProfit.toLocaleString('ru-RU')} ₽
+                      </span>
+                      <span className="text-[#9a9a95]">Маржа</span>
+                      <span className={`font-mono text-right font-semibold ${discMargin < 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                        {discMargin.toFixed(1)}%
+                      </span>
+                    </div>
+                    {discMargin < 20 && discNewTotal > 0 && (
+                      <p className="text-[11px] text-amber-600 font-medium">⚠️ Внимание: маржа ниже 20%</p>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => saveDiscount(quote.id)}
+                        disabled={discNewPct < 0 || discNewPct > 50}
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        Сохранить
+                      </button>
+                      <button
+                        onClick={() => setDiscountEditId(null)}
+                        className="text-[#9a9a95] hover:text-[#111110] transition-colors text-sm px-1">
+                        Отмена
+                      </button>
+                    </div>
                   </div>
                 )}
 
