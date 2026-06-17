@@ -347,6 +347,7 @@ function getProductionProgress(order: Order) {
 // Uses calcOrderProgress — single source of truth. No new API calls.
 
 type BoardBucket = 'not_started' | 'in_progress' | 'ready_for_tempering' | 'on_packaging' | 'packed'
+type ProductionBoardFilter = BoardBucket | 'problems' | null
 
 function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCount: number } {
   const prog = calcOrderProgress(
@@ -384,21 +385,39 @@ function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCoun
   return { bucket: 'in_progress', problemCount }
 }
 
-const BOARD_SLOTS: { bucket: BoardBucket; label: string; numCls: string; bgCls: string; borderCls: string }[] = [
-  { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-[#6b6b66]',  bgCls: 'bg-[#f8f8f7]',  borderCls: 'border-[#e4e4e0]'  },
-  { bucket: 'in_progress',         label: 'В работе',   numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200'   },
-  { bucket: 'ready_for_tempering', label: 'К закалке',  numCls: 'text-orange-700',  bgCls: 'bg-orange-50',   borderCls: 'border-orange-200' },
-  { bucket: 'on_packaging',        label: 'Упаковка',   numCls: 'text-purple-700',  bgCls: 'bg-purple-50',   borderCls: 'border-purple-200' },
-  { bucket: 'packed',              label: 'Упаковано',  numCls: 'text-emerald-700', bgCls: 'bg-emerald-50',  borderCls: 'border-emerald-200'},
+const BOARD_SLOTS: { bucket: BoardBucket; label: string; numCls: string; bgCls: string; borderCls: string; ringCls: string }[] = [
+  { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-[#6b6b66]',  bgCls: 'bg-[#f8f8f7]',  borderCls: 'border-[#e4e4e0]',   ringCls: 'ring-[#9a9a95]'   },
+  { bucket: 'in_progress',         label: 'В работе',   numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200',    ringCls: 'ring-blue-400'    },
+  { bucket: 'ready_for_tempering', label: 'К закалке',  numCls: 'text-orange-700',  bgCls: 'bg-orange-50',   borderCls: 'border-orange-200',  ringCls: 'ring-orange-400'  },
+  { bucket: 'on_packaging',        label: 'Упаковка',   numCls: 'text-purple-700',  bgCls: 'bg-purple-50',   borderCls: 'border-purple-200',  ringCls: 'ring-purple-400'  },
+  { bucket: 'packed',              label: 'Упаковано',  numCls: 'text-emerald-700', bgCls: 'bg-emerald-50',  borderCls: 'border-emerald-200', ringCls: 'ring-emerald-400' },
 ]
 
-function ProductionBoard({ orders }: { orders: Order[] }) {
+const BOARD_FILTER_LABELS: Record<NonNullable<ProductionBoardFilter>, string> = {
+  not_started:         'Не начато',
+  in_progress:         'В работе',
+  ready_for_tempering: 'К закалке',
+  on_packaging:        'Упаковка',
+  packed:              'Упаковано',
+  problems:            'Проблемы',
+}
+
+function ProductionBoard({
+  orders,
+  activeFilter,
+  onFilterChange,
+}: {
+  orders: Order[]
+  activeFilter: ProductionBoardFilter
+  onFilterChange: (f: ProductionBoardFilter) => void
+}) {
   const active = orders.filter(o => {
     const stages = o.parsedNotes.stages ?? {}
     return !stages.shipped && o.parsedNotes.status !== 'quote'
   })
   if (active.length === 0) return null
 
+  // Counts always reflect ALL active orders, independent of current filter
   const counts: Record<BoardBucket, number> = {
     not_started: 0, in_progress: 0, ready_for_tempering: 0, on_packaging: 0, packed: 0,
   }
@@ -416,19 +435,39 @@ function ProductionBoard({ orders }: { orders: Order[] }) {
         <span className="ml-2 font-normal text-[#c4c4be] normal-case tracking-normal">· {active.length} заказов</span>
       </p>
       <div className="flex flex-wrap gap-2">
-        {BOARD_SLOTS.map(slot => (
-          <div key={slot.bucket}
-            className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border ${slot.bgCls} ${slot.borderCls}`}>
-            <span className={`text-[11px] font-medium ${slot.numCls}`}>{slot.label}</span>
-            <span className={`text-[17px] font-bold font-mono leading-none ${slot.numCls}`}>{counts[slot.bucket]}</span>
-          </div>
-        ))}
-        {totalProblems > 0 && (
-          <div className="flex items-center gap-2.5 px-3 py-2 rounded-lg border bg-red-50 border-red-200">
-            <span className="text-[11px] font-medium text-red-700">Проблемы</span>
-            <span className="text-[17px] font-bold font-mono leading-none text-red-700">{totalProblems}</span>
-          </div>
-        )}
+        {BOARD_SLOTS.map(slot => {
+          const isActive = activeFilter === slot.bucket
+          return (
+            <button
+              key={slot.bucket}
+              onClick={() => onFilterChange(isActive ? null : slot.bucket)}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all ${slot.bgCls} ${slot.borderCls} ${
+                isActive
+                  ? `ring-2 ring-offset-1 ${slot.ringCls} shadow-sm`
+                  : 'hover:shadow-sm hover:brightness-95 cursor-pointer'
+              }`}
+            >
+              <span className={`text-[11px] font-medium ${slot.numCls}`}>{slot.label}</span>
+              <span className={`text-[17px] font-bold font-mono leading-none ${slot.numCls}`}>{counts[slot.bucket]}</span>
+            </button>
+          )
+        })}
+        {totalProblems > 0 && (() => {
+          const isActive = activeFilter === 'problems'
+          return (
+            <button
+              onClick={() => onFilterChange(isActive ? null : 'problems')}
+              className={`flex items-center gap-2.5 px-3 py-2 rounded-lg border transition-all bg-red-50 border-red-200 ${
+                isActive
+                  ? 'ring-2 ring-offset-1 ring-red-400 shadow-sm'
+                  : 'hover:shadow-sm cursor-pointer'
+              }`}
+            >
+              <span className="text-[11px] font-medium text-red-700">Проблемы</span>
+              <span className="text-[17px] font-bold font-mono leading-none text-red-700">{totalProblems}</span>
+            </button>
+          )
+        })()}
       </div>
     </div>
   )
@@ -605,6 +644,7 @@ export default function B2BOrdersPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [deadlineFilter, setDeadlineFilter] = useState<DeadlineStatus | 'all'>('all')
+  const [boardFilter, setBoardFilter] = useState<ProductionBoardFilter>(null)
 
   async function loadOrders() {
     setLoading(true)
@@ -677,7 +717,7 @@ export default function B2BOrdersPage() {
 
   useEffect(() => { loadOrders() }, [])
 
-  const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all'
+  const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
 
   const filteredOrders = useMemo(() => {
     const filtered = orders.filter(o => {
@@ -718,12 +758,27 @@ export default function B2BOrdersPage() {
     })
 
     if (deadlineFilter !== 'all') {
-      return [...filtered].sort((a, b) =>
+      const sorted = [...filtered].sort((a, b) =>
         DEADLINE_RISK_ORDER[getDeadlineStatus(a).status] - DEADLINE_RISK_ORDER[getDeadlineStatus(b).status]
       )
+      if (boardFilter !== null) {
+        return sorted.filter(o => {
+          const { bucket, problemCount } = classifyOrderForBoard(o)
+          return boardFilter === 'problems' ? problemCount > 0 : bucket === boardFilter
+        })
+      }
+      return sorted
     }
+
+    if (boardFilter !== null) {
+      return filtered.filter(o => {
+        const { bucket, problemCount } = classifyOrderForBoard(o)
+        return boardFilter === 'problems' ? problemCount > 0 : bucket === boardFilter
+      })
+    }
+
     return filtered
-  }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo])
+  }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
 
   const monthGroups = useMemo(() => {
     const groups: { key: string; label: string; orders: Order[]; total: number }[] = []
@@ -1724,7 +1779,26 @@ export default function B2BOrdersPage() {
       </div>
 
       {/* Производственное табло */}
-      <ProductionBoard orders={orders} />
+      <ProductionBoard
+        orders={orders}
+        activeFilter={boardFilter}
+        onFilterChange={f => setBoardFilter(f)}
+      />
+
+      {/* Индикатор активного фильтра табло */}
+      {boardFilter !== null && (
+        <div className="flex items-center gap-2 mb-2 px-0.5">
+          <span className="text-[11px] text-[#6b6b66]">
+            Производство:
+            <span className="font-semibold text-[#111110] ml-1">{BOARD_FILTER_LABELS[boardFilter]}</span>
+          </span>
+          <button
+            onClick={() => setBoardFilter(null)}
+            className="text-[11px] text-[#9a9a95] hover:text-red-600 transition-colors px-1.5 py-0.5 rounded hover:bg-red-50">
+            × Сбросить
+          </button>
+        </div>
+      )}
 
       {/* Панель фильтров */}
       <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-3 space-y-2.5">
@@ -1751,7 +1825,7 @@ export default function B2BOrdersPage() {
           </div>
           {isFiltered && (
             <button
-              onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all') }}
+              onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null) }}
               className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
               Сбросить
             </button>
@@ -1993,7 +2067,8 @@ export default function B2BOrdersPage() {
           </p>
           {filteredOrders.length === 0 ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
-              {deadlineFilter === 'overdue'  ? 'Просроченных заказов нет' :
+              {boardFilter !== null            ? `Нет заказов в категории "${BOARD_FILTER_LABELS[boardFilter]}"` :
+               deadlineFilter === 'overdue'  ? 'Просроченных заказов нет' :
                deadlineFilter === 'today'    ? 'Заказов со сроком сегодня нет' :
                deadlineFilter === 'tomorrow' ? 'Заказов со сроком завтра нет' :
                deadlineFilter === 'normal'   ? 'Заказов в нормальном сроке нет' :
