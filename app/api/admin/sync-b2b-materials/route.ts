@@ -60,7 +60,7 @@ export async function POST() {
   }
 
   const toInsert: object[] = []
-  const toUpdate: { id: number; cost_price: number; waste_percent: number; notes: string | null }[] = []
+  const toUpdate: { id: number; category: string; cost_price: number; waste_percent: number; notes: string | null }[] = []
 
   const keys = [...new Set((matrix ?? []).map(r => `${r.name}::${r.category}`))]
 
@@ -84,7 +84,7 @@ export async function POST() {
 
       if (existingEntry) {
         const notes = mergeNotes(existingEntry.notes, salePrice)
-        toUpdate.push({ id: existingEntry.id, cost_price: costPrice, waste_percent: wastePct, notes })
+        toUpdate.push({ id: existingEntry.id, category: b2bCategory, cost_price: costPrice, waste_percent: wastePct, notes })
       } else {
         toInsert.push({
           name,
