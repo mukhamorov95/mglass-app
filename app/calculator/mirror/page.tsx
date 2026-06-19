@@ -216,93 +216,97 @@ export default function MirrorCalculatorPage() {
 
   useEffect(() => {
     async function load() {
-      const sb = createClient()
-      const { data: { user } } = await sb.auth.getUser()
-      if (user) {
-        const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
-        setRole((prof as { role?: string } | null)?.role ?? null)
-      }
-      const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
-        sb.from('materials').select('*').eq('active', true).order('category').order('name'),
-        sb.from('services').select('*').eq('active', true),
-        sb.from('financial_settings').select('*'),
-        sb.from('partner_types').select('*').eq('active', true),
-        sb.from('mirror_lighting_components').select('*').eq('active', true).order('sort_order').order('id'),
-        sb.from('mirror_frames').select('*').eq('active', true).order('sort_order').order('id'),
-        sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
-        sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
-        loadGlassMatrix(),
-        loadWasteModifiers(),
-        fetch('/api/admin/pricing-formula'),
-      ])
-      setMaterials(mats ?? [])
-      setServices(svcs ?? [])
-      setPartners(pts ?? [])
-      const rawComps = (comps ?? []) as RawComponent[]
-      setComponents(rawComps)
-      setMirrorFrames((mframes ?? []) as MirrorFrame[])
-      if (psData) setProdSettings(psData as ProductionSettings)
-      if (facetData) setFacetPrices((facetData as FacetPrice[]).filter(f => f.active !== false))
-
-      if (delivRes.ok) {
-        const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
-        const bp = formula.find(p => p.section === 'delivery' && p.param_key === 'base_price')?.value
-        const pk = formula.find(p => p.section === 'delivery' && p.param_key === 'price_per_km')?.value
-        if (bp != null) setDeliveryBase(bp)
-        if (pk != null) setDeliveryPerKm(pk)
-      }
-      setMatrix(mx)
-      setModifiers(mods)
-
-      const mirrorSettings =
-        (fins ?? []).find((s: FinancialSettings) => s.product_type === 'mirror_light') ??
-        (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
-        fins?.[0] ?? null
-      setSettings(mirrorSettings as FinancialSettings | null)
-
-      const names = getMatrixNames(mx, 'cost', 'mirror')
-      if (names.length) {
-        setMirrorName(names[0])
-        const avail = getAvailableMm(mx, names[0], 'cost', 'mirror')
-        setMirrorMm(avail[0] ?? 4 as MatrixMm)
-      }
-
-      const frames = rawComps.filter(c => c.component_type === 'frame')
-      if (frames.length) setFrameId(frames[0].id)
-      const leds12 = rawComps.filter(c => c.component_type === 'led_strip' && c.voltage === 12)
-      if (leds12.length) setLedStripId(leds12[0].id)
-      const diffs = rawComps.filter(c => c.component_type === 'diffuser')
-      if (diffs.length) setDiffuserId(diffs[0].id)
-
-      // Apply prefill from detail page "Пересчитать" button
       try {
-        const raw = sessionStorage.getItem('mglass_mirror_prefill')
-        if (raw) {
-          sessionStorage.removeItem('mglass_mirror_prefill')
-          const p = JSON.parse(raw) as Record<string, unknown>
-          if (p.width)        setWidth(String(p.width))
-          if (p.height)       setHeight(String(p.height))
-          if (p.mirrorName)   setMirrorName(p.mirrorName as string)
-          if (p.mirrorMm)     setMirrorMm(p.mirrorMm as MatrixMm)
-          if (p.shape)        setShape(p.shape as MirrorShape)
-          if (p.hasLighting != null) setHasLighting(Boolean(p.hasLighting))
-          if (p.voltage)      setVoltage(p.voltage as 12 | 24)
-          if (p.frameId)      setFrameId(p.frameId as number)
-          if (p.ledStripId)   setLedStripId(p.ledStripId as number)
-          if (p.psuId)        setPsuId(p.psuId as number)
-          if (p.diffuserId)   setDiffuserId(p.diffuserId as number)
-          if (p.buttonType)   setButtonType(p.buttonType as 'none' | 'sensor' | 'wave')
-          if (p.hasSandblast != null) setHasSandblast(Boolean(p.hasSandblast))
-          if (p.hasSubstrate != null) setHasSubstrate(Boolean(p.hasSubstrate))
-          if (p.hasFrame != null)    setHasFrame(Boolean(p.hasFrame))
-          if (p.mirrorFrameId)       setMirrorFrameId(p.mirrorFrameId as number)
-          if (p.__editCalcId__)      setEditCalcId(p.__editCalcId__ as number)
-          if (p.__order_group_id__)  setEditOrderGroupId(p.__order_group_id__ as string)
-          if (p.__old_final_price__) setEditCalcOldPrice(p.__old_final_price__ as number)
+        const sb = createClient()
+        const { data: { user } } = await sb.auth.getUser()
+        if (user) {
+          const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
+          setRole((prof as { role?: string } | null)?.role ?? null)
         }
-      } catch {}
+        const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
+          sb.from('materials').select('*').eq('active', true).order('category').order('name'),
+          sb.from('services').select('*').eq('active', true),
+          sb.from('financial_settings').select('*'),
+          sb.from('partner_types').select('*').eq('active', true),
+          sb.from('mirror_lighting_components').select('*').eq('active', true).order('sort_order').order('id'),
+          sb.from('mirror_frames').select('*').eq('active', true).order('sort_order').order('id'),
+          sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
+          sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
+          loadGlassMatrix(),
+          loadWasteModifiers(),
+          fetch('/api/admin/pricing-formula'),
+        ])
+        setMaterials(mats ?? [])
+        setServices(svcs ?? [])
+        setPartners(pts ?? [])
+        const rawComps = (comps ?? []) as RawComponent[]
+        setComponents(rawComps)
+        setMirrorFrames((mframes ?? []) as MirrorFrame[])
+        if (psData) setProdSettings(psData as ProductionSettings)
+        if (facetData) setFacetPrices((facetData as FacetPrice[]).filter(f => f.active !== false))
 
-      setLoading(false)
+        if (delivRes.ok) {
+          try {
+            const formula = await delivRes.json() as { section: string; param_key: string; value: number }[]
+            const bp = formula.find(p => p.section === 'delivery' && p.param_key === 'base_price')?.value
+            const pk = formula.find(p => p.section === 'delivery' && p.param_key === 'price_per_km')?.value
+            if (bp != null) setDeliveryBase(bp)
+            if (pk != null) setDeliveryPerKm(pk)
+          } catch {}
+        }
+        setMatrix(mx)
+        setModifiers(mods)
+
+        const mirrorSettings =
+          (fins ?? []).find((s: FinancialSettings) => s.product_type === 'mirror_light') ??
+          (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
+          fins?.[0] ?? null
+        setSettings(mirrorSettings as FinancialSettings | null)
+
+        const names = getMatrixNames(mx, 'cost', 'mirror')
+        if (names.length) {
+          setMirrorName(names[0])
+          const avail = getAvailableMm(mx, names[0], 'cost', 'mirror')
+          setMirrorMm(avail[0] ?? 4 as MatrixMm)
+        }
+
+        const frames = rawComps.filter(c => c.component_type === 'frame')
+        if (frames.length) setFrameId(frames[0].id)
+        const leds12 = rawComps.filter(c => c.component_type === 'led_strip' && c.voltage === 12)
+        if (leds12.length) setLedStripId(leds12[0].id)
+        const diffs = rawComps.filter(c => c.component_type === 'diffuser')
+        if (diffs.length) setDiffuserId(diffs[0].id)
+
+        // Apply prefill from detail page "Пересчитать" button
+        try {
+          const raw = sessionStorage.getItem('mglass_mirror_prefill')
+          if (raw) {
+            sessionStorage.removeItem('mglass_mirror_prefill')
+            const p = JSON.parse(raw) as Record<string, unknown>
+            if (p.width)        setWidth(String(p.width))
+            if (p.height)       setHeight(String(p.height))
+            if (p.mirrorName)   setMirrorName(p.mirrorName as string)
+            if (p.mirrorMm)     setMirrorMm(p.mirrorMm as MatrixMm)
+            if (p.shape)        setShape(p.shape as MirrorShape)
+            if (p.hasLighting != null) setHasLighting(Boolean(p.hasLighting))
+            if (p.voltage)      setVoltage(p.voltage as 12 | 24)
+            if (p.frameId)      setFrameId(p.frameId as number)
+            if (p.ledStripId)   setLedStripId(p.ledStripId as number)
+            if (p.psuId)        setPsuId(p.psuId as number)
+            if (p.diffuserId)   setDiffuserId(p.diffuserId as number)
+            if (p.buttonType)   setButtonType(p.buttonType as 'none' | 'sensor' | 'wave')
+            if (p.hasSandblast != null) setHasSandblast(Boolean(p.hasSandblast))
+            if (p.hasSubstrate != null) setHasSubstrate(Boolean(p.hasSubstrate))
+            if (p.hasFrame != null)    setHasFrame(Boolean(p.hasFrame))
+            if (p.mirrorFrameId)       setMirrorFrameId(p.mirrorFrameId as number)
+            if (p.__editCalcId__)      setEditCalcId(p.__editCalcId__ as number)
+            if (p.__order_group_id__)  setEditOrderGroupId(p.__order_group_id__ as string)
+            if (p.__old_final_price__) setEditCalcOldPrice(p.__old_final_price__ as number)
+          }
+        } catch {}
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
