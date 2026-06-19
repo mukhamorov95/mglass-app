@@ -21,6 +21,7 @@ export default function LoginPage() {
       setError('Неверный email или пароль')
       setLoading(false)
     } else {
+      setLoading(false)
       router.push('/')
       router.refresh()
     }

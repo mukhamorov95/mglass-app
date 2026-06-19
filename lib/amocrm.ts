@@ -42,6 +42,7 @@ export async function amoGet<T = unknown>(
 
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(8000),
   })
   if (res.status === 204 || res.status === 404) return null
   if (!res.ok) throw new Error(`AmoCRM GET ${path} → ${res.status}: ${await res.text()}`)
