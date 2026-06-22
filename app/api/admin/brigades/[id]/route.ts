@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isOwnerRole } from '@/lib/getRole'
 
 function svc() {
   return createServiceClient(
@@ -18,8 +19,8 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const { data: userRow } = await supabase.from('users').select('role').eq('id', user.id).single()
-  if ((userRow as { role: string } | null)?.role !== 'admin') {
-    return NextResponse.json({ error: 'Только администратор' }, { status: 403 })
+  if (!isOwnerRole((userRow as { role: string } | null)?.role)) {
+    return NextResponse.json({ error: 'Только владелец' }, { status: 403 })
   }
 
   const { id } = await params

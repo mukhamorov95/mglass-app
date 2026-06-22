@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireAdmin } from '@/lib/apiAuth'
 
 function adminClient() {
   return createClient(
@@ -20,8 +20,9 @@ const MANAGERS_TO_SEED = [
 ]
 
 export async function POST() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  // Strictly admin: bulk-creates auth users with fresh passwords (bootstrap utility).
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
 
   const db = adminClient()
   const results: { name: string; email: string; password: string; status: string }[] = []

@@ -1,8 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { canAccess, type Role } from './lib/getRole'
+import { canAccessRoute, normalizeRole, type Role } from './lib/getRole'
 
-const VALID_ROLES: Role[] = ['admin', 'manager', 'production', 'seo', 'ceo', 'buyer', 'commercial']
+const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -49,7 +49,7 @@ export async function middleware(request: NextRequest) {
   // Role-based route protection
   if (user && !isLoginPage && !isAccessDenied && !isWebhook) {
     const cached = request.cookies.get('user-role')?.value
-    let role: Role | null = (cached && VALID_ROLES.includes(cached as Role)) ? cached as Role : null
+    let role: Role | null = normalizeRole(cached)
 
     if (!role) {
       const { data } = await supabase
@@ -57,8 +57,9 @@ export async function middleware(request: NextRequest) {
         .select('role')
         .eq('id', user.id)
         .single()
-      const r = data?.role
-      role = (r && VALID_ROLES.includes(r)) ? r as Role : null
+      role = normalizeRole(data?.role)
+      // Bootstrap: known owner email gets admin rights even with no DB row.
+      if (!role && user.email === OWNER_BOOTSTRAP_EMAIL) role = 'admin'
       if (role) {
         supabaseResponse.cookies.set('user-role', role, {
           maxAge: 3600,
@@ -76,7 +77,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(url)
     }
 
-    if (role && !canAccess(role, pathname)) {
+    if (role && !canAccessRoute(role, pathname)) {
       const url = request.nextUrl.clone()
       url.pathname = '/access-denied'
       return NextResponse.redirect(url)

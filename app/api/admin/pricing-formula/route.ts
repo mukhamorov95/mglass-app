@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
-import { getOwnerUser } from '@/lib/requireOwner'
+import { requireOwner } from '@/lib/apiAuth'
 
 function db() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -22,8 +22,8 @@ export async function GET() {
 
 // PATCH: update a single param value by id
 export async function PATCH(req: Request) {
-  const owner = await getOwnerUser()
-  if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { id, value } = await req.json() as { id: number; value: number }
   const supabase = db()
   const { error } = await supabase

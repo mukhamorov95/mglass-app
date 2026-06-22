@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { isOwnerRole } from '@/lib/getRole'
 
 const URL  = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -35,7 +36,7 @@ export async function POST(req: Request) {
 
   const db = admin()
   const { data: u } = await db.from('users').select('role').eq('id', user.id).single()
-  if (u?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isOwnerRole(u?.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const form = await req.formData()
   const modelId = form.get('modelId') as string
@@ -75,7 +76,7 @@ export async function DELETE(req: Request) {
 
   const db = admin()
   const { data: u } = await db.from('users').select('role').eq('id', user.id).single()
-  if (u?.role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!isOwnerRole(u?.role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const modelId = new globalThis.URL(req.url).searchParams.get('modelId')
   if (!modelId) return NextResponse.json({ error: 'modelId required' }, { status: 400 })

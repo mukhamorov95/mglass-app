@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 function adminClient() {
   return createClient(
@@ -16,8 +16,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const body = await req.json()
   const { error, data } = await adminClient().from('sales_scripts').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -25,8 +25,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { id, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
   const { error } = await adminClient().from('sales_scripts').update(fields).eq('id', id)
@@ -35,8 +35,8 @@ export async function PUT(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
   const { error } = await adminClient().from('sales_scripts').delete().eq('id', id)

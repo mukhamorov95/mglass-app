@@ -3,6 +3,7 @@ import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import { createClient } from '@/lib/supabase-server'
 import QuotePDF, { type QuotePDFProps } from '@/components/QuotePDF'
+import { isOwnerRole } from '@/lib/getRole'
 
 export const runtime = 'nodejs'
 
@@ -32,9 +33,13 @@ export async function GET(
 
   if (error || !order) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  // Проверяем доступ: только владелец заказа или пользователь с разрешением see_all_orders/admin
+  // Проверяем доступ: только владелец заказа или owner-tier (admin/ceo) / see_all_orders
   const { data: profile } = await sb.from('users').select('role,see_all_orders').eq('id', user.id).maybeSingle()
-  const canAccess = profile?.role === 'admin' || (profile?.see_all_orders ?? false) || order.created_by === user.id || order.created_by === null
+  const canAccess =
+    isOwnerRole(profile?.role) ||
+    (profile?.see_all_orders ?? false) ||
+    order.created_by === user.id ||
+    order.created_by === null
   if (!canAccess) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   // Load client for contact details

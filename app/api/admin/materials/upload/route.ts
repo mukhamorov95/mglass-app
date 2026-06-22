@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createClient as adminClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
+import { isOwnerRole } from '@/lib/getRole'
 
 const SB_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const ANON   = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -21,17 +22,17 @@ async function getUser() {
   return user
 }
 
-async function checkAdmin() {
+async function checkOwner() {
   const user = await getUser()
   if (!user) return null
   const db = admin()
   const { data: u } = await db.from('users').select('role').eq('id', user.id).single()
-  return u?.role === 'admin' ? user : null
+  return isOwnerRole(u?.role) ? user : null
 }
 
 // POST /api/admin/materials/upload  (multipart: materialId + file)
 export async function POST(req: Request) {
-  const user = await checkAdmin()
+  const user = await checkOwner()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const db = admin()
@@ -70,7 +71,7 @@ export async function POST(req: Request) {
 
 // DELETE /api/admin/materials/upload?materialId=123
 export async function DELETE(req: Request) {
-  const user = await checkAdmin()
+  const user = await checkOwner()
   if (!user) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const db = admin()

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
-import { getOwnerUser } from '@/lib/requireOwner'
+import { requireOwner } from '@/lib/apiAuth'
 
 const VALID_MM = [4, 5, 6, 8, 10, 12]
 
@@ -11,8 +11,8 @@ function db() {
 // POST — transfer sale prices from materials (category='стекло') → glass_price_matrix (price_type='sale')
 // Parses name format: "Стекло <type> <N> мм" → type name + thickness column t<N>
 export async function POST() {
-  const owner = await getOwnerUser()
-  if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const supabase = db()
 

@@ -16,7 +16,7 @@
 
 import { NextResponse }        from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
-import { getOwnerUser }        from '@/lib/requireOwner'
+import { requireOwner }        from '@/lib/apiAuth'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 export const maxDuration = 60
@@ -258,8 +258,8 @@ async function runQueueInline(supabase: SupabaseClient): Promise<number> {
 
 // ── Main handler ──────────────────────────────────────────────────────────────
 export async function POST() {
-  const owner = await getOwnerUser()
-  if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const supabase = db()
   const summary = {

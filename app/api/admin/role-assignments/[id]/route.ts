@@ -1,18 +1,19 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { isOwnerRole } from '@/lib/getRole'
 
-async function requireAdmin() {
+// Org-chart (role_assignments) is HR data → owner tier, not raw auth role mgmt.
+async function requireOwnerUser() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
   const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-  const role = (data as { role: string } | null)?.role
-  return role === 'admin' ? user : null
+  return isOwnerRole((data as { role: string } | null)?.role) ? user : null
 }
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const adminUser = await requireAdmin()
+  const adminUser = await requireOwnerUser()
   if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params
@@ -45,7 +46,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const adminUser = await requireAdmin()
+  const adminUser = await requireOwnerUser()
   if (!adminUser) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { id } = await params

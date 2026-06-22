@@ -1,5 +1,5 @@
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
 import AnalyticsMglassClient from './AnalyticsMglassClient'
 
@@ -19,7 +19,7 @@ export type UserRow = {
 
 export default async function AnalyticsMglassPage() {
   const role = await getRole()
-  if (role !== 'admin') redirect('/')
+  if (!isOwnerRole(role)) redirect('/')
 
   const admin = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 function svc() {
   return createServiceClient(
@@ -10,8 +10,8 @@ function svc() {
 }
 
 export async function GET() {
-  const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { data, error } = await svc()
     .from('health_fix_log')
@@ -23,8 +23,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const body = await req.json()
   const { fix_id, fix_name, before, applied_by } = body
@@ -38,8 +38,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE() {
-  const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { error } = await svc().from('health_fix_log').delete().gte('id', '00000000-0000-0000-0000-000000000000')
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

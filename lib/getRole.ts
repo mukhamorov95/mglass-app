@@ -15,12 +15,36 @@ export type UserProfile = {
   maxDiscount: number
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
+// ─── Owner / role helpers ────────────────────────────────────────────────────
+
+// Roles with top-level (owner) access to every route, bypassing per-path allowlists.
+export const OWNER_ROLES: Role[] = ['admin', 'ceo']
+
+// Emergency bootstrap for the company owner: if their DB row is missing/broken,
+// they still log in with admin rights. Real role from DB always wins when present.
+const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 
 function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
-         r === 'seo'   || r === 'ceo'     || r === 'buyer' || r === 'commercial' || r === 'cfo'
+         r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
+         r === 'commercial' || r === 'cfo'
 }
+
+// Case-insensitive normalisation. Accepts a few common UI aliases.
+export function normalizeRole(r: unknown): Role | null {
+  if (typeof r !== 'string') return null
+  const v = r.trim().toLowerCase()
+  if (v === 'owner') return 'admin'         // UI label "Owner" → admin tier
+  if (v === 'commerce') return 'commercial' // tolerate truncation
+  return isRole(v) ? v : null
+}
+
+export function isOwnerRole(role: Role | string | null | undefined): boolean {
+  const r = normalizeRole(role)
+  return r !== null && OWNER_ROLES.includes(r)
+}
+
+// ─── Session role fetch ──────────────────────────────────────────────────────
 
 export async function getRole(): Promise<Role | null> {
   const supabase = await createClient()
@@ -33,7 +57,12 @@ export async function getRole(): Promise<Role | null> {
     .eq('id', user.id)
     .single()
 
-  return isRole(data?.role) ? data!.role : null
+  const r = normalizeRole(data?.role)
+  if (r) return r
+
+  // Emergency bootstrap — only when DB has nothing usable.
+  if (user.email === OWNER_BOOTSTRAP_EMAIL) return 'admin'
+  return null
 }
 
 export async function getUserProfile(): Promise<UserProfile | null> {
@@ -55,20 +84,23 @@ export async function getUserProfile(): Promise<UserProfile | null> {
       .select('role')
       .eq('id', user.id)
       .single()
-    if (!basic || !isRole(basic.role)) return null
+    const role = normalizeRole(basic?.role) ??
+      (user.email === OWNER_BOOTSTRAP_EMAIL ? ('admin' as const) : null)
+    if (!role) return null
     return {
-      role:        basic.role as Role,
+      role,
       permissions: { ...DEFAULT_PERMISSIONS },
       managerCode: null,
-      canDelete:   basic.role === 'admin',
-      maxDiscount: basic.role === 'admin' ? 100 : 5,
+      canDelete:   isOwnerRole(role),
+      maxDiscount: isOwnerRole(role) ? 100 : 5,
     }
   }
 
-  if (!isRole(data.role)) return null
+  const role = normalizeRole(data.role)
+  if (!role) return null
 
   return {
-    role:        data.role as Role,
+    role,
     permissions: { ...DEFAULT_PERMISSIONS, ...(data.permissions as Partial<UserPermissions> ?? {}) },
     managerCode: data.manager_code ?? null,
     canDelete:   data.can_delete ?? false,
@@ -78,8 +110,11 @@ export async function getUserProfile(): Promise<UserProfile | null> {
 
 // ─── Path access control ─────────────────────────────────────────────────────
 
+// Per-role allowlist of route prefixes. Owner roles (admin, ceo) bypass this
+// table via canAccessRoute — they have full access by definition.
 export const ROLE_ALLOWED: Record<Role, string[]> = {
   admin: ['/'],
+  ceo:   ['/'],
 
   manager: [
     '/',
@@ -161,49 +196,27 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/dashboard',
     '/admin/analytics-mglass',
   ],
-
-  ceo: [
-    '/',
-    '/cfo',
-    '/ceo',
-    '/commercial',
-    '/admin/owner',
-    '/admin/dashboard',
-    '/admin/pnl',
-    '/admin/cfo',
-    '/admin/analytics-mglass',
-    '/admin/bonus-center',
-    '/admin/sales-center',
-    '/admin/b2b-development',
-    '/admin/org',
-    '/admin/users',
-    '/admin/procurement',
-    '/vladislav',
-    '/b2b-analytics',
-    '/marketing',
-    '/ai-stats',
-    '/amo-analysis',
-    '/ai-sales',
-    '/admin/roadmap',
-    '/admin/owner-questionnaire',
-    '/admin/pricing-manual',
-    '/admin/health-check',
-    '/admin/ai-control-center',
-    '/production-app',
-  ],
 }
 
-export function canAccess(role: Role, pathname: string): boolean {
-  if (role === 'admin') return true
-  const allowed = ROLE_ALLOWED[role] ?? []
+// Centralised route gate. Use this everywhere instead of ad-hoc role checks.
+export function canAccessRoute(role: Role | string | null | undefined, pathname: string): boolean {
+  const r = normalizeRole(role)
+  if (!r) return false
+  if (isOwnerRole(r)) return true
+
   if (
     pathname === '/' ||
     pathname.startsWith('/api/') ||
     pathname === '/login' ||
     pathname === '/access-denied'
   ) return true
+
+  const allowed = ROLE_ALLOWED[r] ?? []
   return allowed.some(p => {
     if (p === '/') return pathname === '/'
     return pathname === p || pathname.startsWith(p + '/')
   })
 }
+
+// Back-compat alias — keep until call sites migrate.
+export const canAccess = canAccessRoute

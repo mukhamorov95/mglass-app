@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 export async function POST(req: NextRequest) {
-  const role = await getRole()
-  if (!role || (role !== 'admin' && role !== 'ceo')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { fixId } = await req.json()
   const sb = await createClient()

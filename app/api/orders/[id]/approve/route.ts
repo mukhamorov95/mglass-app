@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isOwnerRole } from '@/lib/getRole'
 
 export async function POST(
   req: NextRequest,
@@ -10,15 +11,15 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
-  // Only admins can approve
+  // Owner-tier (admin + ceo) can approve over-discount orders
   const { data: userRow } = await supabase
     .from('users')
     .select('role')
     .eq('id', user.id)
     .single()
 
-  if (userRow?.role !== 'admin') {
-    return NextResponse.json({ error: 'Только администратор может одобрять заказы' }, { status: 403 })
+  if (!isOwnerRole(userRow?.role)) {
+    return NextResponse.json({ error: 'Только владелец может одобрять заказы' }, { status: 403 })
   }
 
   const { id } = await params

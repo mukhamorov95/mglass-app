@@ -1,11 +1,12 @@
 import { NextResponse } from 'next/server'
-import { getRole } from '@/lib/getRole'
+import { requireAdmin } from '@/lib/apiAuth'
 
 export const runtime = 'nodejs'
 
 export async function POST() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  // Strictly admin: runs `git push origin main` on the server.
+  const guard = await requireAdmin()
+  if (guard instanceof NextResponse) return guard
 
   try {
     const { exec } = await import('child_process')

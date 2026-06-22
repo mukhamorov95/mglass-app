@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getRole } from '@/lib/getRole'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import type { FinancialSettings } from '@/lib/types'
 
@@ -68,7 +68,7 @@ function TrafficLight({ green, yellow, red }: { green: string; yellow: string; r
 
 export default async function PricingManualPage() {
   const role = await getRole()
-  if (role !== 'admin') redirect('/')
+  if (!isOwnerRole(role)) redirect('/')
 
   const supabase = await createClient()
   const { data: settingsRows } = await supabase

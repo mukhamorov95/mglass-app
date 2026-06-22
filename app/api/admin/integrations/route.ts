@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { getOwnerUser } from '@/lib/requireOwner'
+import { requireOwner } from '@/lib/apiAuth'
 
 function db() {
   return createServiceClient(
@@ -17,8 +17,8 @@ function db() {
 }
 
 export async function GET() {
-  const owner = await getOwnerUser()
-  if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const supabase = db()
 
@@ -71,8 +71,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
-  const owner = await getOwnerUser()
-  if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const body = await req.json() as { action: string; queueId?: string }
   const supabase = db()

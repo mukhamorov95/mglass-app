@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation'
-import { getRole } from '@/lib/getRole'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import Link from 'next/link'
 
 const SECTIONS = [
@@ -68,7 +68,7 @@ const SECTIONS = [
 
 export default async function OwnerCenterPage() {
   const role = await getRole()
-  if (role !== 'admin') redirect('/')
+  if (!isOwnerRole(role)) redirect('/')
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">

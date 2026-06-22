@@ -1,6 +1,6 @@
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
@@ -23,7 +23,7 @@ type MonthRow = {
 
 export default async function PnLPage() {
   const role = await getRole()
-  if (role !== 'admin') redirect('/')
+  if (!isOwnerRole(role)) redirect('/')
 
   const supabase = createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

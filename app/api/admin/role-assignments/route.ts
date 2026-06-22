@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { isOwnerRole, normalizeRole } from '@/lib/getRole'
 
 async function requireAuth() {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { user: null, role: null }
   const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-  return { user, role: (data as { role: string } | null)?.role ?? null }
+  return { user, role: normalizeRole((data as { role: string } | null)?.role) }
 }
 
 export async function GET() {
@@ -31,7 +32,7 @@ export async function GET() {
 
 export async function POST(req: Request) {
   const { user, role } = await requireAuth()
-  if (!user || role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  if (!user || !isOwnerRole(role)) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const body = await req.json()
   const { role_id, first_name, last_name, phone, telegram, email, notes } = body

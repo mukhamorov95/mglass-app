@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
 import { getRole } from '@/lib/getRole'
-import { getOwnerUser } from '@/lib/requireOwner'
+import { isOwnerCurrentUser, requireOwner } from '@/lib/apiAuth'
 
 type Category = 'glass' | 'mirror'
 
@@ -14,7 +14,7 @@ export async function GET() {
   const role = await getRole()
   if (!role) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
-  const isOwner = !!(await getOwnerUser())
+  const isOwner = await isOwnerCurrentUser()
   const supabase = db()
 
   const { data, error } = await supabase
@@ -49,8 +49,8 @@ export async function POST(req: Request) {
 
   // Sale writes require owner
   if (body.price_type === 'sale') {
-    const owner = await getOwnerUser()
-    if (!owner) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+    const guard = await requireOwner()
+    if (guard instanceof NextResponse) return guard
   }
 
   const supabase = db()

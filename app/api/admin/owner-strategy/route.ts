@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 function adminClient() {
   return createClient(
@@ -10,8 +10,8 @@ function adminClient() {
 }
 
 export async function GET() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { data, error } = await adminClient()
     .from('owner_strategy')
@@ -25,8 +25,8 @@ export async function GET() {
 }
 
 export async function PUT(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const body: Record<string, string> = await req.json()
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 import { getPipelines, getLeads, getUsers, amoGet } from '@/lib/amocrm'
 import type { AmoNote } from '@/lib/amocrm'
 
@@ -7,8 +7,8 @@ export const runtime     = 'nodejs'
 export const maxDuration = 30
 
 export async function GET() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const now        = new Date()
   const todayStart = Math.floor(new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000)

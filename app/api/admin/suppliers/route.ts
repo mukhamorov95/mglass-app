@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isOwnerRole, normalizeRole } from '@/lib/getRole'
 
 function svc() {
   return createServiceClient(
@@ -14,10 +15,11 @@ async function requireAuth() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { user: null, role: null }
   const { data } = await supabase.from('users').select('role').eq('id', user.id).single()
-  return { user, role: (data as { role: string } | null)?.role ?? null }
+  return { user, role: normalizeRole((data as { role: string } | null)?.role) }
 }
 
-const ALLOWED_WRITE = ['admin', 'buyer']
+// Owner tier (admin, ceo) plus buyer for catalog write access.
+const ALLOWED_WRITE = ['admin', 'ceo', 'buyer']
 
 const VALID_SUPPLIER_TYPES = ['glass_mirror','hardware','lighting','consumables','external_services','logistics','other']
 
@@ -79,7 +81,7 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const { user, role } = await requireAuth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
-  if (role !== 'admin') return NextResponse.json({ error: 'Только администратор может удалять' }, { status: 403 })
+  if (!isOwnerRole(role)) return NextResponse.json({ error: 'Только владелец может удалять' }, { status: 403 })
 
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Неверный запрос' }, { status: 400 }) }

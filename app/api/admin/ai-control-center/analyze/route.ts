@@ -1,15 +1,13 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 export async function POST(req: Request) {
-  const role = await getRole()
-  if (!role || (role !== 'admin' && role !== 'ceo')) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-  }
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { perspective, healthSummary } = await req.json()
   const sb = await createClient()

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 
 function adminClient() {
@@ -11,8 +11,8 @@ function adminClient() {
 }
 
 export async function GET(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   const { searchParams } = new URL(req.url)
   const rating = searchParams.get('rating')
   let q = adminClient().from('ai_sales_feedback').select('*').order('created_at', { ascending: false }).limit(200)

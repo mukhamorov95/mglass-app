@@ -1,7 +1,7 @@
 import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getRole } from '@/lib/getRole'
+import { getRole, isOwnerRole } from '@/lib/getRole'
 import { type DetailStages, STAGE_LABELS } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -186,7 +186,7 @@ export default async function SupervisorPage(props: {
   searchParams: Promise<{ filter?: string }>
 }) {
   const role = await getRole()
-  if (role !== 'admin' && role !== 'ceo') redirect('/production-app')
+  if (!isOwnerRole(role)) redirect('/production-app')
 
   const sb = await createClient()
   const { data } = await sb

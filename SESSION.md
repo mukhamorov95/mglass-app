@@ -1,250 +1,104 @@
 ## Текущая задача
-Архитектурный рефакторинг production stage helpers — ЗАКРЫТО (b582925).
+Авторизация: единая модель для UI и API — ЗАКРЫТО + ревью пройдено, build ОК
 
 ## Что сделано (эта сессия)
-- refactor(production) — centralise stage helpers → коммит b582925
-- feat(admin) — sales-control dashboard MVP v1 → b5a8def
-- chore(admin) — sales-control в sidebar → 1045fbd
-- feat(admin) — sales-control Drawer placeholder → a67050b
-- feat(production) — batch stage updates on mobile order page → c5dd1b3
+- fix(auth): UI guards для CEO (часть 1)
+  - lib/getRole.ts — `OWNER_ROLES = ['admin','ceo']`, `isOwnerRole`, `normalizeRole`, `canAccessRoute` (короткое замыкание для owner ролей), email-bootstrap для admin@mglass.ru
+  - middleware.ts — использует canAccessRoute + normalizeRole; убран хардкод VALID_ROLES (теперь все типобезопасные роли валидны, включая 'cfo')
+  - app/admin/owner/page.tsx, app/admin/pnl/page.tsx, app/admin/analytics-mglass/page.tsx, app/admin/pricing-manual/page.tsx, app/b2b-crm/page.tsx, app/production-app/supervisor/page.tsx — все на isOwnerRole
 
-## Sales Monitor Fix — ЗАКРЫТО
+- fix(auth): API helpers + миграция всех API на единую модель (часть 2)
+  - lib/apiAuth.ts (новый) — `requireOwner()`, `requireAdmin()`, `isOwnerCurrentUser()`
+  - lib/requireOwner.ts — удалён, был email-only check (admin@mglass.ru). Заменён на role-based requireOwner
+  - Owner-tier API (admin + ceo через requireOwner): settings, sales-bonuses, sales-scripts, sales-feedback, owner-strategy, users, invite, suppliers (DELETE), suppliers/[id] (DELETE), brigades, brigades/[id], delivery-zones, delivery-zones/[id], shower-images, materials/upload, role-assignments, role-assignments/[id], sync-b2b-materials, pricing-formula, glass-prices (sale write + sale filter), integrations, integrations/backfill, migrate-glass-prices, ai-recommendations, ai-control-center/analyze, health-fix-log, health-check/fix, orders/[id]/approve, orders/[id]/status (isAdmin → isOwner), quotes/[id]/pdf, debug/amo
+  - Strictly admin (requireAdmin): sync (git push), seed-managers (массовое создание auth user'ов)
+  - Role-specific (без изменений): cfo-settings (admin+ceo+cfo)
+  - suppliers POST/PATCH: ALLOWED_WRITE = ['admin','ceo','buyer'] (CEO добавлен)
+
+## Auth fix — review summary
+
+### Финальные проверки (часть 3)
+- `npm run build` — ✅ зелёный, 0 ошибок
+- `npm run lint` — все warnings/errors предсуществовали, ни одной новой в auth-файлах
+- Циклических импортов нет: apiAuth → getRole → supabase-server,permissions
+- 27 вызовов `requireOwner()` и 2 вызова `requireAdmin()` все имеют корректный `if (guard instanceof NextResponse) return guard` сразу после
+- lib/requireOwner.ts удалён, импортов на него нет
+- VALID_ROLES константа удалена (заменена на normalizeRole)
+
+### Кто куда теперь имеет доступ
+- **Owner tier (admin + ceo)**: весь UI + все owner-tier API (settings, users, suppliers, brigades, delivery-zones, sales-bonuses, sales-scripts, sales-feedback, owner-strategy, invite, role-assignments, sync-b2b-materials, pricing-formula, glass-prices write, integrations, ai-recommendations, ai-control-center, health-check, orders/approve, orders/status, quotes/pdf, debug/amo, shower-images, materials/upload, migrate-glass-prices)
+- **Strictly admin-only**: /api/admin/sync (git push), /api/admin/seed-managers (массовое создание auth users)
+- **Role-specific**: /api/cfo-settings — admin/ceo/cfo, без изменений
+- **Buyer**: POST/PATCH к /api/admin/suppliers (catalog editing) — но не DELETE и не другие admin endpoints
+- **Manager/production/seo/commercial**: без изменений — их allowlist в ROLE_ALLOWED не тронут
+
+### Известные ограничения (не в скоупе текущего фикса)
+- Данные-visibility фильтры (`role === 'admin'` в clients/orders/calculations/my-earnings/manager-dashboard) — это бизнес-логика "свои/все", не auth gates. CEO в этих местах ещё попадает в категорию "видит только своё". Отдельная задача.
+- `app/calculator/mirror/page.tsx:1162` использует `role === 'owner'` (string) — мёртвый код, normalizeRole мапит 'owner' → 'admin', никакая роль не равна 'owner' после нормализации. Безвредно.
+- middleware кеширует role в HTTP-only cookie на 1 час — если admin меняет роль юзера в БД, она применится только после истечения куки или перелогина. Это пре-существующее поведение.
+
+### Причина бага
+1. Owner Center меню для CEO ссылалось на admin-only страницы (`/admin/owner`, `/admin/pnl`, `/admin/analytics-mglass`, `/admin/pricing-manual`), которые внутри делали `if (role !== 'admin') redirect('/')`.
+2. CEO `ROLE_ALLOWED` в `lib/getRole.ts` не включал `/admin/suppliers`, `/admin/brigades`, `/admin/warehouse`, `/admin/route-sheet`, `/admin/infrastructure`, `/admin/materials` и др. — middleware кидал на `/access-denied`.
+3. `middleware.ts:VALID_ROLES` не содержал `'cfo'`, поэтому CFO юзеры падали в null.
+
+### Решение (архитектурное)
+- Owner-tier (`admin` + `ceo`) определён в `OWNER_ROLES` и через `isOwnerRole()` короткозамыкает `canAccessRoute` → полный доступ ко всему.
+- Per-page guards используют `isOwnerRole(role)` вместо `role === 'admin'` — теперь и CEO, и admin проходят везде одинаково.
+- `normalizeRole()` — case-insensitive, маппит UI-алиас `'owner'` → `'admin'`.
+- Email-bootstrap для `admin@mglass.ru` — только если в БД нет валидной роли. Не костыль для конкретного юзера, а аварийная страховка.
+- Ограниченные роли (manager, production, buyer, seo, commercial, cfo) — не тронуты, остаются со своими allowlist'ами.
+
+## Sales Control Drawer Detail — ЗАКРЫТО
 
 ### Коммит
-333b451 — fix(sales-monitor): improve daily manager metrics accuracy
+179db87 — feat(admin): show stale deal details in sales-control drawer
 
-### Что исправлено
-1. `todayStart` — теперь через `getMoscowDayStartUnix()` (полночь Europe/Moscow, не UTC)
-2. events и notes — через `getEvents()` / `getLeadNotes()` (обёртки над `amoGetAll`, нет обрезания на 250)
-3. `note_type` — нормализация через `noteTypeIs()`, поддержка строк и чисел (4, 13)
-4. Wazzup attribution — `noteBelongsToManager()`, ноты бота идут по `responsible_user_id` сделки
-5. Дата в заголовке отчёта — `timeZone: 'Europe/Moscow'` добавлен
+### Что добавлено
+
+- `/api/commercial/stats` для периода `today` теперь отдаёт:
+  - `domain` — домен AmoCRM для deep links
+  - `staleZone1Deals`, `staleZone2Deals`, `staleZone3Deals`, `invoiceStaleDeals` — массивы с `{ id, name, daysStale, stageName }` для каждого менеджера
+- Drawer во вкладках "Без касания", "Продажа >3д", "Производство >3д", "Долгострой" теперь показывает реальный список сделок:
+  - Название сделки (кликабельная ссылка → AmoCRM `/leads/detail/:id`)
+  - Этап сделки
+  - Бейдж с количеством дней без движения
+- Вкладка "Долгострой" — фильтр из staleZone1: сделки >7д или с этапом "Долгострой"
+- Для исторических периодов (неделя/месяц/год) детализация показывает note: "доступна только в режиме Сегодня"
 
 ### Что НЕ изменялось
-- lib/amocrm.ts, lib/telegram.ts, lib/wazzup.ts — не трогались
-- app/ — не трогалась
-- supabase/ — миграций нет
-- package.json — не менялся
+- lib/salesMonitor.ts — не трогался (данные уже были, просто не экспортировались)
+- Структура `StaleInfo` в salesMonitor — не менялась
+- API для исторических периодов (sales_monitor_daily) — не менялось, списков сделок там нет
 
-### Требует ручного обновления в Vercel
-- AMO_WAZZUP_BOT_USER_ID — узнать ID Wazzup-бота через GET /api/v4/users в AmoCRM
-- AMOCRM_MANAGERS_IDS — добавить недостающих менеджеров (9309142, 9811890, 11789378, 12273478, 8114644, 8272783) после уточнения у Владислава, кто активен
+## Production App: Step 13+ — ЗАКРЫТО
 
-- Step 7 — экран фиксации проблем (ЗАКРЫТО)
-- Step 10 — Supervisor Panel (ЗАКРЫТО): /production-app/supervisor
-- Step 11 — Stage Undo (ЗАКРЫТО): кнопка ✕ на этапах + UndoModal + audit trail
-- Step 12 — Audit Visibility (ЗАКРЫТО): read-only блок "История изменений" в экране заказа
-- Step 13 — Supervisor Audit Indicators (ЗАКРЫТО): бейдж ↩ N + фильтр "С отменами" + детальный блок
-
-## Production App: Step 13 Supervisor Panel Audit Indicator — ЗАКРЫТО
-
-### Коммит
-b94b274 — feat(production-app): show audit indicators in supervisor panel
-
-### Что добавлено
-
-- В /production-app/supervisor показывается индикатор отмен этапов по заказу.
-- Если у заказа есть notes.detail_stage_audit, отображается синий бейдж ↩ N.
-- Добавлен фильтр "С отменами" в горизонтальной полосе табов со счётчиком.
-- В карточке заказа отображается последняя отмена:
-  - позиция;
-  - этап;
-  - дата/время;
-  - причина;
-  - кто отменил, если есть email.
-- Экран supervisor остаётся read-only: нет .update/.insert/.delete/.upsert.
-- Новых записей в БД нет. Stage keys, QR route, order page, undo logic не менялись.
-
-### Итог блока Production App
-
-Весь блок завершён:
-- рабочий экран заказа;
-- QR-экран;
-- supervisor panel;
-- постановка этапов;
-- фиксация проблем;
-- отмена ошибочных отметок;
-- audit trail;
-- отображение audit trail в заказе;
-- audit indicators в supervisor panel.
-
-### Production test-plan
-
-1. Открыть /production-app/supervisor (admin или ceo).
-2. Найти заказ с отменой этапа (например #609) — убедиться, что есть синий бейдж ↩ N.
-3. В карточке заказа проверить серый блок: дата, позиция, этап, причина, кто отменил.
-4. Открыть таб "С отменами" — фильтрует только заказы с отменами.
-5. Открыть заказ без отмен — бейдж ↩ и блок отсутствуют.
-6. Выполнить новую отмену → перезагрузить supervisor → счётчик увеличился.
-
-## Production App: Step 12 Detail Stage Audit Visibility — ЗАКРЫТО
-
-### Коммит
-5abbb94 — feat(production-app): show stage audit trail
-
-### Что добавлено
-
-- На странице /production-app/orders/[id] появился read-only блок "История изменений".
-- Блок показывается только если в notes.detail_stage_audit есть записи.
-- Показываются последние 10 записей, отсортированных по created_at по убыванию.
-- Если audit пустой — блок не показывается.
-
-### Что отображается в истории
-
-Для каждой записи:
-- дата/время;
-- позиция (Поз.N);
-- этап (из STAGE_LABELS);
-- бейдж "отмена";
-- причина;
-- кто отменил (created_by_email, если есть);
-- предыдущий статус (previous_value, если есть).
-
-### Безопасность
-
-- Блок только читает notes.detail_stage_audit.
-- Новых .update() не добавлено.
-- Новых insert/delete/upsert нет.
-- Существующие .update({ notes: JSON.stringify(updatedNotes) }) остались только в persistStageUpdate и unsetStage.
-- notes.detail_stages не менялся.
-- Stage keys не менялись.
-- QR route не менялся.
-- Supervisor panel не менялась.
-- Миграций нет.
-
-### Production test-plan
-
-На заказе #609:
-
-1. Открыть /production-app/orders/609.
-2. Если ранее была отмена этапа — проверить, что внизу появился блок "История изменений".
-3. Проверить запись: позиция, этап, дата/время, причина, кто отменил, предыдущий статус.
-4. Открыть заказ без отмен — блок должен отсутствовать.
-5. Выполнить новую отмену этапа — история обновляется сразу (без перезагрузки).
-6. Проверить, что постановка и отмена этапов продолжают работать.
-
-## Production App: Step 11 Stage Undo with Audit Trail — ЗАКРЫТО
-
-### Коммит
-0bd9fa7 — feat(production-app): add stage undo with audit trail
-
-### Что добавлено
-
-- На карточках позиций в /production-app/orders/[id] рядом с выполненными этапами появилась кнопка отмены ✕.
-- Отменять можно обычные этапы: cutting / polishing / drilling / tempering / packaging.
-- Также можно отменить problem.
-- При отмене открывается UndoModal (textarea для причины + кнопка подтверждения).
-- Без причины отмена не сохраняется.
-- После отмены stage key удаляется из notes.detail_stages[itemIndex][stageKey].
-
-### Audit trail
-
-Отмена не удаляет историю бесследно.
-
-При каждой отмене создаётся запись в:
-
-```
-notes.detail_stage_audit
-```
-
-Формат audit-записи:
-
-```ts
-{
-  type: 'stage_unset',
-  item_index: number,
-  stage_key: DetailStageKey,
-  previous_value: DetailStageState,
-  reason: string,
-  created_at: string,
-  created_by: string,
-  created_by_email: string
-}
-```
-
-Если `notes.detail_stage_audit` уже есть — запись дозаписывается. Если нет — создаётся массив.
-
-### Почему это важно
-
-В производстве рабочий или руководитель может ошибочно отметить не тот этап или не ту позицию. Теперь ошибочную отметку можно снять, но с сохранением следа: кто, когда, какой этап снял и по какой причине.
-
-### Что НЕ изменилось
-
-- Stage keys не изменялись.
-- lib/productionStages.ts не менялся.
-- /p/o/[orderId] не менялся.
-- /production-app/supervisor не менялся.
-- notes по-прежнему пишется через JSON.stringify(updatedNotes).
-- Миграций нет.
-- RLS не трогался.
-- Middleware не трогался.
-
-### Что проверить на production
-
-На заказе #609:
-
-1. Открыть /production-app/orders/609.
-2. Найти выполненный этап, например "Полировка".
-3. Нажать ✕ рядом с бейджем.
-4. Ввести причину: Тестовая отмена ошибочной отметки.
-5. Нажать "Отменить этап".
-6. Убедиться, что бейдж этапа исчез, toast показал `✓ Отмена: Полировка (поз.N)`.
-7. Открыть /p/o/609 — этап тоже исчез.
-8. Открыть /b2b-orders — прогресс этапа уменьшился.
-9. Убедиться, что остальные этапы не пропали.
-10. Заново поставить этап — сохраняется корректно.
-
-## Production App: Step 10 Supervisor Panel — ЗАКРЫТО
-
-### Коммит
-3d3a42f — feat(production-app): add supervisor panel
-
-### Маршрут
-/production-app/supervisor
-
-### Доступ
-- admin: всегда (canAccess → return true)
-- ceo: через /production-app в ROLE_ALLOWED.ceo (покрывает /production-app/*)
-- production/manager: redirect → /production-app
-
-### Что показывает
-- Статкарды: Активных / Просрочено / Проблемы / Упаковано
-- Табы-фильтры через URL searchParams: Все / Просрочено / Проблемы / Сегодня—Завтра / Упаковано
-- Список заказов: сортировка overdue → today → tomorrow → normal → ready, проблемные наверх внутри группы
-- Карточка: лейбл + клиент + дедлайн-бейдж + прогресс-бар + список проблем с позицией и причиной
-- Ссылки: → Заказ + → QR-экран
-
-## Production App: QR Compatibility Check — ЗАКРЫТО
-
-### Коммит
-be0ed58 — feat(production-app): align order screen with qr workflow
-
-### Что закрыто
-/p/o/{id} и /production-app/orders/{id} используют общий источник типов и логики этапов через lib/productionStages.ts.
-
-## Access Control: Root Route Matching Fix — ЗАКРЫТО
-
-### Коммит
-be4f698 — fix(access): restrict root route matching
-
-### Что было не так
-'/' в ROLE_ALLOWED фактически открывал все маршруты (p === '/' всегда true внутри allowed.some).
-
-### Что исправлено
-Теперь p === '/' разрешает только pathname === '/'.
+Весь блок Production App завершён (13 шагов: order screen, QR, supervisor panel, stage undo, audit trail, audit visibility, audit indicators).
 
 ## Следующий шаг
-Пауза / production testing. Новые фичи не начинать без отдельного решения.
+1. Закоммитить fix(auth) — UI часть + API часть (~32 файла).
+2. Ручная проверка под CEO (admin@mglass.ru):
+   - Owner Center: открываются все справочники (suppliers, brigades, delivery-zones, materials, services).
+   - Settings: финансовые настройки, sales-bonuses, sales-scripts, owner-strategy сохраняются.
+   - Users: PATCH (изменить роль/пароль), POST telegram_code, invite — все работают.
+   - Orders: approve over-discount, изменение статуса.
+   - Health Check: fix actions работают.
+   - AI Control Center: analyze работает.
+3. Регрессия:
+   - Менеджер не получает 200 на admin-эндпоинтах (settings PUT, users PATCH).
+   - Buyer не получает 200 на suppliers DELETE.
+   - CEO получает 403 на /api/admin/sync (git push) — это намеренно.
+
+## Следующий приоритет по SYSTEM.md
+Менеджер (`/manager`) или Коммерческий (`/commercial`) — уточнить у пользователя.
 
 ## Контекст
-- Production App: /production-app (главный экран) + /production-app/orders/{id} (экран заказа)
-- Supervisor Panel: /production-app/supervisor (только admin/ceo)
-- Данные: b2b_orders.notes.detail_stages — единый источник для обоих интерфейсов
-- Audit: b2b_orders.notes.detail_stage_audit — лог отмен этапов
-- lib/productionStages.ts — общий helper для типов и логики зеркал/закалки
-- Главный экран: server component, фильтрует по notes.status != 'quote' + archived_at IS NULL
-- Счётчики: Активных / Просрочено / Проблемы / Упаковано
-- Сортировка: overdue → today → tomorrow → normal → ready → shipped
+- Sales Control: /admin/sales-control — аналитика команды (таблица + drawer)
+- API: /api/commercial/stats?period=today|week|month|year
+- Drawer: 5 вкладок — Обзор, Без касания, Продажа >3д, Производство >3д, Долгострой
+- Детализация сделок только в режиме today (real-time из AmoCRM)
 
 ## Открытые вопросы
+- AMO_WAZZUP_BOT_USER_ID — нужно уточнить ID Wazzup-бота у Владислава
+- AMOCRM_MANAGERS_IDS — возможно нужно добавить/убрать менеджеров
 - PWA manifest: добавить на позднем шаге

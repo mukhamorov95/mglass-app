@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 import { writeLogForCurrentUser } from '@/lib/activityLog'
 
 function adminClient() {
@@ -11,8 +11,8 @@ function adminClient() {
 }
 
 export async function GET() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const db = adminClient()
 
@@ -34,8 +34,8 @@ export async function GET() {
 }
 
 export async function PATCH(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { id, password_plain, permissions, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'id обязателен' }, { status: 400 })
@@ -76,8 +76,8 @@ export async function PATCH(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { action, userId } = await req.json()
   if (action !== 'telegram_code' || !userId) return NextResponse.json({ error: 'bad request' }, { status: 400 })

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient as svc } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 function db() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -36,8 +36,8 @@ function mergeNotes(existing: string | null, salePrice: number): string | null {
 }
 
 export async function POST() {
-  const role = await getRole()
-  if (role !== 'admin') return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const supabase = db()
 

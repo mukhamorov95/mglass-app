@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
 import { sendMessage as waSend } from '@/lib/wazzup'
+import { isOwnerRole } from '@/lib/getRole'
 
 const CLIENT_MESSAGES: Partial<Record<string, string>> = {
   in_work:   'Ваш заказ принят в производство! Срок изготовления — 7–14 рабочих дней. Как только будет готово — сразу свяжемся с вами.',
@@ -60,18 +61,19 @@ export async function PATCH(
     .eq('id', user.id)
     .single()
 
-  const isAdmin = userRow?.role === 'admin'
+  // Owner tier (admin + ceo) uses service role to update any user's order
+  const isOwner = isOwnerRole(userRow?.role)
   const { id } = await params
   const { status: newStatus, notes } = await req.json()
 
-  const client = isAdmin
+  const client = isOwner
     ? createServiceClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,
         process.env.SUPABASE_SERVICE_ROLE_KEY!,
       )
     : supabase
 
-  const { data: order, error: fetchErr } = await (isAdmin
+  const { data: order, error: fetchErr } = await (isOwner
     ? createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
     : supabase
   ).from('orders').select('status').eq('id', id).single()

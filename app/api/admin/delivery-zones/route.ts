@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { isOwnerRole } from '@/lib/getRole'
 
 function svc() {
   return createServiceClient(
@@ -29,7 +30,7 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const { user, role } = await requireAuth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
-  if (role !== 'admin') return NextResponse.json({ error: 'Только администратор' }, { status: 403 })
+  if (!isOwnerRole(role)) return NextResponse.json({ error: 'Только владелец' }, { status: 403 })
 
   let body: Record<string, unknown>
   try { body = await req.json() } catch { return NextResponse.json({ error: 'Неверный запрос' }, { status: 400 }) }

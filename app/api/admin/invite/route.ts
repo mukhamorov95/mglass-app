@@ -1,13 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient } from '@supabase/supabase-js'
-import { getRole } from '@/lib/getRole'
+import { requireOwner } from '@/lib/apiAuth'
 
 export async function POST(req: NextRequest) {
-  const role = await getRole()
-  if (role !== 'admin') {
-    return NextResponse.json({ error: 'Доступ запрещён' }, { status: 403 })
-  }
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { email, password, role: newRole, name } = await req.json()
   if (!email || !password || !newRole) {
