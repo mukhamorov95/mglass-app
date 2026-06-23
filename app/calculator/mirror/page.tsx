@@ -9,7 +9,7 @@ import {
   calculateMirror, MirrorInputs, MirrorShape, MirrorResult,
   MirrorLightingComponent,
 } from '@/lib/mirrorCalculator'
-import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { calculateMirrorUnified } from '@/lib/pricing/calculateMirrorUnified'
 import type { FacetPrice } from '@/lib/b2bCalculator'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
@@ -430,22 +430,56 @@ export default function MirrorCalculatorPage() {
 
   // Preview-only V2 financial model. Does NOT replace result.finalPrice /
   // result.grandTotal — both old save/PDF paths still use the original numbers.
-  // V2 reuses result.totalCost as directCost and reapplies the shared formula:
-  //   basePrice = directCost / (1 - margin - tax)
-  //   priceWithPartner = basePrice / (1 - partner)         (grossup)
-  //   finalPrice = priceWithPartner * (1 - discount)
-  // Services (installation/delivery) are added on top, identical to the old
-  // grandTotal composition, so the comparison stays apples-to-apples.
+  // V2 rebuilds the cost basket cost-only (no sale_price reads, no fallback
+  // magic) via calculateMirrorUnified, then applies the single shared formula
+  // basePrice = directCost / (1 - margin - tax). Services keep the same
+  // sale-priced add-on logic, so the v2 grandTotal stays apples-to-apples
+  // with the live grandTotal.
+  //
+  // Key input switch: V2 substrate uses mirrorCostPerM2 (the COST row from
+  // glass_price_matrix), not mirrorSalePerM2 — eliminating the live calc's
+  // double-margin on glass.
   const v2Preview = useMemo(() => {
     if (!result) return null
-    return calcFinancialModel({
-      directCost:      result.totalCost,
-      marginPercent:   Number(margin) || 0,
-      taxPercent:      expensesPercent,
-      partnerPercent:  inputs.partnerPercent,
-      discountPercent: Number(discount) || 0,
-    })
-  }, [result, margin, discount, expensesPercent, inputs.partnerPercent])
+    return calculateMirrorUnified(
+      {
+        width: inputs.width,
+        height: inputs.height,
+        shape: inputs.shape,
+        mirrorMaterial: inputs.mirrorMaterial,
+        mirrorCostPriceCostRow: mirrorCostPerM2,
+        mirrorWastePct: inputs.mirrorWastePct,
+        shapeModifierPct: inputs.shapeModifierPct,
+        hasLighting: inputs.hasLighting,
+        voltage: inputs.voltage,
+        frame: inputs.frame,
+        ledStrip: inputs.ledStrip,
+        powerSupply: inputs.powerSupply,
+        diffuser: inputs.diffuser,
+        mirrorFrame: inputs.mirrorFrame,
+        frameAssemblyMinuteRate: inputs.frameAssemblyMinuteRate,
+        buttonType: inputs.buttonType,
+        hasSandblast: inputs.hasSandblast,
+        hasSubstrate: inputs.hasSubstrate,
+        substratePrice: inputs.substratePrice,
+        hasFacet: inputs.hasFacet,
+        facetTypeMm: inputs.facetTypeMm,
+        facetCostPerM: inputs.facetCostPerM,
+        hasInstallation: inputs.hasInstallation,
+        hasDelivery: inputs.hasDelivery,
+        deliveryCost: inputs.deliveryCost,
+        partnerPercent: inputs.partnerPercent,
+        discount: inputs.discount,
+        margin: inputs.margin,
+        standardMargin: inputs.standardMargin,
+        tax: inputs.tax,
+        minMargin: inputs.minMargin,
+      },
+      materials,
+      services,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, mirrorCostPerM2, materials, services])
 
   const marginNum   = result?.margin ?? 0
   const isGreen     = marginNum >= 35
@@ -1092,7 +1126,7 @@ export default function MirrorCalculatorPage() {
                     Финмодель V2 (preview)
                   </p>
                   {v2Preview ? (() => {
-                    const v2GrandTotal = v2Preview.finalPrice + result.servicesTotal
+                    const v2GrandTotal = v2Preview.grandTotal
                     const diff = v2GrandTotal - result.grandTotal
                     const diffColor =
                       diff > 0 ? 'text-emerald-600'
@@ -1107,11 +1141,14 @@ export default function MirrorCalculatorPage() {
                         <p className={`text-[11px] font-mono mt-2 ${diffColor}`}>
                           Разница: {diffSign}{Math.abs(diff).toLocaleString('ru-RU')} ₽
                         </p>
+                        <p className="text-[10px] text-[#a8a8a3] mt-2 leading-snug">
+                          Себестоимость: {v2Preview.directCost.toLocaleString('ru-RU')} ₽ · Маржа: {v2Preview.margin}%
+                        </p>
                       </>
                     )
                   })() : (
                     <p className="text-[11px] text-amber-600">
-                      Финмодель V2 недоступна: проверьте маржу/налог
+                      Финмодель V2 недоступна: проверьте маржу/налог/справочник
                     </p>
                   )}
                 </div>
