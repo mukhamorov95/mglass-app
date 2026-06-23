@@ -9,6 +9,7 @@ import {
   calculateMirror, MirrorInputs, MirrorShape, MirrorResult,
   MirrorLightingComponent,
 } from '@/lib/mirrorCalculator'
+import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import type { FacetPrice } from '@/lib/b2bCalculator'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
@@ -426,6 +427,25 @@ export default function MirrorCalculatorPage() {
      hasFrame, mirrorFrameId,
      hasInstallation, hasDelivery, kmFromMkad, deliveryCost, partnerId, discount, margin, expensesPercent, materials, services],
   )
+
+  // Preview-only V2 financial model. Does NOT replace result.finalPrice /
+  // result.grandTotal — both old save/PDF paths still use the original numbers.
+  // V2 reuses result.totalCost as directCost and reapplies the shared formula:
+  //   basePrice = directCost / (1 - margin - tax)
+  //   priceWithPartner = basePrice / (1 - partner)         (grossup)
+  //   finalPrice = priceWithPartner * (1 - discount)
+  // Services (installation/delivery) are added on top, identical to the old
+  // grandTotal composition, so the comparison stays apples-to-apples.
+  const v2Preview = useMemo(() => {
+    if (!result) return null
+    return calcFinancialModel({
+      directCost:      result.totalCost,
+      marginPercent:   Number(margin) || 0,
+      taxPercent:      expensesPercent,
+      partnerPercent:  inputs.partnerPercent,
+      discountPercent: Number(discount) || 0,
+    })
+  }, [result, margin, discount, expensesPercent, inputs.partnerPercent])
 
   const marginNum   = result?.margin ?? 0
   const isGreen     = marginNum >= 35
@@ -1063,6 +1083,36 @@ export default function MirrorCalculatorPage() {
                     <div className="mt-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100">
                       <p className="text-xs text-red-600 font-medium">Маржа ниже минимума {minMargin}%</p>
                     </div>
+                  )}
+                </div>
+
+                {/* ①.5 Финмодель V2 — preview only, не влияет на сохранение/КП/PDF */}
+                <div className="bg-white rounded-xl border border-dashed border-[#d6d6d2] p-4">
+                  <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
+                    Финмодель V2 (preview)
+                  </p>
+                  {v2Preview ? (() => {
+                    const v2GrandTotal = v2Preview.finalPrice + result.servicesTotal
+                    const diff = v2GrandTotal - result.grandTotal
+                    const diffColor =
+                      diff > 0 ? 'text-emerald-600'
+                      : diff < 0 ? 'text-red-600'
+                      : 'text-[#a8a8a3]'
+                    const diffSign = diff > 0 ? '+' : diff < 0 ? '−' : ''
+                    return (
+                      <>
+                        <p className="text-[20px] font-bold font-mono leading-none tracking-tight text-[#2a2a28]">
+                          {v2GrandTotal.toLocaleString('ru-RU')} ₽
+                        </p>
+                        <p className={`text-[11px] font-mono mt-2 ${diffColor}`}>
+                          Разница: {diffSign}{Math.abs(diff).toLocaleString('ru-RU')} ₽
+                        </p>
+                      </>
+                    )
+                  })() : (
+                    <p className="text-[11px] text-amber-600">
+                      Финмодель V2 недоступна: проверьте маржу/налог
+                    </p>
                   )}
                 </div>
 
