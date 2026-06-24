@@ -576,11 +576,23 @@ export default function MirrorCalculatorPage() {
   // safe для client bundle). Список ровно тот же, что и в OWNER_ROLES.
   const isOwner = role === 'admin' || role === 'ceo' || role === 'owner'
 
-  // Quote price routing: V2 B2C если доступна, иначе fallback на legacy live
-  // grandTotal. Используется в handleSave / handleAddToCart как final_price
-  // и grand_total. Не зависит от inputs.margin / live formulas.
-  const quotePrice = twoStagePreview.available
+  // Quote price routing:
+  //   V2 available  → quotePrice = V2 product price + selected services total
+  //                    (V2 B2C — это цена изделия; услуги (монтаж/доставка)
+  //                    хранятся в result.serviceLines/servicesTotal через
+  //                    live-калькулятор и добавляются сверху).
+  //   V2 unavailable → quotePrice = result.grandTotal (legacy уже включает услуги).
+  //
+  // selectedServicesTotal берётся из result.servicesTotal — поле уже считается
+  // в lib/mirrorCalculator.ts по toggles hasInstallation/hasDelivery без какой-
+  // либо привязки к live-наценке/марже. Услуги в live и в V2 — одни и те же
+  // строки, не зависят от модели ценообразования.
+  const selectedServicesTotal = result?.servicesTotal ?? 0
+  const productQuotePrice     = twoStagePreview.available
     ? twoStagePreview.pricing.b2c.price
+    : (result?.grandTotal ?? 0)
+  const quotePrice = twoStagePreview.available
+    ? productQuotePrice + selectedServicesTotal
     : (result?.grandTotal ?? 0)
   const quoteIsV2 = twoStagePreview.available
 
@@ -1188,7 +1200,7 @@ export default function MirrorCalculatorPage() {
                 {/* ① Price card */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
 
-                  {/* Main price — V2 B2C для клиента; B2B — себестоимость от производства.
+                  {/* Main price — V2 итог = изделие + услуги. B2B = себестоимость от производства.
                       Factory cost и live-цены здесь намеренно не показываем — это owner
                       diagnostics. Менеджер видит только цены, релевантные для КП. */}
                   {twoStagePreview.available ? (
@@ -1197,11 +1209,21 @@ export default function MirrorCalculatorPage() {
                         Цена клиенту
                       </p>
                       <p className="text-[28px] font-bold font-mono leading-none tracking-tight text-emerald-700">
-                        {twoStagePreview.pricing.b2c.price.toLocaleString('ru-RU')} ₽
+                        {quotePrice.toLocaleString('ru-RU')} ₽
                       </p>
 
                       <div className="mt-3 space-y-1">
                         <div className="flex justify-between items-baseline">
+                          <span className="text-[11px] text-[#6b6b66]">Изделие</span>
+                          <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(productQuotePrice)}</span>
+                        </div>
+                        {selectedServicesTotal > 0 && (
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[11px] text-[#6b6b66]">Услуги</span>
+                            <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(selectedServicesTotal)}</span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-baseline pt-1.5 mt-1.5 border-t border-[#f2f2f0]">
                           <span className="text-[11px] text-[#6b6b66]">Себестоимость от производства</span>
                           <span className="text-[12px] font-mono font-semibold text-[#2a2a28]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
                         </div>
@@ -1290,18 +1312,32 @@ export default function MirrorCalculatorPage() {
                                 </span>
                               </div>
                               <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
-                                <span className="text-sm font-bold text-[#111110]">Цена клиенту</span>
-                                <span className="text-base font-mono font-bold text-emerald-700">
+                                <span className="text-xs text-[#4b4b47]">Цена изделия клиенту</span>
+                                <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                   {fmt(twoStagePreview.pricing.b2c.price)}
+                                </span>
+                              </div>
+                              {selectedServicesTotal > 0 && (
+                                <div className="flex items-baseline justify-between">
+                                  <span className="text-xs text-[#4b4b47]">Услуги</span>
+                                  <span className="text-xs font-mono font-semibold text-[#2a2a28]">
+                                    {fmt(selectedServicesTotal)}
+                                  </span>
+                                </div>
+                              )}
+                              <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
+                                <span className="text-sm font-bold text-[#111110]">Итого КП</span>
+                                <span className="text-base font-mono font-bold text-emerald-700">
+                                  {fmt(quotePrice)}
                                 </span>
                               </div>
                             </div>
 
-                            {/* В расчёте учтено: только названия позиций, без сумм.
+                            {/* В расчёте изделия учтено: только названия позиций, без сумм.
                                 Внутренние cost-числа уходят в owner diagnostics. */}
                             {v2Preview && v2Preview.costLines.length > 0 && (
                               <div className="mt-3">
-                                <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">В расчёте учтено</p>
+                                <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">В расчёте изделия учтено</p>
                                 <ul className="space-y-0.5">
                                   {v2Preview.costLines.map((line, i) => (
                                     <li key={i} className="text-[11px] text-[#6b6b66] leading-snug">
@@ -1312,24 +1348,33 @@ export default function MirrorCalculatorPage() {
                               </div>
                             )}
 
-                            <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
-                              Услуги пока считаются отдельно по live-модели. Монтаж/доставка остаются в live-цене.
-                            </p>
+                            {/* Услуги — отдельный список, не смешиваем с себестоимостью изделия */}
+                            {result.serviceLines.length > 0 && (
+                              <div className="mt-3">
+                                <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">Услуги</p>
+                                <ul className="space-y-0.5">
+                                  {result.serviceLines.map((s, i) => (
+                                    <li key={i} className="flex justify-between items-baseline text-[11px] text-[#6b6b66] leading-snug">
+                                      <span>· {s.name}</span>
+                                      <span className="font-mono">{fmt(s.total)} ₽</span>
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </>
                         )}
                       </div>
 
-                      {/* ─── B. +10% hint — от цены клиенту V2 ─── */}
+                      {/* ─── B. +10% hint — от полной итоговой цены КП (изделие + услуги) ─── */}
                       {(() => {
-                        const primaryClientPrice = twoStagePreview.available
-                          ? twoStagePreview.pricing.b2c.price
-                          : result.grandTotal
-                        const upsell = Math.round(primaryClientPrice * 1.1)
-                        const delta  = upsell - primaryClientPrice
+                        // primary = quotePrice (включает услуги, если V2 доступна, иначе live grandTotal).
+                        const upsell = Math.round(quotePrice * 1.1)
+                        const delta  = upsell - quotePrice
                         return (
                           <div className="mt-3 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100">
                             <div className="min-w-0">
-                              <p className="text-[11px] text-emerald-700 font-medium">Продать дороже от цены клиенту V2</p>
+                              <p className="text-[11px] text-emerald-700 font-medium">Продать дороже от итоговой цены КП</p>
                               <p className="text-[10px] text-emerald-600">подсказка, не меняет цену в КП</p>
                             </div>
                             <div className="text-right whitespace-nowrap">
@@ -1361,8 +1406,16 @@ export default function MirrorCalculatorPage() {
                                 <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
                               </div>
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">B2C Price</span>
+                                <span className="text-[11px] text-[#6b6b66]">B2C Product Price</span>
                                 <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2c.price)}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline">
+                                <span className="text-[11px] text-[#6b6b66]">Services Total (sale)</span>
+                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(selectedServicesTotal)}</span>
+                              </div>
+                              <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
+                                <span className="text-[11px] font-semibold text-[#4b4b47]">Quote Total (saved)</span>
+                                <span className="text-[11px] font-mono font-semibold text-[#4b4b47]">{fmt(quotePrice)}</span>
                               </div>
                               <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
                                 <span className="text-[11px] text-[#6b6b66]">Legacy live price</span>
@@ -1370,6 +1423,7 @@ export default function MirrorCalculatorPage() {
                               </div>
                               <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
                                 Live маржа: {result.margin}% · Live прибыль: {fmt(result.profit)}
+                                {' · '}quote source: {quoteIsV2 ? 'v2_b2c + services' : 'legacy_live_fallback'}
                               </p>
                             </div>
                           )}
@@ -1504,7 +1558,9 @@ export default function MirrorCalculatorPage() {
                 <div className="space-y-1.5">
                   <p className={`text-[10px] leading-snug px-1 ${quoteIsV2 ? 'text-[#9a9a95]' : 'text-amber-600'}`}>
                     {quoteIsV2
-                      ? `КП будет создано по цене V2: ${fmt(quotePrice)} ₽`
+                      ? selectedServicesTotal > 0
+                        ? `КП будет создано по итоговой цене V2: ${fmt(quotePrice)} ₽ (изделие ${fmt(productQuotePrice)} + услуги ${fmt(selectedServicesTotal)})`
+                        : `КП будет создано по цене V2: ${fmt(quotePrice)} ₽`
                       : `V2 недоступна — КП будет создано по live-цене ${fmt(quotePrice)} ₽`}
                   </p>
                   <button onClick={handleSave} disabled={saving || discountExceeded}
