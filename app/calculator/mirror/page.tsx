@@ -576,11 +576,66 @@ export default function MirrorCalculatorPage() {
   // safe для client bundle). Список ровно тот же, что и в OWNER_ROLES.
   const isOwner = role === 'admin' || role === 'ceo' || role === 'owner'
 
+  // V2 commercial pipeline:
+  //   B2B Price (V2 production stage) → B2C base (с маржой из формы, не из admin
+  //   config) → partner gross-up → discount → product after discount.
+  //
+  // selectedB2cMarginPercent = Number(margin) — поле «Маржа» формы (раньше
+  // влияло только на live, теперь управляет B2C-наценкой V2).
+  // production tax/margin и b2c tax остаются из admin config — это
+  // финансовые константы организации, не «менеджерская» наценка.
+  //
+  // Возвращает available=false с понятной reason если знаменатель не положителен
+  // (margin+tax >= 100, partner >= 100). Тогда top card / V2 секция фолбэчат
+  // на live result.grandTotal.
+  const v2Commercial = useMemo<
+    | { available: false; reason: string }
+    | {
+        available:                true
+        b2bPrice:                 number
+        b2cTaxPercent:            number
+        selectedB2cMarginPercent: number
+        partnerPercent:           number
+        discountPercent:          number
+        b2cProductBase:           number
+        productWithPartner:       number
+        partnerAmount:            number
+        productAfterDiscount:     number
+        discountAmount:           number
+      }
+  >(() => {
+    if (!twoStagePreview.available) return { available: false, reason: twoStagePreview.reason }
+    const b2bPrice                 = twoStagePreview.pricing.b2b.price
+    const b2cTaxPercent            = twoStagePreview.config.b2cTaxPercent
+    const selectedB2cMarginPercent = Number(margin) || 0
+    const partnerPercent           = inputs.partnerPercent
+    const discountPercent          = Number(discount) || 0
+
+    if (selectedB2cMarginPercent < 0)                                  return { available: false, reason: 'Маржа B2C не может быть отрицательной' }
+    if (b2cTaxPercent + selectedB2cMarginPercent >= 100)               return { available: false, reason: 'Маржа B2C слишком высокая для выбранного налога' }
+    if (partnerPercent < 0 || partnerPercent >= 100)                   return { available: false, reason: 'Партнёрский % вне диапазона' }
+    if (discountPercent < 0 || discountPercent >= 100)                 return { available: false, reason: 'Скидка вне диапазона [0, 100)' }
+
+    const denom              = 1 - b2cTaxPercent / 100 - selectedB2cMarginPercent / 100
+    const b2cProductBaseRaw  = b2bPrice / denom
+    const b2cProductBase     = Math.round(b2cProductBaseRaw)
+    const productWithPartner = partnerPercent > 0
+      ? Math.round(b2cProductBaseRaw / (1 - partnerPercent / 100))
+      : b2cProductBase
+    const partnerAmount         = productWithPartner - b2cProductBase
+    const productAfterDiscount  = Math.round(productWithPartner * (1 - discountPercent / 100))
+    const discountAmount        = productWithPartner - productAfterDiscount
+
+    return {
+      available: true,
+      b2bPrice, b2cTaxPercent, selectedB2cMarginPercent, partnerPercent, discountPercent,
+      b2cProductBase, productWithPartner, partnerAmount,
+      productAfterDiscount, discountAmount,
+    }
+  }, [twoStagePreview, margin, inputs.partnerPercent, discount])
+
   // Quote price routing:
-  //   V2 available  → quotePrice = V2 product price + selected services total
-  //                    (V2 B2C — это цена изделия; услуги (монтаж/доставка)
-  //                    хранятся в result.serviceLines/servicesTotal через
-  //                    live-калькулятор и добавляются сверху).
+  //   V2 commercial available → quotePrice = (V2 commercial pipeline product) + services
   //   V2 unavailable → quotePrice = result.grandTotal (legacy уже включает услуги).
   //
   // selectedServicesTotal берётся из result.servicesTotal — поле уже считается
@@ -588,13 +643,13 @@ export default function MirrorCalculatorPage() {
   // либо привязки к live-наценке/марже. Услуги в live и в V2 — одни и те же
   // строки, не зависят от модели ценообразования.
   const selectedServicesTotal = result?.servicesTotal ?? 0
-  const productQuotePrice     = twoStagePreview.available
-    ? twoStagePreview.pricing.b2c.price
+  const productQuotePrice     = v2Commercial.available
+    ? v2Commercial.productAfterDiscount
     : (result?.grandTotal ?? 0)
-  const quotePrice = twoStagePreview.available
+  const quotePrice            = v2Commercial.available
     ? productQuotePrice + selectedServicesTotal
     : (result?.grandTotal ?? 0)
-  const quoteIsV2 = twoStagePreview.available
+  const quoteIsV2             = v2Commercial.available
 
   const sensorBtn     = materials.find(m => m.name.toLowerCase().includes('сенсорная кнопка') && m.active)
   const waveBtn       = materials.find(m => m.name.toLowerCase().includes('датчик взмаха')    && m.active)
@@ -602,6 +657,25 @@ export default function MirrorCalculatorPage() {
   const deliverySvc   = services.find(s => s.name.toLowerCase().includes('доставка'))
   const sandblastMat  = materials.find(m => m.name.toLowerCase().includes('пескоструй') && m.active)
   const sandblastPrice = sandblastMat?.cost_price ?? 1200
+
+  // Snapshot V2 commercial pipeline для сохранения в cost_breakdown.pricing_meta.
+  // Используется и в add-to-cart, и в save — пишется в обе ветки одинаково.
+  const v2PricingMeta = {
+    pricing_model:       'v2_two_stage' as const,
+    quote_price_source:  quoteIsV2 ? ('v2_b2c_commercial' as const) : ('legacy_live_fallback' as const),
+    v2_product_base_price:    v2Commercial.available ? v2Commercial.b2cProductBase     : null,
+    v2_partner_percent:       v2Commercial.available ? v2Commercial.partnerPercent     : null,
+    v2_partner_amount:        v2Commercial.available ? v2Commercial.partnerAmount      : null,
+    v2_discount_percent:      v2Commercial.available ? v2Commercial.discountPercent    : null,
+    v2_discount_amount:       v2Commercial.available ? v2Commercial.discountAmount     : null,
+    v2_product_final_price:   v2Commercial.available ? v2Commercial.productAfterDiscount : null,
+    v2_services_total:        selectedServicesTotal,
+    v2_quote_total:           quotePrice,
+    v2_b2b_price:             v2Commercial.available ? v2Commercial.b2bPrice           : null,
+    v2_b2c_tax_percent:       v2Commercial.available ? v2Commercial.b2cTaxPercent      : null,
+    v2_b2c_margin_percent:    v2Commercial.available ? v2Commercial.selectedB2cMarginPercent : null,
+    v2_unavailable_reason:    v2Commercial.available ? null : v2Commercial.reason,
+  }
 
   function handleAddToCart() {
     if (!result) return
@@ -618,6 +692,8 @@ export default function MirrorCalculatorPage() {
         hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
         partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
       },
+      // Note: CartContext.cost_breakdown типизирован strict (без pricing_meta);
+      // полный V2 commercial snapshot хранится только в handleSave → calculations.cost_breakdown.
       cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
@@ -627,7 +703,7 @@ export default function MirrorCalculatorPage() {
       },
       base_price: result.basePrice, discount: inputs.discount,
       partner_percent: inputs.partnerPercent,
-      // quotePrice = V2 B2C, если доступна; иначе legacy live grandTotal.
+      // quotePrice = V2 B2C commercial если доступна, иначе legacy live grandTotal.
       // Менеджеру в КП попадает именно эта цена.
       final_price: quotePrice, grand_total: quotePrice,
       margin: result.margin, profit: result.profit,
@@ -653,7 +729,7 @@ export default function MirrorCalculatorPage() {
         hasInstallation, hasDelivery, kmFromMkad: Number(kmFromMkad) || 0,
         partnerId, discount: Number(discount) || 0, margin: Number(margin) || 40,
       },
-      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost },
+      cost_breakdown: { lines: result.costLines, totalCost: result.totalCost, pricing_meta: v2PricingMeta },
       financial_breakdown: {
         expensesPercent: result.expensesPercent, expensesAmount: result.expensesAmount,
         basePrice: result.basePrice, partnerAmount: result.partnerAmount,
@@ -1174,12 +1250,13 @@ export default function MirrorCalculatorPage() {
               </div>
             </div>
 
-            {/* ⑤ УСЛОВИЯ — legacy live, после полного перехода на V2 будут удалены */}
+            {/* ⑤ УСЛОВИЯ — теперь подключены к V2: маржа управляет B2C наценкой,
+                партнёр делает gross-up, скидка применяется после партнёра. */}
             {settings && (
               <div className="p-4">
-                <SectionLabel>Старые коммерческие условия live-модели</SectionLabel>
+                <SectionLabel>Коммерческие условия V2</SectionLabel>
                 <p className="text-[11px] text-[#9a9a95] -mt-2 mb-3 leading-snug">
-                  Не влияют на цену V2 и КП после переключения. Будут удалены/заменены после полного перехода.
+                  Влияют на цену клиента в КП: маржа B2C, скидка и дизайнерские.
                 </p>
                 <PricingBlock
                   settings={settings}
@@ -1200,10 +1277,10 @@ export default function MirrorCalculatorPage() {
                 {/* ① Price card */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
 
-                  {/* Main price — V2 итог = изделие + услуги. B2B = себестоимость от производства.
-                      Factory cost и live-цены здесь намеренно не показываем — это owner
-                      diagnostics. Менеджер видит только цены, релевантные для КП. */}
-                  {twoStagePreview.available ? (
+                  {/* Main price — V2 commercial pipeline: изделие после маржи / партнёра /
+                      скидки + услуги. B2B = себестоимость от производства.
+                      Factory cost / live — owner diagnostics. */}
+                  {v2Commercial.available ? (
                     <>
                       <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
                         Цена клиенту
@@ -1217,6 +1294,18 @@ export default function MirrorCalculatorPage() {
                           <span className="text-[11px] text-[#6b6b66]">Изделие</span>
                           <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(productQuotePrice)}</span>
                         </div>
+                        {v2Commercial.partnerAmount > 0 && (
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[11px] text-purple-600">Дизайнерские {v2Commercial.partnerPercent}% включены</span>
+                            <span className="text-[12px] font-mono text-purple-600">+{fmt(v2Commercial.partnerAmount)}</span>
+                          </div>
+                        )}
+                        {v2Commercial.discountAmount > 0 && (
+                          <div className="flex justify-between items-baseline">
+                            <span className="text-[11px] text-orange-500">Скидка {v2Commercial.discountPercent}%</span>
+                            <span className="text-[12px] font-mono text-orange-500">−{fmt(v2Commercial.discountAmount)}</span>
+                          </div>
+                        )}
                         {selectedServicesTotal > 0 && (
                           <div className="flex justify-between items-baseline">
                             <span className="text-[11px] text-[#6b6b66]">Услуги</span>
@@ -1225,10 +1314,10 @@ export default function MirrorCalculatorPage() {
                         )}
                         <div className="flex justify-between items-baseline pt-1.5 mt-1.5 border-t border-[#f2f2f0]">
                           <span className="text-[11px] text-[#6b6b66]">Себестоимость от производства</span>
-                          <span className="text-[12px] font-mono font-semibold text-[#2a2a28]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
+                          <span className="text-[12px] font-mono font-semibold text-[#2a2a28]">{fmt(v2Commercial.b2bPrice)}</span>
                         </div>
                         <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
-                          Расчёт по финмодели V2
+                          Расчёт по финмодели V2 · маржа B2C {v2Commercial.selectedB2cMarginPercent}%
                         </p>
                       </div>
                     </>
@@ -1241,7 +1330,7 @@ export default function MirrorCalculatorPage() {
                         {result.grandTotal.toLocaleString('ru-RU')} ₽
                       </p>
                       <p className="text-[10px] text-amber-600 mt-1 leading-snug">
-                        V2 недоступна: {twoStagePreview.reason}. КП будет создано по live-цене.
+                        V2 недоступна: {v2Commercial.reason}. КП будет создано по live-цене.
                       </p>
                     </>
                   )}
@@ -1298,9 +1387,9 @@ export default function MirrorCalculatorPage() {
                           </a>
                         </div>
 
-                        {!twoStagePreview.available ? (
+                        {!v2Commercial.available ? (
                           <p className="text-[10px] text-amber-600 leading-snug">
-                            Недоступна — {twoStagePreview.reason}. КП будет создано по live-цене.
+                            Недоступна — {v2Commercial.reason}. КП будет создано по live-цене.
                           </p>
                         ) : (
                           <>
@@ -1308,13 +1397,33 @@ export default function MirrorCalculatorPage() {
                               <div className="flex items-baseline justify-between">
                                 <span className="text-xs text-[#4b4b47]">Себестоимость от производства</span>
                                 <span className="text-xs font-mono font-semibold text-[#2a2a28]">
-                                  {fmt(twoStagePreview.pricing.b2b.price)}
+                                  {fmt(v2Commercial.b2bPrice)}
                                 </span>
                               </div>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xs text-[#6b6b66]">B2C маржа</span>
+                                <span className="text-xs font-mono text-[#6b6b66]">{v2Commercial.selectedB2cMarginPercent}%</span>
+                              </div>
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xs text-[#4b4b47]">Цена изделия до дизайнерских</span>
+                                <span className="text-xs font-mono text-[#4b4b47]">{fmt(v2Commercial.b2cProductBase)}</span>
+                              </div>
+                              {v2Commercial.partnerAmount > 0 && (
+                                <div className="flex items-baseline justify-between">
+                                  <span className="text-xs text-purple-600">Дизайнерские {v2Commercial.partnerPercent}%</span>
+                                  <span className="text-xs font-mono text-purple-600">+{fmt(v2Commercial.partnerAmount)}</span>
+                                </div>
+                              )}
+                              {v2Commercial.discountAmount > 0 && (
+                                <div className="flex items-baseline justify-between">
+                                  <span className="text-xs text-orange-500">Скидка {v2Commercial.discountPercent}%</span>
+                                  <span className="text-xs font-mono text-orange-500">−{fmt(v2Commercial.discountAmount)}</span>
+                                </div>
+                              )}
                               <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
                                 <span className="text-xs text-[#4b4b47]">Цена изделия клиенту</span>
                                 <span className="text-xs font-mono font-semibold text-[#2a2a28]">
-                                  {fmt(twoStagePreview.pricing.b2c.price)}
+                                  {fmt(v2Commercial.productAfterDiscount)}
                                 </span>
                               </div>
                               {selectedServicesTotal > 0 && (
@@ -1406,9 +1515,33 @@ export default function MirrorCalculatorPage() {
                                 <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
                               </div>
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">B2C Product Price</span>
+                                <span className="text-[11px] text-[#6b6b66]">B2C Price (admin config {twoStagePreview.config.b2cMarginPercent}%)</span>
                                 <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2c.price)}</span>
                               </div>
+                              {v2Commercial.available && (
+                                <>
+                                  <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
+                                    <span className="text-[11px] text-[#6b6b66]">B2C base (selected margin {v2Commercial.selectedB2cMarginPercent}%)</span>
+                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.b2cProductBase)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-baseline">
+                                    <span className="text-[11px] text-[#6b6b66]">Partner gross-up</span>
+                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.productWithPartner)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-baseline">
+                                    <span className="text-[11px] text-purple-600">Partner amount ({v2Commercial.partnerPercent}%)</span>
+                                    <span className="text-[11px] font-mono text-purple-600">+{fmt(v2Commercial.partnerAmount)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-baseline">
+                                    <span className="text-[11px] text-orange-500">Discount amount ({v2Commercial.discountPercent}%)</span>
+                                    <span className="text-[11px] font-mono text-orange-500">−{fmt(v2Commercial.discountAmount)}</span>
+                                  </div>
+                                  <div className="flex justify-between items-baseline">
+                                    <span className="text-[11px] text-[#6b6b66]">Product after discount</span>
+                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.productAfterDiscount)}</span>
+                                  </div>
+                                </>
+                              )}
                               <div className="flex justify-between items-baseline">
                                 <span className="text-[11px] text-[#6b6b66]">Services Total (sale)</span>
                                 <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(selectedServicesTotal)}</span>
@@ -1423,7 +1556,7 @@ export default function MirrorCalculatorPage() {
                               </div>
                               <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
                                 Live маржа: {result.margin}% · Live прибыль: {fmt(result.profit)}
-                                {' · '}quote source: {quoteIsV2 ? 'v2_b2c + services' : 'legacy_live_fallback'}
+                                {' · '}quote source: {quoteIsV2 ? 'v2_b2c_commercial' : 'legacy_live_fallback'}
                               </p>
                             </div>
                           )}
