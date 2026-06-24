@@ -40,7 +40,6 @@ export default function PricingV2Page() {
       .from('pricing_model_config_v2')
       .select('production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2')
       .eq('product_category', 'mirror')
-      .eq('active', true)
       .maybeSingle()
     if (error) setError(error.message)
     else if (data) {
@@ -88,7 +87,6 @@ export default function PricingV2Page() {
         packaging_cost_per_m2:     form.packaging_cost_per_m2,
       })
       .eq('product_category', 'mirror')
-      .eq('active', true)
     if (error) setError(error.message)
     else      { setSaved(true); setTimeout(() => setSaved(false), 2500) }
     setSaving(false)
@@ -147,6 +145,9 @@ export default function PricingV2Page() {
           <div className="py-2 border-b border-[#f0f0ec] mb-1">
             <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Stage 1 · Производство (B2B)</span>
           </div>
+          <p className="text-[12px] text-[#6b6b66] py-2 leading-snug">
+            Производство/B2B — формирует цену продажи партнёру.
+          </p>
           {numField('Налог производства',  'Налог на B2B-выручку',                              '%',  'production_tax_percent',    1)}
           {numField('Маржа производства',  'Прибыль производства в B2B-цене',                   '%',  'production_margin_percent', 1)}
           <div className="py-2.5 text-[11px] text-[#9a9a95] font-mono leading-snug">
@@ -158,6 +159,9 @@ export default function PricingV2Page() {
           <div className="py-2 border-b border-[#f0f0ec] mb-1">
             <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Stage 2 · B2C (клиент)</span>
           </div>
+          <p className="text-[12px] text-[#6b6b66] py-2 leading-snug">
+            B2C — формирует цену конечному клиенту от B2B-закупки.
+          </p>
           {numField('Налог B2C',           'Налог на розничную выручку',                        '%',  'b2c_tax_percent',           1)}
           {numField('Маржа B2C',           'Прибыль B2C в розничной цене',                      '%',  'b2c_margin_percent',        1)}
           <div className="py-2.5 text-[11px] text-[#9a9a95] font-mono leading-snug">

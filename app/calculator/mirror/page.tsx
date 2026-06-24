@@ -185,7 +185,8 @@ export default function MirrorCalculatorPage() {
 
   const [role, setRole]               = useState<string | null>(null)
   const [copied, setCopied]           = useState(false)
-  const [showPricing, setShowPricing] = useState(true)
+  const [isPriceBreakdownOpen, setIsPriceBreakdownOpen] = useState(false)
+  const [pricingConfigInactive, setPricingConfigInactive] = useState(false)
   const [saving, setSaving]           = useState(false)
   const [savedId, setSavedId]         = useState<number | null>(null)
   const [addedToCart, setAddedToCart] = useState(false)
@@ -271,9 +272,8 @@ export default function MirrorCalculatorPage() {
           loadWasteModifiers(),
           fetch('/api/admin/pricing-formula'),
           sb.from('pricing_model_config_v2')
-            .select('production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2')
+            .select('product_category, production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2, active')
             .eq('product_category', 'mirror')
-            .eq('active', true)
             .maybeSingle(),
         ])
         setMaterials(mats ?? [])
@@ -285,7 +285,7 @@ export default function MirrorCalculatorPage() {
         if (psData) setProdSettings(psData as ProductionSettings)
         if (facetData) setFacetPrices((facetData as FacetPrice[]).filter(f => f.active !== false))
         if (priceCfg) {
-          const pc = priceCfg as Record<string, number | null>
+          const pc = priceCfg as Record<string, number | boolean | string | null>
           setPricingConfig({
             productionTaxPercent:    Number(pc.production_tax_percent    ?? PRICING_V2_FALLBACK.productionTaxPercent),
             productionMarginPercent: Number(pc.production_margin_percent ?? PRICING_V2_FALLBACK.productionMarginPercent),
@@ -295,6 +295,9 @@ export default function MirrorCalculatorPage() {
             scrapReservePercent:     Number(pc.scrap_reserve_percent     ?? PRICING_V2_FALLBACK.scrapReservePercent),
             packagingCostPerM2:      Number(pc.packaging_cost_per_m2     ?? PRICING_V2_FALLBACK.packagingCostPerM2),
           })
+          setPricingConfigInactive(pc.active === false)
+        } else if (process.env.NODE_ENV !== 'production') {
+          console.warn('[mirror calculator] pricing_model_config_v2 row for product_category=mirror not found — using fallback')
         }
 
         if (delivRes.ok) {
@@ -1167,61 +1170,89 @@ export default function MirrorCalculatorPage() {
                 {/* ① Price card */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
 
-                  {/* Main price */}
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
+                  {/* Main price — V2 B2C when available, иначе live как fallback */}
+                  {twoStagePreview.available ? (
+                    <>
                       <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
-                        LIVE цена для КП сейчас
+                        Цена B2C клиенту
+                      </p>
+                      <p className="text-[28px] font-bold font-mono leading-none tracking-tight text-emerald-700">
+                        {twoStagePreview.pricing.b2c.price.toLocaleString('ru-RU')} ₽
+                      </p>
+
+                      <div className="mt-3 space-y-1">
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[11px] text-[#6b6b66]">B2B цена</span>
+                          <span className="text-[12px] font-mono font-semibold text-[#2a2a28]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
+                        </div>
+                        <div className="flex justify-between items-baseline">
+                          <span className="text-[11px] text-[#6b6b66]">Себестоимость производства</span>
+                          <span className="text-[12px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.factoryCost)}</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 pt-3 border-t border-[#f2f2f0]">
+                        <div className="flex items-baseline justify-between">
+                          <span className="text-[10px] text-[#a8a8a3]">Live цена КП сейчас</span>
+                          <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.grandTotal)}</span>
+                        </div>
+                        <p className="text-[10px] text-[#b8b8b4] mt-0.5 leading-snug">
+                          Пока КП/заказ сохраняется по live-цене
+                        </p>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
+                        Live цена для КП
                       </p>
                       <p className={`text-[26px] font-bold font-mono leading-none tracking-tight ${priceColor}`}>
                         {result.grandTotal.toLocaleString('ru-RU')} ₽
                       </p>
                       <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
-                        Используется при сохранении КП/заказа
+                        V2 недоступна: {twoStagePreview.reason}. Сохраняется при создании КП/заказа.
                       </p>
-                    </div>
-                    <div className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex-shrink-0 ${marginBadge}`}>
-                      {result.margin}%
-                    </div>
-                  </div>
-
-                  {/* Stats row */}
-                  <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#f2f2f0]">
-                    <div>
-                      <p className="text-[10px] text-[#a8a8a3] mb-0.5">Прибыль</p>
-                      <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(result.profit)}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-[#a8a8a3] mb-0.5">Себестоимость</p>
-                      <p className="text-sm font-mono text-[#6b6b66]">{fmt(result.totalCost)}</p>
-                    </div>
-                  </div>
-
-                  {result.belowMinMargin && (
-                    <div className="mt-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100">
-                      <p className="text-xs text-red-600 font-medium">Маржа ниже минимума {minMargin}%</p>
-                    </div>
+                    </>
                   )}
+
+                  <div className="mt-3 pt-3 border-t border-[#f2f2f0] flex items-center justify-between gap-3">
+                    <a
+                      href="/admin/pricing-v2"
+                      className="text-[11px] text-blue-600 hover:underline whitespace-nowrap"
+                    >
+                      Настроить финмодель →
+                    </a>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${marginBadge}`}>
+                      live маржа {result.margin}%
+                    </span>
+                  </div>
                 </div>
 
-                {/* ② Расчёт цены — единый блок: себестоимость, формула, услуги, итог, sanity-check V2 */}
+                {/* ② Расчёт цены — единый блок: live-детализация + V2 финмодель + диагностика. По умолчанию свёрнут. */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                  <button onClick={() => setShowPricing(!showPricing)}
+                  <button onClick={() => setIsPriceBreakdownOpen(!isPriceBreakdownOpen)}
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
                     <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em]">Расчёт цены</p>
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.grandTotal)}</span>
-                      <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${showPricing ? 'rotate-180' : ''}`}
+                      <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${isPriceBreakdownOpen ? 'rotate-180' : ''}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
                   </button>
-                  {showPricing && (
+                  {isPriceBreakdownOpen && (
                     <div className="px-4 pb-4 border-t border-[#f5f5f3]">
 
+                      {/* 0. Live-маржа alert — только внутри детализации */}
+                      {result.belowMinMargin && (
+                        <div className="mt-3 px-3 py-2 bg-red-50 rounded-lg border border-red-100">
+                          <p className="text-xs text-red-600 font-medium">Live маржа ниже минимума {minMargin}%</p>
+                        </div>
+                      )}
+
                       {/* 1. Себестоимость */}
-                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-3 mb-2">Себестоимость</p>
+                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-3 mb-2">Live-расчёт · Себестоимость</p>
                       <div className="divide-y divide-[#f7f7f5]">
                         {result.costLines.map((line, i) => (
                           <div key={i} className="flex items-baseline justify-between py-1.5">
@@ -1308,34 +1339,8 @@ export default function MirrorCalculatorPage() {
                         {' · '}Прибыль: <span className="font-semibold text-[#6b6b66]">{fmt(result.profit)}</span>
                       </p>
 
-                      {/* 7. Финмодель V2 — sanity check, не отдельная цена */}
+                      {/* 7. Финмодель V2 — двухступенчатая цена + диагностика */}
                       <div className="mt-4 pt-3 border-t border-dashed border-[#e0e0dc]">
-                        {(() => {
-                          if (!v2Preview) {
-                            return (
-                              <p className="text-[10px] text-amber-600 leading-snug">
-                                Финмодель V2 недоступна — проверьте справочник cost_price.
-                              </p>
-                            )
-                          }
-                          const diff = v2Preview.grandTotal - result.grandTotal
-                          if (Math.abs(diff) <= 2) {
-                            return (
-                              <p className="text-[10px] text-emerald-700 leading-snug">
-                                Финмодель V2: совпадает с текущей формулой ✓
-                              </p>
-                            )
-                          }
-                          return (
-                            <p className="text-[10px] text-amber-600 leading-snug">
-                              <span className="font-semibold">Внимание:</span> V2 считает от другой себестоимости — {fmt(v2Preview.directCost)} ₽ (live: {fmt(result.totalCost)} ₽). Ожидаемо до унификации справочника cost_price. Цена V2 была бы {fmt(v2Preview.grandTotal)} ₽.
-                            </p>
-                          )
-                        })()}
-                      </div>
-
-                      {/* 7.5. Финмодель V2 — двухступенчатая цена, справочно */}
-                      <div className="mt-3 pt-3 border-t border-dashed border-[#e0e0dc]">
                         <div className="flex items-baseline justify-between mb-1">
                           <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider">
                             ФИНМОДЕЛЬ V2
@@ -1347,20 +1352,12 @@ export default function MirrorCalculatorPage() {
                             Настроить →
                           </a>
                         </div>
-                        <p className="text-[10px] text-[#b8b8b4] mb-2 leading-snug">
-                          Справочно. КП сейчас сохраняется по live-цене сверху.
-                        </p>
                         {!twoStagePreview.available ? (
                           <p className="text-[10px] text-amber-600 leading-snug">
                             Недоступна — {twoStagePreview.reason}.
                           </p>
                         ) : (
                           <>
-                            {twoStagePreview.isFallback && (
-                              <p className="text-[10px] text-amber-600 leading-snug mb-2">
-                                Используются fallback-настройки 12/40/12/40 — конфиг из pricing_model_config_v2 не найден.
-                              </p>
-                            )}
                             <div className="space-y-2">
                               <div>
                                 <p className="text-[10px] text-[#a8a8a3] mb-0.5">Себестоимость производства</p>
@@ -1397,6 +1394,25 @@ export default function MirrorCalculatorPage() {
                             <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
                               Услуги пока считаются отдельно по live-модели. Монтаж/доставка остаются в live-цене.
                             </p>
+
+                            {/* Diagnostic block — не пугать менеджера амбером без причины. */}
+                            <div className="mt-3 pt-2 border-t border-dotted border-[#eaeae6] space-y-1">
+                              {twoStagePreview.isFallback && (
+                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                                  ⚠ config не найден в БД, применяются fallback-настройки 12/40/12/40.
+                                </p>
+                              )}
+                              {!twoStagePreview.isFallback && pricingConfigInactive && (
+                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                                  ⚠ config в БД помечен как inactive, но используется.
+                                </p>
+                              )}
+                              {v2Preview && Math.abs(v2Preview.grandTotal - result.grandTotal) > 2 && (
+                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                                  diff: V2 directCost {fmt(v2Preview.directCost)} ₽ vs live totalCost {fmt(result.totalCost)} ₽. Это нормально: V2 использует cost_price без sale_price и добавляет упаковку/резерв/накладные.
+                                </p>
+                              )}
+                            </div>
                           </>
                         )}
                       </div>
