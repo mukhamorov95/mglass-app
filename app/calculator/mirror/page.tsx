@@ -57,16 +57,34 @@ function toLC(c: RawComponent): MirrorLightingComponent {
 
 // ── Two-stage pricing preview — Factory Cost → B2B → B2C ──────────────────
 // Read-only preview. КП/заказы продолжают сохраняться по live-цене (result.grandTotal).
-const MIRROR_TWO_STAGE_PRICING_CONFIG = {
+//
+// Источник конфига:
+//   - первичный — public.pricing_model_config_v2 (категория 'mirror', active=true)
+//   - fallback  — константа ниже; используется только если загрузка из БД упала
+//                 или строка отсутствует. UI показывает баннер "fallback".
+type PricingV2Config = {
+  productionTaxPercent:    number
+  productionMarginPercent: number
+  b2cTaxPercent:           number
+  b2cMarginPercent:        number
+  factoryOverheadPercent:  number
+  scrapReservePercent:     number
+  packagingCostPerM2:      number
+}
+
+const PRICING_V2_FALLBACK: PricingV2Config = {
   productionTaxPercent:    12,
   productionMarginPercent: 40,
   b2cTaxPercent:           12,
   b2cMarginPercent:        40,
-} as const
+  factoryOverheadPercent:  20,
+  scrapReservePercent:     5,
+  packagingCostPerM2:      120,
+}
 
 type TwoStagePreviewState =
   | { available: false; reason: string }
-  | { available: true;  pricing: TwoStagePricingResult }
+  | { available: true;  pricing: TwoStagePricingResult; config: PricingV2Config; isFallback: boolean }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -162,6 +180,7 @@ export default function MirrorCalculatorPage() {
   const [components, setComponents]   = useState<RawComponent[]>([])
   const [mirrorFrames, setMirrorFrames] = useState<MirrorFrame[]>([])
   const [prodSettings, setProdSettings] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
+  const [pricingConfig, setPricingConfig] = useState<PricingV2Config | null>(null)
   const [loading, setLoading]         = useState(true)
 
   const [role, setRole]               = useState<string | null>(null)
@@ -239,7 +258,7 @@ export default function MirrorCalculatorPage() {
           const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
           setRole((prof as { role?: string } | null)?.role ?? null)
         }
-        const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes] = await Promise.all([
+        const [{ data: mats }, { data: svcs }, { data: fins }, { data: pts }, { data: comps }, { data: mframes }, { data: psData }, { data: facetData }, mx, mods, delivRes, { data: priceCfg }] = await Promise.all([
           sb.from('materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('services').select('*').eq('active', true),
           sb.from('financial_settings').select('*'),
@@ -251,6 +270,11 @@ export default function MirrorCalculatorPage() {
           loadGlassMatrix(),
           loadWasteModifiers(),
           fetch('/api/admin/pricing-formula'),
+          sb.from('pricing_model_config_v2')
+            .select('production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2')
+            .eq('product_category', 'mirror')
+            .eq('active', true)
+            .maybeSingle(),
         ])
         setMaterials(mats ?? [])
         setServices(svcs ?? [])
@@ -260,6 +284,18 @@ export default function MirrorCalculatorPage() {
         setMirrorFrames((mframes ?? []) as MirrorFrame[])
         if (psData) setProdSettings(psData as ProductionSettings)
         if (facetData) setFacetPrices((facetData as FacetPrice[]).filter(f => f.active !== false))
+        if (priceCfg) {
+          const pc = priceCfg as Record<string, number | null>
+          setPricingConfig({
+            productionTaxPercent:    Number(pc.production_tax_percent    ?? PRICING_V2_FALLBACK.productionTaxPercent),
+            productionMarginPercent: Number(pc.production_margin_percent ?? PRICING_V2_FALLBACK.productionMarginPercent),
+            b2cTaxPercent:           Number(pc.b2c_tax_percent           ?? PRICING_V2_FALLBACK.b2cTaxPercent),
+            b2cMarginPercent:        Number(pc.b2c_margin_percent        ?? PRICING_V2_FALLBACK.b2cMarginPercent),
+            factoryOverheadPercent:  Number(pc.factory_overhead_percent  ?? PRICING_V2_FALLBACK.factoryOverheadPercent),
+            scrapReservePercent:     Number(pc.scrap_reserve_percent     ?? PRICING_V2_FALLBACK.scrapReservePercent),
+            packagingCostPerM2:      Number(pc.packaging_cost_per_m2     ?? PRICING_V2_FALLBACK.packagingCostPerM2),
+          })
+        }
 
         if (delivRes.ok) {
           try {
@@ -489,27 +525,42 @@ export default function MirrorCalculatorPage() {
         standardMargin: inputs.standardMargin,
         tax: inputs.tax,
         minMargin: inputs.minMargin,
+        // V2 Factory Cost extensions — packaging + scrap + factory overhead.
+        // pricingConfig либо из БД, либо fallback. Live calc эти поля не читает.
+        productionConfig: {
+          factoryOverheadPercent: (pricingConfig ?? PRICING_V2_FALLBACK).factoryOverheadPercent,
+          scrapReservePercent:    (pricingConfig ?? PRICING_V2_FALLBACK).scrapReservePercent,
+          packagingCostPerM2:     (pricingConfig ?? PRICING_V2_FALLBACK).packagingCostPerM2,
+        },
       },
       materials,
       services,
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, mirrorCostPerM2, materials, services])
+  }, [result, mirrorCostPerM2, materials, services, pricingConfig])
 
   // Two-stage pricing preview (read-only). Источник factory cost — v2Preview.directCost
-  // (cost_price-only basket). result.totalCost не годится: смесь cost+sale цен.
-  // Налог/маржа фиксированы в локальном конфиге и НЕ зависят от inputs.margin/tax.
+  // (cost_price-only basket, теперь включает packaging+scrap+overhead).
+  // Налог/маржа берутся из pricing_model_config_v2; fallback включается, если
+  // строка в БД отсутствует/не загрузилась.
   const twoStagePreview = useMemo<TwoStagePreviewState>(() => {
     if (!result)                                  return { available: false, reason: 'Нет расчёта' }
     if (!v2Preview)                               return { available: false, reason: 'V2 cost-only себестоимость недоступна' }
     if (!mirrorCostPerM2 || mirrorCostPerM2 <= 0) return { available: false, reason: 'Для материала не заполнена закупочная себестоимость cost_price' }
+    const cfg        = pricingConfig ?? PRICING_V2_FALLBACK
+    const isFallback = pricingConfig === null
     const pricing = calculateMirrorTwoStagePricing({
       factoryCost: v2Preview.directCost,
-      config:      MIRROR_TWO_STAGE_PRICING_CONFIG,
+      config: {
+        productionTaxPercent:    cfg.productionTaxPercent,
+        productionMarginPercent: cfg.productionMarginPercent,
+        b2cTaxPercent:           cfg.b2cTaxPercent,
+        b2cMarginPercent:        cfg.b2cMarginPercent,
+      },
     })
     if (!pricing)                                 return { available: false, reason: 'Финмодель V2 не смогла посчитать цену' }
-    return { available: true, pricing }
-  }, [result, v2Preview, mirrorCostPerM2])
+    return { available: true, pricing, config: cfg, isFallback }
+  }, [result, v2Preview, mirrorCostPerM2, pricingConfig])
 
   const marginNum   = result?.margin ?? 0
   const isGreen     = marginNum >= 35
@@ -1285,9 +1336,17 @@ export default function MirrorCalculatorPage() {
 
                       {/* 7.5. Финмодель V2 — двухступенчатая цена, справочно */}
                       <div className="mt-3 pt-3 border-t border-dashed border-[#e0e0dc]">
-                        <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">
-                          ФИНМОДЕЛЬ V2
-                        </p>
+                        <div className="flex items-baseline justify-between mb-1">
+                          <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider">
+                            ФИНМОДЕЛЬ V2
+                          </p>
+                          <a
+                            href="/admin/pricing-v2"
+                            className="text-[10px] text-blue-600 hover:underline"
+                          >
+                            Настроить →
+                          </a>
+                        </div>
                         <p className="text-[10px] text-[#b8b8b4] mb-2 leading-snug">
                           Справочно. КП сейчас сохраняется по live-цене сверху.
                         </p>
@@ -1297,11 +1356,21 @@ export default function MirrorCalculatorPage() {
                           </p>
                         ) : (
                           <>
+                            {twoStagePreview.isFallback && (
+                              <p className="text-[10px] text-amber-600 leading-snug mb-2">
+                                Используются fallback-настройки 12/40/12/40 — конфиг из pricing_model_config_v2 не найден.
+                              </p>
+                            )}
                             <div className="space-y-2">
                               <div>
                                 <p className="text-[10px] text-[#a8a8a3] mb-0.5">Себестоимость производства</p>
                                 <p className="text-sm font-mono font-semibold text-[#2a2a28]">
                                   {fmt(twoStagePreview.pricing.factoryCost)}
+                                </p>
+                                <p className="text-[10px] text-[#9a9a95] leading-snug">
+                                  накладные {twoStagePreview.config.factoryOverheadPercent}%
+                                  {' · '}резерв брака {twoStagePreview.config.scrapReservePercent}%
+                                  {' · '}упаковка {fmt(twoStagePreview.config.packagingCostPerM2)} ₽/м²
                                 </p>
                               </div>
                               <div>
@@ -1310,8 +1379,8 @@ export default function MirrorCalculatorPage() {
                                   {fmt(twoStagePreview.pricing.b2b.price)}
                                 </p>
                                 <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  производство: налог {MIRROR_TWO_STAGE_PRICING_CONFIG.productionTaxPercent}%
-                                  {' · '}маржа {MIRROR_TWO_STAGE_PRICING_CONFIG.productionMarginPercent}%
+                                  производство: налог {twoStagePreview.config.productionTaxPercent}%
+                                  {' · '}маржа {twoStagePreview.config.productionMarginPercent}%
                                 </p>
                               </div>
                               <div>
@@ -1320,8 +1389,8 @@ export default function MirrorCalculatorPage() {
                                   {fmt(twoStagePreview.pricing.b2c.price)}
                                 </p>
                                 <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  B2C: налог {MIRROR_TWO_STAGE_PRICING_CONFIG.b2cTaxPercent}%
-                                  {' · '}маржа {MIRROR_TWO_STAGE_PRICING_CONFIG.b2cMarginPercent}%
+                                  B2C: налог {twoStagePreview.config.b2cTaxPercent}%
+                                  {' · '}маржа {twoStagePreview.config.b2cMarginPercent}%
                                 </p>
                               </div>
                             </div>

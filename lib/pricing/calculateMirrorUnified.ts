@@ -73,6 +73,15 @@ export type CalculateMirrorUnifiedInputs = {
   standardMargin:  number
   tax:             number
   minMargin:       number
+
+  // Production cost extensions (V2 two-stage factory cost). Optional — when
+  // omitted, directCost stays identical to the pre-extension behavior so the
+  // existing v2-preview / financial check keep working unchanged.
+  productionConfig?: {
+    factoryOverheadPercent: number   // % to materials subtotal
+    scrapReservePercent:    number   // % to materials subtotal
+    packagingCostPerM2:     number   // ₽ per billingArea m²
+  }
 }
 
 export type CalculateMirrorUnifiedResult = {
@@ -210,6 +219,18 @@ export function calculateMirrorUnified(
         total: Math.round(perimeter * inputs.diffuser.cost_price),
       })
     }
+    // Lighting consumables — provod, термоусадка, разъёмы, изоляция и т.д.
+    // Засеяны в commit 38f727a (V2-only, is_v2_only=true; live их не видит).
+    const lightingConsumables = findMat(materials, 'Расходники подсветки')
+    if (lightingConsumables && lightingConsumables.cost_price > 0) {
+      lines.push({
+        name:  dn(lightingConsumables),
+        qty:   1,
+        unit:  lightingConsumables.unit || 'шт',
+        price: lightingConsumables.cost_price,
+        total: lightingConsumables.cost_price,
+      })
+    }
   }
 
   // 3. Button — no hardcoded fallback. Missing material = no row,
@@ -304,6 +325,58 @@ export function calculateMirrorUnified(
       price: Math.round(fc.totalMinutes > 0 ? fc.assemblyCost / fc.totalMinutes : 0),
       total: fc.assemblyCost,
     })
+  }
+
+  // 11–13. Production cost extensions (V2 only). Applied to materials subtotal
+  //        BEFORE the financial markup so the resulting directCost reflects the
+  //        full production cost (Factory Cost) — input for the two-stage model.
+  //
+  // Convention: packaging is its own line (₽/м² × billingArea); scrap reserve
+  // and factory overhead are computed as % of the *materials subtotal* only
+  // (lines 1–10) — they do NOT compound on each other or on packaging, so the
+  // order of these three lines in the output array does not affect totals.
+  //
+  // TODO: combined "Сборка зеркала с подсветкой и пескоструем" — пока берётся
+  // приоритет hasLighting > hasSandblast в материале «Сборка зеркала с
+  // подсветкой». При появлении отдельной комбинированной позиции — добавить
+  // в ветке выше (шаг 5).
+  if (inputs.productionConfig) {
+    const cfg = inputs.productionConfig
+    const materialsSubtotal = lines.reduce((s, l) => s + l.total, 0)
+
+    if (cfg.packagingCostPerM2 > 0 && billingArea > 0) {
+      lines.push({
+        name:  'Упаковка',
+        qty:   Number(billingArea.toFixed(3)),
+        unit:  'м²',
+        price: cfg.packagingCostPerM2,
+        total: Math.round(billingArea * cfg.packagingCostPerM2),
+      })
+    }
+    if (cfg.scrapReservePercent > 0 && materialsSubtotal > 0) {
+      const total = Math.round(materialsSubtotal * cfg.scrapReservePercent / 100)
+      if (total > 0) {
+        lines.push({
+          name:  `Резерв брака ${cfg.scrapReservePercent}%`,
+          qty:   1,
+          unit:  '%',
+          price: total,
+          total,
+        })
+      }
+    }
+    if (cfg.factoryOverheadPercent > 0 && materialsSubtotal > 0) {
+      const total = Math.round(materialsSubtotal * cfg.factoryOverheadPercent / 100)
+      if (total > 0) {
+        lines.push({
+          name:  `Накладные производства ${cfg.factoryOverheadPercent}%`,
+          qty:   1,
+          unit:  '%',
+          price: total,
+          total,
+        })
+      }
+    }
   }
 
   const directCost = lines.reduce((s, l) => s + l.total, 0)
