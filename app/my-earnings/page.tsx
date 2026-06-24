@@ -29,7 +29,27 @@ const EARNINGS_SETTINGS_FALLBACK: EarningsSettings = {
   commissionTiers: DEFAULT_MANAGER_COMMISSION_TIERS,
   streakBonuses:   DEFAULT_STREAK_BONUSES,
   effectiveFrom:   '2026-07-01',
-  rulesNote:       'Новая система действует для B2C-заказов с 1 июля. В зачёт идут только подтверждённые B2C-продажи. B2B-продажи будут подключены отдельно по другим правилам. Условия могут пересматриваться по мере роста компании, но изменения будут заранее озвучиваться.',
+  rulesNote: [
+    'Новая система мотивации действует для B2C-заказов с 1 июля 2026 года. Доход менеджера состоит из оклада, прогрессивной комиссии и бонуса за стабильный результат.',
+    '',
+    'Комиссия начисляется по кассовому методу: в расчёт входит только фактически поступившая оплата по B2C-заказам менеджера. Если заказ оформлен на 500 000 ₽, но клиент внёс предоплату 250 000 ₽, в расчёт комиссии попадает только 250 000 ₽. Остаток попадёт в расчёт в том периоде, когда деньги фактически поступят в компанию.',
+    '',
+    'В зачёт входят предоплаты, частичные оплаты, остатки оплат, полные оплаты и доплаты по B2C-заказам, закреплённым за менеджером.',
+    '',
+    'Не входят в зачёт: B2B-заказы, неоплаченные заявки и КП, оформленные, но не оплаченные заказы, отменённые заказы, возвраты, спорные сделки до решения руководителя, технические пересчёты без фактического поступления денег, а также заказы с грубой ошибкой менеджера, если компания понесла убыток.',
+    '',
+    'Комиссия считается ступенчато: процент применяется только к сумме внутри каждого диапазона, а не ко всей выручке.',
+    '',
+    'Выплаты производятся два раза в месяц: 27 числа — за поступления с 1 по 15 число текущего месяца включительно; 15 числа — за поступления с 16 числа по последний день предыдущего месяца.',
+    '',
+    'Прогрессивная ставка считается по накопленной оплаченной B2C-выручке за календарный месяц. Если во второй половине месяца менеджер выходит на более высокую ступень, доплата рассчитывается с учётом уже начисленной комиссии за первую половину месяца.',
+    '',
+    'Бонус за серию начисляется только по полностью закрытым календарным месяцам. Текущий месяц входит в серию только после его завершения. Если менеджер 3 закрытых месяца подряд удерживает подтверждённую оплаченную B2C-выручку выше порога, начисляется бонус: 3 000 000 ₽ и выше каждый месяц — 20 000 ₽; 4 000 000 ₽ и выше каждый месяц — 40 000 ₽; 5 000 000 ₽ и выше каждый месяц — 60 000 ₽. Если в одном из месяцев результат ниже порога, серия по этому порогу обнуляется и начинает считаться заново.',
+    '',
+    'Бонус за серию выплачивается только при нормальной управленческой дисциплине: заказы заведены корректно, оплаты и документы не потеряны, нет грубых ошибок менеджера и незакрытых конфликтных ситуаций по его вине.',
+    '',
+    'Условия могут пересматриваться по мере роста компании, количества заявок, партнёров и заказов. Изменения правил заранее озвучиваются команде.',
+  ].join('\n'),
 }
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -438,7 +458,10 @@ export default function MyEarningsPage() {
           <p className="text-[11px] text-[#6b6b66] leading-snug">
             Действует с <span className="font-semibold">{effSettings.effectiveFrom}</span>.
             Доход = <span className="font-semibold">оклад {fmt(effSalary)}</span>
-            {' + '}прогрессивная комиссия{' + '}бонус за серию.
+            {' + '}прогрессивная комиссия с оплаченной B2C-выручки{' + '}бонус за серию.
+          </p>
+          <p className="text-[10px] text-[#9a9a95] leading-snug mt-1">
+            Кассовый метод: в зачёт идут только фактически поступившие деньги по B2C-заказам. Выплаты 27 числа (1-15) и 15 числа (16-конец прошлого месяца).
           </p>
           {settingsFallbackReason && isOwner && (
             <p className="text-[10px] text-amber-700 leading-snug mt-2">
@@ -684,11 +707,11 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
           <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Калькулятор дохода</p>
           <p className="text-[11px] text-[#6b6b66] mb-3 leading-snug">
-            Введите план по B2C-выручке за месяц и увидите прогноз дохода.
+            Введите план по оплаченной B2C-выручке за месяц (фактические поступления денег) и увидите прогноз дохода.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-[#9a9a95]">Плановая B2C-выручка, ₽</label>
+              <label className="text-[10px] text-[#9a9a95]">Плановая оплаченная B2C-выручка за месяц, ₽</label>
               <input type="number" min={0} step={100_000} value={plannedRevenue}
                 onChange={e => setPlannedRevenue(Number(e.target.value) || 0)}
                 className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
@@ -750,10 +773,11 @@ export default function MyEarningsPage() {
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] text-[#9a9a95]">B2C-выручка менеджера, ₽</label>
+                <label className="text-[10px] text-[#9a9a95]">Оплаченная B2C-выручка менеджера за месяц, ₽</label>
                 <input type="number" min={0} step={100_000} value={ownerRevenue}
                   onChange={e => setOwnerRevenue(Number(e.target.value) || 0)}
                   className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                <p className="text-[10px] text-[#9a9a95] mt-1 leading-snug">Расчёт строится по поступившим деньгам, а не по сумме оформленных заказов.</p>
               </div>
               <div>
                 <label className="text-[10px] text-[#9a9a95]">Валовая маржа компании, %</label>
@@ -844,11 +868,11 @@ export default function MyEarningsPage() {
               </div>
             </div>
             <p className="text-[11px] text-[#6b6b66] leading-snug mb-3">
-              Рейтинг будет строиться по подтверждённой B2C-выручке менеджеров. Сейчас подключён личный localStorage-режим, поэтому доступны только ваши данные. Следующий этап — таблица <span className="font-mono">manager_sales</span> в Supabase и общая админ-панель.
+              Рейтинг будет строиться по подтверждённой оплаченной B2C-выручке менеджеров (по фактическим поступлениям денег). Сейчас подключён личный localStorage-режим, поэтому доступны только ваши данные. Следующий этап — таблица <span className="font-mono">manager_sales</span> в Supabase и общая админ-панель.
             </p>
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-y border-[#e4e4e0]">
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Менеджер</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-выручка</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-поступления</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Комиссия</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Заказов</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. чек</span>
@@ -863,7 +887,7 @@ export default function MyEarningsPage() {
               </span>
             </div>
             <p className="text-[10px] text-[#c4c4be] mt-3 text-center leading-snug">
-              Данные других менеджеров появятся после переноса учёта продаж в Supabase. Пока нет — не показываем, чтобы не вводить в заблуждение.
+              Данные других менеджеров появятся после переноса учёта поступлений в Supabase. Пока нет — не показываем, чтобы не вводить в заблуждение.
             </p>
           </div>
         )}
@@ -876,11 +900,11 @@ export default function MyEarningsPage() {
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Продаж добавлено</p>
+              <p className="text-[10px] text-[#9a9a95]">Поступлений добавлено</p>
               <p className="text-base font-mono font-semibold text-[#111110]">{todayAddedCount}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Выручка засчитана</p>
+              <p className="text-[10px] text-[#9a9a95]">Оплаченная выручка засчитана</p>
               <p className="text-base font-mono font-semibold text-[#111110]">{fmt(todayRevenue)}</p>
             </div>
             <div>
@@ -895,7 +919,7 @@ export default function MyEarningsPage() {
           <div className="flex items-baseline justify-between mb-3">
             <div>
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
-              <p className="text-[11px] text-[#4b4b47] mt-0.5">Принятая B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} сделок</p>
+              <p className="text-[11px] text-[#4b4b47] mt-0.5">Оплаченная B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} поступлений</p>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
               Ставка {curTierLabel}
@@ -975,7 +999,7 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
           <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Бонус за серию</p>
           <p className="text-[11px] text-[#6b6b66] mb-2 leading-snug">
-            3 месяца подряд держать выручку на уровне:
+            3 закрытых календарных месяца подряд держать оплаченную B2C-выручку на уровне (текущий месяц в серию не входит):
           </p>
           <div className="grid grid-cols-3 gap-2">
             {effBonuses.map(b => {
@@ -992,7 +1016,7 @@ export default function MyEarningsPage() {
           </div>
           {completedMonthsDesc.length < 3 ? (
             <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
-              Серия считается по закрытым месяцам. Закрыто {completedMonthsDesc.length} из 3 нужных — история подключится по мере накопления продаж.
+              Серия считается по закрытым месяцам. Закрыто {completedMonthsDesc.length} из 3 нужных — история подключится по мере накопления поступлений.
             </p>
           ) : streak.bonus === 0 ? (
             <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
@@ -1005,26 +1029,26 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <button onClick={() => setShowAddForm(v => !v)}
             className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Ручной ввод B2C-продажи</p>
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Ручной ввод B2C-поступления</p>
             <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">локальный режим / тест</span>
           </button>
           {showAddForm && (
             <div className="px-4 pb-4 border-t border-[#f5f5f3] space-y-2">
               <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
-                Временный режим: менеджер может добавить продажу вручную. Позже B2C-продажи будут подтягиваться из заказов и оплат автоматически.
+                Временный режим: менеджер может добавить фактическое поступление денег вручную (предоплата, остаток, полная оплата или доплата). Позже поступления будут подтягиваться из оплат и заказов автоматически.
               </p>
               <p className="text-[10px] text-[#9a9a95] leading-snug">
-                Каждый менеджер видит только свои ручные продажи в этом браузере (ключ привязан к user_id). После переноса в Supabase доступ будет ограничен по user_id на уровне RLS.
+                Каждый менеджер видит только свои ручные поступления в этом браузере (ключ привязан к user_id). После переноса в Supabase доступ будет ограничен по user_id на уровне RLS.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Дата</label>
+                  <label className="text-[10px] text-[#9a9a95]">Дата поступления</label>
                   <input type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
                     className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Сумма, ₽</label>
+                  <label className="text-[10px] text-[#9a9a95]">Сумма поступления, ₽</label>
                   <input type="number" min={0} value={form.amount || ''}
                     onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
                     className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
@@ -1074,20 +1098,20 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-baseline justify-between">
             <div>
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Мои B2C-заказы и продажи</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">B2B-продажи будут подключены отдельно по другим правилам.</p>
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Мои B2C-поступления и заказы</p>
+              <p className="text-[10px] text-[#c4c4be] mt-0.5">В колонке «В комиссию» отражены только подтверждённые оплаченные поступления. B2B-продажи и неоплаченные заказы в комиссию не идут.</p>
             </div>
             <p className="text-[10px] text-[#c4c4be]">{rows.length} строк</p>
           </div>
           {rows.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет B2C-продаж. Добавьте через форму выше.</div>
+            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет B2C-поступлений. Добавьте через форму выше.</div>
           ) : (
             <>
               <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Источник</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата поступл.</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Заказ</span>
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Клиент</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сумма</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сумма поступл.</span>
                 <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Статус</span>
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">В комиссию</span>
                 <span />
