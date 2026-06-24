@@ -118,9 +118,26 @@ export default function MyEarningsPage() {
   const [calcs, setCalcs]           = useState<Calc[]>([])
   const [localSales, setLocalSales] = useState<LocalSale[]>([])
   const [userId, setUserId]         = useState<string | null>(null)
+  const [role, setRole]             = useState<string | null>(null)
   const [loading, setLoading]       = useState(true)
   const [forbidden, setForbidden]   = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
+  const [showRules, setShowRules]     = useState(false)
+
+  // ── Manager income calculator ─────────────────────────────────────────────
+  // Прогноз дохода менеджера: вводит планируемую выручку и (опционально) бонус,
+  // получает оклад + комиссию + бонус + итог.
+  const [plannedRevenue, setPlannedRevenue] = useState(3_000_000)
+  const [plannedBonus, setPlannedBonus]     = useState(0)
+
+  // ── Owner calculator ──────────────────────────────────────────────────────
+  // Управленческая оценка экономики для владельца. Независимые поля, не
+  // привязаны к менеджерскому калькулятору — owner может моделировать иные
+  // сценарии. Кнопка "Подставить из калькулятора менеджера" копирует значения.
+  const [ownerRevenue, setOwnerRevenue]               = useState(3_000_000)
+  const [ownerGrossMarginPct, setOwnerGrossMarginPct] = useState(40)
+  const [ownerSalary, setOwnerSalary]                 = useState(DEFAULT_MANAGER_SALARY_RUB)
+  const [ownerBonus, setOwnerBonus]                   = useState(0)
 
   // Форма добавления продажи
   const [form, setForm] = useState<Omit<LocalSale, 'id' | 'created_at'>>({
@@ -141,7 +158,11 @@ export default function MyEarningsPage() {
 
       const { data: userData } = await supabase
         .from('users').select('role').eq('id', user.id).single()
-      if (userData?.role !== 'admin' && userData?.role !== 'manager') {
+      const userRole = (userData?.role ?? '').toString().toLowerCase()
+      setRole(userRole)
+      // Доступ: менеджеры (своя страница заработка) + owner-tier (admin/ceo/owner)
+      // для управленческих калькуляторов и заготовки рейтинга.
+      if (!['admin', 'ceo', 'owner', 'manager'].includes(userRole)) {
         setForbidden(true); setLoading(false); return
       }
 
@@ -261,6 +282,31 @@ export default function MyEarningsPage() {
     return [...calcRows, ...localRows].sort((a, b) => b.date.localeCompare(a.date))
   }, [calcs, localSales])
 
+  // ── Manager income calculator: производные ─────────────────────────────────
+  const plannedCommission = useMemo(
+    () => calculateProgressiveCommission(plannedRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
+    [plannedRevenue],
+  )
+  const plannedDistance   = distanceToNextTier(plannedRevenue, DEFAULT_MANAGER_COMMISSION_TIERS)
+  const plannedTotalIncome = DEFAULT_MANAGER_SALARY_RUB + plannedCommission.totalCommission + plannedBonus
+
+  // ── Owner calculator: производные ──────────────────────────────────────────
+  const ownerCommission = useMemo(
+    () => calculateProgressiveCommission(ownerRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
+    [ownerRevenue],
+  )
+  const ownerManagerIncome    = ownerSalary + ownerCommission.totalCommission + ownerBonus
+  const ownerGrossProfit      = Math.round(ownerRevenue * ownerGrossMarginPct / 100)
+  const ownerCompanyRemainder = ownerGrossProfit - ownerManagerIncome
+  const ownerShareOfRevenue   = ownerRevenue > 0 ? (ownerManagerIncome / ownerRevenue) * 100 : 0
+  const ownerShareOfGross     = ownerGrossProfit > 0 ? (ownerManagerIncome / ownerGrossProfit) * 100 : 0
+
+  function syncOwnerFromManagerCalc() {
+    setOwnerRevenue(plannedRevenue)
+    setOwnerBonus(plannedBonus)
+    setOwnerSalary(DEFAULT_MANAGER_SALARY_RUB)
+  }
+
   // ── Mutations: add / update / delete local sale ────────────────────────────
   function addLocalSale() {
     if (!userId) return
@@ -295,10 +341,14 @@ export default function MyEarningsPage() {
   }
 
   if (loading)   return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
-  if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и администраторов</div>
+  if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и владельцев</div>
 
   const curTierLabel  = tierLabelFor(curRevenue)
   const nextTierLabel = distance ? TIERS[currentTierIndex(distance.nextFrom, DEFAULT_MANAGER_COMMISSION_TIERS)]?.label : null
+  // Owner tier — admin / ceo / 'owner' alias. Менеджер не видит owner-блоки.
+  const isOwner = role === 'admin' || role === 'ceo' || role === 'owner'
+  const plannedTierLabel = tierLabelFor(plannedRevenue)
+  const ownerTierLabel   = tierLabelFor(ownerRevenue)
 
   return (
     <div className="bg-white min-h-screen">
@@ -314,19 +364,240 @@ export default function MyEarningsPage() {
         <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-4 py-3">
           <p className="text-[11px] font-semibold text-[#111110] mb-1.5">Как работает заработок</p>
           <p className="text-[11px] text-[#6b6b66] leading-snug">
-            Вы получаете <span className="font-semibold">оклад {fmt(DEFAULT_MANAGER_SALARY_RUB)}</span> + ступенчатую комиссию с принятой выручки.
+            Новая система действует для <span className="font-semibold">B2C-заказов с 1 июля</span>.
+            Доход = <span className="font-semibold">оклад {fmt(DEFAULT_MANAGER_SALARY_RUB)}</span>
+            {' + '}прогрессивная комиссия{' + '}бонус за серию.
           </p>
-          <ul className="text-[11px] text-[#6b6b66] mt-2 space-y-0.5">
-            <li>· до 2 млн — <span className="font-mono font-semibold">2%</span></li>
-            <li>· с 2 до 3 млн — <span className="font-mono font-semibold">2.5%</span></li>
-            <li>· с 3 до 4 млн — <span className="font-mono font-semibold">3%</span></li>
-            <li>· с 4 до 5 млн — <span className="font-mono font-semibold">4%</span></li>
-            <li>· свыше 5 млн — <span className="font-mono font-semibold">5%</span></li>
-          </ul>
-          <p className="text-[11px] text-[#6b6b66] mt-2 leading-snug">
-            Важно: процент применяется только к сумме внутри диапазона. Например, при 5 млн комиссия = <span className="font-mono font-semibold">135 000 ₽</span>, а не 5% от всей суммы. В зачёт идут только подтверждённые продажи.
-          </p>
+          <button
+            onClick={() => setShowRules(v => !v)}
+            className="text-[11px] text-blue-600 hover:underline mt-2"
+          >
+            {showRules ? 'Свернуть' : 'Подробнее →'}
+          </button>
+          {showRules && (
+            <div className="mt-3 pt-3 border-t border-[#e4e4e0] space-y-3">
+              <div>
+                <p className="text-[11px] font-semibold text-[#111110] mb-1">Что входит в зачёт</p>
+                <p className="text-[11px] text-[#6b6b66] leading-snug">
+                  Только подтверждённые B2C-продажи: оплаченные / принятые / засчитанные компанией.
+                </p>
+                <p className="text-[11px] text-[#6b6b66] leading-snug mt-1">
+                  <span className="font-semibold text-[#4b4b47]">Не входят:</span> B2B-продажи, неоплаченные заказы, отменённые заказы, спорные сделки.
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#111110] mb-1">Ступенчатая комиссия</p>
+                <ul className="text-[11px] text-[#6b6b66] space-y-0.5">
+                  <li>· до 2 млн — <span className="font-mono font-semibold">2%</span></li>
+                  <li>· с 2 до 3 млн — <span className="font-mono font-semibold">2.5%</span></li>
+                  <li>· с 3 до 4 млн — <span className="font-mono font-semibold">3%</span></li>
+                  <li>· с 4 до 5 млн — <span className="font-mono font-semibold">4%</span></li>
+                  <li>· свыше 5 млн — <span className="font-mono font-semibold">5%</span></li>
+                </ul>
+                <p className="text-[11px] text-[#6b6b66] leading-snug mt-2">
+                  Процент применяется <span className="font-semibold">только к сумме внутри диапазона</span>, а не ко всей выручке.
+                </p>
+                <p className="text-[11px] text-[#6b6b66] leading-snug">
+                  Пример: при 5 млн комиссия = <span className="font-mono font-semibold">135 000 ₽</span>, а не <span className="font-mono">250 000 ₽</span>.
+                </p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold text-[#111110] mb-1">Условия могут пересматриваться</p>
+                <p className="text-[11px] text-[#6b6b66] leading-snug">
+                  Правила пересматриваются по мере роста компании. Если поток заказов, база клиентов и партнёров вырастут, планки могут быть повышены — но условия всегда озвучиваются заранее и остаются прозрачными.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* ── Калькулятор дохода менеджера ──────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Калькулятор дохода</p>
+          <p className="text-[11px] text-[#6b6b66] mb-3 leading-snug">
+            Введите план по B2C-выручке за месяц и увидите прогноз дохода.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[10px] text-[#9a9a95]">Плановая B2C-выручка, ₽</label>
+              <input type="number" min={0} step={100_000} value={plannedRevenue}
+                onChange={e => setPlannedRevenue(Number(e.target.value) || 0)}
+                className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+            </div>
+            <div>
+              <label className="text-[10px] text-[#9a9a95]">Бонус серии</label>
+              <select value={plannedBonus}
+                onChange={e => setPlannedBonus(Number(e.target.value))}
+                className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs">
+                <option value={0}>Нет</option>
+                <option value={20_000}>+20 000 ₽ (3 мес ≥ 3M)</option>
+                <option value={40_000}>+40 000 ₽ (3 мес ≥ 4M)</option>
+                <option value={60_000}>+60 000 ₽ (3 мес ≥ 5M)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="mt-3 pt-3 border-t border-[#f2f2f0] grid grid-cols-2 gap-3">
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Комиссия</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(plannedCommission.totalCommission)}</p>
+              <p className="text-[10px] text-[#b8b8b4] mt-0.5">ступень {plannedTierLabel}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Оклад</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(DEFAULT_MANAGER_SALARY_RUB)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Бонус серии</p>
+              <p className={`text-sm font-mono font-semibold ${plannedBonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+                {plannedBonus > 0 ? `+${fmt(plannedBonus)}` : '0 ₽'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] text-emerald-600">Итого доход</p>
+              <p className="text-lg font-mono font-bold text-emerald-700">{fmt(plannedTotalIncome)}</p>
+            </div>
+          </div>
+          {plannedDistance && (
+            <p className="text-[10px] text-[#6b6b66] mt-2 leading-snug">
+              До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(plannedDistance.remaining)}</span>
+              {' '}(следующая ставка <span className="font-mono font-semibold">{plannedDistance.ratePercent}%</span>).
+            </p>
+          )}
+        </div>
+
+        {/* ── Калькулятор собственника (только для owner/admin/ceo) ─────────── */}
+        {isOwner && (
+          <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Калькулятор собственника</p>
+              <button onClick={syncOwnerFromManagerCalc}
+                className="text-[10px] text-blue-600 hover:underline">
+                ← Подставить из калькулятора менеджера
+              </button>
+            </div>
+            <p className="text-[11px] text-[#6b6b66] mb-3 leading-snug">
+              Проверка: высокий доход менеджера — не проблема, если он делает больше оборота. Сравниваем менеджерский кошт и валовую прибыль.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">B2C-выручка менеджера, ₽</label>
+                <input type="number" min={0} step={100_000} value={ownerRevenue}
+                  onChange={e => setOwnerRevenue(Number(e.target.value) || 0)}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">Валовая маржа компании, %</label>
+                <input type="number" min={0} max={99} step={1} value={ownerGrossMarginPct}
+                  onChange={e => setOwnerGrossMarginPct(Number(e.target.value) || 0)}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">Оклад менеджера, ₽</label>
+                <input type="number" min={0} step={1_000} value={ownerSalary}
+                  onChange={e => setOwnerSalary(Number(e.target.value) || 0)}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">Бонус серии</label>
+                <select value={ownerBonus}
+                  onChange={e => setOwnerBonus(Number(e.target.value))}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs">
+                  <option value={0}>Нет</option>
+                  <option value={20_000}>+20 000 ₽</option>
+                  <option value={40_000}>+40 000 ₽</option>
+                  <option value={60_000}>+60 000 ₽</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-[#f2f2f0] space-y-1">
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-[#6b6b66]">Выручка</span>
+                <span className="text-[12px] font-mono font-semibold text-[#111110]">{fmt(ownerRevenue)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-[#6b6b66]">Оценочная валовая прибыль ({ownerGrossMarginPct}%)</span>
+                <span className="text-[12px] font-mono font-semibold text-[#111110]">{fmt(ownerGrossProfit)}</span>
+              </div>
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-dotted border-[#eaeae6]">
+                <span className="text-[11px] text-[#6b6b66]">Комиссия менеджера (ступень {ownerTierLabel})</span>
+                <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(ownerCommission.totalCommission)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-[#6b6b66]">Оклад менеджера</span>
+                <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(ownerSalary)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-[#6b6b66]">Бонус серии</span>
+                <span className={`text-[12px] font-mono ${ownerBonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+                  {ownerBonus > 0 ? `+${fmt(ownerBonus)}` : '0 ₽'}
+                </span>
+              </div>
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-[#f0f0ee]">
+                <span className="text-[11px] font-semibold text-[#4b4b47]">Итого менеджеру</span>
+                <span className="text-[13px] font-mono font-bold text-[#111110]">{fmt(ownerManagerIncome)}</span>
+              </div>
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-[#f0f0ee]">
+                <span className="text-[11px] text-emerald-700 font-semibold">Остаток до прочих расходов</span>
+                <span className={`text-[14px] font-mono font-bold ${ownerCompanyRemainder >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                  {fmt(ownerCompanyRemainder)}
+                </span>
+              </div>
+            </div>
+
+            <div className="mt-3 pt-3 border-t border-[#f2f2f0] grid grid-cols-2 gap-3">
+              <div>
+                <p className="text-[10px] text-[#9a9a95]">Доля менеджера от выручки</p>
+                <p className="text-sm font-mono font-semibold text-[#4b4b47]">{ownerShareOfRevenue.toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-[10px] text-[#9a9a95]">Доля менеджера от валовой прибыли</p>
+                <p className="text-sm font-mono font-semibold text-[#4b4b47]">{ownerShareOfGross.toFixed(1)}%</p>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
+              Это управленческая оценка. Фактическая прибыль зависит от себестоимости, рекламы, монтажей, переделок и прочих расходов.
+            </p>
+          </div>
+        )}
+
+        {/* ── Рейтинг менеджеров — placeholder (только для owner/admin/ceo) ──── */}
+        {isOwner && (
+          <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+            <div className="flex items-baseline justify-between mb-2">
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Рейтинг менеджеров</p>
+              <div className="flex items-center gap-1">
+                {(['Сегодня', 'Неделя', 'Месяц'] as const).map(p => (
+                  <span key={p} className="text-[10px] text-[#c4c4be] px-2 py-0.5 border border-[#e4e4e0] rounded">{p}</span>
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] text-[#6b6b66] leading-snug mb-3">
+              Рейтинг будет строиться по подтверждённой B2C-выручке менеджеров. Сейчас подключён личный localStorage-режим, поэтому доступны только ваши данные. Следующий этап — таблица <span className="font-mono">manager_sales</span> в Supabase и общая админ-панель.
+            </p>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-y border-[#e4e4e0]">
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Менеджер</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-выручка</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Комиссия</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Заказов</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. чек</span>
+            </div>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3]">
+              <span className="text-[11px] text-[#4b4b47]">Вы (текущий месяц)</span>
+              <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(curRevenue)}</span>
+              <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(curCommission.totalCommission)}</span>
+              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{curDeals}</span>
+              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">
+                {curDeals > 0 ? fmt(Math.round(curRevenue / curDeals)) : '—'}
+              </span>
+            </div>
+            <p className="text-[10px] text-[#c4c4be] mt-3 text-center leading-snug">
+              Данные других менеджеров появятся после переноса учёта продаж в Supabase. Пока нет — не показываем, чтобы не вводить в заблуждение.
+            </p>
+          </div>
+        )}
 
         {/* ── Сегодня ────────────────────────────────────────────────────────── */}
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
@@ -355,7 +626,7 @@ export default function MyEarningsPage() {
           <div className="flex items-baseline justify-between mb-3">
             <div>
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
-              <p className="text-[11px] text-[#4b4b47] mt-0.5">Принятая выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} сделок</p>
+              <p className="text-[11px] text-[#4b4b47] mt-0.5">Принятая B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} сделок</p>
             </div>
             <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
               Ставка {curTierLabel}
@@ -465,13 +736,16 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <button onClick={() => setShowAddForm(v => !v)}
             className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Добавить продажу</p>
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Ручной ввод B2C-продажи</p>
             <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">локальный режим / тест</span>
           </button>
           {showAddForm && (
             <div className="px-4 pb-4 border-t border-[#f5f5f3] space-y-2">
-              <p className="text-[10px] text-[#9a9a95] mt-3 leading-snug">
-                Хранится в браузере (localStorage). TODO: перенести в Supabase таблицу manager_sales с админ-подтверждением.
+              <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
+                Временный режим: менеджер может добавить продажу вручную. Позже B2C-продажи будут подтягиваться из заказов и оплат автоматически.
+              </p>
+              <p className="text-[10px] text-[#9a9a95] leading-snug">
+                Каждый менеджер видит только свои ручные продажи в этом браузере (ключ привязан к user_id). После переноса в Supabase доступ будет ограничен по user_id на уровне RLS.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
@@ -530,11 +804,14 @@ export default function MyEarningsPage() {
         {/* ── Таблица всех продаж ─────────────────────────────────────────────── */}
         <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
           <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-baseline justify-between">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Все продажи и расчёты</p>
+            <div>
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Мои B2C-заказы и продажи</p>
+              <p className="text-[10px] text-[#c4c4be] mt-0.5">B2B-продажи будут подключены отдельно по другим правилам.</p>
+            </div>
             <p className="text-[10px] text-[#c4c4be]">{rows.length} строк</p>
           </div>
           {rows.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет продаж. Добавьте через форму выше.</div>
+            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет B2C-продаж. Добавьте через форму выше.</div>
           ) : (
             <>
               <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
