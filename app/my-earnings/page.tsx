@@ -9,8 +9,28 @@ import {
   DEFAULT_STREAK_BONUSES,
   currentTierIndex,
   distanceToNextTier,
+  type CommissionTier,
 } from '@/lib/earnings/calculateProgressiveCommission'
 import { TIERS } from '@/lib/commissionTiers'
+
+// Глобальная конфигурация мотивации (одна строка в public.earnings_settings,
+// scope='b2c_manager'). Загружается в useEffect; пока БД не ответила —
+// рендерится с DEFAULT_* fallback'ами из lib/earnings.
+type StreakBonus = { minRevenue: number; bonus: number }
+type EarningsSettings = {
+  baseSalaryRub:   number
+  commissionTiers: CommissionTier[]
+  streakBonuses:   StreakBonus[]
+  effectiveFrom:   string   // YYYY-MM-DD
+  rulesNote:       string
+}
+const EARNINGS_SETTINGS_FALLBACK: EarningsSettings = {
+  baseSalaryRub:   DEFAULT_MANAGER_SALARY_RUB,
+  commissionTiers: DEFAULT_MANAGER_COMMISSION_TIERS,
+  streakBonuses:   DEFAULT_STREAK_BONUSES,
+  effectiveFrom:   '2026-07-01',
+  rulesNote:       'Новая система действует для B2C-заказов с 1 июля. В зачёт идут только подтверждённые B2C-продажи. B2B-продажи будут подключены отдельно по другим правилам. Условия могут пересматриваться по мере роста компании, но изменения будут заранее озвучиваться.',
+}
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -92,19 +112,29 @@ function saveLocalSales(userId: string | null, sales: LocalSale[]) {
   window.localStorage.setItem(`mglass.manager_sales.local.v1.${userId}`, JSON.stringify(sales))
 }
 
-function tierLabelFor(revenue: number): string {
-  const idx = currentTierIndex(revenue, DEFAULT_MANAGER_COMMISSION_TIERS)
-  return TIERS[idx]?.label ?? '2%'
+// Лейбл tier'а из активной конфигурации (для бейджей "ставка X%").
+// Если ratePercent не из стандартного набора (TIER_COLORS), вернётся "{N}%".
+function tierLabelFor(revenue: number, tiers: CommissionTier[]): string {
+  const idx = currentTierIndex(revenue, tiers)
+  const t   = tiers[idx]
+  if (!t) return '2%'
+  // целые → "2%", дробные → "2.5%"
+  const r = t.ratePercent
+  return Number.isInteger(r) ? `${r}%` : `${r}%`
 }
 
 // Streak bonus: ищем наибольший порог, на котором последние 3 завершённых месяца ≥ minRevenue.
-function calcStreakBonus(completedMonthsDesc: { revenue: number }[]): { bonus: number; minRevenue: number; months: number } {
+function calcStreakBonus(
+  completedMonthsDesc: { revenue: number }[],
+  bonuses:             StreakBonus[],
+): { bonus: number; minRevenue: number; months: number } {
   // completedMonthsDesc — без текущего месяца, отсортирован по убыванию (свежие первые)
   if (completedMonthsDesc.length < 3) return { bonus: 0, minRevenue: 0, months: completedMonthsDesc.length }
   const last3 = completedMonthsDesc.slice(0, 3)
   // от высшего тира вниз — берём максимальный, который подтверждается тремя месяцами
-  for (let i = DEFAULT_STREAK_BONUSES.length - 1; i >= 0; i--) {
-    const t = DEFAULT_STREAK_BONUSES[i]
+  const sorted = [...bonuses].sort((a, b) => a.minRevenue - b.minRevenue)
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    const t = sorted[i]
     if (last3.every(m => m.revenue >= t.minRevenue)) {
       return { bonus: t.bonus, minRevenue: t.minRevenue, months: 3 }
     }
@@ -123,6 +153,17 @@ export default function MyEarningsPage() {
   const [forbidden, setForbidden]   = useState(false)
   const [showAddForm, setShowAddForm] = useState(false)
   const [showRules, setShowRules]     = useState(false)
+  const [showSettings, setShowSettings] = useState(false)
+
+  // Глобальная B2C-конфигурация. null = ещё не загружено или ошибка → fallback.
+  const [earningsSettings, setEarningsSettings] = useState<EarningsSettings | null>(null)
+  const [settingsFallbackReason, setSettingsFallbackReason] = useState<string | null>(null)
+
+  // Owner edit form — отдельный буфер, чтобы изменения применялись только при Save.
+  const [settingsDraft, setSettingsDraft] = useState<EarningsSettings>(EARNINGS_SETTINGS_FALLBACK)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [settingsSaved, setSettingsSaved]   = useState(false)
+  const [settingsError, setSettingsError]   = useState<string | null>(null)
 
   // ── Manager income calculator ─────────────────────────────────────────────
   // Прогноз дохода менеджера: вводит планируемую выручку и (опционально) бонус,
@@ -166,13 +207,37 @@ export default function MyEarningsPage() {
         setForbidden(true); setLoading(false); return
       }
 
-      const { data } = await supabase
-        .from('calculations')
-        .select('id,created_at,product_type,final_price,margin,status')
-        .eq('created_by', user.id)
-        .order('created_at', { ascending: false })
-      setCalcs(data ?? [])
+      const [{ data: calcsData }, { data: settingsRow, error: settingsError }] = await Promise.all([
+        supabase
+          .from('calculations')
+          .select('id,created_at,product_type,final_price,margin,status')
+          .eq('created_by', user.id)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('earnings_settings')
+          .select('scope, active, base_salary_rub, commission_tiers, streak_bonuses, effective_from, rules_note')
+          .eq('scope', 'b2c_manager')
+          .maybeSingle(),
+      ])
+      setCalcs(calcsData ?? [])
       setLocalSales(loadLocalSales(user.id))
+
+      if (settingsError) {
+        setSettingsFallbackReason(`Ошибка загрузки настроек: ${settingsError.message}. Используются базовые правила.`)
+      } else if (settingsRow) {
+        const row = settingsRow as Record<string, unknown>
+        const loaded: EarningsSettings = {
+          baseSalaryRub:   Number(row.base_salary_rub ?? EARNINGS_SETTINGS_FALLBACK.baseSalaryRub),
+          commissionTiers: Array.isArray(row.commission_tiers) ? (row.commission_tiers as CommissionTier[]) : EARNINGS_SETTINGS_FALLBACK.commissionTiers,
+          streakBonuses:   Array.isArray(row.streak_bonuses)   ? (row.streak_bonuses as StreakBonus[])     : EARNINGS_SETTINGS_FALLBACK.streakBonuses,
+          effectiveFrom:   typeof row.effective_from === 'string' ? row.effective_from : EARNINGS_SETTINGS_FALLBACK.effectiveFrom,
+          rulesNote:       typeof row.rules_note === 'string' ? row.rules_note : EARNINGS_SETTINGS_FALLBACK.rulesNote,
+        }
+        setEarningsSettings(loaded)
+        setSettingsDraft(loaded)
+      } else {
+        setSettingsFallbackReason('Строки настроек для scope=b2c_manager не найдено. Применяются базовые правила. Сохраните настройки, чтобы создать строку в БД.')
+      }
       setLoading(false)
     }
     load().catch(() => setLoading(false))
@@ -180,6 +245,13 @@ export default function MyEarningsPage() {
 
   const nowKey   = monthKey(new Date().toISOString())
   const todayStr = todayYMD()
+
+  // Активная конфигурация: то, что загружено из БД, иначе fallback.
+  // Все нижеследующие расчёты идут через effSettings — один источник правды.
+  const effSettings = earningsSettings ?? EARNINGS_SETTINGS_FALLBACK
+  const effSalary   = effSettings.baseSalaryRub
+  const effTiers    = effSettings.commissionTiers
+  const effBonuses  = effSettings.streakBonuses
 
   // ── Combined month aggregates ──────────────────────────────────────────────
   // Источники выручки:
@@ -214,13 +286,13 @@ export default function MyEarningsPage() {
   const curRevenue = byMonth[nowKey]?.revenue ?? 0
   const curDeals   = byMonth[nowKey]?.dealCount ?? 0
   const curCommission = useMemo(
-    () => calculateProgressiveCommission(curRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
-    [curRevenue],
+    () => calculateProgressiveCommission(curRevenue, effTiers),
+    [curRevenue, effTiers],
   )
-  const distance = distanceToNextTier(curRevenue, DEFAULT_MANAGER_COMMISSION_TIERS)
-  const streak   = useMemo(() => calcStreakBonus(completedMonthsDesc), [completedMonthsDesc])
+  const distance = distanceToNextTier(curRevenue, effTiers)
+  const streak   = useMemo(() => calcStreakBonus(completedMonthsDesc, effBonuses), [completedMonthsDesc, effBonuses])
 
-  const totalIncome = DEFAULT_MANAGER_SALARY_RUB + curCommission.totalCommission + streak.bonus
+  const totalIncome = effSalary + curCommission.totalCommission + streak.bonus
 
   // ── Today aggregates ───────────────────────────────────────────────────────
   // Сегодняшняя добавленная активность: approved calculations + counted local sales.
@@ -240,9 +312,9 @@ export default function MyEarningsPage() {
   ), [todayApprovedCalcs, todayCountedSales])
   const todayAddedCount = todayApprovedCalcs.length + todayCountedSales.length
   const todayCommission = useMemo(() => {
-    const before = calculateProgressiveCommission(curRevenue - todayRevenue, DEFAULT_MANAGER_COMMISSION_TIERS).totalCommission
+    const before = calculateProgressiveCommission(curRevenue - todayRevenue, effTiers).totalCommission
     return curCommission.totalCommission - before
-  }, [curRevenue, todayRevenue, curCommission.totalCommission])
+  }, [curRevenue, todayRevenue, curCommission.totalCommission, effTiers])
 
   // ── Combined sales table ───────────────────────────────────────────────────
   // Объединённый список: live calculations + local manual sales, отсортирован по дате DESC.
@@ -284,16 +356,16 @@ export default function MyEarningsPage() {
 
   // ── Manager income calculator: производные ─────────────────────────────────
   const plannedCommission = useMemo(
-    () => calculateProgressiveCommission(plannedRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
-    [plannedRevenue],
+    () => calculateProgressiveCommission(plannedRevenue, effTiers),
+    [plannedRevenue, effTiers],
   )
-  const plannedDistance   = distanceToNextTier(plannedRevenue, DEFAULT_MANAGER_COMMISSION_TIERS)
-  const plannedTotalIncome = DEFAULT_MANAGER_SALARY_RUB + plannedCommission.totalCommission + plannedBonus
+  const plannedDistance   = distanceToNextTier(plannedRevenue, effTiers)
+  const plannedTotalIncome = effSalary + plannedCommission.totalCommission + plannedBonus
 
   // ── Owner calculator: производные ──────────────────────────────────────────
   const ownerCommission = useMemo(
-    () => calculateProgressiveCommission(ownerRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
-    [ownerRevenue],
+    () => calculateProgressiveCommission(ownerRevenue, effTiers),
+    [ownerRevenue, effTiers],
   )
   const ownerManagerIncome    = ownerSalary + ownerCommission.totalCommission + ownerBonus
   const ownerGrossProfit      = Math.round(ownerRevenue * ownerGrossMarginPct / 100)
@@ -304,7 +376,7 @@ export default function MyEarningsPage() {
   function syncOwnerFromManagerCalc() {
     setOwnerRevenue(plannedRevenue)
     setOwnerBonus(plannedBonus)
-    setOwnerSalary(DEFAULT_MANAGER_SALARY_RUB)
+    setOwnerSalary(effSalary)
   }
 
   // ── Mutations: add / update / delete local sale ────────────────────────────
@@ -343,12 +415,12 @@ export default function MyEarningsPage() {
   if (loading)   return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
   if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и владельцев</div>
 
-  const curTierLabel  = tierLabelFor(curRevenue)
-  const nextTierLabel = distance ? TIERS[currentTierIndex(distance.nextFrom, DEFAULT_MANAGER_COMMISSION_TIERS)]?.label : null
+  const curTierLabel  = tierLabelFor(curRevenue, effTiers)
+  const nextTierLabel = distance ? tierLabelFor(distance.nextFrom, effTiers) : null
   // Owner tier — admin / ceo / 'owner' alias. Менеджер не видит owner-блоки.
   const isOwner = role === 'admin' || role === 'ceo' || role === 'owner'
-  const plannedTierLabel = tierLabelFor(plannedRevenue)
-  const ownerTierLabel   = tierLabelFor(ownerRevenue)
+  const plannedTierLabel = tierLabelFor(plannedRevenue, effTiers)
+  const ownerTierLabel   = tierLabelFor(ownerRevenue, effTiers)
 
   return (
     <div className="bg-white min-h-screen">
@@ -364,10 +436,20 @@ export default function MyEarningsPage() {
         <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-4 py-3">
           <p className="text-[11px] font-semibold text-[#111110] mb-1.5">Как работает заработок</p>
           <p className="text-[11px] text-[#6b6b66] leading-snug">
-            Новая система действует для <span className="font-semibold">B2C-заказов с 1 июля</span>.
-            Доход = <span className="font-semibold">оклад {fmt(DEFAULT_MANAGER_SALARY_RUB)}</span>
+            Действует с <span className="font-semibold">{effSettings.effectiveFrom}</span>.
+            Доход = <span className="font-semibold">оклад {fmt(effSalary)}</span>
             {' + '}прогрессивная комиссия{' + '}бонус за серию.
           </p>
+          {settingsFallbackReason && isOwner && (
+            <p className="text-[10px] text-amber-700 leading-snug mt-2">
+              ⚠ {settingsFallbackReason}
+            </p>
+          )}
+          {settingsFallbackReason && !isOwner && (
+            <p className="text-[10px] text-[#9a9a95] leading-snug mt-2">
+              Используются базовые правила (настройки не загрузились — обратитесь к админу).
+            </p>
+          )}
           <button
             onClick={() => setShowRules(v => !v)}
             className="text-[11px] text-blue-600 hover:underline mt-2"
@@ -377,39 +459,226 @@ export default function MyEarningsPage() {
           {showRules && (
             <div className="mt-3 pt-3 border-t border-[#e4e4e0] space-y-3">
               <div>
-                <p className="text-[11px] font-semibold text-[#111110] mb-1">Что входит в зачёт</p>
-                <p className="text-[11px] text-[#6b6b66] leading-snug">
-                  Только подтверждённые B2C-продажи: оплаченные / принятые / засчитанные компанией.
-                </p>
-                <p className="text-[11px] text-[#6b6b66] leading-snug mt-1">
-                  <span className="font-semibold text-[#4b4b47]">Не входят:</span> B2B-продажи, неоплаченные заказы, отменённые заказы, спорные сделки.
-                </p>
+                <p className="text-[11px] font-semibold text-[#111110] mb-1">Регламент</p>
+                <p className="text-[11px] text-[#6b6b66] leading-snug whitespace-pre-wrap">{effSettings.rulesNote}</p>
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-[#111110] mb-1">Ступенчатая комиссия</p>
                 <ul className="text-[11px] text-[#6b6b66] space-y-0.5">
-                  <li>· до 2 млн — <span className="font-mono font-semibold">2%</span></li>
-                  <li>· с 2 до 3 млн — <span className="font-mono font-semibold">2.5%</span></li>
-                  <li>· с 3 до 4 млн — <span className="font-mono font-semibold">3%</span></li>
-                  <li>· с 4 до 5 млн — <span className="font-mono font-semibold">4%</span></li>
-                  <li>· свыше 5 млн — <span className="font-mono font-semibold">5%</span></li>
+                  {effTiers.map((t, i) => {
+                    const fromM = (t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)
+                    const toLbl = t.to == null ? '∞' : `${(t.to / 1_000_000).toFixed(t.to % 1_000_000 === 0 ? 0 : 1)} млн`
+                    const prefix = i === 0 ? `до ${toLbl}` : `с ${fromM} до ${toLbl}`
+                    const finalPrefix = t.to == null ? `свыше ${fromM} млн` : prefix
+                    return (
+                      <li key={`${t.from}-${t.ratePercent}`}>
+                        · {finalPrefix} — <span className="font-mono font-semibold">{t.ratePercent}%</span>
+                      </li>
+                    )
+                  })}
                 </ul>
                 <p className="text-[11px] text-[#6b6b66] leading-snug mt-2">
                   Процент применяется <span className="font-semibold">только к сумме внутри диапазона</span>, а не ко всей выручке.
                 </p>
-                <p className="text-[11px] text-[#6b6b66] leading-snug">
-                  Пример: при 5 млн комиссия = <span className="font-mono font-semibold">135 000 ₽</span>, а не <span className="font-mono">250 000 ₽</span>.
-                </p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-[#111110] mb-1">Условия могут пересматриваться</p>
-                <p className="text-[11px] text-[#6b6b66] leading-snug">
-                  Правила пересматриваются по мере роста компании. Если поток заказов, база клиентов и партнёров вырастут, планки могут быть повышены — но условия всегда озвучиваются заранее и остаются прозрачными.
-                </p>
+                <p className="text-[11px] font-semibold text-[#111110] mb-1">Бонус за серию</p>
+                <ul className="text-[11px] text-[#6b6b66] space-y-0.5">
+                  {effBonuses.map(b => (
+                    <li key={b.minRevenue}>
+                      · 3 мес ≥ <span className="font-mono">{(b.minRevenue / 1_000_000).toFixed(0)}M</span> → <span className="font-mono font-semibold">+{fmt(b.bonus)}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             </div>
           )}
         </div>
+
+        {/* ── Настройки системы мотивации (owner/admin) ──────────────────────── */}
+        {isOwner && (
+          <div className="bg-white border border-amber-200 rounded-lg overflow-hidden">
+            <button onClick={() => setShowSettings(v => !v)}
+              className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-50/40 transition-colors">
+              <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-widest">Настройки системы мотивации</p>
+              <span className="text-[10px] text-amber-700">для всех менеджеров</span>
+            </button>
+            {showSettings && (
+              <div className="px-4 pb-4 border-t border-amber-200 space-y-3">
+                <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
+                  Меняется один раз, применяется ко всем менеджерам. После Сохранить → menager увидит новые правила после reload.
+                </p>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[10px] text-[#9a9a95]">Оклад менеджера, ₽</label>
+                    <input type="number" min={0} step={1000} value={settingsDraft.baseSalaryRub}
+                      onChange={e => setSettingsDraft(d => ({ ...d, baseSalaryRub: Number(e.target.value) || 0 }))}
+                      className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                  </div>
+                  <div>
+                    <label className="text-[10px] text-[#9a9a95]">Дата начала действия</label>
+                    <input type="date" value={settingsDraft.effectiveFrom}
+                      onChange={e => setSettingsDraft(d => ({ ...d, effectiveFrom: e.target.value }))}
+                      className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs" />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1">Комиссионные ступени</p>
+                  <div className="space-y-1">
+                    {settingsDraft.commissionTiers.map((t, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr_80px_auto] gap-2 items-center">
+                        <input type="number" min={0} step={100_000} value={t.from}
+                          disabled={idx === 0}
+                          onChange={e => {
+                            const v = Number(e.target.value) || 0
+                            setSettingsDraft(d => {
+                              const next = [...d.commissionTiers]
+                              next[idx] = { ...next[idx], from: v }
+                              if (idx > 0) next[idx - 1] = { ...next[idx - 1], to: v }
+                              return { ...d, commissionTiers: next }
+                            })
+                          }}
+                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono disabled:bg-[#fafaf9]" />
+                        <input type="number" min={0} step={100_000}
+                          value={t.to ?? ''}
+                          placeholder={t.to == null ? '∞' : ''}
+                          disabled={idx === settingsDraft.commissionTiers.length - 1}
+                          onChange={e => {
+                            const raw = e.target.value
+                            const v = raw === '' ? null : (Number(raw) || 0)
+                            setSettingsDraft(d => {
+                              const next = [...d.commissionTiers]
+                              next[idx] = { ...next[idx], to: v }
+                              if (idx + 1 < next.length && v != null) {
+                                next[idx + 1] = { ...next[idx + 1], from: v }
+                              }
+                              return { ...d, commissionTiers: next }
+                            })
+                          }}
+                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono disabled:bg-[#fafaf9]" />
+                        <input type="number" min={0} max={100} step={0.1} value={t.ratePercent}
+                          onChange={e => {
+                            const v = Number(e.target.value) || 0
+                            setSettingsDraft(d => {
+                              const next = [...d.commissionTiers]
+                              next[idx] = { ...next[idx], ratePercent: v }
+                              return { ...d, commissionTiers: next }
+                            })
+                          }}
+                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                        <span className="text-[10px] text-[#9a9a95] w-4">%</span>
+                      </div>
+                    ))}
+                  </div>
+                  <p className="text-[10px] text-[#9a9a95] mt-1">Первая from = 0; последняя to = ∞ (оставьте пустым). Соседние границы автоматически синхронизируются.</p>
+                </div>
+
+                <div>
+                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1">Бонусы серии (3 мес ≥ порог)</p>
+                  <div className="space-y-1">
+                    {settingsDraft.streakBonuses.map((b, idx) => (
+                      <div key={idx} className="grid grid-cols-[1fr_1fr] gap-2 items-center">
+                        <input type="number" min={0} step={100_000} value={b.minRevenue}
+                          onChange={e => {
+                            const v = Number(e.target.value) || 0
+                            setSettingsDraft(d => {
+                              const next = [...d.streakBonuses]
+                              next[idx] = { ...next[idx], minRevenue: v }
+                              return { ...d, streakBonuses: next }
+                            })
+                          }}
+                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                        <input type="number" min={0} step={1000} value={b.bonus}
+                          onChange={e => {
+                            const v = Number(e.target.value) || 0
+                            setSettingsDraft(d => {
+                              const next = [...d.streakBonuses]
+                              next[idx] = { ...next[idx], bonus: v }
+                              return { ...d, streakBonuses: next }
+                            })
+                          }}
+                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[10px] text-[#9a9a95]">Текст регламента / пояснение</label>
+                  <textarea rows={3} value={settingsDraft.rulesNote}
+                    onChange={e => setSettingsDraft(d => ({ ...d, rulesNote: e.target.value }))}
+                    className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs" />
+                </div>
+
+                {settingsError && (
+                  <div className="bg-red-50 border border-red-200 rounded px-3 py-2 text-[11px] text-red-700">
+                    {settingsError}
+                  </div>
+                )}
+
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={async () => {
+                      setSavingSettings(true); setSettingsSaved(false); setSettingsError(null)
+                      // Простая валидация: сумма ставок < 100, все from >= 0.
+                      const tiers = settingsDraft.commissionTiers
+                      for (let i = 0; i < tiers.length; i++) {
+                        if (tiers[i].ratePercent < 0 || tiers[i].ratePercent >= 100) {
+                          setSettingsError(`Ставка ${i + 1} вне диапазона [0, 100).`); setSavingSettings(false); return
+                        }
+                        if (i > 0 && tiers[i].from < tiers[i - 1].from) {
+                          setSettingsError(`Ступень ${i + 1}: from меньше предыдущего.`); setSavingSettings(false); return
+                        }
+                      }
+                      const supabase = createClient()
+                      const payload = {
+                        scope:            'b2c_manager',
+                        active:           true,
+                        base_salary_rub:  settingsDraft.baseSalaryRub,
+                        commission_tiers: settingsDraft.commissionTiers,
+                        streak_bonuses:   settingsDraft.streakBonuses,
+                        effective_from:   settingsDraft.effectiveFrom,
+                        rules_note:       settingsDraft.rulesNote,
+                        updated_at:       new Date().toISOString(),
+                      }
+                      const { data, error } = await supabase
+                        .from('earnings_settings')
+                        .upsert(payload, { onConflict: 'scope' })
+                        .select('scope, active, base_salary_rub, commission_tiers, streak_bonuses, effective_from, rules_note')
+                        .single()
+                      if (error) {
+                        setSettingsError(error.message); setSavingSettings(false); return
+                      }
+                      if (!data) {
+                        setSettingsError('Supabase не вернул строку (возможно, RLS отфильтровал запрос).')
+                        setSavingSettings(false); return
+                      }
+                      const row = data as Record<string, unknown>
+                      const loaded: EarningsSettings = {
+                        baseSalaryRub:   Number(row.base_salary_rub ?? EARNINGS_SETTINGS_FALLBACK.baseSalaryRub),
+                        commissionTiers: Array.isArray(row.commission_tiers) ? (row.commission_tiers as CommissionTier[]) : EARNINGS_SETTINGS_FALLBACK.commissionTiers,
+                        streakBonuses:   Array.isArray(row.streak_bonuses)   ? (row.streak_bonuses as StreakBonus[])     : EARNINGS_SETTINGS_FALLBACK.streakBonuses,
+                        effectiveFrom:   typeof row.effective_from === 'string' ? row.effective_from : EARNINGS_SETTINGS_FALLBACK.effectiveFrom,
+                        rulesNote:       typeof row.rules_note === 'string' ? row.rules_note : EARNINGS_SETTINGS_FALLBACK.rulesNote,
+                      }
+                      setEarningsSettings(loaded)
+                      setSettingsDraft(loaded)
+                      setSettingsFallbackReason(null)
+                      setSettingsSaved(true); setSavingSettings(false)
+                      setTimeout(() => setSettingsSaved(false), 2500)
+                    }}
+                    disabled={savingSettings}
+                    className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-50">
+                    {savingSettings ? 'Сохранение...' : 'Сохранить настройки для всех менеджеров'}
+                  </button>
+                  {settingsSaved && <span className="text-[11px] text-emerald-700 font-semibold">✓ Сохранено</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Калькулятор дохода менеджера ──────────────────────────────────── */}
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
@@ -445,7 +714,7 @@ export default function MyEarningsPage() {
             </div>
             <div>
               <p className="text-[10px] text-[#9a9a95]">Оклад</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(DEFAULT_MANAGER_SALARY_RUB)}</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(effSalary)}</p>
             </div>
             <div>
               <p className="text-[10px] text-[#9a9a95]">Бонус серии</p>
@@ -636,7 +905,7 @@ export default function MyEarningsPage() {
           <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#f2f2f0]">
             <div>
               <p className="text-[10px] text-[#9a9a95]">Оклад</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(DEFAULT_MANAGER_SALARY_RUB)}</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(effSalary)}</p>
             </div>
             <div>
               <p className="text-[10px] text-[#9a9a95]">Комиссия (прогрессивная)</p>
@@ -675,7 +944,7 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
           <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Где вы сейчас на шкале</p>
           <div className="space-y-1.5">
-            {DEFAULT_MANAGER_COMMISSION_TIERS.map((t, i) => {
+            {effTiers.map((t, i) => {
               const tierResult = curCommission.tiers[i]
               const filled    = tierResult.amountInTier > 0
               const upperLabel = t.to == null ? '∞' : `${(t.to / 1_000_000).toFixed(0)}M`
@@ -709,7 +978,7 @@ export default function MyEarningsPage() {
             3 месяца подряд держать выручку на уровне:
           </p>
           <div className="grid grid-cols-3 gap-2">
-            {DEFAULT_STREAK_BONUSES.map(b => {
+            {effBonuses.map(b => {
               const active = streak.bonus === b.bonus
               return (
                 <div key={b.minRevenue} className={`rounded-lg px-2.5 py-2 border ${
@@ -878,8 +1147,8 @@ export default function MyEarningsPage() {
               </div>
               {sortedMonthKeys.map(k => {
                 const m = byMonth[k]
-                const c = calculateProgressiveCommission(m.revenue, DEFAULT_MANAGER_COMMISSION_TIERS).totalCommission
-                const tl = tierLabelFor(m.revenue)
+                const c = calculateProgressiveCommission(m.revenue, effTiers).totalCommission
+                const tl = tierLabelFor(m.revenue, effTiers)
                 const isCurrent = k === nowKey
                 return (
                   <div key={k}

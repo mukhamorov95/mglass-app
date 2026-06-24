@@ -80,7 +80,11 @@ export const DEFAULT_MANAGER_COMMISSION_TIERS: CommissionTier[] = [
   { from: 5_000_000, to: null,      ratePercent: 5   },
 ]
 
-export const DEFAULT_MANAGER_SALARY_RUB = 66_000
+// Fallback ТОЛЬКО если public.earnings_settings (scope='b2c_manager') не
+// загрузился. Канонический источник — БД (миграция 20260625_create_earnings_settings.sql).
+// Менять здесь — только при изменении дефолта для новых окружений; для рабочих
+// настроек используется /my-earnings → "Настройки системы мотивации".
+export const DEFAULT_MANAGER_SALARY_RUB = 60_000
 
 export const DEFAULT_STREAK_BONUSES: Array<{ minRevenue: number; bonus: number }> = [
   { minRevenue: 3_000_000, bonus: 20_000 },
