@@ -11,11 +11,9 @@ import {
 } from '@/lib/mirrorCalculator'
 import { calculateMirrorUnified } from '@/lib/pricing/calculateMirrorUnified'
 import {
-  calculateMirrorThreeTier,
-  type MirrorThreeTierResult,
-  type PricingModelConfigV2,
-  type PricingTierV2,
-} from '@/lib/pricing/calculateMirrorThreeTier'
+  calculateMirrorTwoStagePricing,
+  type TwoStagePricingResult,
+} from '@/lib/pricing/calculateMirrorTwoStagePricing'
 import type { FacetPrice } from '@/lib/b2bCalculator'
 import { saveCalculation, updateCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
@@ -57,41 +55,18 @@ function toLC(c: RawComponent): MirrorLightingComponent {
   }
 }
 
-// ── Three-tier preview — sync с seed-миграцией 20260624_pricing_model_v2_seed_defaults.sql ──
-// Локальные константы используются вместо Supabase-запроса. Когда появится
-// admin-кабинет финмодели — переключим эти источники на запросы из
-// pricing_tiers_v2 / pricing_model_config_v2 без изменения вызывающего кода.
-const MIRROR_PRICING_CONFIG_V2_DEFAULT: PricingModelConfigV2 = {
-  productCategory:                   'mirror',
-  factoryOverheadPercent:             20,
-  scrapReservePercent:                5,
-  packagingCostPerM2:                 120,
-  b2bBaseMarginPercent:               38,
-  minimumB2bMarginAfterDiscount:      20,
-  b2cCommercialCostsPercent:          22,
-  b2cMarginPercent:                   35,
-  b2cMinMarginPercent:                25,
-}
+// ── Two-stage pricing preview — Factory Cost → B2B → B2C ──────────────────
+// Read-only preview. КП/заказы продолжают сохраняться по live-цене (result.grandTotal).
+const MIRROR_TWO_STAGE_PRICING_CONFIG = {
+  productionTaxPercent:    12,
+  productionMarginPercent: 40,
+  b2cTaxPercent:           12,
+  b2cMarginPercent:        40,
+} as const
 
-const MIRROR_TIER_EXTERNAL_B2B_STANDARD: PricingTierV2 = {
-  code:             'external_b2b_standard',
-  name:             'Внешний B2B стандарт',
-  channelType:      'external_b2b',
-  discountPercent:   10,
-  minMarginPercent:  null,
-}
-
-const MIRROR_TIER_INTERNAL_B2C: PricingTierV2 = {
-  code:             'internal_b2c',
-  name:             'M-Glass B2C внутренний',
-  channelType:      'internal_b2c',
-  discountPercent:   20,
-  minMarginPercent:  null,
-}
-
-type ThreeTierPreviewState =
+type TwoStagePreviewState =
   | { available: false; reason: string }
-  | { available: true; b2b: MirrorThreeTierResult; b2c: MirrorThreeTierResult }
+  | { available: true;  pricing: TwoStagePricingResult }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
@@ -521,45 +496,20 @@ export default function MirrorCalculatorPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, mirrorCostPerM2, materials, services])
 
-  // Three-tier preview (read-only). Подаём v2Preview.directCost как чистый
-  // Factory Cost (V2 уже собрал basket только по cost_price). result.totalCost
-  // содержит смесь cost+sale цен и для three-tier НЕ годится.
-  // Tier'ы и config — локальные константы, синхронные с seed-миграцией.
-  // services: [] на этом шаге — монтаж/доставка в live идут по sale_price,
-  // их подключение к three-tier требует отдельной маржевой формулы.
-  const threeTierPreview = useMemo<ThreeTierPreviewState>(() => {
-    if (!result)                       return { available: false, reason: 'Нет расчёта' }
-    if (!v2Preview)                    return { available: false, reason: 'V2 cost-only basket недоступен' }
-    if (!mirrorCostPerM2 || mirrorCostPerM2 <= 0) {
-      return { available: false, reason: 'для материала не заполнена закупочная себестоимость cost_price' }
-    }
-
-    const commonFactory = {
-      materialCost:    v2Preview.directCost,
-      packagingAreaM2: result.billingArea,
-    }
-
-    const b2b = calculateMirrorThreeTier({
-      mode:    'b2b',
-      factory: commonFactory,
-      config:  MIRROR_PRICING_CONFIG_V2_DEFAULT,
-      tier:    MIRROR_TIER_EXTERNAL_B2B_STANDARD,
-      services: [],
+  // Two-stage pricing preview (read-only). Источник factory cost — v2Preview.directCost
+  // (cost_price-only basket). result.totalCost не годится: смесь cost+sale цен.
+  // Налог/маржа фиксированы в локальном конфиге и НЕ зависят от inputs.margin/tax.
+  const twoStagePreview = useMemo<TwoStagePreviewState>(() => {
+    if (!result)                                  return { available: false, reason: 'Нет расчёта' }
+    if (!v2Preview)                               return { available: false, reason: 'V2 cost-only себестоимость недоступна' }
+    if (!mirrorCostPerM2 || mirrorCostPerM2 <= 0) return { available: false, reason: 'Для материала не заполнена закупочная себестоимость cost_price' }
+    const pricing = calculateMirrorTwoStagePricing({
+      factoryCost: v2Preview.directCost,
+      config:      MIRROR_TWO_STAGE_PRICING_CONFIG,
     })
-    const b2c = calculateMirrorThreeTier({
-      mode:    'b2c',
-      factory: commonFactory,
-      config:  MIRROR_PRICING_CONFIG_V2_DEFAULT,
-      tier:    MIRROR_TIER_INTERNAL_B2C,
-      designerPercent: inputs.partnerPercent,
-      discountPercent: Number(discount) || 0,
-      services: [],
-    })
-
-    if (!b2b || !b2c) return { available: false, reason: 'Three-tier preview не смог посчитать модель' }
-    return { available: true, b2b, b2c }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [result, v2Preview, mirrorCostPerM2, inputs.partnerPercent, discount])
+    if (!pricing)                                 return { available: false, reason: 'Финмодель V2 не смогла посчитать цену' }
+    return { available: true, pricing }
+  }, [result, v2Preview, mirrorCostPerM2])
 
   const marginNum   = result?.margin ?? 0
   const isGreen     = marginNum >= 35
@@ -1170,10 +1120,13 @@ export default function MirrorCalculatorPage() {
                   <div className="flex items-start justify-between mb-3">
                     <div>
                       <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
-                        {result.servicesTotal > 0 ? 'Итого с услугами' : 'Цена клиенту'}
+                        LIVE цена для КП сейчас
                       </p>
                       <p className={`text-[26px] font-bold font-mono leading-none tracking-tight ${priceColor}`}>
                         {result.grandTotal.toLocaleString('ru-RU')} ₽
+                      </p>
+                      <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
+                        Используется при сохранении КП/заказа
                       </p>
                     </div>
                     <div className={`px-2.5 py-1.5 rounded-lg text-sm font-bold flex-shrink-0 ${marginBadge}`}>
@@ -1330,49 +1283,50 @@ export default function MirrorCalculatorPage() {
                         })()}
                       </div>
 
-                      {/* 7.5. Three-tier preview — справочно, не используется для КП/заказов */}
+                      {/* 7.5. Финмодель V2 — двухступенчатая цена, справочно */}
                       <div className="mt-3 pt-3 border-t border-dashed border-[#e0e0dc]">
                         <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">
-                          Three-tier preview · модель V2
+                          ФИНМОДЕЛЬ V2
                         </p>
                         <p className="text-[10px] text-[#b8b8b4] mb-2 leading-snug">
-                          Справочно. В КП используется live-цена сверху.
+                          Справочно. КП сейчас сохраняется по live-цене сверху.
                         </p>
-                        {!threeTierPreview.available ? (
+                        {!twoStagePreview.available ? (
                           <p className="text-[10px] text-amber-600 leading-snug">
-                            Недоступен — {threeTierPreview.reason}.
+                            Недоступна — {twoStagePreview.reason}.
                           </p>
                         ) : (
                           <>
                             <div className="space-y-2">
                               <div>
-                                <div className="flex items-baseline justify-between">
-                                  <span className="text-[11px] text-[#4b4b47]">B2B стандарт (−10%)</span>
-                                  <span className="text-[11px] font-mono font-semibold text-[#2a2a28]">
-                                    {fmt(threeTierPreview.b2b.final.clientPrice)}
-                                  </span>
-                                </div>
-                                <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  factory cost {fmt(threeTierPreview.b2b.factory.total)}
-                                  {' · '}маржа после скидки {threeTierPreview.b2b.b2b.marginAfterDiscountPercent}%
+                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Себестоимость производства</p>
+                                <p className="text-sm font-mono font-semibold text-[#2a2a28]">
+                                  {fmt(twoStagePreview.pricing.factoryCost)}
                                 </p>
                               </div>
                               <div>
-                                <div className="flex items-baseline justify-between">
-                                  <span className="text-[11px] text-[#4b4b47]">M-Glass B2C (−20%)</span>
-                                  <span className="text-[11px] font-mono font-semibold text-[#2a2a28]">
-                                    {fmt(threeTierPreview.b2c.final.clientPrice)}
-                                  </span>
-                                </div>
+                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Цена B2B</p>
+                                <p className="text-sm font-mono font-semibold text-[#2a2a28]">
+                                  {fmt(twoStagePreview.pricing.b2b.price)}
+                                </p>
                                 <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  internal transfer {fmt(threeTierPreview.b2c.b2b.tierPrice)}
-                                  {' · B2B '}{threeTierPreview.b2c.b2b.marginAfterDiscountPercent}%
-                                  {' / B2C '}{threeTierPreview.b2c.b2c?.marginAfterDiscountPercent ?? 0}%
+                                  производство: налог {MIRROR_TWO_STAGE_PRICING_CONFIG.productionTaxPercent}%
+                                  {' · '}маржа {MIRROR_TWO_STAGE_PRICING_CONFIG.productionMarginPercent}%
+                                </p>
+                              </div>
+                              <div>
+                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Цена B2C клиенту</p>
+                                <p className="text-sm font-mono font-bold text-emerald-700">
+                                  {fmt(twoStagePreview.pricing.b2c.price)}
+                                </p>
+                                <p className="text-[10px] text-[#9a9a95] leading-snug">
+                                  B2C: налог {MIRROR_TWO_STAGE_PRICING_CONFIG.b2cTaxPercent}%
+                                  {' · '}маржа {MIRROR_TWO_STAGE_PRICING_CONFIG.b2cMarginPercent}%
                                 </p>
                               </div>
                             </div>
-                            <p className="text-[10px] text-[#b8b8b4] mt-2 leading-snug">
-                              Услуги в three-tier preview пока не учитываются. Монтаж/доставка остаются в live-цене.
+                            <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
+                              Услуги пока считаются отдельно по live-модели. Монтаж/доставка остаются в live-цене.
                             </p>
                           </>
                         )}
