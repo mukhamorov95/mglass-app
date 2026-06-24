@@ -1,8 +1,18 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { cumulativeCommission, currentTier, nextTier, tierIndex, TIERS } from '@/lib/commissionTiers'
+import {
+  calculateProgressiveCommission,
+  DEFAULT_MANAGER_COMMISSION_TIERS,
+  DEFAULT_MANAGER_SALARY_RUB,
+  DEFAULT_STREAK_BONUSES,
+  currentTierIndex,
+  distanceToNextTier,
+} from '@/lib/earnings/calculateProgressiveCommission'
+import { TIERS } from '@/lib/commissionTiers'
+
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type Calc = {
   id: number
@@ -10,114 +20,124 @@ type Calc = {
   product_type: string
   final_price: number
   margin: number
-  manager_bonus: number
   status: string
 }
 
-type MonthStat = {
-  key: string
-  label: string
-  approvedRevenue: number
-  baseCommission: number
-  upsellBonus: number
-  total: number
-  tierRate: string
-  tierIdx: number
-  dealCount: number
+// Локально хранимые ручные продажи менеджера. TODO: вынести в Supabase
+// таблицу manager_sales после согласования схемы (status pending/counted/cancelled,
+// admin-подтверждение, история смены статусов). Сейчас — localStorage MVP.
+type LocalSaleStatus = 'pending' | 'counted' | 'cancelled'
+type LocalSale = {
+  id:          string
+  date:        string   // YYYY-MM-DD
+  order_ref:   string
+  client:      string
+  amount:      number
+  comment:     string
+  status:      LocalSaleStatus
+  created_at:  string   // ISO
 }
 
-const STATUS_LABELS: Record<string, { label: string; color: string }> = {
-  draft:    { label: 'Черновик',  color: 'bg-gray-100 text-gray-500' },
-  sent:     { label: 'Отправлен', color: 'bg-blue-50 text-blue-600' },
-  approved: { label: 'Принят',    color: 'bg-emerald-50 text-emerald-700' },
-  rejected: { label: 'Отклонён', color: 'bg-red-50 text-red-500' },
+// ── Constants ────────────────────────────────────────────────────────────────
+
+const TIER_COLORS: Record<string, string> = {
+  '2%':   'bg-gray-100 text-gray-600',
+  '2.5%': 'bg-sky-50 text-sky-700',
+  '3%':   'bg-blue-50 text-blue-700',
+  '4%':   'bg-amber-50 text-amber-700',
+  '5%':   'bg-emerald-50 text-emerald-700',
+}
+
+const STATUS_BADGES: Record<LocalSaleStatus | 'approved' | 'draft' | 'sent' | 'rejected', { label: string; color: string }> = {
+  pending:   { label: 'Ожидает',   color: 'bg-amber-50 text-amber-700' },
+  counted:   { label: 'Засчитано', color: 'bg-emerald-50 text-emerald-700' },
+  cancelled: { label: 'Отменено',  color: 'bg-red-50 text-red-500' },
+  approved:  { label: 'Принят',    color: 'bg-emerald-50 text-emerald-700' },
+  draft:     { label: 'Черновик',  color: 'bg-gray-100 text-gray-500' },
+  sent:      { label: 'Отправлен', color: 'bg-blue-50 text-blue-600' },
+  rejected:  { label: 'Отклонён',  color: 'bg-red-50 text-red-500' },
 }
 
 const TYPE_LABELS: Record<string, string> = { mirror: 'Зеркало', loft: 'Лофт', shower: 'Душевая' }
-const TYPE_DOT:   Record<string, string>  = { mirror: 'bg-blue-400', loft: 'bg-orange-400', shower: 'bg-cyan-400' }
 
-function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function fmt(n: number)  { return n.toLocaleString('ru-RU') + ' ₽' }
 function fmtM(n: number) { return (n / 1_000_000).toFixed(1) + 'M' }
-
+function todayYMD()      { const d = new Date(); return d.toISOString().slice(0, 10) }
 function monthKey(dateStr: string) {
   const d = new Date(dateStr)
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
 }
-
+function ymdMonthKey(ymd: string) { return ymd.slice(0, 7) }
 function monthLabel(key: string) {
   const [y, m] = key.split('-')
   const names = ['', 'Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек']
   return `${names[parseInt(m)]} ${y}`
 }
+function uid() { return Math.random().toString(36).slice(2, 10) + Date.now().toString(36) }
 
-function buildMonthStats(calcs: Calc[]): MonthStat[] {
-  const byMonth: Record<string, Calc[]> = {}
-  for (const c of calcs) {
-    const k = monthKey(c.created_at)
-    if (!byMonth[k]) byMonth[k] = []
-    byMonth[k].push(c)
+function loadLocalSales(userId: string | null): LocalSale[] {
+  if (!userId || typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(`mglass.manager_sales.local.v1.${userId}`)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? (parsed as LocalSale[]) : []
+  } catch { return [] }
+}
+
+function saveLocalSales(userId: string | null, sales: LocalSale[]) {
+  if (!userId || typeof window === 'undefined') return
+  window.localStorage.setItem(`mglass.manager_sales.local.v1.${userId}`, JSON.stringify(sales))
+}
+
+function tierLabelFor(revenue: number): string {
+  const idx = currentTierIndex(revenue, DEFAULT_MANAGER_COMMISSION_TIERS)
+  return TIERS[idx]?.label ?? '2%'
+}
+
+// Streak bonus: ищем наибольший порог, на котором последние 3 завершённых месяца ≥ minRevenue.
+function calcStreakBonus(completedMonthsDesc: { revenue: number }[]): { bonus: number; minRevenue: number; months: number } {
+  // completedMonthsDesc — без текущего месяца, отсортирован по убыванию (свежие первые)
+  if (completedMonthsDesc.length < 3) return { bonus: 0, minRevenue: 0, months: completedMonthsDesc.length }
+  const last3 = completedMonthsDesc.slice(0, 3)
+  // от высшего тира вниз — берём максимальный, который подтверждается тремя месяцами
+  for (let i = DEFAULT_STREAK_BONUSES.length - 1; i >= 0; i--) {
+    const t = DEFAULT_STREAK_BONUSES[i]
+    if (last3.every(m => m.revenue >= t.minRevenue)) {
+      return { bonus: t.bonus, minRevenue: t.minRevenue, months: 3 }
+    }
   }
-  return Object.entries(byMonth)
-    .sort(([a], [b]) => b.localeCompare(a))
-    .map(([key, deals]) => {
-      const approved        = deals.filter(c => c.status === 'approved')
-      const approvedRevenue = approved.reduce((s, c) => s + c.final_price, 0)
-      const baseCommission  = cumulativeCommission(approvedRevenue)
-      const tier            = currentTier(approvedRevenue)
-      return {
-        key,
-        label: monthLabel(key),
-        approvedRevenue,
-        baseCommission,
-        upsellBonus: 0,
-        total:    baseCommission,
-        tierRate: tier.label,
-        tierIdx:  tierIndex(tier.label),
-        dealCount: approved.length,
-      }
-    })
+  return { bonus: 0, minRevenue: 0, months: 0 }
 }
 
-// Считает текущую серию завершённых месяцев на одном тире или выше
-function calcStreak(monthStats: MonthStat[], nowKey: string) {
-  const completed = monthStats.filter(m => m.key < nowKey)
-  if (completed.length === 0) return { count: 0, tierIdx: 0, bonusEarned: false, nextBonusIn: 3 }
-  const baseTierIdx = completed[0].tierIdx
-  let count = 0
-  for (const m of completed) {
-    if (m.tierIdx >= baseTierIdx) count++
-    else break
-  }
-  const bonusEarned  = count >= 3
-  const nextBonusIn  = bonusEarned ? 3 - (count % 3) : 3 - count
-  return { count, tierIdx: baseTierIdx, bonusEarned, nextBonusIn }
-}
-
-const TIER_COLORS: Record<string, string> = {
-  '2%': 'bg-gray-100 text-gray-600',
-  '3%': 'bg-blue-50 text-blue-700',
-  '4%': 'bg-amber-50 text-amber-700',
-  '5%': 'bg-emerald-50 text-emerald-700',
-}
-const TIER_BAR: Record<string, string> = {
-  '2%': 'bg-gray-400',
-  '3%': 'bg-blue-500',
-  '4%': 'bg-amber-500',
-  '5%': 'bg-emerald-500',
-}
+// ── Page ─────────────────────────────────────────────────────────────────────
 
 export default function MyEarningsPage() {
-  const [calcs, setCalcs]     = useState<Calc[]>([])
-  const [loading, setLoading] = useState(true)
-  const [showDeals, setShowDeals] = useState(false)
+  const [calcs, setCalcs]           = useState<Calc[]>([])
+  const [localSales, setLocalSales] = useState<LocalSale[]>([])
+  const [userId, setUserId]         = useState<string | null>(null)
+  const [loading, setLoading]       = useState(true)
+  const [forbidden, setForbidden]   = useState(false)
+  const [showAddForm, setShowAddForm] = useState(false)
 
-  const [forbidden, setForbidden] = useState(false)
+  // Форма добавления продажи
+  const [form, setForm] = useState<Omit<LocalSale, 'id' | 'created_at'>>({
+    date:      todayYMD(),
+    order_ref: '',
+    client:    '',
+    amount:    0,
+    comment:   '',
+    status:    'pending',
+  })
 
   useEffect(() => {
     async function load() {
       const supabase = createClient()
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) { setLoading(false); return }
+      setUserId(user.id)
 
       const { data: userData } = await supabase
         .from('users').select('role').eq('id', user.id).single()
@@ -127,30 +147,158 @@ export default function MyEarningsPage() {
 
       const { data } = await supabase
         .from('calculations')
-        .select('id,created_at,product_type,final_price,margin,manager_bonus,status')
+        .select('id,created_at,product_type,final_price,margin,status')
         .eq('created_by', user.id)
         .order('created_at', { ascending: false })
       setCalcs(data ?? [])
+      setLocalSales(loadLocalSales(user.id))
       setLoading(false)
     }
     load().catch(() => setLoading(false))
   }, [])
 
-  const nowKey       = monthKey(new Date().toISOString())
-  const monthStats   = buildMonthStats(calcs)
-  const streak       = calcStreak(monthStats, nowKey)
+  const nowKey   = monthKey(new Date().toISOString())
+  const todayStr = todayYMD()
 
-  const currentMonth = monthStats.find(m => m.key === nowKey)
-  const curRevenue   = currentMonth?.approvedRevenue ?? 0
-  const curTier      = currentTier(curRevenue)
-  const curNext      = nextTier(curRevenue)
-  const toNext       = curNext ? curNext.threshold - curRevenue : 0
+  // ── Combined month aggregates ──────────────────────────────────────────────
+  // Источники выручки:
+  //   1. Supabase calculations.status='approved' (зачитанная КП-цена).
+  //   2. Local sales.status='counted' (ручные продажи менеджера).
+  // pending/cancelled/draft/sent/rejected в комиссию не идут.
+  const byMonth = useMemo(() => {
+    const m: Record<string, { revenue: number; dealCount: number }> = {}
+    for (const c of calcs) {
+      if (c.status !== 'approved') continue
+      const k = monthKey(c.created_at)
+      if (!m[k]) m[k] = { revenue: 0, dealCount: 0 }
+      m[k].revenue   += c.final_price
+      m[k].dealCount += 1
+    }
+    for (const s of localSales) {
+      if (s.status !== 'counted') continue
+      const k = ymdMonthKey(s.date)
+      if (!m[k]) m[k] = { revenue: 0, dealCount: 0 }
+      m[k].revenue   += s.amount
+      m[k].dealCount += 1
+    }
+    return m
+  }, [calcs, localSales])
 
-  const totalApprovedRevenue = monthStats.reduce((s, m) => s + m.approvedRevenue, 0)
-  const totalEarned          = monthStats.reduce((s, m) => s + m.total, 0)
+  const sortedMonthKeys = useMemo(() => Object.keys(byMonth).sort((a, b) => b.localeCompare(a)), [byMonth])
+  const completedMonthsDesc = useMemo(
+    () => sortedMonthKeys.filter(k => k < nowKey).map(k => byMonth[k]),
+    [sortedMonthKeys, byMonth, nowKey],
+  )
 
-  if (loading) return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
+  const curRevenue = byMonth[nowKey]?.revenue ?? 0
+  const curDeals   = byMonth[nowKey]?.dealCount ?? 0
+  const curCommission = useMemo(
+    () => calculateProgressiveCommission(curRevenue, DEFAULT_MANAGER_COMMISSION_TIERS),
+    [curRevenue],
+  )
+  const distance = distanceToNextTier(curRevenue, DEFAULT_MANAGER_COMMISSION_TIERS)
+  const streak   = useMemo(() => calcStreakBonus(completedMonthsDesc), [completedMonthsDesc])
+
+  const totalIncome = DEFAULT_MANAGER_SALARY_RUB + curCommission.totalCommission + streak.bonus
+
+  // ── Today aggregates ───────────────────────────────────────────────────────
+  // Сегодняшняя добавленная активность: approved calculations + counted local sales.
+  // "Комиссия за сегодня" = маржинальный вклад в месячную прогрессивную комиссию:
+  // totalCommission(monthRevenue) − totalCommission(monthRevenue − todayRevenue).
+  const todayApprovedCalcs = useMemo(
+    () => calcs.filter(c => c.status === 'approved' && c.created_at.slice(0, 10) === todayStr),
+    [calcs, todayStr],
+  )
+  const todayCountedSales = useMemo(
+    () => localSales.filter(s => s.status === 'counted' && s.date === todayStr),
+    [localSales, todayStr],
+  )
+  const todayRevenue = useMemo(() => (
+    todayApprovedCalcs.reduce((s, c) => s + c.final_price, 0) +
+    todayCountedSales.reduce((s, s2) => s + s2.amount, 0)
+  ), [todayApprovedCalcs, todayCountedSales])
+  const todayAddedCount = todayApprovedCalcs.length + todayCountedSales.length
+  const todayCommission = useMemo(() => {
+    const before = calculateProgressiveCommission(curRevenue - todayRevenue, DEFAULT_MANAGER_COMMISSION_TIERS).totalCommission
+    return curCommission.totalCommission - before
+  }, [curRevenue, todayRevenue, curCommission.totalCommission])
+
+  // ── Combined sales table ───────────────────────────────────────────────────
+  // Объединённый список: live calculations + local manual sales, отсортирован по дате DESC.
+  type Row = {
+    key:         string
+    date:        string      // YYYY-MM-DD
+    sourceLabel: string      // "Расчёт #ID" / "Ручная продажа"
+    isLocal:     boolean
+    localId?:    string
+    client:      string
+    amount:      number
+    statusKey:   keyof typeof STATUS_BADGES
+    counted:     boolean     // идёт ли в комиссию
+  }
+  const rows: Row[] = useMemo(() => {
+    const calcRows: Row[] = calcs.map(c => ({
+      key:         `c-${c.id}`,
+      date:        c.created_at.slice(0, 10),
+      sourceLabel: `${TYPE_LABELS[c.product_type] ?? c.product_type} #${c.id}`,
+      isLocal:     false,
+      client:      '—',
+      amount:      c.final_price,
+      statusKey:   (c.status in STATUS_BADGES ? c.status : 'draft') as keyof typeof STATUS_BADGES,
+      counted:     c.status === 'approved',
+    }))
+    const localRows: Row[] = localSales.map(s => ({
+      key:         `l-${s.id}`,
+      date:        s.date,
+      sourceLabel: s.order_ref ? `Ручная: ${s.order_ref}` : 'Ручная продажа',
+      isLocal:     true,
+      localId:     s.id,
+      client:      s.client || '—',
+      amount:      s.amount,
+      statusKey:   s.status,
+      counted:     s.status === 'counted',
+    }))
+    return [...calcRows, ...localRows].sort((a, b) => b.date.localeCompare(a.date))
+  }, [calcs, localSales])
+
+  // ── Mutations: add / update / delete local sale ────────────────────────────
+  function addLocalSale() {
+    if (!userId) return
+    if (!form.amount || form.amount <= 0) return
+    const sale: LocalSale = {
+      id:         uid(),
+      date:       form.date || todayYMD(),
+      order_ref:  form.order_ref.trim(),
+      client:     form.client.trim(),
+      amount:     Number(form.amount) || 0,
+      comment:    form.comment.trim(),
+      status:     form.status,
+      created_at: new Date().toISOString(),
+    }
+    const next = [sale, ...localSales]
+    setLocalSales(next)
+    saveLocalSales(userId, next)
+    setForm({ date: todayYMD(), order_ref: '', client: '', amount: 0, comment: '', status: 'pending' })
+    setShowAddForm(false)
+  }
+  function setLocalStatus(id: string, status: LocalSaleStatus) {
+    if (!userId) return
+    const next = localSales.map(s => s.id === id ? { ...s, status } : s)
+    setLocalSales(next)
+    saveLocalSales(userId, next)
+  }
+  function deleteLocal(id: string) {
+    if (!userId) return
+    const next = localSales.filter(s => s.id !== id)
+    setLocalSales(next)
+    saveLocalSales(userId, next)
+  }
+
+  if (loading)   return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
   if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и администраторов</div>
+
+  const curTierLabel  = tierLabelFor(curRevenue)
+  const nextTierLabel = distance ? TIERS[currentTierIndex(distance.nextFrom, DEFAULT_MANAGER_COMMISSION_TIERS)]?.label : null
 
   return (
     <div className="bg-white min-h-screen">
@@ -159,324 +307,313 @@ export default function MyEarningsPage() {
         {/* Шапка */}
         <div>
           <h1 className="text-sm font-semibold text-[#111110]">Мои заработки</h1>
-          <p className="text-[10px] text-[#9a9a95] mt-0.5">Кумулятивная комиссия + серии</p>
+          <p className="text-[10px] text-[#9a9a95] mt-0.5">Оклад + прогрессивная комиссия + бонус за серию</p>
         </div>
 
-        {/* Текущий месяц */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] px-4 py-3">
-          <div className="flex items-center justify-between mb-3">
+        {/* ── Регламент (как работает заработок) ─────────────────────────────── */}
+        <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <p className="text-[11px] font-semibold text-[#111110] mb-1.5">Как работает заработок</p>
+          <p className="text-[11px] text-[#6b6b66] leading-snug">
+            Вы получаете <span className="font-semibold">оклад {fmt(DEFAULT_MANAGER_SALARY_RUB)}</span> + ступенчатую комиссию с принятой выручки.
+          </p>
+          <ul className="text-[11px] text-[#6b6b66] mt-2 space-y-0.5">
+            <li>· до 2 млн — <span className="font-mono font-semibold">2%</span></li>
+            <li>· с 2 до 3 млн — <span className="font-mono font-semibold">2.5%</span></li>
+            <li>· с 3 до 4 млн — <span className="font-mono font-semibold">3%</span></li>
+            <li>· с 4 до 5 млн — <span className="font-mono font-semibold">4%</span></li>
+            <li>· свыше 5 млн — <span className="font-mono font-semibold">5%</span></li>
+          </ul>
+          <p className="text-[11px] text-[#6b6b66] mt-2 leading-snug">
+            Важно: процент применяется только к сумме внутри диапазона. Например, при 5 млн комиссия = <span className="font-mono font-semibold">135 000 ₽</span>, а не 5% от всей суммы. В зачёт идут только подтверждённые продажи.
+          </p>
+        </div>
+
+        {/* ── Сегодня ────────────────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <div className="flex items-baseline justify-between mb-2">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сегодня</p>
+            <p className="text-[10px] text-[#c4c4be]">{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</p>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95] font-medium uppercase tracking-widest">Текущий месяц</p>
-              <p className="text-xs text-[#4b4b47] mt-0.5">Принятые заказы: {fmt(curRevenue)}</p>
+              <p className="text-[10px] text-[#9a9a95]">Продаж добавлено</p>
+              <p className="text-base font-mono font-semibold text-[#111110]">{todayAddedCount}</p>
             </div>
-            <div className="text-right">
-              <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTier.label]}`}>
-                Тир {curTier.label}
-              </span>
-              <p className="text-xl font-bold font-mono text-emerald-700 mt-0.5">
-                {fmt(currentMonth?.total ?? 0)}
-              </p>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Выручка засчитана</p>
+              <p className="text-base font-mono font-semibold text-[#111110]">{fmt(todayRevenue)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Комиссия за сегодня</p>
+              <p className="text-base font-mono font-semibold text-emerald-700">{fmt(Math.max(0, todayCommission))}</p>
             </div>
           </div>
+        </div>
 
-          {/* Прогресс до следующего тира */}
-          <div className="space-y-1.5 mb-3">
-            <div className="flex gap-1">
-              {TIERS.map((t, i) => {
-                const isPassed = curRevenue >= t.threshold
-                const isActive = curTier.threshold === t.threshold
-                return (
-                  <div key={t.threshold} className="flex-1">
-                    <div className={`h-1.5 rounded-full transition-all ${
-                      isPassed ? TIER_BAR[t.label] : 'bg-[#e4e4e0]'
-                    }`} />
-                    <p className={`text-[9px] mt-0.5 font-medium ${
-                      isActive ? 'text-[#111110]' : isPassed ? 'text-[#9a9a95]' : 'text-[#c4c4be]'
-                    }`}>
-                      {t.label}
-                      {i > 0 && <span className="font-normal ml-0.5">{(t.threshold / 1_000_000).toFixed(0)}M</span>}
-                    </p>
-                  </div>
-                )
-              })}
+        {/* ── Текущий месяц ──────────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <div className="flex items-baseline justify-between mb-3">
+            <div>
+              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
+              <p className="text-[11px] text-[#4b4b47] mt-0.5">Принятая выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} сделок</p>
             </div>
-            {curNext ? (
-              <p className="text-[10px] text-[#9a9a95]">
-                До тира <span className={`font-semibold ${TIER_COLORS[curNext.label].split(' ')[1]}`}>{curNext.label}</span> осталось{' '}
-                <span className="font-semibold text-[#111110]">{fmt(toNext)}</span>
-                {' — '}заработаешь на{' '}
-                <span className="font-semibold text-emerald-600">
-                  +{fmt(cumulativeCommission(curRevenue + toNext) - (currentMonth?.total ?? 0))} больше
-                </span>
-              </p>
-            ) : (
-              <p className="text-[10px] text-emerald-600 font-semibold">Максимальный тир достигнут!</p>
-            )}
+            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
+              Ставка {curTierLabel}
+            </span>
           </div>
 
-          {/* Стрик */}
-          <div className={`rounded-lg px-3 py-2.5 border ${
-            streak.bonusEarned
-              ? 'bg-amber-50 border-amber-200'
-              : streak.count >= 2
-              ? 'bg-orange-50 border-orange-200'
-              : 'bg-[#fafaf9] border-[#e4e4e0]'
-          }`}>
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-base">
-                  {streak.count === 0 ? '🎯' : streak.count >= 3 ? '🔥' : streak.count === 2 ? '⚡' : '✨'}
-                </span>
-                <div>
-                  <p className={`text-xs font-semibold ${streak.bonusEarned ? 'text-amber-700' : 'text-[#4b4b47]'}`}>
-                    {streak.count === 0
-                      ? 'Начни серию'
-                      : `Серия: ${streak.count} ${streak.count === 1 ? 'месяц' : streak.count < 5 ? 'месяца' : 'месяцев'} подряд на тире ${TIERS[streak.tierIdx]?.label}`
-                    }
-                  </p>
-                  <p className="text-[10px] text-[#9a9a95] mt-0.5">
-                    {streak.bonusEarned
-                      ? `Бонус за серию уже заработан! Следующий через ${streak.nextBonusIn} мес.`
-                      : streak.count === 0
-                      ? 'Держи один тир 3 месяца подряд — получи бонус'
-                      : `До бонуса ещё ${streak.nextBonusIn} ${streak.nextBonusIn === 1 ? 'месяц' : 'месяца'}`
-                    }
-                  </p>
-                </div>
-              </div>
-              {streak.tierIdx > 0 && (
-                <div className="text-right flex-shrink-0">
-                  <p className={`text-sm font-bold font-mono ${streak.bonusEarned ? 'text-amber-700' : 'text-[#9a9a95]'}`}>
-                    {fmt(TIERS[streak.tierIdx].streakBonus)}
-                  </p>
-                  <p className="text-[9px] text-[#c4c4be]">бонус за серию</p>
-                </div>
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#f2f2f0]">
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Оклад</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(DEFAULT_MANAGER_SALARY_RUB)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Комиссия (прогрессивная)</p>
+              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(curCommission.totalCommission)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] text-[#9a9a95]">Бонус серии</p>
+              <p className={`text-sm font-mono font-semibold ${streak.bonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+                {streak.bonus > 0 ? `+${fmt(streak.bonus)}` : '0 ₽'}
+              </p>
+              {streak.bonus > 0 ? (
+                <p className="text-[10px] text-amber-700 mt-0.5">3 мес ≥ {fmt(streak.minRevenue)}</p>
+              ) : (
+                <p className="text-[10px] text-[#b8b8b4] mt-0.5">по закрытым месяцам</p>
               )}
             </div>
+            <div>
+              <p className="text-[10px] text-emerald-600">Итого прогноз дохода</p>
+              <p className="text-lg font-mono font-bold text-emerald-700">{fmt(totalIncome)}</p>
+            </div>
+          </div>
 
-            {/* Точки прогресса серии */}
-            {streak.tierIdx > 0 && (
-              <div className="flex gap-1.5 mt-2">
-                {[0, 1, 2].map(i => {
-                  const filled = i < (streak.count % 3 === 0 && streak.count > 0 ? 3 : streak.count % 3)
-                  const completed = streak.count >= 3 && i < 3
-                  return (
-                    <div key={i} className={`flex-1 h-1.5 rounded-full transition-all ${
-                      completed ? 'bg-amber-400' : filled ? 'bg-orange-400' : 'bg-[#e4e4e0]'
-                    }`} />
-                  )
-                })}
-              </div>
+          <div className="mt-3 pt-3 border-t border-[#f2f2f0]">
+            {distance ? (
+              <p className="text-[11px] text-[#6b6b66] leading-snug">
+                До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(distance.remaining)}</span>.
+                {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{distance.ratePercent}%</span>
+              </p>
+            ) : (
+              <p className="text-[11px] text-emerald-700 font-semibold">Максимальный тир достигнут — каждый рубль выручки приносит 5%.</p>
             )}
           </div>
         </div>
 
-        {/* Мотивационный блок */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] px-4 py-3">
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2.5">
-            К чему стремиться — пример за месяц
-          </p>
+        {/* ── Прогресс по диапазонам ─────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Где вы сейчас на шкале</p>
           <div className="space-y-1.5">
-            {[
-              { revenue: 1_000_000, label: '1 млн' },
-              { revenue: 2_000_000, label: '2 млн' },
-              { revenue: 3_000_000, label: '3 млн' },
-              { revenue: 4_000_000, label: '4 млн' },
-              { revenue: 5_000_000, label: '5 млн' },
-            ].map(ex => {
-              const tier   = currentTier(ex.revenue)
-              const comm   = cumulativeCommission(ex.revenue)
-              const isPast = curRevenue >= ex.revenue
+            {DEFAULT_MANAGER_COMMISSION_TIERS.map((t, i) => {
+              const tierResult = curCommission.tiers[i]
+              const filled    = tierResult.amountInTier > 0
+              const upperLabel = t.to == null ? '∞' : `${(t.to / 1_000_000).toFixed(0)}M`
+              const isCurrent = curRevenue >= t.from && (t.to == null || curRevenue < t.to)
               return (
-                <div key={ex.revenue}
-                  className={`flex items-center gap-3 px-3 py-2 rounded-lg border transition-colors ${
-                    isPast ? 'border-emerald-200 bg-emerald-50/60' : 'border-[#e4e4e0] bg-[#fafaf9]'
-                  }`}>
-                  <div className={`w-4 h-4 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    isPast ? 'bg-emerald-500' : 'border-2 border-[#d4d4d0]'
-                  }`}>
-                    {isPast && (
-                      <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
-                      </svg>
-                    )}
-                  </div>
-
-                  <p className={`text-sm font-bold w-12 flex-shrink-0 ${isPast ? 'text-emerald-700' : 'text-[#4b4b47]'}`}>
-                    {ex.label}
-                  </p>
-
-                  <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${TIER_COLORS[tier.label]}`}>
-                    {tier.label}
+                <div key={t.from} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg border ${
+                  isCurrent ? 'border-emerald-200 bg-emerald-50/40' : filled ? 'border-[#e4e4e0] bg-[#fafaf9]' : 'border-[#f0f0ec] bg-white'
+                }`}>
+                  <span className={`text-[11px] font-mono w-16 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
+                    {(t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)}M–{upperLabel}
                   </span>
-
-                  <div className="flex-1 flex gap-1 flex-wrap min-w-0">
-                    {TIERS.map((t, i) => {
-                      const from    = t.threshold
-                      const to      = TIERS[i + 1]?.threshold ?? Infinity
-                      const bracket = Math.min(ex.revenue, to) - from
-                      if (bracket <= 0) return null
-                      return (
-                        <span key={t.threshold} className="text-[10px] text-[#9a9a95] whitespace-nowrap">
-                          {(bracket / 1_000_000).toFixed(0)}M×{t.label}
-                        </span>
-                      )
-                    })}
-                  </div>
-
-                  <p className={`text-sm font-bold font-mono flex-shrink-0 ${isPast ? 'text-emerald-700' : 'text-[#111110]'}`}>
-                    {fmt(comm)}
-                  </p>
+                  <span className={`text-[11px] font-mono font-semibold w-12 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
+                    {t.ratePercent}%
+                  </span>
+                  <span className={`flex-1 text-[11px] font-mono text-right ${filled ? 'text-[#4b4b47]' : 'text-[#c4c4be]'}`}>
+                    {filled ? fmt(tierResult.amountInTier) : '—'}
+                  </span>
+                  <span className={`text-[11px] font-mono font-semibold w-24 text-right ${filled ? 'text-emerald-700' : 'text-[#c4c4be]'}`}>
+                    {filled ? `+${fmt(tierResult.commission)}` : '—'}
+                  </span>
                 </div>
               )
             })}
           </div>
+        </div>
 
-          {/* Бонусы за серии */}
-          <div className="mt-3 pt-3 border-t border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">
-              Бонус за 3 месяца подряд на тире
-            </p>
-            <div className="flex gap-2">
-              {TIERS.filter(t => t.streakBonus > 0).map(t => (
-                <div key={t.label} className={`flex-1 rounded-lg px-2 py-1.5 border ${TIER_COLORS[t.label]} border-current/20`}>
-                  <p className="text-xs font-bold">{t.label}</p>
-                  <p className="text-sm font-bold font-mono">+{(t.streakBonus / 1000).toFixed(0)}k</p>
+        {/* ── Бонусы за серию ─────────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Бонус за серию</p>
+          <p className="text-[11px] text-[#6b6b66] mb-2 leading-snug">
+            3 месяца подряд держать выручку на уровне:
+          </p>
+          <div className="grid grid-cols-3 gap-2">
+            {DEFAULT_STREAK_BONUSES.map(b => {
+              const active = streak.bonus === b.bonus
+              return (
+                <div key={b.minRevenue} className={`rounded-lg px-2.5 py-2 border ${
+                  active ? 'border-amber-300 bg-amber-50' : 'border-[#e4e4e0] bg-[#fafaf9]'
+                }`}>
+                  <p className="text-[10px] text-[#9a9a95]">{(b.minRevenue / 1_000_000).toFixed(0)}M+ × 3 мес</p>
+                  <p className={`text-sm font-mono font-bold ${active ? 'text-amber-700' : 'text-[#4b4b47]'}`}>+{fmt(b.bonus)}</p>
                 </div>
-              ))}
+              )
+            })}
+          </div>
+          {completedMonthsDesc.length < 3 ? (
+            <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
+              Серия считается по закрытым месяцам. Закрыто {completedMonthsDesc.length} из 3 нужных — история подключится по мере накопления продаж.
+            </p>
+          ) : streak.bonus === 0 ? (
+            <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
+              Последние 3 закрытых месяца на разных тирах — серия не сложилась.
+            </p>
+          ) : null}
+        </div>
+
+        {/* ── Добавить продажу ────────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+          <button onClick={() => setShowAddForm(v => !v)}
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Добавить продажу</p>
+            <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">локальный режим / тест</span>
+          </button>
+          {showAddForm && (
+            <div className="px-4 pb-4 border-t border-[#f5f5f3] space-y-2">
+              <p className="text-[10px] text-[#9a9a95] mt-3 leading-snug">
+                Хранится в браузере (localStorage). TODO: перенести в Supabase таблицу manager_sales с админ-подтверждением.
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-[#9a9a95]">Дата</label>
+                  <input type="date" value={form.date}
+                    onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
+                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[#9a9a95]">Сумма, ₽</label>
+                  <input type="number" min={0} value={form.amount || ''}
+                    onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
+                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[#9a9a95]">Номер заказа / КП</label>
+                  <input type="text" value={form.order_ref}
+                    onChange={e => setForm(f => ({ ...f, order_ref: e.target.value }))}
+                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                </div>
+                <div>
+                  <label className="text-[10px] text-[#9a9a95]">Клиент</label>
+                  <input type="text" value={form.client}
+                    onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
+                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                </div>
+              </div>
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">Комментарий</label>
+                <input type="text" value={form.comment}
+                  onChange={e => setForm(f => ({ ...f, comment: e.target.value }))}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+              </div>
+              <div>
+                <label className="text-[10px] text-[#9a9a95]">Статус</label>
+                <select value={form.status}
+                  onChange={e => setForm(f => ({ ...f, status: e.target.value as LocalSaleStatus }))}
+                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs">
+                  <option value="pending">Ожидает подтверждения</option>
+                  <option value="counted">Засчитано</option>
+                  <option value="cancelled">Отменено</option>
+                </select>
+              </div>
+              <div className="flex items-center gap-2 pt-1">
+                <button onClick={addLocalSale} disabled={!form.amount || form.amount <= 0}
+                  className="bg-[#111110] hover:bg-[#2a2a28] text-white text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-40">
+                  Добавить
+                </button>
+                <button onClick={() => setShowAddForm(false)}
+                  className="text-xs text-[#9a9a95] hover:text-[#111110]">Отмена</button>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Итого */}
-        <div className="grid grid-cols-2 gap-2">
-          <div className="bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2.5">
-            <p className="text-[10px] text-emerald-600 font-medium mb-0.5">Заработано всего</p>
-            <p className="text-lg font-bold font-mono text-emerald-700">{fmt(totalEarned)}</p>
-            <p className="text-[10px] text-emerald-500 mt-0.5">за всё время</p>
+        {/* ── Таблица всех продаж ─────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-baseline justify-between">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Все продажи и расчёты</p>
+            <p className="text-[10px] text-[#c4c4be]">{rows.length} строк</p>
           </div>
-          <div className="bg-white border border-[#e4e4e0] rounded-lg px-3 py-2.5">
-            <p className="text-[10px] text-[#9a9a95] font-medium mb-0.5">Принятая выручка</p>
-            <p className="text-lg font-bold font-mono text-[#111110]">{fmt(totalApprovedRevenue)}</p>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">сумма всех заказов</p>
-          </div>
-        </div>
-
-        {/* Разбивка по месяцам */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">По месяцам</p>
-          </div>
-          {monthStats.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Расчётов нет</div>
+          {rows.length === 0 ? (
+            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет продаж. Добавьте через форму выше.</div>
           ) : (
             <>
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">Месяц</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-right">Оборот</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-center">Тир</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-right">Сделки</span>
-                <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider text-right">Комиссия</span>
+              <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Источник</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Клиент</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сумма</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Статус</span>
+                <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">В комиссию</span>
+                <span />
               </div>
-
-              {monthStats.map((m, idx) => {
-                // Стрик-иконка для завершённых месяцев
-                const prevMonths   = monthStats.slice(idx)
-                const streakLen    = (() => {
-                  let n = 0
-                  for (const pm of prevMonths) {
-                    if (pm.key >= nowKey) continue
-                    if (pm.tierIdx >= m.tierIdx) n++
-                    else break
-                  }
-                  return n
-                })()
-                const showStreakBadge = m.key < nowKey && streakLen >= 3 && m.tierIdx > 0
-
+              {rows.map(r => {
+                const st = STATUS_BADGES[r.statusKey] ?? STATUS_BADGES.draft
                 return (
-                  <div key={m.key}
-                    className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 border-b border-[#f5f5f3] last:border-0 ${
-                      m.key === nowKey ? 'bg-emerald-50/40' : 'hover:bg-[#fafaf9]'
-                    }`}>
-                    <div>
-                      <div className="flex items-center gap-1">
-                        <p className="text-xs text-[#111110] font-medium">{m.label}</p>
-                        {showStreakBadge && <span className="text-[10px]">🔥</span>}
+                  <div key={r.key}
+                    className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 items-center px-3 py-1.5 border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
+                    <span className="text-[11px] text-[#6b6b66] font-mono">{r.date}</span>
+                    <span className="text-[11px] text-[#4b4b47] truncate">{r.sourceLabel}</span>
+                    <span className="text-[11px] text-[#6b6b66] truncate">{r.client}</span>
+                    <span className="text-[11px] font-mono text-[#111110] text-right">{fmt(r.amount)}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded text-center ${st.color}`}>{st.label}</span>
+                    <span className={`text-[11px] font-mono font-semibold text-right ${r.counted ? 'text-emerald-700' : 'text-[#c4c4be]'}`}>
+                      {r.counted ? fmt(r.amount) : '—'}
+                    </span>
+                    {r.isLocal && r.localId ? (
+                      <div className="flex items-center gap-1 justify-end">
+                        {r.statusKey === 'pending' && (
+                          <button onClick={() => setLocalStatus(r.localId!, 'counted')}
+                            title="Засчитать"
+                            className="text-[10px] text-emerald-700 hover:underline">✓</button>
+                        )}
+                        {r.statusKey !== 'cancelled' && (
+                          <button onClick={() => setLocalStatus(r.localId!, 'cancelled')}
+                            title="Отменить"
+                            className="text-[10px] text-orange-500 hover:underline">×</button>
+                        )}
+                        <button onClick={() => deleteLocal(r.localId!)}
+                          title="Удалить"
+                          className="text-[10px] text-red-500 hover:underline">🗑</button>
                       </div>
-                    </div>
-                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">
-                      {fmtM(m.approvedRevenue)}
-                    </span>
-                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[m.tierRate]}`}>
-                      {m.tierRate}
-                    </span>
-                    <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">
-                      {m.dealCount} шт
-                    </span>
-                    <span className="text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">
-                      {fmt(m.total)}
-                    </span>
+                    ) : <span />}
                   </div>
                 )
               })}
-
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 bg-[#fafaf9] border-t border-[#e4e4e0]">
-                <span className="text-xs font-semibold text-[#4b4b47]">Итого</span>
-                <span className="text-xs font-mono font-semibold text-[#111110] text-right">{fmtM(totalApprovedRevenue)}</span>
-                <span />
-                <span />
-                <span className="text-xs font-mono font-bold text-emerald-700 text-right">{fmt(totalEarned)}</span>
-              </div>
             </>
           )}
         </div>
 
-        {/* Детализация по сделкам */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <button onClick={() => setShowDeals(v => !v)}
-            className="w-full flex items-center justify-between px-3 py-2.5 hover:bg-[#fafaf9] transition-colors">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Все расчёты</p>
-            <svg className={`w-3.5 h-3.5 text-[#9a9a95] transition-transform ${showDeals ? 'rotate-180' : ''}`}
-              fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
-            </svg>
-          </button>
-          {showDeals && (
+        {/* ── По месяцам ──────────────────────────────────────────────────────── */}
+        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">История по месяцам</p>
+          </div>
+          {sortedMonthKeys.length === 0 ? (
+            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет данных</div>
+          ) : (
             <>
-              <div className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-t border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">#</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">Изделие</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-right">Цена</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-right">Маржа</span>
-                <span className="text-[10px] font-semibold text-emerald-600 uppercase tracking-wider text-right">Бонус</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider text-center">Статус</span>
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-[#e4e4e0]">
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Месяц</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Выручка</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Ставка</span>
+                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сделки</span>
+                <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">Комиссия</span>
               </div>
-              {calcs.map(c => {
-                const st    = STATUS_LABELS[c.status] ?? STATUS_LABELS.draft
-                const bonus = c.manager_bonus ?? 0
+              {sortedMonthKeys.map(k => {
+                const m = byMonth[k]
+                const c = calculateProgressiveCommission(m.revenue, DEFAULT_MANAGER_COMMISSION_TIERS).totalCommission
+                const tl = tierLabelFor(m.revenue)
+                const isCurrent = k === nowKey
                 return (
-                  <div key={c.id}
-                    className="grid grid-cols-[auto_1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                    <span className="text-[10px] text-[#c4c4be] font-mono w-7">#{c.id}</span>
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${TYPE_DOT[c.product_type] ?? 'bg-gray-300'}`} />
-                      <div className="min-w-0">
-                        <p className="text-xs text-[#111110] truncate">{TYPE_LABELS[c.product_type] ?? c.product_type}</p>
-                        <p className="text-[10px] text-[#c4c4be]">
-                          {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })}
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-xs font-mono text-[#111110] text-right whitespace-nowrap">{fmt(c.final_price)}</span>
-                    <span className={`text-xs font-medium text-right ${c.margin >= 35 ? 'text-emerald-600' : c.margin >= 25 ? 'text-amber-600' : 'text-red-500'}`}>
-                      {c.margin}%
-                    </span>
-                    <span className={`text-xs font-mono font-semibold text-right whitespace-nowrap ${bonus > 0 ? 'text-emerald-600' : 'text-[#c4c4be]'}`}>
-                      {bonus > 0 ? fmt(bonus) : '—'}
-                    </span>
-                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded text-center whitespace-nowrap ${st.color}`}>
-                      {st.label}
-                    </span>
+                  <div key={k}
+                    className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 border-b border-[#f5f5f3] last:border-0 ${
+                      isCurrent ? 'bg-emerald-50/40' : 'hover:bg-[#fafaf9]'
+                    }`}>
+                    <span className="text-xs text-[#111110]">{monthLabel(k)}{isCurrent && <span className="text-[10px] text-emerald-600 ml-1.5">сейчас</span>}</span>
+                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmtM(m.revenue)}</span>
+                    <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
+                    <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.dealCount} шт</span>
+                    <span className="text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
                   </div>
                 )
               })}
