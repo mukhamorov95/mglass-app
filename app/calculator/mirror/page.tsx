@@ -149,9 +149,7 @@ export default function MirrorCalculatorPage() {
 
   const [role, setRole]               = useState<string | null>(null)
   const [copied, setCopied]           = useState(false)
-  const [showCost, setShowCost]       = useState(false)
-  const [showPricing, setShowPricing] = useState(false)
-  const [showDebug, setShowDebug]     = useState(false)
+  const [showPricing, setShowPricing] = useState(true)
   const [saving, setSaving]           = useState(false)
   const [savedId, setSavedId]         = useState<number | null>(null)
   const [addedToCart, setAddedToCart] = useState(false)
@@ -1120,46 +1118,13 @@ export default function MirrorCalculatorPage() {
                   )}
                 </div>
 
-                {/* ①.5 Финмодель V2 — preview only, не влияет на сохранение/КП/PDF */}
-                <div className="bg-white rounded-xl border border-dashed border-[#d6d6d2] p-4">
-                  <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
-                    Финмодель V2 (preview)
-                  </p>
-                  {v2Preview ? (() => {
-                    const v2GrandTotal = v2Preview.grandTotal
-                    const diff = v2GrandTotal - result.grandTotal
-                    const diffColor =
-                      diff > 0 ? 'text-emerald-600'
-                      : diff < 0 ? 'text-red-600'
-                      : 'text-[#a8a8a3]'
-                    const diffSign = diff > 0 ? '+' : diff < 0 ? '−' : ''
-                    return (
-                      <>
-                        <p className="text-[20px] font-bold font-mono leading-none tracking-tight text-[#2a2a28]">
-                          {v2GrandTotal.toLocaleString('ru-RU')} ₽
-                        </p>
-                        <p className={`text-[11px] font-mono mt-2 ${diffColor}`}>
-                          Разница: {diffSign}{Math.abs(diff).toLocaleString('ru-RU')} ₽
-                        </p>
-                        <p className="text-[10px] text-[#a8a8a3] mt-2 leading-snug">
-                          Себестоимость: {v2Preview.directCost.toLocaleString('ru-RU')} ₽ · Маржа: {v2Preview.margin}%
-                        </p>
-                      </>
-                    )
-                  })() : (
-                    <p className="text-[11px] text-amber-600">
-                      Финмодель V2 недоступна: проверьте маржу/налог/справочник
-                    </p>
-                  )}
-                </div>
-
-                {/* ② Pricing breakdown */}
+                {/* ② Расчёт цены — единый блок: себестоимость, формула, услуги, итог, sanity-check V2 */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
                   <button onClick={() => setShowPricing(!showPricing)}
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
                     <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em]">Расчёт цены</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.basePrice)}</span>
+                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.grandTotal)}</span>
                       <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${showPricing ? 'rotate-180' : ''}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1167,32 +1132,123 @@ export default function MirrorCalculatorPage() {
                     </div>
                   </button>
                   {showPricing && (
-                    <div className="px-4 pb-3 border-t border-[#f5f5f3]">
-                      <div className="space-y-1.5 mt-2.5">
-                        <PriceLine label="Себестоимость"              value={fmt(result.totalCost)} />
-                        <PriceLine label={`Налог ${expensesPercent}%`} value={fmt(result.expensesAmount)} />
-                        <PriceLine label={`Маржа ${inputs.margin}%`}  value={fmt(result.marginAmount)} />
-                        <div className="flex justify-between items-baseline pt-2 border-t border-[#f0f0ee]">
-                          <span className="text-xs font-semibold text-[#2a2a28]">Базовая цена</span>
-                          <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.basePrice)}</span>
-                        </div>
-                        {result.partnerAmount > 0 && (
-                          <PriceLine label={`Партнёрка ${inputs.partnerPercent}%`}
-                            value={`+${fmt(result.partnerAmount)}`} accent="text-purple-600" />
-                        )}
-                        {result.discountAmount > 0 && (
-                          <PriceLine label={`Скидка ${inputs.discount}%`}
-                            value={`−${fmt(result.discountAmount)}`} accent="text-orange-500" />
-                        )}
-                        <div className="flex justify-between items-baseline pt-2 border-t border-[#f0f0ee]">
-                          <span className="text-xs font-semibold text-[#2a2a28]">Цена изделия</span>
-                          <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.finalPrice)}</span>
-                        </div>
-                        {result.serviceLines.map((s, i) => (
-                          <PriceLine key={i} label={s.name} value={fmt(s.total)} />
+                    <div className="px-4 pb-4 border-t border-[#f5f5f3]">
+
+                      {/* 1. Себестоимость */}
+                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-3 mb-2">Себестоимость</p>
+                      <div className="divide-y divide-[#f7f7f5]">
+                        {result.costLines.map((line, i) => (
+                          <div key={i} className="flex items-baseline justify-between py-1.5">
+                            <div className="flex-1 min-w-0 pr-2">
+                              <p className="text-xs text-[#4b4b47] truncate">{line.name}</p>
+                              <p className="text-[10px] text-[#b8b8b4]">{line.qty} {line.unit} × {line.price.toLocaleString('ru-RU')} ₽</p>
+                            </div>
+                            <span className="text-xs font-mono font-semibold text-[#2a2a28] flex-shrink-0">
+                              {line.total.toLocaleString('ru-RU')} ₽
+                            </span>
+                          </div>
                         ))}
                       </div>
-                      {/* +10% hint */}
+                      <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                        <span className="text-xs font-semibold text-[#2a2a28]">Итого себестоимость</span>
+                        <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.totalCost)}</span>
+                      </div>
+
+                      {/* 2. Налог + маржа → базовая цена */}
+                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Наценка</p>
+                      <div className="space-y-1.5">
+                        <PriceLine label={`Налог ${inputs.tax}%`}   value={`+${fmt(result.expensesAmount)}`} />
+                        <PriceLine label={`Маржа ${inputs.margin}%`} value={`+${fmt(result.marginAmount)}`} />
+                      </div>
+                      <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                        <span className="text-xs font-semibold text-[#2a2a28]">Цена изделия</span>
+                        <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.basePrice)}</span>
+                      </div>
+                      <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
+                        Формула: {fmt(result.totalCost)} / (1 − {inputs.margin}% − {inputs.tax}%) = {fmt(result.basePrice)}
+                      </p>
+
+                      {/* 3. Партнёрские (grossup, только если выбран партнёр) */}
+                      {result.partnerAmount > 0 && (
+                        <>
+                          <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Партнёрские</p>
+                          <PriceLine label={`Партнёрские ${inputs.partnerPercent}%`}
+                            value={`+${fmt(result.partnerAmount)}`} accent="text-purple-600" />
+                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                            <span className="text-xs font-semibold text-[#2a2a28]">Цена с партнёрскими</span>
+                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.priceWithPartner)}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* 4. Скидка (после партнёра) */}
+                      {result.discountAmount > 0 && (
+                        <>
+                          <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Скидка</p>
+                          <PriceLine label={`Скидка ${inputs.discount}%`}
+                            value={`−${fmt(result.discountAmount)}`} accent="text-orange-500" />
+                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                            <span className="text-xs font-semibold text-[#2a2a28]">Цена после скидки</span>
+                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.finalPrice)}</span>
+                          </div>
+                        </>
+                      )}
+
+                      {/* 5. Услуги */}
+                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Услуги</p>
+                      {result.serviceLines.length > 0 ? (
+                        <>
+                          <div className="space-y-1.5">
+                            {result.serviceLines.map((s, i) => (
+                              <PriceLine key={i} label={s.name} value={fmt(s.total)} />
+                            ))}
+                          </div>
+                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                            <span className="text-xs font-semibold text-[#2a2a28]">Итого услуги</span>
+                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.servicesTotal)}</span>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-[11px] text-[#a8a8a3]">Услуги: не выбраны</p>
+                      )}
+
+                      {/* 6. Итого клиенту */}
+                      <div className="flex justify-between items-baseline pt-3 mt-3 border-t-2 border-[#e8e8e5]">
+                        <span className="text-sm font-bold text-[#111110]">Итого клиенту</span>
+                        <span className="text-base font-mono font-bold text-emerald-700">{fmt(result.grandTotal)}</span>
+                      </div>
+                      <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
+                        Реальная маржа: <span className="font-semibold text-[#6b6b66]">{result.margin}%</span>
+                        {' · '}Прибыль: <span className="font-semibold text-[#6b6b66]">{fmt(result.profit)}</span>
+                      </p>
+
+                      {/* 7. Финмодель V2 — sanity check, не отдельная цена */}
+                      <div className="mt-4 pt-3 border-t border-dashed border-[#e0e0dc]">
+                        {(() => {
+                          if (!v2Preview) {
+                            return (
+                              <p className="text-[10px] text-amber-600 leading-snug">
+                                Финмодель V2 недоступна — проверьте справочник cost_price.
+                              </p>
+                            )
+                          }
+                          const diff = v2Preview.grandTotal - result.grandTotal
+                          if (Math.abs(diff) <= 2) {
+                            return (
+                              <p className="text-[10px] text-emerald-700 leading-snug">
+                                Финмодель V2: совпадает с текущей формулой ✓
+                              </p>
+                            )
+                          }
+                          return (
+                            <p className="text-[10px] text-amber-600 leading-snug">
+                              <span className="font-semibold">Внимание:</span> V2 считает от другой себестоимости — {fmt(v2Preview.directCost)} ₽ (live: {fmt(result.totalCost)} ₽). Ожидаемо до унификации справочника cost_price. Цена V2 была бы {fmt(v2Preview.grandTotal)} ₽.
+                            </p>
+                          )
+                        })()}
+                      </div>
+
+                      {/* 8. +10% upsell hint */}
                       {(() => {
                         const nm = inputs.margin + 10
                         const d  = 1 - nm / 100 - inputs.tax / 100
@@ -1202,7 +1258,7 @@ export default function MirrorCalculatorPage() {
                         const nf  = Math.round(nwp * (1 - inputs.discount / 100))
                         return (
                           <button onClick={() => setMargin(String(nm))}
-                            className="mt-2.5 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors">
+                            className="mt-3 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors">
                             <span className="text-[11px] text-emerald-700 font-medium">Продать дороже +10%</span>
                             <div className="text-right">
                               <span className="text-[11px] font-mono font-bold text-emerald-700">{fmt(nf)}</span>
@@ -1214,122 +1270,6 @@ export default function MirrorCalculatorPage() {
                     </div>
                   )}
                 </div>
-
-                {/* ③ Cost breakdown */}
-                <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                  <button onClick={() => setShowCost(!showCost)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
-                    <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em]">Себестоимость</p>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.totalCost)}</span>
-                      <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${showCost ? 'rotate-180' : ''}`}
-                        fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </button>
-                  {showCost && (
-                    <div className="px-4 pb-3 border-t border-[#f5f5f3] divide-y divide-[#f7f7f5]">
-                      {result.costLines.map((line, i) => (
-                        <div key={i} className="flex items-baseline justify-between py-1.5">
-                          <div className="flex-1 min-w-0 pr-2">
-                            <p className="text-xs text-[#4b4b47] truncate">{line.name}</p>
-                            <p className="text-[10px] text-[#b8b8b4]">{line.qty} {line.unit} × {line.price.toLocaleString('ru-RU')} ₽</p>
-                          </div>
-                          <span className="text-xs font-mono font-semibold text-[#2a2a28] flex-shrink-0">
-                            {line.total.toLocaleString('ru-RU')} ₽
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                {/* ④ Admin debug panel */}
-                {(role === 'admin' || role === 'owner') && (
-                  <div className="bg-white rounded-xl border border-amber-200 overflow-hidden">
-                    <button onClick={() => setShowDebug(!showDebug)}
-                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-50 transition-colors">
-                      <p className="text-[10px] font-semibold text-amber-600 uppercase tracking-[0.08em]">
-                        Диагностика расчёта
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-amber-400">margin={inputs.margin}% tax={inputs.tax}%</span>
-                        <svg className={`w-3 h-3 text-amber-400 transition-transform ${showDebug ? 'rotate-180' : ''}`}
-                          fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </div>
-                    </button>
-                    {showDebug && result && (
-                      <div className="px-4 pb-4 border-t border-amber-100 text-[10px] font-mono space-y-1 bg-amber-50/30">
-                        <div className="text-amber-600 font-bold pt-3 text-[9px] uppercase tracking-wider">Входные данные</div>
-                        <div className="text-[#555]">
-                          Маржа: <span className="font-bold">{inputs.margin}%</span>
-                          &nbsp;·&nbsp;Налог: <span className="font-bold">{inputs.tax}%</span>
-                          &nbsp;·&nbsp;Знаменатель: <span className="font-bold">{(1 - inputs.margin/100 - inputs.tax/100).toFixed(4)}</span>
-                        </div>
-                        <div className="text-[#555]">Скидка: {inputs.discount}% · Партнёр: {inputs.partnerPercent}%</div>
-
-                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Себестоимость</div>
-                        {result.costLines.map((l, i) => (
-                          <div key={i} className="flex justify-between text-[#555]">
-                            <span className="truncate mr-2">{l.name}</span>
-                            <span className="flex-shrink-0 font-bold">{l.total.toLocaleString('ru-RU')} ₽</span>
-                          </div>
-                        ))}
-                        <div className="flex justify-between border-t border-amber-200 pt-1 font-bold text-amber-700">
-                          <span>∑ себестоимость</span>
-                          <span>{result.totalCost.toLocaleString('ru-RU')} ₽</span>
-                        </div>
-
-                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Формула</div>
-                        <div className="text-[#555] leading-relaxed">
-                          {result.totalCost.toLocaleString('ru-RU')} / {(1 - inputs.margin/100 - inputs.tax/100).toFixed(2)}
-                          {' = '}<span className="font-bold text-emerald-700">{result.basePrice.toLocaleString('ru-RU')} ₽</span>
-                          {' '}(базовая)
-                        </div>
-                        {result.partnerAmount > 0 && (
-                          <div className="text-[#555]">
-                            + партнёрка {result.partnerAmount.toLocaleString('ru-RU')} ₽
-                            → {result.priceWithPartner.toLocaleString('ru-RU')} ₽
-                          </div>
-                        )}
-                        {result.discountAmount > 0 && (
-                          <div className="text-[#555]">
-                            − скидка {result.discountAmount.toLocaleString('ru-RU')} ₽
-                            → {result.finalPrice.toLocaleString('ru-RU')} ₽
-                          </div>
-                        )}
-
-                        {result.serviceLines.length > 0 && (
-                          <>
-                            <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Услуги</div>
-                            {result.serviceLines.map((s, i) => (
-                              <div key={i} className="flex justify-between text-[#555]">
-                                <span>{s.name}</span>
-                                <span className="font-bold">{s.total.toLocaleString('ru-RU')} ₽</span>
-                              </div>
-                            ))}
-                          </>
-                        )}
-
-                        <div className="text-amber-600 font-bold pt-2 text-[9px] uppercase tracking-wider">Итог</div>
-                        <div className="text-[#555]">
-                          цена изделия <span className="font-bold">{result.finalPrice.toLocaleString('ru-RU')}</span>
-                          {result.servicesTotal > 0 && (
-                            <> + услуги <span className="font-bold">{result.servicesTotal.toLocaleString('ru-RU')}</span></>
-                          )}
-                          {' = '}<span className="font-bold text-emerald-700">{result.grandTotal.toLocaleString('ru-RU')} ₽</span>
-                        </div>
-                        <div className="text-[#555]">
-                          Реальная маржа: <span className="font-bold">{result.margin}%</span>
-                          &nbsp;· Прибыль: <span className="font-bold">{result.profit.toLocaleString('ru-RU')} ₽</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* ⑤ KP text */}
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
