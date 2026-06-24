@@ -33,26 +33,31 @@ export default function PricingV2Page() {
 
   useEffect(() => { load() }, [])
 
+  const SELECT_COLUMNS =
+    'product_category, production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2, active'
+
+  function applyRowToForm(row: Record<string, number | boolean | string | null>) {
+    setForm({
+      production_tax_percent:    Number(row.production_tax_percent    ?? DEFAULTS.production_tax_percent),
+      production_margin_percent: Number(row.production_margin_percent ?? DEFAULTS.production_margin_percent),
+      b2c_tax_percent:           Number(row.b2c_tax_percent           ?? DEFAULTS.b2c_tax_percent),
+      b2c_margin_percent:        Number(row.b2c_margin_percent        ?? DEFAULTS.b2c_margin_percent),
+      factory_overhead_percent:  Number(row.factory_overhead_percent  ?? DEFAULTS.factory_overhead_percent),
+      scrap_reserve_percent:     Number(row.scrap_reserve_percent     ?? DEFAULTS.scrap_reserve_percent),
+      packaging_cost_per_m2:     Number(row.packaging_cost_per_m2     ?? DEFAULTS.packaging_cost_per_m2),
+    })
+  }
+
   async function load() {
     setLoading(true)
     setError(null)
     const { data, error } = await createClient()
       .from('pricing_model_config_v2')
-      .select('production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2')
+      .select(SELECT_COLUMNS)
       .eq('product_category', 'mirror')
       .maybeSingle()
     if (error) setError(error.message)
-    else if (data) {
-      setForm({
-        production_tax_percent:    Number(data.production_tax_percent    ?? DEFAULTS.production_tax_percent),
-        production_margin_percent: Number(data.production_margin_percent ?? DEFAULTS.production_margin_percent),
-        b2c_tax_percent:           Number(data.b2c_tax_percent           ?? DEFAULTS.b2c_tax_percent),
-        b2c_margin_percent:        Number(data.b2c_margin_percent        ?? DEFAULTS.b2c_margin_percent),
-        factory_overhead_percent:  Number(data.factory_overhead_percent  ?? DEFAULTS.factory_overhead_percent),
-        scrap_reserve_percent:     Number(data.scrap_reserve_percent     ?? DEFAULTS.scrap_reserve_percent),
-        packaging_cost_per_m2:     Number(data.packaging_cost_per_m2     ?? DEFAULTS.packaging_cost_per_m2),
-      })
-    }
+    else if (data) applyRowToForm(data as Record<string, number | boolean | string | null>)
     setLoading(false)
   }
 
@@ -75,20 +80,41 @@ export default function PricingV2Page() {
     setError(null)
     const v = validate(form)
     if (v) { setError(v); setSaving(false); return }
-    const { error } = await createClient()
+    // Upsert (а не голый update) — гарантирует, что если строки с
+    // product_category='mirror' ещё нет в окружении (миграция-сид не применена),
+    // она будет создана. .select().single() заставляет Supabase вернуть строку,
+    // которую действительно записал — без этого UPDATE без матча возвращал бы
+    // { data: null, error: null }, и UI показывал бы fake "✓ Сохранено".
+    const payload = {
+      product_category:          'mirror',
+      production_tax_percent:    form.production_tax_percent,
+      production_margin_percent: form.production_margin_percent,
+      b2c_tax_percent:           form.b2c_tax_percent,
+      b2c_margin_percent:        form.b2c_margin_percent,
+      factory_overhead_percent:  form.factory_overhead_percent,
+      scrap_reserve_percent:     form.scrap_reserve_percent,
+      packaging_cost_per_m2:     form.packaging_cost_per_m2,
+      active:                    true,
+      updated_at:                new Date().toISOString(),
+    }
+    const { data, error } = await createClient()
       .from('pricing_model_config_v2')
-      .update({
-        production_tax_percent:    form.production_tax_percent,
-        production_margin_percent: form.production_margin_percent,
-        b2c_tax_percent:           form.b2c_tax_percent,
-        b2c_margin_percent:        form.b2c_margin_percent,
-        factory_overhead_percent:  form.factory_overhead_percent,
-        scrap_reserve_percent:     form.scrap_reserve_percent,
-        packaging_cost_per_m2:     form.packaging_cost_per_m2,
-      })
-      .eq('product_category', 'mirror')
-    if (error) setError(error.message)
-    else      { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+      .upsert(payload, { onConflict: 'product_category' })
+      .select(SELECT_COLUMNS)
+      .single()
+    if (error) {
+      setError(error.message)
+      setSaving(false)
+      return
+    }
+    if (!data) {
+      setError('Настройки не были сохранены: Supabase не вернул строку (возможно RLS отфильтровал запрос).')
+      setSaving(false)
+      return
+    }
+    applyRowToForm(data as Record<string, number | boolean | string | null>)
+    setSaved(true)
+    setTimeout(() => setSaved(false), 2500)
     setSaving(false)
   }
 
