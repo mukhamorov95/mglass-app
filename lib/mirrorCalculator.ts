@@ -98,7 +98,11 @@ export type MirrorResult = {
 }
 
 function findMat(materials: Material[], name: string): Material | undefined {
-  return materials.find(m => m.name.toLowerCase().includes(name.toLowerCase()) && m.active)
+  return materials.find(m =>
+    m.name.toLowerCase().includes(name.toLowerCase())
+    && m.active
+    && m.is_v2_only !== true
+  )
 }
 
 function dn(m: { name: string; short_name?: string | null }): string {

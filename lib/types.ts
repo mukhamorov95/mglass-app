@@ -12,6 +12,7 @@ export type Material = {
   in_stock: boolean
   comment: string | null
   image_url: string | null
+  is_v2_only?: boolean | null   // V2 pricing-preview only — live calc must skip
   created_at: string
   updated_at: string
 }
