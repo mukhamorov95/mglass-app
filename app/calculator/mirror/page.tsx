@@ -1150,7 +1150,10 @@ export default function MirrorCalculatorPage() {
             {/* ⑤ УСЛОВИЯ */}
             {settings && (
               <div className="p-4">
-                <SectionLabel>Коммерческие условия</SectionLabel>
+                <SectionLabel>Коммерческие условия live-модели</SectionLabel>
+                <p className="text-[11px] text-[#9a9a95] -mt-2 mb-3 leading-snug">
+                  Пока влияют только на live-цену для КП. На V2 B2C цену не влияют — она считается из настроек финмодели.
+                </p>
                 <PricingBlock
                   settings={settings}
                   margin={margin} onMarginChange={setMargin}
@@ -1251,191 +1254,217 @@ export default function MirrorCalculatorPage() {
                         </div>
                       )}
 
-                      {/* 1. Себестоимость */}
-                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-3 mb-2">Live-расчёт · Себестоимость</p>
-                      <div className="divide-y divide-[#f7f7f5]">
-                        {result.costLines.map((line, i) => (
-                          <div key={i} className="flex items-baseline justify-between py-1.5">
-                            <div className="flex-1 min-w-0 pr-2">
-                              <p className="text-xs text-[#4b4b47] truncate">{line.name}</p>
-                              <p className="text-[10px] text-[#b8b8b4]">{line.qty} {line.unit} × {line.price.toLocaleString('ru-RU')} ₽</p>
-                            </div>
-                            <span className="text-xs font-mono font-semibold text-[#2a2a28] flex-shrink-0">
-                              {line.total.toLocaleString('ru-RU')} ₽
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
-                        <span className="text-xs font-semibold text-[#2a2a28]">Итого себестоимость</span>
-                        <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.totalCost)}</span>
-                      </div>
-
-                      {/* 2. Налог + маржа → базовая цена */}
-                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Наценка</p>
-                      <div className="space-y-1.5">
-                        <PriceLine label={`Налог ${inputs.tax}%`}   value={`+${fmt(result.expensesAmount)}`} />
-                        <PriceLine label={`Маржа ${inputs.margin}%`} value={`+${fmt(result.marginAmount)}`} />
-                      </div>
-                      <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
-                        <span className="text-xs font-semibold text-[#2a2a28]">Цена изделия</span>
-                        <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.basePrice)}</span>
-                      </div>
-                      <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
-                        Формула: {fmt(result.totalCost)} / (1 − {inputs.margin}% − {inputs.tax}%) = {fmt(result.basePrice)}
-                      </p>
-
-                      {/* 3. Партнёрские (grossup, только если выбран партнёр) */}
-                      {result.partnerAmount > 0 && (
-                        <>
-                          <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Партнёрские</p>
-                          <PriceLine label={`Партнёрские ${inputs.partnerPercent}%`}
-                            value={`+${fmt(result.partnerAmount)}`} accent="text-purple-600" />
-                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
-                            <span className="text-xs font-semibold text-[#2a2a28]">Цена с партнёрскими</span>
-                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.priceWithPartner)}</span>
-                          </div>
-                        </>
-                      )}
-
-                      {/* 4. Скидка (после партнёра) */}
-                      {result.discountAmount > 0 && (
-                        <>
-                          <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Скидка</p>
-                          <PriceLine label={`Скидка ${inputs.discount}%`}
-                            value={`−${fmt(result.discountAmount)}`} accent="text-orange-500" />
-                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
-                            <span className="text-xs font-semibold text-[#2a2a28]">Цена после скидки</span>
-                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.finalPrice)}</span>
-                          </div>
-                        </>
-                      )}
-
-                      {/* 5. Услуги */}
-                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Услуги</p>
-                      {result.serviceLines.length > 0 ? (
-                        <>
-                          <div className="space-y-1.5">
-                            {result.serviceLines.map((s, i) => (
-                              <PriceLine key={i} label={s.name} value={fmt(s.total)} />
-                            ))}
-                          </div>
-                          <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
-                            <span className="text-xs font-semibold text-[#2a2a28]">Итого услуги</span>
-                            <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.servicesTotal)}</span>
-                          </div>
-                        </>
-                      ) : (
-                        <p className="text-[11px] text-[#a8a8a3]">Услуги: не выбраны</p>
-                      )}
-
-                      {/* 6. Итого клиенту */}
-                      <div className="flex justify-between items-baseline pt-3 mt-3 border-t-2 border-[#e8e8e5]">
-                        <span className="text-sm font-bold text-[#111110]">Итого клиенту</span>
-                        <span className="text-base font-mono font-bold text-emerald-700">{fmt(result.grandTotal)}</span>
-                      </div>
-                      <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
-                        Реальная маржа: <span className="font-semibold text-[#6b6b66]">{result.margin}%</span>
-                        {' · '}Прибыль: <span className="font-semibold text-[#6b6b66]">{fmt(result.profit)}</span>
-                      </p>
-
-                      {/* 7. Финмодель V2 — двухступенчатая цена + диагностика */}
-                      <div className="mt-4 pt-3 border-t border-dashed border-[#e0e0dc]">
-                        <div className="flex items-baseline justify-between mb-1">
+                      {/* ─── A. V2 — основной расчёт ──────────────────────────────── */}
+                      <div className="mt-3">
+                        <div className="flex items-baseline justify-between mb-2">
                           <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider">
-                            ФИНМОДЕЛЬ V2
+                            ФИНМОДЕЛЬ V2 · ОСНОВНОЙ РАСЧЁТ
                           </p>
                           <a
                             href="/admin/pricing-v2"
-                            className="text-[10px] text-blue-600 hover:underline"
+                            className="text-[10px] text-blue-600 hover:underline whitespace-nowrap"
                           >
-                            Настроить →
+                            Настроить финмодель →
                           </a>
                         </div>
+
                         {!twoStagePreview.available ? (
                           <p className="text-[10px] text-amber-600 leading-snug">
                             Недоступна — {twoStagePreview.reason}.
                           </p>
                         ) : (
                           <>
-                            <div className="space-y-2">
-                              <div>
-                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Себестоимость производства</p>
-                                <p className="text-sm font-mono font-semibold text-[#2a2a28]">
+                            <div className="space-y-1.5">
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xs text-[#4b4b47]">Себестоимость производства</span>
+                                <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                   {fmt(twoStagePreview.pricing.factoryCost)}
-                                </p>
-                                <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  накладные {twoStagePreview.config.factoryOverheadPercent}%
-                                  {' · '}резерв брака {twoStagePreview.config.scrapReservePercent}%
-                                  {' · '}упаковка {fmt(twoStagePreview.config.packagingCostPerM2)} ₽/м²
-                                </p>
+                                </span>
                               </div>
-                              <div>
-                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Цена B2B</p>
-                                <p className="text-sm font-mono font-semibold text-[#2a2a28]">
+                              <div className="flex items-baseline justify-between">
+                                <span className="text-xs text-[#4b4b47]">Цена B2B</span>
+                                <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                   {fmt(twoStagePreview.pricing.b2b.price)}
-                                </p>
-                                <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  производство: налог {twoStagePreview.config.productionTaxPercent}%
-                                  {' · '}маржа {twoStagePreview.config.productionMarginPercent}%
-                                </p>
+                                </span>
                               </div>
-                              <div>
-                                <p className="text-[10px] text-[#a8a8a3] mb-0.5">Цена B2C клиенту</p>
-                                <p className="text-sm font-mono font-bold text-emerald-700">
+                              <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
+                                <span className="text-sm font-bold text-[#111110]">Цена B2C клиенту</span>
+                                <span className="text-base font-mono font-bold text-emerald-700">
                                   {fmt(twoStagePreview.pricing.b2c.price)}
-                                </p>
-                                <p className="text-[10px] text-[#9a9a95] leading-snug">
-                                  B2C: налог {twoStagePreview.config.b2cTaxPercent}%
-                                  {' · '}маржа {twoStagePreview.config.b2cMarginPercent}%
-                                </p>
+                                </span>
                               </div>
                             </div>
+
+                            <div className="mt-3 px-3 py-2 bg-[#f5f5f3] rounded-lg space-y-1">
+                              <p className="text-[10px] font-semibold text-[#6b6b66] uppercase tracking-wider">Формула</p>
+                              <p className="text-[10px] font-mono text-[#6b6b66] leading-snug">
+                                B2B = {fmt(twoStagePreview.pricing.factoryCost)} / (1 − налог {twoStagePreview.config.productionTaxPercent}% − маржа {twoStagePreview.config.productionMarginPercent}%)
+                              </p>
+                              <p className="text-[10px] font-mono text-[#6b6b66] leading-snug">
+                                B2C = {fmt(twoStagePreview.pricing.b2b.price)} / (1 − налог {twoStagePreview.config.b2cTaxPercent}% − маржа {twoStagePreview.config.b2cMarginPercent}%)
+                              </p>
+                            </div>
+
+                            <div className="mt-3">
+                              <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">Настройки</p>
+                              <p className="text-[11px] text-[#6b6b66] leading-snug">
+                                производство: налог {twoStagePreview.config.productionTaxPercent}%
+                                {' · '}маржа {twoStagePreview.config.productionMarginPercent}%
+                              </p>
+                              <p className="text-[11px] text-[#6b6b66] leading-snug">
+                                B2C: налог {twoStagePreview.config.b2cTaxPercent}%
+                                {' · '}маржа {twoStagePreview.config.b2cMarginPercent}%
+                              </p>
+                              <p className="text-[11px] text-[#6b6b66] leading-snug">
+                                накладные {twoStagePreview.config.factoryOverheadPercent}%
+                                {' · '}резерв брака {twoStagePreview.config.scrapReservePercent}%
+                                {' · '}упаковка {fmt(twoStagePreview.config.packagingCostPerM2)} ₽/м²
+                              </p>
+                            </div>
+
                             <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
                               Услуги пока считаются отдельно по live-модели. Монтаж/доставка остаются в live-цене.
                             </p>
-
-                            {/* Diagnostic block — не пугать менеджера амбером без причины. */}
-                            <div className="mt-3 pt-2 border-t border-dotted border-[#eaeae6] space-y-1">
-                              {twoStagePreview.isFallback && (
-                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
-                                  ⚠ config не найден в БД, применяются fallback-настройки 12/40/12/40.
-                                </p>
-                              )}
-                              {!twoStagePreview.isFallback && pricingConfigInactive && (
-                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
-                                  ⚠ config в БД помечен как inactive, но используется.
-                                </p>
-                              )}
-                              {v2Preview && Math.abs(v2Preview.grandTotal - result.grandTotal) > 2 && (
-                                <p className="text-[10px] text-[#a8a8a3] leading-snug">
-                                  diff: V2 directCost {fmt(v2Preview.directCost)} ₽ vs live totalCost {fmt(result.totalCost)} ₽. Это нормально: V2 использует cost_price без sale_price и добавляет упаковку/резерв/накладные.
-                                </p>
-                              )}
-                            </div>
                           </>
                         )}
                       </div>
 
-                      {/* 8. +10% upsell hint */}
+                      {/* ─── B. +10% hint — от primary client price (V2 если доступна, иначе live) ─── */}
                       {(() => {
-                        const nm = inputs.margin + 10
-                        const d  = 1 - nm / 100 - inputs.tax / 100
-                        if (d <= 0) return null
-                        const nb  = result.totalCost / d
-                        const nwp = inputs.partnerPercent > 0 ? nb / (1 - inputs.partnerPercent / 100) : nb
-                        const nf  = Math.round(nwp * (1 - inputs.discount / 100))
+                        const primaryClientPrice = twoStagePreview.available
+                          ? twoStagePreview.pricing.b2c.price
+                          : result.grandTotal
+                        const upsell = Math.round(primaryClientPrice * 1.1)
+                        const delta  = upsell - primaryClientPrice
                         return (
-                          <button onClick={() => setMargin(String(nm))}
-                            className="mt-3 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100 hover:bg-emerald-100 transition-colors">
+                          <div className="mt-3 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-100">
                             <span className="text-[11px] text-emerald-700 font-medium">Продать дороже +10%</span>
                             <div className="text-right">
-                              <span className="text-[11px] font-mono font-bold text-emerald-700">{fmt(nf)}</span>
-                              <span className="text-[10px] text-emerald-500 ml-1.5">+{fmt(nf - result.finalPrice)}</span>
+                              <span className="text-[11px] font-mono font-bold text-emerald-700">{fmt(upsell)}</span>
+                              <span className="text-[10px] text-emerald-500 ml-1.5">+{fmt(delta)}</span>
                             </div>
-                          </button>
+                          </div>
                         )
                       })()}
+
+                      {/* ─── C. Legacy live — справочно, до переключения сохранения КП/заказов ─── */}
+                      <div className="mt-4 pt-3 border-t border-dashed border-[#e0e0dc]">
+                        <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider">
+                          LEGACY LIVE · СПРАВОЧНО
+                        </p>
+                        <p className="text-[10px] text-[#b8b8b4] mt-1 mb-3 leading-snug">
+                          Эта цена пока используется при сохранении КП/заказа. Будет заменена на V2 после отдельного переключения.
+                        </p>
+
+                        {/* C.1 Live cost lines */}
+                        <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-2">Live себестоимость</p>
+                        <div className="divide-y divide-[#f7f7f5]">
+                          {result.costLines.map((line, i) => (
+                            <div key={i} className="flex items-baseline justify-between py-1.5">
+                              <div className="flex-1 min-w-0 pr-2">
+                                <p className="text-xs text-[#6b6b66] truncate">{line.name}</p>
+                                <p className="text-[10px] text-[#b8b8b4]">{line.qty} {line.unit} × {line.price.toLocaleString('ru-RU')} ₽</p>
+                              </div>
+                              <span className="text-xs font-mono text-[#6b6b66] flex-shrink-0">
+                                {line.total.toLocaleString('ru-RU')} ₽
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                          <span className="text-xs text-[#6b6b66]">Live итого себестоимость</span>
+                          <span className="text-xs font-mono text-[#6b6b66]">{fmt(result.totalCost)}</span>
+                        </div>
+
+                        {/* C.2 Наценка */}
+                        <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Live наценка</p>
+                        <div className="space-y-1.5">
+                          <PriceLine label={`Налог ${inputs.tax}%`}   value={`+${fmt(result.expensesAmount)}`} />
+                          <PriceLine label={`Маржа ${inputs.margin}%`} value={`+${fmt(result.marginAmount)}`} />
+                        </div>
+                        <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                          <span className="text-xs text-[#6b6b66]">Live цена изделия</span>
+                          <span className="text-xs font-mono text-[#6b6b66]">{fmt(result.basePrice)}</span>
+                        </div>
+                        <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
+                          Формула: {fmt(result.totalCost)} / (1 − {inputs.margin}% − {inputs.tax}%) = {fmt(result.basePrice)}
+                        </p>
+
+                        {/* C.3 Партнёрские */}
+                        {result.partnerAmount > 0 && (
+                          <>
+                            <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Live партнёрские</p>
+                            <PriceLine label={`Партнёрские ${inputs.partnerPercent}%`}
+                              value={`+${fmt(result.partnerAmount)}`} accent="text-purple-500" />
+                            <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                              <span className="text-xs text-[#6b6b66]">Live цена с партнёрскими</span>
+                              <span className="text-xs font-mono text-[#6b6b66]">{fmt(result.priceWithPartner)}</span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* C.4 Скидка */}
+                        {result.discountAmount > 0 && (
+                          <>
+                            <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Live скидка</p>
+                            <PriceLine label={`Скидка ${inputs.discount}%`}
+                              value={`−${fmt(result.discountAmount)}`} accent="text-orange-400" />
+                            <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                              <span className="text-xs text-[#6b6b66]">Live цена после скидки</span>
+                              <span className="text-xs font-mono text-[#6b6b66]">{fmt(result.finalPrice)}</span>
+                            </div>
+                          </>
+                        )}
+
+                        {/* C.5 Услуги */}
+                        <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mt-4 mb-2">Live услуги</p>
+                        {result.serviceLines.length > 0 ? (
+                          <>
+                            <div className="space-y-1.5">
+                              {result.serviceLines.map((s, i) => (
+                                <PriceLine key={i} label={s.name} value={fmt(s.total)} />
+                              ))}
+                            </div>
+                            <div className="flex justify-between items-baseline pt-2 mt-2 border-t border-[#f0f0ee]">
+                              <span className="text-xs text-[#6b6b66]">Live итого услуги</span>
+                              <span className="text-xs font-mono text-[#6b6b66]">{fmt(result.servicesTotal)}</span>
+                            </div>
+                          </>
+                        ) : (
+                          <p className="text-[11px] text-[#a8a8a3]">Услуги: не выбраны</p>
+                        )}
+
+                        {/* C.6 Live итого — приглушённый, не emerald */}
+                        <div className="flex justify-between items-baseline pt-3 mt-3 border-t border-[#e8e8e5]">
+                          <span className="text-sm text-[#6b6b66]">Live итого для КП сейчас</span>
+                          <span className="text-base font-mono font-semibold text-[#4b4b47]">{fmt(result.grandTotal)}</span>
+                        </div>
+                        <p className="text-[10px] text-[#b8b8b4] mt-1.5 leading-snug">
+                          Live маржа: <span className="font-semibold text-[#6b6b66]">{result.margin}%</span>
+                          {' · '}Live прибыль: <span className="font-semibold text-[#6b6b66]">{fmt(result.profit)}</span>
+                        </p>
+                      </div>
+
+                      {/* ─── D. Диагностика V2 (если есть аномалии) ─── */}
+                      {twoStagePreview.available && (
+                        <div className="mt-3 pt-2 border-t border-dotted border-[#eaeae6] space-y-1">
+                          {twoStagePreview.isFallback && (
+                            <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                              ⚠ config не найден в БД, применяются fallback-настройки 12/40/12/40.
+                            </p>
+                          )}
+                          {!twoStagePreview.isFallback && pricingConfigInactive && (
+                            <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                              ⚠ config в БД помечен как inactive, но используется.
+                            </p>
+                          )}
+                          {v2Preview && Math.abs(v2Preview.grandTotal - result.grandTotal) > 2 && (
+                            <p className="text-[10px] text-[#a8a8a3] leading-snug">
+                              diff: V2 directCost {fmt(v2Preview.directCost)} ₽ vs live totalCost {fmt(result.totalCost)} ₽. Это нормально: V2 использует cost_price без sale_price и добавляет упаковку/резерв/накладные.
+                            </p>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
