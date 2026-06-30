@@ -113,8 +113,16 @@ export default function MyQueuePage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
+            <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
+          </div>
+          <Link href="/production-app/cutting"
+            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
+            Резка партиями →
+          </Link>
+        </div>
       </div>
 
       <div className="px-4 pt-4">
