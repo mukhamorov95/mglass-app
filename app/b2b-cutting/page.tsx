@@ -725,6 +725,52 @@ export default function B2BCuttingPage() {
     setSaving(false)
   }
 
+  // Печатная заявка поставщику на материал из текущего плана раскроя.
+  // Открывается в отдельном окне, чтобы не трогать стили страницы. Цену/сумму
+  // заполняет поставщик при выставлении счёта.
+  function printSupplierRequest() {
+    if (!results || results.length === 0) return
+    const esc = (s: string) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c))
+    const date = new Date().toLocaleDateString('ru-RU')
+    const rows = results.map(r => `
+      <tr>
+        <td>${esc(r.materialLabel)}</td>
+        <td class="c"><b>${r.sheetsNeeded}</b></td>
+        <td class="c">${r.sheetWidth}×${r.sheetHeight}</td>
+        <td class="c">${r.totalPieces}</td>
+        <td class="c">${(r.totalSheetArea / 1_000_000).toFixed(2)}</td>
+        <td></td><td></td>
+      </tr>`).join('')
+    const totalSheets = results.reduce((s, r) => s + r.sheetsNeeded, 0)
+    const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>Заявка поставщику</title>
+      <style>
+        body{font-family:-apple-system,Arial,sans-serif;color:#111;margin:24px;font-size:13px}
+        h1{font-size:18px;margin:0 0 2px} .muted{color:#777;font-size:12px;margin:0 0 16px}
+        table{width:100%;border-collapse:collapse;margin-top:10px}
+        th,td{border:1px solid #ccc;padding:6px 8px;text-align:left}
+        th{background:#f5f5f3;font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#555}
+        td.c,th.c{text-align:center}
+        tfoot td{font-weight:bold;background:#fafafa}
+        .sign{margin-top:32px;font-size:12px;color:#555}
+        @media print{button{display:none}}
+      </style></head><body>
+      <h1>M-GLASS · Заявка на материал</h1>
+      <p class="muted">Дата: ${date} · Заказов в раскрое: ${selectedIds.size} · Просьба выставить счёт на оплату</p>
+      <table>
+        <thead><tr>
+          <th>Материал</th><th class="c">Листов</th><th class="c">Размер листа, мм</th>
+          <th class="c">Деталей</th><th class="c">Площадь, м²</th><th class="c">Цена за лист</th><th class="c">Сумма</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr><td>Итого</td><td class="c">${totalSheets}</td><td colspan="5"></td></tr></tfoot>
+      </table>
+      <p class="sign">Заявку составил: _____________________  ·  Поставщик: _____________________</p>
+      <button onclick="window.print()" style="margin-top:20px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Печать</button>
+      </body></html>`
+    const w = window.open('', '_blank', 'width=800,height=900')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
   const selectedCount    = selectedIds.size
   const totalPiecesCount = orders.filter(o => selectedIds.has(o.id)).reduce((s, o) => s + o.totalPieces, 0)
   const needsMaterialCount = orders.filter(o => !o.materialOrdered).length
@@ -902,8 +948,12 @@ export default function B2BCuttingPage() {
 
             {/* Purchase summary */}
             <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9]">
+              <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9] flex items-center justify-between gap-2">
                 <h2 className="text-[15px] font-bold text-[#111110]">Список закупки</h2>
+                <button onClick={printSupplierRequest}
+                  className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                  🖨 Заявка поставщику
+                </button>
               </div>
               <table className="w-full text-[13px]">
                 <thead>
