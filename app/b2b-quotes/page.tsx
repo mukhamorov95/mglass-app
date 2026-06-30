@@ -415,15 +415,40 @@ export default function B2BQuotesPage() {
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: getStatus(q), to: 'sent', date: new Date().toISOString(), comment: null })
+    // «В работу» с датой = запуск в производство: выбранная дата это и есть дата запуска.
+    // Пишем launched_at (колонку и notes), иначе заказ висит «без даты запуска» в /b2b-orders,
+    // который группирует по launched_at, а не по work_started_at.
     const newNotes = JSON.stringify({
       ...parsed,
       status: 'sent',
       work_started_at: workDate,
+      launched_at: workDate,
       status_history: history,
     })
     const meta = buildUpdateMeta()
-    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', workDateId)
-    setQuotes(prev => prev.map(x => x.id === workDateId ? { ...x, notes: newNotes, ...meta } : x))
+    const updateRow = {
+      notes: newNotes,
+      ...meta,
+      launched_at:          workDate,
+      launched_by_user_id:  currentUserId,
+      launched_by_name:     currentUserName,
+      converted_by_user_id: currentUserId,
+      converted_by_name:    currentUserName,
+    }
+    const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId)
+    if (error) { showToast('Ошибка: ' + error.message); return }
+    // Генерация задач в цех (best-effort, как у «В заказ»).
+    fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => {})
+    setQuotes(prev => prev.map(x => x.id === workDateId ? {
+      ...x,
+      notes: newNotes,
+      launched_at:          workDate,
+      launched_by_user_id:  currentUserId,
+      launched_by_name:     currentUserName,
+      converted_by_user_id: currentUserId,
+      converted_by_name:    currentUserName,
+      ...meta,
+    } : x))
     showToast('Запущено в работу')
     setWorkDateId(null)
   }
