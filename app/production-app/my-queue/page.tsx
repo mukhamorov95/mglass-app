@@ -34,6 +34,7 @@ export default function MyQueuePage() {
   const [andonFor, setAndonFor] = useState<number | null>(null)
   const [andonReason, setAndonReason] = useState<string>(ANDON_REASONS[0].code)
   const [andonComment, setAndonComment] = useState('')
+  const [myStation, setMyStation] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -42,6 +43,7 @@ export default function MyQueuePage() {
 
     const { data: profile } = await sb.from('users').select('production_station').eq('id', user.id).single()
     const myStation = (profile as { production_station: string | null } | null)?.production_station ?? null
+    setMyStation(myStation)
 
     const orFilter = myStation
       ? `assigned_to.eq.${user.id},and(assigned_to.is.null,station.eq.${myStation})`
@@ -118,9 +120,9 @@ export default function MyQueuePage() {
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
           </div>
-          <Link href="/production-app/cutting"
+          <Link href={`/production-app/station/${myStation ?? 'cutting'}`}
             className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
-            Резка партиями →
+            Партиями →
           </Link>
         </div>
       </div>
