@@ -648,6 +648,12 @@ export default function B2BQuotesPage() {
       setConfirming(false)
       return
     }
+    if (isLaunched) {
+      // Best-effort: production_tasks is derived state for the new shop-floor
+      // queues. If this fails, the order is still launched and notes.stages/
+      // detail_stages keep working exactly as before.
+      fetch(`/api/b2b-orders/${confirmingId}/launch-production`, { method: 'POST' }).catch(() => {})
+    }
     setQuotes(prev => prev.map(x => x.id === confirmingId ? {
       ...x,
       notes: newNotes,

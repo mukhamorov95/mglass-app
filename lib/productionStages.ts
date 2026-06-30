@@ -66,11 +66,18 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
   problem:   'Проблема',
 }
 
-// Returns applicable stages for an item (filters out tempering when not needed)
+// Returns applicable stages for an item (filters out tempering/drilling when not needed).
+// hasHoles uses `!== false` (not `=== true`): items saved before this field existed
+// have it undefined and must keep showing drilling as applicable (no behavior change
+// for historical orders, including the reconciled 2026 B2B import).
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean },
 ) {
-  return PRODUCTION_STAGES.filter(s => s.key !== 'tempering' || itemNeedsTempering(item))
+  return PRODUCTION_STAGES.filter(s => {
+    if (s.key === 'tempering') return itemNeedsTempering(item)
+    if (s.key === 'drilling')  return item.hasHoles !== false
+    return true
+  })
 }
 
 // ─── Progress types and helpers ───────────────────────────────────────────────

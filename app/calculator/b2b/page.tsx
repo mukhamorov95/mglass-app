@@ -145,6 +145,7 @@ export default function B2BCalculatorPage() {
   const [fTempering, setFTempering]   = useState(true)
   const [fFacet, setFFacet]           = useState(false)
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
+  const [fHoles, setFHoles]           = useState(false)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
@@ -166,6 +167,7 @@ export default function B2BCalculatorPage() {
   const [eTempering, setETempering]   = useState(false)
   const [eFacet, setEFacet]           = useState(false)
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
+  const [eHoles, setEHoles]           = useState(false)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
@@ -401,11 +403,12 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
 
     const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices)
-    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined }])
+    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles }])
     setFWidth('')
     setFHeight('')
     setFQty('1')
     setFComment('')
+    setFHoles(false)
     widthRef.current?.focus()
   }
 
@@ -448,6 +451,7 @@ export default function B2BCalculatorPage() {
     setETempering(item.hasTempering)
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
+    setEHoles(item.hasHoles ?? false)
     setEServiceIds(item.services.map(s => s.id))
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -466,7 +470,7 @@ export default function B2BCalculatorPage() {
     const svcs = services.filter(s => eServiceIds.includes(s.id))
     const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices)
     setItems(prev => prev.map(i => i.localId === editingLocalId
-      ? { ...calc, localId: editingLocalId, comment: eComment || undefined }
+      ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles }
       : i))
     setEditingLocalId(null)
   }
@@ -968,6 +972,16 @@ export default function B2BCalculatorPage() {
                   )}
                 </div>
               )}
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Сверловка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fHoles} onChange={e => setFHoles(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fHoles ? 'text-blue-700' : 'text-[#111110]'}`}>
+                    {fHoles ? 'Есть отверстия' : 'Без отверстий'}
+                  </span>
+                </label>
+              </div>
             </div>
 
             {/* Комментарий к позиции */}
@@ -1616,6 +1630,11 @@ export default function B2BCalculatorPage() {
                         )}
                       </>
                     )}
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      <input type="checkbox" checked={eHoles} onChange={e => setEHoles(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eHoles ? 'text-blue-700 font-medium' : 'text-[#111110]'}`}>Сверловка</span>
+                    </label>
                   </div>
                 </div>
               </div>

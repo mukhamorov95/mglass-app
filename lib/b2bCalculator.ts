@@ -97,6 +97,9 @@ export type B2BOrderItem = {
   hasTempering: boolean
   hasFacet: boolean
   facetTypeMm: number | null
+  hasHoles?: boolean        // нужна сверловка — влияет на маршрут производства (lib/productionRouting.ts)
+  shape?: 'rect' | 'curved' // криволинейный рез — зарезервировано, пока не влияет на маршрут (нет отдельной станции)
+  hasTriplex?: boolean      // триплекс/склейка — зарезервировано, пока не влияет на маршрут (нет отдельной станции)
   services: ItemService[]
   // площадь
   areaPiece: number

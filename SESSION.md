@@ -1,5 +1,19 @@
 ## Текущая задача
-Трек **B2B**. Импорт 2026 из Google-таблицы ВЫПОЛНЕН. Дальше — улучшение flow «калькулятор→просчёт→в работу» к cutover 2026-07-01 (с этой даты приложение = источник истины).
+Production-очереди цеха (план одобрен). Код написан, typecheck/eslint/build ЗЕЛЁНЫЕ. Миграция ПРИМЕНЕНА к проду (через Supabase SQL Editor в браузере, подтверждено service-role скриптом: production_tasks ЕСТЬ 0 строк, users.production_station ЕСТЬ). Осталось: коммит + push (Vercel auto-deploy), затем Фаза 1 — тестовый запуск реального B2B-заказа «в работу» → проверить, что production_tasks наполнилась; regression — 679 заказов 2026 не изменились. Экраны my-queue/today читают новую таблицу (Фаза 2), запись этапов пока через старый /p/o (notes.detail_stages) — cutover позже.
+
+## Готово (производственные очереди) — код написан, миграция применена
+- supabase/migrations/20260701_production_tasks.sql — таблица production_tasks + users.production_station (НЕ применена)
+- lib/b2bCalculator.ts — hasHoles/shape/hasTriplex в B2BOrderItem; app/calculator/b2b/page.tsx — чекбокс «Сверловка» (add+edit режимы)
+- lib/productionStages.ts — getApplicableStages учитывает hasHoles (!== false, обратная совместимость)
+- lib/productionRouting.ts (новый) — buildItemRoute/buildProductionTasks/ANDON_REASONS
+- app/api/b2b-orders/[id]/launch-production/route.ts (новый) — генерация задач, идемпотентно
+- app/b2b-quotes/page.tsx handleConfirm — best-effort вызов launch-production при isLaunched
+- app/production-app/my-queue/page.tsx (новый) — личная очередь рабочего, секции Готово/Ожидаю, действия Выполнено/Проблема
+- app/production-app/today/page.tsx (новый) — пул цеха по станциям + активные андон-проблемы, для супервайзера
+- app/p/o/layout.tsx (новый) — ролевая защита (production/owner), раньше /p/o/[orderId] был открыт без проверки роли
+
+## Прошлая задача (для справки)
+Импорт 2026 из Google-таблицы ВЫПОЛНЕН и задеплоен (коммит 1be220f). Следующее после production-очередей — улучшение flow «калькулятор→просчёт→в работу» (3 разрыва Слоя A, см. ниже) к cutover 2026-07-01.
 
 ## Импорт 2026 — v3, ФИНАЛ (rebuild из таблицы)
 - v1 (баг: regex номера терял июньский формат 00XXX) и v2 (баг: openpyxl bool False читался как True через str()) — оба архивированы, не удалены.
