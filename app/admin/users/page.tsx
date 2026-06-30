@@ -19,8 +19,18 @@ type User = {
   max_discount_percent: number | null
   can_delete: boolean
   permissions: UserPermissions
+  production_station: string | null
   created_at: string
 }
+
+// Станции цеха — словарь совпадает с lib/productionStages.ts DetailStageKey (без 'problem').
+const STATIONS: { value: string; label: string }[] = [
+  { value: 'cutting',   label: 'Резка' },
+  { value: 'polishing', label: 'Полировка' },
+  { value: 'drilling',  label: 'Сверловка' },
+  { value: 'tempering', label: 'Закалка' },
+  { value: 'packaging', label: 'Упаковка' },
+]
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   admin:      { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },
@@ -288,6 +298,15 @@ export default function UsersPage() {
                             <option value="seo">SEO</option>
                             <option value="admin">Администратор</option>
                           </select>
+                          {u.role === 'production' && (
+                            <select value={u.production_station ?? ''}
+                              onChange={e => updateUser(u.id, { production_station: e.target.value || null })}
+                              title="Станция цеха — какие задачи видит рабочий в «Мои задачи»"
+                              className="block mt-1.5 text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] cursor-pointer text-[#6b6b66] outline-none focus:border-[#111110]">
+                              <option value="">— станция —</option>
+                              {STATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                            </select>
+                          )}
                         </td>
 
                         {/* Код менеджера */}

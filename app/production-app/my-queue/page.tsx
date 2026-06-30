@@ -78,18 +78,20 @@ export default function MyQueuePage() {
 
   async function markDone(taskId: number) {
     setTasks(prev => prev.filter(t => t.id !== taskId)) // optimistic
-    await sb.from('production_tasks').update({ status: 'done', completed_at: new Date().toISOString() }).eq('id', taskId)
+    // Через API — пишет и в production_tasks, и в notes.detail_stages (прогресс заказа).
+    await fetch(`/api/production-tasks/${taskId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'done' }),
+    }).catch(() => {})
     load()
   }
 
   async function submitAndon() {
     if (andonFor == null) return
-    await sb.from('production_tasks').update({
-      status: 'problem',
-      problem_reason_code: andonReason,
-      problem_comment: andonComment || null,
-      problem_at: new Date().toISOString(),
-    }).eq('id', andonFor)
+    await fetch(`/api/production-tasks/${andonFor}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'problem', reason_code: andonReason, comment: andonComment || null }),
+    }).catch(() => {})
     setAndonFor(null)
     setAndonComment('')
     load()

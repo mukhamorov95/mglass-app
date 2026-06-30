@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase-server'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASON_LABELS } from '@/lib/productionRouting'
+import AssignWorker from './AssignWorker'
 
 // Full shop-floor task pool, grouped by station — for the production supervisor.
 // v1 simplification: shows everything outstanding right now (queued/in_progress/
@@ -23,7 +24,7 @@ type TaskRow = {
 }
 
 type OrderLite = { id: number; client_name: string; custom_number: string | null }
-type WorkerLite = { id: string; name: string | null; email: string | null }
+type WorkerLite = { id: string; name: string | null; email: string | null; production_station: string | null }
 
 const STATIONS: DetailStageKey[] = ['cutting', 'polishing', 'drilling', 'tempering', 'packaging']
 
@@ -38,15 +39,14 @@ export default async function ProductionTodayPage() {
 
   const tasks = (taskRows ?? []) as TaskRow[]
   const orderIds  = [...new Set(tasks.map(t => t.order_id))]
-  const workerIds = [...new Set(tasks.map(t => t.assigned_to).filter((x): x is string => x != null))]
 
   const [{ data: orderRows }, { data: workerRows }] = await Promise.all([
     orderIds.length ? sb.from('b2b_orders').select('id,client_name,custom_number').in('id', orderIds) : Promise.resolve({ data: [] as OrderLite[] }),
-    workerIds.length ? sb.from('users').select('id,name,email').in('id', workerIds) : Promise.resolve({ data: [] as WorkerLite[] }),
+    sb.from('users').select('id,name,email,production_station').eq('role', 'production').eq('active', true),
   ])
 
-  const orders  = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
-  const workers = new Map((workerRows ?? []).map((w: WorkerLite) => [w.id, w]))
+  const orders     = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
+  const allWorkers = (workerRows ?? []) as WorkerLite[]
 
   const problems = tasks.filter(t => t.status === 'problem')
   const byStation = new Map<string, TaskRow[]>()
@@ -104,18 +104,13 @@ export default async function ProductionTodayPage() {
               <div className="space-y-2">
                 {list.map(t => {
                   const o = orders.get(t.order_id)
-                  const w = t.assigned_to ? workers.get(t.assigned_to) : null
                   return (
                     <div key={t.id} className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0">
                         <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
                         <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name} · поз. {t.item_index + 1}</p>
                       </div>
-                      <span className={`text-[10px] font-medium px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${
-                        t.status === 'in_progress' ? 'bg-blue-50 text-blue-700' : 'bg-[#f0f0ec] text-[#9a9a95]'
-                      }`}>
-                        {w ? (w.name ?? w.email ?? 'назначено') : 'свободно'}
-                      </span>
+                      <AssignWorker taskId={t.id} station={t.station} assignedTo={t.assigned_to} workers={allWorkers} />
                     </div>
                   )
                 })}
