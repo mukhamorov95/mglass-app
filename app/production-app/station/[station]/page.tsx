@@ -43,6 +43,7 @@ export default function StationBatchesPage() {
   const [batches, setBatches] = useState<Batch[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [busy, setBusy] = useState(false)
+  const [matPending, setMatPending] = useState<Set<number>>(new Set())  // заказы, ждущие прихода материала (только резка)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -64,11 +65,27 @@ export default function StationBatchesPage() {
     if (tasks.length === 0) { setBatches([]); setLoading(false); return }
 
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
-    const [{ data: orderRows }, { data: matRows }, { data: cfg }] = await Promise.all([
+    const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }] = await Promise.all([
       sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds),
       isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
+      // Заявки на материал по этим заказам (для гейта резки по приходу материала)
+      isCutting ? sb.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', orderIds) : Promise.resolve({ data: [] as { b2b_order_ids: number[] | null; status: string | null }[] }),
     ])
+
+    // Заказ ждёт материал, если по нему ЕСТЬ заявка, но НИ ОДНА не «забрана/закрыта».
+    // Нет заявки = режем со склада, не блокируем.
+    const ARRIVED = new Set(['picked_up', 'closed'])
+    const hasReq = new Set<number>(), arrived = new Set<number>()
+    for (const po of (poRows ?? [])) {
+      for (const oid of (po.b2b_order_ids ?? [])) {
+        if (!orderIds.includes(oid)) continue
+        hasReq.add(oid)
+        if (po.status && ARRIVED.has(po.status)) arrived.add(oid)
+      }
+    }
+    const pending = new Set<number>([...hasReq].filter(oid => !arrived.has(oid)))
+    setMatPending(pending)
     const orders = new Map((orderRows ?? []).map((o: OrderRow) => [o.id, o]))
     const matLookup = new Map((matRows ?? []).map((m: MatRow) => [`${m.name}|${m.thickness}`, m]))
     const settings: CuttingSettings = { ...DEFAULT_CUTTING_SETTINGS, ...(cfg ?? {}) }
@@ -156,6 +173,11 @@ export default function StationBatchesPage() {
       </div>
 
       <div className="px-4 pt-4 space-y-3">
+        {isCutting && matPending.size > 0 && (
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-[12px] text-amber-800">
+            ⏳ {matPending.size} {matPending.size === 1 ? 'заказ ждёт' : 'заказов ждут'} прихода материала — резка по ним заблокирована до отметки «забран» в закупках
+          </div>
+        )}
         {batches.length === 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
             <p className="text-[14px] text-[#9a9a95]">Нет готовых задач на этом этапе</p>
@@ -174,25 +196,29 @@ export default function StationBatchesPage() {
                     {b.result ? <> · КПД <span className={b.result.avgEfficiency >= 70 ? 'text-emerald-600' : 'text-amber-600'}>{b.result.avgEfficiency}%</span></> : null}
                   </p>
                 </button>
-                <button onClick={() => markTasks(b.taskIds)} disabled={busy}
+                <button onClick={() => markTasks(b.orders.filter(o => !matPending.has(o.orderId)).map(o => o.taskId))}
+                  disabled={busy || b.orders.every(o => matPending.has(o.orderId))}
                   className="text-[12px] font-semibold px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors whitespace-nowrap flex-shrink-0">
                   Готово всё
                 </button>
               </div>
               {isOpen && (
                 <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
-                  {b.orders.map((o, i) => (
+                  {b.orders.map((o, i) => {
+                    const waitMat = matPending.has(o.orderId)
+                    return (
                     <div key={`${o.taskId}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-2">
                       <Link href={`/p/o/${o.orderId}`} className="min-w-0">
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span></p>
-                        <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}</p>
+                        <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
                       </Link>
-                      <button onClick={() => markTasks([o.taskId])} disabled={busy}
-                        className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 transition-colors whitespace-nowrap flex-shrink-0">
+                      <button onClick={() => markTasks([o.taskId])} disabled={busy || waitMat}
+                        title={waitMat ? 'Материал ещё не приехал — заявка не закрыта в закупках' : ''}
+                        className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors whitespace-nowrap flex-shrink-0">
                         Готово
                       </button>
                     </div>
-                  ))}
+                  )})}
                 </div>
               )}
             </div>
