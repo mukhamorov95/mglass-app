@@ -85,6 +85,15 @@ const BUYER_POMOSH: NavItem[] = [
   { href: '/admin/guide', label: 'Регламент', icon: '📖', indent: true },
 ]
 
+// Scoped B2B menu shown only to a buyer with b2b_client_scope='mglass_only'.
+// Mirrors MANAGER_B2B but trimmed to the M GLASS quote→order→cutting flow.
+const BUYER_B2B_MGLASS: NavItem[] = [
+  { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮', indent: true },
+  { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝', indent: true },
+  { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦', indent: true },
+  { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
+]
+
 // ─── Production role ──────────────────────────────────────────────────────────
 
 const PRODUCTION_ITEMS: NavItem[] = [
@@ -336,6 +345,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/admin/procurement-routes', '/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
+    if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')
     return open
   }
   if (role === 'manager') {
@@ -627,17 +637,29 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       )
     }
 
-    // Buyer: аккордеон-секции
-    if (role === 'buyer') return (
-      <>
-        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
-        {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
-        {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
-        {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
-        {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
-        {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
-      </>
-    )
+    // Buyer: аккордеон-секции. Если у buyer есть b2b_client_scope='mglass_only',
+    // дополнительно показываем мини-группу B2B (внутренние M GLASS просчёты/заказы).
+    if (role === 'buyer') {
+      const showB2BForScopedBuyer = permissions.b2b_client_scope === 'mglass_only'
+      return (
+        <>
+          <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
+          {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
+          {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
+          {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
+          {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
+          {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
+          {showB2BForScopedBuyer && accordion(
+            'buyer_b2b_mglass',
+            'B2B M GLASS',
+            'text-emerald-600',
+            'text-emerald-400',
+            BUYER_B2B_MGLASS,
+            'bg-emerald-50 text-emerald-700 font-medium',
+          )}
+        </>
+      )
+    }
 
     // Production: flat list
     if (role === 'production') return (

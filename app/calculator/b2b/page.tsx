@@ -184,18 +184,22 @@ export default function B2BCalculatorPage() {
         let userMGlassOnly = false
         if (user?.id) {
           const { data: profile } = await sb.from('users').select('role,name,manager_code,max_discount_percent,can_view_all_clients,permissions').eq('id', user.id).single()
-          if (profile?.role === 'buyer') {
+          userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
+          const perms = (profile?.permissions ?? null) as UserPermissions | null
+          // owners are never scope-restricted, even if the JSON says so
+          userMGlassOnly = !userIsAdmin && isMGlassOnlyUser(perms)
+          // Buyers are normally blocked from the B2B calculator (procurement
+          // doesn't sell). Exception: a buyer with b2b_client_scope='mglass_only'
+          // (e.g. a procurement worker who also handles internal M GLASS quotes)
+          // gets through — they're locked to M GLASS by the scope guard.
+          if (profile?.role === 'buyer' && !userMGlassOnly) {
             setIsBuyer(true)
             return
           }
-          userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
           userManagerCode = profile?.manager_code ?? null
           if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
           userCanSeeAllClients = userIsAdmin || (profile?.can_view_all_clients === true)
           setManagerName((profile?.name as string) || user.email || null)
-          const perms = (profile?.permissions ?? null) as UserPermissions | null
-          // owners are never scope-restricted, even if the JSON says so
-          userMGlassOnly = !userIsAdmin && isMGlassOnlyUser(perms)
         }
         setIsAdmin(userIsAdmin)
         setManagerCode(userManagerCode)

@@ -198,8 +198,29 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   ],
 }
 
+// Per-user B2B scope flag. `mglass_only` unlocks a narrow B2B subset for a
+// non-manager role (currently buyer) so a procurement worker can also do
+// internal M GLASS quotes without becoming a full manager.
+export type B2BScope = 'mglass_only' | null
+
+// Paths a scoped buyer (mglass_only) gets on top of their normal allowlist.
+// Intentionally narrow — only what's needed for the internal M GLASS quote /
+// order flow. Does NOT include /my-earnings, /manager-dashboard, /calculator/mirror,
+// etc. — that would be the full manager role and we don't want that.
+const SCOPED_BUYER_B2B_PATHS: ReadonlyArray<string> = [
+  '/calculator/b2b',
+  '/b2b-quotes',
+  '/b2b-orders',
+  '/b2b-cutting',
+]
+
 // Centralised route gate. Use this everywhere instead of ad-hoc role checks.
-export function canAccessRoute(role: Role | string | null | undefined, pathname: string): boolean {
+// `opts.b2bScope` is optional — old 2-arg callers keep working unchanged.
+export function canAccessRoute(
+  role: Role | string | null | undefined,
+  pathname: string,
+  opts?: { b2bScope?: B2BScope | string | null },
+): boolean {
   const r = normalizeRole(role)
   if (!r) return false
   if (isOwnerRole(r)) return true
@@ -212,10 +233,17 @@ export function canAccessRoute(role: Role | string | null | undefined, pathname:
   ) return true
 
   const allowed = ROLE_ALLOWED[r] ?? []
-  return allowed.some(p => {
-    if (p === '/') return pathname === '/'
-    return pathname === p || pathname.startsWith(p + '/')
-  })
+  const matchAllow = (p: string) =>
+    p === '/' ? pathname === '/' : (pathname === p || pathname.startsWith(p + '/'))
+  if (allowed.some(matchAllow)) return true
+
+  // Scoped extension: a buyer with b2b_client_scope='mglass_only' additionally
+  // gets the narrow B2B contour. Other roles ignore this opt.
+  if (r === 'buyer' && opts?.b2bScope === 'mglass_only') {
+    if (SCOPED_BUYER_B2B_PATHS.some(matchAllow)) return true
+  }
+
+  return false
 }
 
 // Back-compat alias — keep until call sites migrate.
