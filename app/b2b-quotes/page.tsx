@@ -253,24 +253,15 @@ export default function B2BQuotesPage() {
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
   const [mglassOnly, setMglassOnly]   = useState(false)
 
-  // "В работу" — inline date picker
+  // «Запустить в работу» — единый запуск просчёта в производство (дата + № заказа)
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
   const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
+  const [workNumber, setWorkNumber]   = useState('')
   const workDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (workDateId !== null) setTimeout(() => workDateRef.current?.focus(), 50)
   }, [workDateId])
-
-  // "Запустить в заказ" modal
-  type LaunchTargetStatus = 'pending_approval' | 'agreed' | 'confirmed'
-  const [confirmingId, setConfirmingId]       = useState<number | null>(null)
-  const [launchedAt, setLaunchedAt]           = useState(new Date().toISOString().slice(0, 10))
-  const [confirmCustomNumber, setConfirmCustomNumber] = useState('')
-  const [confirmTargetStatus, setConfirmTargetStatus] = useState<LaunchTargetStatus>('confirmed')
-  const [confirmComment, setConfirmComment]   = useState('')
-  const [confirming, setConfirming]           = useState(false)
-  const [confirmError, setConfirmError]       = useState<string | null>(null)
 
   // Delete modal
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -426,6 +417,7 @@ export default function B2BQuotesPage() {
       status_history: history,
     })
     const meta = buildUpdateMeta()
+    const num = workNumber.trim()
     const updateRow = {
       notes: newNotes,
       ...meta,
@@ -434,10 +426,11 @@ export default function B2BQuotesPage() {
       launched_by_name:     currentUserName,
       converted_by_user_id: currentUserId,
       converted_by_name:    currentUserName,
+      ...(num ? { custom_number: num } : {}),
     }
     const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId)
     if (error) { showToast('Ошибка: ' + error.message); return }
-    // Генерация задач в цех (best-effort, как у «В заказ»).
+    // Генерация задач в цех (best-effort).
     fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => {})
     setQuotes(prev => prev.map(x => x.id === workDateId ? {
       ...x,
@@ -447,6 +440,7 @@ export default function B2BQuotesPage() {
       launched_by_name:     currentUserName,
       converted_by_user_id: currentUserId,
       converted_by_name:    currentUserName,
+      ...(num ? { custom_number: num } : {}),
       ...meta,
     } : x))
     showToast('Запущено в работу')
@@ -614,93 +608,6 @@ export default function B2BQuotesPage() {
     }
   }
 
-  async function handleConfirm() {
-    if (!confirmingId) return
-    const q = quotes.find(x => x.id === confirmingId)
-    if (!q) return
-    // Scope guard: mglass_only managers cannot launch orders for non-M-GLASS clients.
-    if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
-      setConfirmError(MGLASS_SCOPE_ERROR)
-      return
-    }
-    // confirmed = actually launched into production → launched_at required.
-    // agreed / pending_approval = approved but not yet launched → date optional.
-    if (confirmTargetStatus === 'confirmed' && !launchedAt) {
-      setConfirmError('Для статуса «Запущено в заказ» нужна дата запуска.')
-      return
-    }
-    setConfirmError(null)
-    setConfirming(true)
-
-    const parsed = parseNotes(q.notes)
-    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({
-      from: getStatus(q),
-      to:   confirmTargetStatus,
-      date: new Date().toISOString(),
-      comment: confirmComment || null,
-    })
-
-    const isLaunched = confirmTargetStatus === 'confirmed'
-    const launchedDate = isLaunched ? launchedAt : null
-
-    const newNotes = JSON.stringify({
-      ...parsed,
-      status: confirmTargetStatus,
-      ...(isLaunched ? { launched_at: launchedDate } : {}),
-      ...(confirmComment ? { status_comment: confirmComment } : {}),
-      status_history: history,
-    })
-
-    const meta = buildUpdateMeta()
-    const updateRow: Record<string, unknown> = {
-      notes: newNotes,
-      ...meta,
-      // Mark who converted this quote → order (any non-quote target counts).
-      converted_by_user_id: currentUserId,
-      converted_by_name:    currentUserName,
-      ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
-      ...(isLaunched ? {
-        launched_at:         launchedDate,
-        launched_by_user_id: currentUserId,
-        launched_by_name:    currentUserName,
-      } : {}),
-    }
-
-    const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', confirmingId)
-    if (error) {
-      setConfirmError('Не удалось сохранить: ' + error.message)
-      setConfirming(false)
-      return
-    }
-    if (isLaunched) {
-      // Best-effort: production_tasks is derived state for the new shop-floor
-      // queues. If this fails, the order is still launched and notes.stages/
-      // detail_stages keep working exactly as before.
-      fetch(`/api/b2b-orders/${confirmingId}/launch-production`, { method: 'POST' }).catch(() => {})
-    }
-    setQuotes(prev => prev.map(x => x.id === confirmingId ? {
-      ...x,
-      notes: newNotes,
-      ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
-      converted_by_user_id: currentUserId,
-      converted_by_name:    currentUserName,
-      ...(isLaunched ? {
-        launched_at:         launchedDate,
-        launched_by_user_id: currentUserId,
-        launched_by_name:    currentUserName,
-      } : {}),
-      updated_by_user_id: meta.updated_by_user_id,
-      updated_by_name:    meta.updated_by_name,
-      updated_at:         meta.updated_at,
-    } : x))
-    setConfirmingId(null)
-    setConfirming(false)
-    setConfirmCustomNumber('')
-    setConfirmComment('')
-    setConfirmTargetStatus('confirmed')
-    showToast(isLaunched ? 'Запущено в заказ' : `Статус → ${STATUS_META[confirmTargetStatus]?.label ?? confirmTargetStatus}`)
-  }
 
   // ── Derived ────────────────────────────────────────────────────────────────
   const [search, setSearch] = useState('')
@@ -910,9 +817,9 @@ export default function B2BQuotesPage() {
                     <div className="flex items-center gap-1">
                       {status === 'quote' && (
                         <button
-                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)) }}
-                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 transition-colors whitespace-nowrap">
-                          В работу →
+                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? '') }}
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                          Запустить в работу →
                         </button>
                       )}
                       {status === 'pending_approval' && (userRole === 'admin' || userRole === 'ceo') && (
@@ -937,17 +844,6 @@ export default function B2BQuotesPage() {
                           Отказ
                         </button>
                       </>)}
-                      {status === 'agreed' && (
-                        <button
-                          onClick={() => {
-                            setConfirmingId(quote.id)
-                            setLaunchedAt(new Date().toISOString().slice(0, 10))
-                            setConfirmCustomNumber(quote.custom_number ?? '')
-                          }}
-                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
-                          В заказ →
-                        </button>
-                      )}
                       {(status === 'rejected' || status === 'sent') && (
                         <button onClick={() => requestStatusChange(quote.id, 'quote')}
                           className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
@@ -1089,20 +985,31 @@ export default function B2BQuotesPage() {
                 {/* ── В работу: выбор даты запуска ──────────────────────── */}
                 {isWorkDateThis && (
                   <div className="px-4 py-3 border-t border-[#f0f0ec] bg-blue-50/50 flex items-center gap-3 flex-wrap">
-                    <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Дата запуска в работу:</span>
-                    <input ref={workDateRef} type="date"
-                      className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
-                      value={workDate}
-                      onChange={e => setWorkDate(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
-                    />
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Дата запуска:</span>
+                      <input ref={workDateRef} type="date"
+                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        value={workDate}
+                        onChange={e => setWorkDate(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">№ заказа:</span>
+                      <input type="text" placeholder="напр. 1453-1"
+                        className="w-28 bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        value={workNumber}
+                        onChange={e => setWorkNumber(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
+                      />
+                    </div>
                     <p className="text-[11px] text-blue-600/70 flex-shrink-0">
-                      Укажите фактическую дату — если заказ уже в работе несколько дней
+                      Заказ уйдёт в производство, задачи появятся в цеху
                     </p>
                     <div className="flex items-center gap-2 ml-auto">
                       <button onClick={confirmWorkDate} disabled={!workDate}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40 transition-colors whitespace-nowrap">
-                        Подтвердить →
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        Запустить →
                       </button>
                       <button onClick={() => setWorkDateId(null)}
                         className="text-[#9a9a95] hover:text-[#111110] transition-colors px-1 text-sm">✕</button>
@@ -1356,85 +1263,6 @@ export default function B2BQuotesPage() {
         </div>
       )}
 
-      {/* ── Launch to order modal ───────────────────────────────────────────── */}
-      {confirmingId !== null && (() => {
-        const q = quotes.find(x => x.id === confirmingId)
-        return (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Перенести в B2B-заказ</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-3">Проверьте клиента, сумму, номер и дату.</p>
-
-            {q && (
-              <div className="bg-[#fafaf9] border border-[#f0f0ec] rounded-lg p-3 mb-4 space-y-1">
-                <div className="text-[11px] uppercase tracking-widest text-[#9a9a95]">Клиент</div>
-                <div className="text-[14px] font-semibold text-[#111110]">{q.client_name || '—'}</div>
-                <div className="flex justify-between text-[12px] text-[#6b6b66] pt-1">
-                  <span>Сумма</span>
-                  <span className="font-semibold text-[#111110]">{fmt((q.discount_percent ?? 0) > 0 ? q.total_after_discount : q.total_sale_inc_vat)}</span>
-                </div>
-              </div>
-            )}
-
-            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Целевой статус</label>
-            <div className="grid grid-cols-3 gap-1 mb-3">
-              {(['pending_approval', 'agreed', 'confirmed'] as const).map(s => (
-                <button key={s} type="button"
-                  onClick={() => setConfirmTargetStatus(s)}
-                  className={`text-[11px] font-medium px-2 py-2 rounded-lg border transition-colors ${
-                    confirmTargetStatus === s
-                      ? 'bg-[#111110] text-white border-[#111110]'
-                      : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f5f5f4]'
-                  }`}>
-                  {s === 'pending_approval' ? 'На согласование' : s === 'agreed' ? 'Согласован' : 'Запущен в работу'}
-                </button>
-              ))}
-            </div>
-
-            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Номер заказа</label>
-            <input
-              autoFocus
-              type="text"
-              placeholder="0147-О, МГ-001..."
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono font-bold outline-none focus:border-[#111110] mb-3"
-              value={confirmCustomNumber}
-              onChange={e => setConfirmCustomNumber(e.target.value)}
-            />
-            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">
-              Дата запуска {confirmTargetStatus === 'confirmed' ? <span className="text-red-500">*</span> : <span className="text-[#9a9a95] normal-case tracking-normal">(необязательно)</span>}
-            </label>
-            <input type="date"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3"
-              value={launchedAt} onChange={e => setLaunchedAt(e.target.value)} />
-
-            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Комментарий</label>
-            <textarea
-              placeholder="оплата, особенности — необязательно"
-              rows={2}
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3 resize-none"
-              value={confirmComment}
-              onChange={e => setConfirmComment(e.target.value)}
-            />
-
-            {confirmError && (
-              <p className="text-[12px] text-red-600 mb-2">{confirmError}</p>
-            )}
-
-            <div className="flex gap-2">
-              <button onClick={() => { setConfirmingId(null); setConfirmCustomNumber(''); setConfirmComment(''); setConfirmError(null); setConfirmTargetStatus('confirmed') }}
-                className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
-                Отмена
-              </button>
-              <button onClick={handleConfirm}
-                disabled={confirming || (confirmTargetStatus === 'confirmed' && !launchedAt)}
-                className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                {confirming ? 'Сохранение...' : confirmTargetStatus === 'confirmed' ? 'Запустить →' : 'Перенести →'}
-              </button>
-            </div>
-          </div>
-        </div>
-        )
-      })()}
     </div>
   )
 }
