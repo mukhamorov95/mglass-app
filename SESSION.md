@@ -1,104 +1,74 @@
 ## Текущая задача
-Авторизация: единая модель для UI и API — ЗАКРЫТО + ревью пройдено, build ОК
+Трек **B2B**. Импорт 2026 из Google-таблицы ВЫПОЛНЕН. Дальше — улучшение flow «калькулятор→просчёт→в работу» к cutover 2026-07-01 (с этой даты приложение = источник истины).
+
+## Импорт 2026 — v3, ФИНАЛ (rebuild из таблицы)
+- v1 (баг: regex номера терял июньский формат 00XXX) и v2 (баг: openpyxl bool False читался как True через str()) — оба архивированы, не удалены.
+- v3 source='sheet_import_2026_v3': 679 активных заказов. Январь–май = принудительно confirmed (явное решение владельца — "должны быть выполнены"). Июнь = по факту чекбоксов с каскадом (если shipped→всё true): 81 confirmed (отгружен) / 75 sent (в работе).
+- Сумма 15 859 109,9 ₽ = отчёт владельца 15 859 110 ₽ (сходится до рубля, проверено).
+- Менеджер из колонки C сохранён в notes.manager_name.
+- Следующий шаг UI (текущий): визуально различать отгружен/не отгружен на карточках заказа в /app/b2b-orders/page.tsx + цветовой индикатор (зелёный/красный) в шапке страницы между счётчиком и кнопкой "Производственный день". Отсутствие client_id НЕ должно влиять на этот индикатор — это независимый сигнал (client_unverified в notes).
+
+## Импорт 2026 — СДЕЛАНО (rebuild из таблицы) [устарело, см. v3 выше]
+- Решение владельца: таблица = источник истины, позиции (`items`) теряем осознанно (в БД было лишь 45% с items), rebuild одобрен.
+- Перенесено **579 заказов** из листа в `b2b_orders` (custom_number, client_id/скидка, launched_at, total_sale_inc_vat, notes.status=confirmed/sent, notes.stages, source='sheet_import_2026'). 107 мусорных итоговых строк листа отброшены.
+- Исходные **733 архивированы** (`archived_at`, НЕ удалены). Бэкап: `scratchpad/b2b_orders_backup.json` (733) + `b2b_clients_backup.json`.
+- 10 заказов без клиента — discount 10% по умолчанию (`notes.discount_defaulted`), 7 клиентов на сверку (Борис Воронеж, Константин, Егор Воронеж, Стеклянная Роскошь(Воронеж), Александр Емельянов, Эльхан, Евгений от Алексая).
+- Активных заказов: 579. notes — text-колонка с JSON. organization_id=1.
+- ОТКАТ если надо: восстановить из b2b_orders_backup.json + снять archived_at со старых / удалить импортированные (source='sheet_import_2026').
+
+## Flow B2B — Слой A
+- ✅ Фикс #1: запущенные (sent/confirmed) больше НЕ показываются в «Просчётах» (`app/b2b-quotes/page.tsx`: notLaunched-фильтр, убран таб «В работе», 'all'→'Активные').
+- ✅ Фикс #2: таб «Сегодня» = просчитано сегодня и ещё не запущено (isToday по created_at); счётчики all/today; подзаголовок «N активных · M сегодня». Бонус: убран антипаттерн setState-в-useMemo (сброс страницы → в обработчиках вкладки/поиска).
+- Проверка: typecheck app — чисто; eslint моих правок — чисто (осталась 1 пред-существующая ошибка на useEffect loadQuotes:514, не моя).
+
+## Следующий шаг — Слой A, фикс #3
+Редактирование заказа: сейчас правка в калькуляторе делает новый insert (`app/calculator/b2b/page.tsx:~281,681`). Нужно: update того же ряда + снапшот «было» в notes.change_log[], итоги считать по «стало». Затем — Слой B (материалы/раскрой→закупка, маршрут с ветвлением, подрядчики).
+
+## B2B — что выяснено (grounded, эта сессия)
+- `b2b_orders` в проде: **733 строки, ВСЕ created_at=2026**. История 2024–2025 в БД отсутствует (есть только в Google-таблице, ~2700 заказов, 2026 ~691).
+- Причина «заказы 2026 вылетели»: **542/733 (74%) без launched_at, 401 без status в notes** → не попадают в помесячную группировку (`b2b-orders` группирует по launch-месяцу) → висят в «без даты»/свёрнутых месяцах. Таймзонный сдвиг (гипотеза H1) ОПРОВЕРГНУТ: дат «31.12» = 0.
+- Просчёты и заказы — одна таблица `b2b_orders`; статус в JSON `notes.status` (quote/sent/agreed/confirmed/pending_approval). Колонка `status` в схеме не используется.
+- Slой A разрывы: (1) `b2b-quotes` грузит всю таблицу без фильтра → запущенные не исчезают из просчётов; (2) нет среза «сегодня/не запущено»; (3) редактирование = новый insert, без истории «было/стало».
+- Slой B: раскрой (`cuttingOptimizer.ts`) силён и считает листы по выделенным заказам ✅; не хватает: сумма ₽ в UI раскроя, печать заявки поставщику, связка раскрой→`purchase_orders`, сверка со складом, ветвление маршрута (сверловка/криволинейка/фацет/триплекс), трекинг подрядчиков «отправлено/вернулось».
+- Google-таблица скачана: `scratchpad/mglass_2026.xlsx`. Помесячные листы 2024–2026, колонки заказа = № / Менеджер / Клиент / Дата запуска / суммы / стадии (Распечатан…Отгружен).
+
+## Прошлый трек (P0 безопасность) — батч 1 закрыт
+- `lib/apiAuth.ts` +`requireRole([...])`; гарды на 10 операций (payment, warehouse, b2b-seed, materials/from-supplier+transfer, mirror-lighting(+tabs), purchase-orders, procurement-routes, bot-toggle). «Без guard» 66→56. `scripts/audit-guards.mjs` — страж.
 
 ## Что сделано (эта сессия)
-- fix(auth): UI guards для CEO (часть 1)
-  - lib/getRole.ts — `OWNER_ROLES = ['admin','ceo']`, `isOwnerRole`, `normalizeRole`, `canAccessRoute` (короткое замыкание для owner ролей), email-bootstrap для admin@mglass.ru
-  - middleware.ts — использует canAccessRoute + normalizeRole; убран хардкод VALID_ROLES (теперь все типобезопасные роли валидны, включая 'cfo')
-  - app/admin/owner/page.tsx, app/admin/pnl/page.tsx, app/admin/analytics-mglass/page.tsx, app/admin/pricing-manual/page.tsx, app/b2b-crm/page.tsx, app/production-app/supervisor/page.tsx — все на isOwnerRole
-
-- fix(auth): API helpers + миграция всех API на единую модель (часть 2)
-  - lib/apiAuth.ts (новый) — `requireOwner()`, `requireAdmin()`, `isOwnerCurrentUser()`
-  - lib/requireOwner.ts — удалён, был email-only check (admin@mglass.ru). Заменён на role-based requireOwner
-  - Owner-tier API (admin + ceo через requireOwner): settings, sales-bonuses, sales-scripts, sales-feedback, owner-strategy, users, invite, suppliers (DELETE), suppliers/[id] (DELETE), brigades, brigades/[id], delivery-zones, delivery-zones/[id], shower-images, materials/upload, role-assignments, role-assignments/[id], sync-b2b-materials, pricing-formula, glass-prices (sale write + sale filter), integrations, integrations/backfill, migrate-glass-prices, ai-recommendations, ai-control-center/analyze, health-fix-log, health-check/fix, orders/[id]/approve, orders/[id]/status (isAdmin → isOwner), quotes/[id]/pdf, debug/amo
-  - Strictly admin (requireAdmin): sync (git push), seed-managers (массовое создание auth user'ов)
-  - Role-specific (без изменений): cfo-settings (admin+ceo+cfo)
-  - suppliers POST/PATCH: ALLOWED_WRITE = ['admin','ceo','buyer'] (CEO добавлен)
-
-## Auth fix — review summary
-
-### Финальные проверки (часть 3)
-- `npm run build` — ✅ зелёный, 0 ошибок
-- `npm run lint` — все warnings/errors предсуществовали, ни одной новой в auth-файлах
-- Циклических импортов нет: apiAuth → getRole → supabase-server,permissions
-- 27 вызовов `requireOwner()` и 2 вызова `requireAdmin()` все имеют корректный `if (guard instanceof NextResponse) return guard` сразу после
-- lib/requireOwner.ts удалён, импортов на него нет
-- VALID_ROLES константа удалена (заменена на normalizeRole)
-
-### Кто куда теперь имеет доступ
-- **Owner tier (admin + ceo)**: весь UI + все owner-tier API (settings, users, suppliers, brigades, delivery-zones, sales-bonuses, sales-scripts, sales-feedback, owner-strategy, invite, role-assignments, sync-b2b-materials, pricing-formula, glass-prices write, integrations, ai-recommendations, ai-control-center, health-check, orders/approve, orders/status, quotes/pdf, debug/amo, shower-images, materials/upload, migrate-glass-prices)
-- **Strictly admin-only**: /api/admin/sync (git push), /api/admin/seed-managers (массовое создание auth users)
-- **Role-specific**: /api/cfo-settings — admin/ceo/cfo, без изменений
-- **Buyer**: POST/PATCH к /api/admin/suppliers (catalog editing) — но не DELETE и не другие admin endpoints
-- **Manager/production/seo/commercial**: без изменений — их allowlist в ROLE_ALLOWED не тронут
-
-### Известные ограничения (не в скоупе текущего фикса)
-- Данные-visibility фильтры (`role === 'admin'` в clients/orders/calculations/my-earnings/manager-dashboard) — это бизнес-логика "свои/все", не auth gates. CEO в этих местах ещё попадает в категорию "видит только своё". Отдельная задача.
-- `app/calculator/mirror/page.tsx:1162` использует `role === 'owner'` (string) — мёртвый код, normalizeRole мапит 'owner' → 'admin', никакая роль не равна 'owner' после нормализации. Безвредно.
-- middleware кеширует role в HTTP-only cookie на 1 час — если admin меняет роль юзера в БД, она применится только после истечения куки или перелогина. Это пре-существующее поведение.
-
-### Причина бага
-1. Owner Center меню для CEO ссылалось на admin-only страницы (`/admin/owner`, `/admin/pnl`, `/admin/analytics-mglass`, `/admin/pricing-manual`), которые внутри делали `if (role !== 'admin') redirect('/')`.
-2. CEO `ROLE_ALLOWED` в `lib/getRole.ts` не включал `/admin/suppliers`, `/admin/brigades`, `/admin/warehouse`, `/admin/route-sheet`, `/admin/infrastructure`, `/admin/materials` и др. — middleware кидал на `/access-denied`.
-3. `middleware.ts:VALID_ROLES` не содержал `'cfo'`, поэтому CFO юзеры падали в null.
-
-### Решение (архитектурное)
-- Owner-tier (`admin` + `ceo`) определён в `OWNER_ROLES` и через `isOwnerRole()` короткозамыкает `canAccessRoute` → полный доступ ко всему.
-- Per-page guards используют `isOwnerRole(role)` вместо `role === 'admin'` — теперь и CEO, и admin проходят везде одинаково.
-- `normalizeRole()` — case-insensitive, маппит UI-алиас `'owner'` → `'admin'`.
-- Email-bootstrap для `admin@mglass.ru` — только если в БД нет валидной роли. Не костыль для конкретного юзера, а аварийная страховка.
-- Ограниченные роли (manager, production, buyer, seo, commercial, cfo) — не тронуты, остаются со своими allowlist'ами.
-
-## Sales Control Drawer Detail — ЗАКРЫТО
-
-### Коммит
-179db87 — feat(admin): show stale deal details in sales-control drawer
-
-### Что добавлено
-
-- `/api/commercial/stats` для периода `today` теперь отдаёт:
-  - `domain` — домен AmoCRM для deep links
-  - `staleZone1Deals`, `staleZone2Deals`, `staleZone3Deals`, `invoiceStaleDeals` — массивы с `{ id, name, daysStale, stageName }` для каждого менеджера
-- Drawer во вкладках "Без касания", "Продажа >3д", "Производство >3д", "Долгострой" теперь показывает реальный список сделок:
-  - Название сделки (кликабельная ссылка → AmoCRM `/leads/detail/:id`)
-  - Этап сделки
-  - Бейдж с количеством дней без движения
-- Вкладка "Долгострой" — фильтр из staleZone1: сделки >7д или с этапом "Долгострой"
-- Для исторических периодов (неделя/месяц/год) детализация показывает note: "доступна только в режиме Сегодня"
-
-### Что НЕ изменялось
-- lib/salesMonitor.ts — не трогался (данные уже были, просто не экспортировались)
-- Структура `StaleInfo` в salesMonitor — не менялась
-- API для исторических периодов (sales_monitor_daily) — не менялось, списков сделок там нет
-
-## Production App: Step 13+ — ЗАКРЫТО
-
-Весь блок Production App завершён (13 шагов: order screen, QR, supervisor panel, stage undo, audit trail, audit visibility, audit indicators).
+- Сквозной аудит 6 аналитиками + `docs/AUDIT_2026-06-30.md`, `docs/WORKING_RULES.md`, `scripts/audit-guards.mjs` (страж покрытия).
+- **Батч 1 гардов (10 операций закрыто, «без guard» 66 → 56):**
+  - `lib/apiAuth.ts` — добавлен helper `requireRole(allowed[])`.
+  - `orders/[id]/payment` → requireRole(admin,ceo,manager,buyer).
+  - `admin/warehouse` → requireOwner; `admin/b2b-seed` (массовый DELETE) → requireOwner.
+  - `admin/materials/from-supplier`, `admin/materials/transfer`, `admin/mirror-lighting`, `admin/mirror-lighting/tabs`, `admin/purchase-orders`, `admin/procurement-routes` → requireRole(admin,ceo,buyer).
+  - `admin/bot-toggle` → requireRole(admin,ceo,seo).
+- Проверено: tsc в боевом коде 0 ошибок, vitest 23/23, страж подтверждает закрытие.
+- Роли подобраны по `ROLE_ALLOWED` так, чтобы не выбить легитимных вызывающих.
 
 ## Следующий шаг
-1. Закоммитить fix(auth) — UI часть + API часть (~32 файла).
-2. Ручная проверка под CEO (admin@mglass.ru):
-   - Owner Center: открываются все справочники (suppliers, brigades, delivery-zones, materials, services).
-   - Settings: финансовые настройки, sales-bonuses, sales-scripts, owner-strategy сохраняются.
-   - Users: PATCH (изменить роль/пароль), POST telegram_code, invite — все работают.
-   - Orders: approve over-discount, изменение статуса.
-   - Health Check: fix actions работают.
-   - AI Control Center: analyze работает.
-3. Регрессия:
-   - Менеджер не получает 200 на admin-эндпоинтах (settings PUT, users PATCH).
-   - Buyer не получает 200 на suppliers DELETE.
-   - CEO получает 403 на /api/admin/sync (git push) — это намеренно.
-
-## Следующий приоритет по SYSTEM.md
-Менеджер (`/manager`) или Коммерческий (`/commercial`) — уточнить у пользователя.
+Батч 2 P0 (по приоритету):
+1. Order-lifecycle service-role роуты по правильным ролям (производство легитимно зовёт стадии): `orders/[id]/{brigade,delivery,production-stages,rating,photos}`, `appointments`, `measurer`.
+2. `ai/proposals/*` (draft/approve/reject) — гард по роли.
+3. `ai/generate-task`, `ai/analyze-note` — добавить auth (сейчас вообще без неё).
+4. Защитить доступ к AmoCRM-write роутам (`amo/calls/analyze` без auth) — НЕ удаляя запись (решение по записи за владельцем).
+5. Проверить наличие `CRON_SECRET`/секрета Wazzup в проде → fail-closed для `wazzup/webhook`, `cron/process-queue|process-tasks`.
 
 ## Контекст
-- Sales Control: /admin/sales-control — аналитика команды (таблица + drawer)
-- API: /api/commercial/stats?period=today|week|month|year
-- Drawer: 5 вкладок — Обзор, Без касания, Продажа >3д, Производство >3д, Долгострой
-- Детализация сделок только в режиме today (real-time из AmoCRM)
+- Корень дыры: `lib/getRole.ts:230` — `/api/*` всегда `true`; вся защита API на самих роутах.
+- Страж: `node scripts/audit-guards.mjs` (regex детектора знает requireOwner/requireAdmin/requireRole).
+- Пре-существующее: 31 ошибка tsc только в `__tests__/calculators/mirror.test.ts` (зовёт calculateMirror с 4 арг вместо 3) — быстрый follow-up, чтобы typecheck стал зелёным гейтом.
 
 ## Открытые вопросы
-- AMO_WAZZUP_BOT_USER_ID — нужно уточнить ID Wazzup-бота у Владислава
-- AMOCRM_MANAGERS_IDS — возможно нужно добавить/убрать менеджеров
-- PWA manifest: добавить на позднем шаге
+1. AmoCRM-записи (`cron/process-queue`, `amo/calls/analyze`) — фича или убрать? (запись не трогаю до решения; доступ к роуту защищу)
+2. RLS на `glass_price_matrix` — включать только после проверки чтения калькуляторов.
+3. Подтвердить `CRON_SECRET`/секрет Wazzup в проде перед fail-closed.
+
+## Контекст
+- Корневой источник дыры: `lib/getRole.ts:230` — `/api/*` всегда `true`, middleware не гейтит API по роли.
+- Роуты `orders/[id]/{status,brigade,delivery,production-stages}` легитимно зовут не-owner роли (производство) — гард подбирать по роли, не blanket requireOwner.
+
+## Открытые вопросы (блокеры P0, решает владелец)
+1. AmoCRM-записи (`cron/process-queue`, `amo/calls/analyze`) — намеренная фича или убрать? (нарушают read-only)
+2. Включение RLS на `glass_price_matrix` — только после проверки, что чтение калькуляторов не сломается.
+3. Cron/webhook fail-closed — подтвердить, что `CRON_SECRET` и секрет Wazzup заданы в проде.

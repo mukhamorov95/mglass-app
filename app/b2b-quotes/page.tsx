@@ -92,16 +92,18 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
   paid:    { label: 'Оплачен',     bg: 'bg-emerald-50', text: 'text-emerald-700', short: '🟢' },
 }
 
-type TabKey = QuoteStatus | 'all' | 'needs_transfer'
+type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today'
 
+// Запущенные в работу (sent/confirmed) — это уже заказы, они живут в /b2b-orders
+// и в просчётах не показываются. Здесь — только активные просчёты.
 const ALL_TABS: { key: TabKey; label: string }[] = [
-  { key: 'all',              label: 'Все' },
+  { key: 'all',              label: 'Активные' },
+  { key: 'today',            label: 'Сегодня' },
   { key: 'needs_transfer',   label: 'Требуют переноса' },
   { key: 'quote',            label: 'Черновики' },
-  { key: 'sent',             label: 'В работе' },
+  { key: 'pending_approval', label: 'На согласовании' },
   { key: 'agreed',           label: 'Согласовано' },
   { key: 'rejected',         label: 'Отказ' },
-  { key: 'pending_approval', label: 'На согласовании' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -145,6 +147,18 @@ function looksLikeOrder(q: Quote): boolean {
 }
 
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
+
+// Запущен в работу → ушёл в заказы, в просчётах не показываем.
+function notLaunched(q: Quote): boolean {
+  const s = getStatus(q)
+  return s !== 'sent' && s !== 'confirmed'
+}
+
+function isToday(iso: string | null | undefined): boolean {
+  if (!iso) return false
+  const d = new Date(iso), now = new Date()
+  return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate()
+}
 
 // ─── Telegram helpers ─────────────────────────────────────────────────────────
 
@@ -661,9 +675,9 @@ export default function B2BQuotesPage() {
   const [search, setSearch] = useState('')
 
   const visible = useMemo(() => {
-    setPage(1)
     let list: Quote[]
-    if (tab === 'all') list = quotes
+    if (tab === 'all') list = quotes.filter(notLaunched)
+    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && isToday(q.created_at))
     else if (tab === 'needs_transfer') list = quotes.filter(looksLikeOrder)
     else list = quotes.filter(q => getStatus(q) === tab)
     if (search.trim()) {
@@ -679,9 +693,10 @@ export default function B2BQuotesPage() {
   }, [quotes, tab, search])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: quotes.length, needs_transfer: 0 }
+    const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0 }
     for (const q of quotes) {
       const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
+      if (notLaunched(q)) { c.all++; if (isToday(q.created_at)) c.today++ }
       if (looksLikeOrder(q)) c.needs_transfer++
     }
     return c
@@ -716,14 +731,14 @@ export default function B2BQuotesPage() {
       <div className="flex items-center justify-between mb-3">
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Расчёты</h1>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">{quotes.length} расчётов всего</p>
+          <p className="text-[12px] text-[#8a8a85] mt-0.5">{counts.all} активных · {counts.today} сегодня</p>
         </div>
         <div className="flex items-center gap-2">
           <input
             type="text"
             placeholder="Поиск: номер, клиент..."
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
             className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white w-52"
           />
           <Link href="/calculator/b2b"
@@ -736,7 +751,7 @@ export default function B2BQuotesPage() {
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 flex-wrap">
         {ALL_TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
+          <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }}
             className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors ${tab === t.key ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
             {t.label}
             {(counts[t.key] ?? 0) > 0 && (

@@ -234,7 +234,7 @@ const DEADLINE_BADGE: Record<DeadlineStatus, string> = {
   tomorrow: 'bg-yellow-50 text-yellow-700',
   normal:   'bg-[#f0f0ec] text-[#6b6b66]',
   ready:    'bg-emerald-50 text-emerald-700',
-  shipped:  'bg-[#f0f0ec] text-[#9a9a95]',
+  shipped:  'bg-emerald-50 text-emerald-700',
   unknown:  'bg-[#f8f8f7] text-[#b0b0aa]',
 }
 
@@ -1338,6 +1338,9 @@ export default function B2BOrdersPage() {
   )
 
   const totalSum = orders.reduce((s, o) => s + getFinalPrice(o), 0)
+  // Готовность производства: отгружен ли заказ. Не связано с тем, найден ли клиент в базе.
+  const shippedCount = orders.filter(o => !!o.parsedNotes.stages?.shipped).length
+  const notShippedCount = orders.length - shippedCount
 
   // ── Shared: expanded order body ─────────────────────────────────────────────
   function renderOrderBody(order: Order) {
@@ -1815,6 +1818,16 @@ export default function B2BOrdersPage() {
             {orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽
           </p>
         </div>
+        <div className="flex items-center gap-1.5 text-[11px] font-medium" title="Готовность производства: отгружено / в работе">
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            {shippedCount} отгружено
+          </span>
+          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+            {notShippedCount} в работе
+          </span>
+        </div>
         <div className="flex items-center gap-2">
           <button
             onClick={() => { const next = !productionDayMode; setProductionDayMode(next); if (!next) setShowOnlyNeedsControl(false) }}
@@ -2149,7 +2162,7 @@ export default function B2BOrdersPage() {
                 const payStatus = getOrderPayStatus(order)
 
                 return (
-                  <div key={order.id} className="px-4 py-2.5">
+                  <div key={order.id} className={`px-4 py-2.5 border-l-4 ${isShipped ? 'border-l-emerald-500' : 'border-l-red-400'}`}>
                     <div className="flex items-start justify-between gap-3 mb-2">
                       <div className="flex items-start gap-2 min-w-0 flex-1">
                         <input
@@ -2290,7 +2303,7 @@ export default function B2BOrdersPage() {
                         const progress = calcProgress(pn.stages ?? {})
 
                         return (
-                          <div key={order.id}>
+                          <div key={order.id} className={`border-l-4 ${isShipped ? 'border-l-emerald-500' : 'border-l-red-400'}`}>
                             <div
                               className="w-full px-4 py-2 flex items-center justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
                               onClick={() => setExpanded(isOpen ? null : order.id)}>
