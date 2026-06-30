@@ -31,7 +31,7 @@ const EMPTY: Omit<B2BMaterial, 'id' | 'created_at'> = {
   name: '', category: 'стекло', thickness: 6, cost_price: 0, sale_price: 0,
   vat_rate: 22, waste_percent: 15, passthrough: false, active: true, notes: null,
   sheet_width: 3210, sheet_height: 2250, pattern_direction: 'none',
-  supplier_id: null, supplier_material_name: null,
+  supplier_id: null, supplier_material_name: null, stock_sheets: 0,
 }
 
 function parseNotes(m: B2BMaterial): B2BMaterial {
@@ -133,6 +133,7 @@ export default function B2BMaterialsPage() {
       sheet_width: Number(form.sheet_width) || 3210,
       sheet_height: Number(form.sheet_height) || 2250,
       pattern_direction: form.pattern_direction ?? 'none',
+      stock_sheets: Number(form.stock_sheets) || 0,
       notes: Object.keys(notesObj).length > 0 ? JSON.stringify(notesObj) : null,
     }
     if (editingId !== null) {
@@ -174,6 +175,7 @@ export default function B2BMaterialsPage() {
       pattern_direction: m.pattern_direction ?? 'none',
       supplier_id: m.supplier_id ?? null,
       supplier_material_name: m.supplier_material_name ?? null,
+      stock_sheets: m.stock_sheets ?? 0,
     })
     setError(null)
     window.scrollTo({ top: 0, behavior: 'smooth' })
@@ -349,6 +351,14 @@ export default function B2BMaterialsPage() {
                   {PATTERN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               </div>
+            </div>
+            <div>
+              <label className="block text-[11px] text-[#9a9a95] mb-1">Остаток на складе, листов</label>
+              <input type="number" min="0" step="0.5"
+                className="w-40 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                value={form.stock_sheets ?? 0}
+                onChange={e => setForm(f => ({ ...f, stock_sheets: Number(e.target.value) }))}
+              />
             </div>
           </div>
 

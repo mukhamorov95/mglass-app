@@ -807,6 +807,14 @@ export default function B2BCuttingPage() {
     return Math.round(r.sheetsNeeded * areaM2 * cp)
   }
 
+  // Сверка со складом: сколько листов на складе и сколько докупить.
+  function stockInfo(r: { materialKey: string; sheetsNeeded: number }): { stock: number; toBuy: number } {
+    const [name, thk] = r.materialKey.split('|')
+    const mat = materials.find(m => `${m.name}|${m.thickness}` === `${name}|${thk}`) as { stock_sheets?: number | null } | undefined
+    const stock = Number(mat?.stock_sheets ?? 0)
+    return { stock, toBuy: Math.max(0, r.sheetsNeeded - stock) }
+  }
+
   const selectedCount    = selectedIds.size
   const totalPiecesCount = orders.filter(o => selectedIds.has(o.id)).reduce((s, o) => s + o.totalPieces, 0)
   const needsMaterialCount = orders.filter(o => !o.materialOrdered).length
@@ -1005,6 +1013,7 @@ export default function B2BCuttingPage() {
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Размер листа</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Деталей</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">КПД</th>
+                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium whitespace-nowrap" title="На складе / докупить">Склад</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Рисунок</th>
                     <th className="px-4 py-2.5 text-right text-[#9a9a95] font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>
                   </tr>
@@ -1023,6 +1032,16 @@ export default function B2BCuttingPage() {
                         <span className={`text-[12px] font-semibold ${
                           r.avgEfficiency >= 70 ? 'text-emerald-600' : r.avgEfficiency >= 50 ? 'text-amber-600' : 'text-red-600'
                         }`}>{r.avgEfficiency}%</span>
+                      </td>
+                      <td className="px-4 py-3 text-center text-[12px] whitespace-nowrap">
+                        {(() => { const { stock, toBuy } = stockInfo(r); return (
+                          <>
+                            <span className="text-[#6b6b66]">скл. {stock % 1 === 0 ? stock : stock.toFixed(1)}</span>
+                            {toBuy > 0
+                              ? <span className="ml-1 font-semibold text-red-600">· докупить {toBuy % 1 === 0 ? toBuy : toBuy.toFixed(1)}</span>
+                              : <span className="ml-1 font-semibold text-emerald-600">· хватает</span>}
+                          </>
+                        )})()}
                       </td>
                       <td className="px-4 py-3 text-center text-[#9a9a95] text-[11px]">
                         {r.patternDirection === 'along_length' ? '↔ По длине' : r.patternDirection === 'along_width' ? '↕ По ширине' : '—'}

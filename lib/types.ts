@@ -385,6 +385,7 @@ export type B2BMaterial = {
   pattern_direction: PatternDirection  // направление рисунка для рифлёного стекла
   supplier_id?: string | null
   supplier_material_name?: string | null
+  stock_sheets?: number          // остаток листов на складе (для сверки в раскрое)
 }
 
 export const B2B_CATEGORIES = [
