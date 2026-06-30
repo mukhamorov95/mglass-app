@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
 
 function db() {
   return createServiceClient(
@@ -13,6 +14,9 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const guard = await requireRole(['admin', 'ceo', 'buyer'])
+  if (guard instanceof NextResponse) return guard
 
   const { materialId, target, componentType, systemType } = await req.json()
   if (!materialId || !target) return NextResponse.json({ error: 'materialId and target required' }, { status: 400 })

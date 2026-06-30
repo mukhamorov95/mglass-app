@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
+
+const ALLOWED = ['admin', 'ceo', 'buyer'] as const
 
 function db() {
   return createServiceClient(
@@ -13,6 +16,9 @@ export async function POST(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
 
   const { label } = await req.json()
   if (!label?.trim()) return NextResponse.json({ error: 'label required' }, { status: 400 })
@@ -32,6 +38,9 @@ export async function DELETE(req: Request) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
 
   const { value } = await req.json()
   const { error } = await db().from('mirror_lighting_tabs').delete().eq('value', value)

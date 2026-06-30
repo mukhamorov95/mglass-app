@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as svc } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
+
+const ALLOWED = ['admin', 'ceo', 'buyer'] as const
 
 function service() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -26,6 +29,8 @@ export async function GET() {
 export async function POST(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const body = await req.json()
   const { data, error } = await service().from('purchase_orders').insert(body).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -35,6 +40,8 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { id, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'Нужен id' }, { status: 400 })
   fields.updated_at = new Date().toISOString()
@@ -46,6 +53,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { id } = await req.json()
   if (!id) return NextResponse.json({ error: 'Нужен id' }, { status: 400 })
   const { error } = await service().from('purchase_orders').delete().eq('id', id)

@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as svc } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
+
+const ALLOWED = ['admin', 'ceo', 'buyer'] as const
 
 function service() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
@@ -39,6 +42,8 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const body = await req.json()
   const table = body._type === 'stop' ? 'procurement_route_stops' : 'procurement_routes'
   const { _type, ...rest } = body
@@ -50,6 +55,8 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { _type, id, ...fields } = await req.json()
   if (!id) return NextResponse.json({ error: 'Нужен id' }, { status: 400 })
   const table = _type === 'stop' ? 'procurement_route_stops' : 'procurement_routes'
@@ -61,6 +68,8 @@ export async function PATCH(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const user = await auth()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...ALLOWED])
+  if (guard instanceof NextResponse) return guard
   const { _type, id } = await req.json()
   const table = _type === 'stop' ? 'procurement_route_stops' : 'procurement_routes'
   const { error } = await service().from(table).delete().eq('id', id)

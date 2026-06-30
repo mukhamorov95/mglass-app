@@ -25,6 +25,15 @@ export async function requireAdmin(): Promise<Role | NextResponse> {
   return role
 }
 
+// Allowlist gate: pass if the caller's role is in `allowed`. Use for routes
+// shared by a specific set of roles (e.g. owner + buyer for procurement).
+// Owner roles must be listed explicitly when they should pass.
+export async function requireRole(allowed: Role[]): Promise<Role | NextResponse> {
+  const role = await getRole()
+  if (!role || !allowed.includes(role)) return forbidden()
+  return role
+}
+
 // Boolean form for conditional logic (e.g. filtering sale-price rows in GETs).
 export async function isOwnerCurrentUser(): Promise<boolean> {
   const role = await getRole()

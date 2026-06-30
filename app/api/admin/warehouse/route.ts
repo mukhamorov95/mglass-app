@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireOwner } from '@/lib/apiAuth'
 
 export async function GET() {
   const supabase = await createServerClient()
@@ -22,6 +23,9 @@ export async function PATCH(req: NextRequest) {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   const { id, stock_qty, min_stock_qty } = await req.json()
   if (!id) return NextResponse.json({ error: 'Нужен id' }, { status: 400 })
