@@ -588,6 +588,8 @@ export default function B2BCuttingPage() {
   const [expandedMat, setExpandedMat] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
   const [savedId, setSavedId] = useState<string | null>(null)
+  const [savingProc, setSavingProc] = useState(false)
+  const [procSaved, setProcSaved] = useState(false)
   const [optimizing, setOptimizing] = useState(false)
   const [prevResults, setPrevResults] = useState<MaterialCuttingResult[] | null>(null)
 
@@ -771,6 +773,30 @@ export default function B2BCuttingPage() {
     if (w) { w.document.write(html); w.document.close() }
   }
 
+  // Сохранить заявку как запись закупки → попадает в /admin/procurement,
+  // где владелец/закупщик ведёт её по статусам (счёт → оплата → забрали).
+  async function savePurchaseRequest() {
+    if (!results || results.length === 0) return
+    setSavingProc(true)
+    const items = results.map(r => ({
+      name: r.materialLabel,
+      thickness: Number(r.materialKey.split('|')[1]) || 0,
+      sheets: r.sheetsNeeded,
+    }))
+    const order_refs = orders.filter(o => selectedIds.has(o.id)).map(o => `${o.client_name} #${o.id}`)
+    const res = await fetch('/api/admin/purchase-orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        supplier_name: '',
+        items, order_refs, b2b_order_ids: Array.from(selectedIds),
+        comment: `Заявка из раскроя ${new Date().toLocaleDateString('ru-RU')} — внести № счёта и поставщика`,
+      }),
+    })
+    setSavingProc(false)
+    setProcSaved(res.ok)
+    if (!res.ok) alert('Не удалось сохранить заявку (нужны права закупок).')
+  }
+
   const selectedCount    = selectedIds.size
   const totalPiecesCount = orders.filter(o => selectedIds.has(o.id)).reduce((s, o) => s + o.totalPieces, 0)
   const needsMaterialCount = orders.filter(o => !o.materialOrdered).length
@@ -950,10 +976,16 @@ export default function B2BCuttingPage() {
             <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
               <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9] flex items-center justify-between gap-2">
                 <h2 className="text-[15px] font-bold text-[#111110]">Список закупки</h2>
-                <button onClick={printSupplierRequest}
-                  className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
-                  🖨 Заявка поставщику
-                </button>
+                <div className="flex items-center gap-2">
+                  <button onClick={savePurchaseRequest} disabled={savingProc || procSaved}
+                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-50 transition-colors whitespace-nowrap">
+                    {procSaved ? '✓ В закупках' : savingProc ? 'Сохранение…' : 'Сохранить в закупки'}
+                  </button>
+                  <button onClick={printSupplierRequest}
+                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                    🖨 Заявка поставщику
+                  </button>
+                </div>
               </div>
               <table className="w-full text-[13px]">
                 <thead>
