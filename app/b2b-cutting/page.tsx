@@ -797,6 +797,16 @@ export default function B2BCuttingPage() {
     if (!res.ok) alert('Не удалось сохранить заявку (нужны права закупок).')
   }
 
+  // Ориентировочная себестоимость листов по материалу: листы × площадь × cost_price.
+  // Та же формула, что в lib/productionSummary.ts (sheetCost) — без выдумок.
+  function estSheetCost(r: { materialKey: string; sheetWidth: number; sheetHeight: number; sheetsNeeded: number }): number {
+    const [name, thk] = r.materialKey.split('|')
+    const mat = materials.find(m => `${m.name}|${m.thickness}` === `${name}|${thk}`) as { cost_price?: number | null } | undefined
+    const cp = mat?.cost_price ?? 0
+    const areaM2 = r.sheetWidth * r.sheetHeight / 1_000_000
+    return Math.round(r.sheetsNeeded * areaM2 * cp)
+  }
+
   const selectedCount    = selectedIds.size
   const totalPiecesCount = orders.filter(o => selectedIds.has(o.id)).reduce((s, o) => s + o.totalPieces, 0)
   const needsMaterialCount = orders.filter(o => !o.materialOrdered).length
@@ -996,6 +1006,7 @@ export default function B2BCuttingPage() {
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Деталей</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">КПД</th>
                     <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Рисунок</th>
+                    <th className="px-4 py-2.5 text-right text-[#9a9a95] font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1016,6 +1027,9 @@ export default function B2BCuttingPage() {
                       <td className="px-4 py-3 text-center text-[#9a9a95] text-[11px]">
                         {r.patternDirection === 'along_length' ? '↔ По длине' : r.patternDirection === 'along_width' ? '↕ По ширине' : '—'}
                       </td>
+                      <td className="px-4 py-3 text-right font-mono text-[#111110] whitespace-nowrap">
+                        {estSheetCost(r) > 0 ? `${estSheetCost(r).toLocaleString('ru-RU')} ₽` : '—'}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1024,7 +1038,7 @@ export default function B2BCuttingPage() {
                 <span>Итого листов: <b className="text-[#111110]">{results.reduce((s, r) => s + r.sheetsNeeded, 0)}</b></span>
                 <span>Деталей: <b className="text-[#111110]">{results.reduce((s, r) => s + r.totalPieces, 0)}</b></span>
                 <span>Площадь листов: <b className="text-[#111110]">{(results.reduce((s, r) => s + r.totalSheetArea, 0) / 1_000_000).toFixed(2)} м²</b></span>
-                <span>Использовано: <b className="text-[#111110]">{(results.reduce((s, r) => s + r.totalUsedArea, 0) / 1_000_000).toFixed(2)} м²</b></span>
+                {(() => { const tot = results.reduce((s, r) => s + estSheetCost(r), 0); return tot > 0 ? <span>Ориентир. себестоимость: <b className="text-[#111110]">{tot.toLocaleString('ru-RU')} ₽</b></span> : null })()}
               </div>
             </div>
 
