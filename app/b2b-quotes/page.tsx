@@ -5,6 +5,8 @@ import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import Pagination from '@/components/Pagination'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
+import type { UserPermissions } from '@/lib/permissions'
+import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 
 const PAGE_SIZE = 50
 
@@ -57,6 +59,17 @@ type Quote = {
   notes: string | null
   created_at: string
   created_by: string | null
+  // Column-level authorship — populated after 20260630_b2b_orders_authorship.sql.
+  // Optional/nullable so the UI still works against pre-migration data.
+  created_by_name?:      string | null
+  updated_by_user_id?:   string | null
+  updated_by_name?:      string | null
+  updated_at?:           string | null
+  converted_by_user_id?: string | null
+  converted_by_name?:    string | null
+  launched_by_user_id?:  string | null
+  launched_by_name?:     string | null
+  launched_at?:          string | null
 }
 
 type QuoteStatus   = 'quote' | 'sent' | 'agreed' | 'rejected' | 'confirmed' | 'pending_approval'
@@ -79,8 +92,11 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
   paid:    { label: 'Оплачен',     bg: 'bg-emerald-50', text: 'text-emerald-700', short: '🟢' },
 }
 
-const ALL_TABS: { key: QuoteStatus | 'all'; label: string }[] = [
+type TabKey = QuoteStatus | 'all' | 'needs_transfer'
+
+const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'all',              label: 'Все' },
+  { key: 'needs_transfer',   label: 'Требуют переноса' },
   { key: 'quote',            label: 'Черновики' },
   { key: 'sent',             label: 'В работе' },
   { key: 'agreed',           label: 'Согласовано' },
@@ -113,6 +129,19 @@ function getPayStatus(q: Quote): PaymentStatus {
 
 function getPayAmount(q: Quote): number {
   return (parseNotes(q.notes)?.prepayment_amount as number) || 0
+}
+
+// Heuristic: quote-status record that already looks like a real order — it should
+// probably be moved into B2B-orders. Used by "Требуют переноса" filter and badge.
+function looksLikeOrder(q: Quote): boolean {
+  if (getStatus(q) !== 'quote') return false
+  if (q.custom_number && q.custom_number.trim()) return true
+  if (q.client_order_number && q.client_order_number.trim()) return true
+  const n = parseNotes(q.notes)
+  if (n.launched_at) return true
+  if (n.payment_status === 'partial' || n.payment_status === 'paid') return true
+  if ((n.prepayment_amount as number | undefined) ?? 0 > 0) return true
+  return false
 }
 
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
@@ -203,10 +232,12 @@ export default function B2BQuotesPage() {
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [expanded, setExpanded]       = useState<number | null>(null)
-  const [tab, setTab]                 = useState<QuoteStatus | 'all'>('all')
+  const [tab, setTab]                 = useState<TabKey>('all')
   const [page, setPage]               = useState(1)
   const [userRole, setUserRole]       = useState<string | null>(null)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null)
+  const [mglassOnly, setMglassOnly]   = useState(false)
 
   // "В работу" — inline date picker
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
@@ -218,10 +249,14 @@ export default function B2BQuotesPage() {
   }, [workDateId])
 
   // "Запустить в заказ" modal
+  type LaunchTargetStatus = 'pending_approval' | 'agreed' | 'confirmed'
   const [confirmingId, setConfirmingId]       = useState<number | null>(null)
   const [launchedAt, setLaunchedAt]           = useState(new Date().toISOString().slice(0, 10))
   const [confirmCustomNumber, setConfirmCustomNumber] = useState('')
+  const [confirmTargetStatus, setConfirmTargetStatus] = useState<LaunchTargetStatus>('confirmed')
+  const [confirmComment, setConfirmComment]   = useState('')
   const [confirming, setConfirming]           = useState(false)
+  const [confirmError, setConfirmError]       = useState<string | null>(null)
 
   // Delete modal
   const [deletingId, setDeletingId] = useState<number | null>(null)
@@ -275,8 +310,9 @@ export default function B2BQuotesPage() {
       ...(status !== 'partial' ? { prepayment_amount: undefined } : {}),
       ...(status === 'paid' ? { paid_at: new Date().toISOString() } : {}),
     })
-    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes } : x))
+    const meta = buildUpdateMeta()
+    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
     setPayEditId(null)
     setPayAmount('')
     showToast(`Оплата: ${PAYMENT_META[status].label}`)
@@ -306,12 +342,18 @@ export default function B2BQuotesPage() {
   async function setStatusDirect(id: number, newStatus: string) {
     const q = quotes.find(q => q.id === id)
     if (!q) return
+    // Scope guard for mglass_only — they cannot touch other clients' quotes.
+    if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
+      showToast(MGLASS_SCOPE_ERROR)
+      return
+    }
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: getStatus(q), to: newStatus, date: new Date().toISOString(), comment: null })
     const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history })
-    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes } : x))
+    const meta = buildUpdateMeta()
+    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
     showToast(`Статус → ${STATUS_META[newStatus as QuoteStatus]?.label ?? newStatus}`)
   }
 
@@ -319,6 +361,12 @@ export default function B2BQuotesPage() {
     if (!pendingChange) return
     const q = quotes.find(q => q.id === pendingChange.quoteId)
     if (!q) return
+    if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
+      showToast(MGLASS_SCOPE_ERROR)
+      setPendingChange(null)
+      setPendingComment('')
+      return
+    }
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({
@@ -333,8 +381,9 @@ export default function B2BQuotesPage() {
       status_comment: pendingComment || null,
       status_history: history,
     })
-    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', pendingChange.quoteId)
-    setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, notes: newNotes } : x))
+    const meta = buildUpdateMeta()
+    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', pendingChange.quoteId)
+    setQuotes(prev => prev.map(x => x.id === pendingChange.quoteId ? { ...x, notes: newNotes, ...meta } : x))
     showToast(`Статус → ${STATUS_META[pendingChange.status as QuoteStatus]?.label ?? pendingChange.status}`)
     setPendingChange(null)
     setPendingComment('')
@@ -344,6 +393,11 @@ export default function B2BQuotesPage() {
     if (!workDateId) return
     const q = quotes.find(x => x.id === workDateId)
     if (!q) return
+    if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
+      showToast(MGLASS_SCOPE_ERROR)
+      setWorkDateId(null)
+      return
+    }
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: getStatus(q), to: 'sent', date: new Date().toISOString(), comment: null })
@@ -353,8 +407,9 @@ export default function B2BQuotesPage() {
       work_started_at: workDate,
       status_history: history,
     })
-    await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', workDateId)
-    setQuotes(prev => prev.map(x => x.id === workDateId ? { ...x, notes: newNotes } : x))
+    const meta = buildUpdateMeta()
+    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', workDateId)
+    setQuotes(prev => prev.map(x => x.id === workDateId ? { ...x, notes: newNotes, ...meta } : x))
     showToast('Запущено в работу')
     setWorkDateId(null)
   }
@@ -372,9 +427,10 @@ export default function B2BQuotesPage() {
       approved_by: currentUserId,
       status_history: history,
     })
-    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
+    const meta = buildUpdateMeta()
+    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
     if (error) { showToast('Ошибка при согласовании'); return }
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes } : x))
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
     showToast('Согласовано ✓')
   }
 
@@ -389,12 +445,17 @@ export default function B2BQuotesPage() {
 
       const { data: profile } = await sb
         .from('users')
-        .select('role, see_all_orders')
+        .select('role, name, see_all_orders, permissions')
         .eq('id', user.id)
         .single()
 
       setUserRole(profile?.role ?? null)
       setCurrentUserId(user.id)
+      setCurrentUserName((profile?.name as string) || user.email || null)
+      const isOwner = profile?.role === 'admin' || profile?.role === 'ceo'
+      const perms = (profile?.permissions ?? null) as UserPermissions | null
+      // Owners are never scope-restricted.
+      setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
       const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
 
       let ordersQuery = sb
@@ -505,27 +566,95 @@ export default function B2BQuotesPage() {
     showToast(`Скидка обновлена: ${newDiscount}%`)
   }
 
+  // Shared "who changed this, when" payload — column-level authorship.
+  function buildUpdateMeta() {
+    return {
+      updated_by_user_id: currentUserId,
+      updated_by_name:    currentUserName,
+      updated_at:         new Date().toISOString(),
+    }
+  }
+
   async function handleConfirm() {
     if (!confirmingId) return
-    setConfirming(true)
     const q = quotes.find(x => x.id === confirmingId)
-    const parsed = parseNotes(q?.notes ?? null)
+    if (!q) return
+    // Scope guard: mglass_only managers cannot launch orders for non-M-GLASS clients.
+    if (mglassOnly && !isMGlassClient({ id: q.client_id ?? undefined, name: q.client_name })) {
+      setConfirmError(MGLASS_SCOPE_ERROR)
+      return
+    }
+    // confirmed = actually launched into production → launched_at required.
+    // agreed / pending_approval = approved but not yet launched → date optional.
+    if (confirmTargetStatus === 'confirmed' && !launchedAt) {
+      setConfirmError('Для статуса «Запущено в заказ» нужна дата запуска.')
+      return
+    }
+    setConfirmError(null)
+    setConfirming(true)
+
+    const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({ from: 'agreed', to: 'confirmed', date: new Date().toISOString(), comment: null })
-    const newNotes = JSON.stringify({ ...parsed, status: 'confirmed', launched_at: launchedAt, status_history: history })
-    await createClient().from('b2b_orders').update({
+    history.push({
+      from: getStatus(q),
+      to:   confirmTargetStatus,
+      date: new Date().toISOString(),
+      comment: confirmComment || null,
+    })
+
+    const isLaunched = confirmTargetStatus === 'confirmed'
+    const launchedDate = isLaunched ? launchedAt : null
+
+    const newNotes = JSON.stringify({
+      ...parsed,
+      status: confirmTargetStatus,
+      ...(isLaunched ? { launched_at: launchedDate } : {}),
+      ...(confirmComment ? { status_comment: confirmComment } : {}),
+      status_history: history,
+    })
+
+    const meta = buildUpdateMeta()
+    const updateRow: Record<string, unknown> = {
       notes: newNotes,
+      ...meta,
+      // Mark who converted this quote → order (any non-quote target counts).
+      converted_by_user_id: currentUserId,
+      converted_by_name:    currentUserName,
       ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
-    }).eq('id', confirmingId)
+      ...(isLaunched ? {
+        launched_at:         launchedDate,
+        launched_by_user_id: currentUserId,
+        launched_by_name:    currentUserName,
+      } : {}),
+    }
+
+    const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', confirmingId)
+    if (error) {
+      setConfirmError('Не удалось сохранить: ' + error.message)
+      setConfirming(false)
+      return
+    }
     setQuotes(prev => prev.map(x => x.id === confirmingId ? {
       ...x,
       notes: newNotes,
       ...(confirmCustomNumber.trim() ? { custom_number: confirmCustomNumber.trim() } : {}),
+      converted_by_user_id: currentUserId,
+      converted_by_name:    currentUserName,
+      ...(isLaunched ? {
+        launched_at:         launchedDate,
+        launched_by_user_id: currentUserId,
+        launched_by_name:    currentUserName,
+      } : {}),
+      updated_by_user_id: meta.updated_by_user_id,
+      updated_by_name:    meta.updated_by_name,
+      updated_at:         meta.updated_at,
     } : x))
     setConfirmingId(null)
     setConfirming(false)
     setConfirmCustomNumber('')
-    showToast('Запущено в заказ')
+    setConfirmComment('')
+    setConfirmTargetStatus('confirmed')
+    showToast(isLaunched ? 'Запущено в заказ' : `Статус → ${STATUS_META[confirmTargetStatus]?.label ?? confirmTargetStatus}`)
   }
 
   // ── Derived ────────────────────────────────────────────────────────────────
@@ -533,7 +662,10 @@ export default function B2BQuotesPage() {
 
   const visible = useMemo(() => {
     setPage(1)
-    let list = tab === 'all' ? quotes : quotes.filter(q => getStatus(q) === tab)
+    let list: Quote[]
+    if (tab === 'all') list = quotes
+    else if (tab === 'needs_transfer') list = quotes.filter(looksLikeOrder)
+    else list = quotes.filter(q => getStatus(q) === tab)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(x =>
@@ -547,8 +679,11 @@ export default function B2BQuotesPage() {
   }, [quotes, tab, search])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: quotes.length }
-    for (const q of quotes) { const s = getStatus(q); c[s] = (c[s] ?? 0) + 1 }
+    const c: Record<string, number> = { all: quotes.length, needs_transfer: 0 }
+    for (const q of quotes) {
+      const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
+      if (looksLikeOrder(q)) c.needs_transfer++
+    }
     return c
   }, [quotes])
 
@@ -677,6 +812,11 @@ export default function B2BQuotesPage() {
                           </span>
                         )}
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                        {looksLikeOrder(quote) && (
+                          <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200" title="У просчёта есть признаки заказа — перенесите в B2B-заказы">
+                            Похоже, это уже заказ
+                          </span>
+                        )}
                       </div>
                       <p className="text-[11px] text-[#9a9a95]">
                         {dateStr}, {timeStr}
@@ -684,6 +824,9 @@ export default function B2BQuotesPage() {
                         {' · '}{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
                         {(quote.total_weight ?? 0) > 0 && ` · ${(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг`}
                         {hasAttach && ' · 📎'}
+                        {(quote.created_by_name || (parsed.manager_name as string | undefined)) && (
+                          <> {' · '}Просчитал: <span className="text-[#6b6b66] font-medium">{quote.created_by_name || (parsed.manager_name as string)}</span></>
+                        )}
                       </p>
                     </div>
                   </button>
@@ -1168,11 +1311,40 @@ export default function B2BQuotesPage() {
       )}
 
       {/* ── Launch to order modal ───────────────────────────────────────────── */}
-      {confirmingId !== null && (
+      {confirmingId !== null && (() => {
+        const q = quotes.find(x => x.id === confirmingId)
+        return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Запустить в заказ</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-4">Укажите номер и дату запуска</p>
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full shadow-xl">
+            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Перенести в B2B-заказ</h2>
+            <p className="text-[13px] text-[#6b6b66] mb-3">Проверьте клиента, сумму, номер и дату.</p>
+
+            {q && (
+              <div className="bg-[#fafaf9] border border-[#f0f0ec] rounded-lg p-3 mb-4 space-y-1">
+                <div className="text-[11px] uppercase tracking-widest text-[#9a9a95]">Клиент</div>
+                <div className="text-[14px] font-semibold text-[#111110]">{q.client_name || '—'}</div>
+                <div className="flex justify-between text-[12px] text-[#6b6b66] pt-1">
+                  <span>Сумма</span>
+                  <span className="font-semibold text-[#111110]">{fmt((q.discount_percent ?? 0) > 0 ? q.total_after_discount : q.total_sale_inc_vat)}</span>
+                </div>
+              </div>
+            )}
+
+            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Целевой статус</label>
+            <div className="grid grid-cols-3 gap-1 mb-3">
+              {(['pending_approval', 'agreed', 'confirmed'] as const).map(s => (
+                <button key={s} type="button"
+                  onClick={() => setConfirmTargetStatus(s)}
+                  className={`text-[11px] font-medium px-2 py-2 rounded-lg border transition-colors ${
+                    confirmTargetStatus === s
+                      ? 'bg-[#111110] text-white border-[#111110]'
+                      : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f5f5f4]'
+                  }`}>
+                  {s === 'pending_approval' ? 'На согласование' : s === 'agreed' ? 'Согласован' : 'Запущен в работу'}
+                </button>
+              ))}
+            </div>
+
             <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Номер заказа</label>
             <input
               autoFocus
@@ -1182,23 +1354,41 @@ export default function B2BQuotesPage() {
               value={confirmCustomNumber}
               onChange={e => setConfirmCustomNumber(e.target.value)}
             />
-            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Дата запуска</label>
+            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">
+              Дата запуска {confirmTargetStatus === 'confirmed' ? <span className="text-red-500">*</span> : <span className="text-[#9a9a95] normal-case tracking-normal">(необязательно)</span>}
+            </label>
             <input type="date"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-4"
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3"
               value={launchedAt} onChange={e => setLaunchedAt(e.target.value)} />
+
+            <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1.5">Комментарий</label>
+            <textarea
+              placeholder="оплата, особенности — необязательно"
+              rows={2}
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3 resize-none"
+              value={confirmComment}
+              onChange={e => setConfirmComment(e.target.value)}
+            />
+
+            {confirmError && (
+              <p className="text-[12px] text-red-600 mb-2">{confirmError}</p>
+            )}
+
             <div className="flex gap-2">
-              <button onClick={() => { setConfirmingId(null); setConfirmCustomNumber('') }}
+              <button onClick={() => { setConfirmingId(null); setConfirmCustomNumber(''); setConfirmComment(''); setConfirmError(null); setConfirmTargetStatus('confirmed') }}
                 className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
                 Отмена
               </button>
-              <button onClick={handleConfirm} disabled={confirming || !launchedAt}
+              <button onClick={handleConfirm}
+                disabled={confirming || (confirmTargetStatus === 'confirmed' && !launchedAt)}
                 className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                {confirming ? 'Сохранение...' : 'Запустить →'}
+                {confirming ? 'Сохранение...' : confirmTargetStatus === 'confirmed' ? 'Запустить →' : 'Перенести →'}
               </button>
             </div>
           </div>
         </div>
-      )}
+        )
+      })()}
     </div>
   )
 }

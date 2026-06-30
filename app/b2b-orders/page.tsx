@@ -149,6 +149,7 @@ type NotesData = {
 
 type Order = {
   id: number
+  client_id: number | null
   client_name: string
   custom_number: string | null
   client_order_number: string | null
@@ -162,6 +163,36 @@ type Order = {
   notes: string | null
   created_at: string
   parsedNotes: NotesData
+  // Column-level authorship — backed by 20260630_b2b_orders_authorship.sql.
+  // Optional/nullable so the UI keeps working against pre-migration rows.
+  created_by_name?:     string | null
+  launched_at?:         string | null
+  launched_by_name?:    string | null
+  launched_by_user_id?: string | null
+  converted_by_name?:   string | null
+  updated_by_name?:     string | null
+  updated_at?:          string | null
+}
+
+// Effective launch date: prefer the new column, fall back to JSON notes.
+// Returns null when neither has it — caller decides if it should treat the
+// order as "not yet launched" or use a fallback like created_at for display.
+function effectiveLaunchDate(o: Order): string | null {
+  if (o.launched_at) return o.launched_at
+  if (o.parsedNotes.launched_at) return o.parsedNotes.launched_at
+  return null
+}
+
+// "Who launched" name with fallback chain.
+function getLaunchedByName(o: Order): string | null {
+  return o.launched_by_name ?? null
+}
+
+// "Who calculated" name with notes fallback for legacy rows.
+function getCreatedByName(o: Order): string | null {
+  if (o.created_by_name) return o.created_by_name
+  const mn = o.parsedNotes && (o.parsedNotes as Record<string, unknown>).manager_name
+  return typeof mn === 'string' ? mn : null
 }
 
 function parseNotes(notes: string | null): NotesData {
@@ -780,19 +811,48 @@ export default function B2BOrdersPage() {
     return filtered
   }, [orders, search, stageFilter, deadlineFilter, dateFrom, dateTo, boardFilter])
 
+  // Internal B2B registry: group by month of effective launch date (column
+  // launched_at, fallback notes.launched_at). Orders without any launch date go
+  // into a separate "no_launch" group at the end of the list. Inside each
+  // month, orders are sorted by launch date ASC (1st of month at top, 31st at
+  // bottom) — first order launched in the month is on top.
   const monthGroups = useMemo(() => {
-    const groups: { key: string; label: string; orders: Order[]; total: number }[] = []
+    const groups: { key: string; label: string; orders: Order[]; total: number; noLaunch: boolean }[] = []
+    const noLaunchGroup = { key: 'no_launch', label: 'Без даты запуска', orders: [] as Order[], total: 0, noLaunch: true }
     for (const order of orders) {
-      const d = new Date(order.created_at)
+      const launch = effectiveLaunchDate(order)
+      if (!launch) {
+        noLaunchGroup.orders.push(order)
+        noLaunchGroup.total += getFinalPrice(order)
+        continue
+      }
+      const d = new Date(launch)
+      if (Number.isNaN(d.getTime())) {
+        noLaunchGroup.orders.push(order)
+        noLaunchGroup.total += getFinalPrice(order)
+        continue
+      }
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
       let group = groups.find(g => g.key === key)
       if (!group) {
-        group = { key, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`, orders: [], total: 0 }
+        group = { key, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`, orders: [], total: 0, noLaunch: false }
         groups.push(group)
       }
       group.orders.push(order)
       group.total += getFinalPrice(order)
     }
+    // Sort orders inside each month by launch date ASC (earliest at the top).
+    for (const g of groups) {
+      g.orders.sort((a, b) => {
+        const da = effectiveLaunchDate(a) ?? ''
+        const db = effectiveLaunchDate(b) ?? ''
+        return da.localeCompare(db)
+      })
+    }
+    // Chronological month order (oldest month at top, newest at bottom). Pushing
+    // the "no launch" bucket to the very end so it is visible but separate.
+    groups.sort((a, b) => a.key.localeCompare(b.key))
+    if (noLaunchGroup.orders.length > 0) groups.push(noLaunchGroup)
     return groups
   }, [orders])
 
@@ -2191,19 +2251,22 @@ export default function B2BOrdersPage() {
             {monthGroups.map(group => {
               const isMonthOpen = expandedMonths.has(group.key)
               return (
-                <div key={group.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div key={group.key} className={`bg-white border rounded-xl overflow-hidden ${group.noLaunch ? 'border-amber-300' : 'border-[#e4e4e0]'}`}>
                   <button
-                    className="w-full px-4 py-2.5 flex items-center justify-between hover:bg-[#fafaf9] transition-colors text-left"
+                    className={`w-full px-4 py-2.5 flex items-center justify-between transition-colors text-left ${group.noLaunch ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-[#fafaf9]'}`}
                     onClick={() => toggleMonth(group.key)}>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-[13px] font-bold text-[#111110]">{group.label}</h2>
-                      <span className="text-[11px] text-[#9a9a95]">{group.orders.length} заказов</span>
+                      <h2 className={`text-[13px] font-bold ${group.noLaunch ? 'text-amber-800' : 'text-[#111110]'}`}>{group.label}</h2>
+                      <span className={`text-[11px] ${group.noLaunch ? 'text-amber-700' : 'text-[#9a9a95]'}`}>{group.orders.length} заказов</span>
+                      {group.noLaunch && (
+                        <span className="text-[10px] font-medium text-amber-700">— нужно проставить дату запуска</span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[13px] font-semibold text-[#111110] font-mono">
+                      <span className={`text-[13px] font-semibold font-mono ${group.noLaunch ? 'text-amber-800' : 'text-[#111110]'}`}>
                         {group.total.toLocaleString('ru-RU')} ₽
                       </span>
-                      <svg className={`w-3.5 h-3.5 text-[#c4c4be] transition-transform flex-shrink-0 ${isMonthOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <svg className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${group.noLaunch ? 'text-amber-600' : 'text-[#c4c4be]'} ${isMonthOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
                       </svg>
                     </div>
@@ -2215,7 +2278,10 @@ export default function B2BOrdersPage() {
                         const isOpen = expanded === order.id
                         const pn = order.parsedNotes
                         const quoteDate = fmtDate(order.created_at)
-                        const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
+                        const launchIso = effectiveLaunchDate(order)
+                        const launchedDate = launchIso ? fmtDate(launchIso) : null
+                        const createdByName = getCreatedByName(order)
+                        const launchedByName = getLaunchedByName(order)
                         const isShipped = !!pn.stages?.shipped
                         const ds = getDeadlineStatus(order)
                         const payStatus = getOrderPayStatus(order)
@@ -2241,7 +2307,7 @@ export default function B2BOrdersPage() {
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {order.custom_number && (
-                                      <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
+                                      <span className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0">
                                         {order.custom_number}
                                       </span>
                                     )}
@@ -2250,7 +2316,7 @@ export default function B2BOrdersPage() {
                                         кл.{order.client_order_number}
                                       </span>
                                     )}
-                                    <p className="text-[13px] font-semibold text-[#111110]">{order.client_name}</p>
+                                    <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
                                     {ds.status !== 'normal' && ds.status !== 'unknown' && (
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                                         {ds.label}
@@ -2266,8 +2332,15 @@ export default function B2BOrdersPage() {
                                       <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-[#9a9a95]">
-                                    #{order.id} · {quoteDate}{launchedDate ? ` · запуск ${launchedDate}` : ''} · {(order.items as unknown[]).length} поз.
+                                  <p className="text-[10px] text-[#9a9a95] flex flex-wrap items-center gap-x-2">
+                                    <span>#{order.id}</span>
+                                    <span>создан {quoteDate}</span>
+                                    {launchedDate
+                                      ? <span>· запуск {launchedDate}</span>
+                                      : <span className="text-amber-600 font-medium">· запуск: не запущен</span>}
+                                    <span>· {(order.items as unknown[]).length} поз.</span>
+                                    <span>· Просчитал: <span className="text-[#6b6b66] font-medium">{createdByName ?? '—'}</span></span>
+                                    <span>· Запустил: <span className="text-[#6b6b66] font-medium">{launchedByName ?? '—'}</span></span>
                                   </p>
                                 </div>
                               </div>

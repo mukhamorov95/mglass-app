@@ -7,6 +7,8 @@ import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
+import type { UserPermissions } from '@/lib/permissions'
+import { isMGlassClient, isMGlassOnlyUser, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -107,6 +109,8 @@ export default function B2BCalculatorPage() {
   const [managerEmail, setManagerEmail] = useState<string | null>(null)
   const [managerId, setManagerId]       = useState<string | null>(null)
   const [managerCode, setManagerCode]   = useState<number | null>(null)
+  const [managerName, setManagerName]   = useState<string | null>(null)
+  const [mglassOnly, setMglassOnly]     = useState(false)
   const [isAdmin, setIsAdmin]           = useState(false)
   const [maxDiscount, setMaxDiscount]   = useState<number>(100)
 
@@ -177,8 +181,9 @@ export default function B2BCalculatorPage() {
         let userIsAdmin = false
         let userCanSeeAllClients = false
         let userManagerCode: number | null = null
+        let userMGlassOnly = false
         if (user?.id) {
-          const { data: profile } = await sb.from('users').select('role,manager_code,max_discount_percent,can_view_all_clients').eq('id', user.id).single()
+          const { data: profile } = await sb.from('users').select('role,name,manager_code,max_discount_percent,can_view_all_clients,permissions').eq('id', user.id).single()
           if (profile?.role === 'buyer') {
             setIsBuyer(true)
             return
@@ -187,9 +192,14 @@ export default function B2BCalculatorPage() {
           userManagerCode = profile?.manager_code ?? null
           if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
           userCanSeeAllClients = userIsAdmin || (profile?.can_view_all_clients === true)
+          setManagerName((profile?.name as string) || user.email || null)
+          const perms = (profile?.permissions ?? null) as UserPermissions | null
+          // owners are never scope-restricted, even if the JSON says so
+          userMGlassOnly = !userIsAdmin && isMGlassOnlyUser(perms)
         }
         setIsAdmin(userIsAdmin)
         setManagerCode(userManagerCode)
+        setMglassOnly(userMGlassOnly)
 
         const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
@@ -209,13 +219,21 @@ export default function B2BCalculatorPage() {
         for (const o of orders ?? []) {
           totals.set(o.client_id, (totals.get(o.client_id) ?? 0) + o.total_after_discount)
         }
-        // Non-admin managers without can_view_all_clients see only their own clients
+        // Non-admin managers without can_view_all_clients see only their own clients.
+        // mglass_only managers see only the M GLASS client (and only that one is selectable).
         const allClients = (cls ?? []) as B2BClient[]
-        const visibleClients = userCanSeeAllClients
-          ? allClients
-          : allClients.filter(c => c.manager_id === user?.id)
+        let visibleClients: B2BClient[]
+        if (userMGlassOnly) {
+          visibleClients = allClients.filter(c => isMGlassClient(c))
+        } else if (userCanSeeAllClients) {
+          visibleClients = allClients
+        } else {
+          visibleClients = allClients.filter(c => c.manager_id === user?.id)
+        }
         const sorted = visibleClients.slice().sort((a, b) => (totals.get(b.id) ?? 0) - (totals.get(a.id) ?? 0))
         setClients(sorted)
+        // For mglass_only users, pre-select the M GLASS client so the calculator opens ready.
+        if (userMGlassOnly && sorted.length > 0) setClientId(sorted[0].id)
 
         // Override sale_price from glass_price_matrix where available
         const matrix = glassMatrix ?? []
@@ -277,6 +295,7 @@ export default function B2BCalculatorPage() {
     }
     if (!draftRestoredRef.current) {
       draftRestoredRef.current = true
+      // (mglass_only override happens in a separate effect below)
       try {
         const raw = localStorage.getItem(DRAFT_KEY)
         if (raw) {
@@ -287,6 +306,16 @@ export default function B2BCalculatorPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading])
+
+  // Defence in depth: if mglass_only and someone (URL param, loaded order,
+  // restored draft) sets clientId to a non-M-GLASS client, snap it back.
+  useEffect(() => {
+    if (!mglassOnly || clients.length === 0) return
+    const current = clients.find(c => c.id === clientId)
+    if (current && isMGlassClient(current)) return
+    const mg = clients.find(c => isMGlassClient(c))
+    if (mg) setClientId(mg.id)
+  }, [mglassOnly, clientId, clients])
 
   // ── Autosave draft to localStorage ──
   useEffect(() => {
@@ -620,6 +649,12 @@ export default function B2BCalculatorPage() {
 
   async function handleSave() {
     if (items.length === 0 || !selectedClient) return
+    // Scope guard: mglass_only managers cannot create quotes for any other client.
+    // Owners/admins/ceo are never scope-restricted (see load() above).
+    if (mglassOnly && !isMGlassClient(selectedClient)) {
+      setSaveError(MGLASS_SCOPE_ERROR)
+      return
+    }
     setSaving(true)
     setSaveError(null)
     setSavedAsPending(false)
@@ -631,12 +666,13 @@ export default function B2BCalculatorPage() {
     const avgMargin = items.length > 0
       ? Math.round(items.reduce((s, i) => s + i.margin, 0) / items.length)
       : 0
+    const authorName = managerName ?? managerEmail ?? null
     const orderNotes = JSON.stringify({
       status: approvalRequired ? 'pending_approval' : 'quote',
       quote_date: new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
-      manager_name: managerEmail ?? null,
+      manager_name: authorName,
     })
     const { data: saved, error } = await sb.from('b2b_orders').insert({
       client_id: clientId,
@@ -654,6 +690,8 @@ export default function B2BCalculatorPage() {
       custom_number: ourOrderNumber.trim() || null,
       client_order_number: clientOrderNumber.trim() || null,
       created_by: managerId ?? null,
+      // Column-level authorship — backed by 20260630_b2b_orders_authorship.sql.
+      created_by_name: authorName,
     }).select('id').single()
 
     if (error) {
@@ -748,23 +786,32 @@ export default function B2BCalculatorPage() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Клиент</label>
-                <button
-                  onClick={() => setShowNewClient(true)}
-                  className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
-                  + Новый клиент
-                </button>
+                {!mglassOnly && (
+                  <button
+                    onClick={() => setShowNewClient(true)}
+                    className="text-[10px] font-semibold text-orange-600 hover:text-orange-800 transition-colors">
+                    + Новый клиент
+                  </button>
+                )}
               </div>
-              <select
-                className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-                value={clientId ?? ''}
-                onChange={e => setClientId(e.target.value ? Number(e.target.value) : null)}>
-                <option value="">— Выберите клиента —</option>
-                {clients.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
-                  </option>
-                ))}
-              </select>
+              {mglassOnly ? (
+                <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] font-semibold flex items-center justify-between">
+                  <span>{selectedClient?.name ?? 'M GLASS'}</span>
+                  <span className="text-[10px] uppercase tracking-widest text-[#9a9a95]">фиксировано</span>
+                </div>
+              ) : (
+                <select
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  value={clientId ?? ''}
+                  onChange={e => setClientId(e.target.value ? Number(e.target.value) : null)}>
+                  <option value="">— Выберите клиента —</option>
+                  {clients.map(c => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}{c.discount_percent > 0 ? ` (−${c.discount_percent}%)` : ''}
+                    </option>
+                  ))}
+                </select>
+              )}
             </div>
 
             {/* Номера заказа */}
