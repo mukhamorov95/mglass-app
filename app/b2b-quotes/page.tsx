@@ -148,10 +148,17 @@ function looksLikeOrder(q: Quote): boolean {
 
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 
-// Запущен в работу → ушёл в заказы, в просчётах не показываем.
-function notLaunched(q: Quote): boolean {
-  const s = getStatus(q)
-  return s !== 'sent' && s !== 'confirmed'
+const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+
+// Кто просчитывал (имя автора). Импортные из таблицы — не просчёты людей.
+function authorOf(q: Quote): string {
+  return q.created_by_name || (parseNotes(q.notes)?.manager_name as string | undefined) || ''
+}
+function isImportQuote(q: Quote): boolean {
+  return /импорт/i.test(q.created_by_name ?? '')
+}
+function finalPriceOf(q: Quote): number {
+  return (q.discount_percent ?? 0) > 0 ? q.total_after_discount : q.total_sale_inc_vat
 }
 
 function isToday(iso: string | null | undefined): boolean {
@@ -252,6 +259,16 @@ export default function B2BQuotesPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [currentUserName, setCurrentUserName] = useState<string | null>(null)
   const [mglassOnly, setMglassOnly]   = useState(false)
+
+  // Архив: фильтры, сворачивание по месяцам, массовый выбор
+  const [dateFrom, setDateFrom]       = useState('')
+  const [dateTo, setDateTo]           = useState('')
+  const [authorFilter, setAuthorFilter] = useState('')
+  const [clientFilter, setClientFilter] = useState('')
+  const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkBusy, setBulkBusy]       = useState(false)
+  const monthsInitRef = useRef(false)
 
   // «Запустить в работу» — единый запуск просчёта в производство (дата + № заказа)
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
@@ -616,8 +633,9 @@ export default function B2BQuotesPage() {
 
   const visible = useMemo(() => {
     let list: Quote[]
-    if (tab === 'all') list = quotes.filter(notLaunched)
-    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && isToday(q.created_at))
+    // «Все» = вся история просчётов (в т.ч. запущенные в работу) — импорт отсеиваем ниже.
+    if (tab === 'all') list = [...quotes]
+    else if (tab === 'today') list = quotes.filter(q => isToday(q.created_at))
     else if (tab === 'needs_transfer') list = quotes.filter(looksLikeOrder)
     else list = quotes.filter(q => getStatus(q) === tab)
     if (search.trim()) {
@@ -629,14 +647,90 @@ export default function B2BQuotesPage() {
         String(x.id).includes(q)
       )
     }
+    // Архив: показываем только просчёты людей (импорт из таблицы исключаем) + фильтры
+    list = list.filter(x => !isImportQuote(x))
+    if (dateFrom) list = list.filter(x => x.created_at.slice(0, 10) >= dateFrom)
+    if (dateTo)   list = list.filter(x => x.created_at.slice(0, 10) <= dateTo)
+    if (authorFilter) list = list.filter(x => authorOf(x) === authorFilter)
+    if (clientFilter) list = list.filter(x => x.client_name === clientFilter)
     return list
-  }, [quotes, tab, search])
+  }, [quotes, tab, search, dateFrom, dateTo, authorFilter, clientFilter])
+
+  // Группировка по месяцам (новые сверху) для архива
+  const monthGroups = useMemo(() => {
+    const groups: { key: string; label: string; quotes: Quote[]; total: number }[] = []
+    for (const q of visible) {
+      const d = new Date(q.created_at)
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      let g = groups.find(x => x.key === key)
+      if (!g) { g = { key, label: `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`, quotes: [], total: 0 }; groups.push(g) }
+      g.quotes.push(q); g.total += finalPriceOf(q)
+    }
+    groups.sort((a, b) => b.key.localeCompare(a.key))
+    return groups
+  }, [visible])
+
+  // Опции фильтров
+  const authorOptions = useMemo(() =>
+    [...new Set(quotes.filter(q => !isImportQuote(q)).map(authorOf).filter(Boolean))].sort(), [quotes])
+  const clientOptions = useMemo(() =>
+    [...new Set(quotes.filter(q => !isImportQuote(q)).map(q => q.client_name).filter(Boolean))].sort(), [quotes])
+
+  // По умолчанию раскрыт новейший месяц (один раз)
+  useEffect(() => {
+    if (!monthsInitRef.current && monthGroups.length > 0) {
+      monthsInitRef.current = true
+      setExpandedMonths(new Set([monthGroups[0].key]))
+    }
+  }, [monthGroups])
+
+  const isAdmin = userRole === 'admin' || userRole === 'ceo'
+
+  function toggleMonth(key: string) {
+    setExpandedMonths(prev => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n })
+  }
+  function toggleSelect(id: number) {
+    setSelectedIds(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
+  function toggleMonthSelect(qs: Quote[]) {
+    const ids = qs.map(q => q.id)
+    const allSel = ids.every(id => selectedIds.has(id))
+    setSelectedIds(prev => {
+      const n = new Set(prev)
+      if (allSel) ids.forEach(id => n.delete(id))
+      else ids.forEach(id => n.add(id))
+      return n
+    })
+  }
+  async function archiveIds(ids: number[]) {
+    if (ids.length === 0) return
+    setBulkBusy(true)
+    const { error } = await createClient().from('b2b_orders')
+      .update({ archived_at: new Date().toISOString(), ...buildUpdateMeta() })
+      .in('id', ids)
+    if (!error) {
+      setQuotes(prev => prev.filter(q => !ids.includes(q.id)))
+      setSelectedIds(new Set())
+      showToast(`Удалено в архив: ${ids.length}`)
+    } else showToast('Ошибка удаления')
+    setBulkBusy(false)
+  }
+  function deleteSelected() {
+    if (!window.confirm(`Удалить в архив ${selectedIds.size} просчёт(ов)? Их можно восстановить из «Архива».`)) return
+    archiveIds([...selectedIds])
+  }
+  function deleteMonth(mg: { label: string; quotes: Quote[] }) {
+    if (!window.confirm(`Удалить в архив весь месяц «${mg.label}» — ${mg.quotes.length} просч.? Восстановимо из «Архива».`)) return
+    archiveIds(mg.quotes.map(q => q.id))
+  }
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0 }
     for (const q of quotes) {
+      if (isImportQuote(q)) continue           // импорт из таблицы — не просчёты людей
       const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
-      if (notLaunched(q)) { c.all++; if (isToday(q.created_at)) c.today++ }
+      c.all++
+      if (isToday(q.created_at)) c.today++
       if (looksLikeOrder(q)) c.needs_transfer++
     }
     return c
@@ -703,6 +797,45 @@ export default function B2BQuotesPage() {
         ))}
       </div>
 
+      {/* Фильтры архива: период, кто считал, клиент */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <span className="text-[11px] text-[#9a9a95]">Период:</span>
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+          className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white" />
+        <span className="text-[11px] text-[#9a9a95]">—</span>
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+          className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white" />
+        <select value={authorFilter} onChange={e => setAuthorFilter(e.target.value)}
+          className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white max-w-[170px]">
+          <option value="">Кто считал: все</option>
+          {authorOptions.map(a => <option key={a} value={a}>{a}</option>)}
+        </select>
+        <select value={clientFilter} onChange={e => setClientFilter(e.target.value)}
+          className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white max-w-[190px]">
+          <option value="">Клиент: все</option>
+          {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        {(dateFrom || dateTo || authorFilter || clientFilter) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); setAuthorFilter(''); setClientFilter('') }}
+            className="text-[11px] text-[#6b6b66] hover:text-[#111110] px-2 py-1 rounded-lg border border-[#e4e4e0] hover:border-[#111110] transition-colors">
+            Сбросить
+          </button>
+        )}
+      </div>
+
+      {/* Массовые действия (только админ) */}
+      {isAdmin && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 mb-3 px-4 py-2 bg-red-50 border border-red-200 rounded-lg">
+          <span className="text-[12px] font-medium text-red-700">Выбрано: {selectedIds.size}</span>
+          <button onClick={deleteSelected} disabled={bulkBusy}
+            className="text-[12px] font-semibold text-white bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg transition-colors disabled:opacity-40">
+            {bulkBusy ? 'Удаление…' : 'Удалить выбранные'}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())}
+            className="text-[12px] text-[#6b6b66] hover:text-[#111110] ml-auto">Отмена</button>
+        </div>
+      )}
+
       {visible.length === 0 ? (
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
           <p className="text-[13px] text-[#6b6b66]">Нет расчётов</p>
@@ -710,12 +843,35 @@ export default function B2BQuotesPage() {
         </div>
       ) : (
         <>
-          <Pagination
-            page={page} total={visible.length} pageSize={PAGE_SIZE}
-            onPageChange={setPage} className="mb-3"
-          />
-        <div className="space-y-1.5">
-          {visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(quote => {
+        <div className="space-y-3">
+          {monthGroups.map(mg => {
+            const isMonthOpen = expandedMonths.has(mg.key)
+            const monthIds = mg.quotes.map(q => q.id)
+            const allSel = monthIds.length > 0 && monthIds.every(id => selectedIds.has(id))
+            return (
+              <div key={mg.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className="px-4 py-2.5 flex items-center gap-3 bg-[#fafaf9] border-b border-[#f0f0ec]">
+                  <button className="flex items-center gap-2 flex-1 min-w-0 text-left" onClick={() => toggleMonth(mg.key)}>
+                    <span className={`text-[11px] text-[#c4c4be] transition-transform inline-block ${isMonthOpen ? 'rotate-90' : ''}`}>▶</span>
+                    <span className="text-[14px] font-bold text-[#111110]">{mg.label}</span>
+                    <span className="text-[11px] text-[#9a9a95]">{mg.quotes.length} просч. · {fmt(mg.total)}</span>
+                  </button>
+                  {isAdmin && (
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <button onClick={() => toggleMonthSelect(mg.quotes)}
+                        className="text-[11px] text-[#6b6b66] hover:text-[#111110] px-2 py-1 rounded-lg border border-[#e4e4e0] hover:border-[#111110] transition-colors">
+                        {allSel ? 'Снять' : 'Выбрать всё'}
+                      </button>
+                      <button onClick={() => deleteMonth(mg)} disabled={bulkBusy}
+                        className="text-[11px] text-red-600 hover:text-red-800 px-2 py-1 rounded-lg border border-red-200 hover:bg-red-50 transition-colors disabled:opacity-40">
+                        Удалить месяц
+                      </button>
+                    </div>
+                  )}
+                </div>
+                {isMonthOpen && (
+                  <div className="divide-y divide-[#f8f8f7]">
+                    {mg.quotes.map(quote => {
             const isOpen    = expanded === quote.id
             const status    = getStatus(quote)
             const sMeta     = STATUS_META[status]
@@ -746,10 +902,16 @@ export default function B2BQuotesPage() {
             const discMargin    = discNewTotal > 0 ? (discProfit / discNewTotal * 100) : 0
 
             return (
-              <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div key={quote.id} className={`bg-white ${selectedIds.has(quote.id) ? 'bg-red-50/40' : ''}`}>
 
                 {/* ── Row header ─────────────────────────────────────────── */}
                 <div className="px-4 py-2.5 flex items-center gap-3">
+
+                  {isAdmin && (
+                    <input type="checkbox" checked={selectedIds.has(quote.id)}
+                      onChange={() => toggleSelect(quote.id)}
+                      className="w-3.5 h-3.5 accent-[#111110] cursor-pointer flex-shrink-0" />
+                  )}
 
                   {/* Expand toggle + info */}
                   <button
@@ -1246,12 +1408,13 @@ export default function B2BQuotesPage() {
                 )}
               </div>
             )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
           })}
         </div>
-          <Pagination
-            page={page} total={visible.length} pageSize={PAGE_SIZE}
-            onPageChange={setPage} className="mt-4"
-          />
         </>
       )}
 

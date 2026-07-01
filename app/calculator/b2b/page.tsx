@@ -1409,20 +1409,14 @@ export default function B2BCalculatorPage() {
                     <p className="text-[12px] font-semibold text-emerald-800">
                       {savedAsPending ? 'Просчёт сохранён и отправлен на согласование ✓' : 'Расчёт сохранён ✓'}
                     </p>
-                    <div className="flex gap-2">
-                      <a
-                        href={`/api/quotes/${savedOrderId}/pdf`}
-                        target="_blank"
-                        download
-                        className="flex-1 text-center bg-[#111110] text-white text-[12px] font-medium py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
-                        📄 Скачать КП (PDF)
-                      </a>
-                      <button
-                        onClick={() => router.push('/b2b-quotes')}
-                        className="flex-1 text-[12px] font-medium py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-white transition-colors">
-                        К списку →
-                      </button>
-                    </div>
+                    <p className="text-[11px] text-emerald-700">
+                      Коммерческое предложение (PDF) скачивается в разделе «Просчёты» — там же хранится вся история расчётов.
+                    </p>
+                    <button
+                      onClick={() => router.push('/b2b-quotes')}
+                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                      Перейти к просчётам →
+                    </button>
                   </div>
                 )}
 
