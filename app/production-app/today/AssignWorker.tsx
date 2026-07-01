@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
-type Worker = { id: string; name: string | null; email: string | null; production_station: string | null }
+type Worker = { id: string; name: string | null; email: string | null; production_stations: string[] | null }
 
 // Назначение задачи рабочему прямо из «Пула на сегодня».
 // Пишет production_tasks.assigned_to (RLS разрешает authenticated update).
@@ -18,9 +18,9 @@ export default function AssignWorker({ taskId, station, assignedTo, workers }: {
   const sb = createClient()
   const [saving, setSaving] = useState(false)
 
+  const atStation = (w: Worker) => (w.production_stations ?? []).includes(station)
   // Сначала рабочие этой станции, потом остальные.
-  const sorted = [...workers].sort((a, b) =>
-    (a.production_station === station ? 0 : 1) - (b.production_station === station ? 0 : 1))
+  const sorted = [...workers].sort((a, b) => (atStation(a) ? 0 : 1) - (atStation(b) ? 0 : 1))
 
   async function assign(workerId: string) {
     setSaving(true)
@@ -41,7 +41,7 @@ export default function AssignWorker({ taskId, station, assignedTo, workers }: {
       <option value="">свободно</option>
       {sorted.map(w => (
         <option key={w.id} value={w.id}>
-          {(w.name ?? w.email ?? 'рабочий')}{w.production_station === station ? '' : ' (др. станция)'}
+          {(w.name ?? w.email ?? 'рабочий')}{atStation(w) ? '' : ' (др. станция)'}
         </option>
       ))}
     </select>

@@ -34,19 +34,19 @@ export default function MyQueuePage() {
   const [andonFor, setAndonFor] = useState<number | null>(null)
   const [andonReason, setAndonReason] = useState<string>(ANDON_REASONS[0].code)
   const [andonComment, setAndonComment] = useState('')
-  const [myStation, setMyStation] = useState<string | null>(null)
+  const [myStations, setMyStations] = useState<string[]>([])
 
   const load = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await sb.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const { data: profile } = await sb.from('users').select('production_station').eq('id', user.id).single()
-    const myStation = (profile as { production_station: string | null } | null)?.production_station ?? null
-    setMyStation(myStation)
+    const { data: profile } = await sb.from('users').select('production_stations').eq('id', user.id).single()
+    const stations = (profile as { production_stations: string[] | null } | null)?.production_stations ?? []
+    setMyStations(stations)
 
-    const orFilter = myStation
-      ? `assigned_to.eq.${user.id},and(assigned_to.is.null,station.eq.${myStation})`
+    const orFilter = stations.length
+      ? `assigned_to.eq.${user.id},and(assigned_to.is.null,station.in.(${stations.join(',')}))`
       : `assigned_to.eq.${user.id}`
 
     const { data: taskRows } = await sb
@@ -120,7 +120,7 @@ export default function MyQueuePage() {
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
           </div>
-          <Link href={`/production-app/station/${myStation ?? 'cutting'}`}
+          <Link href={`/production-app/station/${myStations[0] ?? 'cutting'}`}
             className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
             Партиями →
           </Link>

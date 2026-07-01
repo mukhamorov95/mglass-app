@@ -15,7 +15,7 @@ import {
 // Показываются только готовые к работе (предыдущий этап выполнен).
 // Отметка — всей партией или построчно.
 
-const STATIONS = ['cutting', 'polishing', 'drilling', 'tempering', 'packaging'] as const
+const STATIONS = ['cutting', 'curved', 'polishing', 'drilling', 'tempering', 'packaging'] as const
 type Station = typeof STATIONS[number]
 
 type Task = { id: number; order_id: number; item_index: number; status: string; blocked_by_task_id: number | null }

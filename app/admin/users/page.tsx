@@ -19,13 +19,14 @@ type User = {
   max_discount_percent: number | null
   can_delete: boolean
   permissions: UserPermissions
-  production_station: string | null
+  production_stations: string[] | null
   created_at: string
 }
 
 // Станции цеха — словарь совпадает с lib/productionStages.ts DetailStageKey (без 'problem').
 const STATIONS: { value: string; label: string }[] = [
   { value: 'cutting',   label: 'Резка' },
+  { value: 'curved',    label: 'Криволинейка' },
   { value: 'polishing', label: 'Полировка' },
   { value: 'drilling',  label: 'Сверловка' },
   { value: 'tempering', label: 'Закалка' },
@@ -299,13 +300,22 @@ export default function UsersPage() {
                             <option value="admin">Администратор</option>
                           </select>
                           {u.role === 'production' && (
-                            <select value={u.production_station ?? ''}
-                              onChange={e => updateUser(u.id, { production_station: e.target.value || null })}
-                              title="Станция цеха — какие задачи видит рабочий в «Мои задачи»"
-                              className="block mt-1.5 text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] cursor-pointer text-[#6b6b66] outline-none focus:border-[#111110]">
-                              <option value="">— станция —</option>
-                              {STATIONS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                            </select>
+                            <div className="mt-1.5 flex flex-wrap gap-1 max-w-[220px]" title="Станции цеха — какие задачи видит рабочий">
+                              {STATIONS.map(s => {
+                                const on = (u.production_stations ?? []).includes(s.value)
+                                return (
+                                  <button key={s.value}
+                                    onClick={() => {
+                                      const cur = u.production_stations ?? []
+                                      const next = on ? cur.filter(x => x !== s.value) : [...cur, s.value]
+                                      updateUser(u.id, { production_stations: next })
+                                    }}
+                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${on ? 'bg-orange-100 text-orange-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                    {s.label}
+                                  </button>
+                                )
+                              })}
+                            </div>
                           )}
                         </td>
 

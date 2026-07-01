@@ -4,6 +4,7 @@
 
 export type DetailStageKey =
   | 'cutting'
+  | 'curved'
   | 'polishing'
   | 'drilling'
   | 'tempering'
@@ -50,15 +51,17 @@ export function itemNeedsTempering(item: { hasTempering?: boolean; materialName?
 // ─── Stage definitions (single source of truth, no UI icons) ──────────────────
 
 export const PRODUCTION_STAGES = [
-  { key: 'cutting'   as const, label: 'Резка'     },
-  { key: 'polishing' as const, label: 'Полировка' },
-  { key: 'drilling'  as const, label: 'Сверление' },
-  { key: 'tempering' as const, label: 'Закалка'   },
-  { key: 'packaging' as const, label: 'Упаковка'  },
+  { key: 'cutting'   as const, label: 'Резка'       },
+  { key: 'curved'    as const, label: 'Криволинейка' },
+  { key: 'polishing' as const, label: 'Полировка'   },
+  { key: 'drilling'  as const, label: 'Сверление'   },
+  { key: 'tempering' as const, label: 'Закалка'     },
+  { key: 'packaging' as const, label: 'Упаковка'    },
 ] satisfies { key: Exclude<DetailStageKey, 'problem'>; label: string }[]
 
 export const STAGE_LABELS: Record<DetailStageKey, string> = {
   cutting:   'Резка',
+  curved:    'Криволинейка',
   polishing: 'Полировка',
   drilling:  'Сверление',
   tempering: 'Закалка',
@@ -66,16 +69,17 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
   problem:   'Проблема',
 }
 
-// Returns applicable stages for an item (filters out tempering/drilling when not needed).
-// hasHoles uses `!== false` (not `=== true`): items saved before this field existed
-// have it undefined and must keep showing drilling as applicable (no behavior change
-// for historical orders, including the reconciled 2026 B2B import).
+// Returns applicable stages for an item.
+// - tempering: только каленое и не зеркало.
+// - drilling: `!== false` (старые записи без поля hasHoles сохраняют сверловку — без регрессии).
+// - curved: только явно криволинейные изделия (shape === 'curved'); по умолчанию НЕ применяется.
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string },
 ) {
   return PRODUCTION_STAGES.filter(s => {
     if (s.key === 'tempering') return itemNeedsTempering(item)
     if (s.key === 'drilling')  return item.hasHoles !== false
+    if (s.key === 'curved')    return item.shape === 'curved'
     return true
   })
 }

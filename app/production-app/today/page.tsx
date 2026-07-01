@@ -24,9 +24,9 @@ type TaskRow = {
 }
 
 type OrderLite = { id: number; client_name: string; custom_number: string | null }
-type WorkerLite = { id: string; name: string | null; email: string | null; production_station: string | null }
+type WorkerLite = { id: string; name: string | null; email: string | null; production_stations: string[] | null }
 
-const STATIONS: DetailStageKey[] = ['cutting', 'polishing', 'drilling', 'tempering', 'packaging']
+const STATIONS: DetailStageKey[] = ['cutting', 'curved', 'polishing', 'drilling', 'tempering', 'packaging']
 
 export default async function ProductionTodayPage() {
   const sb = await createClient()
@@ -42,7 +42,7 @@ export default async function ProductionTodayPage() {
 
   const [{ data: orderRows }, { data: workerRows }] = await Promise.all([
     orderIds.length ? sb.from('b2b_orders').select('id,client_name,custom_number').in('id', orderIds) : Promise.resolve({ data: [] as OrderLite[] }),
-    sb.from('users').select('id,name,email,production_station').eq('role', 'production').eq('active', true),
+    sb.from('users').select('id,name,email,production_stations').eq('role', 'production').eq('active', true),
   ])
 
   const orders     = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
