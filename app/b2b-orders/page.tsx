@@ -566,6 +566,7 @@ export default function B2BOrdersPage() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [expanded, setExpanded] = useState<number | null>(null)
   const [expandedMonths, setExpandedMonths] = useState<Set<string>>(new Set())
+  const [expandedYears, setExpandedYears] = useState<Set<number>>(new Set())
 
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [deleting, setDeleting] = useState(false)
@@ -696,20 +697,31 @@ export default function B2BOrdersPage() {
       setManagerCode(profile?.manager_code ?? 0)
       setCanDelete(profile?.role === 'admin' || profile?.can_delete === true)
 
-      let query = sb
-        .from('b2b_orders')
-        .select('*')
-        .not('notes', 'ilike', '%"status":"quote"%')
-        .is('archived_at', null)
-        .order('created_at', { ascending: true })
-        .limit(1000)
-
-      if (!canSeeAll) {
-        query = query.eq('created_by', user.id)
+      // Пагинация: тянем ВСЕ заказы. Supabase режет выборку на 1000 строк/запрос,
+      // а с историей 2024/2025 их >2600 — при одном .limit(1000) новые месяцы
+      // (июль) просто не попадали в выборку. Грузим постранично, новые сверху.
+      const uid = user.id
+      async function fetchAllOrders() {
+        const acc: Record<string, unknown>[] = []
+        for (let from = 0; ; from += 1000) {
+          let q = sb
+            .from('b2b_orders')
+            .select('*')
+            .not('notes', 'ilike', '%"status":"quote"%')
+            .is('archived_at', null)
+            .order('created_at', { ascending: false })
+            .range(from, from + 999)
+          if (!canSeeAll) q = q.eq('created_by', uid)
+          const { data, error } = await q
+          if (error || !data?.length) break
+          acc.push(...data)
+          if (data.length < 1000) break
+        }
+        return acc
       }
 
-      const [{ data }, { data: mats }, { data: varData }] = await Promise.all([
-        query,
+      const [ordersData, { data: mats }, { data: varData }] = await Promise.all([
+        fetchAllOrders(),
         sb.from('b2b_materials')
           .select('id,name,category,thickness,sheet_width,sheet_height,cost_price,waste_percent,supplier_id,supplier_material_name')
           .eq('active', true),
@@ -728,16 +740,23 @@ export default function B2BOrdersPage() {
       setVariantsByMaterialId(groupedVariants)
       setMaterials((mats ?? []) as MatFull[])
 
-      const parsed = (data ?? []).map(o => ({
+      const parsed = (ordersData ?? []).map(o => ({
         ...o,
         items: Array.isArray(o.items) ? o.items : [],
-        parsedNotes: parseNotes(o.notes),
+        parsedNotes: parseNotes(o.notes as string | null),
       })) as Order[]
       setOrders(parsed)
 
-      const now = new Date()
-      const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-      setExpandedMonths(new Set([currentKey]))
+      // По умолчанию раскрываем последние 3 месяца запуска и их годы; остальное свёрнуто.
+      const monthKeys = [...new Set(parsed.map(o => {
+        const l = effectiveLaunchDate(o)
+        if (!l) return null
+        const d = new Date(l)
+        return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+      }).filter((k): k is string => !!k))].sort().reverse()
+      const recent = monthKeys.slice(0, 3)
+      setExpandedMonths(new Set(recent))
+      setExpandedYears(new Set(recent.map(k => Number(k.slice(0, 4)))))
     } catch (err) {
       console.error('[b2b-orders] load error:', err)
       setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
@@ -851,10 +870,24 @@ export default function B2BOrdersPage() {
     }
     // Chronological month order (oldest month at top, newest at bottom). Pushing
     // the "no launch" bucket to the very end so it is visible but separate.
-    groups.sort((a, b) => a.key.localeCompare(b.key))
+    // Новые месяцы сверху (июль → январь). Внутри месяца порядок запуска — ASC (см. выше).
+    groups.sort((a, b) => b.key.localeCompare(a.key))
     if (noLaunchGroup.orders.length > 0) groups.push(noLaunchGroup)
     return groups
   }, [orders])
+
+  // Группировка месяцев по годам (год → месяцы → заказы). Год «0» — «Без даты запуска».
+  const yearGroups = useMemo(() => {
+    const map = new Map<number, { year: number; months: typeof monthGroups; total: number; count: number }>()
+    for (const g of monthGroups) {
+      const year = g.noLaunch ? 0 : Number(g.key.slice(0, 4))
+      let y = map.get(year)
+      if (!y) { y = { year, months: [], total: 0, count: 0 }; map.set(year, y) }
+      y.months.push(g); y.total += g.total; y.count += g.orders.length
+    }
+    // Годы по убыванию; «Без даты запуска» (0) — в самый низ.
+    return [...map.values()].sort((a, b) => (a.year === 0 ? 1 : b.year === 0 ? -1 : b.year - a.year))
+  }, [monthGroups])
 
   const productionDayGroups = useMemo(() => {
     const base = search.trim()
@@ -882,6 +915,15 @@ export default function B2BOrdersPage() {
       const next = new Set(prev)
       if (next.has(key)) next.delete(key)
       else next.add(key)
+      return next
+    })
+  }
+
+  function toggleYear(year: number) {
+    setExpandedYears(prev => {
+      const next = new Set(prev)
+      if (next.has(year)) next.delete(year)
+      else next.add(year)
       return next
     })
   }
@@ -2261,7 +2303,27 @@ export default function B2BOrdersPage() {
           </div>
         ) : (
           <div className="space-y-2">
-            {monthGroups.map(group => {
+            {yearGroups.map(yg => {
+              const yearOpen = expandedYears.has(yg.year)
+              return (
+                <div key={yg.year} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                  <button
+                    className="w-full px-4 py-3 flex items-center justify-between transition-colors text-left bg-[#fafaf9] hover:bg-[#f0f0ec]"
+                    onClick={() => toggleYear(yg.year)}>
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-[15px] font-bold text-[#111110]">{yg.year === 0 ? 'Без даты запуска' : `${yg.year} год`}</h2>
+                      <span className="text-[11px] text-[#9a9a95]">{yg.count} заказов · {yg.months.length} мес.</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[13px] font-semibold font-mono text-[#111110]">{yg.total.toLocaleString('ru-RU')} ₽</span>
+                      <svg className={`w-4 h-4 transition-transform flex-shrink-0 text-[#c4c4be] ${yearOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </button>
+                  {yearOpen && (
+                    <div className="border-t border-[#f0f0ec] p-2 space-y-2">
+                      {yg.months.map(group => {
               const isMonthOpen = expandedMonths.has(group.key)
               return (
                 <div key={group.key} className={`bg-white border rounded-xl overflow-hidden ${group.noLaunch ? 'border-amber-300' : 'border-[#e4e4e0]'}`}>
@@ -2389,6 +2451,11 @@ export default function B2BOrdersPage() {
                           </div>
                         )
                       })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
                     </div>
                   )}
                 </div>
