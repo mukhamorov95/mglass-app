@@ -65,6 +65,7 @@ function resolvePerms(raw: unknown): UserPermissions {
 
 export default function UsersPage() {
   const [users, setUsers]               = useState<User[]>([])
+  const [roleFilter, setRoleFilter]     = useState('all')
   const [loading, setLoading]           = useState(true)
   const [showInvite, setShowInvite]     = useState(false)
   const [inviteEmail, setInviteEmail]   = useState('')
@@ -206,6 +207,21 @@ export default function UsersPage() {
           )
         })()}
 
+        {/* Фильтр по роли — «выпадающий список» отделов (напр. Производство) */}
+        <div className="flex items-center gap-2 mb-3">
+          <span className="text-[12px] text-[#9a9a95]">Отдел:</span>
+          <select value={roleFilter} onChange={e => setRoleFilter(e.target.value)}
+            className="text-[13px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
+            <option value="all">Все ({users.length})</option>
+            <option value="manager">Менеджеры ({users.filter(u => u.role === 'manager').length})</option>
+            <option value="production">Производство ({users.filter(u => u.role === 'production').length})</option>
+            <option value="seo">SEO ({users.filter(u => u.role === 'seo').length})</option>
+            <option value="commercial">Коммерческий ({users.filter(u => u.role === 'commercial').length})</option>
+            <option value="buyer">Закупщики ({users.filter(u => u.role === 'buyer').length})</option>
+            <option value="admin">Администраторы ({users.filter(u => u.role === 'admin').length})</option>
+          </select>
+        </div>
+
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
           {loading ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -229,7 +245,7 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f8f8f7]">
-                {users.map(u => {
+                {users.filter(u => roleFilter === 'all' || u.role === roleFilter).map(u => {
                   const rl      = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
                   const pwVisible = visiblePasswords.has(u.id)
                   const isAdmin = u.role === 'admin'

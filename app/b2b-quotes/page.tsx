@@ -257,6 +257,7 @@ export default function B2BQuotesPage() {
   const [workDateId, setWorkDateId]   = useState<number | null>(null)
   const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
   const [workNumber, setWorkNumber]   = useState('')
+  const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
   const workDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -414,6 +415,7 @@ export default function B2BQuotesPage() {
       status: 'sent',
       work_started_at: workDate,
       launched_at: workDate,
+      ...(workDeadline ? { deadline_date: workDeadline } : {}),
       status_history: history,
     })
     const meta = buildUpdateMeta()
@@ -817,7 +819,7 @@ export default function B2BQuotesPage() {
                     <div className="flex items-center gap-1">
                       {status === 'quote' && (
                         <button
-                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? '') }}
+                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); const dl = new Date(); dl.setDate(dl.getDate() + 14); setWorkDeadline(dl.toISOString().slice(0, 10)) }}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
@@ -991,6 +993,16 @@ export default function B2BQuotesPage() {
                         className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
                         value={workDate}
                         onChange={e => setWorkDate(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
+                      />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Срок сдачи:</span>
+                      <input type="date"
+                        title="Когда отдать клиенту — используется в Сводке производства"
+                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        value={workDeadline}
+                        onChange={e => setWorkDeadline(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
                       />
                     </div>
