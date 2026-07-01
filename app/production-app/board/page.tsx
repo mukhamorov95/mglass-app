@@ -131,8 +131,9 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
     if (Object.values(ds).some(s => s?.problem?.status === 'problem')) anyProblem = true
 
-    // Готов к отгрузке = упаковано (как в Сводке; не требуем закалку — калят не всё).
-    const allDone = flags.packed === true
+    // Готов к отгрузке = упаковка выполнена: order-level флаг (исторические) ИЛИ
+    // все позиции упакованы по detail_stages (новые июльские заказы из просчёта).
+    const allDone = cells['packed']?.status === 'done'
     // Фронтир — первый невыполненный этап (где заказ «сейчас»).
     const frontier = allDone ? undefined : COLS.find(c => cells[c.key].status !== 'done')
     if (frontier) cells[frontier.key].frontier = true
