@@ -66,7 +66,8 @@ async function fetchAll(): Promise<OrderRow[]> {
   const rows: OrderRow[] = []
   const page = 1000
   for (let from = 0; ; from += page) {
-    const { data, error } = await svc.from('b2b_orders').select(cols).order('created_at', { ascending: false }).range(from, from + page - 1)
+    // archived_at IS NULL — иначе в сумму попадают архивные прогоны импорта (v1/v2 + старые), и оборотка утраивается.
+    const { data, error } = await svc.from('b2b_orders').select(cols).is('archived_at', null).order('created_at', { ascending: false }).range(from, from + page - 1)
     if (error || !data?.length) break
     rows.push(...(data as OrderRow[]))
     if (data.length < page) break
@@ -190,8 +191,12 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
           </div>
 
           {withItems.length === 0 ? (
-            <div className="bg-white rounded-lg border border-[#e4e4e0] px-4 py-6 text-center text-xs text-[#9a9a95]">
-              Нет заказов с детализацией себестоимости за период
+            <div className="bg-white rounded-lg border border-[#e4e4e0] px-4 py-6 text-center">
+              <p className="text-[13px] text-[#111110] font-medium">Пока нет заказов с детализацией себестоимости</p>
+              <p className="text-[12px] text-[#9a9a95] mt-1 max-w-md mx-auto">
+                Текущие заказы 2026 импортированы из таблицы без позиций. Разбивка «материал / закалка / прочее»
+                начнёт наполняться автоматически с июльских заказов, оформленных через калькулятор B2B.
+              </p>
             </div>
           ) : (
             <>
