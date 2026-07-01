@@ -91,6 +91,9 @@ export default async function CfoDashboardPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Link href="/cfo/b2b" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors">
+              B2B аналитика →
+            </Link>
             <Link href="/cfo/margins" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors">
               Маржинальность →
             </Link>
@@ -220,6 +223,7 @@ export default async function CfoDashboardPage() {
             <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-1">
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Быстрые ссылки</p>
               {[
+                { href: '/cfo/b2b',     label: 'B2B аналитика (оборот/материал/закалка)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
                 { href: '/admin/cfo',   label: 'Финмодели и ДДС' },
