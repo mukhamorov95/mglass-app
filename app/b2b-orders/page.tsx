@@ -748,16 +748,11 @@ export default function B2BOrdersPage() {
       })) as Order[]
       setOrders(parsed)
 
-      // По умолчанию раскрываем последние 3 месяца запуска и их годы; остальное свёрнуто.
-      const monthKeys = [...new Set(parsed.map(o => {
-        const l = effectiveLaunchDate(o)
-        if (!l) return null
-        const d = new Date(l)
-        return Number.isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-      }).filter((k): k is string => !!k))].sort().reverse()
-      const recent = monthKeys.slice(0, 3)
-      setExpandedMonths(new Set(recent))
-      setExpandedYears(new Set(recent.map(k => Number(k.slice(0, 4)))))
+      // По умолчанию раскрыт ТОЛЬКО текущий месяц (и его год); все остальные свёрнуты.
+      const now = new Date()
+      const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+      setExpandedMonths(new Set([currentKey]))
+      setExpandedYears(new Set([now.getFullYear()]))
     } catch (err) {
       console.error('[b2b-orders] load error:', err)
       setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
