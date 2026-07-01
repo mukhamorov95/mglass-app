@@ -1,3 +1,12 @@
+## B2B-производство — фаза «команда цеха» (СДЕЛАНО, деплой)
+- Миграция (применена): users.production_stations[] (мультистанции), production_tasks CHECK +curved.
+- 6 учёток production: Бекмурза[cutting,curved], Эльзат[polishing], Адилет[drilling], Никита[tempering,packaging], Сергей[], Валерия[]. Пароли *Cex26 (в /admin/users). Триггер auth→users авто-создаёт строку — заводить через update, не insert.
+- Этап «Криволинейка» (curved) — маршрут при item.shape==='curved'. Фильтры my-queue/today/station/AssignWorker — на production_stations[].
+- /admin/users: мультивыбор станций (чипы). ОСТАЛОСЬ: визуальный заголовок-группа «Производство».
+- /production-app (Сводка): группировка по сроку выдачи (готовы/просрочено/сегодня/завтра/послезавтра/позже)+готовность+нав. /material (Сергей, read-only). /docs (Валерия, печать+отметка notes.docs_printed). API /api/b2b-orders/[id]/docs-printed.
+- ОСТАЛОСЬ для точных сроков: у 0/679 заказов есть production_days → «Сводка» пока по фолбэку (запуск+7). Нужно: захват «срока сдачи» при «В работу» (notes.deadline_date) + импорт «Ориентировочной даты» из таблицы.
+Коммиты: 497c079 (мультистанции+curved), 03f1ce6 (Сводка+Материал+Документы).
+
 ## B2B-производство — контур (автономная достройка)
 СДЕЛАНО и задеплоено: ядро (миграция production_tasks, авто-маршрут, генерация при запуске, «Пул на сегодня», ролевая защита /p/o), фикс даты «В работу», объединение в одну кнопку «Запустить в работу». Worker-модуль (коммит 525f8d5): A1 станция рабочего в /admin/users; A2 назначение задач рабочим в «Пуле на сегодня» (AssignWorker); A3 my-queue рабочий; B cutover — /api/production-tasks/[id] пишет и в production_tasks, и в notes.detail_stages.
 СДЕЛАНО: C — печатная «Заявка поставщику» из раскроя (4597662). D — агрегированный вид резчика /production-app/cutting (партии материал+толщина из всех заказов, отметка партией/строкой). E — PWA цеха (production-app.webmanifest start_url /production-app, sw.js, RegisterSW). Коммит 5c9c389.
