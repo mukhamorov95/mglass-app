@@ -20,8 +20,17 @@ type TaskRow = {
   production_day: string | null
 }
 
-type OrderLite = { id: number; client_name: string; custom_number: string | null }
+type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
+type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[] }
 type BlockerLite = { id: number; status: string; stage_key: string }
+
+function specLine(item?: ItemSpec): string {
+  if (!item) return ''
+  const dims = item.width && item.height ? `${item.width}×${item.height}` : ''
+  const mat = [item.materialName || item.category || '', item.thickness ? `${item.thickness}мм` : ''].filter(Boolean).join(' ')
+  const qty = item.quantity && item.quantity > 1 ? `${item.quantity} шт` : ''
+  return [dims, mat, qty].filter(Boolean).join(' · ')
+}
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
@@ -64,7 +73,7 @@ export default function MyQueuePage() {
 
     const [{ data: orderRows }, { data: blockerRows }] = await Promise.all([
       orderIds.length
-        ? sb.from('b2b_orders').select('id,client_name,custom_number').in('id', orderIds)
+        ? sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds)
         : Promise.resolve({ data: [] as OrderLite[] }),
       blockerIds.length
         ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
@@ -77,6 +86,14 @@ export default function MyQueuePage() {
   }, [sb])
 
   useEffect(() => { load() }, [load])
+
+  async function markStart(taskId: number) {
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t)) // optimistic
+    await fetch(`/api/production-tasks/${taskId}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    }).catch(() => {})
+  }
 
   async function markDone(taskId: number) {
     setTasks(prev => prev.filter(t => t.id !== taskId)) // optimistic
@@ -136,7 +153,7 @@ export default function MyQueuePage() {
         ) : (
           <div className="space-y-2 mb-6">
             {ready.map(t => (
-              <TaskCard key={t.id} task={t} order={orders.get(t.order_id)} onDone={() => markDone(t.id)} onAndon={() => setAndonFor(t.id)} />
+              <TaskCard key={t.id} task={t} order={orders.get(t.order_id)} onStart={() => markStart(t.id)} onDone={() => markDone(t.id)} onAndon={() => setAndonFor(t.id)} />
             ))}
           </div>
         )}
@@ -204,15 +221,18 @@ export default function MyQueuePage() {
   )
 }
 
-function TaskCard({ task, order, onDone, onAndon }: {
+function TaskCard({ task, order, onStart, onDone, onAndon }: {
   task: TaskRow
   order: OrderLite | undefined
+  onStart: () => void
   onDone: () => void
   onAndon: () => void
 }) {
+  const spec = specLine(order?.items?.[task.item_index])
+  const active = task.status === 'in_progress'
   return (
-    <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
-      <div className="flex items-start justify-between gap-2 mb-2.5">
+    <div className={`bg-white rounded-xl border px-4 py-3 ${active ? 'border-emerald-300' : 'border-[#e4e4e0]'}`}>
+      <div className="flex items-start justify-between gap-2 mb-1.5">
         <Link href={`/p/o/${task.order_id}`} className="min-w-0">
           <p className="text-[14px] font-bold text-[#111110] truncate">{order?.custom_number?.trim() || `#${task.order_id}`}</p>
           <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
@@ -221,7 +241,12 @@ function TaskCard({ task, order, onDone, onAndon }: {
           Поз. {task.item_index + 1} · {STAGE_LABELS[task.stage_key as DetailStageKey] ?? task.stage_key}
         </span>
       </div>
+      {spec && <p className="text-[12px] font-mono text-[#111110] mb-2.5">{spec}</p>}
+      {active && <p className="text-[11px] font-medium text-emerald-700 mb-2">🔧 в работе</p>}
       <div className="flex gap-2">
+        {!active && (
+          <button onClick={onStart} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[13px] font-medium hover:border-[#111110] hover:text-[#111110] transition-colors">Взял</button>
+        )}
         <button onClick={onDone} className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium">Выполнено</button>
         <button onClick={onAndon} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-[13px] font-medium">Проблема</button>
       </div>

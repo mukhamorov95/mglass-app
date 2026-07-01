@@ -307,6 +307,7 @@ export default function MobileOrderWorkPage() {
     const existingDs = (notesObj.detail_stages ?? {}) as DetailStages
     const now        = new Date().toISOString()
     const newStages: DetailStages = { ...existingDs }
+    const syncUpdates: { item_index: number; stage_key: string; action: 'done' }[] = []
 
     for (const stageKey of selectedStages) {
       // Tempering: only items that actually need it (non-mirror with hasTempering=true)
@@ -324,6 +325,7 @@ export default function MobileOrderWorkPage() {
             updated_by_email: currentUser.email,
           } satisfies DetailStageState,
         }
+        syncUpdates.push({ item_index: idx, stage_key: stageKey, action: 'done' })
       }
     }
 
@@ -348,6 +350,12 @@ export default function MobileOrderWorkPage() {
       ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx])).length
       : 0
     const temperingSkipped = temperingSelected && temperingEffective < selectedItems.size
+
+    // Обратное зеркало в production_tasks (best-effort).
+    fetch(`/api/b2b-orders/${order.id}/sync-stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: syncUpdates }),
+    }).catch(() => {})
 
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     setSelectedItems(new Set())

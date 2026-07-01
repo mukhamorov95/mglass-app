@@ -20,6 +20,8 @@ type OrderItem = {
   hasTempering?: boolean
   hasFacet?:     boolean
   facetTypeMm?:  number
+  hasHoles?:     boolean
+  shape?:        'rect' | 'curved'
   services?:     { name: string; cost: number }[]
   comment?:      string
 }
@@ -63,6 +65,7 @@ type Order = {
 
 const GROUP_ACTIONS: { key: DetailStageKey; label: string; danger?: boolean }[] = [
   { key: 'cutting',   label: 'Резка выполнена'     },
+  { key: 'curved',    label: 'Криволинейка выполнена' },
   { key: 'polishing', label: 'Полировка выполнена' },
   { key: 'drilling',  label: 'Сверление выполнено' },
   { key: 'tempering', label: 'Закалка выполнена'   },
@@ -552,10 +555,12 @@ export default function ProductionOrderPage() {
 
     const effectiveItems = stageKey === 'tempering'
       ? [...selectedItems].filter(idx => itemNeedsTempering(order.items[idx]))
+      : stageKey === 'curved'
+      ? [...selectedItems].filter(idx => order.items[idx]?.shape === 'curved')
       : [...selectedItems]
 
     if (effectiveItems.length === 0) {
-      setToast({ msg: 'В выбранных позициях нет закалки', ok: false })
+      setToast({ msg: stageKey === 'curved' ? 'В выбранных позициях нет криволинейки' : 'В выбранных позициях нет закалки', ok: false })
       setTimeout(() => setToast(null), 3000)
       return
     }
@@ -565,6 +570,11 @@ export default function ProductionOrderPage() {
     setSaving(false)
 
     if (result) {
+      // Обратное зеркало в production_tasks (best-effort): держим новую модель очередей в синхроне.
+      fetch(`/api/b2b-orders/${order.id}/sync-stages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ updates: effectiveItems.map(idx => ({ item_index: idx, stage_key: stageKey, action: 'done' })) }),
+      }).catch(() => {})
       const count   = effectiveItems.length
       const partial = stageKey === 'tempering' && effectiveItems.length < selectedItems.size
       setSelectedItems(new Set())
@@ -651,6 +661,11 @@ export default function ProductionOrderPage() {
     }
 
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
+    // Обратное зеркало отмены этапа в production_tasks (best-effort).
+    fetch(`/api/b2b-orders/${order.id}/sync-stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ updates: [{ item_index: itemIndex, stage_key: stageKey, action: 'unset' }] }),
+    }).catch(() => {})
     return updatedNotes
   }
 

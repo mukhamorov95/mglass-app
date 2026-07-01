@@ -146,6 +146,7 @@ export default function B2BCalculatorPage() {
   const [fFacet, setFFacet]           = useState(false)
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
+  const [fCurved, setFCurved]         = useState(false)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
@@ -168,6 +169,7 @@ export default function B2BCalculatorPage() {
   const [eFacet, setEFacet]           = useState(false)
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
+  const [eCurved, setECurved]         = useState(false)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
@@ -403,12 +405,13 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
 
     const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices)
-    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles }])
+    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
     setFWidth('')
     setFHeight('')
     setFQty('1')
     setFComment('')
     setFHoles(false)
+    setFCurved(false)
     widthRef.current?.focus()
   }
 
@@ -452,6 +455,7 @@ export default function B2BCalculatorPage() {
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
+    setECurved(item.shape === 'curved')
     setEServiceIds(item.services.map(s => s.id))
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -470,7 +474,7 @@ export default function B2BCalculatorPage() {
     const svcs = services.filter(s => eServiceIds.includes(s.id))
     const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices)
     setItems(prev => prev.map(i => i.localId === editingLocalId
-      ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles }
+      ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
       : i))
     setEditingLocalId(null)
   }
@@ -979,6 +983,16 @@ export default function B2BCalculatorPage() {
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
                   <span className={`text-[13px] font-medium ${fHoles ? 'text-blue-700' : 'text-[#111110]'}`}>
                     {fHoles ? 'Есть отверстия' : 'Без отверстий'}
+                  </span>
+                </label>
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Криволинейка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fCurved} onChange={e => setFCurved(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-[#111110]'}`}>
+                    {fCurved ? 'Криволинейный рез' : 'Прямой рез'}
                   </span>
                 </label>
               </div>
@@ -1634,6 +1648,11 @@ export default function B2BCalculatorPage() {
                       <input type="checkbox" checked={eHoles} onChange={e => setEHoles(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] ${eHoles ? 'text-blue-700 font-medium' : 'text-[#111110]'}`}>Сверловка</span>
+                    </label>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
                     </label>
                   </div>
                 </div>
