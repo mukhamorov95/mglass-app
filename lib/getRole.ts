@@ -5,7 +5,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner'
 
 export type UserProfile = {
   role:        Role
@@ -27,7 +27,7 @@ const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
          r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
-         r === 'commercial' || r === 'cfo'
+         r === 'commercial' || r === 'cfo' || r === 'partner'
 }
 
 // Case-insensitive normalisation. Accepts a few common UI aliases.
@@ -195,6 +195,13 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/settings',
     '/admin/dashboard',
     '/admin/analytics-mglass',
+  ],
+
+  // Внешний B2B-партнёр: только свой кабинет. Видит лишь свои заказы (scoped по
+  // b2b_clients.user_id на уровне API). Никакого доступа к внутренним разделам.
+  partner: [
+    '/',
+    '/partner',
   ],
 }
 

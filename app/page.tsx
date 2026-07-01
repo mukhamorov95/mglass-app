@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { getRole } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
@@ -78,6 +79,7 @@ const OWNER_CENTER = [
 
 export default async function Home() {
   const role = await getRole()
+  if (role === 'partner') redirect('/partner')   // партнёр видит только свой кабинет
   const isAdmin = role === 'admin'
   const supabase = await createClient()
 
