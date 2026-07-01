@@ -412,6 +412,7 @@ export default function B2BCalculatorPage() {
     setFComment('')
     setFHoles(false)
     setFCurved(false)
+    setSavedOrderId(null)   // изменили состав — можно снова сохранить
     widthRef.current?.focus()
   }
 
@@ -430,6 +431,7 @@ export default function B2BCalculatorPage() {
 
   function removeItem(localId: string) {
     setItems(prev => prev.filter(i => i.localId !== localId))
+    setSavedOrderId(null)
   }
 
   function copyItem(localId: string) {
@@ -438,6 +440,7 @@ export default function B2BCalculatorPage() {
       if (!item) return prev
       return [...prev, { ...item, localId: crypto.randomUUID() }]
     })
+    setSavedOrderId(null)
   }
 
   const [eComment, setEComment] = useState('')
@@ -477,6 +480,7 @@ export default function B2BCalculatorPage() {
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
       : i))
     setEditingLocalId(null)
+    setSavedOrderId(null)
   }
 
   function handleEditSuperCatChange(sc: SuperCat) {
@@ -1392,9 +1396,9 @@ export default function B2BCalculatorPage() {
                     ⚠️ Скидка снижает итоговую сумму ниже минимальной стоимости позиций. После сохранения просчёт уйдёт на согласование.
                   </div>
                 )}
-                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0}
+                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                  {saving ? 'Сохранение...' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
+                  {saving ? 'Сохранение...' : savedOrderId != null ? 'Сохранено ✓' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
                 </button>
 
                 {saveError && (

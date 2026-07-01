@@ -71,7 +71,7 @@ export async function GET(
     discountPercent:    order.discount_percent ?? 0,
     items:              Array.isArray(order.items) ? order.items : [],
     totalSaleIncVat:    order.total_sale_inc_vat ?? 0,
-    totalAfterDiscount: order.total_after_discount ?? 0,
+    totalAfterDiscount: order.total_after_discount || order.total_sale_inc_vat || 0,   // фолбэк: без скидки итог = цена с НДС
     totalArea:          order.total_area ?? 0,
     totalWeight:        order.total_weight ?? 0,
     managerName,

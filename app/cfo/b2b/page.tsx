@@ -73,11 +73,11 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
   const drafts = all.length - real.length
 
   // Разрез по годам (year-over-year)
-  const byYear = new Map<number, { rev: number; n: number; mat: number; temp: number; revItems: number; nItems: number }>()
+  const byYear = new Map<number, { rev: number; n: number; paidN: number; mat: number; temp: number; revItems: number; nItems: number }>()
   for (const r of real) {
     const y = new Date(r.created_at).getFullYear()
-    const e = byYear.get(y) ?? { rev: 0, n: 0, mat: 0, temp: 0, revItems: 0, nItems: 0 }
-    e.rev += revenue(r); e.n++
+    const e = byYear.get(y) ?? { rev: 0, n: 0, paidN: 0, mat: 0, temp: 0, revItems: 0, nItems: 0 }
+    e.rev += revenue(r); e.n++; if (revenue(r) > 0) e.paidN++
     if (itemsArr(r.items).length > 0) { const c = orderCost(r); e.mat += c.mat; e.temp += c.temp; e.revItems += revenue(r); e.nItems++ }
     byYear.set(y, e)
   }
@@ -89,7 +89,8 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
   const scopeLabel = yearParam ? String(yearParam) : 'все годы'
 
   const totalRevenue = scope.reduce((s, r) => s + revenue(r), 0)
-  const avgCheck = scope.length ? totalRevenue / scope.length : 0
+  const paidCount = scope.filter(r => revenue(r) > 0).length   // заказы с суммой (нулевые не занижают средний чек)
+  const avgCheck = paidCount ? totalRevenue / paidCount : 0
 
   // Разбивка себестоимости — только заказы с items
   const withItems = scope.filter(r => itemsArr(r.items).length > 0)
@@ -151,7 +152,7 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
                 className={`flex-1 min-w-[150px] rounded-lg border px-3 py-3 transition-colors ${yearParam === y ? 'border-[#111110] bg-white ring-1 ring-[#111110]' : 'border-[#e4e4e0] bg-white hover:border-[#c4c4be]'}`}>
                 <p className="text-[11px] font-semibold text-[#6b6b66]">{y} год</p>
                 <p className="text-lg font-bold font-mono mt-0.5 text-[#111110] leading-tight">{fmtMoney(d.rev)}</p>
-                <p className="text-[10px] text-[#9a9a95] mt-0.5">{d.n} заказов · чек {fmtMoney(d.n ? d.rev / d.n : 0)}</p>
+                <p className="text-[10px] text-[#9a9a95] mt-0.5">{d.n} заказов · чек {fmtMoney(d.paidN ? d.rev / d.paidN : 0)}</p>
               </Link>
             ))}
             {yearRows.length === 0 && <div className="text-xs text-[#9a9a95] px-1 py-3">Нет данных</div>}

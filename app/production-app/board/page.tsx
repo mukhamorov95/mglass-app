@@ -16,21 +16,23 @@ type NotesData = {
   launched_at?: string
   production_days?: number
   deadline_date?: string
+  docs_printed?: boolean
   stages?: Stages
   detail_stages?: DetailStages
 }
 type ItemLite = { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string }
 type Order = { id: number; client_name: string | null; custom_number: string | null; items: ItemLite[]; created_at: string; pn: NotesData }
 
-// Колонки ленты заказа. stage — соответствующий этап производства (для уточнения по позициям), null — только order-level.
+// Колонки ленты заказа. stage — этап производства (для уточнения по позициям), null — только order-level.
+// alt — второй ключ флага (разные конвенции: импорт использует edge/packed, /b2b-orders — edge_processed/packaged).
 const COLS = [
-  { key: 'printed',          label: 'Чертёж',    stage: null },
-  { key: 'material_ordered', label: 'Материал',  stage: null },
-  { key: 'cut',              label: 'Резка',     stage: 'cutting'   as DetailStageKey },
-  { key: 'edge',             label: 'Полировка', stage: 'polishing' as DetailStageKey },
-  { key: 'drilled',          label: 'Сверление', stage: 'drilling'  as DetailStageKey },
-  { key: 'tempering',        label: 'Закалка',   stage: 'tempering' as DetailStageKey },
-  { key: 'packed',           label: 'Упаковка',  stage: 'packaging' as DetailStageKey },
+  { key: 'printed',          label: 'Чертёж',    stage: null,                            alt: null },
+  { key: 'material_ordered', label: 'Материал',  stage: null,                            alt: null },
+  { key: 'cut',              label: 'Резка',     stage: 'cutting'   as DetailStageKey,   alt: null },
+  { key: 'edge',             label: 'Полировка', stage: 'polishing' as DetailStageKey,   alt: 'edge_processed' },
+  { key: 'drilled',          label: 'Сверление', stage: 'drilling'  as DetailStageKey,   alt: null },
+  { key: 'tempering',        label: 'Закалка',   stage: 'tempering' as DetailStageKey,   alt: null },
+  { key: 'packed',           label: 'Упаковка',  stage: 'packaging' as DetailStageKey,   alt: 'packaged' },
 ] as const
 
 function parseNotes(n: string | null): NotesData {
@@ -108,6 +110,8 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
     for (const col of COLS) {
       const flagDone = flags[col.key] === true
+        || (col.alt != null && flags[col.alt] === true)
+        || (col.key === 'printed' && o.pn.docs_printed === true)
       let cell: Cell = { status: flagDone ? 'done' : 'none' }
 
       // Уточнение по позициям (только для колонок-этапов и заказов с detail_stages/задачами).

@@ -26,6 +26,7 @@ type NotesData = {
   status?:             string
   launched_at?:        string
   production_days?:    number
+  deadline_date?:      string
   stages?:             Partial<Record<string, string | null>>
   detail_stages?:      DetailStages
   detail_stage_audit?: AuditEntry[]
@@ -79,6 +80,7 @@ function fmtDateTime(s: string | undefined): string {
 }
 
 function getPlannedDeadline(pn: NotesData, createdAt: string): Date {
+  if (pn.deadline_date) return new Date(pn.deadline_date)   // явный срок сдачи — приоритет
   if (pn.launched_at && pn.production_days) {
     const d = new Date(pn.launched_at)
     d.setDate(d.getDate() + pn.production_days)

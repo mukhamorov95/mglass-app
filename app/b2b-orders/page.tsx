@@ -135,6 +135,7 @@ type NotesData = {
   quote_date?: string
   launched_at?: string
   production_days?: number
+  deadline_date?: string
   user_notes?: string
   stages?: Partial<Record<StageKey, string | null>>
   detail_stages?: DetailStages
@@ -243,6 +244,7 @@ const DEADLINE_RISK_ORDER: Record<DeadlineStatus | 'all', number> = {
 }
 
 function getPlannedReadyDate(pn: NotesData, createdAt: string): Date {
+  if (pn.deadline_date) return new Date(pn.deadline_date)   // явный срок сдачи — приоритет
   const explicit = getDeadline(pn.launched_at, pn.production_days)
   if (explicit) return explicit
   if (pn.launched_at) {

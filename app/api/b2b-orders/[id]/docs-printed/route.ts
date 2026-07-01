@@ -22,9 +22,13 @@ export async function PATCH(
   const notes = typeof order.notes === 'string'
     ? (() => { try { return JSON.parse(order.notes) } catch { return {} } })()
     : (order.notes ?? {})
+  const nowIso = new Date().toISOString()
   notes.docs_printed = printed
-  notes.docs_printed_at = printed ? new Date().toISOString() : null
+  notes.docs_printed_at = printed ? nowIso : null
   notes.docs_printed_by = printed ? (user.email ?? user.id) : null
+  // Зеркалим в order-level stages.printed — чтобы борд/список «Чертёж» видели отметку Валерии
+  notes.stages = notes.stages ?? {}
+  notes.stages.printed = printed ? nowIso : null
 
   const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes) }).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

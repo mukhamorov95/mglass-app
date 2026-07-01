@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 
 // Обратное зеркало: отметка этапа со «старых» экранов (orders/[id], /p/o) → production_tasks.
 // Прямое зеркало (production_tasks → notes.detail_stages) живёт в /api/production-tasks/[id].
@@ -47,6 +48,9 @@ export async function POST(
 
     if (!error && data) updated += data.length
   }
+
+  // Третье зеркало: закрытые этапы (все позиции) → order-level notes.stages для /b2b-orders/Сводки
+  await mirrorOrderStages(svc, orderId)
 
   return NextResponse.json({ ok: true, updated })
 }

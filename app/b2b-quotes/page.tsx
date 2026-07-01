@@ -142,7 +142,7 @@ function looksLikeOrder(q: Quote): boolean {
   const n = parseNotes(q.notes)
   if (n.launched_at) return true
   if (n.payment_status === 'partial' || n.payment_status === 'paid') return true
-  if ((n.prepayment_amount as number | undefined) ?? 0 > 0) return true
+  if (((n.prepayment_amount as number | undefined) ?? 0) > 0) return true
   return false
 }
 
@@ -539,7 +539,8 @@ export default function B2BQuotesPage() {
     const sb = createClient()
     const { data: { user } } = await sb.auth.getUser()
     const parsed = parseNotes(q.notes)
-    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined })
+    // Автор дубля — текущий пользователь (не исходный менеджер): чистим manager_name в notes.
+    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, manager_name: currentUserName ?? undefined })
     const { data, error } = await sb.from('b2b_orders').insert({
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
@@ -548,6 +549,7 @@ export default function B2BQuotesPage() {
       total_sale_inc_vat: q.total_sale_inc_vat, total_after_discount: q.total_after_discount,
       notes: newNotes,
       created_by: user?.id ?? null,
+      created_by_name: currentUserName ?? null,
     }).select().single()
     if (!error && data) {
       setQuotes(prev => [{ ...data, items: q.items }, ...prev])
@@ -589,6 +591,7 @@ export default function B2BQuotesPage() {
       discount_percent:     newDiscount,
       total_after_discount: newTotal,
       notes:                newNotes,
+      ...buildUpdateMeta(),   // фиксируем, кто и когда менял скидку (как в остальных мутациях)
     }).eq('id', id)
     if (error) { showToast('Ошибка сохранения скидки'); return }
     setQuotes(prev => prev.map(x => x.id === id ? {

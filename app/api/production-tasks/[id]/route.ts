@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 
 // PATCH — отметка производственной задачи рабочим (Выполнено / Проблема).
 // Двойная запись: production_tasks (новая модель очередей) И notes.detail_stages
@@ -74,6 +75,9 @@ export async function PATCH(
       await svc.from('b2b_orders').update({ notes: JSON.stringify(notes) }).eq('id', task.order_id)
     }
   }
+
+  // 3) третье зеркало: если все позиции этапа закрыты — проставить order-level флаг (для /b2b-orders/Сводки)
+  if (action === 'done') await mirrorOrderStages(svc, task.order_id)
 
   return NextResponse.json({ ok: true })
 }
