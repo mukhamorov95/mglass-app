@@ -66,6 +66,7 @@ const BUCKETS: { key: BucketKey; label: string; hdr: string; badge: string }[] =
 
 const NAV = [
   { href: '/production-app',            label: 'Сводка' },
+  { href: '/production-app/board',      label: 'Борд' },
   { href: '/production-app/today',      label: 'Пул по станциям' },
   { href: '/production-app/my-queue',   label: 'Мои задачи' },
   { href: '/production-app/material',   label: 'Материал' },
