@@ -708,6 +708,7 @@ export default function B2BOrdersPage() {
             .from('b2b_orders')
             .select('*')
             .not('notes', 'ilike', '%"status":"quote"%')
+            .not('notes', 'ilike', '%"historical":true%')   // история 2024/2025 — только в аналитике /cfo/b2b, не в операционном списке
             .is('archived_at', null)
             .order('created_at', { ascending: false })
             .range(from, from + 999)
