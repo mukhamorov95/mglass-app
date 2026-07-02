@@ -6,6 +6,10 @@ import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
+import {
+  PageHeader, Field, EmptyState, SkeletonRows,
+  IcSearch, IcChevron, IcX,
+} from '@/components/ds'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -44,7 +48,7 @@ type MaterialStatus =
   | 'received'
 
 const MATERIAL_STATUS_META: Record<MaterialStatus, { label: string; badge: string }> = {
-  not_checked:      { label: 'Не проверен',     badge: 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]' },
+  not_checked:      { label: 'Не проверен',     badge: 'bg-line-soft text-muted border-line' },
   need_to_buy:      { label: 'Нужно купить',     badge: 'bg-red-50 text-red-700 border-red-200' },
   ordered:          { label: 'Заказан',          badge: 'bg-blue-50 text-blue-700 border-blue-200' },
   invoice_received: { label: 'Счёт получен',     badge: 'bg-amber-50 text-amber-700 border-amber-200' },
@@ -233,10 +237,10 @@ const DEADLINE_BADGE: Record<DeadlineStatus, string> = {
   overdue:  'bg-red-50 text-red-600',
   today:    'bg-amber-50 text-amber-700',
   tomorrow: 'bg-yellow-50 text-yellow-700',
-  normal:   'bg-[#f0f0ec] text-[#6b6b66]',
+  normal:   'bg-line-soft text-ink-soft',
   ready:    'bg-emerald-50 text-emerald-700',
   shipped:  'bg-emerald-50 text-emerald-700',
-  unknown:  'bg-[#f8f8f7] text-[#b0b0aa]',
+  unknown:  'bg-canvas text-faint',
 }
 
 const DEADLINE_RISK_ORDER: Record<DeadlineStatus | 'all', number> = {
@@ -419,7 +423,7 @@ function classifyOrderForBoard(order: Order): { bucket: BoardBucket; problemCoun
 }
 
 const BOARD_SLOTS: { bucket: BoardBucket; label: string; numCls: string; bgCls: string; borderCls: string; ringCls: string }[] = [
-  { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-[#6b6b66]',  bgCls: 'bg-[#f8f8f7]',  borderCls: 'border-[#e4e4e0]',   ringCls: 'ring-[#9a9a95]'   },
+  { bucket: 'not_started',         label: 'Не начато',  numCls: 'text-ink-soft',  bgCls: 'bg-canvas',  borderCls: 'border-line',   ringCls: 'ring-muted'   },
   { bucket: 'in_progress',         label: 'В работе',   numCls: 'text-blue-700',    bgCls: 'bg-blue-50',     borderCls: 'border-blue-200',    ringCls: 'ring-blue-400'    },
   { bucket: 'ready_for_tempering', label: 'К закалке',  numCls: 'text-orange-700',  bgCls: 'bg-orange-50',   borderCls: 'border-orange-200',  ringCls: 'ring-orange-400'  },
   { bucket: 'on_packaging',        label: 'Упаковка',   numCls: 'text-purple-700',  bgCls: 'bg-purple-50',   borderCls: 'border-purple-200',  ringCls: 'ring-purple-400'  },
@@ -463,9 +467,9 @@ function ProductionBoard({
 
   return (
     <div className="mb-3">
-      <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">
+      <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">
         Производственное табло
-        <span className="ml-2 font-normal text-[#c4c4be] normal-case tracking-normal">· {active.length} заказов</span>
+        <span className="ml-2 font-normal text-faint normal-case tracking-normal">· {active.length} заказов</span>
       </p>
       <div className="flex flex-wrap gap-2">
         {BOARD_SLOTS.map(slot => {
@@ -481,7 +485,7 @@ function ProductionBoard({
               }`}
             >
               <span className={`text-[11px] font-medium ${slot.numCls}`}>{slot.label}</span>
-              <span className={`text-[17px] font-bold font-mono leading-none ${slot.numCls}`}>{counts[slot.bucket]}</span>
+              <span className={`text-[17px] font-semibold font-mono leading-none tabular-nums ${slot.numCls}`}>{counts[slot.bucket]}</span>
             </button>
           )
         })}
@@ -497,7 +501,7 @@ function ProductionBoard({
               }`}
             >
               <span className="text-[11px] font-medium text-red-700">Проблемы</span>
-              <span className="text-[17px] font-bold font-mono leading-none text-red-700">{totalProblems}</span>
+              <span className="text-[17px] font-semibold font-mono leading-none tabular-nums text-red-700">{totalProblems}</span>
             </button>
           )
         })()}
@@ -1364,14 +1368,16 @@ export default function B2BOrdersPage() {
   }, [expanded, orders, materials])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="max-w-[1100px] mx-auto px-4 py-5">
+      <SkeletonRows count={6} />
+    </div>
   )
 
   if (loadError) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
       <p className="text-[13px] text-red-600">Не удалось загрузить данные</p>
-      <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
-      <button onClick={loadOrders} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+      <p className="text-[11px] text-muted">{loadError}</p>
+      <button onClick={loadOrders} className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
         Повторить
       </button>
     </div>
@@ -1414,16 +1420,16 @@ export default function B2BOrdersPage() {
     )
 
     return (
-      <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
+      <div className="border-t border-line-soft px-4 py-3 space-y-3 bg-subtle">
 
         {/* Номера заказа */}
         {editNumId === order.id ? (
           <div className="flex items-end gap-2 flex-wrap">
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Наш номер</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1">Наш номер</p>
               <input
                 autoFocus
-                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                className="border border-line rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-ink outline-none focus:border-ink bg-surface w-32"
                 value={editCustomNum}
                 onChange={e => setEditCustomNum(e.target.value)}
                 placeholder="МГ-001"
@@ -1431,9 +1437,9 @@ export default function B2BOrdersPage() {
               />
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">№ клиента</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1">№ клиента</p>
               <input
-                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] bg-white w-32"
+                className="border border-line rounded-lg px-2.5 py-1.5 text-[12px] font-mono text-ink outline-none focus:border-ink bg-surface w-32"
                 value={editClientNum}
                 onChange={e => setEditClientNum(e.target.value)}
                 placeholder="необязательно"
@@ -1443,24 +1449,24 @@ export default function B2BOrdersPage() {
             <button
               onClick={() => saveNum(order.id)}
               disabled={savingNum}
-              className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+              className="px-3 py-1.5 bg-ink text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
               {savingNum ? '...' : 'Сохранить'}
             </button>
-            <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors">
+            <button onClick={() => setEditNumId(null)} className="px-3 py-1.5 text-[11px] text-muted hover:text-ink transition-colors">
               Отмена
             </button>
           </div>
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
             {order.custom_number && (
-              <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+              <span className="text-[13px] font-semibold font-mono text-ink tabular-nums">{order.custom_number}</span>
             )}
             {order.client_order_number && (
-              <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
+              <span className="text-[11px] font-mono text-ink-soft bg-line-soft px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
             )}
             <button
               onClick={() => startEditNum(order)}
-              className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 transition-colors">
+              className="text-[11px] text-muted hover:text-ink underline underline-offset-2 transition-colors">
               {order.custom_number ? 'Изменить номера' : '+ Добавить номер заказа'}
             </button>
             <button
@@ -1474,7 +1480,7 @@ export default function B2BOrdersPage() {
 
         {/* Этапы производства */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Этапы производства</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1.5">Этапы производства</p>
           <div className="flex flex-wrap gap-1">
             {STAGES.map(stage => {
               const doneDate = pn.stages?.[stage.key]
@@ -1487,7 +1493,7 @@ export default function B2BOrdersPage() {
                   className={`flex flex-col items-center px-2 py-1 rounded-md text-[10px] font-medium transition-all border select-none ${
                     done
                       ? 'bg-emerald-600 text-white border-emerald-600'
-                      : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7]'
+                      : 'bg-surface text-ink-soft border-line hover:border-ink hover:text-ink hover:bg-canvas'
                   }`}>
                   {stage.label}
                   {done && doneDate && (
@@ -1503,7 +1509,7 @@ export default function B2BOrdersPage() {
 
         {/* Статус материала */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Материал</p>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1.5">Материал</p>
           <div className="flex items-center gap-2 flex-wrap">
             {(() => {
               const status = (pn.material_status ?? 'not_checked') as MaterialStatus
@@ -1516,7 +1522,7 @@ export default function B2BOrdersPage() {
                   <select
                     value={status}
                     onChange={e => updateMaterialStatus(order.id, e.target.value as MaterialStatus)}
-                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1 text-[#111110] outline-none focus:border-[#111110] bg-white cursor-pointer">
+                    className="text-[11px] border border-line rounded-lg px-2 py-1 text-ink outline-none focus:border-ink bg-surface cursor-pointer">
                     {(Object.entries(MATERIAL_STATUS_META) as [MaterialStatus, { label: string; badge: string }][]).map(([val, m]) => (
                       <option key={val} value={val}>{m.label}</option>
                     ))}
@@ -1526,7 +1532,7 @@ export default function B2BOrdersPage() {
             })()}
           </div>
           {pn.material_status_updated_at && (
-            <p className="text-[10px] text-[#b0b0aa] mt-1">
+            <p className="text-[10px] text-faint mt-1">
               Обновлено: {new Date(pn.material_status_updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
             </p>
           )}
@@ -1538,7 +1544,7 @@ export default function B2BOrdersPage() {
             href={`/b2b-orders/${order.id}/production-sheet`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] hover:bg-[#f8f8f7] transition-colors"
+            className="inline-flex items-center gap-1 text-[11px] font-medium px-2.5 py-1.5 rounded-lg border border-line text-ink-soft hover:border-ink hover:text-ink hover:bg-canvas transition-colors"
           >
             🖨 Лист
           </a>
@@ -1553,19 +1559,19 @@ export default function B2BOrdersPage() {
             ? 'text-blue-600'
             : prog.progressPct > 0
             ? 'text-orange-600'
-            : 'text-[#9a9a95]'
+            : 'text-muted'
           return (
             <div>
               <div className="flex items-center gap-2 mb-1.5">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">
                   Производство
                 </p>
-                <span className={`text-[11px] font-bold ${pctColor}`}>
+                <span className={`text-[11px] font-semibold tabular-nums ${pctColor}`}>
                   {!prog.hasAnyMark ? 'не начато' : `${prog.progressPct}%`}
                 </span>
               </div>
               {!prog.hasAnyMark ? (
-                <p className="text-[11px] text-[#b0b0aa]">Отметок по деталям пока нет</p>
+                <p className="text-[11px] text-faint">Отметок по деталям пока нет</p>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {prog.stages.map(s => {
@@ -1576,7 +1582,7 @@ export default function B2BOrdersPage() {
                       ? 'bg-blue-50 text-blue-700 border-blue-200'
                       : pct > 0
                       ? 'bg-amber-50 text-amber-700 border-amber-200'
-                      : 'bg-[#f4f4f0] text-[#9a9a95] border-[#e4e4e0]'
+                      : 'bg-line-soft text-muted border-line'
                     return (
                       <span key={s.key} className={`text-[10px] font-medium px-2 py-0.5 rounded-md border whitespace-nowrap ${cls}`}>
                         {s.label} {s.done}/{s.total}
@@ -1597,22 +1603,22 @@ export default function B2BOrdersPage() {
         {/* Даты */}
         <div className="flex gap-4 flex-wrap text-[11px]">
           <div>
-            <span className="text-[#9a9a95]">Просчёт: </span>
-            <span className="font-medium text-[#111110]">{quoteDate}</span>
+            <span className="text-muted">Просчёт: </span>
+            <span className="font-medium text-ink tabular-nums">{quoteDate}</span>
           </div>
           {launchedDate && (
             <div>
-              <span className="text-[#9a9a95]">Запуск: </span>
-              <span className="font-medium text-emerald-700">{launchedDate}</span>
+              <span className="text-muted">Запуск: </span>
+              <span className="font-medium text-emerald-700 tabular-nums">{launchedDate}</span>
             </div>
           )}
           {deadlineStr && pn.production_days && (
             <div>
-              <span className="text-[#9a9a95]">Срок ({pn.production_days} дн.): </span>
-              <span className={`font-semibold ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
+              <span className="text-muted">Срок ({pn.production_days} дн.): </span>
+              <span className={`font-semibold tabular-nums ${daysLeft !== null && daysLeft < 0 ? 'text-red-600' : 'text-ink'}`}>
                 {deadlineStr}
                 {daysLeft !== null && !isShipped && (
-                  <span className="ml-1 font-normal text-[10px] text-[#9a9a95]">
+                  <span className="ml-1 font-normal text-[10px] text-muted">
                     {daysLeft < 0 ? `(просрочен ${Math.abs(daysLeft)} д.)` : daysLeft === 0 ? '(сегодня)' : `(${daysLeft} д.)`}
                   </span>
                 )}
@@ -1632,71 +1638,71 @@ export default function B2BOrdersPage() {
             (dcEdit[order.id]?.[field] ?? dc?.[field] ?? '') as string
 
           return (
-            <div className={`rounded-lg border p-3 space-y-2 ${isRisky ? 'border-amber-200 bg-amber-50/30' : 'border-[#e4e4e0] bg-white'}`}>
+            <div className={`rounded-lg border p-3 space-y-2 ${isRisky ? 'border-amber-200 bg-amber-50/30' : 'border-line bg-surface'}`}>
               <div className="flex items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Контроль срока</p>
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">Контроль срока</p>
                 {isRisky && (
                   <span className="text-[9px] font-medium text-amber-700 bg-amber-100 px-1.5 py-px rounded">Требует контроля</span>
                 )}
                 {dc?.updated_at && !isRisky && (
-                  <span className="text-[10px] text-[#b0b0aa]">заполнен</span>
+                  <span className="text-[10px] text-faint">заполнен</span>
                 )}
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Причина риска</p>
+                  <p className="text-[10px] text-muted mb-0.5">Причина риска</p>
                   <select
                     value={fieldVal('reason')}
                     onChange={e => setField('reason', e.target.value)}
-                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white">
+                    className="w-full text-[11px] border border-line rounded-lg px-2 py-1.5 text-ink outline-none focus:border-ink bg-surface">
                     <option value="">— не выбрано —</option>
                     {DC_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
                   </select>
                 </div>
                 <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Ответственный</p>
+                  <p className="text-[10px] text-muted mb-0.5">Ответственный</p>
                   <input
                     type="text"
                     value={fieldVal('responsible')}
                     onChange={e => setField('responsible', e.target.value)}
                     placeholder="Влад / Вера / Никита / Дима"
-                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
+                    className="w-full text-[11px] border border-line rounded-lg px-2 py-1.5 text-ink outline-none focus:border-ink bg-surface placeholder:text-faint"
                   />
                 </div>
               </div>
 
               <div>
-                <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующее действие</p>
+                <p className="text-[10px] text-muted mb-0.5">Следующее действие</p>
                 <input
                   type="text"
                   value={fieldVal('next_action')}
                   onChange={e => setField('next_action', e.target.value)}
                   placeholder="Например: уточнить у закалки готовность партии, передать в упаковку"
-                  className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
+                  className="w-full text-[11px] border border-line rounded-lg px-2 py-1.5 text-ink outline-none focus:border-ink bg-surface placeholder:text-faint"
                 />
               </div>
 
               <div className="flex items-end gap-2 flex-wrap">
                 <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующий контроль</p>
+                  <p className="text-[10px] text-muted mb-0.5">Следующий контроль</p>
                   <input
                     type="date"
                     value={fieldVal('next_check_date')}
                     onChange={e => setField('next_check_date', e.target.value)}
-                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white"
+                    className="text-[11px] border border-line rounded-lg px-2 py-1.5 text-ink outline-none focus:border-ink bg-surface"
                   />
                 </div>
                 <button
                   onClick={() => saveDeadlineControl(order.id)}
                   disabled={dcSaving === order.id}
-                  className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                  className="px-3 py-1.5 bg-ink text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
                   {dcSaving === order.id ? 'Сохр...' : 'Сохранить контроль'}
                 </button>
               </div>
 
               {dc?.updated_at && (
-                <p className="text-[10px] text-[#b0b0aa]">
+                <p className="text-[10px] text-faint">
                   Обновлено: {new Date(dc.updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </p>
               )}
@@ -1706,17 +1712,17 @@ export default function B2BOrdersPage() {
 
         {/* Позиции */}
         <div>
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Позиции</p>
-          <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1.5">Позиции</p>
+          <div className="bg-surface rounded-lg border border-line overflow-hidden">
             {items.map((item, idx) => {
               const svcs = Array.isArray(item.services) ? item.services as { name: string; cost: number }[] : []
               return (
-                <div key={idx} className="px-3 py-1.5 border-b border-[#f8f8f7] last:border-0 text-[11px]">
+                <div key={idx} className="px-3 py-1.5 border-b border-canvas last:border-0 text-[11px]">
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0 min-w-0">
-                      <span className="text-[#c4c4be]">#{idx + 1}</span>
-                      <span className="font-medium text-[#111110]">{String(item.materialName ?? '')} {String(item.thickness ?? '')}мм</span>
-                      <span className="text-[#6b6b66]">{String(item.width ?? '')}×{String(item.height ?? '')} мм · {String(item.quantity ?? '')} шт.</span>
+                      <span className="text-faint tabular-nums">#{idx + 1}</span>
+                      <span className="font-medium text-ink">{String(item.materialName ?? '')} {String(item.thickness ?? '')}мм</span>
+                      <span className="text-ink-soft tabular-nums">{String(item.width ?? '')}×{String(item.height ?? '')} мм · {String(item.quantity ?? '')} шт.</span>
                       {!!item.hasTempering && (
                         <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Закалка</span>
                       )}
@@ -1727,8 +1733,8 @@ export default function B2BOrdersPage() {
                       ))}
                     </div>
                     <div className="text-right flex-shrink-0 whitespace-nowrap">
-                      <span className="font-mono font-semibold text-[#111110]">{Number(item.saleIncVat ?? 0).toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[9px] text-[#9a9a95] ml-1">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
+                      <span className="font-mono font-semibold text-ink tabular-nums">{Number(item.saleIncVat ?? 0).toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[9px] text-muted ml-1 tabular-nums">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
                     </div>
                   </div>
                 </div>
@@ -1738,54 +1744,54 @@ export default function B2BOrdersPage() {
         </div>
 
         {/* ПРОИЗВОДСТВЕННАЯ СВОДКА */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0]">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственная сводка</span>
+        <div className="bg-surface rounded-lg border border-line overflow-hidden">
+          <div className="px-3 py-1.5 bg-canvas border-b border-line">
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">Производственная сводка</span>
           </div>
           <div className="px-3 py-2 space-y-1.5 text-[11px]">
             <div className="flex justify-between">
-              <span className="text-[#9a9a95]">Площадь</span>
-              <span className="font-semibold text-[#111110]">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
+              <span className="text-muted">Площадь</span>
+              <span className="font-semibold text-ink tabular-nums">{(order.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })} м²</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#9a9a95]">Вес</span>
-              <span className="font-semibold text-[#111110]">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span>
+              <span className="text-muted">Вес</span>
+              <span className="font-semibold text-ink tabular-nums">{(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг</span>
             </div>
             {summary.rows.length > 0 && summary.totalSheets > 0 && (
               <>
                 <div className="flex justify-between">
-                  <span className="text-[#9a9a95]">Листы</span>
-                  <span className="font-semibold text-[#111110]">{summary.totalSheets} шт</span>
+                  <span className="text-muted">Листы</span>
+                  <span className="font-semibold text-ink tabular-nums">{summary.totalSheets} шт</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-[#9a9a95]">Стоимость листов</span>
-                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.totalSheetCost)}</span>
+                  <span className="text-muted">Стоимость листов</span>
+                  <span className="font-mono font-semibold text-ink tabular-nums">{fmt(summary.totalSheetCost)}</span>
                 </div>
                 {summary.totalTemperingCost > 0 && (
                   <div className="flex justify-between">
-                    <span className="text-[#9a9a95]">Закалка</span>
-                    <span className="font-mono font-semibold text-amber-700">{fmt(summary.totalTemperingCost)}</span>
+                    <span className="text-muted">Закалка</span>
+                    <span className="font-mono font-semibold text-amber-700 tabular-nums">{fmt(summary.totalTemperingCost)}</span>
                   </div>
                 )}
-                <div className="flex justify-between border-t border-[#f0f0ec] pt-1.5">
-                  <span className="text-[#6b6b66] font-medium">Себестоимость материала</span>
-                  <span className="font-mono font-semibold text-[#111110]">{fmt(summary.grandTotal)}</span>
+                <div className="flex justify-between border-t border-line-soft pt-1.5">
+                  <span className="text-ink-soft font-medium">Себестоимость материала</span>
+                  <span className="font-mono font-semibold text-ink tabular-nums">{fmt(summary.grandTotal)}</span>
                 </div>
               </>
             )}
-            <div className="flex justify-between border-t border-[#e4e4e0] pt-1.5">
-              <span className="font-semibold text-[#111110]">Итого заказ</span>
-              <span className="font-mono font-bold text-[#111110]">{fmt(finalPrice)}</span>
+            <div className="flex justify-between border-t border-line pt-1.5">
+              <span className="font-semibold text-ink">Итого заказ</span>
+              <span className="font-mono font-semibold text-ink tabular-nums">{fmt(finalPrice)}</span>
             </div>
           </div>
           {/* Материалы (разбивка) */}
           {summary.rows.length > 0 && summary.totalSheets > 0 && (
-            <div className="border-t border-[#f0f0ec] px-3 py-2 space-y-1">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Материалы</p>
+            <div className="border-t border-line-soft px-3 py-2 space-y-1">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1">Материалы</p>
               {summary.rows.map(row => (
                 <div key={row.matKey} className="flex items-center justify-between text-[11px]">
-                  <span className="text-[#111110] font-medium">{row.matLabel}</span>
-                  <span className="text-[#6b6b66] font-mono text-[10px]">
+                  <span className="text-ink font-medium">{row.matLabel}</span>
+                  <span className="text-ink-soft font-mono text-[10px] tabular-nums">
                     {row.sheetsNeeded} л. · {row.totalAreaNet.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
                   </span>
                 </div>
@@ -1795,18 +1801,18 @@ export default function B2BOrdersPage() {
         </div>
 
         {/* ПРОИЗВОДСТВЕННОЕ СООБЩЕНИЕ */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+        <div className="bg-surface rounded-lg border border-line overflow-hidden">
           <button
-            className="w-full px-3 py-2 flex items-center justify-between hover:bg-[#fafaf9] transition-colors"
+            className="w-full px-3 py-2 flex items-center justify-between hover:bg-subtle transition-colors"
             onClick={() => setMsgOpenId(isMsgOpen ? null : order.id)}>
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственное сообщение</span>
-            <span className={`text-[#c4c4be] text-[10px] transition-transform ${isMsgOpen ? 'rotate-180' : ''}`}>▼</span>
+            <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">Производственное сообщение</span>
+            <span className={`text-faint text-[10px] transition-transform ${isMsgOpen ? 'rotate-180' : ''}`}>▼</span>
           </button>
           {isMsgOpen && (() => {
             const msg = buildProductionMessage(order)
             return (
-              <div className="border-t border-[#f0f0ec] px-3 py-2.5 space-y-2">
-                <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-[#111110] bg-[#f8f8f7] rounded-lg px-3 py-2.5 border border-[#e8e8e4] select-all">
+              <div className="border-t border-line-soft px-3 py-2.5 space-y-2">
+                <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-ink bg-canvas rounded-lg px-3 py-2.5 border border-line select-all">
                   {msg}
                 </pre>
                 <div className="flex gap-2">
@@ -1816,13 +1822,13 @@ export default function B2BOrdersPage() {
                       setCopiedMsg(true)
                       setTimeout(() => setCopiedMsg(false), 2000)
                     }}
-                    className="flex-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                    className="flex-1 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-[#2a2a28] transition-colors">
                     {copiedMsg ? '✓ Скопировано' : '📋 Копировать'}
                   </button>
                   <button
                     disabled
                     title="В разработке: интеграция с Telegram"
-                    className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#c4c4be] cursor-not-allowed">
+                    className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-line text-faint cursor-not-allowed">
                     ✈ Telegram
                   </button>
                 </div>
@@ -1832,13 +1838,13 @@ export default function B2BOrdersPage() {
         </div>
 
         {userNotes && (
-          <p className="text-[11px] text-[#6b6b66] italic">{userNotes}</p>
+          <p className="text-[11px] text-ink-soft italic">{userNotes}</p>
         )}
 
         {Array.isArray(pn.bulk_actions) && pn.bulk_actions.length > 0 && (() => {
           const last = pn.bulk_actions[pn.bulk_actions.length - 1]
           return (
-            <p className="text-[10px] text-[#b0b0aa]">
+            <p className="text-[10px] text-faint">
               Массово отгружен: {new Date(last.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} · {formatMonthKey(last.month_key)} · {last.created_by}
             </p>
           )
@@ -1851,45 +1857,43 @@ export default function B2BOrdersPage() {
     <div className="max-w-[1100px] mx-auto px-4 py-5">
 
       {/* Шапка */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Заказы</h1>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">
-            {orders.length} заказов · {totalSum.toLocaleString('ru-RU')} ₽
-          </p>
-        </div>
-        <div className="flex items-center gap-1.5 text-[11px] font-medium" title="Готовность производства: отгружено / в работе">
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            {shippedCount} отгружено
-          </span>
-          <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
-            {notShippedCount} в работе
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => { const next = !productionDayMode; setProductionDayMode(next); if (!next) setShowOnlyNeedsControl(false) }}
-            className={`text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-colors ${
-              productionDayMode
-                ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
-                : 'border-[#e4e4e0] text-[#6b6b66] hover:border-amber-500 hover:text-amber-700'
-            }`}>
-            🏭 Производственный день
-          </button>
-          <button
-            disabled={selectedOrderIds.size === 0}
-            onClick={() => setShowMaterialReq(true)}
-            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
-            📦 Материал{selectedOrderIds.size > 0 ? ` (${selectedOrderIds.size})` : ''}
-          </button>
-          <Link href="/calculator/b2b"
-            className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
-            + Новый просчёт
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="B2B Заказы"
+        subtitle={`${orders.length} заказов · ${totalSum.toLocaleString('ru-RU')} ₽`}
+        actions={
+          <>
+            <div className="flex items-center gap-1.5 text-[11px] font-medium mr-1" title="Готовность производства: отгружено / в работе">
+              <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                {shippedCount} отгружено
+              </span>
+              <span className="flex items-center gap-1 px-2 py-1 rounded-lg bg-red-50 text-red-600">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                {notShippedCount} в работе
+              </span>
+            </div>
+            <button
+              onClick={() => { const next = !productionDayMode; setProductionDayMode(next); if (!next) setShowOnlyNeedsControl(false) }}
+              className={`text-[12px] font-medium px-3 py-1.5 rounded-lg border transition-colors ${
+                productionDayMode
+                  ? 'bg-amber-600 text-white border-amber-600 hover:bg-amber-700'
+                  : 'border-line text-ink-soft hover:border-amber-500 hover:text-amber-700'
+              }`}>
+              🏭 Производственный день
+            </button>
+            <button
+              disabled={selectedOrderIds.size === 0}
+              onClick={() => setShowMaterialReq(true)}
+              className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-ink hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+              📦 Материал{selectedOrderIds.size > 0 ? ` (${selectedOrderIds.size})` : ''}
+            </button>
+            <Link href="/calculator/b2b"
+              className="bg-ink text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
+              + Новый просчёт
+            </Link>
+          </>
+        }
+      />
 
       {/* Производственное табло */}
       <ProductionBoard
@@ -1901,45 +1905,41 @@ export default function B2BOrdersPage() {
       {/* Индикатор активного фильтра табло */}
       {boardFilter !== null && (
         <div className="flex items-center gap-2 mb-2 px-0.5">
-          <span className="text-[11px] text-[#6b6b66]">
+          <span className="text-[11px] text-ink-soft">
             Производство:
-            <span className="font-semibold text-[#111110] ml-1">{BOARD_FILTER_LABELS[boardFilter]}</span>
+            <span className="font-semibold text-ink ml-1">{BOARD_FILTER_LABELS[boardFilter]}</span>
           </span>
           <button
             onClick={() => setBoardFilter(null)}
-            className="text-[11px] text-[#9a9a95] hover:text-red-600 transition-colors px-1.5 py-0.5 rounded hover:bg-red-50">
+            className="text-[11px] text-muted hover:text-red-600 transition-colors px-1.5 py-0.5 rounded hover:bg-red-50">
             × Сбросить
           </button>
         </div>
       )}
 
       {/* Панель фильтров */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-3 space-y-2.5">
+      <div className="bg-surface border border-line rounded-xl px-4 py-3 mb-3 space-y-2.5">
         <div className="flex flex-wrap gap-2 items-center">
-          <div className="relative flex-1 min-w-[160px]">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#b4b4ae]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-            </svg>
-            <input
-              type="text"
-              placeholder="Номер заказа или клиент…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
-            />
-          </div>
-          <div className="flex items-center gap-1.5 text-[12px] text-[#8a8a85]">
+          <Field
+            icon={<IcSearch className="w-3.5 h-3.5" />}
+            type="text"
+            placeholder="Номер заказа или клиент…"
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            className="flex-1 min-w-[160px]"
+          />
+          <div className="flex items-center gap-1.5 text-[12px] text-muted">
             <span>с</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"/>
+              className="border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"/>
             <span>по</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"/>
+              className="border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"/>
           </div>
           {isFiltered && (
             <button
               onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo(''); setDeadlineFilter('all'); setBoardFilter(null) }}
-              className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
+              className="text-[11px] text-muted hover:text-ink px-2 py-1.5 rounded-lg hover:bg-line-soft transition-colors whitespace-nowrap">
               Сбросить
             </button>
           )}
@@ -1951,23 +1951,23 @@ export default function B2BOrdersPage() {
               onClick={() => setStageFilter(f.key)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${
                 stageFilter === f.key
-                  ? 'bg-[#111110] text-white border-[#111110]'
-                  : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                  ? 'bg-ink text-white border-ink'
+                  : 'bg-surface text-ink-soft border-line hover:border-ink hover:text-ink'
               }`}>
               {f.label}
             </button>
           ))}
         </div>
-        <div className="flex flex-wrap gap-1 items-center border-t border-[#f4f4f0] pt-2">
-          <span className="text-[10px] font-semibold uppercase tracking-widest text-[#b0b0aa] mr-1">Срок:</span>
+        <div className="flex flex-wrap gap-1 items-center border-t border-line-soft pt-2">
+          <span className="text-[10px] font-semibold uppercase tracking-widest text-faint mr-1">Срок:</span>
           {DEADLINE_FILTER_OPTIONS.map(f => (
             <button
               key={f.key}
               onClick={() => setDeadlineFilter(f.key)}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all border select-none ${
                 deadlineFilter === f.key
-                  ? 'bg-[#111110] text-white border-[#111110]'
-                  : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                  ? 'bg-ink text-white border-ink'
+                  : 'bg-surface text-ink-soft border-line hover:border-ink hover:text-ink'
               }`}>
               {f.label}
             </button>
@@ -1999,14 +1999,14 @@ export default function B2BOrdersPage() {
         ] as const
         if (totalCritical === 0) {
           return (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
+            <div className="bg-surface border border-line rounded-xl p-12 text-center">
               <p className="text-[15px] font-medium text-emerald-700">✅ На сегодня критичных B2B-заказов нет</p>
             </div>
           )
         }
         if (showOnlyNeedsControl && needsControlCount === 0) {
           return (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
+            <div className="bg-surface border border-line rounded-xl p-10 text-center">
               <p className="text-[14px] font-medium text-emerald-700">✅ Все срочные заказы уже взяты в контроль</p>
             </div>
           )
@@ -2014,22 +2014,22 @@ export default function B2BOrdersPage() {
         return (
           <div className="space-y-3">
             {/* Сводка */}
-            <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-2.5 flex flex-wrap gap-5 text-[12px] items-center">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#b0b0aa]">Сегодня</span>
-              <span><span className="text-[#9a9a95]">Просрочено:</span><span className="font-bold text-red-600 ml-1">{groups.overdue.length}</span></span>
-              <span><span className="text-[#9a9a95]">Сегодня:</span><span className="font-bold text-amber-700 ml-1">{groups.today.length}</span></span>
-              <span><span className="text-[#9a9a95]">Завтра:</span><span className="font-bold text-yellow-700 ml-1">{groups.tomorrow.length}</span></span>
-              <span><span className="text-[#9a9a95]">Готово:</span><span className="font-bold text-emerald-700 ml-1">{groups.ready.length}</span></span>
+            <div className="bg-surface border border-line rounded-xl px-4 py-2.5 flex flex-wrap gap-5 text-[12px] items-center">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-faint">Сегодня</span>
+              <span><span className="text-muted">Просрочено:</span><span className="font-semibold text-red-600 ml-1 tabular-nums">{groups.overdue.length}</span></span>
+              <span><span className="text-muted">Сегодня:</span><span className="font-semibold text-amber-700 ml-1 tabular-nums">{groups.today.length}</span></span>
+              <span><span className="text-muted">Завтра:</span><span className="font-semibold text-yellow-700 ml-1 tabular-nums">{groups.tomorrow.length}</span></span>
+              <span><span className="text-muted">Готово:</span><span className="font-semibold text-emerald-700 ml-1 tabular-nums">{groups.ready.length}</span></span>
               <span>
-                <span className="text-[#9a9a95]">Требуют контроля:</span>
-                <span className={`font-bold ml-1 ${needsControlCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{needsControlCount}</span>
+                <span className="text-muted">Требуют контроля:</span>
+                <span className={`font-semibold ml-1 tabular-nums ${needsControlCount > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{needsControlCount}</span>
               </span>
               <button
                 onClick={() => setShowOnlyNeedsControl(v => !v)}
                 className={`ml-auto text-[11px] font-medium px-2.5 py-1 rounded-lg border transition-colors ${
                   showOnlyNeedsControl
                     ? 'bg-red-600 text-white border-red-600 hover:bg-red-700'
-                    : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-red-400 hover:text-red-600'
+                    : 'bg-surface text-ink-soft border-line hover:border-red-400 hover:text-red-600'
                 }`}>
                 ⚠️ Требуют контроля
               </button>
@@ -2047,28 +2047,28 @@ export default function B2BOrdersPage() {
                 return (
                   <div key={order.id}>
                     <div
-                      className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
+                      className="px-4 py-2.5 flex items-start justify-between gap-3 hover:bg-subtle transition-colors cursor-pointer"
                       onClick={() => setExpanded(isOpen ? null : order.id)}>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           {order.custom_number ? (
-                            <span className="text-[13px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-px rounded flex-shrink-0">
+                            <span className="text-[13px] font-semibold font-mono text-ink bg-line-soft px-2 py-px rounded flex-shrink-0 tabular-nums">
                               {order.custom_number}
                             </span>
                           ) : (
-                            <span className="text-[11px] font-mono text-[#b0b0aa] flex-shrink-0">#{order.id}</span>
+                            <span className="text-[11px] font-mono text-faint flex-shrink-0">#{order.id}</span>
                           )}
                           {order.client_order_number && (
-                            <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
+                            <span className="text-[10px] font-mono text-ink-soft bg-canvas border border-line px-1.5 py-px rounded flex-shrink-0">
                               кл.{order.client_order_number}
                             </span>
                           )}
-                          <span className="text-[13px] font-semibold text-[#111110]">{order.client_name}</span>
+                          <span className="text-[13px] font-semibold text-ink">{order.client_name}</span>
                           <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                             {ds.label}
                           </span>
                           {(dc?.next_action || dc?.reason) && (
-                            <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                            <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-line-soft text-ink-soft flex-shrink-0">📝 Контроль</span>
                           )}
                           {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
                             <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
@@ -2086,9 +2086,9 @@ export default function B2BOrdersPage() {
                           )}
                         </div>
                         {dc && (dc.next_action || dc.responsible || dc.next_check_date) && (
-                          <div className="mt-1 text-[10px] text-[#6b6b66] flex flex-wrap gap-x-3 gap-y-0.5">
+                          <div className="mt-1 text-[10px] text-ink-soft flex flex-wrap gap-x-3 gap-y-0.5">
                             {dc.next_action && <span>→ {dc.next_action}</span>}
-                            {dc.responsible && <span className="font-medium text-[#111110]">{dc.responsible}</span>}
+                            {dc.responsible && <span className="font-medium text-ink">{dc.responsible}</span>}
                             {dc.next_check_date && (
                               <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
                             )}
@@ -2097,14 +2097,12 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {!pn.stages?.shipped && progress > 0 && (
-                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
+                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-muted'}`}>
                             {progress}%
                           </span>
                         )}
-                        <span className="text-[12px] font-semibold font-mono text-[#111110]">{fmt(finalPrice)}</span>
-                        <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                        </svg>
+                        <span className="text-[12px] font-semibold font-mono text-ink tabular-nums">{fmt(finalPrice)}</span>
+                        <IcChevron className={`w-3.5 h-3.5 text-faint flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                       </div>
                     </div>
                     {isOpen && renderOrderBody(order)}
@@ -2112,13 +2110,13 @@ export default function B2BOrdersPage() {
                 )
               }
               return sections.map(sec => (
-                <div key={sec.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-                  <div className={`px-4 py-2 flex items-center gap-1.5 border-b border-[#f0f0ec] ${sec.hdr}`}>
-                    <span className="text-[13px] font-bold text-[#111110]">{sec.emoji} {sec.label} —</span>
-                    <span className={`text-[13px] font-bold ${sec.color}`}>{sec.orders.length}</span>
+                <div key={sec.key} className="bg-surface border border-line rounded-xl overflow-hidden">
+                  <div className={`px-4 py-2 flex items-center gap-1.5 border-b border-line-soft ${sec.hdr}`}>
+                    <span className="text-[13px] font-semibold text-ink">{sec.emoji} {sec.label} —</span>
+                    <span className={`text-[13px] font-semibold tabular-nums ${sec.color}`}>{sec.orders.length}</span>
                   </div>
                   {sec.orders.length === 0 ? (
-                    <p className="px-4 py-3 text-[12px] text-[#b0b0aa]">Нет заказов</p>
+                    <p className="px-4 py-3 text-[12px] text-faint">Нет заказов</p>
                   ) : sec.key === 'overdue' ? (
                     (() => {
                       const byMonth = new Map<string, Order[]>()
@@ -2130,7 +2128,7 @@ export default function B2BOrdersPage() {
                       }
                       const sortedMonths = [...byMonth.keys()].sort((a, b) => b.localeCompare(a))
                       return (
-                        <div className="divide-y divide-[#f0f0ec]">
+                        <div className="divide-y divide-line-soft">
                           {sortedMonths.map(monthKey => {
                             const monthOrders = byMonth.get(monthKey)!
                             const monthLabel = formatMonthKey(monthKey)
@@ -2139,7 +2137,7 @@ export default function B2BOrdersPage() {
                               <div key={monthKey}>
                                 <div className="px-4 py-2 bg-red-50/40 flex items-center gap-2">
                                   <span className="text-[11px] font-semibold text-red-700">{monthLabel}</span>
-                                  <span className="text-[11px] text-red-400">— {monthOrders.length} зак.</span>
+                                  <span className="text-[11px] text-red-400 tabular-nums">— {monthOrders.length} зак.</span>
                                   <button
                                     onClick={() => {
                                       if (isBulkLoading) return
@@ -2150,11 +2148,11 @@ export default function B2BOrdersPage() {
                                       bulkMarkMonthAsShipped(monthKey, monthOrders)
                                     }}
                                     disabled={isBulkLoading}
-                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-white hover:bg-red-50 transition-colors disabled:opacity-50">
+                                    className="ml-auto text-[10px] font-medium px-2.5 py-1 rounded-lg border border-red-200 text-red-700 bg-surface hover:bg-red-50 transition-colors disabled:opacity-50">
                                     {isBulkLoading ? 'Обновляем...' : 'Отметить месяц отгруженным'}
                                   </button>
                                 </div>
-                                <div className="divide-y divide-[#f8f8f7]">
+                                <div className="divide-y divide-canvas">
                                   {monthOrders.map(renderPdRow)}
                                 </div>
                               </div>
@@ -2164,7 +2162,7 @@ export default function B2BOrdersPage() {
                       )
                     })()
                   ) : (
-                    <div className="divide-y divide-[#f8f8f7]">
+                    <div className="divide-y divide-canvas">
                       {sec.orders.map(renderPdRow)}
                     </div>
                   )}
@@ -2175,23 +2173,25 @@ export default function B2BOrdersPage() {
         )
       })() : isFiltered ? (
         <div>
-          <p className="text-[11px] text-[#8a8a85] mb-2 px-1">
+          <p className="text-[11px] text-muted mb-2 px-1">
             {filteredOrders.length === 0 ? 'Заказов не найдено' : `Найдено: ${filteredOrders.length} заказов`}
           </p>
           {filteredOrders.length === 0 ? (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
-              {boardFilter !== null            ? `Нет заказов в категории "${BOARD_FILTER_LABELS[boardFilter]}"` :
-               deadlineFilter === 'overdue'  ? 'Просроченных заказов нет' :
-               deadlineFilter === 'today'    ? 'Заказов со сроком сегодня нет' :
-               deadlineFilter === 'tomorrow' ? 'Заказов со сроком завтра нет' :
-               deadlineFilter === 'normal'   ? 'Заказов в нормальном сроке нет' :
-               deadlineFilter === 'ready'    ? 'Готовых заказов нет' :
-               deadlineFilter === 'shipped'  ? 'Отгруженных заказов нет' :
-               deadlineFilter === 'unknown'  ? 'Заказов без определённого срока нет' :
-               'Нет заказов по выбранным фильтрам'}
-            </div>
+            <EmptyState
+              icon={<IcSearch className="w-8 h-8" />}
+              title={
+                boardFilter !== null            ? `Нет заказов в категории "${BOARD_FILTER_LABELS[boardFilter]}"` :
+                deadlineFilter === 'overdue'  ? 'Просроченных заказов нет' :
+                deadlineFilter === 'today'    ? 'Заказов со сроком сегодня нет' :
+                deadlineFilter === 'tomorrow' ? 'Заказов со сроком завтра нет' :
+                deadlineFilter === 'normal'   ? 'Заказов в нормальном сроке нет' :
+                deadlineFilter === 'ready'    ? 'Готовых заказов нет' :
+                deadlineFilter === 'shipped'  ? 'Отгруженных заказов нет' :
+                deadlineFilter === 'unknown'  ? 'Заказов без определённого срока нет' :
+                'Нет заказов по выбранным фильтрам'}
+            />
           ) : (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden divide-y divide-[#f8f8f7]">
+            <div className="bg-surface border border-line rounded-xl overflow-hidden divide-y divide-canvas">
               {filteredOrders.map(order => {
                 const pn = order.parsedNotes
                 const isShipped = !!pn.stages?.shipped
@@ -2214,31 +2214,31 @@ export default function B2BOrdersPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
                             {order.custom_number ? (
-                              <span className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0">
+                              <span className="text-[13px] font-semibold text-ink bg-line-soft px-2 py-px rounded font-mono flex-shrink-0 tabular-nums">
                                 {order.custom_number}
                               </span>
                             ) : (
-                              <span className="text-[11px] font-mono text-[#b0b0aa] flex-shrink-0">#{order.id}</span>
+                              <span className="text-[11px] font-mono text-faint flex-shrink-0">#{order.id}</span>
                             )}
                             {order.client_order_number && (
-                              <span className="text-[10px] text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded font-mono flex-shrink-0">
+                              <span className="text-[10px] text-ink-soft bg-canvas border border-line px-1.5 py-px rounded font-mono flex-shrink-0">
                                 кл.{order.client_order_number}
                               </span>
                             )}
-                            <span className="text-[13px] font-semibold text-[#111110] truncate">{order.client_name}</span>
+                            <span className="text-[13px] font-semibold text-ink truncate">{order.client_name}</span>
                             {ds.status !== 'normal' && ds.status !== 'unknown' && (
                               <span className={`text-[10px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${DEADLINE_BADGE[ds.status]}`}>
                                 {ds.label}
                               </span>
                             )}
                             {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
-                              <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66] flex-shrink-0">📝 Контроль</span>
+                              <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-line-soft text-ink-soft flex-shrink-0">📝 Контроль</span>
                             )}
                             {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
                               <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
                             ) : null })()}
                           </div>
-                          <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                          <p className="text-[11px] text-muted mt-0.5 tabular-nums">
                             {launchedDate}
                             {' · '}{order.items.length} поз.
                             {(order.total_area ?? 0) > 0 && ` · ${order.total_area.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`}
@@ -2247,16 +2247,16 @@ export default function B2BOrdersPage() {
                       </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {!isShipped && progress > 0 && (
-                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
+                          <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-muted'}`}>
                             {progress}%
                           </span>
                         )}
-                        <span className="text-[13px] font-semibold text-[#111110] font-mono">{fmt(finalPrice)}</span>
+                        <span className="text-[13px] font-semibold text-ink font-mono tabular-nums">{fmt(finalPrice)}</span>
                         {canDelete && (
                           <button
                             onClick={() => setDeletingId(order.id)}
                             title="Удалить заказ"
-                            className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
+                            className="p-1 rounded text-faint hover:text-red-500 hover:bg-red-50 transition-colors">
                             <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                             </svg>
@@ -2276,7 +2276,7 @@ export default function B2BOrdersPage() {
                             className={`flex flex-col items-center px-2 py-0.5 rounded text-[10px] font-medium transition-all border select-none ${
                               done
                                 ? 'bg-emerald-600 text-white border-emerald-600'
-                                : 'bg-white text-[#9a9a95] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                                : 'bg-surface text-muted border-line hover:border-ink hover:text-ink'
                             }`}>
                             {stage.label}
                             {done && doneDate && (
@@ -2296,57 +2296,51 @@ export default function B2BOrdersPage() {
         </div>
       ) : (
         monthGroups.length === 0 ? (
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
-            Заказов пока нет
-          </div>
+          <EmptyState title="Заказов пока нет" hint="Запущенные в работу просчёты появятся здесь" />
         ) : (
           <div className="space-y-2">
             {yearGroups.map(yg => {
               const yearOpen = expandedYears.has(yg.year)
               return (
-                <div key={yg.year} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div key={yg.year} className="bg-surface border border-line rounded-xl overflow-hidden">
                   <button
-                    className="w-full px-4 py-3 flex items-center justify-between transition-colors text-left bg-[#fafaf9] hover:bg-[#f0f0ec]"
+                    className="w-full px-4 py-3 flex items-center justify-between transition-colors text-left bg-subtle hover:bg-line-soft"
                     onClick={() => toggleYear(yg.year)}>
                     <div className="flex items-center gap-2">
-                      <h2 className="text-[15px] font-bold text-[#111110]">{yg.year === 0 ? 'Без даты запуска' : `${yg.year} год`}</h2>
-                      <span className="text-[11px] text-[#9a9a95]">{yg.count} заказов · {yg.months.length} мес.</span>
+                      <h2 className="text-[15px] font-semibold text-ink">{yg.year === 0 ? 'Без даты запуска' : `${yg.year} год`}</h2>
+                      <span className="text-[11px] text-muted tabular-nums">{yg.count} заказов · {yg.months.length} мес.</span>
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className="text-[13px] font-semibold font-mono text-[#111110]">{yg.total.toLocaleString('ru-RU')} ₽</span>
-                      <svg className={`w-4 h-4 transition-transform flex-shrink-0 text-[#c4c4be] ${yearOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <span className="text-[13px] font-semibold font-mono text-ink tabular-nums">{yg.total.toLocaleString('ru-RU')} ₽</span>
+                      <IcChevron className={`w-4 h-4 transition-transform flex-shrink-0 text-faint ${yearOpen ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
                   {yearOpen && (
-                    <div className="border-t border-[#f0f0ec] p-2 space-y-2">
+                    <div className="border-t border-line-soft p-2 space-y-2">
                       {yg.months.map(group => {
               const isMonthOpen = expandedMonths.has(group.key)
               return (
-                <div key={group.key} className={`bg-white border rounded-xl overflow-hidden ${group.noLaunch ? 'border-amber-300' : 'border-[#e4e4e0]'}`}>
+                <div key={group.key} className={`bg-surface border rounded-xl overflow-hidden ${group.noLaunch ? 'border-amber-300' : 'border-line'}`}>
                   <button
-                    className={`w-full px-4 py-2.5 flex items-center justify-between transition-colors text-left ${group.noLaunch ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-[#fafaf9]'}`}
+                    className={`w-full px-4 py-2.5 flex items-center justify-between transition-colors text-left ${group.noLaunch ? 'bg-amber-50 hover:bg-amber-100' : 'hover:bg-subtle'}`}
                     onClick={() => toggleMonth(group.key)}>
                     <div className="flex items-center gap-2">
-                      <h2 className={`text-[13px] font-bold ${group.noLaunch ? 'text-amber-800' : 'text-[#111110]'}`}>{group.label}</h2>
-                      <span className={`text-[11px] ${group.noLaunch ? 'text-amber-700' : 'text-[#9a9a95]'}`}>{group.orders.length} заказов</span>
+                      <h2 className={`text-[13px] font-semibold ${group.noLaunch ? 'text-amber-800' : 'text-ink'}`}>{group.label}</h2>
+                      <span className={`text-[11px] tabular-nums ${group.noLaunch ? 'text-amber-700' : 'text-muted'}`}>{group.orders.length} заказов</span>
                       {group.noLaunch && (
                         <span className="text-[10px] font-medium text-amber-700">— нужно проставить дату запуска</span>
                       )}
                     </div>
                     <div className="flex items-center gap-3">
-                      <span className={`text-[13px] font-semibold font-mono ${group.noLaunch ? 'text-amber-800' : 'text-[#111110]'}`}>
+                      <span className={`text-[13px] font-semibold font-mono tabular-nums ${group.noLaunch ? 'text-amber-800' : 'text-ink'}`}>
                         {group.total.toLocaleString('ru-RU')} ₽
                       </span>
-                      <svg className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${group.noLaunch ? 'text-amber-600' : 'text-[#c4c4be]'} ${isMonthOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                      </svg>
+                      <IcChevron className={`w-3.5 h-3.5 transition-transform flex-shrink-0 ${group.noLaunch ? 'text-amber-600' : 'text-faint'} ${isMonthOpen ? 'rotate-90' : ''}`} />
                     </div>
                   </button>
 
                   {isMonthOpen && (
-                    <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
+                    <div className="border-t border-line-soft divide-y divide-canvas">
                       {group.orders.map((order, orderIdx) => {
                         const isOpen = expanded === order.id
                         const pn = order.parsedNotes
@@ -2365,7 +2359,7 @@ export default function B2BOrdersPage() {
                         return (
                           <div key={order.id} className={`border-l-4 ${isShipped ? 'border-l-emerald-500' : 'border-l-red-400'}`}>
                             <div
-                              className="w-full px-4 py-2 flex items-center justify-between gap-3 hover:bg-[#fafaf9] transition-colors cursor-pointer"
+                              className="w-full px-4 py-2 flex items-center justify-between gap-3 hover:bg-subtle transition-colors cursor-pointer"
                               onClick={() => setExpanded(isOpen ? null : order.id)}>
                               <div className="flex items-center gap-2 flex-1 min-w-0">
                                 <span onClick={e => e.stopPropagation()} className="flex-shrink-0 flex items-center">
@@ -2376,72 +2370,70 @@ export default function B2BOrdersPage() {
                                     className="cursor-pointer accent-[#111110] w-3.5 h-3.5"
                                   />
                                 </span>
-                                <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{orderIdx + 1}</span>
+                                <span className="text-[10px] font-semibold text-faint flex-shrink-0 w-4 text-right tabular-nums">{orderIdx + 1}</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
                                     {order.custom_number && (
-                                      <span className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0">
+                                      <span className="text-[15px] font-semibold font-mono text-ink bg-line-soft px-2 py-0.5 rounded flex-shrink-0 tabular-nums">
                                         {order.custom_number}
                                       </span>
                                     )}
                                     {order.client_order_number && (
-                                      <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
+                                      <span className="text-[10px] font-mono text-ink-soft bg-canvas border border-line px-1.5 py-px rounded flex-shrink-0">
                                         кл.{order.client_order_number}
                                       </span>
                                     )}
-                                    <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
+                                    <p className="text-[14px] font-semibold text-ink">{order.client_name}</p>
                                     {ds.status !== 'normal' && ds.status !== 'unknown' && (
                                       <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${DEADLINE_BADGE[ds.status]}`}>
                                         {ds.label}
                                       </span>
                                     )}
                                     {(pn.deadline_control?.next_action || pn.deadline_control?.reason) && (
-                                      <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-[#f0f0ec] text-[#6b6b66]">📝 Контроль</span>
+                                      <span className="text-[9px] font-medium px-1.5 py-px rounded-full bg-line-soft text-ink-soft">📝 Контроль</span>
                                     )}
                                     {(() => { const pb = PAY_BADGE[payStatus]; return pb ? (
                                       <span className={`text-[9px] font-medium px-1.5 py-px rounded-full flex-shrink-0 ${pb.cls}`}>{pb.label}</span>
                                     ) : null })()}
                                     {lastDoneIdx >= 0 && !isShipped && (
-                                      <span className="text-[10px] text-[#9a9a95]">· {STAGES[lastDoneIdx].label}</span>
+                                      <span className="text-[10px] text-muted">· {STAGES[lastDoneIdx].label}</span>
                                     )}
                                   </div>
-                                  <p className="text-[10px] text-[#9a9a95] flex flex-wrap items-center gap-x-2">
+                                  <p className="text-[10px] text-muted flex flex-wrap items-center gap-x-2 tabular-nums">
                                     <span>#{order.id}</span>
                                     <span>создан {quoteDate}</span>
                                     {launchedDate
                                       ? <span>· запуск {launchedDate}</span>
                                       : <span className="text-amber-600 font-medium">· запуск: не запущен</span>}
                                     <span>· {(order.items as unknown[]).length} поз.</span>
-                                    <span>· Просчитал: <span className="text-[#6b6b66] font-medium">{createdByName ?? '—'}</span></span>
-                                    <span>· Запустил: <span className="text-[#6b6b66] font-medium">{launchedByName ?? '—'}</span></span>
+                                    <span>· Просчитал: <span className="text-ink-soft font-medium">{createdByName ?? '—'}</span></span>
+                                    <span>· Запустил: <span className="text-ink-soft font-medium">{launchedByName ?? '—'}</span></span>
                                   </p>
                                 </div>
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
                                 {!isShipped && progress > 0 && (
-                                  <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-[#9a9a95]'}`}>
+                                  <span className={`text-[11px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : 'text-muted'}`}>
                                     {progress}%
                                   </span>
                                 )}
                                 <div className="text-right">
-                                  <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
+                                  <p className="text-[13px] font-semibold text-ink tabular-nums">{fmt(finalPrice)}</p>
                                   {(order.discount_percent ?? 0) > 0 && (
-                                    <p className="text-[10px] text-emerald-600">−{order.discount_percent}%</p>
+                                    <p className="text-[10px] text-emerald-600 tabular-nums">−{order.discount_percent}%</p>
                                   )}
                                 </div>
                                 {canDelete && (
                                   <button
                                     onClick={e => { e.stopPropagation(); setDeletingId(order.id) }}
                                     title="Удалить заказ"
-                                    className="p-1 rounded text-[#d4d4ce] hover:text-red-500 hover:bg-red-50 transition-colors">
+                                    className="p-1 rounded text-faint hover:text-red-500 hover:bg-red-50 transition-colors">
                                     <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                     </svg>
                                   </button>
                                 )}
-                                <svg className={`w-3 h-3 text-[#c4c4be] flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 5l7 7-7 7" />
-                                </svg>
+                                <IcChevron className={`w-3.5 h-3.5 text-faint flex-shrink-0 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                               </div>
                             </div>
 
@@ -2475,41 +2467,41 @@ export default function B2BOrdersPage() {
             className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
             onClick={() => setShowMaterialReq(false)}>
             <div
-              className="bg-white rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
+              className="bg-surface rounded-2xl w-full max-w-5xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl"
               onClick={e => e.stopPropagation()}>
 
               {/* Header */}
-              <div className="px-5 py-4 border-b border-[#e4e4e0] flex items-center justify-between flex-shrink-0">
+              <div className="px-5 py-4 border-b border-line flex items-center justify-between flex-shrink-0">
                 <div>
-                  <h2 className="text-[16px] font-semibold text-[#111110]">Ориентировочная потребность материала</h2>
-                  <p className="text-[12px] text-[#9a9a95] mt-0.5">Выбрано заказов: {selectedOrderIds.size}</p>
+                  <h2 className="text-[16px] font-semibold text-ink">Ориентировочная потребность материала</h2>
+                  <p className="text-[12px] text-muted mt-0.5 tabular-nums">Выбрано заказов: {selectedOrderIds.size}</p>
                 </div>
-                <button onClick={() => setShowMaterialReq(false)} className="text-[#c4c4be] hover:text-[#111110] text-[20px] leading-none px-1">✕</button>
+                <button onClick={() => setShowMaterialReq(false)} className="text-faint hover:text-ink transition-colors p-1"><IcX className="w-4 h-4" /></button>
               </div>
 
               {groups.length === 0 ? (
-                <div className="p-10 text-center text-[13px] text-[#9a9a95]">В выбранных заказах нет позиций</div>
+                <div className="p-10 text-center text-[13px] text-muted">В выбранных заказах нет позиций</div>
               ) : (
                 <>
                   {/* Totals */}
-                  <div className="px-5 py-3 bg-[#fafaf9] border-b border-[#e4e4e0] flex flex-wrap gap-6 flex-shrink-0 text-[12px]">
+                  <div className="px-5 py-3 bg-subtle border-b border-line flex flex-wrap gap-6 flex-shrink-0 text-[12px]">
                     <div>
-                      <span className="text-[#9a9a95]">Всего м²: </span>
-                      <span className="font-semibold">{totalArea.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}</span>
+                      <span className="text-muted">Всего м²: </span>
+                      <span className="font-semibold tabular-nums">{totalArea.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}</span>
                     </div>
                     <div>
-                      <span className="text-[#9a9a95]">Всего кг: </span>
-                      <span className="font-semibold">{totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</span>
+                      <span className="text-muted">Всего кг: </span>
+                      <span className="font-semibold tabular-nums">{totalWeight.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</span>
                     </div>
                     {hasCost && (
                       <div>
-                        <span className="text-[#9a9a95]">Ориент. стоимость: </span>
-                        <span className="font-semibold text-[#111110]">{totalCost.toLocaleString('ru-RU')} ₽</span>
+                        <span className="text-muted">Ориент. стоимость: </span>
+                        <span className="font-semibold text-ink tabular-nums">{totalCost.toLocaleString('ru-RU')} ₽</span>
                       </div>
                     )}
                     <div>
-                      <span className="text-[#9a9a95]">Групп материалов: </span>
-                      <span className="font-semibold">{groups.length}</span>
+                      <span className="text-muted">Групп материалов: </span>
+                      <span className="font-semibold tabular-nums">{groups.length}</span>
                     </div>
                   </div>
 
@@ -2522,31 +2514,31 @@ export default function B2BOrdersPage() {
                   {/* Table */}
                   <div className="overflow-auto flex-1">
                     <table className="w-full text-[12px]">
-                      <thead className="bg-[#fafaf9] border-b border-[#e4e4e0] sticky top-0 z-10">
+                      <thead className="bg-subtle border-b border-line sticky top-0 z-10">
                         <tr>
-                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Материал</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Толщина</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Формат листа</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">м² деталей</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Отход %</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Листов к закупке</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Вес кг</th>
-                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Стоимость листов</th>
-                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказы</th>
+                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Материал</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Толщина</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Формат листа</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">м² деталей</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Отход %</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Листов к закупке</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Вес кг</th>
+                          <th className="text-right px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Стоимость листов</th>
+                          <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Заказы</th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-[#f4f4f0]">
+                      <tbody className="divide-y divide-line-soft">
                         {groups.map(g => (
-                          <tr key={g.materialKey} className={`hover:bg-[#fafaf9] ${g.unmatched ? 'bg-amber-50/30' : ''}`}>
+                          <tr key={g.materialKey} className={`hover:bg-subtle ${g.unmatched ? 'bg-amber-50/30' : ''}`}>
                             <td className="px-3 py-2.5 min-w-[160px]">
-                              <p className="font-medium text-[#111110]">{g.materialName}</p>
-                              {g.category && <p className="text-[10px] text-[#9a9a95]">{g.category}</p>}
+                              <p className="font-medium text-ink">{g.materialName}</p>
+                              {g.category && <p className="text-[10px] text-muted">{g.category}</p>}
                               {g.unmatched && (
                                 <p className="text-[10px] text-amber-700 mt-0.5">⚠ Не найден в справочнике</p>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66] whitespace-nowrap">{g.thickness} мм</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[11px] text-[#6b6b66] whitespace-nowrap">
+                            <td className="px-3 py-2.5 text-right font-mono text-ink-soft whitespace-nowrap tabular-nums">{g.thickness} мм</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-[11px] text-ink-soft whitespace-nowrap tabular-nums">
                               {g.sheetWidth && g.sheetHeight ? (
                                 <span>
                                   {g.sheetWidth}×{g.sheetHeight}
@@ -2556,25 +2548,25 @@ export default function B2BOrdersPage() {
                                 </span>
                               ) : '—'}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110]">
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink tabular-nums">
                               {g.areaM2.toLocaleString('ru-RU', { maximumFractionDigits: 3 })}
                             </td>
-                            <td className="px-3 py-2.5 text-right text-[#6b6b66]">{g.wastePercent}%</td>
-                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110]">
+                            <td className="px-3 py-2.5 text-right text-ink-soft tabular-nums">{g.wastePercent}%</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink tabular-nums">
                               {g.sheetsCount != null ? g.sheetsCount : '—'}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">
+                            <td className="px-3 py-2.5 text-right font-mono text-ink-soft tabular-nums">
                               {g.weightKg.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono whitespace-nowrap">
+                            <td className="px-3 py-2.5 text-right font-mono whitespace-nowrap tabular-nums">
                               {g.estimatedCost != null
-                                ? <span className="font-semibold text-[#111110]">{g.estimatedCost.toLocaleString('ru-RU')} ₽</span>
-                                : <span className="text-[#c4c4be]">—</span>}
+                                ? <span className="font-semibold text-ink">{g.estimatedCost.toLocaleString('ru-RU')} ₽</span>
+                                : <span className="text-faint">—</span>}
                             </td>
                             <td className="px-3 py-2.5 min-w-[120px]">
                               <div className="flex flex-wrap gap-1">
                                 {g.orderNums.map((n, i) => (
-                                  <span key={i} className="text-[10px] font-mono bg-[#f0f0ec] px-1.5 py-px rounded whitespace-nowrap">{n}</span>
+                                  <span key={i} className="text-[10px] font-mono bg-line-soft px-1.5 py-px rounded whitespace-nowrap tabular-nums">{n}</span>
                                 ))}
                               </div>
                             </td>
@@ -2585,16 +2577,16 @@ export default function B2BOrdersPage() {
                   </div>
 
                   {/* Footer */}
-                  <div className="px-5 py-3 border-t border-[#e4e4e0] flex items-center justify-between flex-shrink-0">
+                  <div className="px-5 py-3 border-t border-line flex items-center justify-between flex-shrink-0">
                     <button
                       onClick={() => setShowMaterialReq(false)}
-                      className="text-[12px] text-[#9a9a95] hover:text-[#111110] transition-colors px-3 py-1.5">
+                      className="text-[12px] text-muted hover:text-ink transition-colors px-3 py-1.5">
                       Закрыть
                     </button>
                     <button
                       onClick={() => handleCreatePurchaseOrder(groups)}
                       disabled={creatingPurchaseOrder || groups.length === 0 || selectedOrderIds.size === 0}
-                      className="text-[12px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                      className="text-[12px] font-medium px-4 py-2 rounded-lg bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                       {creatingPurchaseOrder ? 'Создаём...' : '📋 Передать в закупку'}
                     </button>
                   </div>
@@ -2607,7 +2599,7 @@ export default function B2BOrdersPage() {
 
       {/* Toast */}
       {toastMsg && (
-        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[12px] font-medium text-white transition-all ${toastError ? 'bg-red-600' : 'bg-[#111110]'}`}>
+        <div className={`fixed bottom-5 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-xl shadow-lg text-[12px] font-medium text-white transition-all ${toastError ? 'bg-red-600' : 'bg-ink'}`}>
           {toastMsg}
         </div>
       )}
@@ -2615,19 +2607,19 @@ export default function B2BOrdersPage() {
       {/* Диалог архивирования */}
       {deletingId !== null && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Архивировать заказ?</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-5">Заказ будет скрыт из списка. Данные сохранятся в базе.</p>
+          <div className="bg-surface rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h2 className="text-[16px] font-semibold text-ink mb-1">Архивировать заказ?</h2>
+            <p className="text-[13px] text-ink-soft mb-5">Заказ будет скрыт из списка. Данные сохранятся в базе.</p>
             <div className="flex gap-2">
               <button
                 onClick={() => setDeletingId(null)}
-                className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
               <button
                 onClick={handleDelete}
                 disabled={deleting}
-                className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                className="flex-1 py-2.5 rounded-lg bg-ink text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                 {deleting ? 'Архивирование...' : 'Архивировать'}
               </button>
             </div>
