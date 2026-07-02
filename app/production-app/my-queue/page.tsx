@@ -126,29 +126,29 @@ export default function MyQueuePage() {
   const waiting = tasks.filter(t => !isReady(t))
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
+    <div className="min-h-screen bg-canvas flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-4 lg:pt-6">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
+            <h1 className="text-[20px] font-semibold text-ink tracking-tight">Мои задачи</h1>
+            <p className="text-[13px] text-muted mt-0.5 tabular-nums">{ready.length} готово к работе · {waiting.length} ожидаю</p>
           </div>
           <Link href={`/production-app/station/${myStations[0] ?? 'cutting'}`}
-            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
+            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-ink hover:text-ink transition-colors whitespace-nowrap flex-shrink-0">
             Партиями →
           </Link>
         </div>
       </div>
 
       <div className="px-4 pt-4">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Готово к работе</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-3">Готово к работе</p>
         {ready.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center mb-6">
-            <p className="text-[13px] text-[#9a9a95]">Нет задач в очереди</p>
+          <div className="bg-surface rounded-xl border border-line p-6 text-center mb-6">
+            <p className="text-[13px] text-muted">Нет задач в очереди</p>
           </div>
         ) : (
           <div className="space-y-2 mb-6">
@@ -170,12 +170,12 @@ export default function MyQueuePage() {
                   <div key={t.id} className="bg-amber-50/50 rounded-xl border border-amber-200 px-4 py-3">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#111110] truncate">
+                        <p className="text-[14px] font-semibold text-ink truncate">
                           {orders.get(t.order_id)?.custom_number?.trim() || `#${t.order_id}`}
                         </p>
-                        <p className="text-[12px] text-[#6b6b66] truncate">{orders.get(t.order_id)?.client_name}</p>
+                        <p className="text-[12px] text-ink-soft truncate">{orders.get(t.order_id)?.client_name}</p>
                       </div>
-                      <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap flex-shrink-0">
+                      <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap flex-shrink-0">
                         Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
                       </span>
                     </div>
@@ -193,13 +193,13 @@ export default function MyQueuePage() {
       {/* Andon modal */}
       {andonFor != null && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => setAndonFor(null)}>
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5" onClick={e => e.stopPropagation()}>
-            <h2 className="text-[15px] font-bold text-[#111110] mb-3">Что случилось?</h2>
+          <div className="bg-surface rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5" onClick={e => e.stopPropagation()}>
+            <h2 className="text-[15px] font-semibold text-ink mb-3">Что случилось?</h2>
             <div className="space-y-1.5 mb-3">
               {ANDON_REASONS.map(r => (
-                <label key={r.code} className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${andonReason === r.code ? 'border-red-400 bg-red-50' : 'border-[#e4e4e0]'}`}>
+                <label key={r.code} className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${andonReason === r.code ? 'border-red-400 bg-red-50' : 'border-line'}`}>
                   <input type="radio" name="andon" checked={andonReason === r.code} onChange={() => setAndonReason(r.code)} className="accent-[#111110]" />
-                  <span className="text-[13px] text-[#111110]">{r.label}</span>
+                  <span className="text-[13px] text-ink">{r.label}</span>
                 </label>
               ))}
             </div>
@@ -207,11 +207,11 @@ export default function MyQueuePage() {
               value={andonComment}
               onChange={e => setAndonComment(e.target.value)}
               placeholder="Комментарий (необязательно)"
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3"
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink mb-3"
               rows={2}
             />
             <div className="flex gap-2">
-              <button onClick={() => setAndonFor(null)} className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66]">Отмена</button>
+              <button onClick={() => setAndonFor(null)} className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft">Отмена</button>
               <button onClick={submitAndon} className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-[13px] font-medium">Сообщить</button>
             </div>
           </div>
@@ -231,21 +231,21 @@ function TaskCard({ task, order, onStart, onDone, onAndon }: {
   const spec = specLine(order?.items?.[task.item_index])
   const active = task.status === 'in_progress'
   return (
-    <div className={`bg-white rounded-xl border px-4 py-3 ${active ? 'border-emerald-300' : 'border-[#e4e4e0]'}`}>
+    <div className={`bg-surface rounded-xl border px-4 py-3 ${active ? 'border-emerald-300' : 'border-line'}`}>
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <Link href={`/p/o/${task.order_id}`} className="min-w-0">
-          <p className="text-[14px] font-bold text-[#111110] truncate">{order?.custom_number?.trim() || `#${task.order_id}`}</p>
-          <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
+          <p className="text-[14px] font-semibold text-ink truncate">{order?.custom_number?.trim() || `#${task.order_id}`}</p>
+          <p className="text-[12px] text-ink-soft truncate">{order?.client_name}</p>
         </Link>
-        <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-[#f0f0ec] text-[#6b6b66] whitespace-nowrap flex-shrink-0">
+        <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-line-soft text-ink-soft whitespace-nowrap flex-shrink-0">
           Поз. {task.item_index + 1} · {STAGE_LABELS[task.stage_key as DetailStageKey] ?? task.stage_key}
         </span>
       </div>
-      {spec && <p className="text-[12px] font-mono text-[#111110] mb-2.5">{spec}</p>}
+      {spec && <p className="text-[12px] font-mono text-ink mb-2.5 tabular-nums">{spec}</p>}
       {active && <p className="text-[11px] font-medium text-emerald-700 mb-2">🔧 в работе</p>}
       <div className="flex gap-2">
         {!active && (
-          <button onClick={onStart} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[13px] font-medium hover:border-[#111110] hover:text-[#111110] transition-colors">Взял</button>
+          <button onClick={onStart} className="px-3 py-2 rounded-lg border border-line text-ink-soft text-[13px] font-medium hover:border-ink hover:text-ink transition-colors">Взял</button>
         )}
         <button onClick={onDone} className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-medium">Выполнено</button>
         <button onClick={onAndon} className="px-3 py-2 rounded-lg border border-red-200 text-red-600 text-[13px] font-medium">Проблема</button>

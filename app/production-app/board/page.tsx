@@ -51,7 +51,7 @@ function dColor(d: number, ready: boolean) {
   if (d < 0)  return 'text-red-600 bg-red-50 border-red-200'
   if (d === 0) return 'text-amber-700 bg-amber-50 border-amber-200'
   if (d <= 2) return 'text-yellow-700 bg-yellow-50 border-yellow-200'
-  return 'text-[#6b6b66] bg-[#f0f0ec] border-[#e4e4e0]'
+  return 'text-ink-soft bg-line-soft border-line'
 }
 
 type CellStatus = 'done' | 'inprogress' | 'partial' | 'problem' | 'none'
@@ -153,21 +153,21 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const problemCount = rows.filter(r => r.anyProblem).length
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Борд производства</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-3 lg:pt-6">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Борд производства</h1>
+        <p className="text-[13px] text-muted mt-0.5 tabular-nums">
           {rows.length - doneCount} в работе · {doneCount} готовы к отгрузке{problemCount > 0 ? ` · ${problemCount} с проблемой` : ''}
         </p>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {NAV.map(n => (
             <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/board' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/board' ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
               {n.label}
             </Link>
           ))}
           <Link href={showAll ? '/production-app/board' : '/production-app/board?all=1'}
-            className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f0f0ec] transition-colors ml-auto">
+            className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-line text-ink-soft hover:bg-line-soft transition-colors ml-auto">
             {showAll ? 'Скрыть готовые' : `Показать готовые (${doneCount})`}
           </Link>
         </div>
@@ -175,31 +175,31 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
       <div className="px-4 pt-4">
         {visible.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет заказов в работе</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет заказов в работе</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-x-auto">
+          <div className="bg-surface rounded-xl border border-line overflow-x-auto">
             <table className="text-xs border-collapse min-w-full">
               <thead>
-                <tr className="border-b border-[#e4e4e0]">
-                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide sticky left-0 bg-white z-10">Заказ</th>
-                  <th className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95]">Срок</th>
-                  {COLS.map(c => <th key={c.key} className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95] whitespace-nowrap">{c.label}</th>)}
+                <tr className="border-b border-line">
+                  <th className="text-left px-3 py-2 text-[11px] font-semibold text-muted uppercase tracking-wide sticky left-0 bg-surface z-10">Заказ</th>
+                  <th className="px-2 py-2 text-[11px] font-semibold text-muted">Срок</th>
+                  {COLS.map(c => <th key={c.key} className="px-2 py-2 text-[11px] font-semibold text-muted whitespace-nowrap">{c.label}</th>)}
                 </tr>
               </thead>
               <tbody>
                 {visible.map(({ o, cells, anyProblem, allDone, days }) => (
-                  <tr key={o.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                    <td className="px-3 py-2 sticky left-0 bg-white">
+                  <tr key={o.id} className="border-b border-canvas last:border-0 hover:bg-subtle">
+                    <td className="px-3 py-2 sticky left-0 bg-surface">
                       <Link href={`/production-app/orders/${o.id}`} className="block min-w-[120px]">
-                        <span className="font-bold text-[#111110]">{o.custom_number?.trim() || `#${o.id}`}</span>
+                        <span className="font-semibold text-ink">{o.custom_number?.trim() || `#${o.id}`}</span>
                         {anyProblem && <span className="ml-1 text-red-600">⚠</span>}
-                        <span className="block text-[11px] text-[#9a9a95] truncate max-w-[160px]">{o.client_name}</span>
+                        <span className="block text-[11px] text-muted truncate max-w-[160px]">{o.client_name}</span>
                       </Link>
                     </td>
                     <td className="px-2 py-2 text-center">
-                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${dColor(days, allDone)}`}>{allDone ? 'готов' : dLabel(days)}</span>
+                      <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap tabular-nums ${dColor(days, allDone)}`}>{allDone ? 'готов' : dLabel(days)}</span>
                     </td>
                     {COLS.map(c => <td key={c.key} className="px-2 py-2 text-center"><StageCell cell={cells[c.key]} /></td>)}
                   </tr>
@@ -211,19 +211,19 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 
         {/* Легенда */}
         <div className="flex flex-wrap items-center gap-3 mt-3 px-1">
-          <span className="text-[10px] text-[#9a9a95]">Ячейки:</span>
+          <span className="text-[11px] text-muted">Ячейки:</span>
           {[
             { l: 'готово', c: 'bg-emerald-500' },
             { l: 'в работе', c: 'bg-blue-500' },
             { l: 'частично', c: 'bg-amber-400' },
-            { l: 'не начато', c: 'bg-[#e4e4e0]' },
+            { l: 'не начато', c: 'bg-line' },
             { l: 'проблема', c: 'bg-red-500' },
           ].map(x => (
-            <span key={x.l} className="flex items-center gap-1 text-[10px] text-[#6b6b66]">
+            <span key={x.l} className="flex items-center gap-1 text-[11px] text-ink-soft">
               <span className={`inline-block w-2.5 h-2.5 rounded-sm ${x.c}`} />{x.l}
             </span>
           ))}
-          <span className="text-[10px] text-[#9a9a95]">· синяя рамка — текущий этап</span>
+          <span className="text-[11px] text-muted">· синяя рамка — текущий этап</span>
         </div>
       </div>
     </div>
@@ -231,11 +231,11 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
 }
 
 function StageCell({ cell }: { cell: Cell }) {
-  if (!cell) return <span className="text-[#d4d4d0]">—</span>
+  if (!cell) return <span className="text-faint">—</span>
   const ring = cell.frontier ? 'ring-2 ring-blue-400 ring-offset-1' : ''
-  if (cell.status === 'done') return <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500 text-white text-[12px] font-bold ${ring}`}>✓</span>
+  if (cell.status === 'done') return <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md bg-emerald-500 text-white text-[12px] font-semibold ${ring}`}>✓</span>
   if (cell.status === 'problem') return <span className={`inline-flex items-center justify-center w-6 h-6 rounded-md bg-red-500 text-white text-[12px] ${ring}`}>⚠</span>
-  if (cell.status === 'inprogress') return <span className={`inline-flex items-center justify-center min-w-6 h-6 px-1 rounded-md bg-blue-500 text-white text-[10px] font-medium ${ring}`}>{cell.worker || '🔧'}</span>
-  if (cell.status === 'partial') return <span className={`inline-flex items-center justify-center min-w-6 h-6 px-1 rounded-md bg-amber-400 text-white text-[10px] font-bold ${ring}`}>{cell.doneN}/{cell.total}</span>
-  return <span className={`inline-block w-6 h-6 rounded-md bg-[#f0f0ec] border border-[#e4e4e0] ${ring}`} />
+  if (cell.status === 'inprogress') return <span className={`inline-flex items-center justify-center min-w-6 h-6 px-1 rounded-md bg-blue-500 text-white text-[11px] font-medium ${ring}`}>{cell.worker || '🔧'}</span>
+  if (cell.status === 'partial') return <span className={`inline-flex items-center justify-center min-w-6 h-6 px-1 rounded-md bg-amber-400 text-white text-[11px] font-semibold tabular-nums ${ring}`}>{cell.doneN}/{cell.total}</span>
+  return <span className={`inline-block w-6 h-6 rounded-md bg-line-soft border border-line ${ring}`} />
 }

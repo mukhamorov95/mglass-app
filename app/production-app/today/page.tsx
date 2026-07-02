@@ -58,10 +58,10 @@ export default async function ProductionTodayPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Пул по станциям</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{tasks.length} задач цеха · {problems.length} проблем</p>
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-4 lg:pt-6">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Пул по станциям</h1>
+        <p className="text-[13px] text-muted mt-0.5 tabular-nums">{tasks.length} задач цеха · {problems.length} проблем</p>
       </div>
 
       {problems.length > 0 && (
@@ -74,10 +74,10 @@ export default async function ProductionTodayPage() {
                 <div key={t.id} className="bg-red-50 rounded-xl border border-red-200 px-4 py-3">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="min-w-0">
-                      <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
-                      <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name}</p>
+                      <p className="text-[14px] font-semibold text-ink truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
+                      <p className="text-[12px] text-ink-soft truncate">{o?.client_name}</p>
                     </div>
-                    <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 whitespace-nowrap flex-shrink-0">
+                    <span className="text-[11px] font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 whitespace-nowrap flex-shrink-0">
                       Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
                     </span>
                   </div>
@@ -98,17 +98,17 @@ export default async function ProductionTodayPage() {
           if (list.length === 0) return null
           return (
             <div key={station} className="mb-6">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-3 tabular-nums">
                 {STAGE_LABELS[station]} · {list.length}
               </p>
               <div className="space-y-2">
                 {list.map(t => {
                   const o = orders.get(t.order_id)
                   return (
-                    <div key={t.id} className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex items-center justify-between gap-2">
+                    <div key={t.id} className="bg-surface rounded-xl border border-line px-4 py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
-                        <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name} · поз. {t.item_index + 1}</p>
+                        <p className="text-[14px] font-semibold text-ink truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
+                        <p className="text-[12px] text-ink-soft truncate">{o?.client_name} · поз. {t.item_index + 1}</p>
                       </div>
                       <AssignWorker taskId={t.id} station={t.station} assignedTo={t.assigned_to} workers={allWorkers} />
                     </div>
@@ -119,8 +119,8 @@ export default async function ProductionTodayPage() {
           )
         })}
         {tasks.length === 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет задач в производстве</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет задач в производстве</p>
           </div>
         )}
       </div>

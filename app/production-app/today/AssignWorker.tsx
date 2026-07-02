@@ -35,8 +35,8 @@ export default function AssignWorker({ taskId, station, assignedTo, workers }: {
       disabled={saving}
       onChange={e => assign(e.target.value)}
       onClick={e => e.stopPropagation()}
-      className={`text-[10px] font-medium px-2 py-1 rounded-full border cursor-pointer outline-none max-w-[140px] ${
-        assignedTo ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-[#f0f0ec] text-[#9a9a95] border-transparent'
+      className={`text-[11px] font-medium px-2 py-1 rounded-full border cursor-pointer outline-none max-w-[140px] ${
+        assignedTo ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-line-soft text-muted border-transparent'
       }`}>
       <option value="">свободно</option>
       {sorted.map(w => (

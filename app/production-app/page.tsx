@@ -61,7 +61,7 @@ const BUCKETS: { key: BucketKey; label: string; hdr: string; badge: string }[] =
   { key: 'today',    label: '🟠 Отдать сегодня',  hdr: 'text-amber-700',   badge: 'bg-amber-50 text-amber-700 border-amber-200' },
   { key: 'tomorrow', label: '🟡 Отдать завтра',   hdr: 'text-yellow-700',  badge: 'bg-yellow-50 text-yellow-700 border-yellow-200' },
   { key: 'dayafter', label: '🟢 Отдать послезавтра', hdr: 'text-emerald-700', badge: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
-  { key: 'later',    label: '⚪ Позже',           hdr: 'text-[#6b6b66]',   badge: 'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]' },
+  { key: 'later',    label: '⚪ Позже',           hdr: 'text-ink-soft',   badge: 'bg-line-soft text-ink-soft border-line' },
 ]
 
 const NAV = [
@@ -113,14 +113,14 @@ export default async function ProductionAppPage() {
   const urgent = grouped.overdue.length + grouped.today.length
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Сводка производства</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{active.length} в работе · {urgent} горят · {grouped.ready.length} готовы к выдаче</p>
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-3 lg:pt-6">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Сводка производства</h1>
+        <p className="text-[13px] text-muted mt-0.5 tabular-nums">{active.length} в работе · {urgent} горят · {grouped.ready.length} готовы к выдаче</p>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {NAV.map(n => (
             <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app' ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
               {n.label}
             </Link>
           ))}
@@ -129,8 +129,8 @@ export default async function ProductionAppPage() {
 
       <div className="px-4 pt-4 space-y-5">
         {active.length === 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет активных заказов</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет активных заказов</p>
           </div>
         )}
         {BUCKETS.map(b => {
@@ -138,28 +138,28 @@ export default async function ProductionAppPage() {
           if (list.length === 0) return null
           return (
             <div key={b.key}>
-              <p className={`text-[12px] font-bold uppercase tracking-wide mb-2 ${b.hdr}`}>{b.label} · {list.length}</p>
+              <p className={`text-[12px] font-semibold uppercase tracking-wide mb-2 tabular-nums ${b.hdr}`}>{b.label} · {list.length}</p>
               <div className="space-y-2">
                 {list.map(({ order, rd }) => {
                   const label = order.custom_number?.trim() || `#${order.id}`
                   return (
                     <Link key={order.id} href={`/production-app/orders/${order.id}`}
-                      className="block bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 hover:border-[#111110] active:bg-[#f8f8f7] transition-colors">
+                      className="block bg-surface rounded-xl border border-line px-4 py-3 hover:border-ink active:bg-canvas transition-colors">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div className="min-w-0">
-                          <p className="text-[14px] font-bold text-[#111110] truncate">{label}</p>
-                          <p className="text-[12px] text-[#6b6b66] truncate">{order.client_name}</p>
+                          <p className="text-[14px] font-semibold text-ink truncate">{label}</p>
+                          <p className="text-[12px] text-ink-soft truncate">{order.client_name}</p>
                         </div>
-                        <span className={`text-[10px] font-medium px-2 py-1 rounded-full border whitespace-nowrap flex-shrink-0 ${b.badge}`}>
+                        <span className={`text-[11px] font-medium px-2 py-1 rounded-full border whitespace-nowrap flex-shrink-0 ${b.badge}`}>
                           {rd.label}{rd.hasProblems ? ' · ⚠' : ''}
                         </span>
                       </div>
                       {rd.total > 0 && (
                         <div className="flex items-center gap-2">
-                          <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-                            <div className="h-full bg-[#111110] rounded-full" style={{ width: `${(rd.done / rd.total) * 100}%` }} />
+                          <div className="flex-1 h-1.5 bg-line-soft rounded-full overflow-hidden">
+                            <div className="h-full bg-ink rounded-full" style={{ width: `${(rd.done / rd.total) * 100}%` }} />
                           </div>
-                          <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">{rd.done}/{rd.total} уп.</span>
+                          <span className="text-[11px] text-muted whitespace-nowrap tabular-nums">{rd.done}/{rd.total} уп.</span>
                         </div>
                       )}
                     </Link>

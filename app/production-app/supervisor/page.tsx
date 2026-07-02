@@ -166,9 +166,9 @@ const DEADLINE_BADGE: Record<DeadlineStatus, string> = {
   overdue:  'bg-red-50 text-red-600 border-red-200',
   today:    'bg-amber-50 text-amber-700 border-amber-200',
   tomorrow: 'bg-yellow-50 text-yellow-700 border-yellow-200',
-  normal:   'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]',
+  normal:   'bg-line-soft text-ink-soft border-line',
   ready:    'bg-emerald-50 text-emerald-700 border-emerald-200',
-  shipped:  'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]',
+  shipped:  'bg-line-soft text-muted border-line',
 }
 
 const FILTER_LABELS: Record<Filter, string> = {
@@ -256,20 +256,20 @@ export default async function SupervisorPage(props: {
   })
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
+    <div className="min-h-screen bg-canvas pb-20">
 
       {/* Header */}
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
-        <Link href="/production-app" className="text-[12px] text-[#9a9a95] hover:text-[#111110] mb-2 inline-block">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-4 lg:pt-6">
+        <Link href="/production-app" className="text-[12px] text-muted hover:text-ink mb-2 inline-block">
           ← Производство
         </Link>
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Панель производства</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">Обзор активных заказов</p>
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Панель производства</h1>
+        <p className="text-[13px] text-muted mt-0.5">Обзор активных заказов</p>
       </div>
 
       {/* Stat cards */}
       <div className="grid grid-cols-2 gap-3 p-4">
-        <StatCard label="Активных"   value={counts.tasks}    color="text-[#111110]"   />
+        <StatCard label="Активных"   value={counts.tasks}    color="text-ink"   />
         <StatCard label="Просрочено" value={counts.overdue}  color="text-red-600"     />
         <StatCard label="Проблемы"   value={counts.problems} color="text-orange-600"  />
         <StatCard label="Упаковано"  value={counts.ready}    color="text-emerald-600" />
@@ -284,8 +284,8 @@ export default async function SupervisorPage(props: {
               href={f === 'all' ? '/production-app/supervisor' : `/production-app/supervisor?filter=${f}`}
               className={`whitespace-nowrap text-[11px] font-semibold px-3 py-1.5 rounded-full border transition-colors flex-shrink-0 ${
                 filter === f
-                  ? 'bg-[#111110] text-white border-[#111110]'
-                  : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                  ? 'bg-ink text-white border-ink'
+                  : 'bg-surface text-ink-soft border-line hover:border-ink hover:text-ink'
               }`}
             >
               {FILTER_LABELS[f]}
@@ -306,8 +306,8 @@ export default async function SupervisorPage(props: {
       {/* Orders */}
       <div className="px-4">
         {sorted.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет заказов</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет заказов</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -321,28 +321,28 @@ export default async function SupervisorPage(props: {
               return (
                 <div
                   key={order.id}
-                  className={`bg-white rounded-xl border px-4 py-3 ${
-                    prog.hasProblems ? 'border-orange-200' : 'border-[#e4e4e0]'
+                  className={`bg-surface rounded-xl border px-4 py-3 ${
+                    prog.hasProblems ? 'border-orange-200' : 'border-line'
                   }`}
                 >
                   {/* Top row */}
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div className="min-w-0">
-                      <p className="text-[14px] font-bold text-[#111110] truncate">{label}</p>
-                      <p className="text-[12px] text-[#6b6b66] truncate">{order.client_name}</p>
+                      <p className="text-[14px] font-semibold text-ink truncate">{label}</p>
+                      <p className="text-[12px] text-ink-soft truncate">{order.client_name}</p>
                     </div>
                     <div className="flex items-center gap-1.5 flex-shrink-0">
                       {prog.hasProblems && (
-                        <span className="text-[10px] font-bold px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200">
+                        <span className="text-[11px] font-semibold px-2 py-1 rounded-full border bg-orange-50 text-orange-600 border-orange-200 tabular-nums">
                           ⚠ {prog.problems.length}
                         </span>
                       )}
                       {auditSummary.count > 0 && (
-                        <span className="text-[10px] font-medium px-2 py-1 rounded-full border bg-blue-50 text-blue-600 border-blue-200">
+                        <span className="text-[11px] font-medium px-2 py-1 rounded-full border bg-blue-50 text-blue-600 border-blue-200 tabular-nums">
                           ↩ {auditSummary.count}
                         </span>
                       )}
-                      <span className={`text-[10px] font-medium px-2 py-1 rounded-full border ${DEADLINE_BADGE[ds.status]}`}>
+                      <span className={`text-[11px] font-medium px-2 py-1 rounded-full border ${DEADLINE_BADGE[ds.status]}`}>
                         {ds.label}
                       </span>
                     </div>
@@ -351,15 +351,15 @@ export default async function SupervisorPage(props: {
                   {/* Progress bar */}
                   {prog.total > 0 && (
                     <div className="flex items-center gap-2 mb-2">
-                      <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+                      <div className="flex-1 h-1.5 bg-line-soft rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full transition-all ${
-                            prog.done === prog.total ? 'bg-emerald-500' : 'bg-[#111110]'
+                            prog.done === prog.total ? 'bg-emerald-500' : 'bg-ink'
                           }`}
                           style={{ width: `${pct}%` }}
                         />
                       </div>
-                      <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">
+                      <span className="text-[11px] text-muted whitespace-nowrap tabular-nums">
                         {prog.done}/{prog.total} уп.
                       </span>
                     </div>
@@ -378,23 +378,23 @@ export default async function SupervisorPage(props: {
 
                   {/* Audit indicator */}
                   {auditSummary.count > 0 && auditSummary.latest && (
-                    <div className="mb-2 px-3 py-2 rounded-lg bg-[#f8f8f7] border border-[#ebebе8]">
+                    <div className="mb-2 px-3 py-2 rounded-lg bg-canvas border border-line">
                       <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                        <span className="text-[10px] font-semibold text-[#6b6b66]">
+                        <span className="text-[11px] font-semibold text-ink-soft tabular-nums">
                           ↩ Отмены: {auditSummary.count}
                         </span>
-                        <span className="text-[10px] text-[#c4c4be]">·</span>
-                        <span className="text-[10px] text-[#9a9a95]">
+                        <span className="text-[11px] text-faint">·</span>
+                        <span className="text-[11px] text-muted tabular-nums">
                           {fmtDateTime(auditSummary.latest.created_at)}
                         </span>
                       </div>
-                      <p className="text-[10px] text-[#6b6b66] leading-snug">
+                      <p className="text-[11px] text-ink-soft leading-snug">
                         Поз.{(auditSummary.latest.item_index ?? 0) + 1}
                         {' — '}{(STAGE_LABELS as Record<string, string>)[auditSummary.latest.stage_key] ?? auditSummary.latest.stage_key}
                         {auditSummary.latest.reason ? `: ${auditSummary.latest.reason}` : ''}
                       </p>
                       {auditSummary.latest.created_by_email && (
-                        <p className="text-[10px] text-[#9a9a95] mt-0.5">
+                        <p className="text-[11px] text-muted mt-0.5">
                           Кто: {auditSummary.latest.created_by_email}
                         </p>
                       )}
@@ -402,14 +402,14 @@ export default async function SupervisorPage(props: {
                   )}
 
                   {/* Links */}
-                  <div className="flex items-center gap-3 pt-1 border-t border-[#f0f0ec]">
+                  <div className="flex items-center gap-3 pt-1 border-t border-line-soft">
                     <Link
                       href={`/production-app/orders/${order.id}`}
-                      className="text-[11px] font-semibold text-[#111110] hover:underline"
+                      className="text-[11px] font-semibold text-ink hover:underline"
                     >
                       → Заказ
                     </Link>
-                    <span className="text-[#e4e4e0] text-[10px]">|</span>
+                    <span className="text-line text-[11px]">|</span>
                     <a
                       href={`/p/o/${order.id}`}
                       className="text-[11px] font-semibold text-blue-600 hover:underline"
@@ -431,9 +431,9 @@ export default async function SupervisorPage(props: {
 
 function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
   return (
-    <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-      <p className="text-[11px] text-[#9a9a95] font-medium uppercase tracking-wide leading-tight">{label}</p>
-      <p className={`text-[32px] font-bold mt-1 leading-none ${color}`}>{value}</p>
+    <div className="bg-surface rounded-xl border border-line p-4">
+      <p className="text-[11px] text-muted font-medium uppercase tracking-wide leading-tight">{label}</p>
+      <p className={`text-[32px] font-semibold mt-1 leading-none tabular-nums ${color}`}>{value}</p>
     </div>
   )
 }
