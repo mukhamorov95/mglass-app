@@ -7,6 +7,9 @@ import LaunchOrderModal from '@/components/LaunchOrderModal'
 import type { LaunchOrderPayload } from '@/components/LaunchOrderModal'
 import type { FinancialSettings } from '@/lib/types'
 import { computeMarginStatus, MARGIN_STATUS_LABELS } from '@/lib/types'
+import {
+  PageHeader, SegmentedTabs, Field, EmptyState, SkeletonRows, IcSearch,
+} from '@/components/ds'
 
 type Calc = {
   id: number
@@ -346,53 +349,45 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
   const defaultSettings = allSettings[0]
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-5xl mx-auto px-4 py-6">
 
-        {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-[18px] font-bold text-[#111110]">История расчётов</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">{calcs.length} расчётов</p>
-          </div>
-          <div className="flex gap-1.5">
-            {[
+        <PageHeader
+          title="История расчётов"
+          subtitle={`${calcs.length} расчётов`}
+          actions={
+            [
               { href: '/calculator/shower', label: '🚿 Душевая' },
               { href: '/calculator/mirror', label: '🪞 Зеркало' },
               { href: '/calculator/loft',   label: '🏗️ Лофт' },
             ].map(l => (
               <Link key={l.href} href={l.href}
-                className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                className="inline-flex items-center gap-1 text-[12px] font-medium text-ink-soft hover:text-ink px-3 py-1.5 border border-line rounded-lg hover:border-ink transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ink/15">
                 + {l.label}
               </Link>
-            ))}
-          </div>
-        </div>
+            ))
+          }
+        />
 
         {/* Search */}
-        <div className="relative mb-3">
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#9a9a95]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z" />
-          </svg>
-          <input
+        <div className="mb-3">
+          <Field
+            icon={<IcSearch className="w-3.5 h-3.5" />}
             type="text"
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по клиенту, телефону, параметрам..."
-            className="w-full pl-9 pr-4 py-2 bg-white border border-[#e4e4e0] rounded-xl text-[13px] text-[#111110] placeholder:text-[#c4c4be] focus:outline-none focus:border-[#9a9a95] transition-colors"
+            className="w-full"
           />
-          {search && (
-            <button onClick={() => setSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#9a9a95] hover:text-[#4b4b47]">
-              ✕
-            </button>
-          )}
         </div>
 
         {/* Filters row */}
         <div className="flex items-center gap-2 mb-4 flex-wrap">
           {/* Product type */}
-          <div className="flex gap-1">
-            {([
+          <SegmentedTabs
+            value={filterType}
+            onChange={setFilterType}
+            tabs={([
               { k: 'all',    l: 'Все' },
               { k: 'shower', l: '🚿 Душевые' },
               { k: 'mirror', l: '🪞 Зеркала' },
@@ -401,16 +396,11 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
               const cnt = f.k === 'all' ? calcs.length
                 : f.k === 'shower' ? calcs.filter(c => c.product_type.startsWith('shower')).length
                 : calcs.filter(c => c.product_type === f.k).length
-              return (
-                <button key={f.k} onClick={() => setFilterType(f.k)}
-                  className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${filterType === f.k ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#fafaf9]'}`}>
-                  {f.l} <span className="opacity-60">({cnt})</span>
-                </button>
-              )
+              return { value: f.k, label: `${f.l} (${cnt})` }
             })}
-          </div>
+          />
 
-          <div className="w-px h-5 bg-[#e4e4e0]" />
+          <div className="w-px h-5 bg-line" />
 
           {/* Status */}
           <div className="flex gap-1 flex-wrap">
@@ -419,7 +409,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
               ...Object.entries(STATUS_META).map(([k, v]) => ({ k, l: v.label }))
             ].map(f => (
               <button key={f.k} onClick={() => setFilterStatus(f.k)}
-                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold transition-colors ${filterStatus === f.k ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#fafaf9]'}`}>
+                className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ink/15 ${filterStatus === f.k ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft hover:bg-subtle'}`}>
                 {f.l}
               </button>
             ))}
@@ -428,12 +418,14 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
 
         {/* Cards */}
         {loading ? (
-          <div className="py-16 text-center text-[#9a9a95] text-sm">Загрузка...</div>
+          <SkeletonRows count={5} />
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center">
-            <p className="text-[#9a9a95] text-sm mb-2">Расчётов не найдено</p>
-            {search && <button onClick={() => setSearch('')} className="text-blue-600 text-xs hover:underline">Сбросить поиск</button>}
-          </div>
+          <EmptyState
+            icon={<IcSearch className="w-8 h-8" />}
+            title="Расчётов не найдено"
+            hint="Измените фильтры или создайте новый расчёт"
+            action={search ? <button onClick={() => setSearch('')} className="text-[12px] text-ink-soft hover:text-ink px-3 py-1.5 border border-line rounded-lg hover:border-ink transition-colors">Сбросить поиск</button> : undefined}
+          />
         ) : (() => {
           // Build display list: group by order_group_id
           const seen = new Set<string>()
@@ -471,17 +463,17 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                   const displayOrderNumber = gi[0].order_number
 
                   return (
-                    <div key={`group-${rowIdx}`} className="bg-white rounded-xl border border-purple-200 overflow-hidden hover:border-purple-300 transition-colors">
+                    <div key={`group-${rowIdx}`} className="bg-surface rounded-xl border border-purple-200 overflow-hidden hover:border-purple-300 transition-colors">
                       <div className="px-4 py-3.5">
                         {/* Top row */}
                         <div className="flex items-start gap-3 mb-2.5">
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap mb-1">
-                              <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700">
+                              <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-purple-50 text-purple-700">
                                 📦 Заказ · {gi.length} {gi.length === 1 ? 'изделие' : gi.length < 5 ? 'изделия' : 'изделий'}
                               </span>
                               {displayOrderNumber && (
-                                <span className="text-[11px] font-mono font-semibold text-[#4b4b47] bg-[#f5f5f3] px-2 py-0.5 rounded-md">
+                                <span className="text-[11px] font-mono font-medium text-ink-soft bg-line-soft px-2 py-0.5 rounded-md">
                                   №{displayOrderNumber}
                                 </span>
                               )}
@@ -491,42 +483,42 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                                 <input autoFocus value={groupOrderNum} onChange={e => setGroupOrderNum(e.target.value)}
                                   placeholder="Номер заказа"
-                                  className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-28 focus:outline-none focus:border-purple-400" />
+                                  className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-28 focus:outline-none focus:border-purple-400" />
                                 <input value={groupClientName} onChange={e => setGroupClientName(e.target.value)}
                                   placeholder="Имя клиента"
-                                  className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-32 focus:outline-none focus:border-purple-400" />
+                                  className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-32 focus:outline-none focus:border-purple-400" />
                                 <input value={groupClientPhone} onChange={e => setGroupClientPhone(e.target.value)}
                                   placeholder="+7 000 000-00-00"
-                                  className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-36 focus:outline-none focus:border-purple-400" />
+                                  className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-36 focus:outline-none focus:border-purple-400" />
                                 <button onClick={() => saveGroupInfo(gi[0].order_group_id!)} disabled={savingGroup}
-                                  className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-semibold disabled:opacity-50 hover:bg-purple-700 transition-colors">
+                                  className="px-2.5 py-1 bg-purple-600 text-white rounded-lg text-[11px] font-medium disabled:opacity-50 hover:bg-purple-700 transition-colors">
                                   {savingGroup ? '...' : 'Сохранить'}
                                 </button>
-                                <button onClick={() => setEditingGroup(null)} className="text-[11px] text-[#9a9a95] hover:text-[#4b4b47]">Отмена</button>
+                                <button onClick={() => setEditingGroup(null)} className="text-[11px] text-muted hover:text-ink">Отмена</button>
                               </div>
                             ) : (
                               <button onClick={() => openGroupEdit(gi)} className="flex items-center gap-1.5 text-left group mt-0.5">
                                 {displayClientName ? (
-                                  <span className="text-[13px] font-semibold text-[#111110]">{displayClientName}</span>
+                                  <span className="text-[13px] font-medium text-ink">{displayClientName}</span>
                                 ) : (
-                                  <span className="text-[12px] text-[#c4c4be] group-hover:text-purple-500 transition-colors">+ Клиент / номер заказа</span>
+                                  <span className="text-[12px] text-faint group-hover:text-purple-500 transition-colors">+ Клиент / номер заказа</span>
                                 )}
-                                {gi[0].client_phone && <span className="text-[11px] text-[#9a9a95]">· {gi[0].client_phone}</span>}
+                                {gi[0].client_phone && <span className="text-[11px] text-muted">· {gi[0].client_phone}</span>}
                                 {displayClientName && (
-                                  <span className="text-[10px] text-[#c4c4be] group-hover:text-[#9a9a95] transition-colors ml-0.5">✎</span>
+                                  <span className="text-[10px] text-faint group-hover:text-muted transition-colors ml-0.5">✎</span>
                                 )}
                               </button>
                             )}
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
-                            <span className="text-[11px] text-[#9a9a95]">
+                            <span className="text-[11px] text-muted">
                               {new Date(gi[0].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                             </span>
                             {isAdmin && managerName && (
-                              <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
+                              <span className="text-[11px] text-muted border border-line px-1.5 py-0.5 rounded">{managerName}</span>
                             )}
                             <select value={gi[0].status} onChange={e => updateGroupStatus(gi[0].order_group_id!, e.target.value)}
-                              className={`text-[11px] font-semibold px-2 py-1 rounded-full cursor-pointer border-0 outline-none ${st.color}`}>
+                              className={`text-[11px] font-medium px-2 py-1 rounded-full cursor-pointer border-0 outline-none ${st.color}`}>
                               {Object.entries(STATUS_META).map(([val, { label }]) => (
                                 <option key={val} value={val}>{label}</option>
                               ))}
@@ -543,29 +535,29 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                             const productPrice = item.final_price - svcTotal
                             const glassInfo = calcItemArea(item)
                             return (
-                              <div key={item.id} className="flex items-center gap-2 bg-[#fafaf9] rounded-lg px-3 py-1.5">
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${p.color}`}>{p.emoji} {p.label}</span>
-                                <span className="text-[12px] text-[#4b4b47]">{getDesc(item)}</span>
+                              <div key={item.id} className="flex items-center gap-2 bg-subtle rounded-lg px-3 py-1.5">
+                                <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${p.color}`}>{p.emoji} {p.label}</span>
+                                <span className="text-[12px] text-ink-soft">{getDesc(item)}</span>
                                 {glassInfo?.mm && (
                                   <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 whitespace-nowrap flex-shrink-0">
                                     {glassInfo.mm} мм
                                   </span>
                                 )}
                                 {glassInfo && (
-                                  <span className="text-[10px] text-[#9a9a95] whitespace-nowrap flex-shrink-0">
+                                  <span className="text-[10px] text-muted whitespace-nowrap flex-shrink-0">
                                     {glassInfo.areaSqm.toFixed(2)} м²
                                   </span>
                                 )}
                                 <div className="ml-auto flex items-center gap-1.5 flex-shrink-0">
                                   {item.discount > 0 && (
-                                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
                                       −{item.discount}%
                                     </span>
                                   )}
-                                  <span className="font-mono text-[12px] text-[#111110] font-semibold">{fmt(productPrice)}</span>
+                                  <span className="font-mono text-[12px] text-ink font-semibold tabular-nums">{fmt(productPrice)}</span>
                                 </div>
                                 <Link href={`/calculations/${item.id}`}
-                                  className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#f0f0ee] transition-colors whitespace-nowrap">
+                                  className="px-2.5 py-1 rounded-md text-[11px] font-medium border border-line bg-surface text-ink-soft hover:bg-line-soft transition-colors whitespace-nowrap">
                                   Открыть
                                 </Link>
                               </div>
@@ -595,24 +587,24 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                         {/* Financials */}
                         <div className="flex items-center gap-4 mb-3 flex-wrap">
                           <div className="flex items-baseline gap-1">
-                            <span className="text-[11px] text-[#9a9a95]">Итого</span>
-                            <span className="text-[15px] font-bold tabular-nums text-[#111110]">{fmt(groupTotal)}</span>
+                            <span className="text-[11px] text-muted">Итого</span>
+                            <span className="text-[15px] font-semibold tabular-nums text-ink">{fmt(groupTotal)}</span>
                           </div>
                           {groupCost > 0 && (
                             <div className="flex items-baseline gap-1">
-                              <span className="text-[11px] text-[#9a9a95]">С/С</span>
-                              <span className="text-[12px] tabular-nums text-[#6b6b66]">{fmt(groupCost)}</span>
+                              <span className="text-[11px] text-muted">С/С</span>
+                              <span className="text-[12px] tabular-nums text-ink-soft">{fmt(groupCost)}</span>
                             </div>
                           )}
                           <div className="flex items-center gap-1.5">
-                            <span className={`text-[13px] font-bold ${marginColor}`}>{avgMargin.toFixed(1)}%</span>
-                            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${marginBadge}`}>
+                            <span className={`text-[13px] font-semibold ${marginColor}`}>{avgMargin.toFixed(1)}%</span>
+                            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${marginBadge}`}>
                               {MARGIN_STATUS_LABELS[mStatus]}
                             </span>
                           </div>
                           {groupProfit > 0 && (
                             <div className="flex items-baseline gap-1">
-                              <span className="text-[11px] text-[#9a9a95]">Прибыль</span>
+                              <span className="text-[11px] text-muted">Прибыль</span>
                               <span className="text-[12px] tabular-nums text-emerald-600 font-semibold">+{fmt(groupProfit)}</span>
                             </div>
                           )}
@@ -632,7 +624,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                           </a>
                           <div className="flex-1" />
                           <button onClick={() => setLaunchCalc(gi[0])}
-                            className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                            className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-ink text-white hover:bg-[#2a2a28] transition-colors">
                             Запустить заказ →
                           </button>
                         </div>
@@ -655,59 +647,59 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                 const isEditingThis = editingClient === c.id
 
                 return (
-                  <div key={c.id} className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden hover:border-[#c4c4be] transition-colors">
+                  <div key={c.id} className="bg-surface rounded-xl border border-line overflow-hidden hover:border-faint transition-colors">
                     <div className="px-4 py-3.5">
                       <div className="flex items-start gap-3 mb-2.5">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
-                            <span className={`text-[11px] font-bold px-2 py-0.5 rounded-md ${prod.color}`}>
+                            <span className={`text-[11px] font-medium px-2 py-0.5 rounded-md ${prod.color}`}>
                               {prod.emoji} {prod.label}
                             </span>
-                            {desc && <span className="text-[13px] font-semibold text-[#111110]">{desc}</span>}
+                            {desc && <span className="text-[13px] font-medium text-ink">{desc}</span>}
                           </div>
                           {isEditingThis ? (
                             <div className="flex flex-wrap items-center gap-2 mt-1.5">
                               <input autoFocus value={orderNumDraft} onChange={e => setOrderNumDraft(e.target.value)}
                                 placeholder="Номер заказа"
-                                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-28 focus:outline-none focus:border-blue-400" />
+                                className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-28 focus:outline-none focus:border-blue-400" />
                               <input value={clientNameDraft} onChange={e => setClientNameDraft(e.target.value)}
                                 placeholder="Имя клиента"
-                                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-32 focus:outline-none focus:border-blue-400" />
+                                className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-32 focus:outline-none focus:border-blue-400" />
                               <input value={clientPhoneDraft} onChange={e => setClientPhoneDraft(e.target.value)}
                                 placeholder="+7 000 000-00-00"
-                                className="border border-[#e4e4e0] rounded-lg px-2.5 py-1 text-[12px] w-36 focus:outline-none focus:border-blue-400" />
+                                className="border border-line rounded-lg px-2.5 py-1 text-[12px] w-36 focus:outline-none focus:border-blue-400" />
                               <button onClick={() => saveClientInfo(c.id)} disabled={savingClient}
-                                className="px-2.5 py-1 bg-[#111110] text-white rounded-lg text-[11px] font-semibold disabled:opacity-50">
+                                className="px-2.5 py-1 bg-ink text-white rounded-lg text-[11px] font-medium disabled:opacity-50">
                                 {savingClient ? '...' : 'Сохранить'}
                               </button>
-                              <button onClick={() => setEditingClient(null)} className="text-[11px] text-[#9a9a95] hover:text-[#4b4b47]">Отмена</button>
+                              <button onClick={() => setEditingClient(null)} className="text-[11px] text-muted hover:text-ink">Отмена</button>
                             </div>
                           ) : (
                             <button onClick={() => openClientEdit(c)} className="flex items-center gap-1.5 text-left group">
                               {c.order_number && (
-                                <span className="text-[11px] font-mono font-semibold text-[#4b4b47] bg-[#f5f5f3] px-1.5 py-0.5 rounded">№{c.order_number}</span>
+                                <span className="text-[11px] font-mono font-medium text-ink-soft bg-line-soft px-1.5 py-0.5 rounded">№{c.order_number}</span>
                               )}
                               {c.client_name ? (
-                                <span className="text-[13px] font-semibold text-[#111110]">{c.client_name}</span>
+                                <span className="text-[13px] font-medium text-ink">{c.client_name}</span>
                               ) : (
-                                <span className="text-[12px] text-[#c4c4be] group-hover:text-blue-500 transition-colors">+ Клиент / номер заказа</span>
+                                <span className="text-[12px] text-faint group-hover:text-blue-500 transition-colors">+ Клиент / номер заказа</span>
                               )}
-                              {c.client_phone && <span className="text-[11px] text-[#9a9a95]">· {c.client_phone}</span>}
+                              {c.client_phone && <span className="text-[11px] text-muted">· {c.client_phone}</span>}
                               {(c.client_name || c.order_number) && (
-                                <span className="text-[10px] text-[#c4c4be] group-hover:text-[#9a9a95] transition-colors">✎</span>
+                                <span className="text-[10px] text-faint group-hover:text-muted transition-colors">✎</span>
                               )}
                             </button>
                           )}
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
-                          <span className="text-[11px] text-[#9a9a95]">
+                          <span className="text-[11px] text-muted">
                             {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                           </span>
                           {isAdmin && managerName && (
-                            <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
+                            <span className="text-[11px] text-muted border border-line px-1.5 py-0.5 rounded">{managerName}</span>
                           )}
                           <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}
-                            className={`text-[11px] font-semibold px-2 py-1 rounded-full cursor-pointer border-0 outline-none ${st.color}`}>
+                            className={`text-[11px] font-medium px-2 py-1 rounded-full cursor-pointer border-0 outline-none ${st.color}`}>
                             {Object.entries(STATUS_META).map(([val, { label }]) => (
                               <option key={val} value={val}>{label}</option>
                             ))}
@@ -717,29 +709,29 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
 
                       <div className="flex items-center gap-4 mb-3 flex-wrap">
                         <div className="flex items-baseline gap-1">
-                          <span className="text-[11px] text-[#9a9a95]">Цена</span>
-                          <span className="text-[15px] font-bold tabular-nums text-[#111110]">{fmt(c.final_price)}</span>
+                          <span className="text-[11px] text-muted">Цена</span>
+                          <span className="text-[15px] font-semibold tabular-nums text-ink">{fmt(c.final_price)}</span>
                         </div>
                         {totalCost > 0 && (
                           <div className="flex items-baseline gap-1">
-                            <span className="text-[11px] text-[#9a9a95]">С/С</span>
-                            <span className="text-[12px] tabular-nums text-[#6b6b66]">{fmt(totalCost)}</span>
+                            <span className="text-[11px] text-muted">С/С</span>
+                            <span className="text-[12px] tabular-nums text-ink-soft">{fmt(totalCost)}</span>
                           </div>
                         )}
                         <div className="flex items-center gap-1.5">
-                          <span className={`text-[13px] font-bold ${marginColor}`}>{c.margin.toFixed(1)}%</span>
-                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md border ${marginBadge}`}>
+                          <span className={`text-[13px] font-semibold ${marginColor}`}>{c.margin.toFixed(1)}%</span>
+                          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-md border ${marginBadge}`}>
                             {MARGIN_STATUS_LABELS[mStatus]}
                           </span>
                         </div>
                         {c.profit > 0 && (
                           <div className="flex items-baseline gap-1">
-                            <span className="text-[11px] text-[#9a9a95]">Прибыль</span>
+                            <span className="text-[11px] text-muted">Прибыль</span>
                             <span className="text-[12px] tabular-nums text-emerald-600 font-semibold">+{fmt(c.profit)}</span>
                           </div>
                         )}
                         {c.discount > 0 && (
-                          <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
+                          <span className="text-[11px] font-medium px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap">
                             −{c.discount}% скидка
                           </span>
                         )}
@@ -747,7 +739,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
 
                       <div className="flex items-center gap-2 flex-wrap">
                         <Link href={`/calculations/${c.id}`}
-                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-line bg-surface text-ink-soft hover:bg-subtle transition-colors">
                           Открыть
                         </Link>
                         <a href={`/calculations/${c.id}/print`} target="_blank" rel="noopener noreferrer"
@@ -755,7 +747,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                           PDF КП
                         </a>
                         <button onClick={() => duplicateCalc(c)} disabled={duplicating === c.id}
-                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 transition-colors">
+                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-line bg-surface text-ink-soft hover:bg-subtle disabled:opacity-50 transition-colors">
                           {duplicating === c.id ? '...' : 'Дублировать'}
                         </button>
                         {isAdmin && (
@@ -766,7 +758,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                         )}
                         <div className="flex-1" />
                         <button onClick={() => setLaunchCalc(c)}
-                          className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                          className="px-4 py-1.5 rounded-lg text-[12px] font-semibold bg-ink text-white hover:bg-[#2a2a28] transition-colors">
                           Запустить заказ →
                         </button>
                       </div>
