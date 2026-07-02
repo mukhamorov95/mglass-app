@@ -9,24 +9,24 @@ const CSS = `
 .kp-scope{--red:#E1442E;--ink:#18181B;--text:#1D1D1F;--muted:#8C8C88;--line:#E4E4E0;--soft:#F5F5F3;--dot:#CFCFC9;
   background:#54545a;font-family:-apple-system,"Helvetica Neue","Segoe UI",Arial,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;min-height:100vh}
 .kp-scope *{margin:0;padding:0;box-sizing:border-box}
-.kp-page{width:794px;min-height:1123px;background:#fff;margin:24px auto;position:relative;padding:0 56px 56px;display:flex;flex-direction:column}
+.kp-page{width:210mm;height:297mm;background:#fff;margin:0 auto 8mm;position:relative;padding:0 15mm 10mm;display:flex;flex-direction:column;overflow:hidden}
 .kp-topbar{position:absolute;top:0;left:0;right:0;height:14px;background:var(--ink)}
 .kp-topbar::after{content:"";position:absolute;top:14px;left:0;right:0;height:4px;background:var(--red)}
-.kp-head{display:flex;justify-content:space-between;align-items:flex-start;padding-top:60px;padding-bottom:18px;border-bottom:2.5px solid var(--ink)}
-.kp-head img{height:88px}
+.kp-head{display:flex;justify-content:space-between;align-items:flex-start;padding-top:32px;padding-bottom:13px;border-bottom:2.5px solid var(--ink)}
+.kp-head img{height:80px}
 .kp-contacts{text-align:right;font-size:13px;line-height:1.7;font-weight:700;color:#2a2a2a}
-.kp-sec{display:flex;align-items:center;gap:14px;margin:30px 0 16px}
+.kp-sec{display:flex;align-items:center;gap:14px;margin:19px 0 11px}
 .kp-sec .num{background:var(--red);color:#fff;font-weight:800;font-size:13px;letter-spacing:.5px;padding:5px 9px;border-radius:3px}
 .kp-sec .ttl{font-weight:800;font-size:17px;letter-spacing:1.5px;white-space:nowrap}
 .kp-sec .lead{flex:1;border-bottom:1.5px dotted var(--dot);height:1px;margin:0 6px}
 .kp-sec .meta{font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700;white-space:nowrap}
-.kp-metabar{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--soft);margin-top:22px}
+.kp-metabar{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--soft);margin-top:15px}
 .kp-metabar .cell{padding:14px 18px;border-right:1px solid var(--line)}
 .kp-metabar .cell:last-child{border-right:0}
 .kp-metabar .k{font-size:9.5px;letter-spacing:2px;color:var(--muted);font-weight:700;margin-bottom:5px}
 .kp-metabar .v{font-size:17px;font-weight:800}
 .kp-metabar .v.red{color:var(--red)}
-.kp-titleblk{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-top:26px}
+.kp-titleblk{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-top:18px}
 .kp-titleblk .over{font-size:11px;letter-spacing:4px;color:var(--red);font-weight:800;margin-bottom:10px}
 .kp-titleblk h1{font-size:36px;font-weight:800;letter-spacing:-.5px;line-height:1.05}
 .kp-titleblk .sub{font-size:15px;color:#4a4a4a;margin-top:10px;max-width:560px}
@@ -34,7 +34,7 @@ const CSS = `
 .kp-totalbox .k{font-size:10px;letter-spacing:2px;font-weight:700;opacity:.9}
 .kp-totalbox .v{font-size:30px;font-weight:800;margin-top:2px}
 .kp-spec{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line)}
-.kp-spec .row{display:flex;align-items:center;gap:8px;padding:13px 20px;border-bottom:1px solid var(--line)}
+.kp-spec .row{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line)}
 .kp-spec .row:nth-child(odd){border-right:1px solid var(--line)}
 .kp-spec .lbl{font-size:10.5px;letter-spacing:1.5px;color:var(--muted);font-weight:700;white-space:nowrap}
 .kp-spec .dl{flex:1;border-bottom:1.5px dotted var(--dot);height:1px}
@@ -42,9 +42,9 @@ const CSS = `
 .kp-spec .val.red{color:var(--red)}
 .kp-note{font-size:12px;color:#6a6a66;margin-top:14px;line-height:1.6}
 .kp-table{width:100%;border-collapse:collapse;margin-top:4px}
-.kp-table thead th{background:var(--ink);color:#fff;font-size:10px;letter-spacing:1.5px;font-weight:700;padding:15px 14px;text-align:left}
+.kp-table thead th{background:var(--ink);color:#fff;font-size:10px;letter-spacing:1.5px;font-weight:700;padding:12px 14px;text-align:left}
 .kp-table thead th.c{text-align:center}.kp-table thead th.r{text-align:right}
-.kp-table tbody td{padding:16px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+.kp-table tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
 .kp-table tbody tr:nth-child(even){background:var(--soft)}
 .kp-table td.n{color:var(--red);font-weight:800;font-size:15px;width:44px}
 .kp-table td .nm{font-weight:800;font-size:14px}
@@ -54,7 +54,7 @@ const CSS = `
 .kp-table td.sum{text-align:right;font-weight:800;font-size:16px;width:130px}
 .kp-subtotal{display:flex;justify-content:flex-end;gap:40px;padding:16px 14px;font-weight:800}
 .kp-subtotal .lbl{color:#4a4a4a}
-.kp-paybar{display:flex;justify-content:space-between;align-items:center;background:var(--ink);color:#fff;padding:18px 26px;margin-top:6px}
+.kp-paybar{display:flex;justify-content:space-between;align-items:center;background:var(--ink);color:#fff;padding:14px 26px;margin-top:6px}
 .kp-paybar .l{font-size:15px;letter-spacing:3px;color:var(--red);font-weight:800}
 .kp-paybar .r{font-size:28px;font-weight:800}
 .kp-vat{text-align:right;font-size:12px;color:#8a8a86;margin-top:10px}
@@ -113,7 +113,7 @@ const CSS = `
 @media print{
   .kp-scope{background:#fff}
   .kp-toolbar{display:none}
-  .kp-page{margin:0;box-shadow:none;width:auto;min-height:auto;page-break-after:always}
+  .kp-page{margin:0;box-shadow:none;height:297mm;overflow:hidden;page-break-after:always}
   .kp-page:last-child{page-break-after:auto}
   @page{size:A4;margin:0}
 }
@@ -152,6 +152,14 @@ export default function KpPrintPage() {
     }
     load()
   }, [id])
+
+  // Пришли по кнопке «Сохранить в PDF» (?print=1) → сразу открываем диалог печати/сохранения.
+  useEffect(() => {
+    if (kp && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('print') === '1') {
+      const t = setTimeout(() => window.print(), 900)
+      return () => clearTimeout(t)
+    }
+  }, [kp])
 
   if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#8a8a85' }}>Загрузка КП…</div>
   if (notFound || !kp) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#8a8a85' }}>КП не найдено.</div>

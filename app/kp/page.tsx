@@ -363,9 +363,15 @@ export default function KpPage() {
                 {saving ? 'Сохранение…' : editingId ? 'Сохранить изменения' : 'Сохранить КП'}
               </button>
               {savedId && (
-                <a href={`/kp/${savedId}/print`} target="_blank" rel="noreferrer"
+                <a href={`/kp/${savedId}/print?print=1`} target="_blank" rel="noreferrer"
                   className="px-5 py-2.5 bg-[#E1442E] text-white text-[13px] font-semibold rounded-lg hover:bg-[#c93a26] shadow-lg">
-                  📄 Открыть PDF
+                  💾 Сохранить в PDF
+                </a>
+              )}
+              {savedId && (
+                <a href={`/kp/${savedId}/print`} target="_blank" rel="noreferrer"
+                  className="px-4 py-2.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[13px] font-medium rounded-lg hover:bg-[#fafaf9]">
+                  Открыть
                 </a>
               )}
               {savedId && <span className="text-[12px] text-emerald-600">Сохранено ✓</span>}
