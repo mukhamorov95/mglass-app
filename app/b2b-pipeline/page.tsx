@@ -23,7 +23,7 @@ type Quote = {
 type ColStatus = 'quote' | 'sent' | 'negotiation' | 'agreed' | 'confirmed' | 'in_production' | 'completed' | 'cancelled'
 
 const COLUMNS: { key: ColStatus; label: string; color: string; bg: string; border: string }[] = [
-  { key: 'quote',         label: 'Новый',           color: 'text-[#6b6b66]',   bg: 'bg-[#f0f0ec]',   border: 'border-[#c4c4be]' },
+  { key: 'quote',         label: 'Новый',           color: 'text-ink-soft',   bg: 'bg-line-soft',   border: 'border-faint' },
   { key: 'sent',          label: 'Отправлено',       color: 'text-blue-700',    bg: 'bg-blue-50',     border: 'border-blue-300'  },
   { key: 'negotiation',   label: 'Переговоры',       color: 'text-indigo-700',  bg: 'bg-indigo-50',   border: 'border-indigo-300'},
   { key: 'agreed',        label: 'Согласовано',      color: 'text-emerald-700', bg: 'bg-emerald-50',  border: 'border-emerald-300'},
@@ -88,26 +88,26 @@ function DraggableCard({ quote, isOverlay }: { quote: Quote; isOverlay?: boolean
       style={style}
       {...listeners}
       {...attributes}
-      className={`bg-white border border-[#e4e4e0] rounded-xl p-3 cursor-grab active:cursor-grabbing select-none
-        hover:shadow-sm hover:border-[#c4c4be] transition-shadow
-        ${isOverlay ? 'shadow-xl rotate-1 border-[#111110]' : ''}`}>
+      className={`bg-surface border border-line rounded-xl p-3 cursor-grab active:cursor-grabbing select-none
+        hover:shadow-sm hover:border-faint transition-shadow
+        ${isOverlay ? 'shadow-xl rotate-1 border-ink' : ''}`}>
       <div className="flex items-start justify-between gap-1 mb-1.5">
-        <p className="text-[13px] font-semibold text-[#111110] leading-snug">{quote.client_name}</p>
+        <p className="text-[13px] font-semibold text-ink leading-snug">{quote.client_name}</p>
         {isLowMargin && (
-          <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1 py-0.5 rounded shrink-0">
+          <span className="text-[11px] font-semibold bg-red-50 text-red-600 px-1 py-0.5 rounded shrink-0">
             {quote.margin_percent}%
           </span>
         )}
       </div>
-      <p className="text-[14px] font-bold font-mono text-[#111110] mb-1.5">{fmt(total)}</p>
-      <div className="flex items-center justify-between text-[10px] text-[#9a9a95]">
+      <p className="text-[14px] font-semibold font-mono text-ink mb-1.5 tabular-nums">{fmt(total)}</p>
+      <div className="flex items-center justify-between text-[11px] text-muted">
         <span>{new Date(quote.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
         <span className={`font-medium ${days >= 7 ? 'text-amber-600' : days >= 14 ? 'text-red-600' : ''}`}>
           {days}д
         </span>
       </div>
       {managerShort && (
-        <p className="text-[10px] text-[#c4c4be] mt-1 truncate">👤 {managerShort}</p>
+        <p className="text-[11px] text-faint mt-1 truncate">👤 {managerShort}</p>
       )}
     </div>
   )
@@ -130,12 +130,12 @@ function DroppableColumn({
       <div className={`rounded-xl px-3 py-2.5 mb-2 border ${col.bg} ${isOver ? col.border + ' border-2' : 'border-transparent'} transition-all`}>
         <div className="flex items-center justify-between">
           <span className={`text-[11px] font-semibold ${col.color}`}>{col.label}</span>
-          <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-full ${col.bg} ${col.color}`}>
+          <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded-full ${col.bg} ${col.color}`}>
             {quotes.length}
           </span>
         </div>
         {quotes.length > 0 && (
-          <p className={`text-[10px] font-mono mt-0.5 ${col.color} opacity-75`}>{fmt(total)}</p>
+          <p className={`text-[11px] font-mono mt-0.5 tabular-nums ${col.color} opacity-75`}>{fmt(total)}</p>
         )}
       </div>
 
@@ -148,7 +148,7 @@ function DroppableColumn({
           <DraggableCard key={q.id} quote={q} />
         ))}
         {quotes.length === 0 && !isOver && (
-          <div className="py-8 text-center text-[11px] text-[#c4c4be] border border-dashed border-[#e4e4e0] rounded-xl">
+          <div className="py-8 text-center text-[11px] text-faint border border-dashed border-line rounded-xl">
             Пусто
           </div>
         )}
@@ -234,27 +234,27 @@ export default function B2BPipelinePage() {
   const activeQuote = activeId !== null ? quotes.find(q => q.id === activeId) : null
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
+        <div className="fixed top-4 right-4 z-50 bg-ink text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
           {toast}
         </div>
       )}
 
       <div className="px-4 py-5">
         <div className="flex items-center justify-between mb-5 flex-wrap gap-2">
-          <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">Воронка продаж B2B</h1>
+          <h1 className="text-[16px] font-semibold text-ink tracking-tight">Воронка продаж B2B</h1>
           <div className="flex items-center gap-2">
-            <p className="text-[12px] text-[#9a9a95] hidden sm:block">{quotes.length} заказов · перетащи для смены статуса</p>
+            <p className="text-[12px] text-muted hidden sm:block">{quotes.length} заказов · перетащи для смены статуса</p>
             {/* Mobile view toggle */}
-            <div className="flex bg-[#f0f0ec] rounded-lg p-0.5 sm:hidden">
+            <div className="flex bg-line-soft rounded-lg p-0.5 sm:hidden">
               {(['kanban', 'list'] as const).map(v => (
                 <button key={v} onClick={() => setMobileView(v)}
-                  className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${mobileView === v ? 'bg-white text-[#111110] shadow-sm' : 'text-[#8a8a85]'}`}>
+                  className={`px-3 py-1 rounded-md text-[11px] font-medium transition-colors ${mobileView === v ? 'bg-surface text-ink shadow-sm' : 'text-muted'}`}>
                   {v === 'kanban' ? '⠿ Канбан' : '☰ Список'}
                 </button>
               ))}
@@ -271,21 +271,21 @@ export default function B2BPipelinePage() {
                   <span className={`text-[12px] font-semibold ${col.color}`}>{col.label}</span>
                   <span className={`text-[11px] font-bold ${col.color}`}>{columns[col.key].length}</span>
                 </div>
-                <div className="divide-y divide-[#f8f8f7]">
+                <div className="divide-y divide-canvas">
                   {columns[col.key].map(q => {
                     const total = q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat
                     const days = daysInStatus(q)
                     return (
-                      <div key={q.id} className="px-3 py-2.5 bg-white flex items-center justify-between gap-2">
+                      <div key={q.id} className="px-3 py-2.5 bg-surface flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <p className="text-[13px] font-semibold text-[#111110] truncate">{q.client_name}</p>
-                          <p className="text-[11px] text-[#9a9a95]">{total.toLocaleString('ru-RU')} ₽</p>
+                          <p className="text-[13px] font-semibold text-ink truncate">{q.client_name}</p>
+                          <p className="text-[11px] text-muted tabular-nums">{total.toLocaleString('ru-RU')} ₽</p>
                         </div>
                         <div className="flex items-center gap-2 shrink-0">
                           {q.margin_percent > 0 && q.margin_percent < 15 && (
-                            <span className="text-[9px] font-bold bg-red-50 text-red-600 px-1 py-0.5 rounded">{q.margin_percent}%</span>
+                            <span className="text-[11px] font-semibold bg-red-50 text-red-600 px-1 py-0.5 rounded">{q.margin_percent}%</span>
                           )}
-                          <span className={`text-[10px] font-medium ${days >= 14 ? 'text-red-600' : days >= 7 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>{days}д</span>
+                          <span className={`text-[11px] font-medium ${days >= 14 ? 'text-red-600' : days >= 7 ? 'text-amber-600' : 'text-muted'}`}>{days}д</span>
                           <select
                             value={col.key}
                             onChange={async e => {
@@ -300,7 +300,7 @@ export default function B2BPipelinePage() {
                               if (error) { setQuotes(prev => prev.map(x => x.id === q.id ? q : x)); showToast('Ошибка') }
                               else showToast('Статус обновлён')
                             }}
-                            className="text-[10px] border border-[#e4e4e0] rounded-lg px-1.5 py-1 bg-white text-[#6b6b66] outline-none"
+                            className="text-[11px] border border-line rounded-lg px-1.5 py-1 bg-surface text-ink-soft outline-none"
                             onClick={e => e.stopPropagation()}>
                             {COLUMNS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
                           </select>

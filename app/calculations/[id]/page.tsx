@@ -466,7 +466,7 @@ export default function CalculationDetailPage() {
         {/* ── Recalculate confirmation modal ─────────────────────────────── */}
         {showRecalcModal && (
           <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-            <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6">
+            <div className="bg-surface rounded-2xl shadow-2xl max-w-md w-full p-6">
               <div className="flex items-start gap-3 mb-4">
                 <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
                   <span className="text-amber-600 text-lg">⚠</span>
@@ -545,7 +545,7 @@ export default function CalculationDetailPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {/* Status dropdown */}
             <select value={calc.status} onChange={e => updateStatus(e.target.value)}
-              className="text-[13px] border border-[#e8e8ed] rounded-xl px-3 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-[#0071e3]">
+              className="text-[13px] border border-[#e8e8ed] rounded-xl px-3 py-2 bg-surface focus:outline-none focus:ring-2 focus:ring-[#0071e3]">
               {STATUS_LIST.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
 
@@ -575,7 +575,7 @@ export default function CalculationDetailPage() {
 
             {/* PDF */}
             <button onClick={() => window.open(`/calculations/${calc.id}/print`, '_blank')}
-              className="px-3 py-2 bg-white border border-[#e8e8ed] text-[#1d1d1f] text-[13px] font-medium rounded-xl hover:bg-[#f5f5f7] transition-colors">
+              className="px-3 py-2 bg-surface border border-[#e8e8ed] text-[#1d1d1f] text-[13px] font-medium rounded-xl hover:bg-[#f5f5f7] transition-colors">
               PDF
             </button>
 
@@ -595,7 +595,7 @@ export default function CalculationDetailPage() {
           <div className="lg:col-span-2 space-y-4">
 
             {/* Client block */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-4">Клиент</h2>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -640,7 +640,7 @@ export default function CalculationDetailPage() {
                   <div className="relative">
                     <input
                       type="number"
-                      className="w-full border border-[#e8e8ed] bg-white rounded-xl px-3 py-2.5 text-[18px] font-bold font-mono text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
+                      className="w-full border border-[#e8e8ed] bg-surface rounded-xl px-3 py-2.5 text-[18px] font-semibold font-mono tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
                       value={editPrice}
                       onChange={e => handlePriceChange(e.target.value)}
                     />
@@ -656,7 +656,7 @@ export default function CalculationDetailPage() {
                     <input
                       type="number"
                       min="0" max="80" step="1"
-                      className="w-full border border-[#e8e8ed] bg-white rounded-xl px-3 py-2.5 text-[16px] font-bold font-mono text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
+                      className="w-full border border-[#e8e8ed] bg-surface rounded-xl px-3 py-2.5 text-[16px] font-semibold font-mono tabular-nums text-[#1d1d1f] focus:outline-none focus:ring-2 focus:ring-[#0071e3]"
                       value={editDiscount}
                       onChange={e => handleDiscountChange(e.target.value)}
                     />
@@ -665,15 +665,15 @@ export default function CalculationDetailPage() {
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div className="bg-white bg-opacity-60 rounded-xl p-3 text-center">
+                <div className="bg-surface bg-opacity-60 rounded-xl p-3 text-center">
                   <p className="text-[11px] text-[#6e6e73] mb-1">Маржа</p>
-                  <p className={`text-[20px] font-bold ${marginColor}`}>{margin}%</p>
+                  <p className={`text-[20px] font-semibold ${marginColor}`}>{margin}%</p>
                 </div>
-                <div className="bg-white bg-opacity-60 rounded-xl p-3 text-center">
+                <div className="bg-surface bg-opacity-60 rounded-xl p-3 text-center">
                   <p className="text-[11px] text-[#6e6e73] mb-1">Прибыль</p>
-                  <p className="text-[20px] font-bold text-[#1d1d1f]">{profit.toLocaleString('ru-RU')} ₽</p>
+                  <p className="text-[20px] font-semibold text-[#1d1d1f]">{profit.toLocaleString('ru-RU')} ₽</p>
                 </div>
-                <div className="bg-white bg-opacity-60 rounded-xl p-3 text-center">
+                <div className="bg-surface bg-opacity-60 rounded-xl p-3 text-center">
                   <p className="text-[11px] text-[#6e6e73] mb-1">Базовая</p>
                   <p className="text-[15px] font-semibold text-[#6e6e73]">{priceWithPartner.toLocaleString('ru-RU')} ₽</p>
                 </div>
@@ -681,7 +681,7 @@ export default function CalculationDetailPage() {
             </div>
 
             {/* Cost breakdown */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-3">Себестоимость</h2>
               <div className="space-y-0.5">
                 {cb.lines.map((l, i) => (
@@ -690,18 +690,18 @@ export default function CalculationDetailPage() {
                       {l.name}
                       <span className="text-[#aeaeb2] ml-1">{l.qty} {l.unit}</span>
                     </span>
-                    <span className="font-mono text-[#1d1d1f] font-medium">{l.total.toLocaleString('ru-RU')} ₽</span>
+                    <span className="font-mono tabular-nums text-[#1d1d1f] font-medium">{l.total.toLocaleString('ru-RU')} ₽</span>
                   </div>
                 ))}
               </div>
               <div className="flex justify-between pt-2.5 mt-2 border-t border-[#e8e8ed] text-[14px] font-semibold">
                 <span className="text-[#1d1d1f]">Итого себестоимость</span>
-                <span className="font-mono">{cb.totalCost.toLocaleString('ru-RU')} ₽</span>
+                <span className="font-mono tabular-nums">{cb.totalCost.toLocaleString('ru-RU')} ₽</span>
               </div>
             </div>
 
             {/* Financial model */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-3">Финансовая модель</h2>
               <div className="space-y-2">
                 {[
@@ -716,7 +716,7 @@ export default function CalculationDetailPage() {
                 ].map((row, i) => (
                   <div key={i} className={`flex justify-between text-[13px] ${row.bold ? 'font-semibold border-t border-[#e8e8ed] pt-2 mt-1' : ''}`}>
                     <span className="text-[#6e6e73]">{row.label}</span>
-                    <span className={`font-mono ${row.bold ? 'text-[#1d1d1f]' : 'text-[#6e6e73]'}`}>
+                    <span className={`font-mono tabular-nums ${row.bold ? 'text-[#1d1d1f]' : 'text-[#6e6e73]'}`}>
                       {row.value < 0 ? '−' : ''}{Math.abs(row.value).toLocaleString('ru-RU')} ₽
                     </span>
                   </div>
@@ -725,7 +725,7 @@ export default function CalculationDetailPage() {
             </div>
 
             {/* Client text */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <div className="flex justify-between items-center mb-3">
                 <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide">Текст для клиента</h2>
                 <button onClick={async () => {
@@ -750,7 +750,7 @@ export default function CalculationDetailPage() {
           <div className="space-y-4">
 
             {/* Product params */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-3">Параметры</h2>
               {params.length > 0 ? (
                 <div className="space-y-2">
@@ -779,7 +779,7 @@ export default function CalculationDetailPage() {
             )}
 
             {/* Notes */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-3">Заметки</h2>
               <textarea
                 className="w-full border border-[#e8e8ed] rounded-xl px-3 py-2.5 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-[#0071e3] leading-relaxed"
@@ -792,7 +792,7 @@ export default function CalculationDetailPage() {
             </div>
 
             {/* Change history */}
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-[#e8e8ed] p-5">
               <h2 className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wide mb-3">История изменений</h2>
               {changes.length === 0 ? (
                 <p className="text-[13px] text-[#aeaeb2]">Нет изменений</p>
@@ -812,7 +812,7 @@ export default function CalculationDetailPage() {
                         )}
                         <span className="text-[#1d1d1f] font-medium">{ch.new_value ?? '—'}</span>
                       </div>
-                      <p className="text-[10px] text-[#c7c7cc] mt-0.5">
+                      <p className="text-[11px] text-[#c7c7cc] mt-0.5">
                         {fmtTime(ch.created_at)}
                         {ch.changed_by && ` · ${ch.changed_by.split('@')[0]}`}
                       </p>

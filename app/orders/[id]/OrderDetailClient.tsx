@@ -230,19 +230,19 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   }
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[900px] mx-auto px-4 py-6">
 
         {/* Back + breadcrumb */}
         <div className="flex items-center justify-between gap-2 text-[13px] mb-5">
           <div className="flex items-center gap-2">
-            <Link href="/orders" className="text-[#9a9a95] hover:text-[#6b6b66]">← Заказы</Link>
+            <Link href="/orders" className="text-muted hover:text-ink-soft">← Заказы</Link>
             <span className="text-[#d4d4d0]">/</span>
-            <span className="font-mono font-bold text-[#111110]">{order.number}</span>
+            <span className="font-mono tabular-nums font-semibold text-ink">{order.number}</span>
           </div>
           <div className="flex gap-2">
             <Link href={`/orders/${order.id}/print`} target="_blank"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition-colors">
               <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"/>
               </svg>
@@ -250,12 +250,12 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             </Link>
             {order.status === 'completed' && (
               <Link href={`/orders/${order.id}/act`} target="_blank"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition-colors">
                 Акт
               </Link>
             )}
             <Link href={`/orders/${order.id}/spec`} target="_blank"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7] hover:text-[#111110] transition-colors">
+              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas hover:text-ink transition-colors">
               Спецификация
             </Link>
           </div>
@@ -277,12 +277,12 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                 <textarea
                   rows={2} value={approvalNotes} onChange={e => setApprovalNotes(e.target.value)}
                   placeholder="Комментарий к одобрению (необязательно)"
-                  className="w-full border border-red-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-red-400 bg-white resize-none"
+                  className="w-full border border-red-200 rounded-lg px-3 py-2 text-[13px] outline-none focus:border-red-400 bg-surface resize-none"
                 />
                 {error && <p className="text-[12px] text-red-600">{error}</p>}
                 <div className="flex gap-2">
                   <button onClick={() => setShowApproveForm(false)}
-                    className="px-4 py-2 text-[13px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                    className="px-4 py-2 text-[13px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                     Отмена
                   </button>
                   <button onClick={handleApprove} disabled={approving}
@@ -298,7 +298,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
         <div className="space-y-4">
 
           {/* Main card */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6">
+          <div className="bg-surface rounded-xl border border-line p-6">
             <div className="flex items-start justify-between gap-4">
               <div>
                 {/* Custom order number — prominent */}
@@ -312,72 +312,72 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                         onChange={e => setCustomNumber(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter') saveCustomNumber(); if (e.key === 'Escape') setEditingCustomNum(false) }}
                         placeholder="0147-О"
-                        className="text-[26px] font-bold font-mono border-b-2 border-[#0071e3] outline-none bg-transparent w-48 text-[#111110]"
+                        className="text-[26px] font-semibold font-mono tabular-nums border-b-2 border-[#0071e3] outline-none bg-transparent w-48 text-ink"
                       />
                       <button onClick={saveCustomNumber} disabled={savingCustomNum}
-                        className="text-[12px] px-3 py-1 bg-[#111110] text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+                        className="text-[12px] px-3 py-1 bg-ink text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
                         {savingCustomNum ? '...' : 'OK'}
                       </button>
                       <button onClick={() => { setEditingCustomNum(false); setCustomNumber(order.custom_number ?? '') }}
-                        className="text-[12px] px-2 py-1 border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f5f5f3]">
+                        className="text-[12px] px-2 py-1 border border-line rounded-lg text-ink-soft hover:bg-canvas">
                         ✕
                       </button>
                     </div>
                   ) : customNumber ? (
                     <button onClick={() => setEditingCustomNum(true)} title="Изменить номер заказа"
                       className="group flex items-center gap-2">
-                      <span className="text-[28px] font-bold font-mono text-[#111110] group-hover:text-[#0071e3] transition-colors">
+                      <span className="text-[28px] font-semibold font-mono tabular-nums text-ink group-hover:text-[#0071e3] transition-colors">
                         {customNumber}
                       </span>
-                      <span className="text-[11px] text-[#c4c4be] group-hover:text-[#6b6b66] transition-colors">✎</span>
+                      <span className="text-[11px] text-faint group-hover:text-ink-soft transition-colors">✎</span>
                     </button>
                   ) : (
                     <button onClick={() => setEditingCustomNum(true)}
-                      className="text-[13px] text-[#c4c4be] hover:text-[#6b6b66] font-medium transition-colors border border-dashed border-[#e4e4e0] hover:border-[#9a9a95] rounded-lg px-3 py-1.5">
+                      className="text-[13px] text-faint hover:text-ink-soft font-medium transition-colors border border-dashed border-line hover:border-muted rounded-lg px-3 py-1.5">
                       + Добавить номер заказа
                     </button>
                   )}
                 </div>
                 <div className="flex items-center gap-3 flex-wrap mb-1">
-                  <span className="text-[13px] font-mono text-[#9a9a95]">{order.number}</span>
+                  <span className="text-[13px] font-mono tabular-nums text-muted">{order.number}</span>
                   <span className={`text-[12px] font-semibold px-2.5 py-1 rounded-lg ${STATUS_STYLE[order.status]}`}>
                     {ORDER_STATUS_LABELS[order.status]}
                   </span>
                 </div>
-                <p className="text-[17px] font-semibold text-[#111110]">{order.client_name}</p>
+                <p className="text-[17px] font-semibold text-ink">{order.client_name}</p>
                 {order.client_phone && (
-                  <p className="text-[14px] text-[#6b6b66] mt-0.5">{order.client_phone}</p>
+                  <p className="text-[14px] text-ink-soft mt-0.5">{order.client_phone}</p>
                 )}
                 {order.object_address && (
-                  <p className="text-[13px] text-[#9a9a95] mt-0.5">{order.object_address}</p>
+                  <p className="text-[13px] text-muted mt-0.5">{order.object_address}</p>
                 )}
               </div>
               <div className="text-right flex-shrink-0">
-                <p className="text-[22px] font-bold text-[#111110] font-mono">{fmt(order.total_sale_price)}</p>
+                <p className="text-[22px] font-semibold text-ink font-mono tabular-nums">{fmt(order.total_sale_price)}</p>
                 <MarginBadge status={order.margin_status} percent={order.margin_percent} />
               </div>
             </div>
 
             {/* Meta row */}
-            <div className="mt-4 pt-4 border-t border-[#f0f0ec] grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
+            <div className="mt-4 pt-4 border-t border-line-soft grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
               <div>
-                <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Создан</p>
-                <p className="text-[#111110]">{new Date(order.created_at).toLocaleDateString('ru-RU')}</p>
+                <p className="text-muted uppercase tracking-widest text-[11px] font-semibold mb-0.5">Создан</p>
+                <p className="text-ink">{new Date(order.created_at).toLocaleDateString('ru-RU')}</p>
               </div>
               {order.launched_at && (
                 <div>
-                  <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Запущен</p>
-                  <p className="text-[#111110]">{new Date(order.launched_at).toLocaleDateString('ru-RU')}</p>
-                  {daysInWork && <p className="text-[#9a9a95]">{daysInWork} дн. в работе</p>}
+                  <p className="text-muted uppercase tracking-widest text-[11px] font-semibold mb-0.5">Запущен</p>
+                  <p className="text-ink">{new Date(order.launched_at).toLocaleDateString('ru-RU')}</p>
+                  {daysInWork && <p className="text-muted">{daysInWork} дн. в работе</p>}
                 </div>
               )}
               {order.deadline && (
                 <div>
-                  <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Дедлайн</p>
+                  <p className="text-muted uppercase tracking-widest text-[11px] font-semibold mb-0.5">Дедлайн</p>
                   <p className={`font-medium ${
                     daysToDeadline === null ? '' :
                     daysToDeadline < 0  ? 'text-red-600' :
-                    daysToDeadline <= 3 ? 'text-amber-600' : 'text-[#111110]'
+                    daysToDeadline <= 3 ? 'text-amber-600' : 'text-ink'
                   }`}>
                     {new Date(order.deadline).toLocaleDateString('ru-RU')}
                     {daysToDeadline !== null && (
@@ -392,15 +392,15 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
               )}
               {isAdmin && managerName && (
                 <div>
-                  <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Менеджер</p>
-                  <p className="text-[#111110]">{managerName}</p>
+                  <p className="text-muted uppercase tracking-widest text-[11px] font-semibold mb-0.5">Менеджер</p>
+                  <p className="text-ink">{managerName}</p>
                 </div>
               )}
             </div>
 
             {/* AMO link */}
             {order.amo_deal_url && (
-              <div className="mt-3 pt-3 border-t border-[#f0f0ec]">
+              <div className="mt-3 pt-3 border-t border-line-soft">
                 <a href={order.amo_deal_url} target="_blank" rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 text-[13px] text-blue-600 hover:text-blue-800">
                   Открыть сделку в AmoCRM ↗
@@ -410,33 +410,33 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
           </div>
 
           {/* Order lines */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#e4e4e0] bg-[#f8f8f7]">
-              <p className="text-[12px] font-bold text-[#111110] uppercase tracking-widest">Позиции заказа</p>
+          <div className="bg-surface rounded-xl border border-line overflow-hidden">
+            <div className="px-5 py-3 border-b border-line bg-canvas">
+              <p className="text-[12px] font-semibold text-ink uppercase tracking-widest">Позиции заказа</p>
             </div>
             {lines.length === 0 ? (
-              <div className="px-5 py-6 text-[13px] text-[#9a9a95]">Позиции не найдены</div>
+              <div className="px-5 py-6 text-[13px] text-muted">Позиции не найдены</div>
             ) : (
-              <div className="divide-y divide-[#f0f0ec]">
+              <div className="divide-y divide-line-soft">
                 {lines.map(line => (
                   <div key={line.id} className="px-5 py-4">
                     <div className="flex items-start justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[11px] font-bold text-[#9a9a95] bg-[#f5f5f3] px-2 py-0.5 rounded uppercase tracking-wide">
+                          <span className="text-[11px] font-semibold text-muted bg-canvas px-2 py-0.5 rounded uppercase tracking-wide">
                             {PRODUCT_TYPE_LABELS[line.product_type] ?? line.product_type}
                           </span>
                           {line.dimensions_text && (
-                            <span className="text-[11px] text-[#b4b4b0] font-mono">{line.dimensions_text}</span>
+                            <span className="text-[11px] text-[#b4b4b0] font-mono tabular-nums">{line.dimensions_text}</span>
                           )}
                         </div>
-                        <p className="text-[14px] font-medium text-[#111110] mt-1">{line.product_name}</p>
+                        <p className="text-[14px] font-medium text-ink mt-1">{line.product_name}</p>
                         {line.description && (
-                          <p className="text-[12px] text-[#9a9a95] mt-0.5">{line.description}</p>
+                          <p className="text-[12px] text-muted mt-0.5">{line.description}</p>
                         )}
                       </div>
                       <div className="text-right flex-shrink-0">
-                        <p className="text-[15px] font-bold font-mono text-[#111110]">{fmt(line.line_sale_price)}</p>
+                        <p className="text-[15px] font-semibold font-mono tabular-nums text-ink">{fmt(line.line_sale_price)}</p>
                         <MarginBadge status={line.margin_status} percent={line.margin_percent} />
                         <p className="text-[11px] text-[#b4b4b0] mt-1">Себест.: {fmt(line.line_cost_price)}</p>
                       </div>
@@ -445,10 +445,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                     {/* BOM preview */}
                     {(line.materials_bom?.length || line.hardware_bom?.length || line.services_bom?.length) ? (
                       <details className="mt-3">
-                        <summary className="text-[11px] text-[#9a9a95] cursor-pointer hover:text-[#6b6b66] select-none">
+                        <summary className="text-[11px] text-muted cursor-pointer hover:text-ink-soft select-none">
                           Состав ({(line.materials_bom?.length ?? 0) + (line.hardware_bom?.length ?? 0) + (line.services_bom?.length ?? 0)} позиций) →
                         </summary>
-                        <div className="mt-2 bg-[#fafaf9] rounded-lg p-3 space-y-3">
+                        <div className="mt-2 bg-subtle rounded-lg p-3 space-y-3">
                           {line.materials_bom && line.materials_bom.length > 0 && (
                             <BOMSection title="Материалы" items={line.materials_bom} />
                           )}
@@ -467,17 +467,17 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             )}
 
             {/* Totals */}
-            <div className="px-5 py-4 bg-[#f8f8f7] border-t border-[#e4e4e0]">
+            <div className="px-5 py-4 bg-canvas border-t border-line">
               <div className="flex justify-between items-center">
                 <div className="space-y-1 text-[13px]">
                   <div className="flex gap-6">
-                    <span className="text-[#6b6b66]">Себестоимость: <b className="text-[#111110] font-mono">{fmt(order.total_cost_price)}</b></span>
-                    <span className="text-[#6b6b66]">Валовая прибыль: <b className="text-emerald-700 font-mono">{fmt(order.gross_profit)}</b></span>
+                    <span className="text-ink-soft">Себестоимость: <b className="text-ink font-mono tabular-nums">{fmt(order.total_cost_price)}</b></span>
+                    <span className="text-ink-soft">Валовая прибыль: <b className="text-emerald-700 font-mono tabular-nums">{fmt(order.gross_profit)}</b></span>
                   </div>
                 </div>
                 <div className="text-right">
-                  <p className="text-[11px] text-[#9a9a95] uppercase tracking-widest">Итого</p>
-                  <p className="text-[20px] font-bold font-mono text-[#111110]">{fmt(order.total_sale_price)}</p>
+                  <p className="text-[11px] text-muted uppercase tracking-widest">Итого</p>
+                  <p className="text-[20px] font-semibold font-mono tabular-nums text-ink">{fmt(order.total_sale_price)}</p>
                 </div>
               </div>
             </div>
@@ -485,10 +485,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
 
           {/* Production checklist */}
           {(order.status === 'in_work' || order.status === 'completed') && (
-            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-              <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between">
-                <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Производственное задание</p>
-                <span className="text-[11px] text-[#9a9a95]">
+            <div className="bg-surface rounded-xl border border-line overflow-hidden">
+              <div className="px-5 py-3 bg-canvas border-b border-line flex items-center justify-between">
+                <p className="text-[12px] font-semibold text-muted uppercase tracking-wider">Производственное задание</p>
+                <span className="text-[11px] text-muted">
                   {Object.keys(prodStages).length}/{PROD_STAGES.length} этапов
                 </span>
               </div>
@@ -505,7 +505,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                         className={`flex items-center gap-2.5 px-3 py-2.5 rounded-lg border text-left transition-colors ${
                           done
                             ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100'
-                            : 'bg-white border-[#e4e4e0] hover:border-[#c4c4c0] hover:bg-[#fafaf9]'
+                            : 'bg-surface border-line hover:border-[#c4c4c0] hover:bg-subtle'
                         } ${togglingStage === s.key ? 'opacity-50' : ''}`}
                       >
                         <div className={`w-4 h-4 rounded flex-shrink-0 flex items-center justify-center ${done ? 'bg-emerald-500' : 'border-2 border-[#d4d4d0]'}`}>
@@ -516,11 +516,11 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className={`text-[12px] font-medium leading-tight ${done ? 'text-emerald-800' : 'text-[#4b4b47]'}`}>
+                          <p className={`text-[12px] font-medium leading-tight ${done ? 'text-emerald-800' : 'text-ink-soft'}`}>
                             {s.label}
                           </p>
                           {date && (
-                            <p className="text-[10px] text-emerald-600 mt-0.5">{date}</p>
+                            <p className="text-[11px] text-emerald-600 mt-0.5">{date}</p>
                           )}
                         </div>
                       </button>
@@ -528,7 +528,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                   })}
                 </div>
                 <div className="mt-3">
-                  <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-line-soft rounded-full overflow-hidden">
                     <div
                       className="h-full bg-emerald-500 rounded-full transition-all"
                       style={{ width: `${Math.round(Object.keys(prodStages).length / PROD_STAGES.length * 100)}%` }}
@@ -540,13 +540,13 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
           )}
 
           {/* Delivery zone + address */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-3">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Доставка</p>
+          <div className="bg-surface rounded-xl border border-line px-5 py-4 space-y-3">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Доставка</p>
 
             {/* Zone selector */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <p className="text-[10px] text-[#9a9a95] mb-1">Зона доставки</p>
+                <p className="text-[11px] text-muted mb-1">Зона доставки</p>
                 <select
                   value={zoneId}
                   onChange={e => {
@@ -554,7 +554,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                     setZoneId(e.target.value)
                     if (z) setDeliveryCost(z.price)
                   }}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-surface"
                 >
                   <option value="">— не выбрана —</option>
                   {zones.filter(z => z.active).map(z => (
@@ -565,41 +565,41 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                 </select>
               </div>
               <div>
-                <p className="text-[10px] text-[#9a9a95] mb-1">Стоимость доставки, ₽</p>
+                <p className="text-[11px] text-muted mb-1">Стоимость доставки, ₽</p>
                 <input
                   type="number"
                   min={0}
                   value={deliveryCost}
                   onChange={e => setDeliveryCost(Number(e.target.value))}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
                 />
               </div>
             </div>
 
             {/* Address */}
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Адрес доставки</p>
+              <p className="text-[11px] text-muted mb-1">Адрес доставки</p>
               <input
                 type="text"
                 value={deliveryAddr}
                 onChange={e => setDeliveryAddr(e.target.value)}
                 placeholder="Введите адрес доставки..."
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white"
+                className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-surface"
               />
             </div>
 
             <button
               onClick={saveDeliveryAddr}
               disabled={savingAddr}
-              className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+              className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
             >
               {savingAddr ? 'Сохраняю...' : 'Сохранить доставку'}
             </button>
           </div>
 
           {/* Brigade assignment */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-2">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Бригада / монтажник</p>
+          <div className="bg-surface rounded-xl border border-line px-5 py-4 space-y-2">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Бригада / монтажник</p>
             <div className="flex gap-2">
               <select
                 value={brigadeId}
@@ -608,7 +608,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                   await saveBrigade(e.target.value)
                 }}
                 disabled={savingBrigade}
-                className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-white disabled:opacity-50"
+                className="flex-1 border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3] bg-surface disabled:opacity-50"
               >
                 <option value="">— не назначена —</option>
                 {brigades.filter(b => b.active).map(b => (
@@ -617,14 +617,14 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                   </option>
                 ))}
               </select>
-              {savingBrigade && <span className="text-[12px] text-[#9a9a95] self-center">Сохраняю...</span>}
+              {savingBrigade && <span className="text-[12px] text-muted self-center">Сохраняю...</span>}
             </div>
           </div>
 
           {/* Payment tracking */}
-          <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 space-y-3">
+          <div className="bg-surface rounded-xl border border-line px-5 py-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest">Оплата</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Оплата</p>
               <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${PAYMENT_STATUS_COLORS[paymentStatus]}`}>
                 {PAYMENT_STATUS_LABELS[paymentStatus]}
               </span>
@@ -639,7 +639,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                   className={`flex-1 py-2 text-[12px] font-medium rounded-lg border transition-colors ${
                     paymentStatus === s
                       ? PAYMENT_STATUS_COLORS[s] + ' font-semibold'
-                      : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'
+                      : 'bg-surface border-line text-ink-soft hover:bg-canvas'
                   }`}
                 >
                   {PAYMENT_STATUS_LABELS[s]}
@@ -651,43 +651,43 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             {paymentStatus === 'partial' && (
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-1">Сумма предоплаты, ₽</p>
+                  <p className="text-[11px] text-muted mb-1">Сумма предоплаты, ₽</p>
                   <input
                     type="number"
                     min={0}
                     value={prepayAmount}
                     onChange={e => setPrepayAmount(e.target.value)}
                     placeholder="0"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
                   />
                 </div>
                 <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-1">Дата предоплаты</p>
+                  <p className="text-[11px] text-muted mb-1">Дата предоплаты</p>
                   <input
                     type="date"
                     value={prepayDate}
                     onChange={e => setPrepayDate(e.target.value)}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
                   />
                 </div>
               </div>
             )}
 
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Заметка об оплате</p>
+              <p className="text-[11px] text-muted mb-1">Заметка об оплате</p>
               <input
                 type="text"
                 value={paymentNotes}
                 onChange={e => setPaymentNotes(e.target.value)}
                 placeholder="Например: оплата наличными, ждём перевода..."
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
               />
             </div>
 
             <button
               onClick={savePayment}
               disabled={savingPayment}
-              className="w-full py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
+              className="w-full py-2 bg-ink text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors"
             >
               {savingPayment ? 'Сохраняю...' : 'Сохранить оплату'}
             </button>
@@ -695,19 +695,19 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
 
           {/* Completion photos */}
           {(order.status === 'in_work' || order.status === 'completed') && (
-            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-3">Фото готового изделия</p>
+            <div className="bg-surface rounded-xl border border-line px-5 py-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Фото готового изделия</p>
               <div className="flex flex-wrap gap-3">
                 {photos.map((url, i) => (
                   <a key={i} href={url} target="_blank" rel="noopener noreferrer">
-                    <img src={url} alt={`Фото ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-[#e4e4e0] hover:opacity-80 transition-opacity" />
+                    <img src={url} alt={`Фото ${i + 1}`} className="w-24 h-24 object-cover rounded-lg border border-line hover:opacity-80 transition-opacity" />
                   </a>
                 ))}
-                <label className={`w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4c0] transition-colors ${photoUploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                <label className={`w-24 h-24 flex flex-col items-center justify-center border-2 border-dashed border-line rounded-lg cursor-pointer hover:border-[#c4c4c0] transition-colors ${photoUploading ? 'opacity-40 pointer-events-none' : ''}`}>
                   <svg className="w-6 h-6 text-[#b4b4b0] mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 4v16m8-8H4" />
                   </svg>
-                  <span className="text-[10px] text-[#b4b4b0]">{photoUploading ? 'Загрузка...' : 'Добавить'}</span>
+                  <span className="text-[11px] text-[#b4b4b0]">{photoUploading ? 'Загрузка...' : 'Добавить'}</span>
                   <input type="file" accept="image/*" className="hidden" onChange={e => e.target.files?.[0] && uploadPhoto(e.target.files[0])} />
                 </label>
               </div>
@@ -716,29 +716,29 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
 
           {/* Notes */}
           {order.notes && (
-            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</p>
-              <p className="text-[13px] text-[#4b4b47]">{order.notes}</p>
+            <div className="bg-surface rounded-xl border border-line px-5 py-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Комментарий</p>
+              <p className="text-[13px] text-ink-soft">{order.notes}</p>
             </div>
           )}
 
           {/* Approval history */}
           {order.approved_at && (
-            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-1">Одобрение</p>
+            <div className="bg-surface rounded-xl border border-line px-5 py-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Одобрение</p>
               <p className="text-[13px] text-emerald-700">
                 Одобрено {new Date(order.approved_at).toLocaleDateString('ru-RU')}
               </p>
               {order.approval_notes && (
-                <p className="text-[12px] text-[#6b6b66] mt-0.5">{order.approval_notes}</p>
+                <p className="text-[12px] text-ink-soft mt-0.5">{order.approval_notes}</p>
               )}
             </div>
           )}
 
           {/* Installer rating */}
           {order.status === 'completed' && (
-            <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-3">Оценка монтажа</p>
+            <div className="bg-surface rounded-xl border border-line px-5 py-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Оценка монтажа</p>
               {ratingSaved ? (
                 <p className="text-[13px] text-emerald-700 font-medium">✓ Спасибо за оценку!</p>
               ) : (
@@ -758,10 +758,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                         value={ratingComment}
                         onChange={e => setRatingComment(e.target.value)}
                         placeholder="Комментарий (необязательно)"
-                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
+                        className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]"
                       />
                       <button onClick={saveRating} disabled={savingRating}
-                        className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+                        className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
                         {savingRating ? 'Сохраняю...' : 'Сохранить оценку'}
                       </button>
                     </>
@@ -779,7 +779,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                 Завершить заказ ✓
               </button>
               <button onClick={() => handleStatusChange('cancelled')}
-                className="px-4 py-2.5 border border-[#e4e4e0] text-[13px] text-[#9a9a95] rounded-lg hover:bg-[#f8f8f7] hover:text-red-500">
+                className="px-4 py-2.5 border border-line text-[13px] text-muted rounded-lg hover:bg-canvas hover:text-red-500">
                 Отменить
               </button>
             </div>
@@ -793,14 +793,14 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
 function BOMSection({ title, items }: { title: string; items: { name: string; qty: number; unit: string; unit_cost: number; total: number }[] }) {
   return (
     <div>
-      <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-widest mb-1.5">{title}</p>
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">{title}</p>
       <div className="space-y-0.5">
         {items.map((item, i) => (
           <div key={i} className="flex items-center justify-between text-[12px]">
-            <span className="text-[#4b4b47]">{item.name}</span>
-            <div className="flex items-center gap-3 text-[#9a9a95]">
+            <span className="text-ink-soft">{item.name}</span>
+            <div className="flex items-center gap-3 text-muted">
               <span>{item.qty} {item.unit}</span>
-              <span className="font-mono text-[#111110]">{item.total.toLocaleString('ru-RU')} ₽</span>
+              <span className="font-mono tabular-nums text-ink">{item.total.toLocaleString('ru-RU')} ₽</span>
             </div>
           </div>
         ))}

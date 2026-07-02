@@ -123,19 +123,19 @@ function ItemCard({
   return (
     <div
       onClick={onToggle}
-      className={`bg-white rounded-xl overflow-hidden cursor-pointer transition-all ${
+      className={`bg-surface rounded-xl overflow-hidden cursor-pointer transition-all ${
         selected
-          ? 'border-2 border-[#111110] shadow-sm'
+          ? 'border-2 border-ink shadow-sm'
           : 'border border-[#e8e8e4]'
       }`}
     >
       {/* Header */}
-      <div className="px-3 py-3 border-b border-[#f0f0ec]">
+      <div className="px-3 py-3 border-b border-line-soft">
         <div className="flex items-start gap-2.5">
 
           {/* Checkbox */}
           <div className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-            selected ? 'border-[#111110] bg-[#111110]' : 'border-[#d4d4d0] bg-white'
+            selected ? 'border-ink bg-ink' : 'border-[#d4d4d0] bg-surface'
           }`}>
             {selected && (
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -149,18 +149,18 @@ function ItemCard({
             <div className="flex items-start justify-between gap-1.5">
               <div>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-bold text-[#c4c4be]">#{index + 1}</span>
-                  <span className="text-[14px] font-bold text-[#111110] leading-tight">
+                  <span className="text-[11px] font-semibold text-faint tabular-nums">#{index + 1}</span>
+                  <span className="text-[14px] font-semibold text-ink leading-tight">
                     {item.materialName ?? '—'}
                     {item.thickness ? (
-                      <span className="text-[12px] font-normal text-[#6b6b66] ml-1">
+                      <span className="text-[12px] font-normal text-ink-soft ml-1">
                         {item.thickness} мм
                       </span>
                     ) : null}
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[12px] text-[#6b6b66]">
-                  <span className="font-mono font-semibold text-[#111110]">
+                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[12px] text-ink-soft">
+                  <span className="font-mono font-semibold text-ink tabular-nums">
                     {item.width ?? '—'}×{item.height ?? '—'}
                   </span>
                   <span>·</span>
@@ -168,13 +168,13 @@ function ItemCard({
                   {(item.totalAreaNet ?? 0) > 0 && (
                     <>
                       <span>·</span>
-                      <span className="text-[11px]">{(item.totalAreaNet ?? 0).toFixed(3)} м²</span>
+                      <span className="text-[11px] tabular-nums">{(item.totalAreaNet ?? 0).toFixed(3)} м²</span>
                     </>
                   )}
                 </div>
               </div>
               {item.category && (
-                <span className="text-[10px] text-[#9a9a95] bg-[#f4f4f0] px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+                <span className="text-[11px] text-muted bg-[#f4f4f0] px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
                   {item.category}
                 </span>
               )}
@@ -183,7 +183,7 @@ function ItemCard({
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {tags.map((tag, ti) => (
-                  <span key={ti} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                  <span key={ti} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                     tag === 'Закалка'
                       ? 'bg-orange-50 text-orange-700 border border-orange-200'
                       : 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -195,28 +195,28 @@ function ItemCard({
             )}
 
             {comment && (
-              <p className="mt-1 text-[10px] text-[#8a8a85] italic">{comment}</p>
+              <p className="mt-1 text-[11px] text-muted italic">{comment}</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Stage badges */}
-      <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-[#fafaf9]'}`}>
+      <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-subtle'}`}>
         <div className="flex gap-1.5 flex-wrap">
           {visibleStages.map(stage => {
             const sd     = stages?.[stage.key]
             const isDone = sd?.status === 'done'
             return (
               <div key={stage.key} className="flex flex-col items-center gap-0.5">
-                <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${
                   isDone
                     ? 'bg-green-50 text-green-700 border-green-200'
-                    : 'text-[#c4c4be] bg-[#f4f4f0] border-[#e8e8e4]'
+                    : 'text-faint bg-[#f4f4f0] border-[#e8e8e4]'
                 }`}>
                   {stage.label}
                 </span>
-                <span className={`text-[8px] ${isDone ? 'text-green-600' : 'text-[#c4c4be]'}`}>
+                <span className={`text-[11px] ${isDone ? 'text-green-600' : 'text-faint'}`}>
                   {isDone && sd?.updated_at ? fmtDateShort(sd.updated_at) : isDone ? 'готово' : 'ожидает'}
                 </span>
               </div>
@@ -225,10 +225,10 @@ function ItemCard({
 
           {hasProblem && (
             <div className="flex flex-col items-center gap-0.5">
-              <span className="text-[9px] font-medium px-1.5 py-0.5 rounded border bg-red-100 text-red-700 border-red-300 whitespace-nowrap">
+              <span className="text-[11px] font-medium px-1.5 py-0.5 rounded border bg-red-100 text-red-700 border-red-300 whitespace-nowrap">
                 ⚠️ Проблема
               </span>
-              <span className="text-[8px] text-red-500">
+              <span className="text-[11px] text-red-500">
                 {stages?.problem?.updated_at ? fmtDateShort(stages.problem.updated_at) : ''}
               </span>
             </div>
@@ -424,19 +424,19 @@ export default function MobileOrderWorkPage() {
   // ─── Loading ───────────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f8f8f7] flex items-center justify-center">
-      <div className="text-[14px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen bg-canvas flex items-center justify-center">
+      <div className="text-[14px] text-muted">Загрузка...</div>
     </div>
   )
 
   // ─── Error ─────────────────────────────────────────────────────────────────
 
   if (error || !order) return (
-    <div className="min-h-screen bg-[#f8f8f7] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
       <div className="text-center max-w-xs">
         <div className="text-4xl mb-4">🔍</div>
-        <p className="text-[15px] font-semibold text-[#111110] mb-2">{error ?? 'Ошибка загрузки'}</p>
-        <p className="text-[13px] text-[#8a8a85] mb-5">
+        <p className="text-[15px] font-semibold text-ink mb-2">{error ?? 'Ошибка загрузки'}</p>
+        <p className="text-[13px] text-muted mb-5">
           Попробуйте открыть производственный лист и сканировать QR ещё раз.
         </p>
         <Link href="/production-app" className="text-[13px] text-blue-600 underline underline-offset-2">
@@ -470,20 +470,20 @@ export default function MobileOrderWorkPage() {
       {/* Toast */}
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold whitespace-nowrap pointer-events-none ${
-          toast.ok ? 'bg-[#111110] text-white' : 'bg-red-600 text-white'
+          toast.ok ? 'bg-ink text-white' : 'bg-red-600 text-white'
         }`}>
           {toast.msg}
         </div>
       )}
 
-      <div className="min-h-screen bg-[#f8f8f7] pb-32">
+      <div className="min-h-screen bg-canvas pb-32">
 
         {/* ── Top bar ──────────────────────────────────────────────────────── */}
-        <div className="sticky top-0 z-10 bg-white border-b border-[#e4e4e0] px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Link
               href="/production-app"
-              className="text-[#6b6b66] hover:text-[#111110] transition-colors p-1 -ml-1"
+              className="text-ink-soft hover:text-ink transition-colors p-1 -ml-1"
               aria-label="Назад"
             >
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -491,16 +491,16 @@ export default function MobileOrderWorkPage() {
               </svg>
             </Link>
             <div>
-              <p className="text-[10px] text-[#9a9a95] uppercase tracking-widest leading-none mb-0.5">Производство</p>
-              <p className="text-[15px] font-bold text-[#111110] leading-none">{orderLabel}</p>
+              <p className="text-[11px] text-muted uppercase tracking-widest leading-none mb-0.5">Производство</p>
+              <p className="text-[15px] font-semibold text-ink leading-none">{orderLabel}</p>
             </div>
           </div>
           <div className="text-right">
-            <p className="text-[11px] text-[#9a9a95]">
+            <p className="text-[11px] text-muted">
               {order.items.length}&nbsp;{plural(order.items.length, 'позиция', 'позиции', 'позиций')}
             </p>
             {selectedItems.size > 0 && (
-              <p className="text-[11px] font-bold text-[#111110]">
+              <p className="text-[11px] font-semibold text-ink">
                 {selectedItems.size} выбрано
               </p>
             )}
@@ -510,33 +510,33 @@ export default function MobileOrderWorkPage() {
         <div className="px-4 pt-4 space-y-4">
 
           {/* ── Order summary ─────────────────────────────────────────────── */}
-          <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-3 space-y-1.5">
-            <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
+          <div className="bg-surface border border-[#e8e8e4] rounded-xl px-4 py-3 space-y-1.5">
+            <p className="text-[14px] font-semibold text-ink">{order.client_name}</p>
             {order.client_order_number && (
-              <p className="text-[12px] text-[#6b6b66]">
+              <p className="text-[12px] text-ink-soft">
                 Номер клиента: <span className="font-mono">{order.client_order_number}</span>
               </p>
             )}
             {launchDate && (
-              <p className="text-[12px] text-[#6b6b66]">
+              <p className="text-[12px] text-ink-soft">
                 Запуск: <span className="font-medium text-emerald-700">{launchDate}</span>
                 {pn.production_days ? (
-                  <span className="text-[#9a9a95]"> · {pn.production_days} дн.</span>
+                  <span className="text-muted"> · {pn.production_days} дн.</span>
                 ) : null}
               </p>
             )}
             <div className="flex gap-3 flex-wrap pt-0.5">
-              <span className="text-[12px] text-[#6b6b66]">
-                <span className="font-semibold text-[#111110]">{totalQty}</span> шт
+              <span className="text-[12px] text-ink-soft">
+                <span className="font-semibold text-ink tabular-nums">{totalQty}</span> шт
               </span>
               {totalArea > 0 && (
-                <span className="text-[12px] text-[#6b6b66]">
-                  <span className="font-semibold text-[#111110]">{totalArea.toFixed(2)}</span> м²
+                <span className="text-[12px] text-ink-soft">
+                  <span className="font-semibold text-ink tabular-nums">{totalArea.toFixed(2)}</span> м²
                 </span>
               )}
               {totalWeight > 0 && (
-                <span className="text-[12px] text-[#6b6b66]">
-                  <span className="font-semibold text-[#111110]">{totalWeight.toFixed(1)}</span> кг
+                <span className="text-[12px] text-ink-soft">
+                  <span className="font-semibold text-ink tabular-nums">{totalWeight.toFixed(1)}</span> кг
                 </span>
               )}
             </div>
@@ -545,7 +545,7 @@ export default function MobileOrderWorkPage() {
           {/* ── Items list ─────────────────────────────────────────────────── */}
           <div>
             <div className="flex items-center justify-between mb-2.5 px-0.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 Позиции
               </p>
               {order.items.length > 0 && (
@@ -562,8 +562,8 @@ export default function MobileOrderWorkPage() {
             </div>
 
             {order.items.length === 0 ? (
-              <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-8 text-center">
-                <p className="text-[14px] text-[#9a9a95]">В заказе нет позиций</p>
+              <div className="bg-surface border border-[#e8e8e4] rounded-xl px-4 py-8 text-center">
+                <p className="text-[14px] text-muted">В заказе нет позиций</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -589,17 +589,17 @@ export default function MobileOrderWorkPage() {
           {/* ── Batch stage selection ─────────────────────────────────────── */}
           <div>
             <div className="flex items-center justify-between mb-2.5 px-0.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                 Отметить выполненные этапы
               </p>
               {saving && (
-                <span className="text-[11px] text-[#9a9a95]">Сохранение...</span>
+                <span className="text-[11px] text-muted">Сохранение...</span>
               )}
             </div>
 
             {selectedItems.size === 0 ? (
-              <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-4 text-center">
-                <p className="text-[13px] text-[#9a9a95]">
+              <div className="bg-surface border border-[#e8e8e4] rounded-xl px-4 py-4 text-center">
+                <p className="text-[13px] text-muted">
                   Выберите позиции выше, чтобы отметить этапы
                 </p>
               </div>
@@ -607,21 +607,21 @@ export default function MobileOrderWorkPage() {
               <>
                 {/* Selection summary */}
                 <div className="flex items-center gap-2 mb-3 px-0.5">
-                  <span className="text-[12px] text-[#6b6b66]">
+                  <span className="text-[12px] text-ink-soft">
                     Выбрано позиций:
                   </span>
-                  <span className="text-[13px] font-bold text-[#111110]">{selectedItems.size}</span>
+                  <span className="text-[13px] font-semibold text-ink tabular-nums">{selectedItems.size}</span>
                   {selectedStages.size > 0 && (
                     <>
-                      <span className="text-[#c4c4be]">·</span>
-                      <span className="text-[12px] text-[#6b6b66]">этапов:</span>
-                      <span className="text-[13px] font-bold text-[#111110]">{selectedStages.size}</span>
+                      <span className="text-faint">·</span>
+                      <span className="text-[12px] text-ink-soft">этапов:</span>
+                      <span className="text-[13px] font-semibold text-ink tabular-nums">{selectedStages.size}</span>
                     </>
                   )}
                 </div>
 
                 {/* Stage checkboxes */}
-                <div className="bg-white border border-[#e8e8e4] rounded-xl overflow-hidden mb-3">
+                <div className="bg-surface border border-[#e8e8e4] rounded-xl overflow-hidden mb-3">
                   {BATCH_STAGES.map((stage, i) => {
                     const isTempering = stage.key === 'tempering'
                     const isDisabled  = isTempering && !selectedNeedTempering
@@ -631,18 +631,18 @@ export default function MobileOrderWorkPage() {
                       <label
                         key={stage.key}
                         className={`flex items-center gap-3.5 px-4 py-4 transition-colors select-none ${
-                          i > 0 ? 'border-t border-[#f0f0ec]' : ''
+                          i > 0 ? 'border-t border-line-soft' : ''
                         } ${
                           isDisabled
                             ? 'opacity-40 cursor-not-allowed'
-                            : 'cursor-pointer hover:bg-[#fafaf9] active:bg-[#f4f4f0]'
+                            : 'cursor-pointer hover:bg-subtle active:bg-[#f4f4f0]'
                         }`}
                       >
                         {/* Large checkbox */}
                         <div className={`flex-shrink-0 w-7 h-7 rounded-lg border-2 flex items-center justify-center transition-all ${
                           isChecked
-                            ? 'bg-[#111110] border-[#111110]'
-                            : 'border-[#d4d4d0] bg-white'
+                            ? 'bg-ink border-ink'
+                            : 'border-[#d4d4d0] bg-surface'
                         }`}>
                           {isChecked && (
                             <svg width="14" height="14" viewBox="0 0 12 12" fill="none">
@@ -659,9 +659,9 @@ export default function MobileOrderWorkPage() {
                         />
                         <span className="text-[20px] leading-none flex-shrink-0">{stage.icon}</span>
                         <div className="flex-1">
-                          <p className="text-[15px] font-medium text-[#111110]">{stage.label}</p>
+                          <p className="text-[15px] font-medium text-ink">{stage.label}</p>
                           {isTempering && !selectedNeedTempering && (
-                            <p className="text-[11px] text-[#9a9a95] mt-0.5">не требуется для выбранных позиций</p>
+                            <p className="text-[11px] text-muted mt-0.5">не требуется для выбранных позиций</p>
                           )}
                         </div>
                         {isChecked && (
@@ -678,8 +678,8 @@ export default function MobileOrderWorkPage() {
                   disabled={!canSave}
                   className={`w-full py-4 rounded-xl text-[15px] font-semibold transition-all ${
                     canSave
-                      ? 'bg-[#111110] text-white active:bg-[#333] shadow-sm'
-                      : 'bg-[#e8e8e4] text-[#b0b0aa] cursor-not-allowed'
+                      ? 'bg-ink text-white active:bg-[#333] shadow-sm'
+                      : 'bg-[#e8e8e4] text-faint cursor-not-allowed'
                   }`}
                 >
                   {saving

@@ -214,7 +214,7 @@ export default function UnitEconomicsPage() {
                       ].map(row => (
                         <div key={row.label} className={`flex justify-between ${row.bold ? 'border-t border-line pt-1.5 font-semibold' : ''}`}>
                           <span className="text-ink-soft">{row.label}</span>
-                          <span className={`font-mono tabular-nums ${row.bold ? (row.value > 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold') : row.value >= 0 ? 'text-ink' : 'text-[#4b4b47]'}`}>
+                          <span className={`font-mono tabular-nums ${row.bold ? (row.value > 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold') : row.value >= 0 ? 'text-ink' : 'text-ink-soft'}`}>
                             {row.value >= 0 ? '' : ''}{fmt(Math.abs(row.value))}
                           </span>
                         </div>

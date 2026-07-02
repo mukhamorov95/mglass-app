@@ -140,7 +140,7 @@ export default function ProductionSheetPage() {
   // ─── Loading / error states ────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">
       Загрузка...
     </div>
   )
@@ -190,18 +190,18 @@ export default function ProductionSheetPage() {
       `}</style>
 
       {/* ── Screen nav (hidden on print) ───────────────────────────────────── */}
-      <div className="no-print sticky top-0 z-10 bg-white border-b border-[#e4e4e0] px-4 py-2.5 flex items-center justify-between">
+      <div className="no-print sticky top-0 z-10 bg-surface border-b border-line px-4 py-2.5 flex items-center justify-between">
         <Link
           href="/b2b-orders"
-          className="text-[12px] text-[#6b6b66] hover:text-[#111110] transition-colors"
+          className="text-[12px] text-ink-soft hover:text-ink transition-colors"
         >
           ← Назад к заказам
         </Link>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#9a9a95]">Производственный лист</span>
+          <span className="text-[11px] text-muted">Производственный лист</span>
           <button
             onClick={() => window.print()}
-            className="px-4 py-1.5 bg-[#111110] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2a2a28] transition-colors"
+            className="px-4 py-1.5 bg-ink text-white text-[12px] font-semibold rounded-lg hover:bg-[#2a2a28] transition-colors"
           >
             🖨 Печать
           </button>

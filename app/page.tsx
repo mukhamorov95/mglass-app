@@ -126,8 +126,8 @@ export default async function Home() {
       {/* Greeting */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-[13px] text-[#9a9a95]">{dateLabel}</p>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight mt-0.5">Панель менеджера</h1>
+          <p className="text-[13px] text-muted">{dateLabel}</p>
+          <h1 className="text-[22px] font-semibold text-ink tracking-tight mt-0.5">Панель менеджера</h1>
         </div>
         <Link href="/calculations"
           className="text-[13px] text-blue-600 hover:underline font-medium">
@@ -137,14 +137,14 @@ export default async function Home() {
 
       {/* ── NEW CALCULATION – hero section ────────────────────────────── */}
       <section>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Новый расчёт</p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">Новый расчёт</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {CALC_CARDS.map(c => (
             <Link key={c.href} href={c.href}
               className={`group border-2 rounded-2xl p-4 transition-all hover:shadow-md ${c.bg}`}>
               <div className="text-2xl mb-2">{c.emoji}</div>
-              <p className="text-[15px] font-bold text-[#111110] mb-0.5">{c.label}</p>
-              <p className="text-[11px] text-[#6b6b66] leading-snug">{c.desc}</p>
+              <p className="text-[15px] font-semibold text-ink mb-0.5">{c.label}</p>
+              <p className="text-[11px] text-ink-soft leading-snug">{c.desc}</p>
             </Link>
           ))}
         </div>
@@ -152,7 +152,7 @@ export default async function Home() {
 
       {/* ── KPI row ────────────────────────────────────────────────────── */}
       <section>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-3">Статистика</p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">Статистика</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           {[
             { label: 'Расчётов сегодня', value: todayCalcs,    href: '/calculations', accent: '' },
@@ -161,9 +161,9 @@ export default async function Home() {
             { label: 'Выручка (согл.)',   value: revenueMonth > 0 ? fmt(revenueMonth) : '—', href: '/calculations', accent: 'text-emerald-600' },
           ].map(({ label, value, href, accent }) => (
             <Link key={label} href={href}
-              className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all">
-              <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1.5 leading-tight">{label}</p>
-              <p className={`text-[22px] font-bold tabular-nums leading-none ${accent || 'text-[#111110]'}`}>{value}</p>
+              className="bg-surface border border-line rounded-xl px-4 py-3.5 hover:border-faint hover:shadow-sm transition-all">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1.5 leading-tight">{label}</p>
+              <p className={`text-[22px] font-semibold tabular-nums leading-none ${accent || 'text-ink'}`}>{value}</p>
             </Link>
           ))}
         </div>
@@ -173,7 +173,7 @@ export default async function Home() {
       {recent.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Последние расчёты</p>
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Последние расчёты</p>
             <Link href="/calculations" className="text-[12px] text-blue-600 hover:underline">Все →</Link>
           </div>
           <div className="space-y-2">
@@ -187,29 +187,29 @@ export default async function Home() {
                 : d.dimStr ?? `${d.width}×${d.height} мм`
               return (
                 <Link key={c.id} href={`/calculations/${c.id}`}
-                  className="flex items-center gap-3 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 hover:border-[#c4c4be] hover:shadow-sm transition-all">
+                  className="flex items-center gap-3 bg-surface border border-line rounded-xl px-4 py-3 hover:border-faint hover:shadow-sm transition-all">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[13px] font-semibold text-[#111110]">
+                      <span className="text-[13px] font-semibold text-ink">
                         {c.client_name ?? prodLabel}
                       </span>
                       {c.client_name && (
-                        <span className="text-[11px] text-[#9a9a95]">{prodLabel}</span>
+                        <span className="text-[11px] text-muted">{prodLabel}</span>
                       )}
                       {dim && (
-                        <span className="text-[11px] text-[#9a9a95]">{String(dim)}</span>
+                        <span className="text-[11px] text-muted">{String(dim)}</span>
                       )}
                     </div>
-                    <p className="text-[12px] text-[#9a9a95] mt-0.5">
+                    <p className="text-[12px] text-muted mt-0.5">
                       {new Date(c.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                       {isAdmin && c.created_at && ' · ' + (usersMap[(c as any).created_by] ?? '')}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    <span className="text-[14px] font-bold tabular-nums text-[#111110]">
+                    <span className="text-[14px] font-semibold tabular-nums text-ink">
                       {(c.final_price ?? 0).toLocaleString('ru-RU')} ₽
                     </span>
-                    <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${stColor}`}>{st}</span>
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${stColor}`}>{st}</span>
                   </div>
                 </Link>
               )
@@ -222,17 +222,17 @@ export default async function Home() {
       {isAdmin && (
         <section>
           <div className="flex items-center gap-3 mb-3">
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider">Owner Center</p>
-            <div className="flex-1 h-px bg-[#e4e4e0]" />
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Owner Center</p>
+            <div className="flex-1 h-px bg-line" />
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5">
             {OWNER_CENTER.map(item => (
               <Link key={item.href} href={item.href}
-                className="flex items-start gap-3 bg-white border border-[#e4e4e0] rounded-xl p-3.5 hover:border-[#c4c4be] hover:shadow-sm transition-all group">
+                className="flex items-start gap-3 bg-surface border border-line rounded-xl p-3.5 hover:border-faint hover:shadow-sm transition-all group">
                 <span className="text-lg leading-none mt-0.5">{item.emoji}</span>
                 <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors">{item.label}</p>
-                  <p className="text-[11px] text-[#9a9a95] leading-snug">{item.desc}</p>
+                  <p className="text-[13px] font-semibold text-ink group-hover:text-blue-600 transition-colors">{item.label}</p>
+                  <p className="text-[11px] text-muted leading-snug">{item.desc}</p>
                 </div>
               </Link>
             ))}

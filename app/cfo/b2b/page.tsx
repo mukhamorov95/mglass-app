@@ -131,43 +131,43 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
   const shareTotal = shares.reduce((s, x) => s + x.value, 0) || 1
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[1100px] mx-auto px-4 py-4 space-y-4">
 
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold text-[#111110]">CFO Center — B2B аналитика</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">Оборотка, материал, закалка и прибыль по B2B · {scopeLabel} · {scope.length} заказов</p>
+            <h1 className="text-sm font-semibold text-ink">CFO Center — B2B аналитика</h1>
+            <p className="text-[11px] text-muted mt-0.5">Оборотка, материал, закалка и прибыль по B2B · {scopeLabel} · {scope.length} заказов</p>
           </div>
-          <Link href="/cfo" className="text-[10px] text-[#9a9a95] hover:text-[#111110]">← Дашборд</Link>
+          <Link href="/cfo" className="text-[11px] text-muted hover:text-ink">← Дашборд</Link>
         </div>
 
         {/* Оборот по годам — YoY обзор */}
         <div>
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Оборот по годам</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Оборот по годам</p>
           <div className="flex flex-wrap gap-3">
             {yearRows.map(([y, d]) => (
               <Link key={y} href={yearParam === y ? '/cfo/b2b' : `/cfo/b2b?year=${y}`}
-                className={`flex-1 min-w-[150px] rounded-lg border px-3 py-3 transition-colors ${yearParam === y ? 'border-[#111110] bg-white ring-1 ring-[#111110]' : 'border-[#e4e4e0] bg-white hover:border-[#c4c4be]'}`}>
-                <p className="text-[11px] font-semibold text-[#6b6b66]">{y} год</p>
-                <p className="text-lg font-bold font-mono mt-0.5 text-[#111110] leading-tight">{fmtMoney(d.rev)}</p>
-                <p className="text-[10px] text-[#9a9a95] mt-0.5">{d.n} заказов · чек {fmtMoney(d.paidN ? d.rev / d.paidN : 0)}</p>
+                className={`flex-1 min-w-[150px] rounded-lg border px-3 py-3 transition-colors ${yearParam === y ? 'border-ink bg-surface ring-1 ring-ink' : 'border-line bg-surface hover:border-faint'}`}>
+                <p className="text-[11px] font-semibold text-ink-soft">{y} год</p>
+                <p className="text-lg font-semibold font-mono mt-0.5 text-ink leading-tight tabular-nums">{fmtMoney(d.rev)}</p>
+                <p className="text-[11px] text-muted mt-0.5">{d.n} заказов · чек {fmtMoney(d.paidN ? d.rev / d.paidN : 0)}</p>
               </Link>
             ))}
-            {yearRows.length === 0 && <div className="text-xs text-[#9a9a95] px-1 py-3">Нет данных</div>}
+            {yearRows.length === 0 && <div className="text-xs text-muted px-1 py-3">Нет данных</div>}
           </div>
         </div>
 
         {/* Селектор года */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex bg-white border border-[#e4e4e0] rounded-lg p-0.5 gap-0.5">
-            <Link href="/cfo/b2b" className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${!yearParam ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'}`}>Все годы</Link>
+          <div className="flex bg-surface border border-line rounded-lg p-0.5 gap-0.5">
+            <Link href="/cfo/b2b" className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${!yearParam ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'}`}>Все годы</Link>
             {years.map(y => (
-              <Link key={y} href={`/cfo/b2b?year=${y}`} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${yearParam === y ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'}`}>{y}</Link>
+              <Link key={y} href={`/cfo/b2b?year=${y}`} className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${yearParam === y ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'}`}>{y}</Link>
             ))}
           </div>
-          {drafts > 0 && <span className="text-[10px] text-[#9a9a95]">черновики исключены: {drafts}</span>}
+          {drafts > 0 && <span className="text-[11px] text-muted">черновики исключены: {drafts}</span>}
         </div>
 
         {/* KPI области */}
@@ -177,10 +177,10 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
             { label: 'Заказов', value: String(scope.length), hint: 'без черновиков' },
             { label: 'Средний чек', value: fmtMoney(avgCheck), hint: 'оборотка / заказы' },
           ].map(c => (
-            <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-              <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
-              <p className="text-lg font-bold font-mono mt-0.5 text-[#111110] leading-tight">{c.value}</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.hint}</p>
+            <div key={c.label} className="bg-surface rounded-lg border border-line px-3 py-3">
+              <p className="text-[11px] text-muted font-medium">{c.label}</p>
+              <p className="text-lg font-semibold font-mono mt-0.5 text-ink leading-tight tabular-nums">{c.value}</p>
+              <p className="text-[11px] text-faint mt-0.5">{c.hint}</p>
             </div>
           ))}
         </div>
@@ -188,14 +188,14 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
         {/* Разбивка себестоимости */}
         <div>
           <div className="flex items-center justify-between mb-2">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Разбивка себестоимости</p>
-            {withItems.length > 0 && <span className="text-[10px] text-[#9a9a95]">{withItems.length} из {scope.length} заказов · {coverPct}% оборота</span>}
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Разбивка себестоимости</p>
+            {withItems.length > 0 && <span className="text-[11px] text-muted">{withItems.length} из {scope.length} заказов · {coverPct}% оборота</span>}
           </div>
 
           {withItems.length === 0 ? (
-            <div className="bg-white rounded-lg border border-[#e4e4e0] px-4 py-6 text-center">
-              <p className="text-[13px] text-[#111110] font-medium">Пока нет заказов с детализацией себестоимости</p>
-              <p className="text-[12px] text-[#9a9a95] mt-1 max-w-md mx-auto">
+            <div className="bg-surface rounded-lg border border-line px-4 py-6 text-center">
+              <p className="text-[13px] text-ink font-medium">Пока нет заказов с детализацией себестоимости</p>
+              <p className="text-[12px] text-muted mt-1 max-w-md mx-auto">
                 Заказы 2026, импортированные из таблицы, не содержат позиций. Разбивка «материал / закалка / прочее»
                 начнёт наполняться автоматически с заказов, оформленных через калькулятор B2B (с июля 2026).
               </p>
@@ -213,21 +213,21 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
               )}
               <div className="grid grid-cols-5 gap-3 mb-3">
                 {[
-                  { label: 'Оборотка (с расчётом)', value: fmtMoney(revItems), sub: `${withItems.length} заказов`, color: 'text-[#111110]' },
+                  { label: 'Оборотка (с расчётом)', value: fmtMoney(revItems), sub: `${withItems.length} заказов`, color: 'text-ink' },
                   { label: 'Материал', value: fmtMoney(mat), sub: `${revItems ? Math.round(mat / revItems * 100) : 0}% оборота`, color: 'text-sky-700' },
                   { label: 'Закалка', value: fmtMoney(temp), sub: `${revItems ? Math.round(temp / revItems * 100) : 0}% оборота`, color: 'text-orange-700' },
                   { label: 'Прочее', value: fmtMoney(other), sub: 'фацет/кромка/дост.', color: 'text-violet-700' },
                   { label: 'Валовая прибыль', value: fmtMoney(profit), sub: `маржа ${gm.toFixed(0)}%`, color: profit > 0 ? 'text-emerald-700' : 'text-red-600' },
                 ].map(c => (
-                  <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-                    <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
-                    <p className={`text-base font-bold font-mono mt-0.5 leading-tight ${c.color}`}>{c.value}</p>
-                    <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.sub}</p>
+                  <div key={c.label} className="bg-surface rounded-lg border border-line px-3 py-3">
+                    <p className="text-[11px] text-muted font-medium">{c.label}</p>
+                    <p className={`text-base font-semibold font-mono mt-0.5 leading-tight tabular-nums ${c.color}`}>{c.value}</p>
+                    <p className="text-[11px] text-faint mt-0.5">{c.sub}</p>
                   </div>
                 ))}
               </div>
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Структура оборотки (заказы с расчётом)</p>
+              <div className="bg-surface rounded-lg border border-line p-4">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Структура оборотки (заказы с расчётом)</p>
                 <div className="flex h-3 rounded-full overflow-hidden mb-3">
                   {shares.map(s => <div key={s.label} className={s.cls} style={{ width: `${(s.value / shareTotal) * 100}%` }} title={`${s.label}: ${fmtFull(s.value)}`} />)}
                 </div>
@@ -235,7 +235,7 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
                   {shares.map(s => (
                     <div key={s.label} className="flex items-center justify-between text-[11px]">
                       <span className="flex items-center gap-1.5"><span className={`inline-block w-2 h-2 rounded-sm ${s.cls}`} /><span className={s.text}>{s.label}</span></span>
-                      <span className="font-mono text-[#6b6b66]">{fmtFull(s.value)} · {Math.round(s.value / shareTotal * 100)}%</span>
+                      <span className="font-mono text-ink-soft tabular-nums">{fmtFull(s.value)} · {Math.round(s.value / shareTotal * 100)}%</span>
                     </div>
                   ))}
                 </div>
@@ -245,15 +245,15 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
         </div>
 
         {/* Помесячно */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Помесячно · {scopeLabel}</p>
+        <div className="bg-surface rounded-lg border border-line overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-line">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Помесячно · {scopeLabel}</p>
           </div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-[#f5f5f3]">
+              <tr className="border-b border-canvas">
                 {['Месяц', 'Заказов', 'Оборотка', 'Материал*', 'Закалка*', 'С расчётом'].map(h => (
-                  <th key={h} className="px-3 py-2 text-left text-[10px] text-[#9a9a95] font-medium whitespace-nowrap">{h}</th>
+                  <th key={h} className="px-3 py-2 text-left text-[11px] text-muted font-medium whitespace-nowrap">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -261,42 +261,42 @@ export default async function CfoB2BPage({ searchParams }: { searchParams: Promi
               {months.map(([key, m]) => {
                 const [y, mo] = key.split('-')
                 return (
-                  <tr key={key} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
+                  <tr key={key} className="border-b border-canvas last:border-0 hover:bg-subtle">
                     <td className="px-3 py-2 font-medium whitespace-nowrap">{MONTHS[Number(mo) - 1]} {y}</td>
-                    <td className="px-3 py-2 text-[#6b6b66]">{m.n}</td>
-                    <td className="px-3 py-2 font-mono font-medium whitespace-nowrap">{fmtFull(m.rev)}</td>
-                    <td className="px-3 py-2 font-mono text-sky-700 whitespace-nowrap">{m.mat ? fmtFull(m.mat) : '—'}</td>
-                    <td className="px-3 py-2 font-mono text-orange-700 whitespace-nowrap">{m.temp ? fmtFull(m.temp) : '—'}</td>
-                    <td className="px-3 py-2 text-[#9a9a95]">{m.nItems}/{m.n}</td>
+                    <td className="px-3 py-2 text-ink-soft tabular-nums">{m.n}</td>
+                    <td className="px-3 py-2 font-mono font-medium whitespace-nowrap tabular-nums">{fmtFull(m.rev)}</td>
+                    <td className="px-3 py-2 font-mono text-sky-700 whitespace-nowrap tabular-nums">{m.mat ? fmtFull(m.mat) : '—'}</td>
+                    <td className="px-3 py-2 font-mono text-orange-700 whitespace-nowrap tabular-nums">{m.temp ? fmtFull(m.temp) : '—'}</td>
+                    <td className="px-3 py-2 text-muted tabular-nums">{m.nItems}/{m.n}</td>
                   </tr>
                 )
               })}
-              {months.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-[#9a9a95]">Нет данных</td></tr>}
+              {months.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted">Нет данных</td></tr>}
             </tbody>
           </table>
-          <p className="px-4 py-2 text-[10px] text-[#c4c4be] border-t border-[#f5f5f3]">* материал и закалка — только по заказам с детальным расчётом (колонка «с расчётом»)</p>
+          <p className="px-4 py-2 text-[11px] text-faint border-t border-canvas">* материал и закалка — только по заказам с детальным расчётом (колонка «с расчётом»)</p>
         </div>
 
         {/* Топ клиентов */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Топ клиентов · {scopeLabel}</p>
+        <div className="bg-surface rounded-lg border border-line overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-line">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Топ клиентов · {scopeLabel}</p>
           </div>
           <table className="w-full text-xs">
             <thead>
-              <tr className="border-b border-[#f5f5f3]">
-                {['Клиент', 'Заказов', 'Оборотка'].map(h => <th key={h} className="px-3 py-2 text-left text-[10px] text-[#9a9a95] font-medium whitespace-nowrap">{h}</th>)}
+              <tr className="border-b border-canvas">
+                {['Клиент', 'Заказов', 'Оборотка'].map(h => <th key={h} className="px-3 py-2 text-left text-[11px] text-muted font-medium whitespace-nowrap">{h}</th>)}
               </tr>
             </thead>
             <tbody>
               {topClients.map(([name, c]) => (
-                <tr key={name} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
+                <tr key={name} className="border-b border-canvas last:border-0 hover:bg-subtle">
                   <td className="px-3 py-2 font-medium max-w-[260px] truncate">{name}</td>
-                  <td className="px-3 py-2 text-[#6b6b66]">{c.n}</td>
-                  <td className="px-3 py-2 font-mono font-medium whitespace-nowrap">{fmtFull(c.rev)}</td>
+                  <td className="px-3 py-2 text-ink-soft tabular-nums">{c.n}</td>
+                  <td className="px-3 py-2 font-mono font-medium whitespace-nowrap tabular-nums">{fmtFull(c.rev)}</td>
                 </tr>
               ))}
-              {topClients.length === 0 && <tr><td colSpan={3} className="px-3 py-8 text-center text-[#9a9a95]">Нет данных</td></tr>}
+              {topClients.length === 0 && <tr><td colSpan={3} className="px-3 py-8 text-center text-muted">Нет данных</td></tr>}
             </tbody>
           </table>
         </div>
