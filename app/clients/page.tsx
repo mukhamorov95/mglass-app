@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 import { getRole } from '@/lib/getRole'
 import { redirect } from 'next/navigation'
+import { PageHeader, RowCard, StatusPill, EmptyState, IcSearch } from '@/components/ds'
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
@@ -95,60 +96,49 @@ export default async function ClientsPage() {
     .sort((a, b) => b.totalRevenue - a.totalRevenue || b.lastActivityAt.localeCompare(a.lastActivityAt))
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[900px] mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Клиенты</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">История заказов по клиентам</p>
-          </div>
-          <p className="text-[13px] text-[#9a9a95]">{clients.length} клиентов</p>
-        </div>
+        <PageHeader
+          title="Клиенты"
+          subtitle="История заказов по клиентам"
+          actions={<span className="text-[13px] text-muted">{clients.length} клиентов</span>}
+        />
 
         {clients.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-12 text-center">
-            <p className="text-[13px] text-[#9a9a95]">Нет клиентов</p>
-          </div>
+          <EmptyState icon={<IcSearch className="w-8 h-8" />} title="Нет клиентов" />
         ) : (
           <div className="space-y-2">
             {clients.map(c => (
-              <Link
-                key={c.key}
-                href={`/clients/${encodeURIComponent(c.key)}`}
-                className="block bg-white rounded-xl border border-[#e4e4e0] px-5 py-4 hover:border-[#c4c4c0] hover:shadow-sm transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-[15px] font-semibold text-[#111110]">{c.name}</p>
+              <Link key={c.key} href={`/clients/${encodeURIComponent(c.key)}`} className="block hover:opacity-95 transition-opacity">
+                <RowCard
+                  title={
+                    <span className="flex items-center gap-2">
+                      <span className="font-semibold">{c.name}</span>
                       {c.orderCount === 0 && (
-                        <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 border border-amber-200">
-                          только расчёт
-                        </span>
+                        <StatusPill tone="warning">только расчёт</StatusPill>
                       )}
-                    </div>
-                    {c.phone && <p className="text-[13px] text-[#9a9a95] mt-0.5">{c.phone}</p>}
-                    <p className="text-[12px] text-[#b4b4b0] mt-0.5">
+                    </span>
+                  }
+                  subtitle={
+                    <>
+                      {c.phone && <span>{c.phone}</span>}
+                      {c.phone && ' · '}
                       Активность: {new Date(c.lastActivityAt).toLocaleDateString('ru-RU')}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    {c.totalRevenue > 0 ? (
-                      <p className="text-[16px] font-bold text-[#111110] font-mono">{fmt(c.totalRevenue)}</p>
-                    ) : (
-                      <p className="text-[13px] text-[#9a9a95]">нет заказов</p>
-                    )}
-                    <p className="text-[12px] text-[#9a9a95]">
-                      {c.orderCount > 0 ? `${c.orderCount} заказ(ов)` : ''}
-                      {c.calcCount > 0 ? `${c.orderCount > 0 ? ' · ' : ''}${c.calcCount} расчёт(ов)` : ''}
-                    </p>
-                    {c.avgMargin > 0 && (
-                      <p className="text-[12px] text-emerald-600 font-medium">
-                        Маржа {c.avgMargin.toFixed(1)}%
-                      </p>
-                    )}
-                  </div>
-                </div>
+                    </>
+                  }
+                  amount={c.totalRevenue > 0 ? fmt(c.totalRevenue) : <span className="text-[13px] font-normal text-muted">нет заказов</span>}
+                  amountSub={
+                    <span className="text-[11px]">
+                      <span className="text-muted">
+                        {c.orderCount > 0 ? `${c.orderCount} заказ(ов)` : ''}
+                        {c.calcCount > 0 ? `${c.orderCount > 0 ? ' · ' : ''}${c.calcCount} расчёт(ов)` : ''}
+                      </span>
+                      {c.avgMargin > 0 && (
+                        <span className="block text-emerald-600 font-medium">Маржа {c.avgMargin.toFixed(1)}%</span>
+                      )}
+                    </span>
+                  }
+                />
               </Link>
             ))}
           </div>

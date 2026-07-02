@@ -9,6 +9,9 @@ import {
   B2B_SEGMENTS, B2B_STATUSES, B2B_SCORES,
 } from '@/lib/types'
 import Pagination from '@/components/Pagination'
+import {
+  PageHeader, Field, SelectField, SkeletonRows, EmptyState, IcSearch,
+} from '@/components/ds'
 
 const PAGE_SIZE = 50
 
@@ -25,10 +28,10 @@ const segmentLabel = (v: string | null) =>
   B2B_SEGMENTS.find(s => s.value === v)?.label ?? v ?? '—'
 
 const statusMeta = (v: string | null) =>
-  B2B_STATUSES.find(s => s.value === v) ?? { label: '—', color: 'bg-[#f0f0ec] text-[#6b6b66]' }
+  B2B_STATUSES.find(s => s.value === v) ?? { label: '—', color: 'bg-line-soft text-ink-soft' }
 
 const scoreMeta = (v: string | null) =>
-  B2B_SCORES.find(s => s.value === v) ?? { label: '—', color: 'bg-[#f0f0ec] text-[#6b6b66]' }
+  B2B_SCORES.find(s => s.value === v) ?? { label: '—', color: 'bg-line-soft text-ink-soft' }
 
 function daysUntil(dateStr: string | null): number | null {
   if (!dateStr) return null
@@ -42,7 +45,7 @@ function nextContactLabel(dateStr: string | null) {
   if (d < 0) return { text: `просрочено ${-d}д`, cls: 'text-red-600 font-semibold' }
   if (d === 0) return { text: 'сегодня', cls: 'text-orange-600 font-semibold' }
   if (d <= 3) return { text: `через ${d}д`, cls: 'text-amber-600 font-medium' }
-  return { text: `через ${d}д`, cls: 'text-[#8a8a85]' }
+  return { text: `через ${d}д`, cls: 'text-muted' }
 }
 
 const SCORE_ORDER: Record<string, number> = { A: 0, B: 1, C: 2 }
@@ -255,57 +258,47 @@ export default function B2BCRMClient() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       {inlineToast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg pointer-events-none">
+        <div className="fixed top-4 right-4 z-50 bg-ink text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg pointer-events-none">
           {inlineToast}
         </div>
       )}
       <div className="max-w-[1200px] mx-auto px-4 py-5">
 
         {/* Шапка */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">B2B CRM</h1>
-            <p className="text-[12px] text-[#8a8a85] mt-0.5">
-              {clients.filter(c => c.active).length} активных клиентов
-              {overdueCount > 0 && (
-                <span className="ml-2 text-red-600 font-semibold">· {overdueCount} просроченных</span>
-              )}
-            </p>
-          </div>
-          <button
-            onClick={() => router.push('/admin/b2b-clients')}
-            className="text-[12px] text-[#6b6b66] border border-[#e4e4e0] px-3 py-1.5 rounded-lg hover:bg-white transition-colors">
-            + Добавить клиента
-          </button>
-        </div>
+        <PageHeader
+          title="B2B CRM"
+          subtitle={`${clients.filter(c => c.active).length} активных клиентов${overdueCount > 0 ? ` · ${overdueCount} просроченных` : ''}`}
+          actions={
+            <button
+              onClick={() => router.push('/admin/b2b-clients')}
+              className="text-[12px] text-ink-soft border border-line px-3 py-1.5 rounded-lg hover:border-ink transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ink/15">
+              + Добавить клиента
+            </button>
+          }
+        />
 
         {/* Фильтры */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
-          <input
+        <div className="bg-surface border border-line rounded-xl px-4 py-3 mb-4 flex flex-wrap gap-2 items-center">
+          <Field
+            icon={<IcSearch className="w-3.5 h-3.5" />}
             type="text" placeholder="Поиск по имени, телефону..."
-            className="flex-1 min-w-[180px] bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] transition-all"
+            className="flex-1 min-w-[180px]"
             value={search} onChange={e => setSearch(e.target.value)}
           />
-          <select
-            className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6b6b66] outline-none focus:border-[#111110]"
-            value={filterSegment} onChange={e => setFilterSegment(e.target.value)}>
+          <SelectField value={filterSegment} onChange={e => setFilterSegment(e.target.value)}>
             <option value="">Все сегменты</option>
             {B2B_SEGMENTS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <select
-            className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6b6b66] outline-none focus:border-[#111110]"
-            value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
+          </SelectField>
+          <SelectField value={filterStatus} onChange={e => setFilterStatus(e.target.value)}>
             <option value="">Все статусы</option>
             {B2B_STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
-          <select
-            className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6b6b66] outline-none focus:border-[#111110]"
-            value={filterScore} onChange={e => setFilterScore(e.target.value)}>
+          </SelectField>
+          <SelectField value={filterScore} onChange={e => setFilterScore(e.target.value)}>
             <option value="">Все классы</option>
             {B2B_SCORES.map(s => <option key={s.value} value={s.value}>Класс {s.label}</option>)}
-          </select>
+          </SelectField>
           <label className="flex items-center gap-1.5 cursor-pointer select-none">
             <input type="checkbox" checked={filterOverdue} onChange={e => setFilterOverdue(e.target.checked)}
               className="w-3.5 h-3.5 accent-red-500" />
@@ -314,7 +307,7 @@ export default function B2BCRMClient() {
           {(search || filterSegment || filterStatus || filterScore || filterOverdue) && (
             <button
               onClick={() => { setSearch(''); setFilterSegment(''); setFilterStatus(''); setFilterScore(''); setFilterOverdue(false) }}
-              className="text-[11px] text-[#9a9a95] hover:text-red-500 transition-colors">
+              className="text-[11px] text-muted hover:text-red-500 transition-colors">
               Сбросить
             </button>
           )}
@@ -322,9 +315,9 @@ export default function B2BCRMClient() {
 
         {/* Список */}
         {loading ? (
-          <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+          <SkeletonRows count={6} />
         ) : filtered.length === 0 ? (
-          <div className="py-16 text-center text-[13px] text-[#8a8a85]">Нет клиентов по фильтру</div>
+          <EmptyState icon={<IcSearch className="w-8 h-8" />} title="Нет клиентов по фильтру" />
         ) : (
           <>
             <Pagination
@@ -338,34 +331,34 @@ export default function B2BCRMClient() {
               const scm = scoreMeta(c.crm.score)
               const isExpanded = expandedId === c.id
               return (
-                <div key={c.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden hover:border-[#c4c4be] hover:shadow-sm transition-all">
+                <div key={c.id} className="bg-surface border border-line rounded-xl overflow-hidden hover:border-faint transition-colors">
 
                   {/* Основная строка — кликабельна для перехода */}
                   <div
                     onClick={() => router.push(`/b2b-crm/${c.id}`)}
-                    className="px-5 py-4 cursor-pointer">
+                    className="px-5 py-4 cursor-pointer hover:bg-subtle transition-colors">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[14px] font-semibold text-[#111110] truncate">{c.name}</span>
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${scm.color}`}>{scm.label}</span>
+                          <span className="text-[14px] font-semibold text-ink truncate">{c.name}</span>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${scm.color}`}>{scm.label}</span>
                           <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full ${sm.color}`}>{sm.label}</span>
                           {c.crm.segment && (
-                            <span className="text-[10px] text-[#9a9a95] bg-[#f0f0ec] px-2 py-0.5 rounded-full">
+                            <span className="text-[10px] text-muted bg-line-soft px-2 py-0.5 rounded-full">
                               {segmentLabel(c.crm.segment)}
                             </span>
                           )}
                         </div>
                         <div className="flex items-center gap-3 mt-1.5 flex-wrap">
-                          {c.contact && <span className="text-[12px] text-[#6b6b66]">{c.contact}</span>}
-                          {c.phone && <span className="text-[12px] text-[#9a9a95] font-mono">{c.phone}</span>}
+                          {c.contact && <span className="text-[12px] text-ink-soft">{c.contact}</span>}
+                          {c.phone && <span className="text-[12px] text-muted font-mono">{c.phone}</span>}
                           {c.crm.manager_name && (
-                            <span className="text-[11px] text-[#9a9a95]">менеджер: {c.crm.manager_name}</span>
+                            <span className="text-[11px] text-muted">менеджер: {c.crm.manager_name}</span>
                           )}
                         </div>
                         {c.lastInteraction && (
-                          <div className="mt-1.5 text-[11px] text-[#9a9a95] truncate">
-                            <span className="text-[#c4c4be]">
+                          <div className="mt-1.5 text-[11px] text-muted truncate">
+                            <span className="text-faint">
                               {new Date(c.lastInteraction.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                             </span>
                             {' · '}
@@ -375,12 +368,12 @@ export default function B2BCRMClient() {
                       </div>
                       <div className="flex flex-col items-end gap-1.5 shrink-0">
                         {c.yearTotal > 0 && (
-                          <span className="text-[13px] font-semibold font-mono text-[#111110]">
+                          <span className="text-[13px] font-semibold font-mono text-ink tabular-nums">
                             {c.yearTotal.toLocaleString('ru-RU')} ₽
                           </span>
                         )}
                         {c.orderCount > 0 && (
-                          <span className="text-[11px] text-[#9a9a95]">{c.orderCount} заказов</span>
+                          <span className="text-[11px] text-muted">{c.orderCount} заказов</span>
                         )}
                         {nc && <span className={`text-[11px] ${nc.cls}`}>{nc.text}</span>}
                         {c.discount_percent > 0 && (
@@ -393,15 +386,15 @@ export default function B2BCRMClient() {
                   {/* Панель быстрых действий */}
                   <div
                     onClick={e => e.stopPropagation()}
-                    className="border-t border-[#f0f0ec] px-4 py-2 flex items-center gap-2 bg-[#fafaf9]">
+                    className="border-t border-line-soft px-4 py-2 flex items-center gap-2 bg-subtle">
                     <button
                       onClick={() => toggleInline(c.id, 'note')}
-                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'note' ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'}`}>
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'note' ? 'bg-ink text-white' : 'text-ink-soft hover:bg-line-soft'}`}>
                       + Лог
                     </button>
                     <button
                       onClick={() => toggleInline(c.id, 'remind')}
-                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'remind' ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'}`}>
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'remind' ? 'bg-ink text-white' : 'text-ink-soft hover:bg-line-soft'}`}>
                       Напомнить
                     </button>
                     <button
@@ -420,13 +413,13 @@ export default function B2BCRMClient() {
                   {isExpanded && (
                     <div
                       onClick={e => e.stopPropagation()}
-                      className="border-t border-[#f0f0ec] px-4 py-3 bg-white slide-up">
+                      className="border-t border-line-soft px-4 py-3 bg-surface slide-up">
                       {expandMode === 'note' && (
                         <div className="flex items-center gap-2 flex-wrap">
                           <select
                             value={quickType}
                             onChange={e => setQuickType(e.target.value)}
-                            className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6b6b66] outline-none focus:border-[#111110] bg-[#fafaf9]">
+                            className="border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink-soft outline-none focus:border-ink bg-subtle">
                             {INTERACTION_TYPES.map(t => (
                               <option key={t.value} value={t.value}>{t.label}</option>
                             ))}
@@ -438,42 +431,42 @@ export default function B2BCRMClient() {
                             value={quickNote}
                             onChange={e => setQuickNote(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && saveQuickLog(c.id)}
-                            className="flex-1 min-w-[200px] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] bg-[#fafaf9]"
+                            className="flex-1 min-w-[200px] border border-line rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-ink bg-subtle"
                           />
                           <button
                             onClick={() => saveQuickLog(c.id)}
                             disabled={savingInline || !quickNote.trim()}
-                            className="text-[12px] font-semibold bg-[#111110] text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
+                            className="text-[12px] font-semibold bg-ink text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
                             {savingInline ? '...' : 'Сохранить'}
                           </button>
                         </div>
                       )}
                       {expandMode === 'remind' && (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[12px] text-[#6b6b66]">Следующий контакт:</span>
+                          <span className="text-[12px] text-ink-soft">Следующий контакт:</span>
                           <input
                             type="date"
                             autoFocus
                             value={remindDate}
                             onChange={e => setRemindDate(e.target.value)}
-                            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] bg-[#fafaf9]"
+                            className="border border-line rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-ink bg-subtle"
                           />
                           <button
                             onClick={() => saveRemind(c.id)}
                             disabled={savingInline || !remindDate}
-                            className="text-[12px] font-semibold bg-[#111110] text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
+                            className="text-[12px] font-semibold bg-ink text-white px-3 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
                             {savingInline ? '...' : 'Сохранить'}
                           </button>
                         </div>
                       )}
                       {expandMode === 'manager' && (
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-[12px] text-[#6b6b66]">Ответственный менеджер:</span>
+                          <span className="text-[12px] text-ink-soft">Ответственный менеджер:</span>
                           <select
                             autoFocus
                             value={assigningManagerId}
                             onChange={e => setAssigningManagerId(e.target.value)}
-                            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] bg-[#fafaf9]">
+                            className="border border-line rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-ink bg-subtle">
                             <option value="">— Без менеджера —</option>
                             {managers.map(m => (
                               <option key={m.id} value={m.id}>
