@@ -64,9 +64,9 @@ const CSS = `
 .kp-foot .m{color:var(--muted);letter-spacing:1.5px}
 .kp-darkcard{display:flex;background:var(--ink);color:#fff;position:relative;overflow:hidden;background-image:linear-gradient(#2a2a2e 1px,transparent 1px),linear-gradient(90deg,#2a2a2e 1px,transparent 1px);background-size:34px 34px}
 .kp-darkcard .left{width:38%;border-right:1px solid var(--red);padding:34px 30px;display:flex;flex-direction:column;justify-content:center;align-items:flex-start}
-.kp-darkcard .big{font-size:82px;font-weight:800;line-height:.9}
-.kp-darkcard .big span{font-size:34px;vertical-align:top;color:var(--red)}
-.kp-darkcard .cap{font-size:11px;letter-spacing:3px;color:var(--red);font-weight:700;margin-top:8px}
+.kp-darkcard .big{font-size:78px;font-weight:800;line-height:1}
+.kp-darkcard .big span{font-size:32px;color:var(--red);margin-left:2px}
+.kp-darkcard .cap{font-size:11px;letter-spacing:3px;color:var(--red);font-weight:700;margin-top:16px}
 .kp-darkcard .right{flex:1;padding:34px 30px;display:flex;flex-direction:column;justify-content:center}
 .kp-darkcard .over{font-size:11px;letter-spacing:3px;color:var(--red);font-weight:700;margin-bottom:12px}
 .kp-darkcard h2{font-size:26px;font-weight:800;line-height:1.15}
