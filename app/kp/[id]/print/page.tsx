@@ -9,7 +9,8 @@ const CSS = `
 .kp-scope{--red:#E1442E;--ink:#18181B;--text:#1D1D1F;--muted:#8C8C88;--line:#E4E4E0;--soft:#F5F5F3;--dot:#CFCFC9;
   background:#54545a;font-family:-apple-system,"Helvetica Neue","Segoe UI",Arial,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;min-height:100vh}
 .kp-scope *{margin:0;padding:0;box-sizing:border-box}
-.kp-page{width:210mm;min-height:297mm;background:#fff;margin:0 auto 8mm;position:relative;padding:0 15mm 10mm;display:flex;flex-direction:column}
+.kp-page{width:210mm;height:297mm;background:#fff;margin:0 auto 8mm;position:relative;overflow:hidden}
+.kp-fit{width:210mm;min-height:297mm;padding:0 15mm 10mm;display:flex;flex-direction:column;transform-origin:top left;box-sizing:border-box}
 .kp-topbar{position:absolute;top:0;left:0;right:0;height:14px;background:var(--ink)}
 .kp-topbar::after{content:"";position:absolute;top:14px;left:0;right:0;height:4px;background:var(--red)}
 .kp-head{display:flex;justify-content:space-between;align-items:flex-start;padding-top:32px;padding-bottom:13px;border-bottom:2.5px solid var(--ink)}
@@ -113,11 +114,29 @@ const CSS = `
 @media print{
   .kp-scope{background:#fff}
   .kp-toolbar{display:none}
-  .kp-page{margin:0;box-shadow:none;min-height:297mm;page-break-after:always}
+  .kp-page{margin:0;box-shadow:none;height:297mm;overflow:hidden;page-break-after:always}
   .kp-page:last-child{page-break-after:auto}
   @page{size:A4;margin:0}
 }
 `
+
+// Авто-подгон: если контент листа выше A4 — слегка ужимаем его трансформом,
+// чтобы влезал точно в один лист (без потери данных и без лишних страниц).
+function fitPages() {
+  document.querySelectorAll<HTMLElement>('.kp-fit').forEach(fit => {
+    const page = fit.closest('.kp-page') as HTMLElement | null
+    if (!page) return
+    fit.style.transform = ''
+    fit.style.width = '210mm'
+    const avail = page.clientHeight
+    const need = fit.scrollHeight
+    if (need > avail + 1) {
+      const scale = Math.max(0.6, (avail - 1) / need)
+      fit.style.transform = `scale(${scale})`
+      fit.style.width = `${210 / scale}mm`
+    }
+  })
+}
 
 export default function KpPrintPage() {
   const params = useParams()
@@ -153,13 +172,24 @@ export default function KpPrintPage() {
     load()
   }, [id])
 
+  // Подгоняем каждый лист под A4 после рендера, загрузки логотипа и ресайза.
+  useEffect(() => {
+    if (!kp) return
+    const run = () => fitPages()
+    const t = setTimeout(run, 150)
+    window.addEventListener('resize', run)
+    const img = document.querySelector('.kp-head img') as HTMLImageElement | null
+    if (img && !img.complete) img.addEventListener('load', run, { once: true })
+    return () => { clearTimeout(t); window.removeEventListener('resize', run) }
+  }, [kp])
+
   // Пришли по кнопке «Сохранить в PDF» (?print=1) → сразу открываем диалог сохранения.
   // Ждём загрузки логотипа, чтобы он попал в PDF; страховка по таймауту.
   useEffect(() => {
     if (!kp || typeof window === 'undefined') return
     if (new URLSearchParams(window.location.search).get('print') !== '1') return
     let done = false
-    const fire = () => { if (done) return; done = true; setTimeout(() => window.print(), 300) }
+    const fire = () => { if (done) return; done = true; fitPages(); setTimeout(() => window.print(), 300) }
     const img = document.querySelector('.kp-head img') as HTMLImageElement | null
     if (img && !img.complete) {
       img.addEventListener('load', fire, { once: true })

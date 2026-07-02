@@ -90,6 +90,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
       {/* ============ PAGE 1 ============ */}
       <div className="kp-page">
         <div className="kp-topbar" />
+        <div className="kp-fit">
         <Head />
 
         <div className="kp-metabar">
@@ -139,11 +140,13 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         {kp.vat_note && <div className="kp-vat">{kp.vat_note}</div>}
 
         <Foot kp={kp} page={1} />
+        </div>
       </div>
 
       {/* ============ PAGE 2 ============ */}
       <div className="kp-page">
         <div className="kp-topbar" />
+        <div className="kp-fit">
         <Head />
 
         <Sec n="03" title="КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА" meta="ГЕРМЕТИЧНОСТЬ" />
@@ -192,11 +195,13 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         </div>
 
         <Foot kp={kp} page={2} />
+        </div>
       </div>
 
       {/* ============ PAGE 3 ============ */}
       <div className="kp-page">
         <div className="kp-topbar" />
+        <div className="kp-fit">
         <Head />
 
         <Sec n="08" title="СХЕМА КОМПЛЕКТАЦИИ" meta="ЧЕРТЁЖ" />
@@ -224,6 +229,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         <div className="kp-thanks">Благодарим за обращение в MGlass. Будем рады воплотить ваш проект.</div>
 
         <Foot kp={kp} page={3} />
+        </div>
       </div>
     </div>
   )
