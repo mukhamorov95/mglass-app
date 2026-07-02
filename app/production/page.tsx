@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import dynamic from 'next/dynamic'
+import { SegmentedTabs, IcSearch, IcChevron } from '@/components/ds'
 
 const MglassProductionTab = dynamic(() => import('./MglassProductionTab'), { ssr: false })
 
@@ -197,7 +198,7 @@ export default function ProductionPage() {
   }, [filtered])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
@@ -205,21 +206,12 @@ export default function ProductionPage() {
 
       {/* Шапка + вкладки */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">Производство</h1>
-        <div className="flex gap-1 bg-[#f0f0ec] rounded-xl p-1">
-          <button onClick={() => setActiveTab('mglass')}
-            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
-              activeTab === 'mglass' ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
-            }`}>
-            МГласс
-          </button>
-          <button onClick={() => setActiveTab('b2b')}
-            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-all ${
-              activeTab === 'b2b' ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
-            }`}>
-            B2B
-          </button>
-        </div>
+        <h1 className="text-[18px] font-semibold text-ink tracking-tight">Производство</h1>
+        <SegmentedTabs
+          value={activeTab}
+          onChange={setActiveTab}
+          tabs={[{ value: 'mglass', label: 'МГласс' }, { value: 'b2b', label: 'B2B' }]}
+        />
       </div>
 
       {activeTab === 'mglass' ? (
@@ -227,33 +219,31 @@ export default function ProductionPage() {
       ) : (<>
 
       {/* Фильтры */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl px-3 sm:px-4 py-3 mb-3 space-y-2.5">
+      <div className="bg-surface border border-line rounded-xl px-3 sm:px-4 py-3 mb-3 space-y-2.5">
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
-            <svg className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#b4b4ae]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-4.35-4.35M17 11A6 6 0 1 1 5 11a6 6 0 0 1 12 0z"/>
-            </svg>
+            <IcSearch className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-faint" />
             <input
               ref={searchRef}
               type="text"
               placeholder="Номер заказа или клиент…"
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-8 pr-3 py-2 sm:py-1.5 text-[13px] sm:text-[12px] border border-[#e4e4e0] rounded-lg outline-none focus:border-[#111110] text-[#111110] placeholder:text-[#b4b4ae]"
+              className="w-full pl-8 pr-3 py-2 sm:py-1.5 text-[13px] sm:text-[12px] border border-line rounded-lg outline-none focus:border-ink text-ink placeholder:text-faint"
             />
           </div>
-          <div className="flex items-center gap-1.5 text-[12px] text-[#8a8a85]">
+          <div className="flex items-center gap-1.5 text-[12px] text-muted">
             <span>с</span>
             <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-              className="flex-1 sm:flex-none border border-[#e4e4e0] rounded-lg px-2 py-2 sm:py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"/>
+              className="flex-1 sm:flex-none border border-line rounded-lg px-2 py-2 sm:py-1.5 text-[12px] text-ink outline-none focus:border-ink"/>
             <span>по</span>
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-              className="flex-1 sm:flex-none border border-[#e4e4e0] rounded-lg px-2 py-2 sm:py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"/>
+              className="flex-1 sm:flex-none border border-line rounded-lg px-2 py-2 sm:py-1.5 text-[12px] text-ink outline-none focus:border-ink"/>
           </div>
           {(search || dateFrom || dateTo || stageFilter !== 'all_active') && (
             <button
               onClick={() => { setSearch(''); setStageFilter('all_active'); setDateFrom(''); setDateTo('') }}
-              className="text-[12px] text-[#8a8a85] hover:text-[#111110] px-3 py-2 sm:py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors whitespace-nowrap">
+              className="text-[12px] text-muted hover:text-ink px-3 py-2 sm:py-1.5 rounded-lg hover:bg-line-soft transition-colors whitespace-nowrap">
               Сбросить
             </button>
           )}
@@ -265,8 +255,8 @@ export default function ProductionPage() {
               onClick={() => setStageFilter(f.key)}
               className={`px-3 sm:px-2.5 py-1.5 sm:py-1 rounded-lg text-[12px] sm:text-[11px] font-medium transition-all border select-none ${
                 stageFilter === f.key
-                  ? 'bg-[#111110] text-white border-[#111110]'
-                  : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                  ? 'bg-ink text-white border-ink'
+                  : 'bg-surface text-ink-soft border-line hover:border-ink hover:text-ink'
               }`}>
               {f.label}
             </button>
@@ -276,7 +266,7 @@ export default function ProductionPage() {
 
       {/* Список по месяцам */}
       {monthGroups.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center text-[13px] text-[#8a8a85]">
+        <div className="bg-surface border border-line rounded-xl p-10 text-center text-[13px] text-muted">
           Нет заказов по выбранным фильтрам
         </div>
       ) : (
@@ -287,22 +277,20 @@ export default function ProductionPage() {
             const isOpen = expandedMonths.has(monthKey)
 
             return (
-              <div key={monthKey} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div key={monthKey} className="bg-surface border border-line rounded-xl overflow-hidden">
 
                 <button
                   onClick={() => toggleMonth(monthKey)}
-                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#f8f8f7] transition-colors">
+                  className="w-full flex items-center justify-between px-4 py-3 hover:bg-canvas transition-colors">
                   <div className="flex items-center gap-2">
-                    <span className="text-[14px] font-semibold text-[#111110]">{monthLabel}</span>
-                    <span className="text-[11px] text-[#9a9a95]">{monthOrders.length} заказов</span>
+                    <span className="text-[14px] font-semibold text-ink">{monthLabel}</span>
+                    <span className="text-[11px] text-muted">{monthOrders.length} заказов</span>
                   </div>
-                  <svg className={`w-4 h-4 text-[#9a9a95] transition-transform ${isOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
+                  <IcChevron className={`w-4 h-4 text-muted transition-transform ${isOpen ? 'rotate-90' : ''}`} />
                 </button>
 
                 {isOpen && (
-                  <div className="divide-y divide-[#f0f0ec] border-t border-[#f0f0ec]">
+                  <div className="divide-y divide-line-soft border-t border-line-soft">
                     {monthOrders.map(order => {
                       const pn = order.parsedNotes
                       const isShipped = !!pn.stages?.shipped
@@ -324,30 +312,30 @@ export default function ProductionPage() {
                           <div className="flex items-center justify-between gap-3 mb-2.5">
                             <div className="flex items-center gap-2 min-w-0 flex-1 flex-wrap">
                               {orderNum && (
-                                <span className="text-[12px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded font-mono flex-shrink-0">
+                                <span className="text-[12px] font-semibold text-ink bg-line-soft px-2 py-0.5 rounded font-mono flex-shrink-0">
                                   {orderNum}
                                 </span>
                               )}
-                              <span className="text-[13px] font-semibold text-[#111110]">{order.client_name}</span>
-                              <span className="text-[11px] text-[#9a9a95]">{fmtDate(launched)}</span>
+                              <span className="text-[13px] font-semibold text-ink">{order.client_name}</span>
+                              <span className="text-[11px] text-muted">{fmtDate(launched)}</span>
                               {isShipped ? (
-                                <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700">отгружен</span>
+                                <span className="text-[11px] font-medium px-1.5 py-px rounded-full bg-emerald-50 text-emerald-700">отгружен</span>
                               ) : daysLeft !== null ? (
                                 daysLeft < 0
-                                  ? <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600">просрочен {Math.abs(daysLeft)} д.</span>
+                                  ? <span className="text-[11px] font-medium px-1.5 py-px rounded-full bg-red-50 text-red-600">просрочен {Math.abs(daysLeft)} д.</span>
                                   : daysLeft <= 2
-                                    ? <span className="text-[10px] font-medium px-1.5 py-px rounded-full bg-orange-50 text-orange-600">осталось {daysLeft} д.</span>
+                                    ? <span className="text-[11px] font-medium px-1.5 py-px rounded-full bg-orange-50 text-orange-600">осталось {daysLeft} д.</span>
                                     : null
                               ) : null}
                             </div>
                             <div className="flex items-center gap-2 flex-shrink-0">
                               {!isShipped && (
-                                <span className={`text-[12px] font-bold tabular-nums ${progress === 100 ? 'text-emerald-600' : progress >= 60 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>
+                                <span className={`text-[12px] font-semibold tabular-nums ${progress === 100 ? 'text-emerald-600' : progress >= 60 ? 'text-amber-600' : 'text-muted'}`}>
                                   {progress}%
                                 </span>
                               )}
-                              <div className="w-16 sm:w-20 h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-                                <div className={`h-full rounded-full transition-all ${progress === 100 ? 'bg-emerald-500' : 'bg-[#111110]'}`} style={{ width: `${progress}%` }} />
+                              <div className="w-16 sm:w-20 h-1.5 bg-line-soft rounded-full overflow-hidden">
+                                <div className={`h-full rounded-full transition-all ${progress === 100 ? 'bg-emerald-500' : 'bg-ink'}`} style={{ width: `${progress}%` }} />
                               </div>
                             </div>
                           </div>
@@ -363,14 +351,14 @@ export default function ProductionPage() {
                                   <button
                                     onClick={() => toggleStage(order.id, stage.key)}
                                     title={done ? `Выполнено: ${doneDate}${comment ? '\n' + comment : ''}` : 'Нажать чтобы отметить'}
-                                    className={`w-full sm:w-auto flex flex-col items-center px-1 sm:px-2 py-2 sm:py-0.5 rounded text-[11px] sm:text-[10px] font-medium transition-all border select-none active:scale-95 min-h-[44px] sm:min-h-0 justify-center ${
+                                    className={`w-full sm:w-auto flex flex-col items-center px-1 sm:px-2 py-2 sm:py-0.5 rounded text-[11px] font-medium transition-all border select-none active:scale-95 min-h-[44px] sm:min-h-0 justify-center ${
                                       done
                                         ? 'bg-emerald-600 text-white border-emerald-600'
-                                        : 'bg-white text-[#9a9a95] border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110]'
+                                        : 'bg-surface text-muted border-line hover:border-ink hover:text-ink'
                                     }`}>
                                     {stage.label}
                                     {done && doneDate && (
-                                      <span className="text-[8px] font-normal opacity-60 leading-none mt-0.5">
+                                      <span className="text-[11px] font-normal opacity-60 leading-none mt-0.5">
                                         {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                                       </span>
                                     )}
@@ -379,10 +367,10 @@ export default function ProductionPage() {
                                     <button
                                       onClick={() => openComment(order.id, stage.key)}
                                       title={comment ? 'Заметка: ' + comment : 'Добавить заметку'}
-                                      className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[9px] border transition-colors ${
+                                      className={`absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-[11px] border transition-colors ${
                                         comment
                                           ? 'bg-amber-400 border-amber-400 text-white'
-                                          : 'bg-white border-[#d4d4ce] text-[#9a9a95] hover:border-[#111110] hover:text-[#111110] opacity-0 group-hover:opacity-100'
+                                          : 'bg-surface border-line text-muted hover:border-ink hover:text-ink opacity-0 group-hover:opacity-100'
                                       }`}>
                                       {comment ? '!' : '✎'}
                                     </button>
@@ -397,11 +385,11 @@ export default function ProductionPage() {
                             <div className="mt-2 space-y-1">
                               {STAGES.filter(s => pn.stage_comments?.[s.key]).map(stage => (
                                 <div key={stage.key} className="flex items-start gap-1.5 text-[11px]">
-                                  <span className="text-[#9a9a95] flex-shrink-0">{stage.label}:</span>
-                                  <span className="text-[#6b6b66] italic">{pn.stage_comments![stage.key]}</span>
+                                  <span className="text-muted flex-shrink-0">{stage.label}:</span>
+                                  <span className="text-ink-soft italic">{pn.stage_comments![stage.key]}</span>
                                   <button
                                     onClick={() => openComment(order.id, stage.key)}
-                                    className="text-[#c4c4be] hover:text-[#111110] flex-shrink-0 ml-0.5">✎</button>
+                                    className="text-faint hover:text-ink flex-shrink-0 ml-0.5">✎</button>
                                 </div>
                               ))}
                             </div>
@@ -422,26 +410,26 @@ export default function ProductionPage() {
       {/* Модальное окно заметки */}
       {commentModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center px-0 sm:px-4">
-          <div className="bg-white rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm shadow-xl">
-            <h2 className="text-[15px] font-semibold text-[#111110] mb-1">
+          <div className="bg-surface rounded-t-2xl sm:rounded-2xl p-5 w-full sm:max-w-sm shadow-xl">
+            <h2 className="text-[15px] font-semibold text-ink mb-1">
               Заметка: {STAGES.find(s => s.key === commentModal.stageKey)?.label}
             </h2>
-            <p className="text-[12px] text-[#9a9a95] mb-3">Причина задержки, уточнение, передача смены</p>
+            <p className="text-[12px] text-muted mb-3">Причина задержки, уточнение, передача смены</p>
             <textarea
               autoFocus
               rows={3}
               value={commentModal.text}
               onChange={e => setCommentModal(prev => prev ? { ...prev, text: e.target.value } : null)}
               placeholder="Напишите заметку…"
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] resize-none mb-4 placeholder:text-[#c4c4be]"
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink resize-none mb-4 placeholder:text-faint"
             />
             <div className="flex gap-2">
               <button onClick={() => setCommentModal(null)}
-                className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
               <button onClick={saveComment} disabled={savingComment}
-                className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                className="flex-1 py-2.5 rounded-lg bg-ink text-white text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                 Сохранить
               </button>
             </div>

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { PageHeader, SegmentedTabs, MetricTile } from '@/components/ds'
 
 type Period = 'today' | 'week' | 'month' | 'year'
 
@@ -34,7 +35,7 @@ function scoreColor(val: number, good: number, bad: number): string {
 
 function Flag({ condition, text }: { condition: boolean; text: string }) {
   if (!condition) return null
-  return <span className="inline-block text-[10px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5 mr-1 mb-1">{text}</span>
+  return <span className="inline-block text-[11px] bg-red-50 text-red-600 border border-red-200 rounded px-1.5 py-0.5 mr-1 mb-1">{text}</span>
 }
 
 function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
@@ -42,27 +43,27 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
   const isToday = period === 'today'
 
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+    <div className="bg-surface border border-line rounded-xl overflow-hidden">
       {/* Header */}
-      <div className="px-5 py-4 border-b border-[#f0f0ec] flex items-center justify-between">
+      <div className="px-5 py-4 border-b border-line-soft flex items-center justify-between">
         <div>
-          <p className="text-[14px] font-semibold text-[#111110]">{firstName}</p>
-          <p className="text-[11px] text-[#9a9a95] mt-0.5">Активных сделок: <strong className="text-[#111110]">{m.activeLeads}</strong></p>
+          <p className="text-[14px] font-semibold text-ink">{firstName}</p>
+          <p className="text-[11px] text-muted mt-0.5">Активных сделок: <strong className="text-ink tabular-nums">{m.activeLeads}</strong></p>
         </div>
         <div className="text-right">
           <div className="flex gap-1 text-[11px]">
-            <span className="text-blue-600 font-mono font-bold">{m.zone1}</span>
-            <span className="text-[#c4c4be]">/</span>
-            <span className="text-orange-500 font-mono font-bold">{m.zone2}</span>
-            <span className="text-[#c4c4be]">/</span>
-            <span className="text-green-600 font-mono font-bold">{m.zone3}</span>
+            <span className="text-blue-600 font-mono font-semibold tabular-nums">{m.zone1}</span>
+            <span className="text-faint">/</span>
+            <span className="text-orange-500 font-mono font-semibold tabular-nums">{m.zone2}</span>
+            <span className="text-faint">/</span>
+            <span className="text-green-600 font-mono font-semibold tabular-nums">{m.zone3}</span>
           </div>
-          <p className="text-[9px] text-[#c4c4be] mt-0.5">К / П / Пр-во</p>
+          <p className="text-[11px] text-faint mt-0.5">К / П / Пр-во</p>
         </div>
       </div>
 
       {/* Activity */}
-      <div className="grid grid-cols-4 divide-x divide-[#f0f0ec] border-b border-[#f0f0ec]">
+      <div className="grid grid-cols-4 divide-x divide-line-soft border-b border-line-soft">
         {[
           { label: 'Лидов',  value: m.newLeads,     good: 2, bad: 1 },
           { label: 'Звонков', value: m.callsMade,   good: 3, bad: 1 },
@@ -70,8 +71,8 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
           { label: 'Перем',  value: m.cardsMoved,   good: 3, bad: 1 },
         ].map(k => (
           <div key={k.label} className="px-3 py-2.5 text-center">
-            <p className={`text-[18px] font-bold font-mono leading-none ${scoreColor(k.value, k.good, k.bad)}`}>{k.value}</p>
-            <p className="text-[9px] text-[#9a9a95] mt-0.5">{k.label}</p>
+            <p className={`text-[18px] font-semibold font-mono leading-none tabular-nums ${scoreColor(k.value, k.good, k.bad)}`}>{k.value}</p>
+            <p className="text-[11px] text-muted mt-0.5">{k.label}</p>
           </div>
         ))}
       </div>
@@ -83,10 +84,10 @@ function ManagerCard({ m, period }: { m: ManagerStat; period: Period }) {
         <Flag condition={m.invoiceStale > 0} text={`Счёт >5д: ${m.invoiceStale}`} />
         <Flag condition={m.staleZone2 > 0} text={`Зона 2: ${m.staleZone2} >3д`} />
         {!m.staleZone1 && !m.invoiceStale && !m.staleZone2 && (m.callsMade > 0 || m.messagesSent > 0) && (
-          <span className="text-[10px] text-green-600">✅ Норма</span>
+          <span className="text-[11px] text-green-600">✅ Норма</span>
         )}
         {!m.staleZone1 && !m.invoiceStale && !m.staleZone2 && m.callsMade === 0 && m.messagesSent === 0 && !isToday && (
-          <span className="text-[10px] text-[#c4c4be]">— нет данных</span>
+          <span className="text-[11px] text-faint">— нет данных</span>
         )}
       </div>
     </div>
@@ -117,28 +118,21 @@ export default function CommercialPage() {
   }), { newLeads: 0, callsMade: 0, messagesSent: 0, cardsMoved: 0, activeLeads: 0 })
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1200px] mx-auto px-4 py-5">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">Коммерческий</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Аналитика по менеджерам</p>
-          </div>
-
-          {/* Period tabs */}
-          <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
-            {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
-              <button key={p} onClick={() => setPeriod(p)}
-                className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                  period === p ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
-                }`}>
-                {PERIOD_LABELS[p]}
-              </button>
-            ))}
-          </div>
-        </div>
+        <PageHeader
+          title="Коммерческий"
+          subtitle="Аналитика по менеджерам"
+          actions={
+            <SegmentedTabs
+              value={period}
+              onChange={setPeriod}
+              tabs={(Object.keys(PERIOD_LABELS) as Period[]).map(p => ({ value: p, label: PERIOD_LABELS[p] }))}
+            />
+          }
+        />
 
         {/* Summary strip */}
         {totals && !loading && (
@@ -150,11 +144,7 @@ export default function CommercialPage() {
               { label: 'Перемещений',  value: totals.cardsMoved },
               { label: 'Активных сделок', value: totals.activeLeads },
             ].map(k => (
-              <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.label}</p>
-                <p className="text-[22px] font-bold font-mono text-[#111110] leading-none">{k.value}</p>
-                <p className="text-[10px] text-[#c4c4be] mt-1">вся команда · {PERIOD_LABELS[period].toLowerCase()}</p>
-              </div>
+              <MetricTile key={k.label} label={k.label} value={k.value} hint={`вся команда · ${PERIOD_LABELS[period].toLowerCase()}`} />
             ))}
           </div>
         )}
@@ -174,7 +164,7 @@ export default function CommercialPage() {
         {loading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[1, 2, 3, 4].map(i => (
-              <div key={i} className="bg-white border border-[#e4e4e0] rounded-xl h-[160px] animate-pulse" />
+              <div key={i} className="bg-surface border border-line rounded-xl h-[160px] animate-pulse" />
             ))}
           </div>
         )}
@@ -190,7 +180,7 @@ export default function CommercialPage() {
 
         {/* Footer note */}
         {!loading && period !== 'today' && data?.fromDate && (
-          <p className="text-[11px] text-[#c4c4be] mt-4 text-center">
+          <p className="text-[11px] text-faint mt-4 text-center">
             Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
           </p>
         )}

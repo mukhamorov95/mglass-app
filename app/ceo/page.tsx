@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader, SectionHeader } from '@/components/ds'
 
 type ManagerStat = {
   id: number; name: string
@@ -38,26 +39,24 @@ export default function CeoPage() {
   const sorted   = [...stats].sort((a, b) => b.activeLeads - a.activeLeads)
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1100px] mx-auto px-4 py-5">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">CEO — Обзор бизнеса</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">
-              {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <Link href="/commercial"
-            className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
-            Детальная аналитика →
-          </Link>
-        </div>
+        <PageHeader
+          title="CEO — Обзор бизнеса"
+          subtitle={new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+          actions={
+            <Link href="/commercial"
+              className="px-3 py-1.5 border border-line rounded-lg text-[12px] text-ink-soft hover:bg-surface hover:text-ink transition-colors">
+              Детальная аналитика →
+            </Link>
+          }
+        />
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-            {[1,2,3,4].map(i => <div key={i} className="bg-white border border-[#e4e4e0] rounded-xl h-24 animate-pulse" />)}
+            {[1,2,3,4].map(i => <div key={i} className="bg-surface border border-line rounded-xl h-24 animate-pulse" />)}
           </div>
         ) : error ? (
           <div className="bg-red-50 border border-red-200 rounded-xl px-5 py-4 text-[13px] text-red-600 mb-5">
@@ -73,10 +72,10 @@ export default function CeoPage() {
                 { label: 'Сообщений',        value: totals.messages, icon: '💬', sub: 'вся команда' },
                 { label: 'Зависших лидов',  value: totals.stale,  icon: '⚠️', sub: `счетов просроч: ${totals.invoice}`, alert: totals.stale > 5 },
               ].map(k => (
-                <div key={k.label} className={`bg-white border rounded-xl px-4 py-3 ${k.alert ? 'border-red-300' : 'border-[#e4e4e0]'}`}>
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.icon} {k.label}</p>
-                  <p className={`text-[28px] font-bold font-mono leading-none ${k.alert ? 'text-red-500' : 'text-[#111110]'}`}>{k.value}</p>
-                  <p className="text-[10px] text-[#c4c4be] mt-1">{k.sub}</p>
+                <div key={k.label} className={`bg-surface border rounded-xl px-4 py-3 ${k.alert ? 'border-red-300' : 'border-line'}`}>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-1">{k.icon} {k.label}</p>
+                  <p className={`text-[28px] font-semibold font-mono leading-none tabular-nums ${k.alert ? 'text-red-500' : 'text-ink'}`}>{k.value}</p>
+                  <p className="text-[11px] text-faint mt-1">{k.sub}</p>
                 </div>
               ))}
             </div>
@@ -105,14 +104,14 @@ export default function CeoPage() {
             )}
 
             {/* Manager table */}
-            <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-5">
-              <div className="px-5 py-3 border-b border-[#f0f0ec]">
-                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Менеджеры — сегодня</span>
+            <div className="bg-surface border border-line rounded-xl overflow-hidden mb-5">
+              <div className="px-5 py-3 border-b border-line-soft">
+                <SectionHeader title="Менеджеры — сегодня" />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-[#f0f0ec] text-[9px] font-bold uppercase tracking-widest text-[#9a9a95]">
+                    <tr className="border-b border-line-soft text-[11px] font-semibold uppercase tracking-widest text-muted">
                       <th className="px-5 py-2.5 text-left">Менеджер</th>
                       <th className="px-3 py-2.5 text-center">Лидов</th>
                       <th className="px-3 py-2.5 text-center">Звонков</th>
@@ -122,22 +121,22 @@ export default function CeoPage() {
                       <th className="px-3 py-2.5 text-center">Зависших</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-[#f8f8f7]">
+                  <tbody className="divide-y divide-subtle">
                     {sorted.map(m => {
                       const isInactive = m.callsMade === 0 && m.messagesSent === 0
                       const staleTotal = m.staleZone1 + m.staleZone2
                       return (
-                        <tr key={m.id} className={`hover:bg-[#fafaf9] transition-colors ${isInactive ? 'bg-red-50/30' : ''}`}>
-                          <td className="px-5 py-3 font-medium text-[#111110]">
+                        <tr key={m.id} className={`hover:bg-subtle transition-colors ${isInactive ? 'bg-red-50/30' : ''}`}>
+                          <td className="px-5 py-3 font-medium text-ink">
                             {m.name.split(' ')[0]}
-                            {isInactive && <span className="ml-2 text-[9px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">0 активности</span>}
+                            {isInactive && <span className="ml-2 text-[11px] text-red-500 bg-red-50 px-1.5 py-0.5 rounded">0 активности</span>}
                           </td>
-                          <td className="px-3 py-3 text-center font-mono">{m.newLeads}</td>
-                          <td className={`px-3 py-3 text-center font-mono font-semibold ${m.callsMade === 0 ? 'text-red-400' : 'text-green-600'}`}>{m.callsMade}</td>
-                          <td className={`px-3 py-3 text-center font-mono font-semibold ${m.messagesSent === 0 ? 'text-orange-400' : 'text-green-600'}`}>{m.messagesSent}</td>
-                          <td className="px-3 py-3 text-center font-mono">{m.cardsMoved}</td>
-                          <td className="px-3 py-3 text-center font-mono font-bold text-[#111110]">{m.activeLeads}</td>
-                          <td className={`px-3 py-3 text-center font-mono font-bold ${staleTotal > 3 ? 'text-red-500' : staleTotal > 0 ? 'text-orange-400' : 'text-[#c4c4be]'}`}>
+                          <td className="px-3 py-3 text-center font-mono tabular-nums">{m.newLeads}</td>
+                          <td className={`px-3 py-3 text-center font-mono font-semibold tabular-nums ${m.callsMade === 0 ? 'text-red-400' : 'text-green-600'}`}>{m.callsMade}</td>
+                          <td className={`px-3 py-3 text-center font-mono font-semibold tabular-nums ${m.messagesSent === 0 ? 'text-orange-400' : 'text-green-600'}`}>{m.messagesSent}</td>
+                          <td className="px-3 py-3 text-center font-mono tabular-nums">{m.cardsMoved}</td>
+                          <td className="px-3 py-3 text-center font-mono font-semibold text-ink tabular-nums">{m.activeLeads}</td>
+                          <td className={`px-3 py-3 text-center font-mono font-semibold tabular-nums ${staleTotal > 3 ? 'text-red-500' : staleTotal > 0 ? 'text-orange-400' : 'text-faint'}`}>
                             {staleTotal || '—'}
                           </td>
                         </tr>
@@ -157,7 +156,7 @@ export default function CeoPage() {
                 { href: '/admin/sales-center',  label: '📣 Sales Center' },
               ].map(l => (
                 <Link key={l.href} href={l.href}
-                  className="flex items-center gap-2 px-4 py-3 bg-white border border-[#e4e4e0] rounded-xl text-[13px] text-[#111110] hover:bg-[#f8f8f7] transition-colors">
+                  className="flex items-center gap-2 px-4 py-3 bg-surface border border-line rounded-xl text-[13px] text-ink hover:bg-canvas transition-colors">
                   {l.label}
                 </Link>
               ))}
