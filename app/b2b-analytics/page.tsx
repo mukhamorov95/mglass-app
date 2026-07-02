@@ -2,6 +2,10 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import {
+  PageHeader, SegmentedTabs, SelectField, MetricTile, StatusPill,
+  EmptyState, SkeletonRows, type PillTone,
+} from '@/components/ds'
 
 type Order = {
   id: number
@@ -238,24 +242,21 @@ export default function B2BAnalyticsPage() {
   }, [orders])
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1400px] mx-auto px-6 py-8">
 
         {/* Шапка */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div>
-            <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Аналитика B2B</h1>
-            <p className="text-[13px] text-[#8a8a85] mt-0.5">Клиенты, сезонность, воронка продаж</p>
-          </div>
-          <select
-            value={year}
-            onChange={e => setYear(Number(e.target.value))}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110] bg-white">
-            {(availableYears.length > 0 ? availableYears : [new Date().getFullYear()]).map(y => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
+        <PageHeader
+          title="Аналитика B2B"
+          subtitle="Клиенты, сезонность, воронка продаж"
+          actions={
+            <SelectField value={year} onChange={e => setYear(Number(e.target.value))}>
+              {(availableYears.length > 0 ? availableYears : [new Date().getFullYear()]).map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </SelectField>
+          }
+        />
 
         {/* KPI */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
@@ -265,27 +266,17 @@ export default function B2BAnalyticsPage() {
             { label: 'Клиентов',        value: summary.clients || '—' },
             { label: 'Конверсия',       value: funnelData.conversion + '%' },
           ].map(c => (
-            <div key={c.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{c.label}</p>
-              <p className="text-[22px] font-bold text-[#111110] tabular-nums">{c.value}</p>
-            </div>
+            <MetricTile key={c.label} label={c.label} value={c.value} />
           ))}
         </div>
 
         {/* Вкладки */}
-        <div className="flex gap-1 mb-4">
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-                tab === t.key ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'
-              }`}>
-              {t.label}
-            </button>
-          ))}
+        <div className="mb-4">
+          <SegmentedTabs value={tab} onChange={setTab} tabs={TABS.map(t => ({ value: t.key, label: t.label }))} />
         </div>
 
         {loading ? (
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+          <SkeletonRows count={5} />
         ) : (
           <>
             {/* ── По клиентам ── */}
@@ -300,7 +291,7 @@ export default function B2BAnalyticsPage() {
                   ] as { key: ClientsView; label: string }[]).map(v => (
                     <button key={v.key} onClick={() => setClientsView(v.key)}
                       className={`px-3 py-1 rounded-lg text-[12px] font-medium transition-colors border ${
-                        clientsView === v.key ? 'bg-[#111110] text-white border-[#111110]' : 'text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f0f0ec]'
+                        clientsView === v.key ? 'bg-ink text-white border-ink' : 'text-ink-soft border-line hover:bg-line-soft'
                       }`}>
                       {v.label}
                     </button>
@@ -309,61 +300,61 @@ export default function B2BAnalyticsPage() {
 
                 {/* По месяцам (matrix) */}
                 {clientsView === 'matrix' && (
-                  <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                  <div className="bg-surface border border-line rounded-xl overflow-hidden">
                     {clients.length === 0 ? (
-                      <div className="p-12 text-center">
-                        <p className="text-[14px] font-medium text-[#111110] mb-1">Нет данных за {year} год</p>
-                        <p className="text-[13px] text-[#8a8a85]">Заказы появятся здесь после сохранения в калькуляторе</p>
-                      </div>
+                      <EmptyState
+                        title={`Нет данных за ${year} год`}
+                        hint="Заказы появятся здесь после сохранения в калькуляторе"
+                      />
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="w-full text-[12px]">
                           <thead>
-                            <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
-                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest sticky left-0 bg-[#fafaf9] min-w-[180px]">Клиент</th>
+                            <tr className="border-b border-line-soft bg-subtle">
+                              <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest sticky left-0 bg-subtle min-w-[180px]">Клиент</th>
                               {MONTHS_SHORT.map((m, i) => (
-                                <th key={i} className={`text-right px-3 py-2.5 text-[10px] font-semibold uppercase tracking-widest w-16 ${i + 1 === currentMonth ? 'text-[#111110]' : 'text-[#9a9a95]'}`}>{m}</th>
+                                <th key={i} className={`text-right px-3 py-2.5 text-[10px] font-semibold uppercase tracking-widest w-16 ${i + 1 === currentMonth ? 'text-ink' : 'text-muted'}`}>{m}</th>
                               ))}
-                              <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#111110] uppercase tracking-widest w-28 border-l border-[#f0f0ec]">Итого {year}</th>
-                              <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-16">Зак.</th>
+                              <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-ink uppercase tracking-widest w-28 border-l border-line-soft">Итого {year}</th>
+                              <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-16">Зак.</th>
                             </tr>
                           </thead>
                           <tbody>
                             {clients.map((c, idx) => (
-                              <tr key={c.client_id} className="border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9]">
-                                <td className="px-4 py-2.5 sticky left-0 bg-white hover:bg-[#fafaf9]">
+                              <tr key={c.client_id} className="border-b border-line-soft last:border-0 hover:bg-subtle">
+                                <td className="px-4 py-2.5 sticky left-0 bg-surface hover:bg-subtle">
                                   <div className="flex items-center gap-2">
-                                    <span className="text-[10px] font-bold text-[#c4c4be] w-4 flex-shrink-0">#{idx + 1}</span>
-                                    <span className="font-medium text-[#111110]">{c.client_name}</span>
+                                    <span className="text-[10px] font-semibold text-faint w-4 flex-shrink-0 tabular-nums">#{idx + 1}</span>
+                                    <span className="font-medium text-ink">{c.client_name}</span>
                                   </div>
                                 </td>
                                 {MONTHS_SHORT.map((_, i) => {
                                   const mn = i + 1; const cell = c.months[mn]
                                   return (
-                                    <td key={mn} className={`px-3 py-2.5 text-right font-mono ${cell ? 'text-[#111110]' : 'text-[#d4d4ce]'} ${mn === currentMonth ? 'bg-blue-50/40' : ''}`}>
+                                    <td key={mn} className={`px-3 py-2.5 text-right font-mono tabular-nums ${cell ? 'text-ink' : 'text-faint'} ${mn === currentMonth ? 'bg-blue-50/40' : ''}`}>
                                       {cell ? fmtK(cell.total) : '—'}
                                     </td>
                                   )
                                 })}
-                                <td className="px-4 py-2.5 text-right font-mono font-semibold text-[#111110] border-l border-[#f0f0ec]">{c.yearTotal.toLocaleString('ru-RU')} ₽</td>
-                                <td className="px-4 py-2.5 text-right text-[#6b6b66]">{c.yearOrders}</td>
+                                <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink border-l border-line-soft tabular-nums">{c.yearTotal.toLocaleString('ru-RU')} ₽</td>
+                                <td className="px-4 py-2.5 text-right text-ink-soft tabular-nums">{c.yearOrders}</td>
                               </tr>
                             ))}
                           </tbody>
                           <tfoot>
-                            <tr className="border-t-2 border-[#e4e4e0] bg-[#fafaf9]">
-                              <td className="px-4 py-2.5 font-semibold text-[#111110] sticky left-0 bg-[#fafaf9]">Итого</td>
+                            <tr className="border-t-2 border-line bg-subtle">
+                              <td className="px-4 py-2.5 font-semibold text-ink sticky left-0 bg-subtle">Итого</td>
                               {MONTHS_SHORT.map((_, i) => {
                                 const mn = i + 1
                                 const monthTotal = clients.reduce((s, c) => s + (c.months[mn]?.total ?? 0), 0)
                                 return (
-                                  <td key={mn} className={`px-3 py-2.5 text-right font-mono font-semibold text-[#111110] ${mn === currentMonth ? 'bg-blue-50/40' : ''}`}>
+                                  <td key={mn} className={`px-3 py-2.5 text-right font-mono font-semibold text-ink tabular-nums ${mn === currentMonth ? 'bg-blue-50/40' : ''}`}>
                                     {monthTotal > 0 ? fmtK(monthTotal) : '—'}
                                   </td>
                                 )
                               })}
-                              <td className="px-4 py-2.5 text-right font-mono font-bold text-[#111110] border-l border-[#e4e4e0]">{summary.total.toLocaleString('ru-RU')} ₽</td>
-                              <td className="px-4 py-2.5 text-right font-semibold text-[#111110]">{summary.count}</td>
+                              <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink border-l border-line tabular-nums">{summary.total.toLocaleString('ru-RU')} ₽</td>
+                              <td className="px-4 py-2.5 text-right font-semibold text-ink tabular-nums">{summary.count}</td>
                             </tr>
                           </tfoot>
                         </table>
@@ -383,57 +374,57 @@ export default function B2BAnalyticsPage() {
                         { label: 'Под риском',    count: segmentation.atRisk.length,     sub: '90–180 дней',        color: 'text-amber-600'   },
                         { label: 'Потерянные',    count: segmentation.churned.length,    sub: 'заказ > 180 дней',  color: 'text-red-500'     },
                       ].map(s => (
-                        <div key={s.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{s.label}</p>
-                          <p className={`text-[22px] font-bold tabular-nums ${s.color}`}>{s.count}</p>
-                          <p className="text-[10px] text-[#9a9a95] mt-0.5">{s.sub}</p>
+                        <div key={s.label} className="bg-surface border border-line rounded-xl px-4 py-3.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-1">{s.label}</p>
+                          <p className={`text-[22px] font-semibold tabular-nums ${s.color}`}>{s.count}</p>
+                          <p className="text-[10px] text-muted mt-0.5">{s.sub}</p>
                         </div>
                       ))}
                     </div>
 
                     {/* Топ-10 по LTV */}
-                    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-                      <div className="px-4 py-3 border-b border-[#f0f0ec]">
-                        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Топ клиентов по LTV (все время)</p>
+                    <div className="bg-surface border border-line rounded-xl overflow-hidden">
+                      <div className="px-4 py-3 border-b border-line-soft">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Топ клиентов по LTV (все время)</p>
                       </div>
                       {ltvData.length === 0 ? (
-                        <div className="p-12 text-center text-[13px] text-[#8a8a85]">Нет данных</div>
+                        <div className="p-12 text-center text-[13px] text-muted">Нет данных</div>
                       ) : (
                         <div className="overflow-x-auto">
                           <table className="w-full text-[12px]">
                             <thead>
-                              <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
-                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest min-w-[180px]">Клиент</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">LTV</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказов</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Ср. чек</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Первый заказ</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Последний</th>
-                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Дней назад</th>
+                              <tr className="border-b border-line-soft bg-subtle">
+                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest min-w-[180px]">Клиент</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">LTV</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Заказов</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Ср. чек</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Первый заказ</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Последний</th>
+                                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Дней назад</th>
                               </tr>
                             </thead>
                             <tbody>
                               {ltvData.slice(0, 10).map((c, idx) => {
-                                const segment = c.total_orders_count === 1 ? { label: 'Новый', cls: 'bg-blue-50 text-blue-600' }
-                                  : c.days_since_last_order < 90    ? { label: 'Активен', cls: 'bg-emerald-50 text-emerald-600' }
-                                  : c.days_since_last_order < 180   ? { label: 'Риск',    cls: 'bg-amber-50 text-amber-600' }
-                                  :                                    { label: 'Потерян', cls: 'bg-red-50 text-red-500' }
+                                const segment = c.total_orders_count === 1 ? { label: 'Новый', tone: 'accent' as PillTone }
+                                  : c.days_since_last_order < 90    ? { label: 'Активен', tone: 'success' as PillTone }
+                                  : c.days_since_last_order < 180   ? { label: 'Риск',    tone: 'warning' as PillTone }
+                                  :                                    { label: 'Потерян', tone: 'danger' as PillTone }
                                 return (
-                                  <tr key={c.client_id} className="border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9]">
+                                  <tr key={c.client_id} className="border-b border-line-soft last:border-0 hover:bg-subtle">
                                     <td className="px-4 py-2.5">
                                       <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold text-[#c4c4be] w-4 flex-shrink-0">#{idx + 1}</span>
-                                        <span className="font-medium text-[#111110]">{c.client_name}</span>
-                                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${segment.cls}`}>{segment.label}</span>
+                                        <span className="text-[10px] font-semibold text-faint w-4 flex-shrink-0 tabular-nums">#{idx + 1}</span>
+                                        <span className="font-medium text-ink">{c.client_name}</span>
+                                        <StatusPill tone={segment.tone}>{segment.label}</StatusPill>
                                       </div>
                                     </td>
-                                    <td className="px-4 py-2.5 text-right font-mono font-bold text-[#111110]">{c.total_revenue.toLocaleString('ru-RU')} ₽</td>
-                                    <td className="px-4 py-2.5 text-right text-[#6b6b66]">{c.total_orders_count}</td>
-                                    <td className="px-4 py-2.5 text-right font-mono text-[#6b6b66]">{c.avg_order_value.toLocaleString('ru-RU')} ₽</td>
-                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.first_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
-                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.last_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink tabular-nums">{c.total_revenue.toLocaleString('ru-RU')} ₽</td>
+                                    <td className="px-4 py-2.5 text-right text-ink-soft tabular-nums">{c.total_orders_count}</td>
+                                    <td className="px-4 py-2.5 text-right font-mono text-ink-soft tabular-nums">{c.avg_order_value.toLocaleString('ru-RU')} ₽</td>
+                                    <td className="px-4 py-2.5 text-right text-muted">{new Date(c.first_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-4 py-2.5 text-right text-muted">{new Date(c.last_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
                                     <td className="px-4 py-2.5 text-right">
-                                      <span className={`font-semibold ${c.days_since_last_order < 90 ? 'text-emerald-600' : c.days_since_last_order < 180 ? 'text-amber-600' : 'text-red-500'}`}>
+                                      <span className={`font-semibold tabular-nums ${c.days_since_last_order < 90 ? 'text-emerald-600' : c.days_since_last_order < 180 ? 'text-amber-600' : 'text-red-500'}`}>
                                         {c.days_since_last_order}д
                                       </span>
                                     </td>
@@ -451,18 +442,18 @@ export default function B2BAnalyticsPage() {
                       { label: 'Под риском (90–180 дней)',   list: segmentation.atRisk,     border: 'border-amber-200',  header: 'bg-amber-50' },
                       { label: 'Потерянные (> 180 дней)',    list: segmentation.churned,    border: 'border-red-200',    header: 'bg-red-50'   },
                     ].map(seg => seg.list.length > 0 && (
-                      <div key={seg.label} className={`bg-white border ${seg.border} rounded-xl overflow-hidden`}>
+                      <div key={seg.label} className={`bg-surface border ${seg.border} rounded-xl overflow-hidden`}>
                         <div className={`px-4 py-3 border-b ${seg.border} ${seg.header}`}>
-                          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#6b6b66]">{seg.label} — {seg.list.length} клиентов</p>
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink-soft">{seg.label} — {seg.list.length} клиентов</p>
                         </div>
-                        <div className="divide-y divide-[#f8f8f7]">
+                        <div className="divide-y divide-line-soft">
                           {seg.list.map(c => (
-                            <div key={c.client_id} className="px-4 py-2.5 flex items-center justify-between gap-4 hover:bg-[#fafaf9]">
-                              <span className="text-[12px] font-medium text-[#111110] truncate">{c.client_name}</span>
-                              <div className="flex items-center gap-4 shrink-0 text-[11px] text-[#9a9a95]">
-                                <span className="font-mono">{c.total_revenue.toLocaleString('ru-RU')} ₽</span>
-                                <span>{c.total_orders_count} зак.</span>
-                                <span className="font-semibold text-amber-600">{c.days_since_last_order}д</span>
+                            <div key={c.client_id} className="px-4 py-2.5 flex items-center justify-between gap-4 hover:bg-subtle">
+                              <span className="text-[12px] font-medium text-ink truncate">{c.client_name}</span>
+                              <div className="flex items-center gap-4 shrink-0 text-[11px] text-muted">
+                                <span className="font-mono tabular-nums">{c.total_revenue.toLocaleString('ru-RU')} ₽</span>
+                                <span className="tabular-nums">{c.total_orders_count} зак.</span>
+                                <span className="font-semibold text-amber-600 tabular-nums">{c.days_since_last_order}д</span>
                               </div>
                             </div>
                           ))}
@@ -474,23 +465,23 @@ export default function B2BAnalyticsPage() {
 
                 {/* Когортная таблица */}
                 {clientsView === 'cohort' && (
-                  <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                  <div className="bg-surface border border-line rounded-xl overflow-hidden">
                     {cohortData.length === 0 ? (
-                      <div className="p-12 text-center text-[13px] text-[#8a8a85]">Нет данных для когортного анализа</div>
+                      <div className="p-12 text-center text-[13px] text-muted">Нет данных для когортного анализа</div>
                     ) : (
                       <>
-                        <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9]">
-                          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Когортный анализ — удержание клиентов по месяцам</p>
-                          <p className="text-[10px] text-[#c4c4be] mt-0.5">% клиентов из когорты, совершивших хотя бы 1 заказ в месяц N после первого</p>
+                        <div className="px-4 py-3 border-b border-line-soft bg-subtle">
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Когортный анализ — удержание клиентов по месяцам</p>
+                          <p className="text-[11px] text-faint mt-0.5">% клиентов из когорты, совершивших хотя бы 1 заказ в месяц N после первого</p>
                         </div>
                         <div className="overflow-x-auto">
                           <table className="w-full text-[11px]">
                             <thead>
-                              <tr className="border-b border-[#f0f0ec]">
-                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest sticky left-0 bg-white min-w-[110px]">Когорта</th>
-                                <th className="text-center px-2 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-12">Кл.</th>
+                              <tr className="border-b border-line-soft">
+                                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest sticky left-0 bg-surface min-w-[110px]">Когорта</th>
+                                <th className="text-center px-2 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-12">Кл.</th>
                                 {Array.from({ length: 12 }, (_, i) => (
-                                  <th key={i} className="text-center px-2 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-12">М{i}</th>
+                                  <th key={i} className="text-center px-2 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-12">М{i}</th>
                                 ))}
                               </tr>
                             </thead>
@@ -499,16 +490,16 @@ export default function B2BAnalyticsPage() {
                                 const [cohortYear, cohortMo] = row.cohort.split('-').map(Number)
                                 const label = `${MONTHS_SHORT[(cohortMo ?? 1) - 1]} ${cohortYear}`
                                 return (
-                                  <tr key={row.cohort} className="border-b border-[#f8f8f7] last:border-0">
-                                    <td className="px-4 py-2 font-medium text-[#111110] sticky left-0 bg-white">{label}</td>
-                                    <td className="px-2 py-2 text-center font-semibold text-[#6b6b66]">{row.size}</td>
+                                  <tr key={row.cohort} className="border-b border-line-soft last:border-0">
+                                    <td className="px-4 py-2 font-medium text-ink sticky left-0 bg-surface">{label}</td>
+                                    <td className="px-2 py-2 text-center font-semibold text-ink-soft tabular-nums">{row.size}</td>
                                     {row.months.map((m, mi) => {
                                       const bg = m.pct === 0
                                         ? 'transparent'
                                         : `rgba(17,17,16,${(m.pct / 100) * 0.65})`
-                                      const textCol = m.pct > 45 ? '#fff' : m.pct > 0 ? '#111110' : '#d4d4ce'
+                                      const textCol = m.pct > 45 ? '#fff' : m.pct > 0 ? '#111110' : '#c4c4be'
                                       return (
-                                        <td key={mi} className="px-2 py-2 text-center rounded"
+                                        <td key={mi} className="px-2 py-2 text-center rounded tabular-nums"
                                           style={{ background: bg, color: textCol }}>
                                           {m.pct > 0 ? m.pct + '%' : '—'}
                                         </td>
@@ -531,12 +522,12 @@ export default function B2BAnalyticsPage() {
             {tab === 'season' && (
               <div className="space-y-4">
                 {seasonData.years.length === 0 ? (
-                  <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center text-[13px] text-[#8a8a85]">Нет данных</div>
+                  <div className="bg-surface border border-line rounded-xl p-12 text-center text-[13px] text-muted">Нет данных</div>
                 ) : (
                   <>
                     {/* Сравнение по годам */}
-                    <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-5">Выручка по месяцам (тыс. ₽)</p>
+                    <div className="bg-surface border border-line rounded-xl p-6">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-5">Выручка по месяцам (тыс. ₽)</p>
                       <div className="flex items-end gap-1.5" style={{ height: 180 }}>
                         {MONTHS_SHORT.map((m, mi) => {
                           const vals = seasonData.years.map(y => ({ y, v: seasonData.byYear[y]?.[mi] ?? 0 }))
@@ -546,10 +537,10 @@ export default function B2BAnalyticsPage() {
                                 {vals.map(({ y, v }) => {
                                   const h = seasonData.maxVal > 0 ? Math.round(v / seasonData.maxVal * 150) : 0
                                   const colors: Record<number, string> = {
-                                    [seasonData.years[0] ?? 0]: 'bg-[#d4d4ce]',
-                                    [seasonData.years[seasonData.years.length - 1] ?? 0]: 'bg-[#111110]',
+                                    [seasonData.years[0] ?? 0]: 'bg-faint',
+                                    [seasonData.years[seasonData.years.length - 1] ?? 0]: 'bg-ink',
                                   }
-                                  const color = colors[y] ?? 'bg-[#8a8a85]'
+                                  const color = colors[y] ?? 'bg-muted'
                                   return (
                                     <div key={y} className="relative group flex-1 flex items-end">
                                       <div
@@ -561,7 +552,7 @@ export default function B2BAnalyticsPage() {
                                   )
                                 })}
                               </div>
-                              <span className={`text-[10px] ${mi + 1 === currentMonth ? 'font-bold text-[#111110]' : 'text-[#9a9a95]'}`}>{m}</span>
+                              <span className={`text-[10px] ${mi + 1 === currentMonth ? 'font-semibold text-ink' : 'text-muted'}`}>{m}</span>
                             </div>
                           )
                         })}
@@ -570,8 +561,8 @@ export default function B2BAnalyticsPage() {
                         <div className="flex gap-4 mt-4">
                           {seasonData.years.map((y, i) => (
                             <div key={y} className="flex items-center gap-1.5">
-                              <div className={`w-3 h-2 rounded-sm ${i === 0 ? 'bg-[#d4d4ce]' : i === seasonData.years.length - 1 ? 'bg-[#111110]' : 'bg-[#8a8a85]'} ${y === year ? '' : 'opacity-50'}`} />
-                              <span className="text-[11px] text-[#6b6b66]">{y}</span>
+                              <div className={`w-3 h-2 rounded-sm ${i === 0 ? 'bg-faint' : i === seasonData.years.length - 1 ? 'bg-ink' : 'bg-muted'} ${y === year ? '' : 'opacity-50'}`} />
+                              <span className="text-[11px] text-ink-soft tabular-nums">{y}</span>
                             </div>
                           ))}
                         </div>
@@ -579,14 +570,14 @@ export default function B2BAnalyticsPage() {
                     </div>
 
                     {/* Таблица по месяцам выбранного года */}
-                    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                    <div className="bg-surface border border-line rounded-xl overflow-hidden">
                       <table className="w-full text-[12px]">
                         <thead>
-                          <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Месяц</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Выручка</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказов</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Ср. чек</th>
+                          <tr className="border-b border-line-soft bg-subtle">
+                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Месяц</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Выручка</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Заказов</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Ср. чек</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -596,13 +587,13 @@ export default function B2BAnalyticsPage() {
                             const avg = monthOrders.length > 0 ? Math.round(revenue / monthOrders.length) : 0
                             const isCurrent = mi + 1 === currentMonth
                             return (
-                              <tr key={mi} className={`border-b border-[#f8f8f7] last:border-0 ${isCurrent ? 'bg-blue-50/30' : 'hover:bg-[#fafaf9]'}`}>
-                                <td className="px-4 py-2.5 font-medium text-[#111110]">
+                              <tr key={mi} className={`border-b border-line-soft last:border-0 ${isCurrent ? 'bg-blue-50/30' : 'hover:bg-subtle'}`}>
+                                <td className="px-4 py-2.5 font-medium text-ink">
                                   {m} {isCurrent && <span className="text-[10px] text-blue-600 font-normal ml-1">текущий</span>}
                                 </td>
-                                <td className="px-4 py-2.5 text-right font-mono font-semibold text-[#111110]">{revenue > 0 ? revenue.toLocaleString('ru-RU') + ' ₽' : '—'}</td>
-                                <td className="px-4 py-2.5 text-right text-[#6b6b66]">{monthOrders.length || '—'}</td>
-                                <td className="px-4 py-2.5 text-right font-mono text-[#6b6b66]">{avg > 0 ? avg.toLocaleString('ru-RU') + ' ₽' : '—'}</td>
+                                <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink tabular-nums">{revenue > 0 ? revenue.toLocaleString('ru-RU') + ' ₽' : '—'}</td>
+                                <td className="px-4 py-2.5 text-right text-ink-soft tabular-nums">{monthOrders.length || '—'}</td>
+                                <td className="px-4 py-2.5 text-right font-mono text-ink-soft tabular-nums">{avg > 0 ? avg.toLocaleString('ru-RU') + ' ₽' : '—'}</td>
                               </tr>
                             )
                           })}
@@ -618,7 +609,7 @@ export default function B2BAnalyticsPage() {
             {tab === 'conversion' && (
               <div className="space-y-4">
                 {managerStats.length === 0 ? (
-                  <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center text-[13px] text-[#8a8a85]">
+                  <div className="bg-surface border border-line rounded-xl p-12 text-center text-[13px] text-muted">
                     Нет данных за {year} год
                   </div>
                 ) : (
@@ -629,47 +620,44 @@ export default function B2BAnalyticsPage() {
                         { label: 'КП за период', value: orders.length },
                         { label: 'Ср. конверсия', value: managerStats.length > 0 ? Math.round(managerStats.reduce((s, r) => s + r.conversion, 0) / managerStats.length) + '%' : '—' },
                       ].map(c => (
-                        <div key={c.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5">
-                          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{c.label}</p>
-                          <p className="text-[22px] font-bold text-[#111110] tabular-nums">{c.value}</p>
-                        </div>
+                        <MetricTile key={c.label} label={c.label} value={c.value} />
                       ))}
                     </div>
 
-                    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                    <div className="bg-surface border border-line rounded-xl overflow-hidden">
                       <table className="w-full text-[12px]">
                         <thead>
-                          <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
-                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Менеджер</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">КП</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказов</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Конверсия</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Выручка</th>
-                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Ср. маржа</th>
+                          <tr className="border-b border-line-soft bg-subtle">
+                            <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Менеджер</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">КП</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Заказов</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Конверсия</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Выручка</th>
+                            <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Ср. маржа</th>
                           </tr>
                         </thead>
                         <tbody>
                           {managerStats.map((r, idx) => (
-                            <tr key={r.name} className="border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9]">
+                            <tr key={r.name} className="border-b border-line-soft last:border-0 hover:bg-subtle">
                               <td className="px-4 py-2.5">
                                 <div className="flex items-center gap-2">
-                                  <span className="text-[10px] font-bold text-[#c4c4be] w-4">{idx + 1}</span>
-                                  <span className="font-medium text-[#111110]">{r.name}</span>
+                                  <span className="text-[10px] font-semibold text-faint w-4 tabular-nums">{idx + 1}</span>
+                                  <span className="font-medium text-ink">{r.name}</span>
                                 </div>
                               </td>
-                              <td className="px-4 py-2.5 text-right text-[#6b6b66]">{r.kpCount}</td>
-                              <td className="px-4 py-2.5 text-right text-[#6b6b66]">{r.orderCount || '—'}</td>
+                              <td className="px-4 py-2.5 text-right text-ink-soft tabular-nums">{r.kpCount}</td>
+                              <td className="px-4 py-2.5 text-right text-ink-soft tabular-nums">{r.orderCount || '—'}</td>
                               <td className="px-4 py-2.5 text-right">
-                                <span className={`font-semibold ${r.conversion >= 50 ? 'text-emerald-600' : r.conversion >= 25 ? 'text-[#111110]' : 'text-red-500'}`}>
+                                <span className={`font-semibold tabular-nums ${r.conversion >= 50 ? 'text-emerald-600' : r.conversion >= 25 ? 'text-ink' : 'text-red-500'}`}>
                                   {r.kpCount > 0 ? r.conversion + '%' : '—'}
                                 </span>
                               </td>
-                              <td className="px-4 py-2.5 text-right font-mono font-semibold text-[#111110]">
+                              <td className="px-4 py-2.5 text-right font-mono font-semibold text-ink tabular-nums">
                                 {r.revenue > 0 ? r.revenue.toLocaleString('ru-RU') + ' ₽' : '—'}
                               </td>
                               <td className="px-4 py-2.5 text-right">
                                 {r.avgMargin > 0 ? (
-                                  <span className={`font-semibold ${r.avgMargin < 15 ? 'text-red-500' : 'text-emerald-600'}`}>
+                                  <span className={`font-semibold tabular-nums ${r.avgMargin < 15 ? 'text-red-500' : 'text-emerald-600'}`}>
                                     {r.avgMargin}%
                                   </span>
                                 ) : '—'}
@@ -681,18 +669,18 @@ export default function B2BAnalyticsPage() {
                     </div>
 
                     {/* Прогресс-бар конверсии */}
-                    <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-4">Конверсия по менеджерам</p>
+                    <div className="bg-surface border border-line rounded-xl p-6">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-4">Конверсия по менеджерам</p>
                       <div className="space-y-3">
                         {managerStats.map(r => (
                           <div key={r.name}>
                             <div className="flex items-center justify-between mb-1">
-                              <span className="text-[12px] text-[#6b6b66]">{r.name}</span>
-                              <span className="text-[12px] font-semibold text-[#111110]">{r.kpCount > 0 ? r.conversion + '%' : '—'}</span>
+                              <span className="text-[12px] text-ink-soft">{r.name}</span>
+                              <span className="text-[12px] font-semibold text-ink tabular-nums">{r.kpCount > 0 ? r.conversion + '%' : '—'}</span>
                             </div>
-                            <div className="h-5 bg-[#f0f0ec] rounded-lg overflow-hidden">
+                            <div className="h-5 bg-line-soft rounded-lg overflow-hidden">
                               <div
-                                className={`h-full rounded-lg transition-all ${r.conversion >= 50 ? 'bg-emerald-500' : r.conversion >= 25 ? 'bg-[#111110]' : 'bg-red-400'}`}
+                                className={`h-full rounded-lg transition-all ${r.conversion >= 50 ? 'bg-emerald-500' : r.conversion >= 25 ? 'bg-ink' : 'bg-red-400'}`}
                                 style={{ width: `${Math.max(r.conversion, 2)}%` }}
                               />
                             </div>
@@ -716,33 +704,33 @@ export default function B2BAnalyticsPage() {
                     { label: 'Конверсия',            value: funnelData.conversion + '%', sub: 'просчёт → заказ' },
                     { label: 'Средний чек заказа',   value: funnelData.avgOrder > 0 ? funnelData.avgOrder.toLocaleString('ru-RU') + ' ₽' : '—', sub: 'подтверждённые' },
                   ].map(c => (
-                    <div key={c.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{c.label}</p>
-                      <p className="text-[22px] font-bold text-[#111110] tabular-nums">{c.value}</p>
-                      <p className="text-[11px] text-[#9a9a95] mt-0.5">{c.sub}</p>
+                    <div key={c.label} className="bg-surface border border-line rounded-xl px-4 py-3.5">
+                      <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-1">{c.label}</p>
+                      <p className="text-[22px] font-semibold text-ink tabular-nums">{c.value}</p>
+                      <p className="text-[11px] text-muted mt-0.5">{c.sub}</p>
                     </div>
                   ))}
                 </div>
 
                 {/* Воронка визуально */}
-                <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
-                  <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-4">Путь просчёта</p>
+                <div className="bg-surface border border-line rounded-xl p-6">
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-4">Путь просчёта</p>
                   <div className="space-y-2">
                     {[
-                      { label: 'Просчётов создано', count: funnelData.quotesCount + funnelData.confirmedCount, color: 'bg-[#f0f0ec]', text: 'text-[#111110]' },
-                      { label: 'Подтверждено и запущено', count: funnelData.confirmedCount, color: 'bg-[#111110]', text: 'text-white' },
+                      { label: 'Просчётов создано', count: funnelData.quotesCount + funnelData.confirmedCount, color: 'bg-line-soft', text: 'text-ink' },
+                      { label: 'Подтверждено и запущено', count: funnelData.confirmedCount, color: 'bg-ink', text: 'text-white' },
                     ].map((step, i) => {
                       const total = funnelData.quotesCount + funnelData.confirmedCount
                       const w = total > 0 ? Math.round(step.count / total * 100) : 0
                       return (
                         <div key={i}>
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[12px] text-[#6b6b66]">{step.label}</span>
-                            <span className="text-[12px] font-semibold text-[#111110]">{step.count}</span>
+                            <span className="text-[12px] text-ink-soft">{step.label}</span>
+                            <span className="text-[12px] font-semibold text-ink tabular-nums">{step.count}</span>
                           </div>
-                          <div className="h-8 bg-[#f8f8f7] rounded-lg overflow-hidden">
+                          <div className="h-8 bg-canvas rounded-lg overflow-hidden">
                             <div className={`h-full ${step.color} rounded-lg flex items-center px-3 transition-all`} style={{ width: `${Math.max(w, 4)}%` }}>
-                              <span className={`text-[11px] font-bold ${step.text} whitespace-nowrap`}>{w}%</span>
+                              <span className={`text-[11px] font-semibold ${step.text} whitespace-nowrap tabular-nums`}>{w}%</span>
                             </div>
                           </div>
                         </div>
@@ -752,14 +740,14 @@ export default function B2BAnalyticsPage() {
                 </div>
 
                 {/* По месяцам */}
-                <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className="bg-surface border border-line rounded-xl overflow-hidden">
                   <table className="w-full text-[12px]">
                     <thead>
-                      <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
-                        <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Месяц</th>
-                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Просчётов</th>
-                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Заказов</th>
-                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Конверсия</th>
+                      <tr className="border-b border-line-soft bg-subtle">
+                        <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Месяц</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Просчётов</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Заказов</th>
+                        <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Конверсия</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -768,13 +756,13 @@ export default function B2BAnalyticsPage() {
                         const conv = total > 0 ? Math.round(row.orders / total * 100) : null
                         const isCurrent = i + 1 === currentMonth
                         return (
-                          <tr key={i} className={`border-b border-[#f8f8f7] last:border-0 ${isCurrent ? 'bg-blue-50/30' : 'hover:bg-[#fafaf9]'}`}>
-                            <td className="px-4 py-2 font-medium text-[#111110]">
+                          <tr key={i} className={`border-b border-line-soft last:border-0 ${isCurrent ? 'bg-blue-50/30' : 'hover:bg-subtle'}`}>
+                            <td className="px-4 py-2 font-medium text-ink">
                               {MONTHS_FULL[i]} {isCurrent && <span className="text-[10px] text-blue-600 font-normal ml-1">текущий</span>}
                             </td>
-                            <td className="px-4 py-2 text-right text-[#6b6b66]">{row.quotes || '—'}</td>
-                            <td className="px-4 py-2 text-right text-[#6b6b66]">{row.orders || '—'}</td>
-                            <td className="px-4 py-2 text-right font-semibold text-[#111110]">
+                            <td className="px-4 py-2 text-right text-ink-soft tabular-nums">{row.quotes || '—'}</td>
+                            <td className="px-4 py-2 text-right text-ink-soft tabular-nums">{row.orders || '—'}</td>
+                            <td className="px-4 py-2 text-right font-semibold text-ink tabular-nums">
                               {conv !== null ? conv + '%' : '—'}
                             </td>
                           </tr>

@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { B2BMaterial } from '@/lib/types'
+import { PageHeader, EmptyState, SkeletonRows } from '@/components/ds'
 import {
   runCuttingOptimizer,
   runCuttingOptimizerOptimized,
@@ -328,7 +329,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
           return (
             <button key={i} onClick={() => setActiveSheet(i)}
               className={`px-2.5 py-1 rounded text-[11px] font-medium border transition-colors ${
-                activeSheet === i ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#f5f5f3]'
+                activeSheet === i ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-surface text-ink-soft border-line hover:bg-canvas'
               }`}
             >
               Лист {i + 1}{cnt > 0 ? ` (${cnt})` : ''}
@@ -337,10 +338,10 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
         })}
         <button
           onClick={() => { const ni = sheetCount; setSheetCount(c => c + 1); setActiveSheet(ni) }}
-          className="px-2 py-1 rounded text-[11px] border border-dashed border-[#c4c4be] text-[#9a9a95] hover:border-indigo-400 hover:text-indigo-600 transition-colors"
+          className="px-2 py-1 rounded text-[11px] border border-dashed border-faint text-muted hover:border-indigo-400 hover:text-indigo-600 transition-colors"
         >+ лист</button>
-        <span className="ml-auto text-[11px] text-[#6b6b66]">
-          КПД <b className={eff >= 70 ? 'text-emerald-600' : eff >= 50 ? 'text-amber-600' : 'text-[#4b4b47]'}>{eff}%</b>
+        <span className="ml-auto text-[11px] text-ink-soft">
+          КПД <b className={`tabular-nums ${eff >= 70 ? 'text-emerald-600' : eff >= 50 ? 'text-amber-600' : 'text-ink-soft'}`}>{eff}%</b>
         </span>
       </div>
 
@@ -350,17 +351,17 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
           <span className="text-[11px] font-semibold text-indigo-800">{selPiece.label}{selPl.rotated ? ' ↻' : ''}</span>
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => handleRotate(selId!)} disabled={!selPiece.canRotate}
-              className="px-2 py-0.5 rounded bg-white border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 text-[10px]"
+              className="px-2 py-0.5 rounded bg-surface border border-indigo-200 text-indigo-700 hover:bg-indigo-50 disabled:opacity-40 text-[10px]"
             >↻ Повернуть</button>
             <button onClick={() => handleRemove(selId!)}
-              className="px-2 py-0.5 rounded bg-white border border-red-200 text-red-600 hover:bg-red-50 text-[10px]"
+              className="px-2 py-0.5 rounded bg-surface border border-red-200 text-red-600 hover:bg-red-50 text-[10px]"
             >✕ Убрать</button>
           </div>
         </div>
       )}
 
       {/* SVG Canvas */}
-      <div className="rounded-lg border border-[#e4e4e0] overflow-hidden" onClick={() => setSelId(null)}>
+      <div className="rounded-lg border border-line overflow-hidden" onClick={() => setSelId(null)}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${sheetW} ${sheetH}`}
@@ -413,14 +414,14 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
         <div className="text-[11px] text-emerald-600 font-semibold">✓ Все {pieces.length} деталей размещены</div>
       ) : unplaced.length > 0 ? (
         <div>
-          <div className="text-[10px] text-[#9a9a95] mb-1 font-medium">Нажмите для авто-размещения ({unplaced.length} шт):</div>
+          <div className="text-[10px] text-muted mb-1 font-medium">Нажмите для авто-размещения ({unplaced.length} шт):</div>
           <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
             {unplaced.map(pc => {
               const ci = orderColorMap.get(pc.orderId) ?? 0
               return (
                 <button key={pc.id} onClick={() => handleUnplacedClick(pc)}
                   style={{ background: pieceColor(ci, 0.15), borderColor: pieceColor(ci, 0.6) }}
-                  className="text-[10px] px-2 py-1 rounded border font-mono hover:opacity-75 transition-opacity text-[#111]"
+                  className="text-[10px] px-2 py-1 rounded border font-mono hover:opacity-75 transition-opacity text-ink"
                   title={`${pc.width}×${pc.height} мм · ${pc.orderClientName}`}
                 >{pc.label}</button>
               )
@@ -456,12 +457,12 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
   const unplacedCount  = result.unplacedCount  ?? unplacedPieces.length
 
   return (
-    <div className={`border rounded-xl overflow-hidden ${unplacedCount > 0 ? 'border-red-300' : 'border-[#e4e4e0]'}`}>
+    <div className={`border rounded-xl overflow-hidden ${unplacedCount > 0 ? 'border-red-300' : 'border-line'}`}>
       <button
         onClick={onToggle}
-        className="w-full flex items-center gap-3 px-4 py-3 bg-[#fafaf9] hover:bg-[#f5f5f3] transition-colors text-left"
+        className="w-full flex items-center gap-3 px-4 py-3 bg-subtle hover:bg-canvas transition-colors text-left"
       >
-        <span className="text-[15px] font-bold text-[#111110] flex-1">{result.materialLabel}</span>
+        <span className="text-[15px] font-semibold text-ink flex-1">{result.materialLabel}</span>
         <div className="flex items-center gap-3 flex-shrink-0">
           {patLabel && (
             <span className="text-[11px] px-2 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">{patLabel}</span>
@@ -471,16 +472,16 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
               ⚠ {unplacedCount} не влезло
             </span>
           )}
-          <span className="text-[13px] font-bold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200">
+          <span className="text-[13px] font-semibold text-blue-700 bg-blue-50 px-3 py-1 rounded-lg border border-blue-200 tabular-nums">
             {result.sheetsNeeded} {result.sheetsNeeded === 1 ? 'лист' : result.sheetsNeeded < 5 ? 'листа' : 'листов'}
           </span>
-          <span className={`text-[12px] font-semibold px-2 py-1 rounded border ${
+          <span className={`text-[12px] font-semibold px-2 py-1 rounded border tabular-nums ${
             result.avgEfficiency >= 70 ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
             result.avgEfficiency >= 50 ? 'bg-amber-50 text-amber-700 border-amber-200' :
             'bg-red-50 text-red-700 border-red-200'
           }`}>КПД {result.avgEfficiency}%</span>
-          <span className="text-[#9a9a95] text-[12px]">{result.totalPieces} дет.</span>
-          <span className="text-[18px] text-[#9a9a95]" style={{ transform: expanded ? 'rotate(180deg)' : 'none', display: 'inline-block' }}>›</span>
+          <span className="text-muted text-[12px] tabular-nums">{result.totalPieces} дет.</span>
+          <span className="text-[18px] text-muted" style={{ transform: expanded ? 'rotate(180deg)' : 'none', display: 'inline-block' }}>›</span>
         </div>
       </button>
 
@@ -512,7 +513,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
               {orders.map(([orderId, clientName], i) => (
                 <div key={orderId} className="flex items-center gap-1.5 text-[12px]">
                   <div className="w-3 h-3 rounded-sm flex-shrink-0" style={{ background: pieceColor(i) }} />
-                  <span className="text-[#4b4b47]">{clientName || `Заказ #${orderId}`}</span>
+                  <span className="text-ink-soft">{clientName || `Заказ #${orderId}`}</span>
                 </div>
               ))}
             </div>
@@ -523,17 +524,17 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
             {/* Left: Auto */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] font-bold text-[#4b4b47]">Авто-раскрой</span>
-                <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200">{result.sheetsNeeded} листов</span>
+                <span className="text-[12px] font-semibold text-ink-soft">Авто-раскрой</span>
+                <span className="text-[11px] px-2 py-0.5 rounded bg-blue-50 text-blue-600 border border-blue-200 tabular-nums">{result.sheetsNeeded} листов</span>
               </div>
               {result.sheets.map(sheet => (
                 <div key={sheet.index} className="space-y-1">
-                  <div className="flex items-center gap-2 text-[11px] text-[#6b6b66]">
+                  <div className="flex items-center gap-2 text-[11px] text-ink-soft">
                     <span className="font-semibold">Лист {sheet.index + 1}</span>
                     <span>·</span>
-                    <span>{sheet.pieces.length} дет.</span>
+                    <span className="tabular-nums">{sheet.pieces.length} дет.</span>
                     <span>·</span>
-                    <span className={sheet.efficiency >= 70 ? 'text-emerald-600' : sheet.efficiency >= 50 ? 'text-amber-600' : 'text-red-600'}>
+                    <span className={`tabular-nums ${sheet.efficiency >= 70 ? 'text-emerald-600' : sheet.efficiency >= 50 ? 'text-amber-600' : 'text-red-600'}`}>
                       {sheet.efficiency}%
                     </span>
                   </div>
@@ -542,7 +543,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
                     <div className="flex flex-wrap gap-1 pt-0.5">
                       <span className="text-[10px] text-amber-600 font-semibold">Остатки:</span>
                       {sheet.remnants.map((rem: Remnant, ri: number) => (
-                        <span key={ri} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">
+                        <span key={ri} className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 tabular-nums">
                           {rem.w}×{rem.h}
                         </span>
                       ))}
@@ -555,8 +556,8 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
             {/* Right: Manual */}
             <div className="space-y-2">
               <div className="flex items-center gap-2">
-                <span className="text-[12px] font-bold text-[#4b4b47]">Ручной раскрой</span>
-                <span className="text-[11px] text-[#9a9a95]">перетаскивайте детали</span>
+                <span className="text-[12px] font-semibold text-ink-soft">Ручной раскрой</span>
+                <span className="text-[11px] text-muted">перетаскивайте детали</span>
               </div>
               <ManualCuttingEditor
                 pieces={pieces}
@@ -821,58 +822,58 @@ export default function B2BCuttingPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center">
-        <div className="text-[#9a9a95] text-[14px]">Загрузка заказов...</div>
+      <div className="min-h-screen bg-canvas py-6 px-4">
+        <div className="max-w-6xl mx-auto">
+          <SkeletonRows count={5} />
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] py-6 px-4">
+    <div className="min-h-screen bg-canvas py-6 px-4">
       <div className="max-w-6xl mx-auto space-y-6">
 
         {/* Header */}
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-[22px] font-bold text-[#111110]">Планирование раскроя</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-1">Выберите заказы → авто-раскрой + редактор ручной раскладки</p>
-          </div>
-          <a href="/admin/cutting-settings" className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">⚙ Настройки раскроя</a>
-        </div>
+        <PageHeader
+          title="Планирование раскроя"
+          subtitle="Выберите заказы → авто-раскрой + редактор ручной раскладки"
+          actions={
+            <a href="/admin/cutting-settings" className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">⚙ Настройки раскроя</a>
+          }
+        />
 
         {/* Settings bar */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex flex-wrap items-center gap-4 text-[12px]">
-          <span className="font-semibold text-[#4b4b47]">Параметры:</span>
-          <span className="text-[#6b6b66]">Зазор <b>{settings.gap_between_pieces} мм</b></span>
-          <span className="text-[#6b6b66]">Кромка <b>{settings.edge_margin} мм</b></span>
-          <span className="text-[#6b6b66]">Поворот <b>{settings.allow_rotation ? 'разрешён' : 'запрещён'}</b></span>
-          <span className="text-[#6b6b66]">Рисунок <b>{settings.respect_pattern ? 'учитывается' : 'игнорируется'}</b></span>
+        <div className="bg-surface rounded-xl border border-line px-4 py-3 flex flex-wrap items-center gap-4 text-[12px]">
+          <span className="font-semibold text-ink-soft">Параметры:</span>
+          <span className="text-ink-soft">Зазор <b className="tabular-nums">{settings.gap_between_pieces} мм</b></span>
+          <span className="text-ink-soft">Кромка <b className="tabular-nums">{settings.edge_margin} мм</b></span>
+          <span className="text-ink-soft">Поворот <b>{settings.allow_rotation ? 'разрешён' : 'запрещён'}</b></span>
+          <span className="text-ink-soft">Рисунок <b>{settings.respect_pattern ? 'учитывается' : 'игнорируется'}</b></span>
         </div>
 
         {/* Filter toggle */}
         <div className="flex items-center gap-2">
           <button onClick={() => setShowAll(false)}
             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
-              !showAll ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#f5f5f3]'
+              !showAll ? 'bg-blue-600 text-white border-blue-600' : 'bg-surface text-ink-soft border-line hover:bg-canvas'
             }`}
           >Ждут материала ({needsMaterialCount})</button>
           <button onClick={() => setShowAll(true)}
             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
-              showAll ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#f5f5f3]'
+              showAll ? 'bg-blue-600 text-white border-blue-600' : 'bg-surface text-ink-soft border-line hover:bg-canvas'
             }`}
           >Все активные ({orders.length})</button>
           <div className="ml-auto flex items-center gap-2">
             <button onClick={selectAll} className="text-[11px] text-blue-600 hover:underline">Выбрать все</button>
-            <span className="text-[#d0d0cc]">·</span>
-            <button onClick={clearAll} className="text-[11px] text-[#9a9a95] hover:underline">Снять</button>
+            <span className="text-faint">·</span>
+            <button onClick={clearAll} className="text-[11px] text-muted hover:underline">Снять</button>
           </div>
         </div>
 
         {/* Orders list */}
         {visibleOrders.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center text-[14px] text-[#9a9a95]">
-            Нет заказов, ожидающих материала
-          </div>
+          <EmptyState title="Нет заказов, ожидающих материала" />
         ) : (
           <div className="space-y-2">
             {visibleOrders.map(order => {
@@ -884,19 +885,19 @@ export default function B2BCuttingPage() {
               }
               return (
                 <div key={order.id} onClick={() => toggleOrder(order.id)}
-                  className={`bg-white rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm ${
-                    sel ? 'border-blue-400 bg-blue-50/30' : 'border-[#e4e4e0] hover:border-[#c4c4be]'
+                  className={`bg-surface rounded-xl border-2 transition-all cursor-pointer hover:shadow-sm ${
+                    sel ? 'border-blue-400 bg-blue-50/30' : 'border-line hover:border-faint'
                   }`}
                 >
                   <div className="px-4 py-3 flex items-center gap-3">
                     <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
-                      sel ? 'bg-blue-600 border-blue-600' : 'border-[#c4c4be] bg-white'
+                      sel ? 'bg-blue-600 border-blue-600' : 'border-faint bg-surface'
                     }`}>
                       {sel && <svg width="10" height="8" viewBox="0 0 10 8" fill="none"><path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/></svg>}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[14px] font-semibold text-[#111110]">{order.client_name}</span>
+                        <span className="text-[14px] font-semibold text-ink">{order.client_name}</span>
                         {order.materialOrdered
                           ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 border border-emerald-200">Материал заказан</span>
                           : <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">Ждёт материала</span>
@@ -904,14 +905,14 @@ export default function B2BCuttingPage() {
                       </div>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1">
                         {Array.from(matSummary.entries()).map(([k, qty]) => (
-                          <span key={k} className="text-[11px] text-[#6b6b66]">{k} · {qty} шт</span>
+                          <span key={k} className="text-[11px] text-ink-soft tabular-nums">{k} · {qty} шт</span>
                         ))}
                       </div>
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <div className="text-[12px] text-[#6b6b66]">{order.totalPieces} {order.totalPieces === 1 ? 'деталь' : order.totalPieces < 5 ? 'детали' : 'деталей'}</div>
-                      <div className="text-[11px] text-[#9a9a95]">{order.totalAreaNet.toFixed(2)} м²</div>
-                      <div className="text-[11px] text-[#9a9a95]">{new Date(order.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</div>
+                      <div className="text-[12px] text-ink-soft tabular-nums">{order.totalPieces} {order.totalPieces === 1 ? 'деталь' : order.totalPieces < 5 ? 'детали' : 'деталей'}</div>
+                      <div className="text-[11px] text-muted tabular-nums">{order.totalAreaNet.toFixed(2)} м²</div>
+                      <div className="text-[11px] text-muted tabular-nums">{new Date(order.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</div>
                     </div>
                   </div>
                 </div>
@@ -939,7 +940,7 @@ export default function B2BCuttingPage() {
                 ) : '⚡ Оптимизировать'}
               </button>
               <button onClick={savePlan} disabled={saving}
-                className="px-4 py-3 bg-white border border-[#e4e4e0] text-[#4b4b47] rounded-xl text-[13px] font-medium hover:bg-[#f5f5f3] disabled:opacity-50 transition-colors"
+                className="px-4 py-3 bg-surface border border-line text-ink-soft rounded-xl text-[13px] font-medium hover:bg-canvas disabled:opacity-50 transition-colors"
               >
                 {saving ? 'Сохраняю...' : savedId ? '✓ Сохранено' : 'Сохранить план'}
               </button>
@@ -959,15 +960,15 @@ export default function B2BCuttingPage() {
               const totalStrategies = results.reduce((s, r) => s + (r.strategiesChecked ?? 0), 0)
               return (
                 <div className={`rounded-xl px-4 py-3 border flex items-center gap-3 text-[13px] ${
-                  saved > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-[#f5f5f3] border-[#e4e4e0] text-[#6b6b66]'
+                  saved > 0 ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-canvas border-line text-ink-soft'
                 }`}>
                   <span className="text-[20px]">{saved > 0 ? '🎉' : '✓'}</span>
                   <div>
                     {saved > 0
-                      ? <span className="font-semibold">Оптимизация сэкономила <b>{saved} {saved === 1 ? 'лист' : saved < 5 ? 'листа' : 'листов'}</b> ({prevSheets} → {curSheets})</span>
+                      ? <span className="font-semibold">Оптимизация сэкономила <b className="tabular-nums">{saved} {saved === 1 ? 'лист' : saved < 5 ? 'листа' : 'листов'}</b> ({prevSheets} → {curSheets})</span>
                       : <span className="font-semibold">Исходный раскрой уже оптимален</span>
                     }
-                    <span className="ml-2 text-[11px] opacity-70">перебрано {totalStrategies} вариантов</span>
+                    <span className="ml-2 text-[11px] opacity-70 tabular-nums">перебрано {totalStrategies} вариантов</span>
                   </div>
                 </div>
               )
@@ -991,79 +992,79 @@ export default function B2BCuttingPage() {
             })()}
 
             {/* Purchase summary */}
-            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-              <div className="px-4 py-3 border-b border-[#f0f0ec] bg-[#fafaf9] flex items-center justify-between gap-2">
-                <h2 className="text-[15px] font-bold text-[#111110]">Список закупки</h2>
+            <div className="bg-surface rounded-xl border border-line overflow-hidden">
+              <div className="px-4 py-3 border-b border-line-soft bg-subtle flex items-center justify-between gap-2">
+                <h2 className="text-[15px] font-semibold text-ink">Список закупки</h2>
                 <div className="flex items-center gap-2">
                   <button onClick={savePurchaseRequest} disabled={savingProc || procSaved}
-                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-50 transition-colors whitespace-nowrap">
+                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-ink hover:text-ink disabled:opacity-50 transition-colors whitespace-nowrap">
                     {procSaved ? '✓ В закупках' : savingProc ? 'Сохранение…' : 'Сохранить в закупки'}
                   </button>
                   <button onClick={printSupplierRequest}
-                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                    className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                     🖨 Заявка поставщику
                   </button>
                 </div>
               </div>
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-[#f0f0ec]">
-                    <th className="px-4 py-2.5 text-left text-[#9a9a95] font-medium">Материал</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Листов</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Размер листа</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Деталей</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">КПД</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium whitespace-nowrap" title="На складе / докупить">Склад</th>
-                    <th className="px-4 py-2.5 text-center text-[#9a9a95] font-medium">Рисунок</th>
-                    <th className="px-4 py-2.5 text-right text-[#9a9a95] font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>
+                  <tr className="border-b border-line-soft">
+                    <th className="px-4 py-2.5 text-left text-muted font-medium">Материал</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium">Листов</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium">Размер листа</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium">Деталей</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium">КПД</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium whitespace-nowrap" title="На складе / докупить">Склад</th>
+                    <th className="px-4 py-2.5 text-center text-muted font-medium">Рисунок</th>
+                    <th className="px-4 py-2.5 text-right text-muted font-medium whitespace-nowrap" title="Ориентировочная себестоимость листов">Ориентир. ₽</th>
                   </tr>
                 </thead>
                 <tbody>
                   {results.map(r => (
-                    <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9]">
-                      <td className="px-4 py-3 font-semibold text-[#111110]">{r.materialLabel}</td>
+                    <tr key={r.materialKey} className="border-b border-line-soft last:border-0 hover:bg-subtle">
+                      <td className="px-4 py-3 font-semibold text-ink">{r.materialLabel}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className="font-bold text-blue-700 text-[15px]">{r.sheetsNeeded}</span>
-                        <span className="text-[#9a9a95] ml-1">{r.sheetsNeeded === 1 ? 'лист' : r.sheetsNeeded < 5 ? 'листа' : 'листов'}</span>
+                        <span className="font-semibold text-blue-700 text-[15px] tabular-nums">{r.sheetsNeeded}</span>
+                        <span className="text-muted ml-1">{r.sheetsNeeded === 1 ? 'лист' : r.sheetsNeeded < 5 ? 'листа' : 'листов'}</span>
                       </td>
-                      <td className="px-4 py-3 text-center text-[#6b6b66] font-mono text-[12px]">{r.sheetWidth}×{r.sheetHeight}</td>
-                      <td className="px-4 py-3 text-center text-[#6b6b66]">{r.totalPieces}</td>
+                      <td className="px-4 py-3 text-center text-ink-soft font-mono text-[12px] tabular-nums">{r.sheetWidth}×{r.sheetHeight}</td>
+                      <td className="px-4 py-3 text-center text-ink-soft tabular-nums">{r.totalPieces}</td>
                       <td className="px-4 py-3 text-center">
-                        <span className={`text-[12px] font-semibold ${
+                        <span className={`text-[12px] font-semibold tabular-nums ${
                           r.avgEfficiency >= 70 ? 'text-emerald-600' : r.avgEfficiency >= 50 ? 'text-amber-600' : 'text-red-600'
                         }`}>{r.avgEfficiency}%</span>
                       </td>
                       <td className="px-4 py-3 text-center text-[12px] whitespace-nowrap">
                         {(() => { const { stock, toBuy } = stockInfo(r); return (
                           <>
-                            <span className="text-[#6b6b66]">скл. {stock % 1 === 0 ? stock : stock.toFixed(1)}</span>
+                            <span className="text-ink-soft tabular-nums">скл. {stock % 1 === 0 ? stock : stock.toFixed(1)}</span>
                             {toBuy > 0
-                              ? <span className="ml-1 font-semibold text-red-600">· докупить {toBuy % 1 === 0 ? toBuy : toBuy.toFixed(1)}</span>
+                              ? <span className="ml-1 font-semibold text-red-600 tabular-nums">· докупить {toBuy % 1 === 0 ? toBuy : toBuy.toFixed(1)}</span>
                               : <span className="ml-1 font-semibold text-emerald-600">· хватает</span>}
                           </>
                         )})()}
                       </td>
-                      <td className="px-4 py-3 text-center text-[#9a9a95] text-[11px]">
+                      <td className="px-4 py-3 text-center text-muted text-[11px]">
                         {r.patternDirection === 'along_length' ? '↔ По длине' : r.patternDirection === 'along_width' ? '↕ По ширине' : '—'}
                       </td>
-                      <td className="px-4 py-3 text-right font-mono text-[#111110] whitespace-nowrap">
+                      <td className="px-4 py-3 text-right font-mono text-ink whitespace-nowrap tabular-nums">
                         {estSheetCost(r) > 0 ? `${estSheetCost(r).toLocaleString('ru-RU')} ₽` : '—'}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <div className="px-4 py-3 bg-[#fafaf9] border-t border-[#f0f0ec] flex flex-wrap gap-4 text-[12px] text-[#6b6b66]">
-                <span>Итого листов: <b className="text-[#111110]">{results.reduce((s, r) => s + r.sheetsNeeded, 0)}</b></span>
-                <span>Деталей: <b className="text-[#111110]">{results.reduce((s, r) => s + r.totalPieces, 0)}</b></span>
-                <span>Площадь листов: <b className="text-[#111110]">{(results.reduce((s, r) => s + r.totalSheetArea, 0) / 1_000_000).toFixed(2)} м²</b></span>
-                {(() => { const tot = results.reduce((s, r) => s + estSheetCost(r), 0); return tot > 0 ? <span>Ориентир. себестоимость: <b className="text-[#111110]">{tot.toLocaleString('ru-RU')} ₽</b></span> : null })()}
+              <div className="px-4 py-3 bg-subtle border-t border-line-soft flex flex-wrap gap-4 text-[12px] text-ink-soft">
+                <span>Итого листов: <b className="text-ink tabular-nums">{results.reduce((s, r) => s + r.sheetsNeeded, 0)}</b></span>
+                <span>Деталей: <b className="text-ink tabular-nums">{results.reduce((s, r) => s + r.totalPieces, 0)}</b></span>
+                <span>Площадь листов: <b className="text-ink tabular-nums">{(results.reduce((s, r) => s + r.totalSheetArea, 0) / 1_000_000).toFixed(2)} м²</b></span>
+                {(() => { const tot = results.reduce((s, r) => s + estSheetCost(r), 0); return tot > 0 ? <span>Ориентир. себестоимость: <b className="text-ink tabular-nums">{tot.toLocaleString('ru-RU')} ₽</b></span> : null })()}
               </div>
             </div>
 
             {/* Per-material cutting layouts */}
             <div className="space-y-3">
-              <h2 className="text-[15px] font-bold text-[#111110]">Карты раскроя</h2>
+              <h2 className="text-[15px] font-semibold text-ink">Карты раскроя</h2>
               {results.map(r => (
                 <MaterialSection
                   key={r.materialKey}
