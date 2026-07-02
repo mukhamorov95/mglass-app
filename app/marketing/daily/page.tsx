@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { PageHeader } from '@/components/ds'
 
 type ReelsIdea = { topic: string; hook: string; why_today: string }
 type TopReel = { title: string; hook: string; structure_summary: string; narrator_text: string; cta: string }
@@ -26,8 +27,8 @@ function copyToClipboard(text: string) {
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-      <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-3">{title}</p>
+    <div className="bg-surface border border-line rounded-xl p-5">
+      <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">{title}</p>
       {children}
     </div>
   )
@@ -102,35 +103,31 @@ export default function DailyPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       {/* Header */}
-      <div className="flex items-start justify-between mb-6">
-        <div>
-          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Дневная контент-машина</h1>
-          <p className="text-[13px] text-[#6b6b66] mt-0.5">
-            AI генерирует полный план на день: Reels, Telegram, WhatsApp, B2B, партнёры
-          </p>
-        </div>
-        <div className="flex gap-2 items-center">
+      <PageHeader
+        title="Дневная контент-машина"
+        subtitle="AI генерирует полный план на день: Reels, Telegram, WhatsApp, B2B, партнёры"
+        actions={
           <input
             type="date"
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="border border-line rounded-lg px-3 py-1.5 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
-        </div>
-      </div>
+        }
+      />
 
       {/* Generate button */}
       {!plan && !generating && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center mb-6">
-          <p className="text-[15px] font-semibold text-[#111110] mb-2">
+        <div className="bg-surface border border-line rounded-xl p-8 text-center mb-6">
+          <p className="text-[15px] font-semibold text-ink mb-2">
             {selectedDate === today ? 'Сгенерировать план на сегодня' : `Нет плана на ${selectedDate}`}
           </p>
-          <p className="text-[12px] text-[#8a8a85] mb-5">
+          <p className="text-[12px] text-muted mb-5">
             AI создаёт 3 идеи Reels · полный сценарий · Telegram пост · WhatsApp статус · B2B идею · партнёрское действие
           </p>
           {selectedDate === today && (
             <button onClick={generate}
-              className="px-6 py-3 bg-[#111110] text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] transition-colors">
+              className="px-6 py-3 bg-ink text-white rounded-xl text-[13px] font-semibold hover:bg-[#2a2a28] transition-colors">
               Запустить AI-генерацию
             </button>
           )}
@@ -140,14 +137,14 @@ export default function DailyPage() {
 
       {/* Loading */}
       {generating && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center mb-6">
+        <div className="bg-surface border border-line rounded-xl p-10 text-center mb-6">
           <div className="flex justify-center gap-2 mb-4">
             {[0, 150, 300].map(d => (
               <span key={d} className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${d}ms` }} />
             ))}
           </div>
-          <p className="text-[14px] font-medium text-[#111110] mb-1">AI анализирует день и создаёт контент-план...</p>
-          <p className="text-[12px] text-[#8a8a85]">Обычно занимает 15–30 секунд</p>
+          <p className="text-[14px] font-medium text-ink mb-1">AI анализирует день и создаёт контент-план...</p>
+          <p className="text-[12px] text-muted">Обычно занимает 15–30 секунд</p>
         </div>
       )}
 
@@ -157,7 +154,7 @@ export default function DailyPage() {
           {/* Date + insight */}
           <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl p-5">
             <p className="text-[11px] font-semibold uppercase tracking-wider opacity-80 mb-1">Маркетинговый инсайт дня</p>
-            <p className="text-[15px] font-bold leading-snug">{plan.insight}</p>
+            <p className="text-[15px] font-semibold leading-snug">{plan.insight}</p>
             <p className="text-[11px] opacity-60 mt-2">{plan.date}</p>
           </div>
 
@@ -165,14 +162,14 @@ export default function DailyPage() {
           <Section title="3 идеи для Reels">
             <div className="space-y-3">
               {plan.reels_ideas?.map((idea, i) => (
-                <div key={i} className="border border-[#e4e4e0] rounded-lg p-3">
+                <div key={i} className="border border-line rounded-lg p-3">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
-                      <p className="text-[13px] font-semibold text-[#111110]">{idea.topic}</p>
+                      <p className="text-[13px] font-semibold text-ink">{idea.topic}</p>
                       <p className="text-[12px] text-blue-600 mt-0.5">"{idea.hook}"</p>
-                      <p className="text-[11px] text-[#8a8a85] mt-1">{idea.why_today}</p>
+                      <p className="text-[11px] text-muted mt-1">{idea.why_today}</p>
                     </div>
-                    <span className="w-7 h-7 rounded-full bg-[#111110] text-white flex items-center justify-center text-[12px] font-bold flex-shrink-0">
+                    <span className="w-7 h-7 rounded-full bg-ink text-white flex items-center justify-center text-[12px] font-semibold flex-shrink-0">
                       {i + 1}
                     </span>
                   </div>
@@ -186,23 +183,23 @@ export default function DailyPage() {
             <Section title="Топ-сценарий дня (готов к съёмке)">
               <div className="space-y-3">
                 <div>
-                  <p className="text-[11px] text-[#8a8a85]">Название</p>
-                  <p className="text-[15px] font-bold text-[#111110]">{plan.top_reel_script.title}</p>
+                  <p className="text-[11px] text-muted">Название</p>
+                  <p className="text-[15px] font-semibold text-ink">{plan.top_reel_script.title}</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[#8a8a85]">Хук</p>
+                  <p className="text-[11px] text-muted">Хук</p>
                   <p className="text-[13px] font-semibold text-blue-700">"{plan.top_reel_script.hook}"</p>
                 </div>
                 <div>
-                  <p className="text-[11px] text-[#8a8a85] mb-1">Структура</p>
-                  <p className="text-[12px] text-[#6b6b66]">{plan.top_reel_script.structure_summary}</p>
+                  <p className="text-[11px] text-muted mb-1">Структура</p>
+                  <p className="text-[12px] text-ink-soft">{plan.top_reel_script.structure_summary}</p>
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <p className="text-[11px] text-[#8a8a85]">Текст диктора</p>
+                    <p className="text-[11px] text-muted">Текст диктора</p>
                     <CopyBtn text={plan.top_reel_script.narrator_text} />
                   </div>
-                  <pre className="text-[12px] text-[#111110] whitespace-pre-wrap bg-[#f8f8f6] rounded-lg p-3 font-sans leading-relaxed">
+                  <pre className="text-[12px] text-ink whitespace-pre-wrap bg-subtle rounded-lg p-3 font-sans leading-relaxed">
                     {plan.top_reel_script.narrator_text}
                   </pre>
                 </div>
@@ -219,14 +216,14 @@ export default function DailyPage() {
             <Section title="Telegram пост">
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex-1">
-                  <pre className="text-[12px] text-[#111110] whitespace-pre-wrap font-sans bg-[#f0f8ff] rounded-lg p-3">
+                  <pre className="text-[12px] text-ink whitespace-pre-wrap font-sans bg-[#f0f8ff] rounded-lg p-3">
                     {plan.telegram_post.text}
                   </pre>
                 </div>
                 <CopyBtn text={plan.telegram_post.text} />
               </div>
               {plan.telegram_post.cta && (
-                <p className="text-[11px] text-[#8a8a85]">CTA: {plan.telegram_post.cta}</p>
+                <p className="text-[11px] text-muted">CTA: {plan.telegram_post.cta}</p>
               )}
             </Section>
           )}
@@ -235,7 +232,7 @@ export default function DailyPage() {
           {plan.whatsapp_status && (
             <Section title="WhatsApp статус">
               <div className="flex items-start justify-between gap-2">
-                <pre className="flex-1 text-[12px] text-[#111110] whitespace-pre-wrap font-sans bg-[#f0fff4] rounded-lg p-3">
+                <pre className="flex-1 text-[12px] text-ink whitespace-pre-wrap font-sans bg-[#f0fff4] rounded-lg p-3">
                   {plan.whatsapp_status.text}
                 </pre>
                 <CopyBtn text={plan.whatsapp_status.text} />
@@ -251,7 +248,7 @@ export default function DailyPage() {
                   <span className="text-[11px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded font-medium flex-shrink-0">
                     {plan.b2b_idea.format}
                   </span>
-                  <p className="text-[13px] font-semibold text-[#111110]">{plan.b2b_idea.topic}</p>
+                  <p className="text-[13px] font-semibold text-ink">{plan.b2b_idea.topic}</p>
                 </div>
                 <p className="text-[12px] text-blue-600">"{plan.b2b_idea.hook}"</p>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
@@ -265,13 +262,13 @@ export default function DailyPage() {
           {/* Partner */}
           {plan.partner_action && (
             <Section title="Партнёрская программа — сегодня">
-              <p className="text-[12px] text-[#6b6b66] mb-3">{plan.partner_action.description}</p>
+              <p className="text-[12px] text-ink-soft mb-3">{plan.partner_action.description}</p>
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Шаблон сообщения</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Шаблон сообщения</p>
                   <CopyBtn text={plan.partner_action.message_template} />
                 </div>
-                <pre className="text-[12px] text-[#111110] whitespace-pre-wrap font-sans bg-[#f8f8f6] rounded-lg p-3 border border-[#e4e4e0]">
+                <pre className="text-[12px] text-ink whitespace-pre-wrap font-sans bg-subtle rounded-lg p-3 border border-line">
                   {plan.partner_action.message_template}
                 </pre>
               </div>
@@ -281,10 +278,10 @@ export default function DailyPage() {
           {/* Regenerate */}
           <div className="flex gap-3 pt-2">
             <button onClick={generate} disabled={generating}
-              className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[12px] hover:bg-[#f4f4f0] disabled:opacity-50 transition-colors">
+              className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[12px] hover:bg-canvas disabled:opacity-50 transition-colors">
               Перегенерировать
             </button>
-            <p className="text-[11px] text-[#8a8a85] self-center">
+            <p className="text-[11px] text-muted self-center">
               Новая генерация заменит текущий план для даты {plan.date}
             </p>
           </div>

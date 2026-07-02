@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { PageHeader } from '@/components/ds'
 
 const SECTIONS = [
   {
@@ -48,11 +49,11 @@ export default function MarketingCenterPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Маркетинг</p>
-        <h1 className="text-[28px] font-bold text-[#111110] tracking-tight">Marketing Center</h1>
-        <p className="text-[15px] text-[#6b6b66] mt-1">
-          Контент-машина MGlass — лиды, партнёры, бренд и рост до 1 млрд ₽
-        </p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Маркетинг</p>
+        <PageHeader
+          title="Marketing Center"
+          subtitle="Контент-машина MGlass — лиды, партнёры, бренд и рост до 1 млрд ₽"
+        />
       </div>
 
       {/* Quick links */}
@@ -60,17 +61,17 @@ export default function MarketingCenterPage() {
         {SECTIONS.map(section => (
           <div key={section.title}>
             <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-[13px] font-bold text-[#111110]">{section.title}</h2>
-              <div className="flex-1 h-px bg-[#e4e4e0]" />
+              <h2 className="text-[13px] font-semibold text-ink">{section.title}</h2>
+              <div className="flex-1 h-px bg-line" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {section.items.map(item => (
                 <Link key={item.href} href={item.href}
-                  className={`flex items-start gap-3 bg-white border-2 ${section.color} rounded-xl p-4 hover:shadow-md transition-all group`}>
+                  className={`flex items-start gap-3 bg-surface border-2 ${section.color} rounded-xl p-4 hover:shadow-md transition-all group`}>
                   <span className="text-xl mt-0.5 flex-shrink-0">{item.emoji}</span>
                   <div>
-                    <p className="text-[14px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors">{item.label}</p>
-                    <p className="text-[12px] text-[#6b6b66] mt-0.5 leading-snug">{item.desc}</p>
+                    <p className="text-[14px] font-semibold text-ink group-hover:text-blue-600 transition-colors">{item.label}</p>
+                    <p className="text-[12px] text-ink-soft mt-0.5 leading-snug">{item.desc}</p>
                   </div>
                 </Link>
               ))}
@@ -82,17 +83,17 @@ export default function MarketingCenterPage() {
       {/* Strategy timeline */}
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[13px] font-bold text-[#111110]">Стратегия роста → 1 млрд ₽</h2>
-          <div className="flex-1 h-px bg-[#e4e4e0]" />
+          <h2 className="text-[13px] font-semibold text-ink">Стратегия роста → 1 млрд ₽</h2>
+          <div className="flex-1 h-px bg-line" />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {STRATEGY.map(s => (
-            <div key={s.title} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <div key={s.title} className="bg-surface border border-line rounded-xl p-4">
               <div className="flex items-center gap-2 mb-2">
                 <span className="text-lg">{s.icon}</span>
-                <span className="text-[14px] font-semibold text-[#111110]">{s.title}</span>
+                <span className="text-[14px] font-semibold text-ink">{s.title}</span>
               </div>
-              <p className="text-[12px] text-[#6b6b66] leading-relaxed">{s.desc}</p>
+              <p className="text-[12px] text-ink-soft leading-relaxed">{s.desc}</p>
             </div>
           ))}
         </div>
@@ -101,17 +102,17 @@ export default function MarketingCenterPage() {
       {/* Channels */}
       <div>
         <div className="flex items-center gap-3 mb-4">
-          <h2 className="text-[13px] font-bold text-[#111110]">Ключевые каналы</h2>
-          <div className="flex-1 h-px bg-[#e4e4e0]" />
+          <h2 className="text-[13px] font-semibold text-ink">Ключевые каналы</h2>
+          <div className="flex-1 h-px bg-line" />
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {CHANNELS.map(c => (
-            <div key={c.label} className="bg-[#fafaf8] border border-[#e4e4e0] rounded-xl p-3">
+            <div key={c.label} className="bg-subtle border border-line rounded-xl p-3">
               <div className="flex items-center gap-2 mb-1">
                 <span>{c.icon}</span>
-                <span className="text-[13px] font-semibold text-[#111110]">{c.label}</span>
+                <span className="text-[13px] font-semibold text-ink">{c.label}</span>
               </div>
-              <p className="text-[12px] text-[#6b6b66]">{c.desc}</p>
+              <p className="text-[12px] text-ink-soft">{c.desc}</p>
             </div>
           ))}
         </div>

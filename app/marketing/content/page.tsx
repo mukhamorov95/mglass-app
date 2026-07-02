@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { PageHeader, SelectField, EmptyState, Field } from '@/components/ds'
 
 type ContentItem = {
   id: number
@@ -129,33 +130,31 @@ export default function ContentPlanPage() {
     (catFilter === 'all' || x.category === catFilter)
   )
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
 
-      <div className="mb-6 flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Контент-план</h1>
-          <p className="text-[13px] text-[#6b6b66] mt-1">{items.length} единиц контента</p>
-        </div>
-        <button onClick={startNew} className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
-          + Добавить
-        </button>
-      </div>
+      <PageHeader
+        title="Контент-план"
+        subtitle={`${items.length} единиц контента`}
+        actions={
+          <button onClick={startNew} className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#2a2a28] transition-colors">
+            + Добавить
+          </button>
+        }
+      />
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2 mb-5">
-        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-          className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] bg-white text-[#111110]">
+        <SelectField value={statusFilter} onChange={e => setStatusFilter(e.target.value)}>
           <option value="all">Все статусы</option>
           {STATUSES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
-        </select>
-        <select value={catFilter} onChange={e => setCatFilter(e.target.value)}
-          className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] bg-white text-[#111110]">
+        </SelectField>
+        <SelectField value={catFilter} onChange={e => setCatFilter(e.target.value)}>
           <option value="all">Все категории</option>
           {CATEGORIES.map(c => <option key={c.v} value={c.v}>{c.l}</option>)}
-        </select>
+        </SelectField>
       </div>
 
       {/* Stats bar */}
@@ -174,33 +173,33 @@ export default function ContentPlanPage() {
       {/* Items */}
       <div className="space-y-2">
         {filtered.length === 0 && (
-          <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет записей. Нажмите «+ Добавить».</div>
+          <EmptyState title="Нет записей" hint="Нажмите «+ Добавить»." />
         )}
         {filtered.map(item => (
-          <div key={item.id} className="bg-white border border-[#e4e4e0] rounded-xl">
+          <div key={item.id} className="bg-surface border border-line rounded-xl">
             <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === item.id ? null : item.id)}>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg(item.status).cls}`}>
                 {statusCfg(item.status).l}
               </span>
-              <span className="text-[13px] font-medium text-[#111110] truncate flex-1">{item.topic}</span>
+              <span className="text-[13px] font-medium text-ink truncate flex-1">{item.topic}</span>
               <div className="flex items-center gap-2 flex-shrink-0">
-                {item.platform && <span className="text-[11px] bg-[#f0f0ec] text-[#6b6b66] px-2 py-0.5 rounded">{platLabel(item.platform)}</span>}
-                <span className="text-[11px] bg-[#f5f5f0] text-[#6b6b66] px-2 py-0.5 rounded">{catLabel(item.category)}</span>
+                {item.platform && <span className="text-[11px] bg-line-soft text-ink-soft px-2 py-0.5 rounded">{platLabel(item.platform)}</span>}
+                <span className="text-[11px] bg-line-soft text-ink-soft px-2 py-0.5 rounded">{catLabel(item.category)}</span>
                 <button onClick={e => { e.stopPropagation(); advanceStatus(item) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors">
                   →
                 </button>
                 <button onClick={e => { e.stopPropagation(); startEdit(item) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors">
                   Ред.
                 </button>
                 <button onClick={e => { e.stopPropagation(); del(item.id) }}
                   className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:text-red-600 transition-colors">✕</button>
-                <span className="text-[#c0c0bb] text-sm">{expanded === item.id ? '▲' : '▼'}</span>
+                <span className="text-faint text-sm">{expanded === item.id ? '▲' : '▼'}</span>
               </div>
             </div>
             {expanded === item.id && (
-              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[12px]">
+              <div className="border-t border-line-soft px-4 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-2 gap-4 text-[12px]">
                 {[
                   ['Цель', item.goal],
                   ['Хук', item.hook],
@@ -209,14 +208,14 @@ export default function ContentPlanPage() {
                   ['Дата', item.publish_date],
                 ].map(([label, val]) => val ? (
                   <div key={label as string}>
-                    <p className="text-[#8a8a85] font-medium mb-0.5">{label}</p>
-                    <p className="text-[#111110] leading-relaxed">{val}</p>
+                    <p className="text-muted font-medium mb-0.5">{label}</p>
+                    <p className="text-ink leading-relaxed">{val}</p>
                   </div>
                 ) : null)}
                 {item.body && (
                   <div className="sm:col-span-2">
-                    <p className="text-[#8a8a85] font-medium mb-0.5">Текст поста</p>
-                    <pre className="text-[#111110] leading-relaxed whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-3">{item.body}</pre>
+                    <p className="text-muted font-medium mb-0.5">Текст поста</p>
+                    <pre className="text-ink leading-relaxed whitespace-pre-wrap font-sans bg-subtle rounded-lg p-3">{item.body}</pre>
                   </div>
                 )}
               </div>
@@ -228,23 +227,21 @@ export default function ContentPlanPage() {
       {/* Form modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editId ? 'Редактировать' : 'Новая единица контента'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">{editId ? 'Редактировать' : 'Новая единица контента'}</h2>
             <div className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Категория</label>
-                  <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] bg-white">
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Категория</label>
+                  <SelectField value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))} className="w-full">
                     {CATEGORIES.map(c => <option key={c.v} value={c.v}>{c.l}</option>)}
-                  </select>
+                  </SelectField>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Платформа</label>
-                  <select value={form.platform ?? ''} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] bg-white">
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Платформа</label>
+                  <SelectField value={form.platform ?? ''} onChange={e => setForm(f => ({ ...f, platform: e.target.value }))} className="w-full">
                     {PLATFORMS.map(p => <option key={p.v} value={p.v}>{p.l}</option>)}
-                  </select>
+                  </SelectField>
                 </div>
               </div>
               {[
@@ -255,42 +252,41 @@ export default function ContentPlanPage() {
                 { key: 'video_idea', label: 'Идея видео', placeholder: 'Съёмка в цеху, показываем стекло' },
               ].map(({ key, label, placeholder }) => (
                 <div key={key}>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">{label}</label>
-                  <input type="text" value={(form as Record<string, string | null>)[key] ?? ''}
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">{label}</label>
+                  <Field type="text" value={(form as Record<string, string | null>)[key] ?? ''}
                     onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
                     placeholder={placeholder}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full" />
                 </div>
               ))}
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Текст поста</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Текст поста</label>
                 <textarea value={form.body ?? ''} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                   rows={4} placeholder="Полный текст для публикации..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Статус</label>
-                  <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] bg-white">
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Статус</label>
+                  <SelectField value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))} className="w-full">
                     {STATUSES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
-                  </select>
+                  </SelectField>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Дата публикации</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Дата публикации</label>
                   <input type="date" value={form.publish_date ?? ''}
                     onChange={e => setForm(f => ({ ...f, publish_date: e.target.value || null }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[12px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#2a2a28] disabled:opacity-50 transition-colors">
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
             </div>
