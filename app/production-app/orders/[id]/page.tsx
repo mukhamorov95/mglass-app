@@ -143,19 +143,19 @@ function ProblemModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b border-[#f0f0ec]">
+        <div className="px-5 pt-5 pb-3 border-b border-line-soft">
           <div className="flex items-center justify-between mb-0.5">
-            <h2 className="text-[16px] font-bold text-[#111110]">Фиксация проблемы</h2>
-            <button onClick={onCancel} className="p-1 -mr-1 text-[#9a9a95] hover:text-[#111110] transition-colors">
+            <h2 className="text-[16px] font-semibold text-ink">Фиксация проблемы</h2>
+            <button onClick={onCancel} className="p-1 -mr-1 text-muted hover:text-ink transition-colors">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <p className="text-[12px] text-[#9a9a95]">
+          <p className="text-[12px] text-muted">
             {itemCount} {itemCount === 1 ? 'позиция' : itemCount < 5 ? 'позиции' : 'позиций'}
           </p>
         </div>
@@ -164,7 +164,7 @@ function ProblemModal({
 
           {/* Reason list */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Причина</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-2">Причина</p>
             <div className="space-y-1.5">
               {PROBLEM_REASONS.map(r => (
                 <button
@@ -173,7 +173,7 @@ function ProblemModal({
                   className={`w-full text-left px-3.5 py-2.5 rounded-xl text-[13px] font-medium border transition-all ${
                     reason === r
                       ? 'border-red-400 bg-red-50 text-red-700'
-                      : 'border-[#e8e8e4] bg-[#fafaf9] text-[#3a3a35] hover:border-[#c4c4be] hover:bg-white'
+                      : 'border-line bg-subtle text-ink hover:border-faint hover:bg-surface'
                   }`}
                 >
                   {reason === r && (
@@ -187,13 +187,13 @@ function ProblemModal({
 
           {/* Comment */}
           <div>
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Комментарий (необязательно)</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-2">Комментарий (необязательно)</p>
             <textarea
               value={note}
               onChange={e => setNote(e.target.value)}
               rows={2}
               placeholder="Уточните деталь, номер позиции и т.д."
-              className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8e4] bg-[#fafaf9] text-[13px] text-[#111110] placeholder-[#c4c4be] resize-none focus:outline-none focus:border-[#9a9a95]"
+              className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-subtle text-[13px] text-ink placeholder-faint resize-none focus:outline-none focus:border-muted"
             />
           </div>
         </div>
@@ -203,7 +203,7 @@ function ProblemModal({
           <button
             onClick={onCancel}
             disabled={saving}
-            className="flex-1 py-3 rounded-xl border border-[#e8e8e4] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f4f4f0] transition-colors"
+            className="flex-1 py-3 rounded-xl border border-line text-[13px] font-medium text-ink-soft hover:bg-line-soft transition-colors"
           >
             Отмена
           </button>
@@ -241,23 +241,23 @@ function UndoModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-[2px]">
-      <div className="w-full max-w-sm bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-surface rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden">
 
         {/* Header */}
-        <div className="px-5 pt-5 pb-3 border-b border-[#f0f0ec]">
+        <div className="px-5 pt-5 pb-3 border-b border-line-soft">
           <div className="flex items-center justify-between mb-0.5">
-            <h2 className="text-[16px] font-bold text-[#111110]">Отменить отметку</h2>
-            <button onClick={onCancel} className="p-1 -mr-1 text-[#9a9a95] hover:text-[#111110] transition-colors">
+            <h2 className="text-[16px] font-semibold text-ink">Отменить отметку</h2>
+            <button onClick={onCancel} className="p-1 -mr-1 text-muted hover:text-ink transition-colors">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round">
                 <path d="M18 6L6 18M6 6l12 12" />
               </svg>
             </button>
           </div>
-          <p className="text-[12px] text-[#9a9a95]">{stageLabel}</p>
+          <p className="text-[12px] text-muted">{stageLabel}</p>
         </div>
 
         <div className="px-5 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Причина отмены</p>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-2">Причина отмены</p>
           <textarea
             value={reason}
             onChange={e => setReason(e.target.value)}
@@ -265,7 +265,7 @@ function UndoModal({
             autoFocus
             rows={3}
             placeholder="Например: ошибочная отметка, перепутали позицию..."
-            className="w-full px-3.5 py-2.5 rounded-xl border border-[#e8e8e4] bg-[#fafaf9] text-[13px] text-[#111110] placeholder-[#c4c4be] resize-none focus:outline-none focus:border-[#9a9a95]"
+            className="w-full px-3.5 py-2.5 rounded-xl border border-line bg-subtle text-[13px] text-ink placeholder-faint resize-none focus:outline-none focus:border-muted"
           />
         </div>
 
@@ -273,7 +273,7 @@ function UndoModal({
           <button
             onClick={onCancel}
             disabled={saving}
-            className="flex-1 py-3 rounded-xl border border-[#e8e8e4] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f4f4f0] transition-colors"
+            className="flex-1 py-3 rounded-xl border border-line text-[13px] font-medium text-ink-soft hover:bg-line-soft transition-colors"
           >
             Отмена
           </button>
@@ -282,8 +282,8 @@ function UndoModal({
             disabled={saving || !reason.trim()}
             className={`flex-1 py-3 rounded-xl text-[13px] font-semibold transition-all ${
               saving || !reason.trim()
-                ? 'bg-[#f0f0ec] text-[#c4c4be] cursor-not-allowed'
-                : 'bg-[#111110] text-white hover:bg-[#2a2a28] active:bg-[#3a3a38]'
+                ? 'bg-line-soft text-faint cursor-not-allowed'
+                : 'bg-ink text-white hover:bg-[#2a2a28] active:bg-[#3a3a38]'
             }`}
           >
             {saving ? 'Сохранение...' : 'Отменить этап'}
@@ -318,17 +318,17 @@ function ItemCard({
   return (
     <div
       onClick={onToggle}
-      className={`bg-white rounded-xl overflow-hidden cursor-pointer transition-all ${
-        selected ? 'border-2 border-[#111110] shadow-sm' : 'border border-[#e8e8e4]'
+      className={`bg-surface rounded-xl overflow-hidden cursor-pointer transition-all ${
+        selected ? 'border-2 border-ink shadow-sm' : 'border border-line'
       }`}
     >
       {/* Header */}
-      <div className="px-3 py-3 border-b border-[#f0f0ec]">
+      <div className="px-3 py-3 border-b border-line-soft">
         <div className="flex items-start gap-2.5">
 
           {/* Checkbox */}
           <div className={`mt-0.5 flex-shrink-0 w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-            selected ? 'border-[#111110] bg-[#111110]' : 'border-[#d4d4d0] bg-white'
+            selected ? 'border-ink bg-ink' : 'border-faint bg-surface'
           }`}>
             {selected && (
               <svg width="11" height="11" viewBox="0 0 12 12" fill="none">
@@ -342,16 +342,16 @@ function ItemCard({
             <div className="flex items-start justify-between gap-1.5">
               <div>
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className="text-[11px] font-bold text-[#c4c4be]">#{index + 1}</span>
-                  <span className="text-[14px] font-bold text-[#111110] leading-tight">
+                  <span className="text-[11px] font-semibold text-faint">#{index + 1}</span>
+                  <span className="text-[14px] font-semibold text-ink leading-tight">
                     {item.materialName ?? '—'}
                     {item.thickness ? (
-                      <span className="text-[12px] font-normal text-[#6b6b66] ml-1">{item.thickness} мм</span>
+                      <span className="text-[12px] font-normal text-ink-soft ml-1">{item.thickness} мм</span>
                     ) : null}
                   </span>
                 </div>
-                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[12px] text-[#6b6b66]">
-                  <span className="font-mono font-semibold text-[#111110]">
+                <div className="mt-0.5 flex items-center gap-1.5 flex-wrap text-[12px] text-ink-soft tabular-nums">
+                  <span className="font-mono font-semibold text-ink">
                     {item.width ?? '—'}×{item.height ?? '—'}
                   </span>
                   <span>·</span>
@@ -362,7 +362,7 @@ function ItemCard({
                 </div>
               </div>
               {item.category && (
-                <span className="text-[10px] text-[#9a9a95] bg-[#f4f4f0] px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
+                <span className="text-[11px] text-muted bg-line-soft px-1.5 py-0.5 rounded flex-shrink-0 mt-0.5">
                   {item.category}
                 </span>
               )}
@@ -371,7 +371,7 @@ function ItemCard({
             {tags.length > 0 && (
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {tags.map((tag, ti) => (
-                  <span key={ti} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
+                  <span key={ti} className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${
                     tag === 'Закалка'
                       ? 'bg-orange-50 text-orange-700 border border-orange-200'
                       : 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -381,14 +381,14 @@ function ItemCard({
             )}
 
             {comment && (
-              <p className="mt-1 text-[10px] text-[#8a8a85] italic">{comment}</p>
+              <p className="mt-1 text-[11px] text-muted italic">{comment}</p>
             )}
           </div>
         </div>
       </div>
 
       {/* Stage badges */}
-      <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-[#fafaf9]'}`}>
+      <div className={`px-3 py-2 ${hasProblem ? 'bg-red-50' : 'bg-subtle'}`}>
         <div className="flex gap-1.5 flex-wrap">
           {visibleStages.map(stage => {
             const sd     = stages?.[stage.key]
@@ -396,24 +396,24 @@ function ItemCard({
             return (
               <div key={stage.key} className="flex flex-col items-center gap-0.5">
                 <div className="flex items-center gap-0.5">
-                  <span className={`text-[9px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${
+                  <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${
                     isDone
                       ? 'bg-green-50 text-green-700 border-green-200'
-                      : 'text-[#c4c4be] bg-[#f4f4f0] border-[#e8e8e4]'
+                      : 'text-faint bg-line-soft border-line'
                   }`}>
                     {stage.label}
                   </span>
                   {isDone && sd && onUnsetStage && (
                     <button
                       onClick={e => { e.stopPropagation(); onUnsetStage(stage.key, sd) }}
-                      className="text-[9px] text-[#c4c4be] hover:text-red-400 leading-none px-0.5 transition-colors"
+                      className="text-[11px] text-faint hover:text-red-400 leading-none px-0.5 transition-colors"
                       title="Отменить"
                     >
                       ✕
                     </button>
                   )}
                 </div>
-                <span className={`text-[8px] ${isDone ? 'text-green-600' : 'text-[#c4c4be]'}`}>
+                <span className={`text-[11px] ${isDone ? 'text-green-600' : 'text-faint'}`}>
                   {isDone && sd?.updated_at ? fmtDateShort(sd.updated_at) : isDone ? 'готово' : 'ожидает'}
                 </span>
               </div>
@@ -423,20 +423,20 @@ function ItemCard({
           {hasProblem && (
             <div className="flex flex-col items-center gap-0.5">
               <div className="flex items-center gap-0.5">
-                <span className="text-[9px] font-medium px-1.5 py-0.5 rounded border bg-red-100 text-red-700 border-red-300 whitespace-nowrap">
+                <span className="text-[11px] font-medium px-1.5 py-0.5 rounded border bg-red-100 text-red-700 border-red-300 whitespace-nowrap">
                   Проблема
                 </span>
                 {stages?.problem && onUnsetStage && (
                   <button
                     onClick={e => { e.stopPropagation(); onUnsetStage('problem', stages.problem!) }}
-                    className="text-[9px] text-[#c4c4be] hover:text-red-400 leading-none px-0.5 transition-colors"
+                    className="text-[11px] text-faint hover:text-red-400 leading-none px-0.5 transition-colors"
                     title="Отменить"
                   >
                     ✕
                   </button>
                 )}
               </div>
-              <span className="text-[8px] text-red-500">
+              <span className="text-[11px] text-red-500">
                 {stages?.problem?.updated_at ? fmtDateShort(stages.problem.updated_at) : ''}
               </span>
             </div>
@@ -672,15 +672,15 @@ export default function ProductionOrderPage() {
   // ─── Loading / error states ────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f8f8f7] flex items-center justify-center">
-      <div className="text-[14px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen bg-canvas flex items-center justify-center">
+      <div className="text-[14px] text-muted">Загрузка...</div>
     </div>
   )
 
   if (error || !order) return (
-    <div className="min-h-screen bg-[#f8f8f7] flex items-center justify-center px-4">
+    <div className="min-h-screen bg-canvas flex items-center justify-center px-4">
       <div className="text-center max-w-xs">
-        <p className="text-[15px] font-semibold text-[#111110] mb-2">{error ?? 'Ошибка загрузки'}</p>
+        <p className="text-[15px] font-semibold text-ink mb-2">{error ?? 'Ошибка загрузки'}</p>
         <Link href="/production-app" className="text-[13px] text-blue-600 underline underline-offset-2">
           К списку заказов
         </Link>
@@ -715,7 +715,7 @@ export default function ProductionOrderPage() {
     <>
       {toast && (
         <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-50 px-5 py-2.5 rounded-xl shadow-lg text-[13px] font-semibold whitespace-nowrap pointer-events-none ${
-          toast.ok ? 'bg-[#111110] text-white' : 'bg-red-600 text-white'
+          toast.ok ? 'bg-ink text-white' : 'bg-red-600 text-white'
         }`}>
           {toast.ok ? '✓ ' : '⚠ '}{toast.msg}
         </div>
@@ -748,14 +748,14 @@ export default function ProductionOrderPage() {
         />
       )}
 
-      <div className="min-h-screen bg-[#f8f8f7] pb-32">
+      <div className="min-h-screen bg-canvas pb-32">
 
         {/* Top bar */}
-        <div className="sticky top-0 z-10 bg-white border-b border-[#e4e4e0] px-4 py-3 flex items-center justify-between">
+        <div className="sticky top-0 z-10 bg-surface border-b border-line px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Link
               href="/production-app"
-              className="text-[#6b6b66] hover:text-[#111110] transition-colors p-1 -ml-1"
+              className="text-ink-soft hover:text-ink transition-colors p-1 -ml-1"
               aria-label="Назад"
             >
               <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -763,17 +763,17 @@ export default function ProductionOrderPage() {
               </svg>
             </Link>
             <div>
-              <p className="text-[10px] text-[#9a9a95] uppercase tracking-widest leading-none mb-0.5">Производство</p>
-              <p className="text-[15px] font-bold text-[#111110] leading-none">{orderLabel}</p>
+              <p className="text-[11px] text-muted uppercase tracking-widest leading-none mb-0.5">Производство</p>
+              <p className="text-[15px] font-semibold text-ink leading-none">{orderLabel}</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
             <div className="text-right">
-              <p className="text-[11px] text-[#9a9a95]">
+              <p className="text-[11px] text-muted">
                 {order.items.length}&nbsp;{plural(order.items.length, 'позиция', 'позиции', 'позиций')}
               </p>
               {selectedItems.size > 0 && (
-                <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
+                <p className="text-[11px] font-semibold text-ink">{selectedItems.size} выбрано</p>
               )}
             </div>
             <a
@@ -789,33 +789,33 @@ export default function ProductionOrderPage() {
         <div className="px-4 pt-4 space-y-4">
 
           {/* Order summary */}
-          <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-3 space-y-1.5">
-            <p className="text-[14px] font-bold text-[#111110]">{order.client_name}</p>
+          <div className="bg-surface border border-line rounded-xl px-4 py-3 space-y-1.5">
+            <p className="text-[14px] font-semibold text-ink">{order.client_name}</p>
             {order.client_order_number && (
-              <p className="text-[12px] text-[#6b6b66]">
+              <p className="text-[12px] text-ink-soft">
                 Номер клиента: <span className="font-mono">{order.client_order_number}</span>
               </p>
             )}
             {launchDate && (
-              <p className="text-[12px] text-[#6b6b66]">
+              <p className="text-[12px] text-ink-soft">
                 Запуск: <span className="font-medium text-emerald-700">{launchDate}</span>
                 {pn.production_days && (
-                  <span className="text-[#9a9a95]"> · {pn.production_days} дн.</span>
+                  <span className="text-muted"> · {pn.production_days} дн.</span>
                 )}
               </p>
             )}
-            <div className="flex gap-3 flex-wrap pt-0.5">
-              <span className="text-[12px] text-[#6b6b66]">
-                <span className="font-semibold text-[#111110]">{totalQty}</span> шт
+            <div className="flex gap-3 flex-wrap pt-0.5 tabular-nums">
+              <span className="text-[12px] text-ink-soft">
+                <span className="font-semibold text-ink">{totalQty}</span> шт
               </span>
               {totalArea > 0 && (
-                <span className="text-[12px] text-[#6b6b66]">
-                  <span className="font-semibold text-[#111110]">{totalArea.toFixed(2)}</span> м²
+                <span className="text-[12px] text-ink-soft">
+                  <span className="font-semibold text-ink">{totalArea.toFixed(2)}</span> м²
                 </span>
               )}
               {totalWeight > 0 && (
-                <span className="text-[12px] text-[#6b6b66]">
-                  <span className="font-semibold text-[#111110]">{totalWeight.toFixed(1)}</span> кг
+                <span className="text-[12px] text-ink-soft">
+                  <span className="font-semibold text-ink">{totalWeight.toFixed(1)}</span> кг
                 </span>
               )}
             </div>
@@ -824,7 +824,7 @@ export default function ProductionOrderPage() {
           {/* Items list */}
           <div>
             <div className="flex items-center justify-between mb-2.5 px-0.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Позиции</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Позиции</p>
               {order.items.length > 0 && (
                 <button
                   onClick={() => allSelected
@@ -839,8 +839,8 @@ export default function ProductionOrderPage() {
             </div>
 
             {order.items.length === 0 ? (
-              <div className="bg-white border border-[#e8e8e4] rounded-xl px-4 py-8 text-center">
-                <p className="text-[14px] text-[#9a9a95]">В заказе нет позиций</p>
+              <div className="bg-surface border border-line rounded-xl px-4 py-8 text-center">
+                <p className="text-[14px] text-muted">В заказе нет позиций</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -874,12 +874,12 @@ export default function ProductionOrderPage() {
           {/* Group actions */}
           <div>
             <div className="flex items-center justify-between mb-2.5 px-0.5">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Действия</p>
-              {saving && <span className="text-[11px] text-[#9a9a95]">Сохранение...</span>}
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Действия</p>
+              {saving && <span className="text-[11px] text-muted">Сохранение...</span>}
             </div>
 
             {selectedItems.size === 0 && (
-              <p className="text-[11px] text-[#b0b0aa] mb-2 px-0.5">
+              <p className="text-[11px] text-faint mb-2 px-0.5">
                 Выберите позиции выше, чтобы отметить этап
               </p>
             )}
@@ -900,8 +900,8 @@ export default function ProductionOrderPage() {
                           ? 'border-red-100 text-red-300 bg-red-50 cursor-not-allowed'
                           : 'border-red-300 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200'
                         : isDisabled
-                          ? 'border-[#e8e8e4] text-[#c4c4be] bg-[#f8f8f7] cursor-not-allowed'
-                          : 'border-[#111110] text-[#111110] bg-white hover:bg-[#f4f4f0] active:bg-[#ebebeb] shadow-sm'
+                          ? 'border-line text-faint bg-canvas cursor-not-allowed'
+                          : 'border-ink text-ink bg-surface hover:bg-line-soft active:bg-line shadow-sm'
                     }`}
                   >
                     {action.label}
@@ -914,42 +914,42 @@ export default function ProductionOrderPage() {
           {/* Audit trail */}
           {auditLog.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2.5 px-0.5">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-2.5 px-0.5">
                 История изменений
               </p>
-              <div className="bg-white border border-[#e8e8e4] rounded-xl overflow-hidden divide-y divide-[#f0f0ec]">
+              <div className="bg-surface border border-line rounded-xl overflow-hidden divide-y divide-line-soft">
                 {auditLog.map((entry, i) => (
                   <div key={i} className="px-4 py-3">
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] font-semibold text-[#111110]">
+                        <span className="text-[11px] font-semibold text-ink">
                           Поз.{(entry.item_index ?? 0) + 1}
                         </span>
-                        <span className="text-[10px] text-[#c4c4be]">—</span>
-                        <span className="text-[11px] font-medium text-[#111110]">
+                        <span className="text-[11px] text-faint">—</span>
+                        <span className="text-[11px] font-medium text-ink">
                           {STAGE_LABELS[entry.stage_key] ?? entry.stage_key}
                         </span>
-                        <span className="text-[9px] font-medium px-1.5 py-0.5 rounded border bg-[#f4f4f0] text-[#6b6b66] border-[#e8e8e4]">
+                        <span className="text-[11px] font-medium px-1.5 py-0.5 rounded border bg-line-soft text-ink-soft border-line">
                           отмена
                         </span>
                       </div>
-                      <span className="text-[10px] text-[#9a9a95] whitespace-nowrap flex-shrink-0">
+                      <span className="text-[11px] text-muted whitespace-nowrap flex-shrink-0">
                         {fmtDateTime(entry.created_at)}
                       </span>
                     </div>
                     {entry.reason && (
-                      <p className="text-[11px] text-[#6b6b66] leading-snug mb-0.5">
+                      <p className="text-[11px] text-ink-soft leading-snug mb-0.5">
                         Причина: {entry.reason}
                       </p>
                     )}
                     <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-0.5">
                       {entry.created_by_email && (
-                        <span className="text-[10px] text-[#9a9a95]">
+                        <span className="text-[11px] text-muted">
                           Кто: {entry.created_by_email}
                         </span>
                       )}
                       {entry.previous_value && (
-                        <span className="text-[10px] text-[#9a9a95]">
+                        <span className="text-[11px] text-muted">
                           Было: {entry.previous_value.status === 'done' ? 'выполнено' : 'проблема'}
                           {entry.previous_value.updated_at
                             ? ` от ${fmtDateTime(entry.previous_value.updated_at)}`

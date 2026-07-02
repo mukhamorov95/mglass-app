@@ -71,7 +71,7 @@ function ScriptCard({ script, onUpdate, onDelete }: {
   }
 
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+    <div className="bg-surface border border-line rounded-xl overflow-hidden">
       <div className="px-4 py-3 flex items-start gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
@@ -81,21 +81,21 @@ function ScriptCard({ script, onUpdate, onDelete }: {
             {script.ai_generated && (
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 font-medium">AI</span>
             )}
-            <span className="text-[11px] text-[#8a8a85]">{CONTENT_TYPE_LABELS[script.content_type] ?? script.content_type}</span>
-            <span className="text-[11px] text-[#8a8a85]">· {TOPIC_LABELS[script.topic] ?? script.topic}</span>
+            <span className="text-[11px] text-muted">{CONTENT_TYPE_LABELS[script.content_type] ?? script.content_type}</span>
+            <span className="text-[11px] text-muted">· {TOPIC_LABELS[script.topic] ?? script.topic}</span>
           </div>
-          <p className="text-[14px] font-semibold text-[#111110] leading-tight">{script.title ?? '—'}</p>
-          {script.hook && <p className="text-[12px] text-[#6b6b66] mt-0.5 line-clamp-1">"{script.hook}"</p>}
+          <p className="text-[14px] font-semibold text-ink leading-tight">{script.title ?? '—'}</p>
+          {script.hook && <p className="text-[12px] text-ink-soft mt-0.5 line-clamp-1">"{script.hook}"</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {script.status !== 'published' && (
             <button onClick={nextStatus}
-              className="text-[11px] px-2.5 py-1 rounded-lg bg-[#f4f4f0] text-[#6b6b66] hover:bg-[#e4e4e0] transition-colors">
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-line-soft text-ink-soft hover:bg-line transition-colors">
               →
             </button>
           )}
           <button onClick={() => setOpen(o => !o)}
-            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-blue-300 hover:text-blue-700 transition-colors">
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:border-blue-300 hover:text-blue-700 transition-colors">
             {open ? 'Свернуть' : 'Открыть'}
           </button>
           <button onClick={() => onDelete(script.id)}
@@ -106,9 +106,9 @@ function ScriptCard({ script, onUpdate, onDelete }: {
       </div>
 
       {open && (
-        <div className="border-t border-[#e4e4e0] px-4 py-4 space-y-4">
+        <div className="border-t border-line px-4 py-4 space-y-4">
           {/* Stats */}
-          <div className="flex gap-4 text-[12px] text-[#6b6b66]">
+          <div className="flex gap-4 text-[12px] text-ink-soft tabular-nums">
             <span>👁 {script.views_count} просмотров</span>
             <span>🎯 {script.leads_count} лидов</span>
             <span>🔖 {script.saves_count} сохранений</span>
@@ -117,13 +117,13 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {/* Structure */}
           {script.structure && script.structure.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Структура</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Структура</p>
               <div className="space-y-1">
                 {script.structure.map((s, i) => (
                   <div key={i} className="grid grid-cols-[80px_1fr_1fr] gap-2 text-[12px]">
-                    <span className="text-[#8a8a85] font-mono">{s.time}</span>
-                    <span className="text-[#111110]">{s.visual}</span>
-                    <span className="text-[#6b6b66] italic">{s.audio}</span>
+                    <span className="text-muted font-mono">{s.time}</span>
+                    <span className="text-ink">{s.visual}</span>
+                    <span className="text-ink-soft italic">{s.audio}</span>
                   </div>
                 ))}
               </div>
@@ -134,13 +134,13 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {script.narrator_text && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Текст диктора</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Текст диктора</p>
                 <button onClick={() => copy('narrator', script.narrator_text!)}
                   className="text-[11px] text-blue-600 hover:underline">
                   {copied === 'narrator' ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[12px] text-[#111110] whitespace-pre-wrap bg-[#f8f8f6] rounded-lg p-3 font-sans leading-relaxed">
+              <pre className="text-[12px] text-ink whitespace-pre-wrap bg-subtle rounded-lg p-3 font-sans leading-relaxed">
                 {script.narrator_text}
               </pre>
             </div>
@@ -149,16 +149,16 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {/* Shots */}
           {script.shots && script.shots.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Кадры</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Кадры</p>
               <div className="space-y-2">
                 {script.shots.map((sh) => (
                   <div key={sh.order} className="flex gap-3 text-[12px]">
-                    <span className="w-5 h-5 rounded-full bg-[#111110] text-white flex items-center justify-center text-[10px] flex-shrink-0 mt-0.5">
+                    <span className="w-5 h-5 rounded-full bg-ink text-white flex items-center justify-center text-[11px] flex-shrink-0 mt-0.5">
                       {sh.order}
                     </span>
                     <div>
-                      <p className="text-[#111110]">{sh.description}</p>
-                      <p className="text-[#8a8a85] text-[11px]">{sh.tip}</p>
+                      <p className="text-ink">{sh.description}</p>
+                      <p className="text-muted text-[11px]">{sh.tip}</p>
                     </div>
                   </div>
                 ))}
@@ -169,10 +169,10 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {/* B-roll */}
           {script.b_roll && script.b_roll.length > 0 && (
             <div>
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">B-roll</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">B-roll</p>
               <div className="flex flex-wrap gap-2">
                 {script.b_roll.map((b, i) => (
-                  <span key={i} className="text-[11px] px-2 py-1 bg-[#f4f4f0] rounded-lg text-[#6b6b66]">{b}</span>
+                  <span key={i} className="text-[11px] px-2 py-1 bg-line-soft rounded-lg text-ink-soft">{b}</span>
                 ))}
               </div>
             </div>
@@ -182,16 +182,16 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           <div className="grid grid-cols-2 gap-4">
             {script.editing_notes && (
               <div>
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Монтаж</p>
-                <p className="text-[12px] text-[#6b6b66]">{script.editing_notes}</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Монтаж</p>
+                <p className="text-[12px] text-ink-soft">{script.editing_notes}</p>
               </div>
             )}
             {script.subtitle_moments && script.subtitle_moments.length > 0 && (
               <div>
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Субтитры</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Субтитры</p>
                 <ul className="space-y-0.5">
                   {script.subtitle_moments.map((sm, i) => (
-                    <li key={i} className="text-[12px] text-[#6b6b66]">· {sm}</li>
+                    <li key={i} className="text-[12px] text-ink-soft">· {sm}</li>
                   ))}
                 </ul>
               </div>
@@ -210,13 +210,13 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {script.description && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Подпись Instagram/YouTube</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Подпись Instagram/YouTube</p>
                 <button onClick={() => copy('desc', script.description!)}
                   className="text-[11px] text-blue-600 hover:underline">
                   {copied === 'desc' ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap bg-[#f8f8f6] rounded-lg p-3 font-sans">{script.description}</pre>
+              <pre className="text-[12px] text-ink-soft whitespace-pre-wrap bg-subtle rounded-lg p-3 font-sans">{script.description}</pre>
             </div>
           )}
 
@@ -225,25 +225,25 @@ function ScriptCard({ script, onUpdate, onDelete }: {
             {script.telegram_post && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Telegram пост</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Telegram пост</p>
                   <button onClick={() => copy('tg', script.telegram_post!)}
                     className="text-[11px] text-blue-600 hover:underline">
                     {copied === 'tg' ? 'Скопировано!' : 'Копировать'}
                   </button>
                 </div>
-                <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap bg-[#f0f8ff] rounded-lg p-3 font-sans">{script.telegram_post}</pre>
+                <pre className="text-[12px] text-ink-soft whitespace-pre-wrap bg-[#f0f8ff] rounded-lg p-3 font-sans">{script.telegram_post}</pre>
               </div>
             )}
             {script.whatsapp_status && (
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">WhatsApp статус</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">WhatsApp статус</p>
                   <button onClick={() => copy('wa', script.whatsapp_status!)}
                     className="text-[11px] text-blue-600 hover:underline">
                     {copied === 'wa' ? 'Скопировано!' : 'Копировать'}
                   </button>
                 </div>
-                <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap bg-[#f0fff4] rounded-lg p-3 font-sans">{script.whatsapp_status}</pre>
+                <pre className="text-[12px] text-ink-soft whitespace-pre-wrap bg-[#f0fff4] rounded-lg p-3 font-sans">{script.whatsapp_status}</pre>
               </div>
             )}
           </div>
@@ -252,51 +252,51 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {script.b2b_version && (
             <div>
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">B2B версия</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">B2B версия</p>
                 <button onClick={() => copy('b2b', script.b2b_version!)}
                   className="text-[11px] text-blue-600 hover:underline">
                   {copied === 'b2b' ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap bg-[#faf8ff] rounded-lg p-3 font-sans">{script.b2b_version}</pre>
+              <pre className="text-[12px] text-ink-soft whitespace-pre-wrap bg-[#faf8ff] rounded-lg p-3 font-sans">{script.b2b_version}</pre>
             </div>
           )}
 
           {/* Cover */}
           {script.cover_idea && (
-            <div className="bg-[#f4f4f0] rounded-lg px-3 py-2">
-              <span className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Обложка: </span>
-              <span className="text-[12px] text-[#6b6b66]">{script.cover_idea}</span>
+            <div className="bg-line-soft rounded-lg px-3 py-2">
+              <span className="text-[11px] font-semibold text-muted uppercase tracking-wider">Обложка: </span>
+              <span className="text-[12px] text-ink-soft">{script.cover_idea}</span>
             </div>
           )}
 
           {/* Platform URL + analytics edit */}
-          <div className="pt-2 border-t border-[#e4e4e0] flex gap-3 items-center">
+          <div className="pt-2 border-t border-line flex gap-3 items-center">
             <input
               type="url"
               placeholder="Ссылка на опубликованное видео..."
               defaultValue={script.platform_url ?? ''}
               onBlur={e => onUpdate(script.id, { platform_url: e.target.value || null })}
-              className="flex-1 text-[12px] border border-[#e4e4e0] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300"
+              className="flex-1 text-[12px] border border-line rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-300"
             />
             <div className="flex gap-2 text-[11px]">
               <label className="flex items-center gap-1">
-                <span className="text-[#8a8a85]">👁</span>
+                <span className="text-muted">👁</span>
                 <input type="number" min="0" defaultValue={script.views_count}
                   onBlur={e => onUpdate(script.id, { views_count: parseInt(e.target.value) || 0 })}
-                  className="w-16 border border-[#e4e4e0] rounded px-1.5 py-1 focus:outline-none" />
+                  className="w-16 border border-line rounded px-1.5 py-1 focus:outline-none" />
               </label>
               <label className="flex items-center gap-1">
-                <span className="text-[#8a8a85]">🎯</span>
+                <span className="text-muted">🎯</span>
                 <input type="number" min="0" defaultValue={script.leads_count}
                   onBlur={e => onUpdate(script.id, { leads_count: parseInt(e.target.value) || 0 })}
-                  className="w-12 border border-[#e4e4e0] rounded px-1.5 py-1 focus:outline-none" />
+                  className="w-12 border border-line rounded px-1.5 py-1 focus:outline-none" />
               </label>
               <label className="flex items-center gap-1">
-                <span className="text-[#8a8a85]">🔖</span>
+                <span className="text-muted">🔖</span>
                 <input type="number" min="0" defaultValue={script.saves_count}
                   onBlur={e => onUpdate(script.id, { saves_count: parseInt(e.target.value) || 0 })}
-                  className="w-12 border border-[#e4e4e0] rounded px-1.5 py-1 focus:outline-none" />
+                  className="w-12 border border-line rounded px-1.5 py-1 focus:outline-none" />
               </label>
             </div>
           </div>
@@ -424,31 +424,31 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
   return (
     <div className="space-y-6">
       {/* Controls */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <h2 className="text-[14px] font-semibold text-[#111110] mb-4">Настройки контента</h2>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <h2 className="text-[14px] font-semibold text-ink mb-4">Настройки контента</h2>
         <div className="grid grid-cols-3 gap-4 mb-4">
           <div>
-            <label className="text-[11px] font-medium text-[#8a8a85] uppercase tracking-wider block mb-1.5">Формат</label>
+            <label className="text-[11px] font-medium text-muted uppercase tracking-wider block mb-1.5">Формат</label>
             <select value={contentType} onChange={e => setContentType(e.target.value)}
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
               {Object.entries(CONTENT_TYPE_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-[#8a8a85] uppercase tracking-wider block mb-1.5">Тема</label>
+            <label className="text-[11px] font-medium text-muted uppercase tracking-wider block mb-1.5">Тема</label>
             <select value={topic} onChange={e => setTopic(e.target.value)}
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
               {Object.entries(TOPIC_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
             </select>
           </div>
           <div>
-            <label className="text-[11px] font-medium text-[#8a8a85] uppercase tracking-wider block mb-1.5">Цель</label>
+            <label className="text-[11px] font-medium text-muted uppercase tracking-wider block mb-1.5">Цель</label>
             <select value={goal} onChange={e => setGoal(e.target.value)}
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300">
               {Object.entries(GOAL_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
               ))}
@@ -456,7 +456,7 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
           </div>
         </div>
         <div className="mb-4">
-          <label className="text-[11px] font-medium text-[#8a8a85] uppercase tracking-wider block mb-1.5">
+          <label className="text-[11px] font-medium text-muted uppercase tracking-wider block mb-1.5">
             Дополнительный контекст (необязательно)
           </label>
           <textarea
@@ -464,11 +464,11 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
             onChange={e => setContext(e.target.value)}
             rows={2}
             placeholder="Конкретный проект, пожелания, особые акценты..."
-            className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
         </div>
         <button onClick={generate} disabled={loading}
-          className="w-full py-3 bg-[#111110] text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-50 transition-colors">
+          className="w-full py-3 bg-ink text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-50 transition-colors">
           {loading ? 'AI генерирует контент...' : 'Сгенерировать контент'}
         </button>
         {error && <p className="text-[12px] text-red-500 mt-2">{error}</p>}
@@ -476,18 +476,18 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
 
       {/* Loading state — live progress */}
       {loading && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+        <div className="bg-surface border border-line rounded-xl p-6">
           <div className="flex items-center gap-3 mb-4">
             <div className="flex gap-1">
               {[0, 150, 300].map(d => (
                 <span key={d} className="w-2 h-2 rounded-full bg-blue-500 animate-bounce" style={{ animationDelay: `${d}ms` }} />
               ))}
             </div>
-            <p className="text-[13px] text-[#111110] font-medium">AI создаёт контент...</p>
-            <span className="text-[11px] text-[#8a8a85]">{doneCount} / 12 элементов</span>
+            <p className="text-[13px] text-ink font-medium">AI создаёт контент...</p>
+            <span className="text-[11px] text-muted">{doneCount} / 12 элементов</span>
           </div>
           {/* Progress bar */}
-          <div className="w-full bg-[#f4f4f0] rounded-full h-1.5 mb-4">
+          <div className="w-full bg-line-soft rounded-full h-1.5 mb-4">
             <div
               className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${Math.min((doneCount / 12) * 100, 95)}%` }}
@@ -499,14 +499,14 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
               <span key={s.key} className={`text-[11px] px-2 py-0.5 rounded-full transition-colors ${
                 i < doneCount
                   ? 'bg-blue-100 text-blue-700 font-medium'
-                  : 'bg-[#f4f4f0] text-[#8a8a85]'
+                  : 'bg-line-soft text-muted'
               }`}>
                 {s.icon} {s.label}
               </span>
             ))}
           </div>
           {streamText.length > 100 && (
-            <p className="text-[10px] text-[#8a8a85] mt-3">
+            <p className="text-[11px] text-muted mt-3">
               Получено символов: {streamText.length}
             </p>
           )}
@@ -531,34 +531,34 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           {/* Hook */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+          <div className="bg-surface border border-line rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Хук (первые слова)</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Хук (первые слова)</p>
               <button onClick={() => copy('hook', result.hook)} className="text-[11px] text-blue-600 hover:underline">
                 {copied === 'hook' ? 'Скопировано!' : 'Копировать'}
               </button>
             </div>
-            <p className="text-[16px] font-bold text-[#111110] leading-tight">"{result.hook}"</p>
+            <p className="text-[16px] font-semibold text-ink leading-tight">"{result.hook}"</p>
           </div>
 
           {/* Structure */}
           {result.structure && (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-3">Структура</p>
+            <div className="bg-surface border border-line rounded-xl p-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">Структура</p>
               <div className="space-y-2">
                 {result.structure.map((s, i) => (
-                  <div key={i} className="grid grid-cols-[90px_1fr_1fr] gap-3 text-[12px] py-1.5 border-b border-[#f4f4f0] last:border-0">
+                  <div key={i} className="grid grid-cols-[90px_1fr_1fr] gap-3 text-[12px] py-1.5 border-b border-line-soft last:border-0">
                     <div>
-                      <span className="text-[#8a8a85] font-mono text-[11px]">{s.time}</span>
-                      <p className="text-[#111110] font-medium">{s.label}</p>
+                      <span className="text-muted font-mono text-[11px]">{s.time}</span>
+                      <p className="text-ink font-medium">{s.label}</p>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#8a8a85] uppercase">Картинка</span>
-                      <p className="text-[#6b6b66]">{s.visual}</p>
+                      <span className="text-[11px] text-muted uppercase">Картинка</span>
+                      <p className="text-ink-soft">{s.visual}</p>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#8a8a85] uppercase">Звук</span>
-                      <p className="text-[#6b6b66] italic">{s.audio}</p>
+                      <span className="text-[11px] text-muted uppercase">Звук</span>
+                      <p className="text-ink-soft italic">{s.audio}</p>
                     </div>
                   </div>
                 ))}
@@ -567,29 +567,29 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
           )}
 
           {/* Narrator */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+          <div className="bg-surface border border-line rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Текст диктора</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Текст диктора</p>
               <button onClick={() => copy('narrator', result.narrator_text)} className="text-[11px] text-blue-600 hover:underline">
                 {copied === 'narrator' ? 'Скопировано!' : 'Копировать'}
               </button>
             </div>
-            <pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans leading-relaxed">{result.narrator_text}</pre>
+            <pre className="text-[13px] text-ink whitespace-pre-wrap font-sans leading-relaxed">{result.narrator_text}</pre>
           </div>
 
           {/* Shots */}
           {result.shots && (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-3">Кадры для съёмки</p>
+            <div className="bg-surface border border-line rounded-xl p-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">Кадры для съёмки</p>
               <div className="space-y-3">
                 {result.shots.map(sh => (
                   <div key={sh.order} className="flex gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#111110] text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+                    <span className="w-6 h-6 rounded-full bg-ink text-white flex items-center justify-center text-[11px] font-semibold flex-shrink-0">
                       {sh.order}
                     </span>
                     <div>
-                      <p className="text-[13px] text-[#111110]">{sh.description}</p>
-                      <p className="text-[11px] text-[#8a8a85] mt-0.5">{sh.tip}</p>
+                      <p className="text-[13px] text-ink">{sh.description}</p>
+                      <p className="text-[11px] text-muted mt-0.5">{sh.tip}</p>
                     </div>
                   </div>
                 ))}
@@ -599,20 +599,20 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
 
           {/* B-roll + Editing + Subtitles */}
           <div className="grid grid-cols-3 gap-4">
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">B-roll</p>
+            <div className="bg-surface border border-line rounded-xl p-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">B-roll</p>
               <ul className="space-y-1">
-                {result.b_roll.map((b, i) => <li key={i} className="text-[12px] text-[#6b6b66]">· {b}</li>)}
+                {result.b_roll.map((b, i) => <li key={i} className="text-[12px] text-ink-soft">· {b}</li>)}
               </ul>
             </div>
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Монтаж</p>
-              <p className="text-[12px] text-[#6b6b66]">{result.editing_notes}</p>
+            <div className="bg-surface border border-line rounded-xl p-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Монтаж</p>
+              <p className="text-[12px] text-ink-soft">{result.editing_notes}</p>
             </div>
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Субтитры</p>
+            <div className="bg-surface border border-line rounded-xl p-4">
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Субтитры</p>
               <ul className="space-y-1">
-                {result.subtitle_moments.map((sm, i) => <li key={i} className="text-[12px] text-[#6b6b66]">· {sm}</li>)}
+                {result.subtitle_moments.map((sm, i) => <li key={i} className="text-[12px] text-ink-soft">· {sm}</li>)}
               </ul>
             </div>
           </div>
@@ -629,53 +629,53 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
           </div>
 
           {/* Description */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+          <div className="bg-surface border border-line rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Подпись Instagram/YouTube</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Подпись Instagram/YouTube</p>
               <button onClick={() => copy('desc', result.description)} className="text-[11px] text-blue-600 hover:underline">
                 {copied === 'desc' ? 'Скопировано!' : 'Копировать'}
               </button>
             </div>
-            <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap font-sans">{result.description}</pre>
+            <pre className="text-[12px] text-ink-soft whitespace-pre-wrap font-sans">{result.description}</pre>
           </div>
 
           {/* Cover */}
-          <div className="bg-[#f4f4f0] rounded-xl p-4">
-            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Обложка / превью</p>
-            <p className="text-[13px] text-[#111110]">{result.cover_idea}</p>
+          <div className="bg-line-soft rounded-xl p-4">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Обложка / превью</p>
+            <p className="text-[13px] text-ink">{result.cover_idea}</p>
           </div>
 
           {/* Telegram + WhatsApp */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <div className="bg-surface border border-line rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Telegram пост</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Telegram пост</p>
                 <button onClick={() => copy('tg', result.telegram_post)} className="text-[11px] text-blue-600 hover:underline">
                   {copied === 'tg' ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap font-sans">{result.telegram_post}</pre>
+              <pre className="text-[12px] text-ink-soft whitespace-pre-wrap font-sans">{result.telegram_post}</pre>
             </div>
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <div className="bg-surface border border-line rounded-xl p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">WhatsApp статус</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">WhatsApp статус</p>
                 <button onClick={() => copy('wa', result.whatsapp_status)} className="text-[11px] text-blue-600 hover:underline">
                   {copied === 'wa' ? 'Скопировано!' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap font-sans">{result.whatsapp_status}</pre>
+              <pre className="text-[12px] text-ink-soft whitespace-pre-wrap font-sans">{result.whatsapp_status}</pre>
             </div>
           </div>
 
           {/* B2B */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+          <div className="bg-surface border border-line rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">B2B версия</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">B2B версия</p>
               <button onClick={() => copy('b2b', result.b2b_version)} className="text-[11px] text-blue-600 hover:underline">
                 {copied === 'b2b' ? 'Скопировано!' : 'Копировать'}
               </button>
             </div>
-            <pre className="text-[12px] text-[#6b6b66] whitespace-pre-wrap font-sans">{result.b2b_version}</pre>
+            <pre className="text-[12px] text-ink-soft whitespace-pre-wrap font-sans">{result.b2b_version}</pre>
           </div>
         </div>
       )}
@@ -729,12 +729,12 @@ function LibraryTab() {
       {/* Stats bar */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFilterStatus('')}
-          className={`text-[12px] px-3 py-1.5 rounded-xl border transition-colors ${!filterStatus ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-gray-400'}`}>
+          className={`text-[12px] px-3 py-1.5 rounded-xl border transition-colors ${!filterStatus ? 'bg-ink text-white border-ink' : 'border-line text-ink-soft hover:border-gray-400'}`}>
           Все ({scripts.length})
         </button>
         {STATUS_STEPS.map(s => (
           <button key={s} onClick={() => setFilterStatus(filterStatus === s ? '' : s)}
-            className={`text-[12px] px-3 py-1.5 rounded-xl border transition-colors ${filterStatus === s ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-gray-400'}`}>
+            className={`text-[12px] px-3 py-1.5 rounded-xl border transition-colors ${filterStatus === s ? 'bg-ink text-white border-ink' : 'border-line text-ink-soft hover:border-gray-400'}`}>
             {STATUS_LABELS[s]} ({statusCounts[s] ?? 0})
           </button>
         ))}
@@ -743,21 +743,21 @@ function LibraryTab() {
       {/* Type filter */}
       <div className="flex gap-2 flex-wrap">
         <button onClick={() => setFilterType('')}
-          className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${!filterType ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+          className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${!filterType ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
           Все форматы
         </button>
         {Object.entries(CONTENT_TYPE_LABELS).map(([k, v]) => (
           <button key={k} onClick={() => setFilterType(filterType === k ? '' : k)}
-            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterType === k ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterType === k ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
             {v}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="text-center py-12 text-[13px] text-muted">Загрузка...</div>
       ) : scripts.length === 0 ? (
-        <div className="text-center py-12 text-[13px] text-[#8a8a85]">
+        <div className="text-center py-12 text-[13px] text-muted">
           Нет контента. Сгенерируйте первый в вкладке "Генератор".
         </div>
       ) : (
@@ -798,27 +798,27 @@ function AnalyticsTab({ scripts }: { scripts: Script[] }) {
           { label: 'Лиды', value: totalLeads, sub: totalViews ? `${((totalLeads / totalViews) * 100).toFixed(1)}% конверсия` : '—' },
           { label: 'Сохранения', value: totalSaves, sub: 'органический охват' },
         ].map(stat => (
-          <div key={stat.label} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[11px] text-[#8a8a85] uppercase tracking-wider">{stat.label}</p>
-            <p className="text-[24px] font-bold text-[#111110] mt-1">{stat.value}</p>
-            <p className="text-[11px] text-[#8a8a85] mt-0.5">{stat.sub}</p>
+          <div key={stat.label} className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[11px] text-muted uppercase tracking-wider">{stat.label}</p>
+            <p className="text-[24px] font-semibold text-ink mt-1 tabular-nums">{stat.value}</p>
+            <p className="text-[11px] text-muted mt-0.5">{stat.sub}</p>
           </div>
         ))}
       </div>
 
       {/* Pipeline */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-        <p className="text-[12px] font-semibold text-[#111110] mb-3">Пайплайн контента</p>
+      <div className="bg-surface border border-line rounded-xl p-4">
+        <p className="text-[12px] font-semibold text-ink mb-3">Пайплайн контента</p>
         <div className="flex gap-2">
           {STATUS_STEPS.map((s, i) => {
             const count = scripts.filter(sc => sc.status === s).length
             return (
               <div key={s} className="flex-1 text-center">
                 <div className="flex items-center justify-center gap-1 mb-1">
-                  {i > 0 && <span className="text-[#8a8a85]">›</span>}
+                  {i > 0 && <span className="text-muted">›</span>}
                   <span className={`text-[11px] px-2 py-0.5 rounded-full ${STATUS_COLORS[s]}`}>{STATUS_LABELS[s]}</span>
                 </div>
-                <p className="text-[20px] font-bold text-[#111110]">{count}</p>
+                <p className="text-[20px] font-semibold text-ink tabular-nums">{count}</p>
               </div>
             )
           })}
@@ -827,17 +827,17 @@ function AnalyticsTab({ scripts }: { scripts: Script[] }) {
 
       {/* By type */}
       {byType.length > 0 && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-          <p className="text-[12px] font-semibold text-[#111110] mb-3">По форматам</p>
+        <div className="bg-surface border border-line rounded-xl p-4">
+          <p className="text-[12px] font-semibold text-ink mb-3">По форматам</p>
           <div className="space-y-2">
             {byType.sort((a, b) => b.views - a.views).map(t => (
               <div key={t.key} className="flex items-center gap-3 text-[12px]">
-                <span className="w-32 text-[#6b6b66] truncate">{t.label}</span>
-                <div className="flex-1 bg-[#f4f4f0] rounded-full h-2">
+                <span className="w-32 text-ink-soft truncate">{t.label}</span>
+                <div className="flex-1 bg-line-soft rounded-full h-2">
                   <div className="bg-blue-500 h-2 rounded-full"
                     style={{ width: `${totalViews ? (t.views / totalViews) * 100 : 0}%` }} />
                 </div>
-                <span className="w-20 text-right text-[#8a8a85]">{t.count} шт · {t.views.toLocaleString('ru')} 👁</span>
+                <span className="w-20 text-right text-muted tabular-nums">{t.count} шт · {t.views.toLocaleString('ru')} 👁</span>
               </div>
             ))}
           </div>
@@ -846,17 +846,17 @@ function AnalyticsTab({ scripts }: { scripts: Script[] }) {
 
       {/* Top performers */}
       {topContent.length > 0 && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-          <p className="text-[12px] font-semibold text-[#111110] mb-3">Топ по просмотрам</p>
+        <div className="bg-surface border border-line rounded-xl p-4">
+          <p className="text-[12px] font-semibold text-ink mb-3">Топ по просмотрам</p>
           <div className="space-y-2">
             {topContent.map((s, i) => (
               <div key={s.id} className="flex items-center gap-3 text-[12px] py-1">
-                <span className="w-5 text-[#8a8a85] font-mono">{i + 1}</span>
+                <span className="w-5 text-muted font-mono">{i + 1}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[#111110] truncate">{s.title ?? '—'}</p>
-                  <p className="text-[#8a8a85] text-[11px]">{CONTENT_TYPE_LABELS[s.content_type] ?? s.content_type}</p>
+                  <p className="text-ink truncate">{s.title ?? '—'}</p>
+                  <p className="text-muted text-[11px]">{CONTENT_TYPE_LABELS[s.content_type] ?? s.content_type}</p>
                 </div>
-                <div className="flex gap-4 text-[#6b6b66] flex-shrink-0">
+                <div className="flex gap-4 text-ink-soft flex-shrink-0 tabular-nums">
                   <span>👁 {s.views_count.toLocaleString('ru')}</span>
                   <span>🎯 {s.leads_count}</span>
                   <span>🔖 {s.saves_count}</span>
@@ -896,14 +896,14 @@ export default function VideoFactoryPage() {
     <div className="max-w-4xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">AI Video Factory</h1>
-        <p className="text-[13px] text-[#6b6b66] mt-0.5">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">AI Video Factory</h1>
+        <p className="text-[13px] text-ink-soft mt-0.5">
           AI генерирует 12 элементов контента: хук, сценарий, структуру, диктора, кадры, B-roll, CTA, описание, обложку, монтаж, субтитры, B2B версию
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-[#f4f4f0] rounded-xl p-1">
+      <div className="flex gap-1 mb-6 bg-line-soft rounded-xl p-1">
         {([
           { key: 'generator', label: 'Генератор' },
           { key: 'library', label: 'Библиотека' },
@@ -911,7 +911,7 @@ export default function VideoFactoryPage() {
         ] as const).map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex-1 py-2 rounded-lg text-[13px] font-medium transition-colors ${
-              tab === t.key ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
+              tab === t.key ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
             }`}>
             {t.label}
           </button>

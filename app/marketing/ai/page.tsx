@@ -86,19 +86,19 @@ export default function AIMarketerPage() {
     <div className="flex flex-col h-[calc(100vh-60px)] max-w-3xl mx-auto px-4">
 
       {/* Header */}
-      <div className="py-5 border-b border-[#e4e4e0] flex-shrink-0">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">AI-маркетолог</h1>
-        <p className="text-[13px] text-[#6b6b66] mt-0.5">Сценарии, посты, идеи, стратегии — работает как директор по маркетингу MGlass</p>
+      <div className="py-5 border-b border-line flex-shrink-0">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">AI-маркетолог</h1>
+        <p className="text-[13px] text-ink-soft mt-0.5">Сценарии, посты, идеи, стратегии — работает как директор по маркетингу MGlass</p>
       </div>
 
       {/* Quick prompts */}
       {messages.length === 0 && (
         <div className="py-5 flex-shrink-0">
-          <p className="text-[12px] font-medium text-[#8a8a85] uppercase tracking-wider mb-3">Быстрый старт</p>
+          <p className="text-[12px] font-medium text-muted uppercase tracking-wider mb-3">Быстрый старт</p>
           <div className="flex flex-wrap gap-2">
             {QUICK_PROMPTS.map(q => (
               <button key={q.label} onClick={() => send(q.prompt)}
-                className="text-[12px] px-3 py-1.5 rounded-xl border border-[#e4e4e0] text-[#6b6b66] hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
+                className="text-[12px] px-3 py-1.5 rounded-xl border border-line text-ink-soft hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors">
                 {q.label}
               </button>
             ))}
@@ -111,20 +111,20 @@ export default function AIMarketerPage() {
         {messages.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
             {m.role === 'assistant' && (
-              <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[12px] font-bold flex-shrink-0 mt-0.5 mr-2">M</div>
+              <div className="w-7 h-7 rounded-full bg-blue-600 flex items-center justify-center text-white text-[12px] font-semibold flex-shrink-0 mt-0.5 mr-2">M</div>
             )}
             <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed ${
               m.role === 'user'
-                ? 'bg-[#111110] text-white rounded-br-sm'
-                : 'bg-white border border-[#e4e4e0] text-[#111110] rounded-bl-sm'
+                ? 'bg-ink text-white rounded-br-sm'
+                : 'bg-surface border border-line text-ink rounded-bl-sm'
             }`}>
               {m.content ? (
                 <pre className="whitespace-pre-wrap font-sans">{m.content}</pre>
               ) : (
                 <span className="inline-flex gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#8a8a85] animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#8a8a85] animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1.5 h-1.5 rounded-full bg-[#8a8a85] animate-bounce" style={{ animationDelay: '300ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce" style={{ animationDelay: '0ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce" style={{ animationDelay: '150ms' }} />
+                  <span className="w-1.5 h-1.5 rounded-full bg-muted animate-bounce" style={{ animationDelay: '300ms' }} />
                 </span>
               )}
             </div>
@@ -134,12 +134,12 @@ export default function AIMarketerPage() {
       </div>
 
       {/* Input */}
-      <div className="py-4 flex-shrink-0 border-t border-[#e4e4e0]">
+      <div className="py-4 flex-shrink-0 border-t border-line">
         {messages.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {QUICK_PROMPTS.slice(0, 4).map(q => (
               <button key={q.label} onClick={() => send(q.prompt)} disabled={streaming}
-                className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-40">
+                className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:border-blue-300 hover:text-blue-700 hover:bg-blue-50 transition-colors disabled:opacity-40">
                 {q.label}
               </button>
             ))}
@@ -154,14 +154,14 @@ export default function AIMarketerPage() {
             disabled={streaming}
             placeholder="Попроси AI: написать пост, придумать акцию, сделать сценарий Reels..."
             rows={2}
-            className="flex-1 border border-[#e4e4e0] rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
+            className="flex-1 border border-line rounded-xl px-4 py-3 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300 disabled:opacity-50"
           />
           <button onClick={() => send()} disabled={!input.trim() || streaming}
-            className="flex-shrink-0 px-4 py-3 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-40 transition-colors">
+            className="flex-shrink-0 px-4 py-3 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-40 transition-colors">
             {streaming ? '...' : '→'}
           </button>
         </div>
-        <p className="text-[11px] text-[#8a8a85] mt-2">Enter — отправить · Shift+Enter — новая строка</p>
+        <p className="text-[11px] text-muted mt-2">Enter — отправить · Shift+Enter — новая строка</p>
       </div>
     </div>
   )

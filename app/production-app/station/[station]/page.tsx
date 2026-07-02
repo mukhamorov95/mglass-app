@@ -147,25 +147,25 @@ export default function StationBatchesPage() {
   const totalPieces = batches.reduce((s, b) => s + b.totalPieces, 0)
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
+    <div className="min-h-screen bg-canvas flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-4 lg:pt-6">
         <div className="flex items-start justify-between gap-2">
           <div>
-            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">{STAGE_LABELS[station as DetailStageKey]} — партии</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">
+            <h1 className="text-[20px] font-semibold text-ink tracking-tight">{STAGE_LABELS[station as DetailStageKey]} — партии</h1>
+            <p className="text-[13px] text-muted mt-0.5">
               {batches.length} материалов · {isCutting ? `${totalSheets} листов` : `${totalPieces} деталей`}
             </p>
           </div>
-          <Link href="/production-app/my-queue" className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">Мои задачи →</Link>
+          <Link href="/production-app/my-queue" className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-line text-ink-soft hover:border-ink hover:text-ink transition-colors whitespace-nowrap flex-shrink-0">Мои задачи →</Link>
         </div>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {STATIONS.map(s => (
             <Link key={s} href={`/production-app/station/${s}`}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${s === station ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${s === station ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
               {STAGE_LABELS[s as DetailStageKey]}
             </Link>
           ))}
@@ -179,18 +179,18 @@ export default function StationBatchesPage() {
           </div>
         )}
         {batches.length === 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет готовых задач на этом этапе</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет готовых задач на этом этапе</p>
           </div>
         )}
         {batches.map(b => {
           const isOpen = expanded.has(b.key)
           return (
-            <div key={b.key} className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+            <div key={b.key} className="bg-surface rounded-xl border border-line overflow-hidden">
               <div className="px-4 py-3 flex items-center justify-between gap-3">
                 <button className="min-w-0 text-left flex-1" onClick={() => setExpanded(p => { const n = new Set(p); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n })}>
-                  <p className="text-[15px] font-bold text-[#111110] truncate">{b.label}</p>
-                  <p className="text-[12px] text-[#6b6b66]">
+                  <p className="text-[15px] font-semibold text-ink truncate">{b.label}</p>
+                  <p className="text-[12px] text-ink-soft tabular-nums">
                     {b.result ? <><b className="text-blue-700">{b.result.sheetsNeeded}</b> листов · </> : null}
                     {b.totalPieces} деталей · {b.totalAreaM2.toFixed(2)} м² · из {b.orders.length} строк
                     {b.result ? <> · КПД <span className={b.result.avgEfficiency >= 70 ? 'text-emerald-600' : 'text-amber-600'}>{b.result.avgEfficiency}%</span></> : null}
@@ -203,14 +203,14 @@ export default function StationBatchesPage() {
                 </button>
               </div>
               {isOpen && (
-                <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
+                <div className="border-t border-line-soft divide-y divide-canvas">
                   {b.orders.map((o, i) => {
                     const waitMat = matPending.has(o.orderId)
                     return (
                     <div key={`${o.taskId}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-2">
                       <Link href={`/p/o/${o.orderId}`} className="min-w-0">
-                        <p className="text-[13px] font-semibold text-[#111110] truncate">{o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span></p>
-                        <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
+                        <p className="text-[13px] font-semibold text-ink truncate">{o.number} <span className="text-muted font-normal">· {o.client}</span></p>
+                        <p className="text-[12px] text-ink-soft tabular-nums">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
                       </Link>
                       <button onClick={() => markTasks([o.taskId])} disabled={busy || waitMat}
                         title={waitMat ? 'Материал ещё не приехал — заявка не закрыта в закупках' : ''}

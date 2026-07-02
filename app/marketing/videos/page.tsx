@@ -116,18 +116,18 @@ export default function VideoFactoryPage() {
     setTimeout(() => setCopied(null), 2000)
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
 
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Video Factory</h1>
-          <p className="text-[13px] text-[#6b6b66] mt-1">Сценарии Reels и Shorts для MGlass</p>
+          <h1 className="text-[22px] font-semibold text-ink tracking-tight">Video Factory</h1>
+          <p className="text-[13px] text-ink-soft mt-1">Сценарии Reels и Shorts для MGlass</p>
         </div>
         <button onClick={() => { setForm(EMPTY); setEditId(null); setShowForm(true) }}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
+          className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
           + Ролик
         </button>
       </div>
@@ -142,37 +142,37 @@ export default function VideoFactoryPage() {
       </div>
 
       <div className="space-y-3">
-        {videos.length === 0 && <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет сценариев. Нажмите «+ Ролик».</div>}
+        {videos.length === 0 && <div className="text-center py-16 text-[13px] text-muted">Нет сценариев. Нажмите «+ Ролик».</div>}
         {videos.map(v => (
-          <div key={v.id} className="bg-white border border-[#e4e4e0] rounded-xl">
+          <div key={v.id} className="bg-surface border border-line rounded-xl">
             <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === v.id ? null : v.id)}>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${statusCfg(v.status).cls}`}>
                 {statusCfg(v.status).l}
               </span>
-              <span className="text-[13px] font-medium text-[#111110] flex-1 truncate">{v.title}</span>
+              <span className="text-[13px] font-medium text-ink flex-1 truncate">{v.title}</span>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={e => { e.stopPropagation(); copyScript(v) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors">
                   {copied === v.id ? '✓' : 'Копировать'}
                 </button>
                 <button onClick={e => { e.stopPropagation(); advanceStatus(v) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">→</button>
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors">→</button>
                 <button onClick={e => { e.stopPropagation(); const { id, ...rest } = v; setForm(rest); setEditId(v.id); setShowForm(true) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Ред.</button>
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors">Ред.</button>
                 <button onClick={e => { e.stopPropagation(); if (!confirm('Удалить?')) return; fetch('/api/marketing/videos', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: v.id }) }); setVideos(prev => prev.filter(x => x.id !== v.id)) }}
                   className="text-[11px] px-2 py-1 text-red-400 hover:text-red-600 transition-colors">✕</button>
-                <span className="text-[#c0c0bb] text-sm">{expanded === v.id ? '▲' : '▼'}</span>
+                <span className="text-faint text-sm">{expanded === v.id ? '▲' : '▼'}</span>
               </div>
             </div>
             {expanded === v.id && (
-              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3 space-y-4">
-                {v.hook && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Хук</p><p className="text-[14px] font-semibold text-[#111110] leading-tight">"{v.hook}"</p></div>}
-                {v.problem && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Проблема</p><p className="text-[13px] text-[#6b6b66]">{v.problem}</p></div>}
-                {v.structure && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Структура</p><pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-3">{v.structure}</pre></div>}
-                {v.narrator_text && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Текст диктора</p><pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans bg-amber-50 border border-amber-100 rounded-lg p-3 italic">{v.narrator_text}</pre></div>}
-                {v.shots && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Кадры</p><pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-3">{v.shots}</pre></div>}
-                {v.b_roll && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">B-roll</p><p className="text-[13px] text-[#6b6b66]">{v.b_roll}</p></div>}
-                {v.cta && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">CTA</p><p className="text-[13px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{v.cta}</p></div>}
+              <div className="border-t border-line-soft px-4 pb-4 pt-3 space-y-4">
+                {v.hook && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Хук</p><p className="text-[14px] font-semibold text-ink leading-tight">"{v.hook}"</p></div>}
+                {v.problem && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Проблема</p><p className="text-[13px] text-ink-soft">{v.problem}</p></div>}
+                {v.structure && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Структура</p><pre className="text-[13px] text-ink whitespace-pre-wrap font-sans bg-subtle rounded-lg p-3">{v.structure}</pre></div>}
+                {v.narrator_text && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Текст диктора</p><pre className="text-[13px] text-ink whitespace-pre-wrap font-sans bg-amber-50 border border-amber-100 rounded-lg p-3 italic">{v.narrator_text}</pre></div>}
+                {v.shots && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Кадры</p><pre className="text-[13px] text-ink whitespace-pre-wrap font-sans bg-subtle rounded-lg p-3">{v.shots}</pre></div>}
+                {v.b_roll && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">B-roll</p><p className="text-[13px] text-ink-soft">{v.b_roll}</p></div>}
+                {v.cta && <div><p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">CTA</p><p className="text-[13px] font-semibold text-emerald-700 bg-emerald-50 rounded-lg px-3 py-2">{v.cta}</p></div>}
               </div>
             )}
           </div>
@@ -181,11 +181,11 @@ export default function VideoFactoryPage() {
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-2">{editId ? 'Редактировать сценарий' : 'Новый сценарий ролика'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-2">{editId ? 'Редактировать сценарий' : 'Новый сценарий ролика'}</h2>
             {!editId && (
               <div className="flex gap-2 mb-4">
-                <span className="text-[12px] text-[#8a8a85]">Шаблоны:</span>
+                <span className="text-[12px] text-muted">Шаблоны:</span>
                 {TEMPLATES.map(tpl => (
                   <button key={tpl.label} onClick={() => applyTemplate(tpl)}
                     className="text-[12px] px-2.5 py-1 rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50 transition-colors">
@@ -206,27 +206,27 @@ export default function VideoFactoryPage() {
                 { k: 'cta', l: 'CTA', r: 2 },
               ].map(({ k, l, r }) => (
                 <div key={k}>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">{l}</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">{l}</label>
                   <textarea value={(form as Record<string, string | null>)[k] ?? ''} rows={r}
                     onChange={e => setForm(f => ({ ...f, [k]: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               ))}
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Статус</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Статус</label>
                 <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] bg-white">
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[12px] bg-surface">
                   {STATUSES.map(s => <option key={s.v} value={s.v}>{s.l}</option>)}
                 </select>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-subtle transition-colors">
                 Отмена
               </button>
             </div>

@@ -71,17 +71,17 @@ export default function DocsPage() {
   })
   const toPrint = orders.filter(o => !o.pn.docs_printed).length
 
-  if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
+  if (loading) return <div className="min-h-screen bg-canvas flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Документы</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{toPrint} без чертежей · {orders.length} в работе</p>
+    <div className="min-h-screen bg-canvas pb-20">
+      <div className="bg-surface border-b border-line px-4 pt-12 pb-3 lg:pt-6">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Документы</h1>
+        <p className="text-[13px] text-muted mt-0.5">{toPrint} без чертежей · {orders.length} в работе</p>
         <div className="flex flex-wrap gap-1.5 mt-3">
           {NAV.map(n => (
             <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/docs' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/docs' ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
               {n.label}
             </Link>
           ))}
@@ -90,24 +90,24 @@ export default function DocsPage() {
 
       <div className="px-4 pt-4 space-y-2">
         {sorted.length === 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет заказов в работе</p>
+          <div className="bg-surface rounded-xl border border-line p-8 text-center">
+            <p className="text-[14px] text-muted">Нет заказов в работе</p>
           </div>
         )}
         {sorted.map(o => {
           const days = deadline(o.pn, o.created_at)
           const printed = !!o.pn.docs_printed
           return (
-            <div key={o.id} className={`bg-white rounded-xl border px-4 py-3 ${printed ? 'border-[#e4e4e0]' : 'border-amber-300'}`}>
+            <div key={o.id} className={`bg-surface rounded-xl border px-4 py-3 ${printed ? 'border-line' : 'border-amber-300'}`}>
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="min-w-0">
-                  <p className="text-[14px] font-bold text-[#111110] truncate">{o.custom_number?.trim() || `#${o.id}`} <span className="text-[#9a9a95] font-normal">· {o.client_name}</span></p>
-                  <p className={`text-[12px] ${days <= 0 ? 'text-red-600 font-medium' : days <= 2 ? 'text-amber-700' : 'text-[#9a9a95]'}`}>срок: {dLabel(days)}</p>
+                  <p className="text-[14px] font-semibold text-ink truncate">{o.custom_number?.trim() || `#${o.id}`} <span className="text-muted font-normal">· {o.client_name}</span></p>
+                  <p className={`text-[12px] ${days <= 0 ? 'text-red-600 font-medium' : days <= 2 ? 'text-amber-700' : 'text-muted'}`}>срок: {dLabel(days)}</p>
                 </div>
               </div>
               <div className="flex gap-2">
                 <a href={`/b2b-orders/${o.id}/production-sheet`} target="_blank"
-                  className="flex-1 text-center py-2 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">
+                  className="flex-1 text-center py-2 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:border-ink hover:text-ink transition-colors">
                   🖨 Чертёж
                 </a>
                 <button onClick={() => togglePrinted(o)} disabled={busy === o.id}

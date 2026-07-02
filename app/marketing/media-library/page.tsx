@@ -57,9 +57,9 @@ function MediaCard({ item, onDelete, onUpdate }: {
   }
 
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+    <div className="bg-surface border border-line rounded-xl overflow-hidden">
       {/* Preview */}
-      <div className="h-36 bg-[#f4f4f0] flex items-center justify-center relative">
+      <div className="h-36 bg-line-soft flex items-center justify-center relative">
         {item.thumbnail_url || item.url ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -69,11 +69,11 @@ function MediaCard({ item, onDelete, onUpdate }: {
             onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
           />
         ) : (
-          <span className="text-[28px] text-[#c4c4c0]">
+          <span className="text-[28px] text-faint">
             {item.type === 'video' || item.type === 'b_roll' ? '🎬' : item.type === 'audio' ? '🎵' : '🖼'}
           </span>
         )}
-        <span className="absolute top-2 left-2 text-[10px] px-1.5 py-0.5 bg-black/60 text-white rounded font-medium">
+        <span className="absolute top-2 left-2 text-[11px] px-1.5 py-0.5 bg-black/60 text-white rounded font-medium">
           {TYPE_LABELS[item.type] ?? item.type}
         </span>
       </div>
@@ -87,24 +87,24 @@ function MediaCard({ item, onDelete, onUpdate }: {
             className="w-full text-[13px] font-medium border border-blue-300 rounded px-2 py-0.5 focus:outline-none"
           />
         ) : (
-          <p className="text-[13px] font-medium text-[#111110] truncate cursor-pointer" onClick={() => setEditing(true)}>
+          <p className="text-[13px] font-medium text-ink truncate cursor-pointer" onClick={() => setEditing(true)}>
             {item.name}
           </p>
         )}
 
         {item.category && (
-          <p className="text-[11px] text-[#8a8a85] mt-0.5">{CATEGORY_LABELS[item.category] ?? item.category}</p>
+          <p className="text-[11px] text-muted mt-0.5">{CATEGORY_LABELS[item.category] ?? item.category}</p>
         )}
         {item.project_name && (
-          <p className="text-[11px] text-[#8a8a85]">Объект: {item.project_name}</p>
+          <p className="text-[11px] text-muted">Объект: {item.project_name}</p>
         )}
 
         {/* Tags */}
         <div className="flex flex-wrap gap-1 mt-2">
           {item.tags.map(tag => (
-            <span key={tag} className="flex items-center gap-0.5 text-[10px] px-1.5 py-0.5 bg-[#f4f4f0] text-[#6b6b66] rounded">
+            <span key={tag} className="flex items-center gap-0.5 text-[11px] px-1.5 py-0.5 bg-line-soft text-ink-soft rounded">
               {tag}
-              <button onClick={() => removeTag(tag)} className="text-[#8a8a85] hover:text-red-500 ml-0.5">×</button>
+              <button onClick={() => removeTag(tag)} className="text-muted hover:text-red-500 ml-0.5">×</button>
             </span>
           ))}
           <div className="flex items-center gap-1">
@@ -113,7 +113,7 @@ function MediaCard({ item, onDelete, onUpdate }: {
               onChange={e => setEditTag(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') addTag() }}
               placeholder="+ тег"
-              className="text-[10px] w-16 border border-[#e4e4e0] rounded px-1 py-0.5 focus:outline-none focus:border-blue-300"
+              className="text-[11px] w-16 border border-line rounded px-1 py-0.5 focus:outline-none focus:border-blue-300"
             />
           </div>
         </div>
@@ -125,7 +125,7 @@ function MediaCard({ item, onDelete, onUpdate }: {
             placeholder="URL файла..."
             defaultValue={item.url ?? ''}
             onBlur={e => onUpdate(item.id, { url: e.target.value || null })}
-            className="flex-1 text-[11px] border border-[#e4e4e0] rounded px-2 py-1 focus:outline-none min-w-0"
+            className="flex-1 text-[11px] border border-line rounded px-2 py-1 focus:outline-none min-w-0"
           />
           <button onClick={() => onDelete(item.id)}
             className="text-[11px] px-2 py-1 rounded text-red-400 hover:bg-red-50 flex-shrink-0">
@@ -216,28 +216,28 @@ export default function MediaLibraryPage() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Медиабиблиотека</h1>
-          <p className="text-[13px] text-[#6b6b66] mt-0.5">Фото, видео, B-roll — всё для производства контента MGlass</p>
+          <h1 className="text-[20px] font-semibold text-ink tracking-tight">Медиабиблиотека</h1>
+          <p className="text-[13px] text-ink-soft mt-0.5">Фото, видео, B-roll — всё для производства контента MGlass</p>
         </div>
         <button onClick={() => setShowAdd(true)}
-          className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
+          className="px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
           + Добавить
         </button>
       </div>
 
       {/* Add form */}
       {showAdd && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-6 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110]">Добавить медиафайл</p>
+        <div className="bg-surface border border-line rounded-xl p-5 mb-6 space-y-3">
+          <p className="text-[13px] font-semibold text-ink">Добавить медиафайл</p>
           <div className="grid grid-cols-3 gap-3">
             <input
               placeholder="Название *"
               value={form.name ?? ''}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="col-span-2 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="col-span-2 border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300"
             />
             <select value={form.type ?? 'photo'} onChange={e => setForm(f => ({ ...f, type: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               {Object.entries(TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
@@ -246,18 +246,18 @@ export default function MediaLibraryPage() {
               placeholder="URL файла"
               value={form.url ?? ''}
               onChange={e => setForm(f => ({ ...f, url: e.target.value || null }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none"
             />
             <input
               placeholder="URL превью"
               value={form.thumbnail_url ?? ''}
               onChange={e => setForm(f => ({ ...f, thumbnail_url: e.target.value || null }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none"
             />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <select value={form.category ?? ''} onChange={e => setForm(f => ({ ...f, category: e.target.value || null }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               <option value="">Категория...</option>
               {CATEGORIES.map(c => <option key={c} value={c}>{CATEGORY_LABELS[c] ?? c}</option>)}
             </select>
@@ -265,13 +265,13 @@ export default function MediaLibraryPage() {
               placeholder="Название объекта/проекта"
               value={form.project_name ?? ''}
               onChange={e => setForm(f => ({ ...f, project_name: e.target.value || null }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none"
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none"
             />
           </div>
 
           {/* Tags */}
           <div>
-            <p className="text-[11px] text-[#8a8a85] mb-1.5">Теги</p>
+            <p className="text-[11px] text-muted mb-1.5">Теги</p>
             <div className="flex flex-wrap gap-1.5 mb-2">
               {form.tags?.map(t => (
                 <span key={t} className="text-[11px] px-2 py-0.5 bg-blue-100 text-blue-700 rounded flex items-center gap-1">
@@ -285,7 +285,7 @@ export default function MediaLibraryPage() {
                 <button key={t} onClick={() => {
                   if (!form.tags?.includes(t)) setForm(f => ({ ...f, tags: [...(f.tags ?? []), t] }))
                 }}
-                  className="text-[11px] px-2 py-0.5 border border-[#e4e4e0] rounded text-[#6b6b66] hover:border-blue-300 hover:text-blue-700 transition-colors">
+                  className="text-[11px] px-2 py-0.5 border border-line rounded text-ink-soft hover:border-blue-300 hover:text-blue-700 transition-colors">
                   {t}
                 </button>
               ))}
@@ -294,7 +294,7 @@ export default function MediaLibraryPage() {
                 onChange={e => setTagInput(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') addFormTag() }}
                 placeholder="+ свой тег"
-                className="text-[11px] border border-[#e4e4e0] rounded px-2 py-0.5 focus:outline-none focus:border-blue-300 w-24"
+                className="text-[11px] border border-line rounded px-2 py-0.5 focus:outline-none focus:border-blue-300 w-24"
               />
             </div>
           </div>
@@ -304,16 +304,16 @@ export default function MediaLibraryPage() {
             value={form.description ?? ''}
             onChange={e => setForm(f => ({ ...f, description: e.target.value || null }))}
             rows={2}
-            className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none"
+            className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none"
           />
 
           <div className="flex gap-2">
             <button onClick={add} disabled={!form.name?.trim() || saving}
-              className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50">
+              className="px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50">
               {saving ? 'Сохранение...' : 'Добавить'}
             </button>
             <button onClick={() => setShowAdd(false)}
-              className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[13px] hover:bg-[#f4f4f0]">
+              className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[13px] hover:bg-line-soft">
               Отмена
             </button>
           </div>
@@ -324,12 +324,12 @@ export default function MediaLibraryPage() {
       <div className="flex gap-3 mb-5 flex-wrap">
         <div className="flex gap-1">
           <button onClick={() => setFilterType('')}
-            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${!filterType ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+            className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${!filterType ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
             Все
           </button>
           {Object.entries(TYPE_LABELS).map(([k, v]) => (
             <button key={k} onClick={() => setFilterType(filterType === k ? '' : k)}
-              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterType === k ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterType === k ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
               {v}
             </button>
           ))}
@@ -337,7 +337,7 @@ export default function MediaLibraryPage() {
         <div className="flex gap-1 flex-wrap">
           {allTags.slice(0, 12).map(tag => (
             <button key={tag} onClick={() => setFilterTag(filterTag === tag ? '' : tag)}
-              className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+              className={`text-[11px] px-2 py-0.5 rounded border transition-colors ${filterTag === tag ? 'bg-blue-600 text-white border-blue-600' : 'border-line text-muted'}`}>
               {tag}
             </button>
           ))}
@@ -345,19 +345,19 @@ export default function MediaLibraryPage() {
       </div>
 
       {/* Stats */}
-      <div className="flex gap-4 text-[12px] text-[#8a8a85] mb-4">
+      <div className="flex gap-4 text-[12px] text-muted mb-4 tabular-nums">
         {Object.entries(TYPE_LABELS).map(([k, v]) => {
           const count = items.filter(m => m.type === k).length
           return count > 0 ? <span key={k}>{v}: {count}</span> : null
         })}
-        <span className="font-medium text-[#6b6b66]">Итого: {items.length}</span>
+        <span className="font-medium text-ink-soft">Итого: {items.length}</span>
       </div>
 
       {/* Grid */}
       {loading ? (
-        <div className="text-center py-16 text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="text-center py-16 text-[13px] text-muted">Загрузка...</div>
       ) : items.length === 0 ? (
-        <div className="text-center py-16 text-[13px] text-[#8a8a85]">
+        <div className="text-center py-16 text-[13px] text-muted">
           Медиатека пуста. Добавьте первый файл.
         </div>
       ) : (
