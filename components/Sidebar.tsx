@@ -474,7 +474,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       } ${
         active(item.href)
           ? activeCls
-          : 'text-[#6b6b66] hover:bg-[#f5f5f3] hover:text-[#111110]'
+          : 'text-ink-soft hover:bg-[#f5f5f3] hover:text-ink'
       }`}
     >
       <span className="text-[13px] w-4 flex-shrink-0 text-center leading-none opacity-75">{item.icon}</span>
@@ -511,7 +511,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
           <div className="mt-0.5 space-y-px">
             {entries.map((entry, idx) =>
               isGroup(entry) ? (
-                <div key={`group-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
+                <div key={`group-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-muted">
                   {entry.groupLabel}
                 </div>
               ) : (
@@ -529,7 +529,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   const workspaceAccordion = (
     id: string,
     label: string,
-    dot: string,       // dot color class, e.g. 'bg-[#111110]' or 'bg-orange-500'
+    dot: string,       // dot color class, e.g. 'bg-ink' or 'bg-orange-500'
     labelCls: string,
     entries: NavEntry[],
     activeCls: string,
@@ -546,7 +546,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
             <span className={`text-[13px] font-semibold tracking-[-0.01em] ${labelCls}`}>{label}</span>
           </div>
           <svg
-            className={`w-3 h-3 text-[#c4c4be] group-hover:text-[#9a9a95] transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+            className={`w-3 h-3 text-faint group-hover:text-muted transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor"
           >
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
@@ -556,7 +556,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
           <div className="mt-0.5 space-y-px ml-0.5">
             {entries.map((entry, idx) =>
               isGroup(entry) ? (
-                <div key={`group-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
+                <div key={`group-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-muted">
                   {entry.groupLabel}
                 </div>
               ) : (
@@ -615,17 +615,17 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       return (
         <>
           <div className="space-y-px mb-2">
-            {MANAGER_AMO.map(item => navItem(item, 'bg-[#f0f0ec] text-[#111110] font-medium'))}
+            {MANAGER_AMO.map(item => navItem(item, 'bg-line-soft text-ink font-medium'))}
           </div>
-          <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+          <div className="my-1 mx-2 h-px bg-line-soft" />
           {permissions.see_mglass && workspaceAccordion(
             'mglass', 'MGlass',
-            'bg-[#111110]', 'text-[#111110]',
+            'bg-ink', 'text-ink',
             mglassNav,
-            'bg-[#f0f0ec] text-[#111110] font-medium',
+            'bg-line-soft text-ink font-medium',
           )}
           {permissions.see_mglass && permissions.see_b2b && (
-            <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+            <div className="my-1 mx-2 h-px bg-line-soft" />
           )}
           {permissions.see_b2b && workspaceAccordion(
             'b2b', 'B2B',
@@ -685,7 +685,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       <>
         {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-medium')}
         {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('system',    'Система',      'text-ink-soft',  'text-faint',  CEO_SYSTEM,    'bg-[#f5f5f3] text-ink font-medium')}
       </>
     )
 
@@ -694,11 +694,11 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       <>
         {workspaceAccordion(
           'mglass', 'MGlass',
-          'bg-[#111110]', 'text-[#111110]',
+          'bg-ink', 'text-ink',
           MANAGER_MGLASS,
-          'bg-[#f0f0ec] text-[#111110] font-medium',
+          'bg-line-soft text-ink font-medium',
         )}
-        <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+        <div className="my-1 mx-2 h-px bg-line-soft" />
         {workspaceAccordion(
           'b2b', 'B2B',
           'bg-orange-400', 'text-[#c2600a]',
@@ -723,7 +723,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-medium')}
         {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-medium')}
         {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-medium')}
-        {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('system',      'Система',      'text-ink-soft',  'text-faint',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-ink font-medium')}
       </>
     )
 
@@ -732,16 +732,16 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
         {accordion('prod_orders', 'Заказы',        'text-orange-600', 'text-orange-400', PRODUCTION_NAV_ORDERS, 'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_app',    'Production App', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_APP,    'bg-orange-50 text-orange-700 font-medium')}
-        {accordion('prod_ref',    'Справочники',   'text-[#6b6b66]',  'text-[#c4c4be]',  PRODUCTION_NAV_REF,    'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('prod_ref',    'Справочники',   'text-ink-soft',  'text-faint',  PRODUCTION_NAV_REF,    'bg-[#f5f5f3] text-ink font-medium')}
       </>
     )
 
     // Admin directories view
     return (
       <>
-        {accordion('directories', 'Справочники', 'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-[#111110] font-medium')}
-        {accordion('b2b',         'B2B',         'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_B2B,         'bg-[#f5f5f3] text-[#111110] font-medium')}
-        {accordion('operations',  'Операции',    'text-[#6b6b66]', 'text-[#c4c4be]', ADMIN_OPERATIONS,  'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('directories', 'Справочники', 'text-ink-soft', 'text-faint', ADMIN_DIRECTORIES, 'bg-[#f5f5f3] text-ink font-medium')}
+        {accordion('b2b',         'B2B',         'text-ink-soft', 'text-faint', ADMIN_B2B,         'bg-[#f5f5f3] text-ink font-medium')}
+        {accordion('operations',  'Операции',    'text-ink-soft', 'text-faint', ADMIN_OPERATIONS,  'bg-[#f5f5f3] text-ink font-medium')}
       </>
     )
   }
@@ -757,9 +757,9 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       <button
         aria-label="Открыть меню"
         onClick={() => setMobileOpen(v => !v)}
-        className="fixed top-3.5 left-3.5 z-50 lg:hidden w-8 h-8 flex items-center justify-center bg-white border border-[#e4e4e0] rounded-lg shadow-sm"
+        className="fixed top-3.5 left-3.5 z-50 lg:hidden w-8 h-8 flex items-center justify-center bg-white border border-line rounded-lg shadow-sm"
       >
-        <svg className="w-4 h-4 text-[#4b4b47]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <svg className="w-4 h-4 text-ink-soft" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           {mobileOpen
             ? <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M6 18L18 6M6 6l12 12" />
             : <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}   d="M4 6h16M4 12h16M4 18h16" />
@@ -770,22 +770,22 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       <aside
         className={`
           fixed lg:sticky top-0 left-0 h-screen z-40 lg:z-auto
-          w-[220px] flex-shrink-0 flex flex-col bg-[#fafaf9] border-r border-[#ebebе8]
+          w-[220px] flex-shrink-0 flex flex-col bg-[#fafaf9] border-r border-line
           transition-transform duration-200 ease-in-out overflow-hidden
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
       >
         {/* Header */}
-        <div className="border-b border-[#ebebе8] flex-shrink-0">
+        <div className="border-b border-line flex-shrink-0">
           <Link href="/" onClick={() => setMobileOpen(false)}
             className="flex items-center gap-2.5 px-4 py-3 hover:bg-[#f5f5f3] transition-colors">
-            <div className="w-[26px] h-[26px] bg-[#111110] rounded-[6px] flex items-center justify-center flex-shrink-0">
+            <div className="w-[26px] h-[26px] bg-ink rounded-[6px] flex items-center justify-center flex-shrink-0">
               <span className="text-white text-[10px] font-bold tracking-tight">MG</span>
             </div>
             <div>
-              <span className="text-[14px] font-bold text-[#111110] tracking-[-0.02em]">MGlass</span>
+              <span className="text-[14px] font-bold text-ink tracking-[-0.02em]">MGlass</span>
               {!isAdmin && role && (
-                <div className="text-[10px] text-[#b0b0aa] leading-tight">
+                <div className="text-[10px] text-muted leading-tight">
                   {role === 'manager' ? 'Менеджер' : role === 'production' ? 'Производство' : role === 'seo' ? 'SEO' : role === 'cfo' ? 'CFO' : role === 'commercial' ? 'Коммерческий' : 'CEO'}
                 </div>
               )}
@@ -805,8 +805,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
                   <button key={v} onClick={() => switchMode(v)}
                     className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
                       viewMode === v
-                        ? 'bg-white text-[#111110] shadow-sm'
-                        : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                        ? 'bg-white text-ink shadow-sm'
+                        : 'text-muted hover:text-ink-soft'
                     }`}>
                     {l}
                   </button>
@@ -821,7 +821,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
                 className={`w-full flex items-center justify-center gap-1.5 py-1.5 rounded-md text-[11px] font-semibold transition-all disabled:opacity-50 ${
                   syncState === 'ok'    ? 'bg-emerald-100 text-emerald-700' :
                   syncState === 'error' ? 'bg-red-50 text-red-600' :
-                  'bg-[#efefec] text-[#6b6b66] hover:bg-[#e8e8e4] hover:text-[#111110]'
+                  'bg-[#efefec] text-ink-soft hover:bg-[#e8e8e4] hover:text-ink'
                 }`}>
                 {syncState === 'loading' ? '...' :
                  syncState === 'ok'      ? '✓ Синхронизировано' :
@@ -837,15 +837,15 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         </nav>
 
         {/* Footer */}
-        <div className="px-3 py-2.5 border-t border-[#ebebе8] flex-shrink-0">
+        <div className="px-3 py-2.5 border-t border-line flex-shrink-0">
           <div className="flex items-center gap-2 px-2 mb-1">
-            <div className="w-5 h-5 rounded-full bg-[#efefec] border border-[#e4e4e0] flex items-center justify-center flex-shrink-0">
-              <span className="text-[9px] font-bold text-[#6b6b66]">{(userEmail[0] ?? '?').toUpperCase()}</span>
+            <div className="w-5 h-5 rounded-full bg-[#efefec] border border-line flex items-center justify-center flex-shrink-0">
+              <span className="text-[9px] font-bold text-ink-soft">{(userEmail[0] ?? '?').toUpperCase()}</span>
             </div>
-            <p className="text-[11px] text-[#9a9a95] truncate leading-tight">{userEmail}</p>
+            <p className="text-[11px] text-muted truncate leading-tight">{userEmail}</p>
           </div>
           <button onClick={logout}
-            className="w-full text-left px-2 py-1.5 rounded-md text-[12px] text-[#b0b0aa] hover:text-red-500 hover:bg-red-50 transition-colors">
+            className="w-full text-left px-2 py-1.5 rounded-md text-[12px] text-muted hover:text-red-500 hover:bg-red-50 transition-colors">
             Выйти
           </button>
         </div>
