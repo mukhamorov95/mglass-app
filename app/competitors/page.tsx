@@ -67,8 +67,8 @@ ${clientSays ? `Что говорит клиент: ${clientSays}` : ''}
   return (
     <div className="max-w-[720px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[18px] font-bold text-[#111110] tracking-tight">Сравнение с конкурентами</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Аргументы в пользу MGlass против конкретного конкурента</p>
+        <h1 className="text-[18px] font-semibold text-ink tracking-tight">Сравнение с конкурентами</h1>
+        <p className="text-[13px] text-muted mt-0.5">Аргументы в пользу MGlass против конкретного конкурента</p>
       </div>
 
       <div className="grid grid-cols-5 gap-2 mb-5">
@@ -76,8 +76,8 @@ ${clientSays ? `Что говорит клиент: ${clientSays}` : ''}
           <button key={c.id} onClick={() => setCompetitor(c.id)}
             className={`flex flex-col items-center gap-1.5 p-3 rounded-xl border text-center transition-all ${
               competitor === c.id
-                ? 'border-[#111110] bg-[#111110] text-white'
-                : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#c4c4be]'
+                ? 'border-ink bg-ink text-white'
+                : 'border-line bg-surface text-ink-soft hover:border-faint'
             }`}>
             <span className="text-[18px]">{c.icon}</span>
             <span className="text-[11px] font-semibold leading-tight">{c.label}</span>
@@ -85,41 +85,41 @@ ${clientSays ? `Что говорит клиент: ${clientSays}` : ''}
         ))}
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-4">
+      <div className="bg-surface border border-line rounded-xl p-5 space-y-4">
         <div>
-          <label className="block text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">Продукт</label>
+          <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Продукт</label>
           <select value={product} onChange={e => setProduct(e.target.value)}
-            className="w-full rounded-lg border border-[#e4e4e0] px-3 py-2.5 text-[13px] text-[#111110] bg-white focus:outline-none focus:border-[#8a8a85]">
+            className="w-full rounded-lg border border-line px-3 py-2.5 text-[13px] text-ink bg-surface focus:outline-none focus:border-muted">
             {PRODUCTS.map(p => <option key={p}>{p}</option>)}
           </select>
         </div>
 
         <div>
-          <label className="block text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-2">
-            Что говорит клиент <span className="font-normal normal-case text-[#c4c4be]">(необязательно)</span>
+          <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">
+            Что говорит клиент <span className="font-normal normal-case text-faint">(необязательно)</span>
           </label>
           <input value={clientSays} onChange={e => setClientSays(e.target.value)}
             placeholder="«В ИКЕА такое же за 8 000₽», «там гарантия 3 года», «у вас дороже»..."
-            className="w-full rounded-lg border border-[#e4e4e0] px-3 py-2.5 text-[13px] placeholder:text-[#c4c4be] focus:outline-none focus:border-[#8a8a85]" />
+            className="w-full rounded-lg border border-line px-3 py-2.5 text-[13px] placeholder:text-faint focus:outline-none focus:border-muted" />
         </div>
 
         <button onClick={generate} disabled={!competitor || loading}
-          className="w-full py-2.5 rounded-xl bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#2a2a28] transition-colors flex items-center justify-center gap-2">
+          className="w-full py-2.5 rounded-xl bg-ink text-white text-[13px] font-semibold disabled:opacity-40 hover:bg-[#2a2a28] transition-colors flex items-center justify-center gap-2">
           {loading && <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>}
           {loading ? 'Анализирую...' : 'Получить аргументы'}
         </button>
       </div>
 
       {result && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mt-4">
+        <div className="bg-surface border border-line rounded-xl p-5 mt-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-[13px] font-semibold text-[#111110]">Аргументы MGlass</h3>
+            <h3 className="text-[13px] font-semibold text-ink">Аргументы MGlass</h3>
             <button onClick={copy}
-              className="text-[12px] px-3 py-1.5 rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] transition-colors">
+              className="text-[12px] px-3 py-1.5 rounded-lg bg-line-soft text-ink-soft hover:bg-line transition-colors">
               {copied ? '✓ Скопировано' : 'Копировать'}
             </button>
           </div>
-          <div className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap bg-[#f8f8f6] rounded-lg p-4 border border-[#ececea]">
+          <div className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap bg-canvas rounded-lg p-4 border border-line">
             {result}
           </div>
         </div>
