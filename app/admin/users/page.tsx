@@ -86,6 +86,7 @@ export default function UsersPage() {
   const [telegramCode, setTelegramCode] = useState<{ userId: string; code: string } | null>(null)
   const [expandedPerms, setExpandedPerms] = useState<Set<string>>(new Set())
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -178,6 +179,14 @@ export default function UsersPage() {
     setExpandedGroups(prev => {
       const next = new Set(prev)
       next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  function toggleStations(id: string) {
+    setExpandedStations(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
   }
@@ -346,24 +355,41 @@ export default function UsersPage() {
                             <option value="seo">SEO</option>
                             <option value="admin">Администратор</option>
                           </select>
-                          {u.role === 'production' && (
-                            <div className="mt-1.5 flex flex-wrap gap-1 max-w-[220px]" title="Станции цеха — какие задачи видит рабочий">
-                              {STATIONS.map(s => {
-                                const on = (u.production_stations ?? []).includes(s.value)
-                                return (
-                                  <button key={s.value}
-                                    onClick={() => {
-                                      const cur = u.production_stations ?? []
-                                      const next = on ? cur.filter(x => x !== s.value) : [...cur, s.value]
-                                      updateUser(u.id, { production_stations: next })
-                                    }}
-                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${on ? 'bg-orange-100 text-orange-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
-                                    {s.label}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
+                          {u.role === 'production' && (() => {
+                            const stOpen  = expandedStations.has(u.id)
+                            const enabled = STATIONS.filter(s => (u.production_stations ?? []).includes(s.value))
+                            return (
+                              <div className="mt-1.5 max-w-[240px]">
+                                <button onClick={() => toggleStations(u.id)}
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]"
+                                  title="Этапы цеха — какие задачи видит рабочий. Нажми, чтобы добавить или убрать.">
+                                  <span className="text-[9px]">{stOpen ? '▼' : '▶'}</span>
+                                  <span>Этапы</span>
+                                  <span className="text-[#9a9a95] font-normal">
+                                    · {enabled.length ? enabled.map(s => s.label).join(', ') : 'не заданы'}
+                                  </span>
+                                </button>
+                                {stOpen && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {STATIONS.map(s => {
+                                      const on = (u.production_stations ?? []).includes(s.value)
+                                      return (
+                                        <button key={s.value}
+                                          onClick={() => {
+                                            const cur = u.production_stations ?? []
+                                            const next = on ? cur.filter(x => x !== s.value) : [...cur, s.value]
+                                            updateUser(u.id, { production_stations: next })
+                                          }}
+                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${on ? 'bg-orange-100 text-orange-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                          {on ? '✓ ' : ''}{s.label}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </td>
 
                         {/* Код менеджера */}
