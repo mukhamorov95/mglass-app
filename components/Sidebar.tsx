@@ -33,6 +33,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
   { groupLabel: 'Продажи' },
   { href: '/kp',            label: 'КП',               icon: '📄' },
+  { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
   { href: '/calculations',  label: 'История расчётов', icon: '📋' },
   { href: '/orders',        label: 'Заказы',           icon: '📦' },
   { href: '/clients',       label: 'Клиенты',          icon: '👤' },
