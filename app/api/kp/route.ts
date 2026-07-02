@@ -34,14 +34,28 @@ export async function GET() {
   const sb = await createClient()
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  // RLS сам ограничит выборку (свои или все для owner/see_all)
+  const { data: prof } = await sb.from('users').select('role').eq('id', user.id).maybeSingle()
+  const role = (prof?.role as string) ?? 'manager'
+  // RLS сам ограничит выборку: менеджер — только свои, owner — все.
   const { data, error } = await sb
     .from('commercial_proposals')
     .select('id, number, client_name, total, status, manager_name, created_at, content')
     .order('created_at', { ascending: false })
     .limit(1000)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ items: data ?? [] })
+  return NextResponse.json({ items: data ?? [], role, canDelete: OWNER.has(role) })
+}
+
+export async function DELETE(req: Request) {
+  const u = await authUser()
+  if (!u) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  if (!OWNER.has(u.role)) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  const body = await req.json().catch(() => ({})) as { id?: number }
+  if (!body.id) return NextResponse.json({ error: 'no id' }, { status: 400 })
+  const svc = createServiceClient()
+  const { error } = await svc.from('commercial_proposals').delete().eq('id', body.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true })
 }
 
 export async function POST(req: Request) {

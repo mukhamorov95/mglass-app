@@ -74,6 +74,7 @@ export default function KpPage() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryRow[]>([])
+  const [canDelete, setCanDelete] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [interimText, setInterimText] = useState('')
   const [speechSupported, setSpeechSupported] = useState(true)
@@ -92,9 +93,19 @@ export default function KpPage() {
       const res = await fetch('/api/kp')
       const data = await res.json()
       setHistory(Array.isArray(data.items) ? data.items : [])
+      setCanDelete(!!data.canDelete)
       const now = new Date()
       setExpanded(new Set([`${now.getFullYear()}-${now.getMonth()}`]))
     } catch { setHistory([]) }
+  }
+
+  async function deleteKp(id: number, e: React.MouseEvent) {
+    e.stopPropagation()
+    if (!confirm('Удалить это КП безвозвратно?')) return
+    try {
+      const res = await fetch('/api/kp', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+      if (res.ok) setHistory(prev => prev.filter(r => r.id !== id))
+    } catch { /* ignore */ }
   }
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -405,6 +416,7 @@ export default function KpPage() {
                             <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
                             <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
                             <a href={`/kp/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
+                            {canDelete && <button onClick={e => deleteKp(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                           </div>
                         </div>
                       ))}
