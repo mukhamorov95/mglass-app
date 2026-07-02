@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/ds'
 
 type AppointmentType = 'measurement' | 'installation'
 type AppointmentStatus = 'planned' | 'done' | 'cancelled'
@@ -29,7 +30,7 @@ const TYPE_COLORS: Record<AppointmentType, string> = {
 }
 
 const STATUS_COLORS: Record<AppointmentStatus, string> = {
-  planned:   'bg-white border-[#e4e4e0]',
+  planned:   'bg-surface border-line',
   done:      'bg-emerald-50 border-emerald-200 opacity-70',
   cancelled: 'bg-gray-50 border-gray-200 opacity-50',
 }
@@ -140,36 +141,36 @@ export default function CalendarPage() {
   const today = new Date()
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[1100px] mx-auto px-4 py-6">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-5">
-          <div>
-            <h1 className="text-[22px] font-bold text-[#111110]">Календарь</h1>
-            <p className="text-[13px] text-[#9a9a95]">Замеры и монтажи</p>
-          </div>
-          <button
-            onClick={() => openForm()}
-            className="px-4 py-2 bg-[#111110] text-white text-[13px] font-semibold rounded-xl hover:bg-[#2a2a28] transition-colors"
-          >
-            + Добавить
-          </button>
-        </div>
+        <PageHeader
+          title="Календарь"
+          subtitle="Замеры и монтажи"
+          actions={
+            <button
+              onClick={() => openForm()}
+              className="px-4 py-2 bg-ink text-white text-[13px] font-semibold rounded-xl hover:opacity-90 transition-opacity"
+            >
+              + Добавить
+            </button>
+          }
+        />
 
         {/* Week navigation */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] mb-4">
-          <div className="flex items-center justify-between px-4 py-3 border-b border-[#f0f0ec]">
-            <button onClick={prevWeek} className="p-1.5 hover:bg-[#f8f8f7] rounded-lg transition-colors">
-              <svg className="w-5 h-5 text-[#6b6b66]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="bg-surface rounded-xl border border-line mb-4">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft">
+            <button onClick={prevWeek} className="p-1.5 hover:bg-subtle rounded-lg transition-colors">
+              <svg className="w-5 h-5 text-ink-soft" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
               </svg>
             </button>
-            <p className="text-[14px] font-semibold text-[#111110]">
+            <p className="text-[14px] font-semibold text-ink">
               {days[0].getDate()} — {days[6].getDate()} {MONTH_NAMES[days[6].getMonth()]} {days[6].getFullYear()}
             </p>
-            <button onClick={nextWeek} className="p-1.5 hover:bg-[#f8f8f7] rounded-lg transition-colors">
-              <svg className="w-5 h-5 text-[#6b6b66]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <button onClick={nextWeek} className="p-1.5 hover:bg-subtle rounded-lg transition-colors">
+              <svg className="w-5 h-5 text-ink-soft" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
               </svg>
             </button>
@@ -183,13 +184,13 @@ export default function CalendarPage() {
               const dateStr  = day.toISOString().slice(0, 10)
 
               return (
-                <div key={i} className={`border-r border-[#f0f0ec] last:border-r-0 min-h-[120px] ${isToday ? 'bg-blue-50/30' : ''}`}>
+                <div key={i} className={`border-r border-line-soft last:border-r-0 min-h-[120px] ${isToday ? 'bg-blue-50/30' : ''}`}>
                   {/* Day header */}
-                  <div className={`px-2 py-2 border-b border-[#f0f0ec] ${isToday ? 'bg-blue-600' : ''}`}>
-                    <p className={`text-[11px] font-bold uppercase ${isToday ? 'text-white' : 'text-[#9a9a95]'}`}>
+                  <div className={`px-2 py-2 border-b border-line-soft ${isToday ? 'bg-blue-600' : ''}`}>
+                    <p className={`text-[11px] font-semibold uppercase ${isToday ? 'text-white' : 'text-muted'}`}>
                       {WEEK_DAY_LABELS[i]}
                     </p>
-                    <p className={`text-[16px] font-bold ${isToday ? 'text-white' : 'text-[#111110]'}`}>
+                    <p className={`text-[16px] font-semibold ${isToday ? 'text-white' : 'text-ink'}`}>
                       {day.getDate()}
                     </p>
                   </div>
@@ -200,18 +201,18 @@ export default function CalendarPage() {
                       <div key={a.id}
                         className={`rounded-lg border px-2 py-1.5 ${STATUS_COLORS[a.status]}`}>
                         <div className="flex items-center gap-1 mb-0.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
                             {TYPE_LABELS[a.type]}
                           </span>
-                          <span className="text-[10px] text-[#9a9a95]">
+                          <span className="text-[10px] text-muted">
                             {new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         {a.orders && (
-                          <p className="text-[11px] font-semibold text-[#111110] truncate">{a.orders.client_name}</p>
+                          <p className="text-[11px] font-semibold text-ink truncate">{a.orders.client_name}</p>
                         )}
                         {a.assignee_name && (
-                          <p className="text-[10px] text-[#9a9a95] truncate">{a.assignee_name}</p>
+                          <p className="text-[10px] text-muted truncate">{a.assignee_name}</p>
                         )}
                         {a.status === 'planned' && (
                           <button
@@ -226,7 +227,7 @@ export default function CalendarPage() {
 
                     <button
                       onClick={() => openForm(dateStr)}
-                      className="w-full text-center py-1 text-[11px] text-[#c4c4be] hover:text-[#6b6b66] transition-colors"
+                      className="w-full text-center py-1 text-[11px] text-faint hover:text-ink-soft transition-colors"
                     >
                       +
                     </button>
@@ -239,40 +240,40 @@ export default function CalendarPage() {
 
         {/* Upcoming appointments list */}
         {appointments.filter(a => a.status === 'planned').length > 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-            <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
-              <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">
+          <div className="bg-surface rounded-xl border border-line overflow-hidden">
+            <div className="px-5 py-3 bg-subtle border-b border-line">
+              <p className="text-[12px] font-semibold text-muted uppercase tracking-wider">
                 Предстоящие ({appointments.filter(a => a.status === 'planned').length})
               </p>
             </div>
-            <div className="divide-y divide-[#f0f0ec]">
+            <div className="divide-y divide-line-soft">
               {appointments
                 .filter(a => a.status === 'planned')
                 .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
                 .map(a => (
                   <div key={a.id} className="px-5 py-3.5 flex items-start gap-4">
                     <div className="text-center flex-shrink-0 w-12">
-                      <p className="text-[18px] font-bold text-[#111110]">
+                      <p className="text-[18px] font-semibold text-ink tabular-nums">
                         {new Date(a.scheduled_at).getDate()}
                       </p>
-                      <p className="text-[10px] text-[#9a9a95] uppercase">
+                      <p className="text-[10px] text-muted uppercase">
                         {MONTH_NAMES[new Date(a.scheduled_at).getMonth()].slice(0, 3)}
                       </p>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
+                        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
                           {TYPE_LABELS[a.type]}
                         </span>
-                        <span className="text-[12px] text-[#9a9a95]">
+                        <span className="text-[12px] text-muted">
                           {new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       {a.orders && (
-                        <p className="text-[13px] font-semibold text-[#111110]">{a.orders.client_name}</p>
+                        <p className="text-[13px] font-semibold text-ink">{a.orders.client_name}</p>
                       )}
-                      {a.address && <p className="text-[12px] text-[#9a9a95]">{a.address}</p>}
-                      {a.assignee_name && <p className="text-[11px] text-[#b4b4b0]">{a.assignee_name}</p>}
+                      {a.address && <p className="text-[12px] text-muted">{a.address}</p>}
+                      {a.assignee_name && <p className="text-[11px] text-faint">{a.assignee_name}</p>}
                     </div>
                     <button
                       onClick={() => updateStatus(a.id, 'done')}
@@ -290,17 +291,17 @@ export default function CalendarPage() {
       {/* New appointment modal */}
       {showForm && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl border border-[#e4e4e0] w-full max-w-md p-6 space-y-4">
+          <div className="bg-surface rounded-2xl border border-line w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-[16px] font-bold text-[#111110]">Новая запись</h2>
-              <button onClick={() => setShowForm(false)} className="text-[#9a9a95] hover:text-[#6b6b66]">✕</button>
+              <h2 className="text-[16px] font-semibold text-ink">Новая запись</h2>
+              <button onClick={() => setShowForm(false)} className="text-muted hover:text-ink-soft">✕</button>
             </div>
 
             <div className="grid grid-cols-2 gap-2">
               {(['measurement', 'installation'] as AppointmentType[]).map(t => (
                 <button key={t} onClick={() => setNewType(t)}
                   className={`py-2.5 rounded-xl text-[13px] font-semibold border transition-colors ${
-                    newType === t ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0]'
+                    newType === t ? 'bg-ink text-white border-ink' : 'bg-surface text-ink-soft border-line'
                   }`}>
                   {TYPE_LABELS[t]}
                 </button>
@@ -309,44 +310,44 @@ export default function CalendarPage() {
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] font-bold text-[#9a9a95] mb-1">Дата</label>
+                <label className="block text-[11px] font-semibold text-muted mb-1">Дата</label>
                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
+                  className="w-full border border-line rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
               </div>
               <div>
-                <label className="block text-[11px] font-bold text-[#9a9a95] mb-1">Время</label>
+                <label className="block text-[11px] font-semibold text-muted mb-1">Время</label>
                 <input type="time" value={newTime} onChange={e => setNewTime(e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
+                  className="w-full border border-line rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
               </div>
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-[#9a9a95] mb-1">Адрес</label>
+              <label className="block text-[11px] font-semibold text-muted mb-1">Адрес</label>
               <input type="text" value={newAddress} onChange={e => setNewAddress(e.target.value)}
                 placeholder="ул. Примерная, 1"
-                className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
+                className="w-full border border-line rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-[#9a9a95] mb-1">Ответственный</label>
+              <label className="block text-[11px] font-semibold text-muted mb-1">Ответственный</label>
               <input type="text" value={newAssignee} onChange={e => setNewAssignee(e.target.value)}
                 placeholder="Имя замерщика / монтажника"
-                className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
+                className="w-full border border-line rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3]" />
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-[#9a9a95] mb-1">Заметки</label>
+              <label className="block text-[11px] font-semibold text-muted mb-1">Заметки</label>
               <textarea rows={2} value={newNotes} onChange={e => setNewNotes(e.target.value)}
-                className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3] resize-none" />
+                className="w-full border border-line rounded-xl px-3 py-2.5 text-[14px] outline-none focus:border-[#0071e3] resize-none" />
             </div>
 
             <div className="flex gap-2">
               <button onClick={() => setShowForm(false)}
-                className="flex-1 py-2.5 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f8f8f7]">
+                className="flex-1 py-2.5 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-subtle">
                 Отмена
               </button>
               <button onClick={saveAppointment} disabled={saving || !newDate}
-                className="flex-1 py-2.5 bg-[#111110] text-white rounded-xl text-[13px] font-semibold disabled:opacity-40">
+                className="flex-1 py-2.5 bg-ink text-white rounded-xl text-[13px] font-semibold disabled:opacity-40">
                 {saving ? 'Сохраняю...' : 'Сохранить'}
               </button>
             </div>

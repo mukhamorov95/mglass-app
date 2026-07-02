@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PageHeader } from '@/components/ds'
 
 type Note = {
   id: string
@@ -152,13 +153,13 @@ export default function MyNotesPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-[22px] font-semibold text-[#1d1d1f] mb-1">Мои заметки</h1>
-      <p className="text-[13px] text-[#6e6e73] mb-6">
-        Надиктуй или напиши наблюдение — AI разберёт и даст рекомендацию
-      </p>
+      <PageHeader
+        title="Мои заметки"
+        subtitle="Надиктуй или напиши наблюдение — AI разберёт и даст рекомендацию"
+      />
 
       {/* Input area */}
-      <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5 mb-6">
+      <div className="bg-surface rounded-2xl border border-line p-5 mb-6">
         <div className="relative">
           <textarea
             value={text + (interimText ? interimText : '')}
@@ -173,7 +174,7 @@ export default function MyNotesPage() {
                 : 'Напишите заметку или нажмите микрофон чтобы надиктовать...'
             }
             rows={5}
-            className="w-full resize-none bg-[#f9f9fb] border border-[#e8e8ed] rounded-xl px-4 py-3 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]"
+            className="w-full resize-none bg-subtle border border-line rounded-xl px-4 py-3 text-[14px] text-ink outline-none focus:border-[#0071e3] transition-colors placeholder:text-faint"
             readOnly={recording}
           />
           {recording && (
@@ -186,7 +187,7 @@ export default function MyNotesPage() {
 
         {/* interim hint */}
         {interimText && (
-          <p className="mt-1 text-[12px] text-[#aeaeb2] italic px-1">{interimText}</p>
+          <p className="mt-1 text-[12px] text-muted italic px-1">{interimText}</p>
         )}
 
         <div className="flex items-center gap-3 mt-4">
@@ -197,7 +198,7 @@ export default function MyNotesPage() {
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all ${
                 recording
                   ? 'bg-red-50 text-red-600 border border-red-200'
-                  : 'bg-[#f2f2f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
+                  : 'bg-line-soft text-ink hover:bg-line'
               }`}
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
@@ -218,7 +219,7 @@ export default function MyNotesPage() {
         </div>
 
         {!speechSupported && (
-          <p className="mt-3 text-[12px] text-[#aeaeb2]">
+          <p className="mt-3 text-[12px] text-muted">
             Голосовой ввод доступен в Chrome и Safari
           </p>
         )}
@@ -230,14 +231,14 @@ export default function MyNotesPage() {
           <p className="text-[12px] font-semibold text-[#0071e3] uppercase tracking-wider mb-3">
             AI разбор
           </p>
-          <p className="text-[14px] text-[#1d1d1f] font-medium mb-4">{analysis.summary}</p>
+          <p className="text-[14px] text-ink font-medium mb-4">{analysis.summary}</p>
 
           {analysis.insights?.length > 0 && (
             <div className="mb-4">
-              <p className="text-[11px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-2">Выводы</p>
+              <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mb-2">Выводы</p>
               <ul className="space-y-1">
                 {analysis.insights.map((s, i) => (
-                  <li key={i} className="flex gap-2 text-[13px] text-[#1d1d1f]">
+                  <li key={i} className="flex gap-2 text-[13px] text-ink">
                     <span className="text-[#0071e3] shrink-0">•</span>{s}
                   </li>
                 ))}
@@ -247,10 +248,10 @@ export default function MyNotesPage() {
 
           {analysis.actions?.length > 0 && (
             <div className="mb-4">
-              <p className="text-[11px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-2">Действия</p>
+              <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mb-2">Действия</p>
               <ul className="space-y-1">
                 {analysis.actions.map((a, i) => (
-                  <li key={i} className="flex gap-2 text-[13px] text-[#1d1d1f]">
+                  <li key={i} className="flex gap-2 text-[13px] text-ink">
                     <span className="text-emerald-500 shrink-0">→</span>{a}
                   </li>
                 ))}
@@ -259,11 +260,11 @@ export default function MyNotesPage() {
           )}
 
           {analysis.for_bot && (
-            <div className="bg-white rounded-xl p-3 border border-[#cce0ff]">
-              <p className="text-[11px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-1">
+            <div className="bg-surface rounded-xl p-3 border border-[#cce0ff]">
+              <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider mb-1">
                 Для AI-менеджера
               </p>
-              <p className="text-[13px] text-[#1d1d1f]">{analysis.for_bot}</p>
+              <p className="text-[13px] text-ink">{analysis.for_bot}</p>
             </div>
           )}
         </div>
@@ -271,55 +272,55 @@ export default function MyNotesPage() {
 
       {/* Notes history */}
       <div className="space-y-3">
-        <p className="text-[13px] font-semibold text-[#6e6e73] uppercase tracking-wider px-1">
+        <p className="text-[13px] font-semibold text-ink-soft uppercase tracking-wider px-1">
           История заметок
         </p>
 
         {loading ? (
-          <p className="text-center text-[13px] text-[#aeaeb2] py-8">Загрузка...</p>
+          <p className="text-center text-[13px] text-muted py-8">Загрузка...</p>
         ) : notes.length === 0 ? (
-          <p className="text-center text-[13px] text-[#aeaeb2] py-8">Заметок пока нет</p>
+          <p className="text-center text-[13px] text-muted py-8">Заметок пока нет</p>
         ) : notes.map(note => (
-          <div key={note.id} className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden">
+          <div key={note.id} className="bg-surface rounded-2xl border border-line overflow-hidden">
             <button
               onClick={() => setExpanded(expanded === note.id ? null : note.id)}
-              className="w-full px-5 py-4 flex items-start gap-3 text-left hover:bg-[#f9f9fb] transition-colors"
+              className="w-full px-5 py-4 flex items-start gap-3 text-left hover:bg-subtle transition-colors"
             >
               <div className="flex-1 min-w-0">
-                <p className="text-[13px] text-[#1d1d1f] line-clamp-2">
+                <p className="text-[13px] text-ink line-clamp-2">
                   {note.ai_summary || note.content.slice(0, 120)}
                 </p>
-                <p className="text-[11px] text-[#aeaeb2] mt-1">{fmt(note.created_at)}</p>
+                <p className="text-[11px] text-muted mt-1">{fmt(note.created_at)}</p>
               </div>
               <svg
                 width="16" height="16" viewBox="0 0 24 24" fill="none"
-                stroke="#aeaeb2" strokeWidth="2" strokeLinecap="round"
-                className={`shrink-0 mt-1 transition-transform ${expanded === note.id ? 'rotate-180' : ''}`}
+                stroke="currentColor" strokeWidth="2" strokeLinecap="round"
+                className={`shrink-0 mt-1 text-muted transition-transform ${expanded === note.id ? 'rotate-180' : ''}`}
               >
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </button>
 
             {expanded === note.id && (
-              <div className="px-5 pb-5 border-t border-[#f2f2f7] pt-4 space-y-4">
+              <div className="px-5 pb-5 border-t border-line-soft pt-4 space-y-4">
                 {/* Original text */}
                 <div>
-                  <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-2">
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
                     Заметка
                   </p>
-                  <p className="text-[13px] text-[#3a3a3c] whitespace-pre-wrap leading-relaxed">
+                  <p className="text-[13px] text-ink-soft whitespace-pre-wrap leading-relaxed">
                     {note.content}
                   </p>
                 </div>
 
                 {note.ai_insights && (note.ai_insights as string[]).length > 0 && (
                   <div>
-                    <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-2">
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
                       Выводы
                     </p>
                     <ul className="space-y-1">
                       {(note.ai_insights as string[]).map((s, i) => (
-                        <li key={i} className="flex gap-2 text-[13px] text-[#1d1d1f]">
+                        <li key={i} className="flex gap-2 text-[13px] text-ink">
                           <span className="text-[#0071e3] shrink-0">•</span>{s}
                         </li>
                       ))}
@@ -329,12 +330,12 @@ export default function MyNotesPage() {
 
                 {note.ai_actions && (note.ai_actions as string[]).length > 0 && (
                   <div>
-                    <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-2">
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">
                       Действия
                     </p>
                     <ul className="space-y-1">
                       {(note.ai_actions as string[]).map((a, i) => (
-                        <li key={i} className="flex gap-2 text-[13px] text-[#1d1d1f]">
+                        <li key={i} className="flex gap-2 text-[13px] text-ink">
                           <span className="text-emerald-500 shrink-0">→</span>{a}
                         </li>
                       ))}
@@ -347,7 +348,7 @@ export default function MyNotesPage() {
                     <p className="text-[11px] font-semibold text-[#0071e3] uppercase tracking-wider mb-1">
                       Для AI-менеджера
                     </p>
-                    <p className="text-[13px] text-[#1d1d1f]">{note.ai_for_bot}</p>
+                    <p className="text-[13px] text-ink">{note.ai_for_bot}</p>
                   </div>
                 )}
               </div>

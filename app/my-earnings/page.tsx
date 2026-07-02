@@ -432,8 +432,8 @@ export default function MyEarningsPage() {
     saveLocalSales(userId, next)
   }
 
-  if (loading)   return <div className="p-8 text-center text-[#9a9a95] text-xs">Загрузка...</div>
-  if (forbidden) return <div className="p-8 text-center text-[#9a9a95] text-xs">Доступ только для менеджеров и владельцев</div>
+  if (loading)   return <div className="p-8 text-center text-muted text-xs">Загрузка...</div>
+  if (forbidden) return <div className="p-8 text-center text-muted text-xs">Доступ только для менеджеров и владельцев</div>
 
   const curTierLabel  = tierLabelFor(curRevenue, effTiers)
   const nextTierLabel = distance ? tierLabelFor(distance.nextFrom, effTiers) : null
@@ -443,24 +443,24 @@ export default function MyEarningsPage() {
   const ownerTierLabel   = tierLabelFor(ownerRevenue, effTiers)
 
   return (
-    <div className="bg-white min-h-screen">
+    <div className="bg-surface min-h-screen">
       <div className="max-w-[900px] mx-auto px-4 py-6 space-y-4">
 
         {/* Шапка */}
         <div>
-          <h1 className="text-sm font-semibold text-[#111110]">Мои заработки</h1>
-          <p className="text-[10px] text-[#9a9a95] mt-0.5">Оклад + прогрессивная комиссия + бонус за серию</p>
+          <h1 className="text-sm font-semibold text-ink">Мои заработки</h1>
+          <p className="text-[10px] text-muted mt-0.5">Оклад + прогрессивная комиссия + бонус за серию</p>
         </div>
 
         {/* ── Регламент (как работает заработок) ─────────────────────────────── */}
-        <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-4 py-3">
-          <p className="text-[11px] font-semibold text-[#111110] mb-1.5">Как работает заработок</p>
-          <p className="text-[11px] text-[#6b6b66] leading-snug">
+        <div className="bg-subtle border border-line rounded-lg px-4 py-3">
+          <p className="text-[11px] font-semibold text-ink mb-1.5">Как работает заработок</p>
+          <p className="text-[11px] text-ink-soft leading-snug">
             Действует с <span className="font-semibold">{effSettings.effectiveFrom}</span>.
             Доход = <span className="font-semibold">оклад {fmt(effSalary)}</span>
             {' + '}прогрессивная комиссия с оплаченной B2C-выручки{' + '}бонус за серию.
           </p>
-          <p className="text-[10px] text-[#9a9a95] leading-snug mt-1">
+          <p className="text-[10px] text-muted leading-snug mt-1">
             Кассовый метод: в зачёт идут только фактически поступившие деньги по B2C-заказам. Выплаты 27 числа (1-15) и 15 числа (16-конец прошлого месяца).
           </p>
           {settingsFallbackReason && isOwner && (
@@ -469,7 +469,7 @@ export default function MyEarningsPage() {
             </p>
           )}
           {settingsFallbackReason && !isOwner && (
-            <p className="text-[10px] text-[#9a9a95] leading-snug mt-2">
+            <p className="text-[10px] text-muted leading-snug mt-2">
               Используются базовые правила (настройки не загрузились — обратитесь к админу).
             </p>
           )}
@@ -480,14 +480,14 @@ export default function MyEarningsPage() {
             {showRules ? 'Свернуть' : 'Подробнее →'}
           </button>
           {showRules && (
-            <div className="mt-3 pt-3 border-t border-[#e4e4e0] space-y-3">
+            <div className="mt-3 pt-3 border-t border-line space-y-3">
               <div>
-                <p className="text-[11px] font-semibold text-[#111110] mb-1">Регламент</p>
-                <p className="text-[11px] text-[#6b6b66] leading-snug whitespace-pre-wrap">{effSettings.rulesNote}</p>
+                <p className="text-[11px] font-semibold text-ink mb-1">Регламент</p>
+                <p className="text-[11px] text-ink-soft leading-snug whitespace-pre-wrap">{effSettings.rulesNote}</p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-[#111110] mb-1">Ступенчатая комиссия</p>
-                <ul className="text-[11px] text-[#6b6b66] space-y-0.5">
+                <p className="text-[11px] font-semibold text-ink mb-1">Ступенчатая комиссия</p>
+                <ul className="text-[11px] text-ink-soft space-y-0.5">
                   {effTiers.map((t, i) => {
                     const fromM = (t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)
                     const toLbl = t.to == null ? '∞' : `${(t.to / 1_000_000).toFixed(t.to % 1_000_000 === 0 ? 0 : 1)} млн`
@@ -500,13 +500,13 @@ export default function MyEarningsPage() {
                     )
                   })}
                 </ul>
-                <p className="text-[11px] text-[#6b6b66] leading-snug mt-2">
+                <p className="text-[11px] text-ink-soft leading-snug mt-2">
                   Процент применяется <span className="font-semibold">только к сумме внутри диапазона</span>, а не ко всей выручке.
                 </p>
               </div>
               <div>
-                <p className="text-[11px] font-semibold text-[#111110] mb-1">Бонус за серию</p>
-                <ul className="text-[11px] text-[#6b6b66] space-y-0.5">
+                <p className="text-[11px] font-semibold text-ink mb-1">Бонус за серию</p>
+                <ul className="text-[11px] text-ink-soft space-y-0.5">
                   {effBonuses.map(b => (
                     <li key={b.minRevenue}>
                       · 3 мес ≥ <span className="font-mono">{(b.minRevenue / 1_000_000).toFixed(0)}M</span> → <span className="font-mono font-semibold">+{fmt(b.bonus)}</span>
@@ -520,7 +520,7 @@ export default function MyEarningsPage() {
 
         {/* ── Настройки системы мотивации (owner/admin) ──────────────────────── */}
         {isOwner && (
-          <div className="bg-white border border-amber-200 rounded-lg overflow-hidden">
+          <div className="bg-surface border border-amber-200 rounded-lg overflow-hidden">
             <button onClick={() => setShowSettings(v => !v)}
               className="w-full flex items-center justify-between px-4 py-3 hover:bg-amber-50/40 transition-colors">
               <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-widest">Настройки системы мотивации</p>
@@ -528,27 +528,27 @@ export default function MyEarningsPage() {
             </button>
             {showSettings && (
               <div className="px-4 pb-4 border-t border-amber-200 space-y-3">
-                <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
+                <p className="text-[11px] text-ink-soft mt-3 leading-snug">
                   Меняется один раз, применяется ко всем менеджерам. После Сохранить → menager увидит новые правила после reload.
                 </p>
 
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[10px] text-[#9a9a95]">Оклад менеджера, ₽</label>
+                    <label className="text-[10px] text-muted">Оклад менеджера, ₽</label>
                     <input type="number" min={0} step={1000} value={settingsDraft.baseSalaryRub}
                       onChange={e => setSettingsDraft(d => ({ ...d, baseSalaryRub: Number(e.target.value) || 0 }))}
-                      className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                      className="w-full border border-line rounded px-2 py-1.5 text-xs text-right font-mono" />
                   </div>
                   <div>
-                    <label className="text-[10px] text-[#9a9a95]">Дата начала действия</label>
+                    <label className="text-[10px] text-muted">Дата начала действия</label>
                     <input type="date" value={settingsDraft.effectiveFrom}
                       onChange={e => setSettingsDraft(d => ({ ...d, effectiveFrom: e.target.value }))}
-                      className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs" />
+                      className="w-full border border-line rounded px-2 py-1.5 text-xs" />
                   </div>
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1">Комиссионные ступени</p>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Комиссионные ступени</p>
                   <div className="space-y-1">
                     {settingsDraft.commissionTiers.map((t, idx) => (
                       <div key={idx} className="grid grid-cols-[1fr_1fr_80px_auto] gap-2 items-center">
@@ -563,7 +563,7 @@ export default function MyEarningsPage() {
                               return { ...d, commissionTiers: next }
                             })
                           }}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono disabled:bg-[#fafaf9]" />
+                          className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono disabled:bg-subtle" />
                         <input type="number" min={0} step={100_000}
                           value={t.to ?? ''}
                           placeholder={t.to == null ? '∞' : ''}
@@ -580,7 +580,7 @@ export default function MyEarningsPage() {
                               return { ...d, commissionTiers: next }
                             })
                           }}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono disabled:bg-[#fafaf9]" />
+                          className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono disabled:bg-subtle" />
                         <input type="number" min={0} max={100} step={0.1} value={t.ratePercent}
                           onChange={e => {
                             const v = Number(e.target.value) || 0
@@ -590,16 +590,16 @@ export default function MyEarningsPage() {
                               return { ...d, commissionTiers: next }
                             })
                           }}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
-                        <span className="text-[10px] text-[#9a9a95] w-4">%</span>
+                          className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono" />
+                        <span className="text-[10px] text-muted w-4">%</span>
                       </div>
                     ))}
                   </div>
-                  <p className="text-[10px] text-[#9a9a95] mt-1">Первая from = 0; последняя to = ∞ (оставьте пустым). Соседние границы автоматически синхронизируются.</p>
+                  <p className="text-[10px] text-muted mt-1">Первая from = 0; последняя to = ∞ (оставьте пустым). Соседние границы автоматически синхронизируются.</p>
                 </div>
 
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider mb-1">Бонусы серии (3 мес ≥ порог)</p>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Бонусы серии (3 мес ≥ порог)</p>
                   <div className="space-y-1">
                     {settingsDraft.streakBonuses.map((b, idx) => (
                       <div key={idx} className="grid grid-cols-[1fr_1fr] gap-2 items-center">
@@ -612,7 +612,7 @@ export default function MyEarningsPage() {
                               return { ...d, streakBonuses: next }
                             })
                           }}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                          className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono" />
                         <input type="number" min={0} step={1000} value={b.bonus}
                           onChange={e => {
                             const v = Number(e.target.value) || 0
@@ -622,17 +622,17 @@ export default function MyEarningsPage() {
                               return { ...d, streakBonuses: next }
                             })
                           }}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                          className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono" />
                       </div>
                     ))}
                   </div>
                 </div>
 
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Текст регламента / пояснение</label>
+                  <label className="text-[10px] text-muted">Текст регламента / пояснение</label>
                   <textarea rows={3} value={settingsDraft.rulesNote}
                     onChange={e => setSettingsDraft(d => ({ ...d, rulesNote: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs" />
+                    className="w-full border border-line rounded px-2 py-1.5 text-xs" />
                 </div>
 
                 {settingsError && (
@@ -704,23 +704,23 @@ export default function MyEarningsPage() {
         )}
 
         {/* ── Калькулятор дохода менеджера ──────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Калькулятор дохода</p>
-          <p className="text-[11px] text-[#6b6b66] mb-3 leading-snug">
+        <div className="bg-surface border border-line rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Калькулятор дохода</p>
+          <p className="text-[11px] text-ink-soft mb-3 leading-snug">
             Введите план по оплаченной B2C-выручке за месяц (фактические поступления денег) и увидите прогноз дохода.
           </p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-[10px] text-[#9a9a95]">Плановая оплаченная B2C-выручка за месяц, ₽</label>
+              <label className="text-[10px] text-muted">Плановая оплаченная B2C-выручка за месяц, ₽</label>
               <input type="number" min={0} step={100_000} value={plannedRevenue}
                 onChange={e => setPlannedRevenue(Number(e.target.value) || 0)}
-                className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                className="w-full border border-line rounded px-2 py-1.5 text-xs text-right font-mono" />
             </div>
             <div>
-              <label className="text-[10px] text-[#9a9a95]">Бонус серии</label>
+              <label className="text-[10px] text-muted">Бонус серии</label>
               <select value={plannedBonus}
                 onChange={e => setPlannedBonus(Number(e.target.value))}
-                className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs">
+                className="w-full border border-line rounded px-2 py-1.5 text-xs">
                 <option value={0}>Нет</option>
                 <option value={20_000}>+20 000 ₽ (3 мес ≥ 3M)</option>
                 <option value={40_000}>+40 000 ₽ (3 мес ≥ 4M)</option>
@@ -729,30 +729,30 @@ export default function MyEarningsPage() {
             </div>
           </div>
 
-          <div className="mt-3 pt-3 border-t border-[#f2f2f0] grid grid-cols-2 gap-3">
+          <div className="mt-3 pt-3 border-t border-line-soft grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Комиссия</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(plannedCommission.totalCommission)}</p>
-              <p className="text-[10px] text-[#b8b8b4] mt-0.5">ступень {plannedTierLabel}</p>
+              <p className="text-[10px] text-muted">Комиссия</p>
+              <p className="text-sm font-mono font-semibold text-ink">{fmt(plannedCommission.totalCommission)}</p>
+              <p className="text-[10px] text-faint mt-0.5">ступень {plannedTierLabel}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Оклад</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(effSalary)}</p>
+              <p className="text-[10px] text-muted">Оклад</p>
+              <p className="text-sm font-mono font-semibold text-ink">{fmt(effSalary)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Бонус серии</p>
-              <p className={`text-sm font-mono font-semibold ${plannedBonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+              <p className="text-[10px] text-muted">Бонус серии</p>
+              <p className={`text-sm font-mono font-semibold ${plannedBonus > 0 ? 'text-amber-700' : 'text-faint'}`}>
                 {plannedBonus > 0 ? `+${fmt(plannedBonus)}` : '0 ₽'}
               </p>
             </div>
             <div>
               <p className="text-[10px] text-emerald-600">Итого доход</p>
-              <p className="text-lg font-mono font-bold text-emerald-700">{fmt(plannedTotalIncome)}</p>
+              <p className="text-lg font-mono font-semibold text-emerald-700">{fmt(plannedTotalIncome)}</p>
             </div>
           </div>
           {plannedDistance && (
-            <p className="text-[10px] text-[#6b6b66] mt-2 leading-snug">
-              До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(plannedDistance.remaining)}</span>
+            <p className="text-[10px] text-ink-soft mt-2 leading-snug">
+              До следующей ступени осталось <span className="font-mono font-semibold text-ink">{fmt(plannedDistance.remaining)}</span>
               {' '}(следующая ставка <span className="font-mono font-semibold">{plannedDistance.ratePercent}%</span>).
             </p>
           )}
@@ -760,42 +760,42 @@ export default function MyEarningsPage() {
 
         {/* ── Калькулятор собственника (только для owner/admin/ceo) ─────────── */}
         {isOwner && (
-          <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <div className="bg-surface border border-line rounded-lg px-4 py-3">
             <div className="flex items-baseline justify-between mb-2">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Калькулятор собственника</p>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Калькулятор собственника</p>
               <button onClick={syncOwnerFromManagerCalc}
                 className="text-[10px] text-blue-600 hover:underline">
                 ← Подставить из калькулятора менеджера
               </button>
             </div>
-            <p className="text-[11px] text-[#6b6b66] mb-3 leading-snug">
+            <p className="text-[11px] text-ink-soft mb-3 leading-snug">
               Проверка: высокий доход менеджера — не проблема, если он делает больше оборота. Сравниваем менеджерский кошт и валовую прибыль.
             </p>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Оплаченная B2C-выручка менеджера за месяц, ₽</label>
+                <label className="text-[10px] text-muted">Оплаченная B2C-выручка менеджера за месяц, ₽</label>
                 <input type="number" min={0} step={100_000} value={ownerRevenue}
                   onChange={e => setOwnerRevenue(Number(e.target.value) || 0)}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
-                <p className="text-[10px] text-[#9a9a95] mt-1 leading-snug">Расчёт строится по поступившим деньгам, а не по сумме оформленных заказов.</p>
+                  className="w-full border border-line rounded px-2 py-1.5 text-xs text-right font-mono" />
+                <p className="text-[10px] text-muted mt-1 leading-snug">Расчёт строится по поступившим деньгам, а не по сумме оформленных заказов.</p>
               </div>
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Валовая маржа компании, %</label>
+                <label className="text-[10px] text-muted">Валовая маржа компании, %</label>
                 <input type="number" min={0} max={99} step={1} value={ownerGrossMarginPct}
                   onChange={e => setOwnerGrossMarginPct(Number(e.target.value) || 0)}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                  className="w-full border border-line rounded px-2 py-1.5 text-xs text-right font-mono" />
               </div>
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Оклад менеджера, ₽</label>
+                <label className="text-[10px] text-muted">Оклад менеджера, ₽</label>
                 <input type="number" min={0} step={1_000} value={ownerSalary}
                   onChange={e => setOwnerSalary(Number(e.target.value) || 0)}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs text-right font-mono" />
+                  className="w-full border border-line rounded px-2 py-1.5 text-xs text-right font-mono" />
               </div>
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Бонус серии</label>
+                <label className="text-[10px] text-muted">Бонус серии</label>
                 <select value={ownerBonus}
                   onChange={e => setOwnerBonus(Number(e.target.value))}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1.5 text-xs">
+                  className="w-full border border-line rounded px-2 py-1.5 text-xs">
                   <option value={0}>Нет</option>
                   <option value={20_000}>+20 000 ₽</option>
                   <option value={40_000}>+40 000 ₽</option>
@@ -804,53 +804,53 @@ export default function MyEarningsPage() {
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-[#f2f2f0] space-y-1">
+            <div className="mt-3 pt-3 border-t border-line-soft space-y-1">
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] text-[#6b6b66]">Выручка</span>
-                <span className="text-[12px] font-mono font-semibold text-[#111110]">{fmt(ownerRevenue)}</span>
+                <span className="text-[11px] text-ink-soft">Выручка</span>
+                <span className="text-[12px] font-mono font-semibold text-ink">{fmt(ownerRevenue)}</span>
               </div>
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] text-[#6b6b66]">Оценочная валовая прибыль ({ownerGrossMarginPct}%)</span>
-                <span className="text-[12px] font-mono font-semibold text-[#111110]">{fmt(ownerGrossProfit)}</span>
+                <span className="text-[11px] text-ink-soft">Оценочная валовая прибыль ({ownerGrossMarginPct}%)</span>
+                <span className="text-[12px] font-mono font-semibold text-ink">{fmt(ownerGrossProfit)}</span>
               </div>
-              <div className="flex justify-between items-baseline pt-1.5 border-t border-dotted border-[#eaeae6]">
-                <span className="text-[11px] text-[#6b6b66]">Комиссия менеджера (ступень {ownerTierLabel})</span>
-                <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(ownerCommission.totalCommission)}</span>
-              </div>
-              <div className="flex justify-between items-baseline">
-                <span className="text-[11px] text-[#6b6b66]">Оклад менеджера</span>
-                <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(ownerSalary)}</span>
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-dotted border-line-soft">
+                <span className="text-[11px] text-ink-soft">Комиссия менеджера (ступень {ownerTierLabel})</span>
+                <span className="text-[12px] font-mono text-ink-soft">{fmt(ownerCommission.totalCommission)}</span>
               </div>
               <div className="flex justify-between items-baseline">
-                <span className="text-[11px] text-[#6b6b66]">Бонус серии</span>
-                <span className={`text-[12px] font-mono ${ownerBonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+                <span className="text-[11px] text-ink-soft">Оклад менеджера</span>
+                <span className="text-[12px] font-mono text-ink-soft">{fmt(ownerSalary)}</span>
+              </div>
+              <div className="flex justify-between items-baseline">
+                <span className="text-[11px] text-ink-soft">Бонус серии</span>
+                <span className={`text-[12px] font-mono ${ownerBonus > 0 ? 'text-amber-700' : 'text-faint'}`}>
                   {ownerBonus > 0 ? `+${fmt(ownerBonus)}` : '0 ₽'}
                 </span>
               </div>
-              <div className="flex justify-between items-baseline pt-1.5 border-t border-[#f0f0ee]">
-                <span className="text-[11px] font-semibold text-[#4b4b47]">Итого менеджеру</span>
-                <span className="text-[13px] font-mono font-bold text-[#111110]">{fmt(ownerManagerIncome)}</span>
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-line-soft">
+                <span className="text-[11px] font-semibold text-ink-soft">Итого менеджеру</span>
+                <span className="text-[13px] font-mono font-semibold text-ink">{fmt(ownerManagerIncome)}</span>
               </div>
-              <div className="flex justify-between items-baseline pt-1.5 border-t border-[#f0f0ee]">
+              <div className="flex justify-between items-baseline pt-1.5 border-t border-line-soft">
                 <span className="text-[11px] text-emerald-700 font-semibold">Остаток до прочих расходов</span>
-                <span className={`text-[14px] font-mono font-bold ${ownerCompanyRemainder >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                <span className={`text-[14px] font-mono font-semibold ${ownerCompanyRemainder >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                   {fmt(ownerCompanyRemainder)}
                 </span>
               </div>
             </div>
 
-            <div className="mt-3 pt-3 border-t border-[#f2f2f0] grid grid-cols-2 gap-3">
+            <div className="mt-3 pt-3 border-t border-line-soft grid grid-cols-2 gap-3">
               <div>
-                <p className="text-[10px] text-[#9a9a95]">Доля менеджера от выручки</p>
-                <p className="text-sm font-mono font-semibold text-[#4b4b47]">{ownerShareOfRevenue.toFixed(1)}%</p>
+                <p className="text-[10px] text-muted">Доля менеджера от выручки</p>
+                <p className="text-sm font-mono font-semibold text-ink-soft">{ownerShareOfRevenue.toFixed(1)}%</p>
               </div>
               <div>
-                <p className="text-[10px] text-[#9a9a95]">Доля менеджера от валовой прибыли</p>
-                <p className="text-sm font-mono font-semibold text-[#4b4b47]">{ownerShareOfGross.toFixed(1)}%</p>
+                <p className="text-[10px] text-muted">Доля менеджера от валовой прибыли</p>
+                <p className="text-sm font-mono font-semibold text-ink-soft">{ownerShareOfGross.toFixed(1)}%</p>
               </div>
             </div>
 
-            <p className="text-[10px] text-[#b8b8b4] mt-3 leading-snug">
+            <p className="text-[10px] text-faint mt-3 leading-snug">
               Это управленческая оценка. Фактическая прибыль зависит от себестоимости, рекламы, монтажей, переделок и прочих расходов.
             </p>
           </div>
@@ -858,104 +858,104 @@ export default function MyEarningsPage() {
 
         {/* ── Рейтинг менеджеров — placeholder (только для owner/admin/ceo) ──── */}
         {isOwner && (
-          <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+          <div className="bg-surface border border-line rounded-lg px-4 py-3">
             <div className="flex items-baseline justify-between mb-2">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Рейтинг менеджеров</p>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Рейтинг менеджеров</p>
               <div className="flex items-center gap-1">
                 {(['Сегодня', 'Неделя', 'Месяц'] as const).map(p => (
-                  <span key={p} className="text-[10px] text-[#c4c4be] px-2 py-0.5 border border-[#e4e4e0] rounded">{p}</span>
+                  <span key={p} className="text-[10px] text-faint px-2 py-0.5 border border-line rounded">{p}</span>
                 ))}
               </div>
             </div>
-            <p className="text-[11px] text-[#6b6b66] leading-snug mb-3">
+            <p className="text-[11px] text-ink-soft leading-snug mb-3">
               Рейтинг будет строиться по подтверждённой оплаченной B2C-выручке менеджеров (по фактическим поступлениям денег). Сейчас подключён личный localStorage-режим, поэтому доступны только ваши данные. Следующий этап — таблица <span className="font-mono">manager_sales</span> в Supabase и общая админ-панель.
             </p>
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-y border-[#e4e4e0]">
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Менеджер</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-поступления</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Комиссия</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Заказов</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. чек</span>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-subtle border-y border-line">
+              <span className="text-[10px] font-semibold text-muted uppercase">Менеджер</span>
+              <span className="text-[10px] font-semibold text-muted uppercase text-right">B2C-поступления</span>
+              <span className="text-[10px] font-semibold text-muted uppercase text-right">Комиссия</span>
+              <span className="text-[10px] font-semibold text-muted uppercase text-right">Заказов</span>
+              <span className="text-[10px] font-semibold text-muted uppercase text-right">Ср. чек</span>
             </div>
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3]">
-              <span className="text-[11px] text-[#4b4b47]">Вы (текущий месяц)</span>
-              <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(curRevenue)}</span>
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-line-soft">
+              <span className="text-[11px] text-ink-soft">Вы (текущий месяц)</span>
+              <span className="text-[11px] font-mono text-ink-soft text-right whitespace-nowrap">{fmt(curRevenue)}</span>
               <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(curCommission.totalCommission)}</span>
-              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{curDeals}</span>
-              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">
+              <span className="text-[11px] font-mono text-muted text-right whitespace-nowrap">{curDeals}</span>
+              <span className="text-[11px] font-mono text-muted text-right whitespace-nowrap">
                 {curDeals > 0 ? fmt(Math.round(curRevenue / curDeals)) : '—'}
               </span>
             </div>
-            <p className="text-[10px] text-[#c4c4be] mt-3 text-center leading-snug">
+            <p className="text-[10px] text-faint mt-3 text-center leading-snug">
               Данные других менеджеров появятся после переноса учёта поступлений в Supabase. Пока нет — не показываем, чтобы не вводить в заблуждение.
             </p>
           </div>
         )}
 
         {/* ── Сегодня ────────────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+        <div className="bg-surface border border-line rounded-lg px-4 py-3">
           <div className="flex items-baseline justify-between mb-2">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сегодня</p>
-            <p className="text-[10px] text-[#c4c4be]">{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Сегодня</p>
+            <p className="text-[10px] text-faint">{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Поступлений добавлено</p>
-              <p className="text-base font-mono font-semibold text-[#111110]">{todayAddedCount}</p>
+              <p className="text-[10px] text-muted">Поступлений добавлено</p>
+              <p className="text-base font-mono font-semibold text-ink">{todayAddedCount}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Оплаченная выручка засчитана</p>
-              <p className="text-base font-mono font-semibold text-[#111110]">{fmt(todayRevenue)}</p>
+              <p className="text-[10px] text-muted">Оплаченная выручка засчитана</p>
+              <p className="text-base font-mono font-semibold text-ink">{fmt(todayRevenue)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Комиссия за сегодня</p>
+              <p className="text-[10px] text-muted">Комиссия за сегодня</p>
               <p className="text-base font-mono font-semibold text-emerald-700">{fmt(Math.max(0, todayCommission))}</p>
             </div>
           </div>
         </div>
 
         {/* ── Текущий месяц ──────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
+        <div className="bg-surface border border-line rounded-lg px-4 py-3">
           <div className="flex items-baseline justify-between mb-3">
             <div>
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
-              <p className="text-[11px] text-[#4b4b47] mt-0.5">Оплаченная B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} поступлений</p>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Текущий месяц · {monthLabel(nowKey)}</p>
+              <p className="text-[11px] text-ink-soft mt-0.5">Оплаченная B2C-выручка: <span className="font-mono font-semibold">{fmt(curRevenue)}</span> · {curDeals} поступлений</p>
             </div>
-            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
+            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${TIER_COLORS[curTierLabel] ?? TIER_COLORS['2%']}`}>
               Ставка {curTierLabel}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-[#f2f2f0]">
+          <div className="grid grid-cols-2 gap-3 pt-3 border-t border-line-soft">
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Оклад</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(effSalary)}</p>
+              <p className="text-[10px] text-muted">Оклад</p>
+              <p className="text-sm font-mono font-semibold text-ink">{fmt(effSalary)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Комиссия (прогрессивная)</p>
-              <p className="text-sm font-mono font-semibold text-[#111110]">{fmt(curCommission.totalCommission)}</p>
+              <p className="text-[10px] text-muted">Комиссия (прогрессивная)</p>
+              <p className="text-sm font-mono font-semibold text-ink">{fmt(curCommission.totalCommission)}</p>
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95]">Бонус серии</p>
-              <p className={`text-sm font-mono font-semibold ${streak.bonus > 0 ? 'text-amber-700' : 'text-[#c4c4be]'}`}>
+              <p className="text-[10px] text-muted">Бонус серии</p>
+              <p className={`text-sm font-mono font-semibold ${streak.bonus > 0 ? 'text-amber-700' : 'text-faint'}`}>
                 {streak.bonus > 0 ? `+${fmt(streak.bonus)}` : '0 ₽'}
               </p>
               {streak.bonus > 0 ? (
                 <p className="text-[10px] text-amber-700 mt-0.5">3 мес ≥ {fmt(streak.minRevenue)}</p>
               ) : (
-                <p className="text-[10px] text-[#b8b8b4] mt-0.5">по закрытым месяцам</p>
+                <p className="text-[10px] text-faint mt-0.5">по закрытым месяцам</p>
               )}
             </div>
             <div>
               <p className="text-[10px] text-emerald-600">Итого прогноз дохода</p>
-              <p className="text-lg font-mono font-bold text-emerald-700">{fmt(totalIncome)}</p>
+              <p className="text-lg font-mono font-semibold text-emerald-700">{fmt(totalIncome)}</p>
             </div>
           </div>
 
-          <div className="mt-3 pt-3 border-t border-[#f2f2f0]">
+          <div className="mt-3 pt-3 border-t border-line-soft">
             {distance ? (
-              <p className="text-[11px] text-[#6b6b66] leading-snug">
-                До следующей ступени осталось <span className="font-mono font-semibold text-[#111110]">{fmt(distance.remaining)}</span>.
+              <p className="text-[11px] text-ink-soft leading-snug">
+                До следующей ступени осталось <span className="font-mono font-semibold text-ink">{fmt(distance.remaining)}</span>.
                 {' '}Следующая ставка: <span className={`font-mono font-semibold ${TIER_COLORS[nextTierLabel ?? '2%']?.split(' ')[1] ?? ''}`}>{distance.ratePercent}%</span>
               </p>
             ) : (
@@ -965,8 +965,8 @@ export default function MyEarningsPage() {
         </div>
 
         {/* ── Прогресс по диапазонам ─────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Где вы сейчас на шкале</p>
+        <div className="bg-surface border border-line rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Где вы сейчас на шкале</p>
           <div className="space-y-1.5">
             {effTiers.map((t, i) => {
               const tierResult = curCommission.tiers[i]
@@ -975,18 +975,18 @@ export default function MyEarningsPage() {
               const isCurrent = curRevenue >= t.from && (t.to == null || curRevenue < t.to)
               return (
                 <div key={t.from} className={`flex items-center gap-3 px-3 py-1.5 rounded-lg border ${
-                  isCurrent ? 'border-emerald-200 bg-emerald-50/40' : filled ? 'border-[#e4e4e0] bg-[#fafaf9]' : 'border-[#f0f0ec] bg-white'
+                  isCurrent ? 'border-emerald-200 bg-emerald-50/40' : filled ? 'border-line bg-subtle' : 'border-line-soft bg-surface'
                 }`}>
-                  <span className={`text-[11px] font-mono w-16 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
+                  <span className={`text-[11px] font-mono w-16 flex-shrink-0 ${filled ? 'text-ink' : 'text-faint'}`}>
                     {(t.from / 1_000_000).toFixed(t.from % 1_000_000 === 0 ? 0 : 1)}M–{upperLabel}
                   </span>
-                  <span className={`text-[11px] font-mono font-semibold w-12 flex-shrink-0 ${filled ? 'text-[#111110]' : 'text-[#c4c4be]'}`}>
+                  <span className={`text-[11px] font-mono font-semibold w-12 flex-shrink-0 ${filled ? 'text-ink' : 'text-faint'}`}>
                     {t.ratePercent}%
                   </span>
-                  <span className={`flex-1 text-[11px] font-mono text-right ${filled ? 'text-[#4b4b47]' : 'text-[#c4c4be]'}`}>
+                  <span className={`flex-1 text-[11px] font-mono text-right ${filled ? 'text-ink-soft' : 'text-faint'}`}>
                     {filled ? fmt(tierResult.amountInTier) : '—'}
                   </span>
-                  <span className={`text-[11px] font-mono font-semibold w-24 text-right ${filled ? 'text-emerald-700' : 'text-[#c4c4be]'}`}>
+                  <span className={`text-[11px] font-mono font-semibold w-24 text-right ${filled ? 'text-emerald-700' : 'text-faint'}`}>
                     {filled ? `+${fmt(tierResult.commission)}` : '—'}
                   </span>
                 </div>
@@ -996,9 +996,9 @@ export default function MyEarningsPage() {
         </div>
 
         {/* ── Бонусы за серию ─────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Бонус за серию</p>
-          <p className="text-[11px] text-[#6b6b66] mb-2 leading-snug">
+        <div className="bg-surface border border-line rounded-lg px-4 py-3">
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Бонус за серию</p>
+          <p className="text-[11px] text-ink-soft mb-2 leading-snug">
             3 закрытых календарных месяца подряд держать оплаченную B2C-выручку на уровне (текущий месяц в серию не входит):
           </p>
           <div className="grid grid-cols-3 gap-2">
@@ -1006,77 +1006,77 @@ export default function MyEarningsPage() {
               const active = streak.bonus === b.bonus
               return (
                 <div key={b.minRevenue} className={`rounded-lg px-2.5 py-2 border ${
-                  active ? 'border-amber-300 bg-amber-50' : 'border-[#e4e4e0] bg-[#fafaf9]'
+                  active ? 'border-amber-300 bg-amber-50' : 'border-line bg-subtle'
                 }`}>
-                  <p className="text-[10px] text-[#9a9a95]">{(b.minRevenue / 1_000_000).toFixed(0)}M+ × 3 мес</p>
-                  <p className={`text-sm font-mono font-bold ${active ? 'text-amber-700' : 'text-[#4b4b47]'}`}>+{fmt(b.bonus)}</p>
+                  <p className="text-[10px] text-muted">{(b.minRevenue / 1_000_000).toFixed(0)}M+ × 3 мес</p>
+                  <p className={`text-sm font-mono font-semibold ${active ? 'text-amber-700' : 'text-ink-soft'}`}>+{fmt(b.bonus)}</p>
                 </div>
               )
             })}
           </div>
           {completedMonthsDesc.length < 3 ? (
-            <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
+            <p className="text-[10px] text-muted mt-2 leading-snug">
               Серия считается по закрытым месяцам. Закрыто {completedMonthsDesc.length} из 3 нужных — история подключится по мере накопления поступлений.
             </p>
           ) : streak.bonus === 0 ? (
-            <p className="text-[10px] text-[#9a9a95] mt-2 leading-snug">
+            <p className="text-[10px] text-muted mt-2 leading-snug">
               Последние 3 закрытых месяца на разных тирах — серия не сложилась.
             </p>
           ) : null}
         </div>
 
         {/* ── Добавить продажу ────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+        <div className="bg-surface border border-line rounded-lg overflow-hidden">
           <button onClick={() => setShowAddForm(v => !v)}
-            className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">+ Ручной ввод B2C-поступления</p>
+            className="w-full flex items-center justify-between px-4 py-3 hover:bg-subtle transition-colors">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">+ Ручной ввод B2C-поступления</p>
             <span className="text-[10px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">локальный режим / тест</span>
           </button>
           {showAddForm && (
-            <div className="px-4 pb-4 border-t border-[#f5f5f3] space-y-2">
-              <p className="text-[11px] text-[#6b6b66] mt-3 leading-snug">
+            <div className="px-4 pb-4 border-t border-line-soft space-y-2">
+              <p className="text-[11px] text-ink-soft mt-3 leading-snug">
                 Временный режим: менеджер может добавить фактическое поступление денег вручную (предоплата, остаток, полная оплата или доплата). Позже поступления будут подтягиваться из оплат и заказов автоматически.
               </p>
-              <p className="text-[10px] text-[#9a9a95] leading-snug">
+              <p className="text-[10px] text-muted leading-snug">
                 Каждый менеджер видит только свои ручные поступления в этом браузере (ключ привязан к user_id). После переноса в Supabase доступ будет ограничен по user_id на уровне RLS.
               </p>
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Дата поступления</label>
+                  <label className="text-[10px] text-muted">Дата поступления</label>
                   <input type="date" value={form.date}
                     onChange={e => setForm(f => ({ ...f, date: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                    className="w-full border border-line rounded px-2 py-1 text-xs" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Сумма поступления, ₽</label>
+                  <label className="text-[10px] text-muted">Сумма поступления, ₽</label>
                   <input type="number" min={0} value={form.amount || ''}
                     onChange={e => setForm(f => ({ ...f, amount: Number(e.target.value) }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs text-right font-mono" />
+                    className="w-full border border-line rounded px-2 py-1 text-xs text-right font-mono" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Номер заказа / КП</label>
+                  <label className="text-[10px] text-muted">Номер заказа / КП</label>
                   <input type="text" value={form.order_ref}
                     onChange={e => setForm(f => ({ ...f, order_ref: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                    className="w-full border border-line rounded px-2 py-1 text-xs" />
                 </div>
                 <div>
-                  <label className="text-[10px] text-[#9a9a95]">Клиент</label>
+                  <label className="text-[10px] text-muted">Клиент</label>
                   <input type="text" value={form.client}
                     onChange={e => setForm(f => ({ ...f, client: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                    className="w-full border border-line rounded px-2 py-1 text-xs" />
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Комментарий</label>
+                <label className="text-[10px] text-muted">Комментарий</label>
                 <input type="text" value={form.comment}
                   onChange={e => setForm(f => ({ ...f, comment: e.target.value }))}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs" />
+                  className="w-full border border-line rounded px-2 py-1 text-xs" />
               </div>
               <div>
-                <label className="text-[10px] text-[#9a9a95]">Статус</label>
+                <label className="text-[10px] text-muted">Статус</label>
                 <select value={form.status}
                   onChange={e => setForm(f => ({ ...f, status: e.target.value as LocalSaleStatus }))}
-                  className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs">
+                  className="w-full border border-line rounded px-2 py-1 text-xs">
                   <option value="pending">Ожидает подтверждения</option>
                   <option value="counted">Засчитано</option>
                   <option value="cancelled">Отменено</option>
@@ -1084,35 +1084,35 @@ export default function MyEarningsPage() {
               </div>
               <div className="flex items-center gap-2 pt-1">
                 <button onClick={addLocalSale} disabled={!form.amount || form.amount <= 0}
-                  className="bg-[#111110] hover:bg-[#2a2a28] text-white text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-40">
+                  className="bg-ink hover:bg-ink text-white text-xs font-semibold px-3 py-1.5 rounded disabled:opacity-40">
                   Добавить
                 </button>
                 <button onClick={() => setShowAddForm(false)}
-                  className="text-xs text-[#9a9a95] hover:text-[#111110]">Отмена</button>
+                  className="text-xs text-muted hover:text-ink">Отмена</button>
               </div>
             </div>
           )}
         </div>
 
         {/* ── Таблица всех продаж ─────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-baseline justify-between">
+        <div className="bg-surface border border-line rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-subtle border-b border-line flex items-baseline justify-between">
             <div>
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Мои B2C-поступления и заказы</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">В колонке «В комиссию» отражены только подтверждённые оплаченные поступления. B2B-продажи и неоплаченные заказы в комиссию не идут.</p>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Мои B2C-поступления и заказы</p>
+              <p className="text-[10px] text-faint mt-0.5">В колонке «В комиссию» отражены только подтверждённые оплаченные поступления. B2B-продажи и неоплаченные заказы в комиссию не идут.</p>
             </div>
-            <p className="text-[10px] text-[#c4c4be]">{rows.length} строк</p>
+            <p className="text-[10px] text-faint">{rows.length} строк</p>
           </div>
           {rows.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет B2C-поступлений. Добавьте через форму выше.</div>
+            <div className="p-6 text-center text-muted text-xs">Пока нет B2C-поступлений. Добавьте через форму выше.</div>
           ) : (
             <>
-              <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Дата поступл.</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Заказ</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Клиент</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сумма поступл.</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Статус</span>
+              <div className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 px-3 py-1.5 border-b border-line">
+                <span className="text-[10px] font-semibold text-muted uppercase">Дата поступл.</span>
+                <span className="text-[10px] font-semibold text-muted uppercase">Заказ</span>
+                <span className="text-[10px] font-semibold text-muted uppercase">Клиент</span>
+                <span className="text-[10px] font-semibold text-muted uppercase text-right">Сумма поступл.</span>
+                <span className="text-[10px] font-semibold text-muted uppercase text-center">Статус</span>
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">В комиссию</span>
                 <span />
               </div>
@@ -1120,13 +1120,13 @@ export default function MyEarningsPage() {
                 const st = STATUS_BADGES[r.statusKey] ?? STATUS_BADGES.draft
                 return (
                   <div key={r.key}
-                    className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 items-center px-3 py-1.5 border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                    <span className="text-[11px] text-[#6b6b66] font-mono">{r.date}</span>
-                    <span className="text-[11px] text-[#4b4b47] truncate">{r.sourceLabel}</span>
-                    <span className="text-[11px] text-[#6b6b66] truncate">{r.client}</span>
-                    <span className="text-[11px] font-mono text-[#111110] text-right">{fmt(r.amount)}</span>
+                    className="grid grid-cols-[80px_1fr_1fr_100px_90px_90px_60px] gap-2 items-center px-3 py-1.5 border-b border-line-soft last:border-0 hover:bg-subtle">
+                    <span className="text-[11px] text-ink-soft font-mono">{r.date}</span>
+                    <span className="text-[11px] text-ink-soft truncate">{r.sourceLabel}</span>
+                    <span className="text-[11px] text-ink-soft truncate">{r.client}</span>
+                    <span className="text-[11px] font-mono text-ink text-right">{fmt(r.amount)}</span>
                     <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded text-center ${st.color}`}>{st.label}</span>
-                    <span className={`text-[11px] font-mono font-semibold text-right ${r.counted ? 'text-emerald-700' : 'text-[#c4c4be]'}`}>
+                    <span className={`text-[11px] font-mono font-semibold text-right ${r.counted ? 'text-emerald-700' : 'text-faint'}`}>
                       {r.counted ? fmt(r.amount) : '—'}
                     </span>
                     {r.isLocal && r.localId ? (
@@ -1154,19 +1154,19 @@ export default function MyEarningsPage() {
         </div>
 
         {/* ── По месяцам ──────────────────────────────────────────────────────── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
-          <div className="px-3 py-2 bg-[#fafaf9] border-b border-[#e4e4e0]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">История по месяцам</p>
+        <div className="bg-surface border border-line rounded-lg overflow-hidden">
+          <div className="px-3 py-2 bg-subtle border-b border-line">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">История по месяцам</p>
           </div>
           {sortedMonthKeys.length === 0 ? (
-            <div className="p-6 text-center text-[#9a9a95] text-xs">Пока нет данных</div>
+            <div className="p-6 text-center text-muted text-xs">Пока нет данных</div>
           ) : (
             <>
-              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-[#e4e4e0]">
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Месяц</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Выручка</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-center">Ставка</span>
-                <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Сделки</span>
+              <div className="grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-1.5 border-b border-line">
+                <span className="text-[10px] font-semibold text-muted uppercase">Месяц</span>
+                <span className="text-[10px] font-semibold text-muted uppercase text-right">Выручка</span>
+                <span className="text-[10px] font-semibold text-muted uppercase text-center">Ставка</span>
+                <span className="text-[10px] font-semibold text-muted uppercase text-right">Сделки</span>
                 <span className="text-[10px] font-semibold text-emerald-600 uppercase text-right">Комиссия</span>
               </div>
               {sortedMonthKeys.map(k => {
@@ -1176,14 +1176,14 @@ export default function MyEarningsPage() {
                 const isCurrent = k === nowKey
                 return (
                   <div key={k}
-                    className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 border-b border-[#f5f5f3] last:border-0 ${
-                      isCurrent ? 'bg-emerald-50/40' : 'hover:bg-[#fafaf9]'
+                    className={`grid grid-cols-[1fr_auto_auto_auto_auto] items-center gap-x-3 px-3 py-2 border-b border-line-soft last:border-0 ${
+                      isCurrent ? 'bg-emerald-50/40' : 'hover:bg-subtle'
                     }`}>
-                    <span className="text-xs text-[#111110]">{monthLabel(k)}{isCurrent && <span className="text-[10px] text-emerald-600 ml-1.5">сейчас</span>}</span>
-                    <span className="text-xs font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmtM(m.revenue)}</span>
+                    <span className="text-xs text-ink">{monthLabel(k)}{isCurrent && <span className="text-[10px] text-emerald-600 ml-1.5">сейчас</span>}</span>
+                    <span className="text-xs font-mono text-ink-soft text-right whitespace-nowrap">{fmtM(m.revenue)}</span>
                     <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded text-center whitespace-nowrap ${TIER_COLORS[tl] ?? TIER_COLORS['2%']}`}>{tl}</span>
-                    <span className="text-xs font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.dealCount} шт</span>
-                    <span className="text-xs font-mono font-bold text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
+                    <span className="text-xs font-mono text-muted text-right whitespace-nowrap">{m.dealCount} шт</span>
+                    <span className="text-xs font-mono font-semibold text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
                   </div>
                 )
               })}

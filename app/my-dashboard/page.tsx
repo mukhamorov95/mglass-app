@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/ds'
 
 const AI_TOOLS = [
   {
@@ -67,16 +68,16 @@ export default function MyDashboardPage() {
 
   return (
     <div className="max-w-[860px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-[18px] font-bold text-[#111110] tracking-tight">AI Продажи — дашборд</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Все инструменты для работы с клиентами в одном месте</p>
-      </div>
+      <PageHeader
+        title="AI Продажи — дашборд"
+        subtitle="Все инструменты для работы с клиентами в одном месте"
+      />
 
       {/* Совет дня */}
       <div className="mb-6 bg-[#fffbeb] border border-[#fde68a] rounded-xl px-4 py-3 flex items-start gap-3">
         <span className="text-[18px] mt-0.5">💡</span>
         <div>
-          <p className="text-[11px] font-bold text-[#92400e] uppercase tracking-widest mb-0.5">Совет дня</p>
+          <p className="text-[11px] font-semibold text-[#92400e] uppercase tracking-widest mb-0.5">Совет дня</p>
           <p className="text-[13px] text-[#78350f] leading-relaxed">{TIPS[tipIdx]}</p>
         </div>
       </div>
@@ -88,14 +89,14 @@ export default function MyDashboardPage() {
             className={`flex flex-col p-4 rounded-xl border ${tool.color} hover:shadow-sm transition-all`}>
             <span className="text-[24px] mb-2">{tool.icon}</span>
             <span className={`text-[13px] font-semibold mb-1 ${tool.labelColor}`}>{tool.label}</span>
-            <span className="text-[12px] text-[#6b6b66] leading-tight">{tool.desc}</span>
+            <span className="text-[12px] text-ink-soft leading-tight">{tool.desc}</span>
           </Link>
         ))}
       </div>
 
       {/* Быстрый доступ к калькуляторам */}
       <div>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-3">Быстрый расчёт</p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Быстрый расчёт</p>
         <div className="grid grid-cols-3 gap-2">
           {[
             { href: '/calculator/mirror', label: 'Зеркало с подсветкой' },
@@ -103,7 +104,7 @@ export default function MyDashboardPage() {
             { href: '/calculator/shower', label: 'Душевая перегородка' },
           ].map(item => (
             <Link key={item.href} href={item.href}
-              className="flex items-center justify-center px-4 py-3 rounded-xl border border-[#e4e4e0] bg-white text-[13px] text-[#6b6b66] hover:border-[#c4c4be] hover:text-[#111110] transition-colors text-center">
+              className="flex items-center justify-center px-4 py-3 rounded-xl border border-line bg-surface text-[13px] text-ink-soft hover:border-faint hover:text-ink transition-colors text-center">
               {item.label}
             </Link>
           ))}
