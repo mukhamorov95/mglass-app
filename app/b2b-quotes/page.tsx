@@ -7,6 +7,10 @@ import Pagination from '@/components/Pagination'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
+import {
+  PageHeader, SegmentedTabs, Field, EmptyState, SkeletonRows, StatusPill,
+  IcSearch, type PillTone,
+} from '@/components/ds'
 
 const PAGE_SIZE = 50
 
@@ -78,12 +82,17 @@ type PaymentStatus = 'unpaid' | 'partial' | 'paid'
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const STATUS_META: Record<QuoteStatus, { label: string; bg: string; text: string }> = {
-  quote:            { label: 'Черновик',         bg: 'bg-[#f0f0ec]',  text: 'text-[#6b6b66]'  },
+  quote:            { label: 'Черновик',         bg: 'bg-line-soft',  text: 'text-ink-soft'    },
   sent:             { label: 'В работе',          bg: 'bg-blue-50',    text: 'text-blue-700'    },
   agreed:           { label: 'Согласовано',       bg: 'bg-emerald-50', text: 'text-emerald-700' },
   rejected:         { label: 'Отказ',            bg: 'bg-red-50',     text: 'text-red-600'     },
   confirmed:        { label: 'Запущено в заказ', bg: 'bg-purple-50',  text: 'text-purple-700'  },
   pending_approval: { label: 'На согласовании',  bg: 'bg-amber-50',   text: 'text-amber-700'   },
+}
+
+// Семантический тон StatusPill для отображаемых статусов (интерактивные кнопки оставляем на своих цветах).
+const STATUS_TONE: Record<QuoteStatus, PillTone> = {
+  quote: 'neutral', sent: 'accent', agreed: 'success', rejected: 'danger', confirmed: 'strong', pending_approval: 'warning',
 }
 
 const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: string; short: string }> = {
@@ -646,14 +655,16 @@ export default function B2BQuotesPage() {
   }, [quotes])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="max-w-[1200px] mx-auto px-4 py-5">
+      <SkeletonRows count={6} />
+    </div>
   )
 
   if (loadError) return (
     <div className="min-h-screen flex flex-col items-center justify-center gap-3 text-center px-4">
       <p className="text-[13px] text-red-600">Не удалось загрузить данные</p>
-      <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
-      <button onClick={loadQuotes} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+      <p className="text-[11px] text-muted">{loadError}</p>
+      <button onClick={loadQuotes} className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
         Повторить
       </button>
     </div>
@@ -665,52 +676,51 @@ export default function B2BQuotesPage() {
 
       {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in">
+        <div className="fixed top-4 right-4 z-50 bg-ink text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg animate-in fade-in">
           {toast}
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Расчёты</h1>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">{counts.all} активных · {counts.today} сегодня</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <input
-            type="text"
-            placeholder="Поиск: номер, клиент..."
-            value={search}
-            onChange={e => { setSearch(e.target.value); setPage(1) }}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white w-52"
-          />
-          <Link href="/calculator/b2b"
-            className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
-            + Новый расчёт
-          </Link>
-        </div>
-      </div>
+      <PageHeader
+        title="B2B Расчёты"
+        subtitle={`${counts.all} активных · ${counts.today} сегодня`}
+        actions={
+          <>
+            <Field
+              icon={<IcSearch className="w-3.5 h-3.5" />}
+              type="text"
+              placeholder="Поиск: номер, клиент..."
+              value={search}
+              onChange={e => { setSearch(e.target.value); setPage(1) }}
+              className="w-52"
+            />
+            <Link href="/calculator/b2b"
+              className="bg-ink text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+              + Новый расчёт
+            </Link>
+          </>
+        }
+      />
 
       {/* Status tabs */}
-      <div className="flex items-center gap-1 mb-4 flex-wrap">
-        {ALL_TABS.map(t => (
-          <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }}
-            className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors ${tab === t.key ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
-            {t.label}
-            {(counts[t.key] ?? 0) > 0 && (
-              <span className={`ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === t.key ? 'bg-white/20 text-white' : 'bg-[#f0f0ec] text-[#8a8a85]'}`}>
-                {counts[t.key]}
-              </span>
-            )}
-          </button>
-        ))}
+      <div className="mb-4">
+        <SegmentedTabs
+          value={tab}
+          onChange={v => { setTab(v); setPage(1) }}
+          tabs={ALL_TABS.map(t => ({
+            value: t.key,
+            label: (counts[t.key] ?? 0) > 0 ? `${t.label} · ${counts[t.key]}` : t.label,
+          }))}
+        />
       </div>
 
       {visible.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-10 text-center">
-          <p className="text-[13px] text-[#6b6b66]">Нет расчётов</p>
-          <p className="text-[11px] text-[#9a9a95] mt-0.5">Сохранённые из калькулятора расчёты появятся здесь</p>
-        </div>
+        <EmptyState
+          icon={<IcSearch className="w-8 h-8" />}
+          title="Нет расчётов"
+          hint="Сохранённые из калькулятора расчёты появятся здесь"
+        />
       ) : (
         <>
           <Pagination
@@ -749,7 +759,7 @@ export default function B2BQuotesPage() {
             const discMargin    = discNewTotal > 0 ? (discProfit / discNewTotal * 100) : 0
 
             return (
-              <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div key={quote.id} className="bg-surface border border-line rounded-xl overflow-hidden">
 
                 {/* ── Row header ─────────────────────────────────────────── */}
                 <div className="px-4 py-2.5 flex items-center gap-3">
@@ -758,32 +768,32 @@ export default function B2BQuotesPage() {
                   <button
                     className="flex items-center gap-3 flex-1 min-w-0 text-left"
                     onClick={() => setExpanded(isOpen ? null : quote.id)}>
-                    <span className="text-[11px] font-bold text-[#c4c4be] flex-shrink-0">#{quote.id}</span>
+                    <span className="text-[11px] font-bold text-faint flex-shrink-0">#{quote.id}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         {quote.custom_number && (
-                          <span className="text-[13px] font-bold font-mono text-[#111110]">{quote.custom_number}</span>
+                          <span className="text-[13px] font-bold font-mono text-ink">{quote.custom_number}</span>
                         )}
                         {quote.client_order_number && (
-                          <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">
+                          <span className="text-[11px] font-mono text-ink-soft bg-line-soft px-1.5 py-0.5 rounded">
                             кл. {quote.client_order_number}
                           </span>
                         )}
-                        <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                        <p className="text-[13px] font-semibold text-ink truncate">{quote.client_name}</p>
                         {looksLikeOrder(quote) && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200" title="У просчёта есть признаки заказа — перенесите в B2B-заказы">
                             Похоже, это уже заказ
                           </span>
                         )}
                       </div>
-                      <p className="text-[11px] text-[#9a9a95]">
+                      <p className="text-[11px] text-muted">
                         {dateStr}, {timeStr}
                         {' · '}{quote.items.length} поз.
                         {' · '}{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²
                         {(quote.total_weight ?? 0) > 0 && ` · ${(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг`}
                         {hasAttach && ' · 📎'}
                         {(quote.created_by_name || (parsed.manager_name as string | undefined)) && (
-                          <> {' · '}Просчитал: <span className="text-[#6b6b66] font-medium">{quote.created_by_name || (parsed.manager_name as string)}</span></>
+                          <> {' · '}Просчитал: <span className="text-ink-soft font-medium">{quote.created_by_name || (parsed.manager_name as string)}</span></>
                         )}
                       </p>
                     </div>
@@ -800,14 +810,12 @@ export default function B2BQuotesPage() {
 
                     {/* "На согласовании" — только этот статус показываем плашкой, он требует action */}
                     {status === 'pending_approval' && (
-                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sMeta.bg} ${sMeta.text}`}>
-                        {sMeta.label}
-                      </span>
+                      <StatusPill tone={STATUS_TONE[status]}>{sMeta.label}</StatusPill>
                     )}
 
                     {/* Price */}
                     <div className="text-right min-w-[80px]">
-                      <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
+                      <p className="text-[13px] font-semibold text-ink">{fmt(finalPrice)}</p>
                       <button
                         onClick={() => {
                           setDiscountEditId(isDiscountEditThis ? null : quote.id)
@@ -823,7 +831,7 @@ export default function B2BQuotesPage() {
                       {status === 'quote' && (
                         <button
                           onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); const dl = new Date(); dl.setDate(dl.getDate() + 14); setWorkDeadline(dl.toISOString().slice(0, 10)) }}
-                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
+                          className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-ink text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
                       )}
@@ -851,7 +859,7 @@ export default function B2BQuotesPage() {
                       </>)}
                       {(status === 'rejected' || status === 'sent') && (
                         <button onClick={() => requestStatusChange(quote.id, 'quote')}
-                          className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
+                          className="text-[11px] px-2 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle transition-colors whitespace-nowrap">
                           ↩ Черновик
                         </button>
                       )}
@@ -859,36 +867,36 @@ export default function B2BQuotesPage() {
                       {/* PDF */}
                       <a href={`/api/quotes/${quote.id}/pdf`} target="_blank" download
                         title="Скачать КП в PDF"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle hover:text-ink transition-colors whitespace-nowrap">
                         📄 PDF
                       </a>
                       {/* ТГ — copy Telegram work text to clipboard */}
                       <button
                         onClick={() => copyTelegramText(quote)}
                         title="Скопировать текст для Telegram"
-                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-line text-ink-soft hover:bg-subtle hover:text-ink transition-colors whitespace-nowrap">
                         {copiedId === quote.id ? '✓' : 'ТГ'}
                       </button>
                       {/* КП */}
                       <Link href={`/b2b-quotes/${quote.id}/kp`} target="_blank"
                         title="Открыть КП для печати"
-                        className="text-[11px] text-[#c4c4be] hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors">
+                        className="text-[11px] text-faint hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors">
                         КП
                       </Link>
                       {/* Редактировать в калькуляторе (та же запись; для копии — кнопка ⧉ рядом) */}
                       <Link href={`/calculator/b2b?orderId=${quote.id}`}
                         title="Редактировать в калькуляторе"
-                        className="text-[11px] text-[#c4c4be] hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
+                        className="text-[11px] text-faint hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
                         🧮
                       </Link>
                       {/* Duplicate */}
                       <button onClick={() => duplicateQuote(quote)} title="Дублировать расчёт"
-                        className="text-[11px] text-[#c4c4be] hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50 transition-colors">
+                        className="text-[11px] text-faint hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50 transition-colors">
                         ⧉
                       </button>
                       {/* Delete */}
                       <button onClick={() => setDeletingId(quote.id)} title="Удалить"
-                        className="text-[#c4c4be] hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
+                        className="text-faint hover:text-red-500 p-1 rounded hover:bg-red-50 transition-colors">
                         <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
@@ -899,19 +907,19 @@ export default function B2BQuotesPage() {
 
                 {/* ── Payment edit panel ─────────────────────────────────── */}
                 {isPayEditThis && (
-                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-[#fafaf9] flex items-center gap-2 flex-wrap">
-                    <span className="text-[11px] font-semibold text-[#6b6b66] uppercase tracking-widest">Оплата:</span>
+                  <div className="px-4 py-3 border-t border-line-soft bg-subtle flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-widest">Оплата:</span>
                     {(['unpaid', 'partial', 'paid'] as PaymentStatus[]).map(ps => (
                       <button key={ps}
                         onClick={() => ps === 'partial' ? null : savePayStatus(quote.id, ps)}
-                        className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors border ${payStatus === ps ? `${PAYMENT_META[ps].bg} ${PAYMENT_META[ps].text} border-transparent font-semibold` : 'border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
+                        className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors border ${payStatus === ps ? `${PAYMENT_META[ps].bg} ${PAYMENT_META[ps].text} border-transparent font-semibold` : 'border-line text-ink-soft hover:bg-canvas'}`}>
                         {PAYMENT_META[ps].short} {PAYMENT_META[ps].label}
                       </button>
                     ))}
                     {/* Partial amount inline */}
                     <div className="flex items-center gap-1.5 ml-1">
                       <input ref={payAmountRef} type="number" min="0"
-                        className="w-28 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-amber-400"
+                        className="w-28 bg-surface border border-line rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-amber-400"
                         value={payAmount}
                         onChange={e => setPayAmount(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && Number(payAmount) > 0 && savePayStatus(quote.id, 'partial', Number(payAmount))}
@@ -924,46 +932,46 @@ export default function B2BQuotesPage() {
                       </button>
                     </div>
                     <button onClick={() => { setPayEditId(null); setPayAmount('') }}
-                      className="ml-auto text-[#9a9a95] hover:text-[#111110] text-sm transition-colors">✕</button>
+                      className="ml-auto text-muted hover:text-ink text-sm transition-colors">✕</button>
                   </div>
                 )}
 
                 {/* ── Discount edit panel ────────────────────────────────── */}
                 {isDiscountEditThis && (
-                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-[#fafaf9] space-y-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Скидка по просчёту</p>
+                  <div className="px-4 py-3 border-t border-line-soft bg-subtle space-y-2.5">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-muted">Скидка по просчёту</p>
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[11px] text-[#6b6b66]">
+                      <span className="text-[11px] text-ink-soft">
                         Текущая: <span className="font-semibold">{quote.discount_percent ?? 0}%</span>
                       </span>
-                      <span className="text-[#c4c4be] select-none">→</span>
-                      <span className="text-[11px] text-[#6b6b66]">Новая:</span>
+                      <span className="text-faint select-none">→</span>
+                      <span className="text-[11px] text-ink-soft">Новая:</span>
                       <div className="flex items-center gap-1">
                         <input
                           ref={discountInputRef}
                           type="number" min="0" max="50" step="1"
-                          className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none focus:border-[#111110] transition-colors"
+                          className="w-16 bg-surface border border-line rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none focus:border-ink transition-colors"
                           value={discountInput}
                           onChange={e => setDiscountInput(e.target.value)}
                           onKeyDown={e => e.key === 'Enter' && saveDiscount(quote.id)}
                         />
-                        <span className="text-[12px] text-[#6b6b66]">%</span>
+                        <span className="text-[12px] text-ink-soft">%</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[220px]">
-                      <span className="text-[#9a9a95]">Было к оплате</span>
-                      <span className="font-mono text-right text-[#6b6b66]">{finalPrice.toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[#9a9a95]">Станет к оплате</span>
-                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : 'text-[#111110]'}`}>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-surface border border-line-soft rounded-lg px-3 py-2 w-fit min-w-[220px]">
+                      <span className="text-muted">Было к оплате</span>
+                      <span className="font-mono text-right text-ink-soft">{finalPrice.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-muted">Станет к оплате</span>
+                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : 'text-ink'}`}>
                         {discNewTotal.toLocaleString('ru-RU')} ₽
                       </span>
-                      <span className="text-[#9a9a95]">Себестоимость</span>
-                      <span className="font-mono text-right text-[#6b6b66]">{discCost.toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[#9a9a95]">Прибыль</span>
-                      <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
+                      <span className="text-muted">Себестоимость</span>
+                      <span className="font-mono text-right text-ink-soft">{discCost.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-muted">Прибыль</span>
+                      <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-ink'}`}>
                         {discProfit.toLocaleString('ru-RU')} ₽
                       </span>
-                      <span className="text-[#9a9a95]">Маржа</span>
+                      <span className="text-muted">Маржа</span>
                       <span className={`font-mono text-right font-semibold ${discMargin < 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
                         {discMargin.toFixed(1)}%
                       </span>
@@ -975,12 +983,12 @@ export default function B2BQuotesPage() {
                       <button
                         onClick={() => saveDiscount(quote.id)}
                         disabled={discNewPct < 0 || discNewPct > 50}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
                         Сохранить
                       </button>
                       <button
                         onClick={() => setDiscountEditId(null)}
-                        className="text-[#9a9a95] hover:text-[#111110] transition-colors text-sm px-1">
+                        className="text-muted hover:text-ink transition-colors text-sm px-1">
                         Отмена
                       </button>
                     </div>
@@ -989,11 +997,11 @@ export default function B2BQuotesPage() {
 
                 {/* ── В работу: выбор даты запуска ──────────────────────── */}
                 {isWorkDateThis && (
-                  <div className="px-4 py-3 border-t border-[#f0f0ec] bg-blue-50/50 flex items-center gap-3 flex-wrap">
+                  <div className="px-4 py-3 border-t border-line-soft bg-blue-50/50 flex items-center gap-3 flex-wrap">
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Дата запуска:</span>
                       <input ref={workDateRef} type="date"
-                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        className="bg-surface border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
                         value={workDate}
                         onChange={e => setWorkDate(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
@@ -1003,7 +1011,7 @@ export default function B2BQuotesPage() {
                       <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Срок сдачи:</span>
                       <input type="date"
                         title="Когда отдать клиенту — используется в Сводке производства"
-                        className="bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        className="bg-surface border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
                         value={workDeadline}
                         onChange={e => setWorkDeadline(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
@@ -1012,7 +1020,7 @@ export default function B2BQuotesPage() {
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">№ заказа:</span>
                       <input type="text" placeholder="напр. 1453-1"
-                        className="w-28 bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
+                        className="w-28 bg-surface border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-blue-400 font-mono"
                         value={workNumber}
                         onChange={e => setWorkNumber(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
@@ -1023,23 +1031,23 @@ export default function B2BQuotesPage() {
                     </p>
                     <div className="flex items-center gap-2 ml-auto">
                       <button onClick={confirmWorkDate} disabled={!workDate}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
                         Запустить →
                       </button>
                       <button onClick={() => setWorkDateId(null)}
-                        className="text-[#9a9a95] hover:text-[#111110] transition-colors px-1 text-sm">✕</button>
+                        className="text-muted hover:text-ink transition-colors px-1 text-sm">✕</button>
                     </div>
                   </div>
                 )}
 
                 {/* ── Status change comment panel ────────────────────────── */}
                 {isPendingThis && (
-                  <div className={`px-4 py-3 border-t border-[#f0f0ec] flex items-center gap-2 ${pendingChange.status === 'rejected' ? 'bg-red-50/40' : 'bg-emerald-50/40'}`}>
+                  <div className={`px-4 py-3 border-t border-line-soft flex items-center gap-2 ${pendingChange.status === 'rejected' ? 'bg-red-50/40' : 'bg-emerald-50/40'}`}>
                     <span className={`text-[11px] font-semibold flex-shrink-0 ${pendingChange.status === 'rejected' ? 'text-red-600' : 'text-emerald-700'}`}>
                       {STATUS_META[pendingChange.status as QuoteStatus]?.label}:
                     </span>
                     <input ref={commentInputRef} type="text"
-                      className="flex-1 min-w-0 bg-white border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] transition-all"
+                      className="flex-1 min-w-0 bg-surface border border-line rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-ink transition-all"
                       value={pendingComment}
                       onChange={e => setPendingComment(e.target.value)}
                       onKeyDown={e => e.key === 'Enter' && confirmStatusChange()}
@@ -1049,17 +1057,17 @@ export default function B2BQuotesPage() {
                       Подтвердить →
                     </button>
                     <button onClick={() => { setPendingChange(null); setPendingComment('') }}
-                      className="text-[#9a9a95] hover:text-[#111110] transition-colors px-1 text-sm">✕</button>
+                      className="text-muted hover:text-ink transition-colors px-1 text-sm">✕</button>
                   </div>
                 )}
 
                 {/* ── Expanded: items table ──────────────────────────────── */}
                 {isOpen && (
-                  <div className="border-t border-[#f0f0ec]">
+                  <div className="border-t border-line-soft">
 
                     {/* Status comment (last) */}
                     {statusComment && (
-                      <div className={`px-4 py-2 text-[11px] flex items-center gap-2 border-b border-[#f0f0ec] ${status === 'rejected' ? 'bg-red-50/40 text-red-700' : 'bg-emerald-50/40 text-emerald-700'}`}>
+                      <div className={`px-4 py-2 text-[11px] flex items-center gap-2 border-b border-line-soft ${status === 'rejected' ? 'bg-red-50/40 text-red-700' : 'bg-emerald-50/40 text-emerald-700'}`}>
                         <span className="font-semibold">{sMeta.label}:</span>
                         <span>{statusComment}</span>
                       </div>
@@ -1068,7 +1076,7 @@ export default function B2BQuotesPage() {
                     <div className="overflow-x-auto">
                       <table className="w-full text-[11px]">
                         <thead>
-                          <tr className="border-b border-[#f0f0ec] bg-[#fafaf9] text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">
+                          <tr className="border-b border-line-soft bg-subtle text-[10px] font-semibold text-muted uppercase tracking-widest whitespace-nowrap">
                             <th className="px-2 py-1.5 text-center w-7">#</th>
                             <th className="px-2 py-1.5 text-left min-w-[130px]">Материал</th>
                             <th className="px-2 py-1.5 text-left min-w-[70px]">Тип</th>
@@ -1079,18 +1087,18 @@ export default function B2BQuotesPage() {
                             <th className="px-2 py-1.5 text-right w-14">Кв.м</th>
                             <th className="px-2 py-1.5 text-right w-14">Вес, кг</th>
                             <th className="px-2 py-1.5 text-right w-18">Цена/м²</th>
-                            <th className="px-2 py-1.5 text-right w-20 text-[#111110]">Итого</th>
-                            <th className="px-2 py-1.5 text-right w-20 text-[#9a9a95]">Себест.</th>
+                            <th className="px-2 py-1.5 text-right w-20 text-ink">Итого</th>
+                            <th className="px-2 py-1.5 text-right w-20 text-muted">Себест.</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-[#f8f8f7]">
+                        <tbody className="divide-y divide-canvas">
                           {quote.items.map((item, idx) => {
                             const itemFull = item.saleIncVat ?? 0
                             return (
-                              <tr key={idx} className="hover:bg-[#fafaf9]">
-                                <td className="px-2 py-1 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
+                              <tr key={idx} className="hover:bg-subtle">
+                                <td className="px-2 py-1 text-center text-[10px] font-bold text-faint">{idx + 1}</td>
                                 <td className="px-2 py-1">
-                                  <div className="font-medium text-[#111110]">{String(item.materialName ?? '')}</div>
+                                  <div className="font-medium text-ink">{String(item.materialName ?? '')}</div>
                                   {(item.hasTempering || (item.services?.length ?? 0) > 0) && (
                                     <div className="flex gap-0.5 flex-wrap mt-0.5">
                                       {item.hasTempering && <span className="text-[8px] font-medium px-1 py-px rounded bg-orange-50 text-orange-600">закалка</span>}
@@ -1100,34 +1108,34 @@ export default function B2BQuotesPage() {
                                     </div>
                                   )}
                                   {item.comment && (
-                                    <p className="text-[10px] text-[#9a9a95] italic mt-0.5">{item.comment}</p>
+                                    <p className="text-[10px] text-muted italic mt-0.5">{item.comment}</p>
                                   )}
                                 </td>
-                                <td className="px-2 py-1 text-[#6b6b66] whitespace-nowrap">{String(item.category ?? '')}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.thickness ?? ''}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.width ?? ''}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.height ?? ''}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.quantity ?? ''}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#6b6b66]">{Number(item.totalWeight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.pricePerM2 ?? 0).toLocaleString('ru-RU')}</td>
-                                <td className="px-2 py-1 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemFull.toLocaleString('ru-RU')} ₽</td>
-                                <td className="px-2 py-1 text-right font-mono text-[#9a9a95] whitespace-nowrap">{Number(item.costExVat ?? 0).toLocaleString('ru-RU')} ₽</td>
+                                <td className="px-2 py-1 text-ink-soft whitespace-nowrap">{String(item.category ?? '')}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{item.thickness ?? ''}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{item.width ?? ''}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{item.height ?? ''}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{item.quantity ?? ''}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink-soft">{Number(item.totalWeight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
+                                <td className="px-2 py-1 text-right font-mono text-ink">{Number(item.pricePerM2 ?? 0).toLocaleString('ru-RU')}</td>
+                                <td className="px-2 py-1 text-right font-mono font-semibold text-ink whitespace-nowrap">{itemFull.toLocaleString('ru-RU')} ₽</td>
+                                <td className="px-2 py-1 text-right font-mono text-muted whitespace-nowrap">{Number(item.costExVat ?? 0).toLocaleString('ru-RU')} ₽</td>
                               </tr>
                             )
                           })}
                         </tbody>
                         <tfoot>
-                          <tr className="border-t border-[#e4e4e0] bg-[#fafaf9] text-[#111110]">
-                            <td colSpan={7} className="px-2 py-1.5 text-[10px] text-[#6b6b66]">{quote.items.length} позиций</td>
+                          <tr className="border-t border-line bg-subtle text-ink">
+                            <td colSpan={7} className="px-2 py-1.5 text-[10px] text-ink-soft">{quote.items.length} позиций</td>
                             <td className="px-2 py-1.5 text-right font-mono text-[11px]">{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
-                            <td className="px-2 py-1.5 text-right font-mono text-[11px] text-[#6b6b66]">{(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
+                            <td className="px-2 py-1.5 text-right font-mono text-[11px] text-ink-soft">{(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
                             <td />
-                            <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap text-[11px] text-[#6b6b66]">{fmt(quote.total_sale_inc_vat)}</td>
+                            <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap text-[11px] text-ink-soft">{fmt(quote.total_sale_inc_vat)}</td>
                             <td />
                           </tr>
                           {(quote.discount_percent ?? 0) > 0 && (
-                            <tr className="bg-[#fafaf9]">
+                            <tr className="bg-subtle">
                               <td colSpan={10} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
                                 Скидка {quote.discount_percent}%
                               </td>
@@ -1137,9 +1145,9 @@ export default function B2BQuotesPage() {
                               <td />
                             </tr>
                           )}
-                          <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
-                            <td colSpan={10} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
-                            <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
+                          <tr className="bg-subtle border-t border-line font-semibold">
+                            <td colSpan={10} className="px-2 py-1.5 text-right text-[11px] text-ink">Итого к оплате</td>
+                            <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-ink">{fmt(finalPrice)}</td>
                             <td />
                           </tr>
                         </tfoot>
@@ -1162,25 +1170,25 @@ export default function B2BQuotesPage() {
                       if (!summary.totalSheets) return null
                       const fmtRub = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
                       return (
-                        <div className="border-t border-[#f0f0ec]">
-                          <div className="px-4 py-2 bg-[#fafaf9]">
-                            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Предварительная закупка</p>
+                        <div className="border-t border-line-soft">
+                          <div className="px-4 py-2 bg-subtle">
+                            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-2">Предварительная закупка</p>
                             <div className="space-y-1">
                               {summary.rows.map(row => (
                                 <div key={row.matKey} className="flex items-center justify-between text-[11px]">
                                   <div>
-                                    <span className="font-medium text-[#111110]">{row.matLabel}</span>
-                                    <span className="text-[#9a9a95] ml-2">≈ {row.sheetsNeeded} л.</span>
+                                    <span className="font-medium text-ink">{row.matLabel}</span>
+                                    <span className="text-muted ml-2">≈ {row.sheetsNeeded} л.</span>
                                     {row.temperingCost > 0 && (
                                       <span className="text-amber-600 ml-1.5 text-[10px]">+ закалка {fmtRub(row.temperingCost)}</span>
                                     )}
                                   </div>
-                                  <span className="font-mono text-[#6b6b66]">{fmtRub(row.sheetCost)}</span>
+                                  <span className="font-mono text-ink-soft">{fmtRub(row.sheetCost)}</span>
                                 </div>
                               ))}
-                              <div className="flex justify-between text-[11px] pt-1 border-t border-[#e4e4e0] mt-1">
-                                <span className="text-[#6b6b66]">Итого материал</span>
-                                <span className="font-mono font-semibold text-[#111110]">{fmtRub(summary.grandTotal)}</span>
+                              <div className="flex justify-between text-[11px] pt-1 border-t border-line mt-1">
+                                <span className="text-ink-soft">Итого материал</span>
+                                <span className="font-mono font-semibold text-ink">{fmtRub(summary.grandTotal)}</span>
                               </div>
                             </div>
                           </div>
@@ -1190,7 +1198,7 @@ export default function B2BQuotesPage() {
 
                     {/* Work start date */}
                     {workStartedAt && (
-                      <div className="px-4 py-2 border-t border-[#f0f0ec] flex items-center gap-2 text-[11px] text-blue-700 bg-blue-50/30">
+                      <div className="px-4 py-2 border-t border-line-soft flex items-center gap-2 text-[11px] text-blue-700 bg-blue-50/30">
                         <span className="font-semibold">В работе с:</span>
                         <span className="font-mono">
                           {new Date(workStartedAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
@@ -1199,22 +1207,22 @@ export default function B2BQuotesPage() {
                     )}
 
                     {/* Payment status in expanded view */}
-                    <div className="px-4 py-2.5 border-t border-[#f0f0ec] flex items-center gap-3">
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Оплата</span>
+                    <div className="px-4 py-2.5 border-t border-line-soft flex items-center gap-3">
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-muted">Оплата</span>
                       <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${pMeta.bg} ${pMeta.text}`}>
                         {pMeta.short} {pMeta.label}
                         {payStatus === 'partial' && getPayAmount(quote) > 0 && ` — ${getPayAmount(quote).toLocaleString('ru-RU')} ₽`}
                       </span>
                       <button
                         onClick={() => { setPayEditId(isPayEditThis ? null : quote.id); setPayAmount('') }}
-                        className="text-[11px] text-[#9a9a95] hover:text-[#111110] transition-colors underline underline-offset-2">
+                        className="text-[11px] text-muted hover:text-ink transition-colors underline underline-offset-2">
                         изменить
                       </button>
                     </div>
 
                     {/* Notes / comment */}
                     {userNotes && (
-                      <p className="px-4 py-2 text-[11px] text-[#6b6b66] italic border-t border-[#f0f0ec]">{userNotes}</p>
+                      <p className="px-4 py-2 text-[11px] text-ink-soft italic border-t border-line-soft">{userNotes}</p>
                     )}
 
                     {/* Attachments */}
@@ -1222,10 +1230,10 @@ export default function B2BQuotesPage() {
                       const files = attachments.filter(a => a.order_id === quote.id)
                       if (files.length === 0) return null
                       return (
-                        <div className="px-4 py-2.5 border-t border-[#f0f0ec] flex flex-wrap gap-2">
+                        <div className="px-4 py-2.5 border-t border-line-soft flex flex-wrap gap-2">
                           {files.map(f => (
                             <a key={f.id} href={`/api/b2b/attachments/${f.id}`} target="_blank" rel="noopener noreferrer"
-                              className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#e4e4e0] rounded-lg text-[11px] text-[#111110] hover:bg-[#fafaf9] hover:border-[#c4c4be] transition-colors">
+                              className="flex items-center gap-1.5 px-2.5 py-1.5 border border-line rounded-lg text-[11px] text-ink hover:bg-subtle hover:border-faint transition-colors">
                               <span className="text-[13px]">
                                 {/\.pdf$/i.test(f.file_name) ? '📄' :
                                  /\.(jpe?g|png|heic|heif)$/i.test(f.file_name) ? '🖼️' :
@@ -1234,7 +1242,7 @@ export default function B2BQuotesPage() {
                               </span>
                               <span className="max-w-[140px] truncate font-medium">{f.file_name}</span>
                               {f.file_size && (
-                                <span className="text-[#9a9a95] flex-shrink-0 font-mono">
+                                <span className="text-muted flex-shrink-0 font-mono">
                                   {f.file_size < 1024 * 1024
                                     ? `${(f.file_size / 1024).toFixed(0)} КБ`
                                     : `${(f.file_size / (1024 * 1024)).toFixed(1)} МБ`}
@@ -1261,12 +1269,12 @@ export default function B2BQuotesPage() {
       {/* ── Delete modal ────────────────────────────────────────────────────── */}
       {deletingId !== null && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center px-4">
-          <div className="bg-white rounded-2xl p-6 max-w-sm w-full shadow-xl">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-1">Удалить расчёт?</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-5">Это действие нельзя отменить.</p>
+          <div className="bg-surface rounded-2xl p-6 max-w-sm w-full shadow-xl">
+            <h2 className="text-[16px] font-semibold text-ink mb-1">Удалить расчёт?</h2>
+            <p className="text-[13px] text-ink-soft mb-5">Это действие нельзя отменить.</p>
             <div className="flex gap-2">
               <button onClick={() => setDeletingId(null)}
-                className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
               <button onClick={handleDelete} disabled={deleting}
