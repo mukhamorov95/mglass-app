@@ -31,7 +31,7 @@ export default function PricingV2Page() {
   const [saved, setSaved]     = useState(false)
   const [error, setError]     = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   const SELECT_COLUMNS =
     'product_category, production_tax_percent, production_margin_percent, b2c_tax_percent, b2c_margin_percent, factory_overhead_percent, scrap_reserve_percent, packaging_cost_per_m2, active'

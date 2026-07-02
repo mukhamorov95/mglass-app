@@ -363,7 +363,7 @@ export default function MirrorCalculatorPage() {
         setLoading(false)
       }
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   function handleMirrorNameChange(name: string) {

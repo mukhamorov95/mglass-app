@@ -53,7 +53,7 @@ export default function MirrorLightingPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
   useEffect(() => { if (addingTab) newTabRef.current?.focus() }, [addingTab])
 
   // Вкладки: базовые + сохранённые в БД + обнаруженные в компонентах

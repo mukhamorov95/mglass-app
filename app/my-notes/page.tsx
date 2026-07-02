@@ -65,7 +65,7 @@ export default function MyNotesPage() {
       typeof window !== 'undefined' &&
       ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
     )
-    loadNotes()
+    loadNotes().catch(() => setLoading(false))
   }, [])
 
   async function loadNotes() {

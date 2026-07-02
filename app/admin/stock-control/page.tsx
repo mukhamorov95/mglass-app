@@ -39,7 +39,7 @@ export default function StockControlPage() {
   const [saving,  setSaving]  = useState<number | null>(null)
   const [showAll, setShowAll] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

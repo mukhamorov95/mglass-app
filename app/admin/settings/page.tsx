@@ -19,7 +19,7 @@ export default function SettingsPage() {
   const [saved, setSaved]     = useState<number | null>(null)
   const [error, setError]     = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

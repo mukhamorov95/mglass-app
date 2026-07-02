@@ -699,7 +699,7 @@ function LibraryTab() {
     setLoading(false)
   }, [filterStatus, filterType])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function update(id: number, fields: Partial<Script>) {
     await fetch('/api/marketing/scripts', {

@@ -62,7 +62,7 @@ export default function VladislavPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('attention')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     const sb = createClient()

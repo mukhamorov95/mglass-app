@@ -132,7 +132,7 @@ export default function AIProposalsPage() {
     }
   }, [filter])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // ── Form helpers ────────────────────────────────────────────────────────────
   function setField<K extends keyof CreateFormFields>(key: K, value: CreateFormFields[K]) {

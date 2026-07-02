@@ -170,7 +170,7 @@ export default function B2BPipelinePage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

@@ -73,7 +73,7 @@ export default function MaterialsAdminPage() {
     load()
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

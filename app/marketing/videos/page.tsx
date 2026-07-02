@@ -68,7 +68,7 @@ export default function VideoFactoryPage() {
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState<number | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

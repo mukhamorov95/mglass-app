@@ -185,7 +185,7 @@ function ScriptsTab() {
   const [saving, setSaving]           = useState(false)
   const [copied, setCopied]           = useState<number | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)
@@ -407,7 +407,7 @@ function KnowledgeTab() {
   const [saving, setSaving]       = useState(false)
   const [tagInput, setTagInput]   = useState('')
 
-  useEffect(() => { load() }, [catFilter])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [catFilter])
 
   async function load() {
     setLoading(true)
@@ -574,7 +574,7 @@ function FollowupTab() {
   const [saving, setSaving]         = useState(false)
   const [copied, setCopied]         = useState<number | null>(null)
 
-  useEffect(() => { load() }, [ctxFilter])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [ctxFilter])
 
   async function load() {
     setLoading(true)

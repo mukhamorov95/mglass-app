@@ -62,7 +62,7 @@ export default function MirrorFramesPage() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   function startEdit(f: MirrorFrame) {
     setEditId(f.id)

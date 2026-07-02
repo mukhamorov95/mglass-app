@@ -85,7 +85,7 @@ export default function MyQueuePage() {
     setLoading(false)
   }, [sb])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function markStart(taskId: number) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t)) // optimistic

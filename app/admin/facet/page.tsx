@@ -26,7 +26,7 @@ export default function FacetPage() {
   // Editing state per row
   const [edits, setEdits] = useState<Record<number, Partial<FacetRow>>>({})
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

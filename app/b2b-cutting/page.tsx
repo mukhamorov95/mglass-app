@@ -595,7 +595,7 @@ export default function B2BCuttingPage() {
 
   const resultsRef = useRef<HTMLDivElement>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

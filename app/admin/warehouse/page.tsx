@@ -39,7 +39,7 @@ export default function WarehousePage() {
   const [filterLow, setFilterLow] = useState(false)
   const [search, setSearch]       = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

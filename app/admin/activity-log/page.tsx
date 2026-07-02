@@ -46,7 +46,7 @@ export default function ActivityLogPage() {
   const [filterAction, setFilterAction] = useState('')
   const [filterUser, setFilterUser]     = useState('')
 
-  useEffect(() => { loadLog() }, [])
+  useEffect(() => { loadLog().catch(() => setLoading(false)) }, [])
 
   async function loadLog() {
     setLoading(true)

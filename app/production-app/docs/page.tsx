@@ -51,7 +51,7 @@ export default function DocsPage() {
     setLoading(false)
   }, [sb])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function togglePrinted(o: Order) {
     setBusy(o.id)

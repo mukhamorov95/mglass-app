@@ -31,7 +31,7 @@ export default function DeliveryZonesPage() {
   const [linearSaving, setLinearSaving] = useState(false)
   const [linearSaved, setLinearSaved]   = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

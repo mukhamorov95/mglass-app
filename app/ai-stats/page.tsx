@@ -87,7 +87,7 @@ export default function AiStatsPage() {
       setChats(enriched)
       setLoading(false)
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function openChat(chat: Chat) {

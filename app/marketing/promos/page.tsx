@@ -48,7 +48,7 @@ export default function PromoCenterPage() {
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

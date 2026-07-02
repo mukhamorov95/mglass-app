@@ -88,7 +88,7 @@ function BudgetTab() {
   const [saving, setSaving] = useState(false)
   const [filterType, setFilterType] = useState('all')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)
@@ -272,7 +272,7 @@ function StandardTab() {
   const [filterType, setFilterType] = useState('all')
   const [colorsInput, setColorsInput] = useState('')
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)
@@ -511,7 +511,7 @@ export default function ShowerHardwarePage() {
     setSuppliers((sups ?? []) as Supplier[])
   }
 
-  useEffect(() => { loadShared() }, [])
+  useEffect(() => { loadShared().catch(() => {}) }, [])
 
   const TABS = [
     { key: 'catalog',  label: 'Справочник' },

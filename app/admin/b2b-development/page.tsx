@@ -163,7 +163,7 @@ export default function B2BDevelopmentPage() {
   const [generating, setGenerating]     = useState(false)
   const [scoring, setScoring]           = useState(false)
 
-  useEffect(() => { load() }, [segFilter, scoreFilter])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [segFilter, scoreFilter])
 
   async function load() {
     setLoading(true)
@@ -1086,7 +1086,7 @@ function OutreachTab() {
   const [expanded, setExpanded]   = useState<number | null>(null)
   const [copied, setCopied]       = useState<number | null>(null)
 
-  useEffect(() => { load() }, [segFilter, stageFilter])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [segFilter, stageFilter])
 
   async function load() {
     setLoading(true)

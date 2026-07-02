@@ -82,7 +82,7 @@ export default function B2BServicesPage() {
   const [psError, setPsError]           = useState<string | null>(null)
   const [psDirty, setPsDirty]           = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

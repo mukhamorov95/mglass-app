@@ -165,7 +165,7 @@ export default function AIProposalDetailPage() {
     }
   }, [id])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // ── Actions ────────────────────────────────────────────────────────────────
 

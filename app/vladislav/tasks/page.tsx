@@ -63,7 +63,7 @@ export default function TasksPage() {
 
   useEffect(() => {
     setSpeechOk(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function load() {

@@ -115,7 +115,7 @@ export default function IntegrationsMonitor() {
     setLoading(false)
   }, [])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   function showToast(msg: string) {
     setToast(msg)

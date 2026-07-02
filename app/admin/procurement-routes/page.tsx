@@ -42,7 +42,7 @@ export default function ProcurementRoutesPage() {
   const [newDate,   setNewDate]   = useState(today)
   const [newDriver, setNewDriver] = useState('Сергей Васильевич')
 
-  useEffect(() => { loadRoutes() }, [])
+  useEffect(() => { loadRoutes().catch(() => setLoading(false)) }, [])
 
   async function loadRoutes() {
     const res = await fetch('/api/admin/procurement-routes')

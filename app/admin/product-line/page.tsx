@@ -710,7 +710,7 @@ function SkuTab() {
     setLoading(false)
   }, [filterCat, filterStatus])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function loadChecklist(sku_id: number) {
     if (checklists[sku_id]) return

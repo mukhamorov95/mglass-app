@@ -64,7 +64,7 @@ export default function B2BProductionPage() {
   const [printId, setPrintId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

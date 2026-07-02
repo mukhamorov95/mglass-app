@@ -278,7 +278,7 @@ export default function B2BCalculatorPage() {
         setLoading(false)
       }
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   // ── Check draft / orderId after data loads ──

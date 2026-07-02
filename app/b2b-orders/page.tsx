@@ -763,7 +763,7 @@ export default function B2BOrdersPage() {
     }
   }
 
-  useEffect(() => { loadOrders() }, [])
+  useEffect(() => { loadOrders().catch(() => setLoading(false)) }, [])
 
   const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
 

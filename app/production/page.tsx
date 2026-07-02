@@ -121,7 +121,7 @@ export default function ProductionPage() {
       })) as Order[])
       setLoading(false)
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   async function toggleStage(orderId: number, stageKey: StageKey) {

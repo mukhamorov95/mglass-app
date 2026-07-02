@@ -133,7 +133,7 @@ export default function StationBatchesPage() {
     setLoading(false)
   }, [sb, station, isCutting])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function markTasks(taskIds: number[]) {
     setBusy(true)

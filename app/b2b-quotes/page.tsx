@@ -532,7 +532,7 @@ export default function B2BQuotesPage() {
     }
   }
 
-  useEffect(() => { loadQuotes() }, [])
+  useEffect(() => { loadQuotes().catch(() => setLoading(false)) }, [])
 
   // ── Duplicate / Delete ─────────────────────────────────────────────────────
   async function duplicateQuote(q: Quote) {

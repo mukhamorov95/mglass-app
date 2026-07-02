@@ -45,7 +45,7 @@ export default function WasteModifiersPage() {
     if (res.ok) setRows(await res.json())
     setLoading(false)
   }
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
   useEffect(() => { if (adding) inputRef.current?.focus() }, [adding])
 
   async function toggleActive(row: Modifier) {

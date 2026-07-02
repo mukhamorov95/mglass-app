@@ -224,7 +224,7 @@ export default function CalculationDetailPage() {
       setChildCalcs((childData ?? []) as { id: number; created_at: string; final_price: number }[])
       setLoading(false)
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [id])
 
   // ── Price ↔ Discount sync ─────────────────────────────────────────────────

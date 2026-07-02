@@ -54,6 +54,7 @@ export default function LoftCalculatorPage() {
   const [allSettings, setAllSettings] = useState<FinancialSettings[]>([])
   const [partners, setPartners]     = useState<PartnerType[]>([])
   const [loading, setLoading]       = useState(true)
+  const [loadError, setLoadError]   = useState(false)
   const [role, setRole]             = useState<string | null>(null)
   const [copied, setCopied]         = useState(false)
   const [showDetails, setShowDetails] = useState(false)
@@ -94,6 +95,8 @@ export default function LoftCalculatorPage() {
 
   useEffect(() => {
     async function load() {
+      setLoadError(false)
+      try {
       const { data: { user } } = await supabase.auth.getUser()
       if (user) {
         const { data: prof } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
@@ -171,7 +174,12 @@ export default function LoftCalculatorPage() {
         (fins ?? []).find((s: FinancialSettings) => s.tier === 'standard') ??
         fins?.[0] ?? null
       if (!saved.margin && loftSettings) setMargin(String((loftSettings as FinancialSettings).default_margin))
-      setLoading(false)
+      } catch (e) {
+        console.error(e)
+        setLoadError(true)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
@@ -360,6 +368,14 @@ export default function LoftCalculatorPage() {
   }
 
 
+  if (loadError) return (
+    <div className="min-h-screen flex items-center justify-center text-[#9a9a95] text-sm p-6">
+      <div className="text-center">
+        <p className="mb-3">Не удалось загрузить калькулятор.</p>
+        <button onClick={() => location.reload()} className="px-4 py-2 bg-[#111110] text-white rounded-lg">Повторить</button>
+      </div>
+    </div>
+  )
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[#9a9a95] text-sm">Загрузка...</div>
   )

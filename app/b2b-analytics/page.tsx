@@ -66,7 +66,7 @@ export default function B2BAnalyticsPage() {
       setAllOrders(enriched)
       setLoading(false)
     }
-    load()
+    load().catch(() => setLoading(false))
   }, [])
 
   useEffect(() => {

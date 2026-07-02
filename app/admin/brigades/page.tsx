@@ -30,7 +30,7 @@ export default function BrigadesPage() {
   const [error, setError]       = useState('')
   const [showForm, setShowForm] = useState(false)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
     setLoading(true)

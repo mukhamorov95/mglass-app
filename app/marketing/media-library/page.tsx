@@ -164,7 +164,7 @@ export default function MediaLibraryPage() {
     setLoading(false)
   }, [filterType, filterTag, filterCategory])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function add() {
     if (!form.name?.trim()) return

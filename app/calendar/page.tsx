@@ -78,7 +78,7 @@ export default function CalendarPage() {
 
   const days = weekDays(monday)
 
-  useEffect(() => { load() }, [monday])
+  useEffect(() => { load().catch(() => setLoading(false)) }, [monday])
 
   async function load() {
     setLoading(true)
