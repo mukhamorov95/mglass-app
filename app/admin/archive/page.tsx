@@ -36,6 +36,18 @@ const authorOf = (r: Row) => r.created_by_name || (parseNotes(r.notes).manager_n
 const priceOf = (r: Row) => (r.discount_percent ?? 0) > 0 ? (r.total_after_discount ?? 0) : (r.total_sale_inc_vat ?? 0)
 const statusOf = (r: Row) => (parseNotes(r.notes).status as string | undefined) || 'quote'
 const STATUS_LABEL: Record<string, string> = { quote: 'Черновик', pending_approval: 'На согласовании', agreed: 'Согласован', rejected: 'Отказ', sent: 'В работе', confirmed: 'Запущен' }
+const STATUS_STYLE: Record<string, string> = {
+  quote: 'bg-[#f0f0ec] text-[#6b6b66]', pending_approval: 'bg-amber-50 text-amber-700',
+  agreed: 'bg-emerald-50 text-emerald-700', sent: 'bg-blue-50 text-blue-700',
+  confirmed: 'bg-emerald-100 text-emerald-800', rejected: 'bg-red-50 text-red-700',
+}
+
+const ic = { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round', strokeLinejoin: 'round' } as const
+const IcChevron   = ({ className = '' }: { className?: string }) => <svg {...ic} className={className}><path d="m9 18 6-6-6-6" /></svg>
+const IcArrowLeft = ({ className = '' }: { className?: string }) => <svg {...ic} className={className}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
+const IcDownload  = ({ className = '' }: { className?: string }) => <svg {...ic} className={className}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><path d="M7 10l5 5 5-5" /><path d="M12 15V3" /></svg>
+const IcX         = ({ className = '' }: { className?: string }) => <svg {...ic} className={className}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+const IcArchive   = ({ className = '' }: { className?: string }) => <svg {...ic} className={className}><rect width="20" height="5" x="2" y="3" rx="1" /><path d="M4 8v11a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8" /><path d="M10 12h4" /></svg>
 
 export default function ArchivePage() {
   const [rows, setRows]       = useState<Row[]>([])
@@ -177,38 +189,38 @@ export default function ArchivePage() {
           <h1 className="text-[18px] font-semibold text-[#111110]">Архив расчётов B2B</h1>
           <p className="text-[12px] text-[#9a9a95] mt-0.5">{visible.length} просчётов · история по месяцам</p>
         </div>
-        <Link href="/b2b-quotes" className="text-[12px] text-[#6b6b66] hover:text-[#111110] px-3 py-1.5 border border-[#e4e4e0] rounded-lg hover:border-[#111110] transition-colors">← Просчёты</Link>
+        <Link href="/b2b-quotes" className="inline-flex items-center gap-1.5 text-[12px] text-[#6b6b66] hover:text-[#111110] px-3 py-1.5 border border-[#e4e4e0] rounded-lg hover:border-[#111110] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15"><IcArrowLeft className="w-3.5 h-3.5" />Просчёты</Link>
       </div>
 
       {/* Вкладки Архив / Корзина */}
       <div className="flex items-center gap-1 mb-3">
         {([['active', `Архив (${activeCount})`], ['trash', `Корзина (${trashCount})`]] as const).map(([v, label]) => (
           <button key={v} onClick={() => { setView(v); setSelectedIds(new Set()) }}
-            className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors ${view === v ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
+            className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15 ${view === v ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
             {label}
           </button>
         ))}
       </div>
 
       {/* Фильтры */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
+      <div className="flex items-center gap-2 mb-3 flex-wrap bg-white border border-[#e4e4e0] rounded-xl px-3 py-2.5">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № / клиент"
-          className="border border-[#e4e4e0] rounded-lg px-3 py-1 text-[12px] outline-none focus:border-[#111110] bg-white w-44" />
+          className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] focus:ring-2 focus:ring-[#111110]/10 bg-white w-44" />
         <span className="text-[11px] text-[#9a9a95]">Период:</span>
-        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white" />
+        <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] focus:ring-2 focus:ring-[#111110]/10 bg-white" />
         <span className="text-[11px] text-[#9a9a95]">—</span>
-        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white" />
-        <select value={authorFilter} onChange={e => setAuthorFilter(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white max-w-[170px]">
+        <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] focus:ring-2 focus:ring-[#111110]/10 bg-white" />
+        <select value={authorFilter} onChange={e => setAuthorFilter(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] focus:ring-2 focus:ring-[#111110]/10 bg-white max-w-[170px]">
           <option value="">Кто считал: все</option>
           {authorOptions.map(a => <option key={a} value={a}>{a}</option>)}
         </select>
-        <select value={clientFilter} onChange={e => setClientFilter(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white max-w-[190px]">
+        <select value={clientFilter} onChange={e => setClientFilter(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110] focus:ring-2 focus:ring-[#111110]/10 bg-white max-w-[190px]">
           <option value="">Клиент: все</option>
           {clientOptions.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         {(search || dateFrom || dateTo || authorFilter || clientFilter) && (
           <button onClick={() => { setSearch(''); setDateFrom(''); setDateTo(''); setAuthorFilter(''); setClientFilter('') }}
-            className="text-[11px] text-[#6b6b66] hover:text-[#111110] px-2 py-1 rounded-lg border border-[#e4e4e0] hover:border-[#111110] transition-colors">Сбросить</button>
+            className="text-[11px] text-[#6b6b66] hover:text-[#111110] px-2 py-1.5 rounded-lg border border-[#e4e4e0] hover:border-[#111110] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15">Сбросить</button>
         )}
       </div>
 
@@ -229,9 +241,37 @@ export default function ArchivePage() {
       )}
 
       {loading ? (
-        <div className="text-center py-16 text-[13px] text-[#9a9a95]">Загрузка...</div>
+        <div className="space-y-3" aria-busy="true">
+          {[0, 1, 2].map(i => (
+            <div key={i} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 bg-[#fafaf9] border-b border-[#f0f0ec] flex items-center gap-3">
+                <div className="w-3 h-3 rounded bg-[#e6e6e2] animate-pulse" />
+                <div className="h-3.5 w-32 rounded bg-[#e6e6e2] animate-pulse" />
+                <div className="h-3 w-24 rounded bg-[#f0f0ec] animate-pulse" />
+              </div>
+              {i === 0 && (
+                <div className="divide-y divide-[#f8f8f7]">
+                  {[0, 1, 2, 3].map(j => (
+                    <div key={j} className="flex items-center gap-3 px-4 py-2.5">
+                      <div className="h-3 w-16 rounded bg-[#f0f0ec] animate-pulse" />
+                      <div className="h-3 flex-1 max-w-[220px] rounded bg-[#f0f0ec] animate-pulse" />
+                      <div className="h-3 w-20 rounded bg-[#f0f0ec] animate-pulse ml-auto" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
       ) : monthGroups.length === 0 ? (
-        <div className="text-center py-16 text-[13px] text-[#9a9a95]">{view === 'trash' ? 'Корзина пуста' : 'Просчётов пока нет'}</div>
+        <div className="flex flex-col items-center justify-center text-center py-20">
+          <IcArchive className="w-8 h-8 text-[#c4c4be] mb-3" />
+          <p className="text-[13px] font-medium text-[#6b6b66]">{view === 'trash' ? 'Корзина пуста' : 'Просчётов пока нет'}</p>
+          <p className="text-[12px] text-[#9a9a95] mt-1">{view === 'trash' ? 'Удалённые просчёты появятся здесь' : 'Здесь копится история просчётов B2B по месяцам'}</p>
+          {view === 'active' && (
+            <Link href="/b2b-quotes" className="inline-flex items-center gap-1.5 mt-4 text-[12px] text-[#6b6b66] hover:text-[#111110] px-3 py-1.5 border border-[#e4e4e0] rounded-lg hover:border-[#111110] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15"><IcArrowLeft className="w-3.5 h-3.5" />К просчётам</Link>
+          )}
+        </div>
       ) : (
         <div className="space-y-3">
           {monthGroups.map(g => {
@@ -241,8 +281,8 @@ export default function ArchivePage() {
             return (
               <div key={g.key} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
                 <div className="px-4 py-2.5 flex items-center gap-3 bg-[#fafaf9] border-b border-[#f0f0ec]">
-                  <button className="flex items-center gap-2 flex-1 min-w-0 text-left" onClick={() => toggleMonth(g.key)}>
-                    <span className={`text-[11px] text-[#c4c4be] inline-block transition-transform ${open ? 'rotate-90' : ''}`}>▶</span>
+                  <button className="flex items-center gap-2 flex-1 min-w-0 text-left rounded outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15" onClick={() => toggleMonth(g.key)}>
+                    <IcChevron className={`w-4 h-4 text-[#9a9a95] flex-shrink-0 transition-transform ${open ? 'rotate-90' : ''}`} />
                     <span className="text-[14px] font-bold text-[#111110]">{g.label}</span>
                     <span className="text-[11px] text-[#9a9a95]">{g.rows.length} просч. · {fmt(g.total)}</span>
                   </button>
@@ -256,7 +296,8 @@ export default function ArchivePage() {
                   )}
                 </div>
                 {open && (
-                  <table className="w-full text-[12px]">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[720px] text-[12px]">
                     <thead className="border-b border-[#f0f0ec]">
                       <tr className="text-[10px] text-[#9a9a95] uppercase tracking-wide">
                         {isAdmin && <th className="w-8" />}
@@ -279,7 +320,7 @@ export default function ArchivePage() {
                             {r.client_order_number && <span className="text-[10px] text-[#9a9a95] ml-1">кл. {r.client_order_number}</span>}
                           </td>
                           <td className="px-3 py-2 text-[#6b6b66]">{authorOf(r)}</td>
-                          <td className="px-3 py-2 text-[#9a9a95]">{STATUS_LABEL[statusOf(r)] ?? statusOf(r)}</td>
+                          <td className="px-3 py-2"><span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${STATUS_STYLE[statusOf(r)] ?? 'bg-[#f0f0ec] text-[#6b6b66]'}`}>{STATUS_LABEL[statusOf(r)] ?? statusOf(r)}</span></td>
                           <td className="px-3 py-2 text-center text-[#6b6b66] whitespace-nowrap">{fmtDate(r.created_at)}</td>
                           <td className="px-3 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
                             {fmt(priceOf(r))}
@@ -287,11 +328,11 @@ export default function ArchivePage() {
                           </td>
                           <td className="px-3 py-2 text-right whitespace-nowrap">
                             {view === 'active' ? (
-                              <span className="inline-flex items-center gap-1">
-                                <a href={`/api/quotes/${r.id}/pdf`} target="_blank" download title="Скачать КП (PDF)" className="text-[11px] text-[#6b6b66] hover:text-[#111110] px-1.5 py-1 rounded hover:bg-[#f5f5f4]">📄</a>
-                                <Link href={`/b2b-quotes/${r.id}/kp`} target="_blank" title="КП для печати" className="text-[11px] text-[#c4c4be] hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50">КП</Link>
+                              <span className="inline-flex items-center gap-0.5">
+                                <a href={`/api/quotes/${r.id}/pdf`} target="_blank" download title="Скачать КП (PDF)" className="inline-flex text-[#9a9a95] hover:text-[#111110] p-1.5 rounded hover:bg-[#f5f5f4] transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15"><IcDownload className="w-4 h-4" /></a>
+                                <Link href={`/b2b-quotes/${r.id}/kp`} target="_blank" title="КП для печати" className="text-[11px] font-medium text-[#6b6b66] hover:text-violet-600 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-[#111110]/15">КП</Link>
                                 {isAdmin && (
-                                  <button onClick={() => { if (window.confirm('Удалить в корзину этот просчёт?')) updateArchived([r.id], true) }} title="Удалить" className="text-[#c4c4be] hover:text-red-500 px-1 py-1 rounded hover:bg-red-50">✕</button>
+                                  <button onClick={() => { if (window.confirm('Удалить в корзину этот просчёт?')) updateArchived([r.id], true) }} title="Удалить" className="inline-flex text-[#9a9a95] hover:text-red-500 p-1.5 rounded hover:bg-red-50 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-red-300"><IcX className="w-4 h-4" /></button>
                                 )}
                               </span>
                             ) : isAdmin && (
@@ -305,6 +346,7 @@ export default function ArchivePage() {
                       ))}
                     </tbody>
                   </table>
+                  </div>
                 )}
               </div>
             )

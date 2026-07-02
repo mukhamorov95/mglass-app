@@ -14,12 +14,11 @@ ALTER TABLE public.b2b_orders
   ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'internal';
 CREATE INDEX IF NOT EXISTS idx_b2b_orders_source ON public.b2b_orders (source) WHERE source <> 'internal';
 
--- 3) helper: текущий пользователь — партнёр? (SECURITY DEFINER — читает users в обход RLS)
-CREATE OR REPLACE FUNCTION auth.is_partner() RETURNS boolean AS $$
-  SELECT EXISTS (SELECT 1 FROM public.users WHERE id = auth.uid() AND lower(role) = 'partner')
-$$ LANGUAGE sql SECURITY DEFINER STABLE;
+-- ПРИМЕЧАНИЕ: helper auth.is_partner() НЕ создаём — SQL-редактор Supabase не даёт
+-- создавать объекты в схеме auth (ERROR 42501), и он не нужен: политики ниже
+-- используют auth.uid() напрямую (его чтение разрешено). ПРИМЕНЕНО в прод 2026-07-02.
 
--- 4) Partner-RLS: партнёр читает ТОЛЬКО свою карточку и свои заказы.
+-- 3) Partner-RLS: партнёр читает ТОЛЬКО свою карточку и свои заказы.
 --    Аддитивно (политики складываются по ИЛИ). Для внутренних условие user_id=auth.uid()
 --    ложно → no-op; их org-политика цела.
 --    ВАЖНО: изоляция сработает, ТОЛЬКО если партнёр НЕ в profiles org=1 (иначе org
