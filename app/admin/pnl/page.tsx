@@ -101,8 +101,8 @@ export default async function PnLPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">P&amp;L — Финансовый отчёт</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">P&amp;L — Финансовый отчёт</h1>
+        <p className="text-[13px] text-muted mt-0.5">
           Выручка / Себестоимость / Валовая прибыль / Расходы / Чистая прибыль по месяцам
         </p>
       </div>
@@ -110,15 +110,15 @@ export default async function PnLPage() {
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Выручка всего',    value: fmt(totals.revenue),     color: 'text-[#111110]' },
+          { label: 'Выручка всего',    value: fmt(totals.revenue),     color: 'text-ink' },
           { label: 'Валовая прибыль',  value: fmt(totals.grossProfit),  color: 'text-emerald-700', sub: pct(totalGrossMargin) },
           { label: 'Расходы',          value: fmt(totals.expenses),     color: 'text-amber-700' },
           { label: 'Чистая прибыль',   value: fmt(totals.netProfit),    color: totals.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700', sub: pct(totalNetMargin) },
         ].map(card => (
-          <div key={card.label} className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4">
-            <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-widest mb-1">{card.label}</p>
-            <p className={`text-[18px] font-bold font-mono ${card.color}`}>{card.value}</p>
-            {card.sub && <p className="text-[11px] text-[#9a9a95] mt-0.5">{card.sub}</p>}
+          <div key={card.label} className="bg-surface border border-line rounded-xl px-5 py-4">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">{card.label}</p>
+            <p className={`text-[18px] font-semibold font-mono tabular-nums ${card.color}`}>{card.value}</p>
+            {card.sub && <p className="text-[11px] text-muted mt-0.5 tabular-nums">{card.sub}</p>}
           </div>
         ))}
       </div>
@@ -131,42 +131,42 @@ export default async function PnLPage() {
       </div>
 
       {/* Monthly table */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-[#f8f8f7] border-b border-[#e4e4e0]">
-                <th className="px-4 py-3 text-left text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Месяц</th>
-                <th className="px-4 py-3 text-center text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Заказов</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Выручка</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Себест.</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Вал. прибыль</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Маржа %</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Расходы</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">Чист. приб.</th>
-                <th className="px-4 py-3 text-right text-[10px] font-bold text-[#9a9a95] uppercase tracking-wider">ЧМ %</th>
+              <tr className="bg-canvas border-b border-line">
+                <th className="px-4 py-3 text-left text-[11px] font-semibold text-muted uppercase tracking-wider">Месяц</th>
+                <th className="px-4 py-3 text-center text-[11px] font-semibold text-muted uppercase tracking-wider">Заказов</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Выручка</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Себест.</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Вал. прибыль</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Маржа %</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Расходы</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">Чист. приб.</th>
+                <th className="px-4 py-3 text-right text-[11px] font-semibold text-muted uppercase tracking-wider">ЧМ %</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f0f0ec]">
+            <tbody className="divide-y divide-line-soft">
               {rows.map(r => (
-                <tr key={r.key} className="hover:bg-[#fafaf9] transition-colors">
-                  <td className="px-4 py-3 font-medium text-[#111110]">{r.label}</td>
-                  <td className="px-4 py-3 text-center text-[#6b6b66]">{r.orders}</td>
-                  <td className="px-4 py-3 text-right font-mono text-[#111110]">{fmt(r.revenue)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-[#9a9a95]">{fmt(r.cogs)}</td>
-                  <td className="px-4 py-3 text-right font-mono text-emerald-700 font-semibold">{fmt(r.grossProfit)}</td>
+                <tr key={r.key} className="hover:bg-subtle transition-colors">
+                  <td className="px-4 py-3 font-medium text-ink">{r.label}</td>
+                  <td className="px-4 py-3 text-center text-ink-soft tabular-nums">{r.orders}</td>
+                  <td className="px-4 py-3 text-right font-mono text-ink tabular-nums">{fmt(r.revenue)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-muted tabular-nums">{fmt(r.cogs)}</td>
+                  <td className="px-4 py-3 text-right font-mono text-emerald-700 font-semibold tabular-nums">{fmt(r.grossProfit)}</td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded tabular-nums ${
                       r.grossMargin >= 40 ? 'bg-emerald-50 text-emerald-700' :
                       r.grossMargin >= 30 ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
                     }`}>{pct(r.grossMargin)}</span>
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-amber-700">{fmt(r.expenses)}</td>
-                  <td className={`px-4 py-3 text-right font-mono font-semibold ${r.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                  <td className="px-4 py-3 text-right font-mono text-amber-700 tabular-nums">{fmt(r.expenses)}</td>
+                  <td className={`px-4 py-3 text-right font-mono font-semibold tabular-nums ${r.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                     {fmt(r.netProfit)}
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded tabular-nums ${
                       r.netMargin >= 15 ? 'bg-emerald-50 text-emerald-700' :
                       r.netMargin >= 5  ? 'bg-amber-50 text-amber-700' : 'bg-red-50 text-red-700'
                     }`}>{pct(r.netMargin)}</span>
@@ -175,24 +175,24 @@ export default async function PnLPage() {
               ))}
 
               {/* Totals row */}
-              <tr className="bg-[#f8f8f7] font-bold border-t-2 border-[#e4e4e0]">
-                <td className="px-4 py-3 text-[#111110]">Итого</td>
-                <td className="px-4 py-3 text-center text-[#111110]">{totals.orders}</td>
-                <td className="px-4 py-3 text-right font-mono text-[#111110]">{fmt(totals.revenue)}</td>
-                <td className="px-4 py-3 text-right font-mono text-[#9a9a95]">{fmt(totals.cogs)}</td>
-                <td className="px-4 py-3 text-right font-mono text-emerald-700">{fmt(totals.grossProfit)}</td>
+              <tr className="bg-canvas font-semibold border-t-2 border-line">
+                <td className="px-4 py-3 text-ink">Итого</td>
+                <td className="px-4 py-3 text-center text-ink tabular-nums">{totals.orders}</td>
+                <td className="px-4 py-3 text-right font-mono text-ink tabular-nums">{fmt(totals.revenue)}</td>
+                <td className="px-4 py-3 text-right font-mono text-muted tabular-nums">{fmt(totals.cogs)}</td>
+                <td className="px-4 py-3 text-right font-mono text-emerald-700 tabular-nums">{fmt(totals.grossProfit)}</td>
                 <td className="px-4 py-3 text-right">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded tabular-nums ${
                     totalGrossMargin >= 40 ? 'bg-emerald-100 text-emerald-800' :
                     totalGrossMargin >= 30 ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
                   }`}>{pct(totalGrossMargin)}</span>
                 </td>
-                <td className="px-4 py-3 text-right font-mono text-amber-700">{fmt(totals.expenses)}</td>
-                <td className={`px-4 py-3 text-right font-mono ${totals.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
+                <td className="px-4 py-3 text-right font-mono text-amber-700 tabular-nums">{fmt(totals.expenses)}</td>
+                <td className={`px-4 py-3 text-right font-mono tabular-nums ${totals.netProfit >= 0 ? 'text-emerald-700' : 'text-red-700'}`}>
                   {fmt(totals.netProfit)}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded ${
+                  <span className={`text-[11px] font-semibold px-2 py-0.5 rounded tabular-nums ${
                     totalNetMargin >= 15 ? 'bg-emerald-100 text-emerald-800' :
                     totalNetMargin >= 5  ? 'bg-amber-100 text-amber-800' : 'bg-red-100 text-red-800'
                   }`}>{pct(totalNetMargin)}</span>
@@ -204,8 +204,8 @@ export default async function PnLPage() {
       </div>
 
       {rows.length === 0 && (
-        <div className="bg-white rounded-xl border border-[#e4e4e0] p-12 text-center mt-4">
-          <p className="text-[13px] text-[#9a9a95]">Нет данных по заказам</p>
+        <div className="bg-surface rounded-xl border border-line p-12 text-center mt-4">
+          <p className="text-[13px] text-muted">Нет данных по заказам</p>
         </div>
       )}
     </div>

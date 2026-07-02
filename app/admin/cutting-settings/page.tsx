@@ -46,25 +46,25 @@ export default function CuttingSettingsPage() {
   function field(label: string, desc: string, unit: string, key: keyof Settings, type: 'number' | 'boolean') {
     if (type === 'boolean') {
       return (
-        <div className="flex items-center justify-between py-3 border-b border-[#f0f0ec] last:border-0">
+        <div className="flex items-center justify-between py-3 border-b border-line-soft last:border-0">
           <div>
-            <div className="text-[14px] font-semibold text-[#111110]">{label}</div>
-            <div className="text-[12px] text-[#9a9a95] mt-0.5">{desc}</div>
+            <div className="text-[14px] font-semibold text-ink">{label}</div>
+            <div className="text-[12px] text-muted mt-0.5">{desc}</div>
           </div>
           <button
             onClick={() => setForm(f => ({ ...f, [key]: !f[key] }))}
             className={`relative w-11 h-6 rounded-full transition-colors ${form[key] ? 'bg-blue-600' : 'bg-[#d0d0cc]'}`}
           >
-            <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${form[key] ? 'translate-x-5.5 left-0.5' : 'left-0.5'}`} />
+            <span className={`absolute top-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform ${form[key] ? 'translate-x-5.5 left-0.5' : 'left-0.5'}`} />
           </button>
         </div>
       )
     }
     return (
-      <div className="flex items-center justify-between py-3 border-b border-[#f0f0ec] last:border-0">
+      <div className="flex items-center justify-between py-3 border-b border-line-soft last:border-0">
         <div>
-          <div className="text-[14px] font-semibold text-[#111110]">{label}</div>
-          <div className="text-[12px] text-[#9a9a95] mt-0.5">{desc}</div>
+          <div className="text-[14px] font-semibold text-ink">{label}</div>
+          <div className="text-[12px] text-muted mt-0.5">{desc}</div>
         </div>
         <div className="flex items-center gap-2">
           <input
@@ -73,36 +73,36 @@ export default function CuttingSettingsPage() {
             onChange={e => setForm(f => ({ ...f, [key]: Number(e.target.value) }))}
             min={0}
             max={50}
-            className="w-20 border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] text-right focus:outline-none focus:border-blue-400"
+            className="w-20 border border-line rounded-lg px-3 py-1.5 text-[13px] text-right focus:outline-none focus:border-blue-400"
           />
-          <span className="text-[13px] text-[#9a9a95] w-6">{unit}</span>
+          <span className="text-[13px] text-muted w-6">{unit}</span>
         </div>
       </div>
     )
   }
 
-  if (loading) return <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center text-[#9a9a95]">Загрузка...</div>
+  if (loading) return <div className="min-h-screen bg-subtle flex items-center justify-center text-muted">Загрузка...</div>
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] py-8 px-4">
+    <div className="min-h-screen bg-subtle py-8 px-4">
       <div className="max-w-xl mx-auto space-y-6">
 
         <div>
-          <h1 className="text-[20px] font-bold text-[#111110]">Настройки раскроя</h1>
-          <p className="text-[13px] text-[#9a9a95] mt-1">Технологические параметры для расчёта карт раскроя</p>
+          <h1 className="text-[20px] font-semibold text-ink">Настройки раскроя</h1>
+          <p className="text-[13px] text-muted mt-1">Технологические параметры для расчёта карт раскроя</p>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
-          <div className="py-2 border-b border-[#f0f0ec] mb-1">
-            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Технологические зазоры</span>
+        <div className="bg-surface rounded-xl border border-line px-5">
+          <div className="py-2 border-b border-line-soft mb-1">
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Технологические зазоры</span>
           </div>
           {field('Зазор между деталями', 'Минимальное расстояние между соседними деталями на листе', 'мм', 'gap_between_pieces', 'number')}
           {field('Кромочный допуск', 'Отступ от края листа по периметру', 'мм', 'edge_margin', 'number')}
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
-          <div className="py-2 border-b border-[#f0f0ec] mb-1">
-            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Алгоритм раскроя</span>
+        <div className="bg-surface rounded-xl border border-line px-5">
+          <div className="py-2 border-b border-line-soft mb-1">
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Алгоритм раскроя</span>
           </div>
           {field('Разрешить поворот деталей', 'Алгоритм может поворачивать детали на 90° для лучшей упаковки', '', 'allow_rotation', 'boolean')}
           {field('Учитывать направление рисунка', 'Для рифлёного и узорного стекла — запрещает поворот деталей', '', 'respect_pattern', 'boolean')}

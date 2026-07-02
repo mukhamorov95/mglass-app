@@ -75,7 +75,7 @@ function Slide2() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-10">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">02 / Что мы делаем</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">02 / Что мы делаем</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           ПОЛНЫЙ ЦИКЛ<br /><span className="text-amber-400">ОБРАБОТКИ СТЕКЛА</span>
         </h2>
@@ -84,7 +84,7 @@ function Slide2() {
         {services.map((s, i) => (
           <div key={i} className="bg-white/[0.04] border border-white/10 rounded-xl p-5 hover:border-amber-400/40 hover:bg-white/[0.07] transition-all group">
             <div className="text-[28px] mb-3">{s.icon}</div>
-            <div className="text-white font-bold text-[15px] mb-1.5 group-hover:text-amber-400 transition-colors">{s.title}</div>
+            <div className="text-white font-semibold text-[15px] mb-1.5 group-hover:text-amber-400 transition-colors">{s.title}</div>
             <div className="text-white/50 text-[12px] leading-relaxed">{s.desc}</div>
           </div>
         ))}
@@ -110,7 +110,7 @@ function Slide3() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">03 / Возможности</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">03 / Возможности</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           ПРОИЗВОДСТВЕННЫЕ<br /><span className="text-amber-400">ХАРАКТЕРИСТИКИ</span>
         </h2>
@@ -173,7 +173,7 @@ function Slide4() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">04 / Для кого</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">04 / Для кого</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           С КОГО МЫ<br /><span className="text-amber-400">РАБОТАЕМ</span>
         </h2>
@@ -187,7 +187,7 @@ function Slide4() {
                 {s.tag}
               </span>
             </div>
-            <div className="text-white font-bold text-[14px] mb-1.5 group-hover:text-amber-400 transition-colors">{s.title}</div>
+            <div className="text-white font-semibold text-[14px] mb-1.5 group-hover:text-amber-400 transition-colors">{s.title}</div>
             <div className="text-white/50 text-[11px] leading-relaxed">{s.desc}</div>
           </div>
         ))}
@@ -233,7 +233,7 @@ function Slide5() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">05 / Почему мы</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">05 / Почему мы</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           ПОЧЕМУ ВЫБИРАЮТ<br /><span className="text-amber-400">MGLASS</span>
         </h2>
@@ -243,7 +243,7 @@ function Slide5() {
           <div key={i} className="flex gap-4">
             <div className="text-[11px] font-black text-amber-400/40 pt-0.5 flex-shrink-0">{p.num}</div>
             <div>
-              <div className="text-white font-bold text-[14px] mb-1">{p.title}</div>
+              <div className="text-white font-semibold text-[14px] mb-1">{p.title}</div>
               <div className="text-white/50 text-[11px] leading-relaxed">{p.desc}</div>
             </div>
           </div>
@@ -266,7 +266,7 @@ function Slide6() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">06 / Качество</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">06 / Качество</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           КОНТРОЛЬ<br /><span className="text-amber-400">КАЧЕСТВА</span>
         </h2>
@@ -281,7 +281,7 @@ function Slide6() {
                 <span className="text-amber-400 text-[11px] font-black">{String(i + 1).padStart(2, '0')}</span>
               </div>
               <div className="pt-2.5">
-                <div className="text-white font-bold text-[14px] mb-0.5">{s.label}</div>
+                <div className="text-white font-semibold text-[14px] mb-0.5">{s.label}</div>
                 <div className="text-white/50 text-[12px]">{s.desc}</div>
               </div>
             </div>
@@ -327,7 +327,7 @@ function Slide7() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">07 / Кейсы</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">07 / Кейсы</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           РЕАЛЬНЫЕ<br /><span className="text-amber-400">РЕЗУЛЬТАТЫ</span>
         </h2>
@@ -336,7 +336,7 @@ function Slide7() {
         {cases.map((c, i) => (
           <div key={i} className="bg-white/[0.04] border border-white/10 rounded-xl p-5 hover:border-amber-400/40 transition-all">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 uppercase tracking-wide">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-400/10 text-amber-400 border border-amber-400/20 uppercase tracking-wide">
                 {c.segment}
               </span>
               <span className="text-amber-400 font-black text-[15px]">{c.volume}</span>
@@ -367,7 +367,7 @@ function Slide8() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">08 / Условия</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">08 / Условия</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           УСЛОВИЯ<br /><span className="text-amber-400">СОТРУДНИЧЕСТВА</span>
         </h2>
@@ -376,7 +376,7 @@ function Slide8() {
         {terms.map((t, i) => (
           <div key={i} className="bg-white/[0.04] border border-white/10 rounded-xl p-5 hover:border-amber-400/40 transition-all">
             <div className="text-[28px] mb-3">{t.icon}</div>
-            <div className="text-white font-bold text-[14px] mb-1.5">{t.title}</div>
+            <div className="text-white font-semibold text-[14px] mb-1.5">{t.title}</div>
             <div className="text-white/50 text-[12px] leading-relaxed">{t.desc}</div>
           </div>
         ))}
@@ -398,7 +398,7 @@ function Slide9() {
     <div className="h-full flex flex-col justify-center px-16 py-12">
       <div className="absolute top-0 left-0 right-0 h-[3px] bg-gradient-to-r from-transparent via-amber-400 to-transparent" />
       <div className="mb-8">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-3">09 / Как начать</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-3">09 / Как начать</div>
         <h2 className="text-[48px] font-black text-white leading-none tracking-tight">
           КАК НАЧАТЬ<br /><span className="text-amber-400">РАБОТУ</span>
         </h2>
@@ -409,7 +409,7 @@ function Slide9() {
             <div className="text-[36px] font-black text-amber-400/20 leading-none mb-3 group-hover:text-amber-400/40 transition-colors">
               {s.num}
             </div>
-            <div className="text-white font-bold text-[14px] mb-1.5">{s.title}</div>
+            <div className="text-white font-semibold text-[14px] mb-1.5">{s.title}</div>
             <div className="text-white/50 text-[12px] leading-relaxed">{s.desc}</div>
           </div>
         ))}
@@ -433,7 +433,7 @@ function Slide10() {
       <div className="absolute bottom-8 right-8 w-12 h-12 border-b-2 border-r-2 border-amber-400/30 rounded-br-lg" />
 
       <div className="relative z-10 max-w-2xl">
-        <div className="text-amber-400 text-[11px] font-bold tracking-[0.25em] uppercase mb-6">10 / Контакты</div>
+        <div className="text-amber-400 text-[11px] font-semibold tracking-[0.25em] uppercase mb-6">10 / Контакты</div>
         <h2 className="text-[56px] font-black text-white leading-none tracking-tight mb-4">
           НАЧНЁМ<br /><span className="text-amber-400">РАБОТАТЬ?</span>
         </h2>
@@ -528,7 +528,7 @@ export default function B2BPresentationPage() {
       {/* Top bar */}
       <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between px-6 py-3 bg-gradient-to-b from-black/60 to-transparent">
         <div className="flex items-center gap-3">
-          <div className="w-7 h-7 bg-white rounded-[6px] flex items-center justify-center">
+          <div className="w-7 h-7 bg-surface rounded-[6px] flex items-center justify-center">
             <span className="text-[#0a0a09] text-[11px] font-black tracking-tight">MG</span>
           </div>
           <span className="text-white/60 text-[13px] font-semibold">MGlass · B2B Presentation</span>

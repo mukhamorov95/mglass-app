@@ -52,14 +52,14 @@ const STATUS_ICON: Record<CheckStatus, string> = {
   pending: '○', running: '◌', ok: '✓', warn: '⚠', error: '✕',
 }
 const STATUS_COLOR: Record<CheckStatus, string> = {
-  pending: 'text-[#b0b0ac]',
+  pending: 'text-faint',
   running: 'text-blue-500',
   ok:      'text-emerald-600',
   warn:    'text-amber-500',
   error:   'text-red-500',
 }
 const STATUS_BG: Record<CheckStatus, string> = {
-  pending: 'bg-[#f4f3f1]',
+  pending: 'bg-canvas',
   running: 'bg-blue-50',
   ok:      'bg-emerald-50',
   warn:    'bg-amber-50',
@@ -654,12 +654,12 @@ function IssueCard({
       {/* Header */}
       <div className={`px-5 py-3 flex items-start justify-between gap-3 ${headerBg}`}>
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <span className={`text-[15px] font-bold flex-shrink-0 mt-0.5 ${STATUS_COLOR[check.status]}`}>
+          <span className={`text-[15px] font-semibold flex-shrink-0 mt-0.5 ${STATUS_COLOR[check.status]}`}>
             {STATUS_ICON[check.status]}
           </span>
           <div className="min-w-0">
-            <p className="text-[13px] font-semibold text-[#1a1a18]">{check.name}</p>
-            <p className="text-[11px] text-[#8a8a85] mt-0.5">{check.module}</p>
+            <p className="text-[13px] font-semibold text-ink">{check.name}</p>
+            <p className="text-[11px] text-muted mt-0.5">{check.module}</p>
           </div>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${SEVERITY_COLOR[meta.severity]}`}>
@@ -668,32 +668,32 @@ function IssueCard({
       </div>
 
       {/* Body */}
-      <div className="px-5 py-4 bg-white space-y-3">
+      <div className="px-5 py-4 bg-surface space-y-3">
         {check.detail && (
           <div>
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Описание</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Описание</p>
             <p className={`text-[12px] ${check.status === 'error' ? 'text-red-700' : 'text-amber-700'}`}>
               {check.detail}
             </p>
           </div>
         )}
         <div>
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Причина</p>
-          <p className="text-[12px] text-[#3a3a38]">{meta.cause}</p>
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Причина</p>
+          <p className="text-[12px] text-ink-soft">{meta.cause}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Влияние на систему</p>
-          <p className="text-[12px] text-[#3a3a38]">{meta.impact}</p>
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Влияние на систему</p>
+          <p className="text-[12px] text-ink-soft">{meta.impact}</p>
         </div>
         <div>
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Рекомендация</p>
-          <p className="text-[12px] text-[#3a3a38]">{meta.recommendation}</p>
+          <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Рекомендация</p>
+          <p className="text-[12px] text-ink-soft">{meta.recommendation}</p>
         </div>
 
         {/* Instruction panel */}
         {meta.instruction && showInstruction && (
-          <div className="mt-1 rounded-lg bg-[#f7f7f4] border border-[#e8e8e5] p-4">
-            <p className="text-[11px] font-semibold text-[#4a4a46] mb-3">Инструкция по исправлению</p>
+          <div className="mt-1 rounded-lg bg-canvas border border-line p-4">
+            <p className="text-[11px] font-semibold text-ink-soft mb-3">Инструкция по исправлению</p>
             <div className="space-y-2">
               {(
                 [
@@ -705,8 +705,8 @@ function IssueCard({
                 ] as [string, string][]
               ).map(([label, value]) => (
                 <div key={label} className="grid grid-cols-[150px_1fr] gap-2 items-start">
-                  <span className="text-[10px] text-[#8a8a85] font-medium pt-0.5">{label}</span>
-                  <span className="text-[11px] text-[#2a2a28]">{value}</span>
+                  <span className="text-[10px] text-muted font-medium pt-0.5">{label}</span>
+                  <span className="text-[11px] text-ink">{value}</span>
                 </div>
               ))}
             </div>
@@ -729,7 +729,7 @@ function IssueCard({
       </div>
 
       {/* Footer actions */}
-      <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] flex items-center gap-2 flex-wrap">
+      <div className="px-5 py-3 bg-subtle border-t border-line-soft flex items-center gap-2 flex-wrap">
         {/* Status badge */}
         {fixState.status === 'fixing' && (
           <span className="text-[11px] text-blue-600 font-medium">Исправляется...</span>
@@ -746,7 +746,7 @@ function IssueCard({
           {canFix && meta.autoFixId && fixState.status !== 'fixed' && fixState.status !== 'fixing' && (
             <button
               onClick={() => onFix(check.id, meta.autoFixId!, check.name, check.detail ?? '')}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#111110] text-white hover:bg-[#27272a] active:bg-[#3f3f46] transition-colors"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-ink text-white hover:bg-[#27272a] active:bg-[#3f3f46] transition-colors"
             >
               Исправить автоматически
             </button>
@@ -756,7 +756,7 @@ function IssueCard({
           {meta.instruction && (
             <button
               onClick={() => setShowInstruction(v => !v)}
-              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors"
+              className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-line text-ink-soft hover:bg-line-soft transition-colors"
             >
               {showInstruction ? 'Скрыть инструкцию' : 'Показать инструкцию'}
             </button>
@@ -766,7 +766,7 @@ function IssueCard({
           {fixState.status !== 'fixed' && (
             <button
               onClick={() => onIgnore(check.id)}
-              className="px-2 py-1.5 rounded-lg text-[11px] text-[#9a9a95] hover:text-[#5a5a55] transition-colors"
+              className="px-2 py-1.5 rounded-lg text-[11px] text-muted hover:text-ink-soft transition-colors"
             >
               Игнорировать
             </button>
@@ -785,31 +785,31 @@ function FixLogSection({ entries, onClear }: { entries: FixLogEntry[]; onClear: 
   return (
     <div className="mt-8">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-[13px] font-semibold text-[#4b4b47]">Журнал исправлений</h2>
+        <h2 className="text-[13px] font-semibold text-ink-soft">Журнал исправлений</h2>
         <button
           onClick={onClear}
-          className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55] transition-colors"
+          className="text-[11px] text-muted hover:text-ink-soft transition-colors"
         >
           Очистить
         </button>
       </div>
-      <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-        <div className="divide-y divide-[#f5f5f3]">
+      <div className="bg-surface rounded-xl border border-line overflow-hidden">
+        <div className="divide-y divide-line-soft">
           {[...entries].reverse().map(entry => (
             <div key={entry.id} className="px-4 py-3 flex items-start gap-4">
               <div className="flex-shrink-0 w-[72px]">
-                <p className="text-[10px] text-[#9a9a95]">
+                <p className="text-[10px] text-muted">
                   {new Date(entry.ts).toLocaleDateString('ru-RU')}
                 </p>
-                <p className="text-[10px] text-[#9a9a95]">
+                <p className="text-[10px] text-muted">
                   {new Date(entry.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-[12px] font-medium text-[#2a2a28]">{entry.checkName}</p>
-                <p className="text-[11px] text-[#6a6a65] mt-0.5">{entry.action}</p>
+                <p className="text-[12px] font-medium text-ink">{entry.checkName}</p>
+                <p className="text-[11px] text-ink-soft mt-0.5">{entry.action}</p>
                 {entry.before && (
-                  <p className="text-[10px] text-[#9a9a95] mt-0.5">Было: {entry.before}</p>
+                  <p className="text-[10px] text-muted mt-0.5">Было: {entry.before}</p>
                 )}
                 {entry.after && (
                   <p className={`text-[11px] mt-0.5 ${entry.result === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>
@@ -826,7 +826,7 @@ function FixLogSection({ entries, onClear }: { entries: FixLogEntry[]; onClear: 
                   {entry.result === 'success' ? 'Успешно' : 'Ошибка'}
                 </span>
                 {entry.userEmail && (
-                  <p className="text-[9px] text-[#9a9a95] mt-1">{entry.userEmail.split('@')[0]}</p>
+                  <p className="text-[9px] text-muted mt-1">{entry.userEmail.split('@')[0]}</p>
                 )}
               </div>
             </div>
@@ -1027,8 +1027,8 @@ export default function HealthCheckPage() {
 
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110]">Проверка системы</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-1">
+        <h1 className="text-[20px] font-semibold text-ink">Проверка системы</h1>
+        <p className="text-[13px] text-muted mt-1">
           Диагностика и восстановление всех модулей платформы MGlass
         </p>
       </div>
@@ -1053,7 +1053,7 @@ export default function HealthCheckPage() {
                overallStatus === 'warn' ? 'Есть предупреждения' :
                                           'Обнаружены ошибки'}
             </p>
-            <p className="text-[12px] text-[#6b6b66] mt-0.5">
+            <p className="text-[12px] text-ink-soft mt-0.5">
               {okCount} ОК · {warnCount} предупреждений · {errorCount} ошибок · всего {total} проверок
               {fixedCount > 0 && ` · ${fixedCount} исправлено`}
               {startedAt && ` · ${startedAt.toLocaleTimeString('ru-RU')}`}
@@ -1068,8 +1068,8 @@ export default function HealthCheckPage() {
         disabled={running}
         className={`w-full h-12 rounded-xl text-[14px] font-semibold transition-colors mb-8 ${
           running
-            ? 'bg-[#f0f0ec] text-[#9a9a95] cursor-not-allowed'
-            : 'bg-[#111110] text-white hover:bg-[#27272a] active:bg-[#3f3f46]'
+            ? 'bg-line-soft text-muted cursor-not-allowed'
+            : 'bg-ink text-white hover:bg-[#27272a] active:bg-[#3f3f46]'
         }`}
       >
         {running ? '⟳  Проверка...' : done ? 'Запустить проверку повторно' : 'Запустить проверку системы'}
@@ -1079,14 +1079,14 @@ export default function HealthCheckPage() {
       {done && issues.length > 0 && (
         <div className="mb-8">
           <div className="flex items-center gap-2 mb-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Ошибки и предупреждения</h2>
+            <h2 className="text-[14px] font-semibold text-ink">Ошибки и предупреждения</h2>
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
               errorCount > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
             }`}>
               {issues.length}
             </span>
             {!canFix && (
-              <span className="text-[11px] text-[#9a9a95] ml-2">
+              <span className="text-[11px] text-muted ml-2">
                 Автоисправление доступно только администратору
               </span>
             )}
@@ -1113,7 +1113,7 @@ export default function HealthCheckPage() {
           {fixedCount > 0 && (
             <button
               onClick={startCheck}
-              className="mt-4 w-full h-10 rounded-xl text-[13px] font-semibold border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors"
+              className="mt-4 w-full h-10 rounded-xl text-[13px] font-semibold border border-line text-ink-soft hover:bg-line-soft transition-colors"
             >
               Запустить проверку повторно
             </button>
@@ -1141,12 +1141,12 @@ export default function HealthCheckPage() {
           const badge = modRun ? 'running' : modError ? 'error' : modWarn ? 'warn' : modOk ? 'ok' : 'pending'
 
           return (
-            <div key={module} className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-[#f2f2f0] bg-[#fafaf8]">
-                <span className="text-[12px] font-semibold text-[#4b4b47] uppercase tracking-wide">
+            <div key={module} className="bg-surface rounded-xl border border-line overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft bg-subtle">
+                <span className="text-[12px] font-semibold text-ink-soft uppercase tracking-wide">
                   {module}
                 </span>
-                <span className={`text-[11px] font-mono font-bold ${STATUS_COLOR[badge]}`}>
+                <span className={`text-[11px] font-mono font-semibold ${STATUS_COLOR[badge]}`}>
                   {STATUS_ICON[badge]}{' '}
                   {badge === 'running' ? 'проверка...' :
                    badge === 'ok'      ? 'ок' :
@@ -1155,17 +1155,17 @@ export default function HealthCheckPage() {
                 </span>
               </div>
 
-              <div className="divide-y divide-[#f5f5f3]">
+              <div className="divide-y divide-line-soft">
                 {moduleChecks.map(c => (
                   <div key={c.id} className={`flex items-start gap-3 px-4 py-3 ${STATUS_BG[c.status]} transition-colors`}>
-                    <span className={`text-[13px] font-bold mt-0.5 flex-shrink-0 ${STATUS_COLOR[c.status]}`}>
+                    <span className={`text-[13px] font-semibold mt-0.5 flex-shrink-0 ${STATUS_COLOR[c.status]}`}>
                       {STATUS_ICON[c.status]}
                     </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[12px] font-medium text-[#2a2a28]">{c.name}</span>
+                        <span className="text-[12px] font-medium text-ink">{c.name}</span>
                         {c.ms != null && (
-                          <span className="text-[10px] text-[#c0c0bc] font-mono">{c.ms}ms</span>
+                          <span className="text-[10px] text-faint font-mono">{c.ms}ms</span>
                         )}
                         {fixStates[c.id]?.status === 'fixed' && (
                           <span className="text-[10px] text-emerald-600 font-semibold">✓ исправлено</span>
@@ -1175,13 +1175,13 @@ export default function HealthCheckPage() {
                         <p className={`text-[11px] mt-0.5 ${
                           c.status === 'error' ? 'text-red-600' :
                           c.status === 'warn'  ? 'text-amber-600' :
-                                                 'text-[#6b6b66]'
+                                                 'text-ink-soft'
                         }`}>
                           {c.detail}
                         </p>
                       )}
                       {c.hint && (
-                        <p className="text-[11px] text-[#9a9a95] mt-0.5 italic">{c.hint}</p>
+                        <p className="text-[11px] text-muted mt-0.5 italic">{c.hint}</p>
                       )}
                     </div>
                   </div>
@@ -1196,7 +1196,7 @@ export default function HealthCheckPage() {
       <FixLogSection entries={fixLog} onClear={clearLog} />
 
       {/* Legend */}
-      <div className="mt-8 flex gap-4 text-[11px] text-[#9a9a95]">
+      <div className="mt-8 flex gap-4 text-[11px] text-muted">
         <span className="text-emerald-600 font-semibold">✓ Работает</span>
         <span className="text-amber-500 font-semibold">⚠ Предупреждение</span>
         <span className="text-red-500 font-semibold">✕ Ошибка</span>

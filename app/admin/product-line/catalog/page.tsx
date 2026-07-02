@@ -121,21 +121,21 @@ function ModelCard({ model, color }: { model: Model; color: string }) {
   if (model.switch_type?.length)   rows.push(['Включение', model.switch_type.join(' / ')])
 
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+    <div className="bg-surface border border-line rounded-xl p-4">
       <div className="flex items-start gap-4 mb-4">
         <div className={`text-${color}-400`}><MirrorShape form={model.form} /></div>
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
-            <p className="text-[14px] font-bold text-[#111110]">{model.name}</p>
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${BADGE_MAP[color]}`}>{model.article}</span>
+            <p className="text-[14px] font-semibold text-ink">{model.name}</p>
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${BADGE_MAP[color]}`}>{model.article}</span>
           </div>
         </div>
       </div>
       <div className="space-y-1.5">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-4 text-[12px]">
-            <span className="text-[#8a8a85]">{k}</span>
-            <span className="text-[#111110] font-medium text-right">{v}</span>
+            <span className="text-muted">{k}</span>
+            <span className="text-ink font-medium text-right">{v}</span>
           </div>
         ))}
       </div>
@@ -184,7 +184,7 @@ function SeriesImage({
       <input ref={inputRef} type="file" accept="image/*" className="hidden" onChange={handleFile} />
 
       {hasImage ? (
-        <div className="relative w-40 h-40 rounded-xl overflow-hidden border border-[#e4e4e0] group">
+        <div className="relative w-40 h-40 rounded-xl overflow-hidden border border-line group">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={imageUrl}
@@ -204,7 +204,7 @@ function SeriesImage({
         <button
           onClick={() => inputRef.current?.click()}
           disabled={uploading}
-          className="w-40 h-40 rounded-xl border-2 border-dashed border-[#d0d0cc] hover:border-[#9a9a95] hover:bg-white/60 transition-all flex flex-col items-center justify-center gap-2 text-[#9a9a95] hover:text-[#6b6b66]"
+          className="w-40 h-40 rounded-xl border-2 border-dashed border-[#d0d0cc] hover:border-muted hover:bg-white/60 transition-all flex flex-col items-center justify-center gap-2 text-muted hover:text-ink-soft"
         >
           {uploading ? (
             <span className="text-[12px]">Загрузка...</span>
@@ -249,16 +249,16 @@ export default function CatalogPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Product Line</p>
-        <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Каталог зеркал 2025</h1>
-        <p className="text-[13px] text-[#6b6b66] mt-1">5 серий · 8 моделей · Silver & UltraClear · Гарантия 12 месяцев</p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Product Line</p>
+        <h1 className="text-[22px] font-semibold text-ink tracking-tight">Каталог зеркал 2025</h1>
+        <p className="text-[13px] text-ink-soft mt-1">5 серий · 8 моделей · Silver & UltraClear · Гарантия 12 месяцев</p>
       </div>
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-[#f5f5f0] rounded-xl p-1 w-fit">
         {([['series', '🪞 Серии и модели'], ['tech', '📋 Тех. информация']] as const).map(([t, l]) => (
           <button key={t} onClick={() => setActiveTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${activeTab === t ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'}`}>
+            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${activeTab === t ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
             {l}
           </button>
         ))}
@@ -269,12 +269,12 @@ export default function CatalogPage() {
           {/* Series filter */}
           <div className="flex gap-2 flex-wrap mb-6">
             <button onClick={() => setActiveSeries(null)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${!activeSeries ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:bg-[#eeeeea]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${!activeSeries ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft hover:bg-[#eeeeea]'}`}>
               Все серии
             </button>
             {SERIES.map(s => (
               <button key={s.id} onClick={() => setActiveSeries(activeSeries === s.id ? null : s.id)}
-                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${activeSeries === s.id ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:bg-[#eeeeea]'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${activeSeries === s.id ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft hover:bg-[#eeeeea]'}`}>
                 {s.name}
               </button>
             ))}
@@ -287,16 +287,16 @@ export default function CatalogPage() {
                 <div className="flex items-start gap-6 mb-5">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-3 mb-2">
-                      <h2 className="text-[24px] font-black text-[#111110] tracking-tight">{series.name}</h2>
-                      <span className={`text-[11px] font-bold px-2.5 py-1 rounded-full ${BADGE_MAP[series.color]}`}>
+                      <h2 className="text-[24px] font-black text-ink tracking-tight">{series.name}</h2>
+                      <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${BADGE_MAP[series.color]}`}>
                         {series.models.length} {series.models.length === 1 ? 'модель' : 'модели'}
                       </span>
                       {series.lighting && (
-                        <span className="text-[11px] text-[#6b6b66] font-medium">{LIGHTING_ICON[series.lighting]}</span>
+                        <span className="text-[11px] text-ink-soft font-medium">{LIGHTING_ICON[series.lighting]}</span>
                       )}
                     </div>
-                    <p className="text-[13px] text-[#6b6b66] italic mb-2">{series.tagline}</p>
-                    <p className="text-[12px] text-[#8a8a85] leading-relaxed">{series.description}</p>
+                    <p className="text-[13px] text-ink-soft italic mb-2">{series.tagline}</p>
+                    <p className="text-[12px] text-muted leading-relaxed">{series.description}</p>
                   </div>
 
                   <SeriesImage
@@ -320,58 +320,58 @@ export default function CatalogPage() {
 
       {activeTab === 'tech' && (
         <div className="space-y-6">
-          <div className="bg-white border border-[#e4e4e0] rounded-2xl p-6">
-            <h3 className="text-[16px] font-bold text-[#111110] mb-4">Типы зеркального полотна</h3>
+          <div className="bg-surface border border-line rounded-2xl p-6">
+            <h3 className="text-[16px] font-semibold text-ink mb-4">Типы зеркального полотна</h3>
             <div className="grid grid-cols-2 gap-4">
               {TECH_INFO.materials.map(m => (
-                <div key={m.name} className="border border-[#e4e4e0] rounded-xl p-4">
+                <div key={m.name} className="border border-line rounded-xl p-4">
                   <div className="flex items-center gap-2 mb-2">
-                    <p className="text-[15px] font-bold text-[#111110]">{m.name}</p>
+                    <p className="text-[15px] font-semibold text-ink">{m.name}</p>
                     <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${m.badgeColor}`}>{m.badge}</span>
                   </div>
-                  <p className="text-[12px] text-[#6b6b66] leading-relaxed">{m.desc}</p>
+                  <p className="text-[12px] text-ink-soft leading-relaxed">{m.desc}</p>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-white border border-[#e4e4e0] rounded-2xl p-6">
-            <h3 className="text-[16px] font-bold text-[#111110] mb-4">Система крепления</h3>
+          <div className="bg-surface border border-line rounded-2xl p-6">
+            <h3 className="text-[16px] font-semibold text-ink mb-4">Система крепления</h3>
             <div className="space-y-2">
               {TECH_INFO.mounting.map(item => (
                 <div key={item} className="flex gap-3 items-start">
-                  <div className="w-4 h-px bg-[#111110] mt-[10px] flex-shrink-0" />
-                  <p className="text-[13px] text-[#6b6b66]">{item}</p>
+                  <div className="w-4 h-px bg-ink mt-[10px] flex-shrink-0" />
+                  <p className="text-[13px] text-ink-soft">{item}</p>
                 </div>
               ))}
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white border border-[#e4e4e0] rounded-2xl p-6">
-              <h3 className="text-[16px] font-bold text-[#111110] mb-1">Гарантия 12 месяцев</h3>
-              <p className="text-[11px] text-[#8a8a85] mb-4">Гарантия распространяется на:</p>
+            <div className="bg-surface border border-line rounded-2xl p-6">
+              <h3 className="text-[16px] font-semibold text-ink mb-1">Гарантия 12 месяцев</h3>
+              <p className="text-[11px] text-muted mb-4">Гарантия распространяется на:</p>
               <div className="space-y-2">
                 {TECH_INFO.guarantee.map(item => (
                   <div key={item} className="flex gap-3 items-start">
-                    <div className="w-4 h-px bg-[#111110] mt-[10px] flex-shrink-0" />
-                    <p className="text-[13px] font-medium text-[#111110]">{item}</p>
+                    <div className="w-4 h-px bg-ink mt-[10px] flex-shrink-0" />
+                    <p className="text-[13px] font-medium text-ink">{item}</p>
                   </div>
                 ))}
               </div>
-              <div className="mt-4 p-3 bg-[#fafaf8] rounded-xl text-[11px] text-[#6b6b66] leading-relaxed">
+              <div className="mt-4 p-3 bg-[#fafaf8] rounded-xl text-[11px] text-ink-soft leading-relaxed">
                 Предлагаем постгарантийное обслуживание и замену комплектующих.
               </div>
             </div>
 
-            <div className="bg-white border border-[#e4e4e0] rounded-2xl p-6">
-              <h3 className="text-[16px] font-bold text-[#111110] mb-1">Уход и безопасность</h3>
-              <p className="text-[11px] text-[#8a8a85] mb-4">Зеркала защищены от влаги, пригодны для ванных</p>
+            <div className="bg-surface border border-line rounded-2xl p-6">
+              <h3 className="text-[16px] font-semibold text-ink mb-1">Уход и безопасность</h3>
+              <p className="text-[11px] text-muted mb-4">Зеркала защищены от влаги, пригодны для ванных</p>
               <div className="space-y-2">
                 {TECH_INFO.care.map(item => (
                   <div key={item} className="flex gap-3 items-start">
-                    <div className="w-4 h-px bg-[#111110] mt-[10px] flex-shrink-0" />
-                    <p className="text-[13px] text-[#6b6b66]">{item}</p>
+                    <div className="w-4 h-px bg-ink mt-[10px] flex-shrink-0" />
+                    <p className="text-[13px] text-ink-soft">{item}</p>
                   </div>
                 ))}
               </div>

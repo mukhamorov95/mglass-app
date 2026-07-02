@@ -120,10 +120,10 @@ export default function PricingV2Page() {
 
   function numField(label: string, desc: string, unit: string, key: keyof Config, step = 1) {
     return (
-      <div className="flex items-start justify-between py-3 border-b border-[#f0f0ec] last:border-0 gap-3">
+      <div className="flex items-start justify-between py-3 border-b border-line-soft last:border-0 gap-3">
         <div className="flex-1 min-w-0">
-          <div className="text-[14px] font-semibold text-[#111110]">{label}</div>
-          <div className="text-[12px] text-[#9a9a95] mt-0.5">{desc}</div>
+          <div className="text-[14px] font-semibold text-ink">{label}</div>
+          <div className="text-[12px] text-muted mt-0.5">{desc}</div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <input
@@ -132,29 +132,29 @@ export default function PricingV2Page() {
             step={step}
             min={0}
             onChange={e => setForm(f => ({ ...f, [key]: Number(e.target.value) }))}
-            className="w-24 border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] text-right focus:outline-none focus:border-blue-400"
+            className="w-24 border border-line rounded-lg px-3 py-1.5 text-[13px] text-right focus:outline-none focus:border-blue-400"
           />
-          <span className="text-[13px] text-[#9a9a95] w-12">{unit}</span>
+          <span className="text-[13px] text-muted w-12">{unit}</span>
         </div>
       </div>
     )
   }
 
   if (loading) {
-    return <div className="min-h-screen bg-[#fafaf9] flex items-center justify-center text-[#9a9a95]">Загрузка...</div>
+    return <div className="min-h-screen bg-subtle flex items-center justify-center text-muted">Загрузка...</div>
   }
 
   const productionDenom = 1 - form.production_tax_percent / 100 - form.production_margin_percent / 100
   const b2cDenom        = 1 - form.b2c_tax_percent        / 100 - form.b2c_margin_percent        / 100
 
   return (
-    <div className="min-h-screen bg-[#fafaf9] py-8 px-4">
+    <div className="min-h-screen bg-subtle py-8 px-4">
       <div className="max-w-2xl mx-auto space-y-6">
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-[20px] font-bold text-[#111110]">Финмодель V2 · Зеркала</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-1">
+            <h1 className="text-[20px] font-semibold text-ink">Финмодель V2 · Зеркала</h1>
+            <p className="text-[13px] text-muted mt-1">
               Двухступенчатая модель: Factory Cost → B2B Price → B2C Client Price.
               Применяется только в preview-блоке калькулятора. Live КП/заказы пока сохраняются по live-цене.
             </p>
@@ -167,37 +167,37 @@ export default function PricingV2Page() {
           </Link>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
-          <div className="py-2 border-b border-[#f0f0ec] mb-1">
-            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Stage 1 · Производство (B2B)</span>
+        <div className="bg-surface rounded-xl border border-line px-5">
+          <div className="py-2 border-b border-line-soft mb-1">
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Stage 1 · Производство (B2B)</span>
           </div>
-          <p className="text-[12px] text-[#6b6b66] py-2 leading-snug">
+          <p className="text-[12px] text-ink-soft py-2 leading-snug">
             Производство/B2B — формирует цену продажи партнёру.
           </p>
           {numField('Налог производства',  'Налог на B2B-выручку',                              '%',  'production_tax_percent',    1)}
           {numField('Маржа производства',  'Прибыль производства в B2B-цене',                   '%',  'production_margin_percent', 1)}
-          <div className="py-2.5 text-[11px] text-[#9a9a95] font-mono leading-snug">
+          <div className="py-2.5 text-[11px] text-muted font-mono leading-snug">
             Знаменатель: 1 − {form.production_tax_percent}% − {form.production_margin_percent}% = {productionDenom.toFixed(2)}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
-          <div className="py-2 border-b border-[#f0f0ec] mb-1">
-            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Stage 2 · B2C (клиент)</span>
+        <div className="bg-surface rounded-xl border border-line px-5">
+          <div className="py-2 border-b border-line-soft mb-1">
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Stage 2 · B2C (клиент)</span>
           </div>
-          <p className="text-[12px] text-[#6b6b66] py-2 leading-snug">
+          <p className="text-[12px] text-ink-soft py-2 leading-snug">
             B2C — формирует цену конечному клиенту от B2B-закупки.
           </p>
           {numField('Налог B2C',           'Налог на розничную выручку',                        '%',  'b2c_tax_percent',           1)}
           {numField('Маржа B2C',           'Прибыль B2C в розничной цене',                      '%',  'b2c_margin_percent',        1)}
-          <div className="py-2.5 text-[11px] text-[#9a9a95] font-mono leading-snug">
+          <div className="py-2.5 text-[11px] text-muted font-mono leading-snug">
             Знаменатель: 1 − {form.b2c_tax_percent}% − {form.b2c_margin_percent}% = {b2cDenom.toFixed(2)}
           </div>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] px-5">
-          <div className="py-2 border-b border-[#f0f0ec] mb-1">
-            <span className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide">Себестоимость производства</span>
+        <div className="bg-surface rounded-xl border border-line px-5">
+          <div className="py-2 border-b border-line-soft mb-1">
+            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Себестоимость производства</span>
           </div>
           {numField('Накладные производства', 'Электричество, аренда цеха, прочее — % к материалам', '%',  'factory_overhead_percent', 1)}
           {numField('Резерв брака/отхода',    'Запас на брак и обрезки — % к материалам',             '%',  'scrap_reserve_percent',    1)}
@@ -214,7 +214,7 @@ export default function PricingV2Page() {
           <button
             onClick={save}
             disabled={saving}
-            className="bg-[#111110] hover:bg-[#2a2a28] text-white text-[13px] font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
+            className="bg-ink hover:bg-[#2a2a28] text-white text-[13px] font-semibold px-5 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {saving ? 'Сохранение...' : 'Сохранить настройки'}
           </button>
@@ -222,14 +222,14 @@ export default function PricingV2Page() {
           <button
             onClick={load}
             disabled={saving}
-            className="text-[12px] text-[#9a9a95] hover:text-[#111110] underline"
+            className="text-[12px] text-muted hover:text-ink underline"
           >
             Сбросить
           </button>
         </div>
 
-        <div className="bg-[#f5f5f3] border border-[#e4e4e0] rounded-xl px-4 py-3 text-[12px] text-[#6b6b66] leading-snug">
-          <p className="font-semibold text-[#111110] mb-1">Как это считается</p>
+        <div className="bg-canvas border border-line rounded-xl px-4 py-3 text-[12px] text-ink-soft leading-snug">
+          <p className="font-semibold text-ink mb-1">Как это считается</p>
           <p className="font-mono text-[11px] mb-1">B2B Price = Factory Cost / (1 − налог% − маржа%)</p>
           <p className="font-mono text-[11px]">B2C Price = B2B Price / (1 − налог% − маржа%)</p>
           <p className="mt-2">

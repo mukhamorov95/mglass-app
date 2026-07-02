@@ -73,7 +73,7 @@ function levelColor(level: string) {
     case 'warn':    return 'text-amber-600'
     case 'skip':    return 'text-gray-400'
     case 'idle':    return 'text-gray-400'
-    default:        return 'text-[#4b4b47]'
+    default:        return 'text-ink-soft'
   }
 }
 
@@ -155,9 +155,9 @@ export default function AgentsPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f7f7f6] flex items-center justify-center">
-      <div className="flex items-center gap-2 text-[#9a9a95] text-xs">
-        <div className="w-4 h-4 border-2 border-[#d0d0cc] border-t-[#9a9a95] rounded-full animate-spin" />
+    <div className="min-h-screen bg-canvas flex items-center justify-center">
+      <div className="flex items-center gap-2 text-muted text-xs">
+        <div className="w-4 h-4 border-2 border-faint border-t-muted rounded-full animate-spin" />
         Загрузка AI-команды...
       </div>
     </div>
@@ -172,23 +172,23 @@ export default function AgentsPage() {
   }, null)
 
   return (
-    <div className="min-h-screen bg-[#f7f7f6]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-5xl mx-auto px-4 py-4">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-5">
           <div>
-            <h1 className="text-base font-semibold text-[#111110]">AI-команда MGlass</h1>
-            <p className="text-xs text-[#9a9a95] mt-0.5">
+            <h1 className="text-base font-semibold text-ink">AI-команда MGlass</h1>
+            <p className="text-xs text-muted mt-0.5">
               {activeCount} из {agents.length} активны
               {runningCount > 0 && <span className="text-emerald-600"> · {runningCount} работает сейчас</span>}
               {lastAny && <span> · последний запуск {fmtTime(lastAny)}</span>}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className="text-[10px] text-[#9a9a95]">обновлено {fmtLogTime(lastRefresh.toISOString())}</span>
+            <span className="text-[10px] text-muted">обновлено {fmtLogTime(lastRefresh.toISOString())}</span>
             <button onClick={load}
-              className="h-7 px-2.5 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-white transition-colors">
+              className="h-7 px-2.5 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-surface transition-colors">
               ↻ Обновить
             </button>
           </div>
@@ -207,7 +207,7 @@ export default function AgentsPage() {
 
             return (
               <div key={agent.agent_key}
-                className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden flex flex-col">
+                className="bg-surface rounded-xl border border-line overflow-hidden flex flex-col">
 
                 {/* Card header */}
                 <div className={`px-4 pt-4 pb-3 ${agent.enabled ? '' : 'opacity-60'}`}>
@@ -219,20 +219,20 @@ export default function AgentsPage() {
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <p className="text-sm font-semibold text-[#111110]">{agent.name}</p>
+                          <p className="text-sm font-semibold text-ink">{agent.name}</p>
                           {agent.is_running ? (
-                            <span className="flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                            <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
                               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
                               РАБОТАЕТ
                             </span>
                           ) : (
-                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${agent.enabled ? meta.badge : meta.badgeOff}`}>
+                            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${agent.enabled ? meta.badge : meta.badgeOff}`}>
                               {agent.enabled ? '● АКТИВЕН' : '○ ПАУЗА'}
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-[#6b6b66] mt-0.5 leading-snug">{agent.description}</p>
-                        <div className="flex items-center gap-3 mt-1 text-[10px] text-[#9a9a95]">
+                        <p className="text-[11px] text-ink-soft mt-0.5 leading-snug">{agent.description}</p>
+                        <div className="flex items-center gap-3 mt-1 text-[10px] text-muted">
                           <span>⏱ {schedLabel}</span>
                           <span>▶ {agent.total_runs} запусков</span>
                           {agent.last_run_at && <span>последний: {fmtTime(agent.last_run_at)}</span>}
@@ -242,15 +242,15 @@ export default function AgentsPage() {
 
                     {/* Toggle */}
                     <button onClick={() => toggle(agent)} disabled={isTogg}
-                      className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 mt-1 disabled:opacity-50 ${agent.enabled ? 'bg-emerald-500' : 'bg-[#d0d0cc]'}`}>
-                      <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${agent.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
+                      className={`w-11 h-6 rounded-full transition-all relative flex-shrink-0 mt-1 disabled:opacity-50 ${agent.enabled ? 'bg-emerald-500' : 'bg-faint'}`}>
+                      <div className={`absolute top-0.5 w-5 h-5 bg-surface rounded-full shadow transition-transform ${agent.enabled ? 'translate-x-5' : 'translate-x-0.5'}`} />
                     </button>
                   </div>
 
                   {/* Last action */}
                   {agent.last_action_text && (
-                    <div className="mt-2.5 px-2.5 py-1.5 bg-[#f7f7f6] rounded-lg">
-                      <p className="text-[11px] text-[#4b4b47] leading-snug">{agent.last_action_text}</p>
+                    <div className="mt-2.5 px-2.5 py-1.5 bg-canvas rounded-lg">
+                      <p className="text-[11px] text-ink-soft leading-snug">{agent.last_action_text}</p>
                     </div>
                   )}
 
@@ -261,7 +261,7 @@ export default function AgentsPage() {
                         .filter(([, v]) => v !== null && typeof v !== 'object')
                         .slice(0, 5)
                         .map(([k, v]) => (
-                          <span key={k} className="text-[10px] px-2 py-0.5 bg-[#f0f0ee] rounded text-[#6b6b66] font-mono">
+                          <span key={k} className="text-[10px] px-2 py-0.5 bg-line-soft rounded text-ink-soft font-mono">
                             {k}: {String(v)}
                           </span>
                         ))}
@@ -274,8 +274,8 @@ export default function AgentsPage() {
                   const pending = (agent.memory?.pending_approvals as any[]) ?? []
                   if (!pending.length) return null
                   return (
-                    <div className="border-t border-[#f0f0ee] px-4 py-3">
-                      <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide mb-2">
+                    <div className="border-t border-line-soft px-4 py-3">
+                      <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-2">
                         Ожидают одобрения — {pending.length}
                       </p>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
@@ -291,16 +291,16 @@ export default function AgentsPage() {
                             if (res.ok) await load()
                           }
                           return (
-                          <div key={item.id ?? idx} className="flex items-start justify-between gap-2 py-1.5 border-b border-[#f7f7f7] last:border-0">
+                          <div key={item.id ?? idx} className="flex items-start justify-between gap-2 py-1.5 border-b border-line-soft last:border-0">
                             <div className="flex-1 min-w-0">
-                              <p className="text-[11px] font-medium text-[#111110] truncate">
+                              <p className="text-[11px] font-medium text-ink truncate">
                                 {name}
-                                {item.category && <span className="text-[#9a9a95] font-normal"> · {item.category}</span>}
+                                {item.category && <span className="text-muted font-normal"> · {item.category}</span>}
                                 {item.cost_price && <span className="text-emerald-600 font-normal"> · {Number(item.cost_price).toLocaleString('ru-RU')} ₽</span>}
-                                {item.unit && <span className="text-[#9a9a95] font-normal">/{item.unit}</span>}
+                                {item.unit && <span className="text-muted font-normal">/{item.unit}</span>}
                               </p>
-                              <p className="text-[10px] text-[#9a9a95] truncate">{item.reason ?? ''}</p>
-                              {item.source && <p className="text-[10px] text-[#b8b8b4]">{item.source}</p>}
+                              <p className="text-[10px] text-muted truncate">{item.reason ?? ''}</p>
+                              {item.source && <p className="text-[10px] text-faint">{item.source}</p>}
                             </div>
                             <div className="flex gap-1 flex-shrink-0">
                               <button onClick={() => doAction(false)}
@@ -322,11 +322,11 @@ export default function AgentsPage() {
 
                 {/* Log */}
                 {agLogs.length > 0 && (
-                  <div className="border-t border-[#f0f0ee] px-4 py-2 flex-1">
+                  <div className="border-t border-line-soft px-4 py-2 flex-1">
                     <div className="space-y-0.5">
                       {visLogs.map(log => (
                         <div key={log.id} className="flex items-start gap-2 py-0.5">
-                          <span className="text-[10px] text-[#b8b8b4] flex-shrink-0 w-9 font-mono mt-px">{fmtLogTime(log.ran_at)}</span>
+                          <span className="text-[10px] text-faint flex-shrink-0 w-9 font-mono mt-px">{fmtLogTime(log.ran_at)}</span>
                           <span className="text-[11px] flex-shrink-0">{log.icon}</span>
                           <span className={`text-[11px] leading-snug flex-1 min-w-0 ${levelColor(log.level)}`}>{log.message}</span>
                         </div>
@@ -334,43 +334,43 @@ export default function AgentsPage() {
                     </div>
                     {agLogs.length > 5 && (
                       <button onClick={() => setExpanded(p => ({ ...p, [agent.agent_key]: !isExp }))}
-                        className="mt-1.5 text-[10px] text-[#9a9a95] hover:text-[#4b4b47] transition-colors">
+                        className="mt-1.5 text-[10px] text-muted hover:text-ink-soft transition-colors">
                         {isExp ? '↑ Свернуть' : `↓ Ещё ${agLogs.length - 5} записей`}
                       </button>
                     )}
                   </div>
                 )}
                 {agLogs.length === 0 && (
-                  <div className="border-t border-[#f0f0ee] px-4 py-3">
-                    <p className="text-[11px] text-[#b8b8b4] italic">Сегодня ещё не запускался</p>
+                  <div className="border-t border-line-soft px-4 py-3">
+                    <p className="text-[11px] text-faint italic">Сегодня ещё не запускался</p>
                   </div>
                 )}
 
                 {/* Actions */}
-                <div className="border-t border-[#f0f0ee] px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-                  <span className="text-[10px] text-[#9a9a95]">
+                <div className="border-t border-line-soft px-4 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[10px] text-muted">
                     {agent.schedule ? `по расписанию (${schedLabel})` : 'только ручной запуск'}
                   </span>
                   <div className="flex items-center gap-2">
                     {agent.agent_key === 'catalog' && (
                       <>
-                        <label className={`h-7 px-3 rounded-lg text-[11px] font-medium border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors flex items-center gap-1.5 cursor-pointer ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
+                        <label className={`h-7 px-3 rounded-lg text-[11px] font-medium border border-line text-ink-soft hover:bg-canvas transition-colors flex items-center gap-1.5 cursor-pointer ${uploading ? 'opacity-40 pointer-events-none' : ''}`}>
                           {uploading
-                            ? <><span className="w-3 h-3 border border-[#9a9a95] border-t-transparent rounded-full animate-spin" />Читаю PDF...</>
+                            ? <><span className="w-3 h-3 border border-muted border-t-transparent rounded-full animate-spin" />Читаю PDF...</>
                             : <>📄 Загрузить прайс</>
                           }
                           <input type="file" accept=".pdf" className="hidden"
                             onChange={e => { const f = e.target.files?.[0]; if (f) uploadPdf(f); e.target.value = '' }} />
                         </label>
                         {uploadResult && (
-                          <span className="text-[10px] text-[#6b6b66]">{uploadResult}</span>
+                          <span className="text-[10px] text-ink-soft">{uploadResult}</span>
                         )}
                       </>
                     )}
                     <button onClick={() => runNow(agent)} disabled={isRun || agent.is_running}
-                      className="h-7 px-3 rounded-lg text-[11px] font-medium border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] disabled:opacity-40 transition-colors flex items-center gap-1.5">
+                      className="h-7 px-3 rounded-lg text-[11px] font-medium border border-line text-ink-soft hover:bg-canvas disabled:opacity-40 transition-colors flex items-center gap-1.5">
                       {isRun || agent.is_running
-                        ? <><span className="w-3 h-3 border border-[#9a9a95] border-t-transparent rounded-full animate-spin" />Работает...</>
+                        ? <><span className="w-3 h-3 border border-muted border-t-transparent rounded-full animate-spin" />Работает...</>
                         : <>▶ Запустить</>
                       }
                     </button>
@@ -382,22 +382,22 @@ export default function AgentsPage() {
         </div>
 
         {/* Global feed */}
-        <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-          <div className="px-4 py-3 border-b border-[#f0f0ee] flex items-center justify-between">
-            <p className="text-[11px] font-semibold text-[#a8a8a3] uppercase tracking-wide">Лента событий сегодня</p>
-            <span className="text-[11px] text-[#9a9a95]">{logs.length} записей</span>
+        <div className="bg-surface rounded-xl border border-line overflow-hidden">
+          <div className="px-4 py-3 border-b border-line-soft flex items-center justify-between">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">Лента событий сегодня</p>
+            <span className="text-[11px] text-muted">{logs.length} записей</span>
           </div>
           {logs.length === 0 ? (
-            <p className="px-4 py-8 text-sm text-center text-[#9a9a95]">Агенты сегодня ещё не работали</p>
+            <p className="px-4 py-8 text-sm text-center text-muted">Агенты сегодня ещё не работали</p>
           ) : (
-            <div className="divide-y divide-[#f7f7f7] max-h-80 overflow-y-auto">
+            <div className="divide-y divide-line-soft max-h-80 overflow-y-auto">
               {logs.map(log => {
                 const m = AGENT_META[log.agent_key]
                 return (
                   <div key={log.id} className="flex items-start gap-3 px-4 py-2">
-                    <span className="text-[10px] text-[#b8b8b4] font-mono w-9 flex-shrink-0 mt-px">{fmtLogTime(log.ran_at)}</span>
+                    <span className="text-[10px] text-faint font-mono w-9 flex-shrink-0 mt-px">{fmtLogTime(log.ran_at)}</span>
                     <span className="text-[11px] flex-shrink-0">{m?.emoji ?? '🤖'}</span>
-                    <span className={`text-[10px] font-semibold flex-shrink-0 w-16 mt-px ${m?.color ?? 'text-[#6b6b66]'}`}>{log.agent_key}</span>
+                    <span className={`text-[10px] font-semibold flex-shrink-0 w-16 mt-px ${m?.color ?? 'text-ink-soft'}`}>{log.agent_key}</span>
                     <span className="text-[11px] flex-shrink-0">{log.icon}</span>
                     <span className={`text-[11px] flex-1 min-w-0 leading-snug ${levelColor(log.level)}`}>{log.message}</span>
                   </div>

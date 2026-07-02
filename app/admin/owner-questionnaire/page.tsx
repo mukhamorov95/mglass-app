@@ -249,7 +249,7 @@ export default function OwnerQuestionnairePage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
@@ -257,9 +257,9 @@ export default function OwnerQuestionnairePage() {
 
       {/* Header */}
       <div className="mb-8">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Только для владельца</p>
-        <h1 className="text-[24px] font-bold text-[#111110] tracking-tight">Стратегический опросник</h1>
-        <p className="text-[14px] text-[#6b6b66] mt-1">
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Только для владельца</p>
+        <h1 className="text-[24px] font-semibold text-ink tracking-tight">Стратегический опросник</h1>
+        <p className="text-[14px] text-ink-soft mt-1">
           Ответы используются системой для формул, предупреждений и автоматических решений.
           Заполните один раз, обновляйте при изменении стратегии.
         </p>
@@ -268,22 +268,22 @@ export default function OwnerQuestionnairePage() {
       {/* Sections */}
       <div className="space-y-6">
         {SECTIONS.map(section => (
-          <div key={section.id} className={`bg-white border-2 ${section.color} rounded-2xl p-6`}>
+          <div key={section.id} className={`bg-surface border-2 ${section.color} rounded-2xl p-6`}>
             <div className="flex items-center gap-2 mb-5">
               <span className="text-lg">{section.icon}</span>
-              <h2 className="text-[15px] font-semibold text-[#111110]">{section.title}</h2>
+              <h2 className="text-[15px] font-semibold text-ink">{section.title}</h2>
             </div>
             <div className="space-y-5">
               {section.questions.map(q => (
                 <div key={q.key}>
-                  <label className="block text-[13px] font-medium text-[#111110] mb-1">
+                  <label className="block text-[13px] font-medium text-ink mb-1">
                     {q.label}
                     {'unit' in q && q.unit && (
-                      <span className="ml-1 text-[#8a8a85] font-normal">({q.unit})</span>
+                      <span className="ml-1 text-muted font-normal">({q.unit})</span>
                     )}
                   </label>
                   {q.hint && (
-                    <p className="text-[12px] text-[#8a8a85] mb-2">{q.hint}</p>
+                    <p className="text-[12px] text-muted mb-2">{q.hint}</p>
                   )}
 
                   {q.type === 'number' && (
@@ -291,7 +291,7 @@ export default function OwnerQuestionnairePage() {
                       type="number"
                       value={answers[q.key] ?? ''}
                       onChange={e => set(q.key, e.target.value)}
-                      className="w-full sm:w-48 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full sm:w-48 border border-line rounded-lg px-3 py-2 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                   )}
 
@@ -299,7 +299,7 @@ export default function OwnerQuestionnairePage() {
                     <select
                       value={answers[q.key] ?? ''}
                       onChange={e => set(q.key, e.target.value)}
-                      className="w-full sm:w-72 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full sm:w-72 border border-line rounded-lg px-3 py-2 text-[13px] text-ink bg-surface focus:outline-none focus:ring-2 focus:ring-blue-300"
                     >
                       {(q as { options?: { v: string; l: string }[] }).options?.map(o => (
                         <option key={o.v} value={o.v}>{o.l}</option>
@@ -319,7 +319,7 @@ export default function OwnerQuestionnairePage() {
                             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors ${
                               active
                                 ? 'bg-blue-600 border-blue-600 text-white'
-                                : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:border-blue-300'
+                                : 'bg-surface border-line text-ink-soft hover:border-blue-300'
                             }`}
                           >
                             {m.l}
@@ -335,7 +335,7 @@ export default function OwnerQuestionnairePage() {
                       onChange={e => set(q.key, e.target.value)}
                       rows={3}
                       placeholder="Введите текст..."
-                      className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      className="w-full border border-line rounded-lg px-3 py-2 text-[13px] text-ink resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
                     />
                   )}
                 </div>
@@ -350,7 +350,7 @@ export default function OwnerQuestionnairePage() {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="px-6 py-2.5 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors disabled:opacity-50"
+          className="px-6 py-2.5 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors disabled:opacity-50"
         >
           {saving ? 'Сохранение...' : 'Сохранить ответы'}
         </button>
@@ -363,20 +363,20 @@ export default function OwnerQuestionnairePage() {
       </div>
 
       {/* Summary preview */}
-      <div className="mt-10 bg-[#f8f8f5] rounded-2xl p-6">
-        <h3 className="text-[13px] font-bold text-[#111110] uppercase tracking-wider mb-4">Текущие настройки</h3>
+      <div className="mt-10 bg-canvas rounded-2xl p-6">
+        <h3 className="text-[13px] font-semibold text-ink uppercase tracking-wider mb-4">Текущие настройки</h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           {SECTIONS.flatMap(s => s.questions).filter(q => q.key !== 'growth_priority').map(q => (
-            <div key={q.key} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-[#e8e8e4]">
-              <span className="text-[12px] text-[#8a8a85] min-w-0 truncate">{q.label}</span>
-              <span className="text-[13px] font-medium text-[#111110] whitespace-nowrap">{fmt(q.key, answers[q.key] ?? '')}</span>
+            <div key={q.key} className="flex items-baseline justify-between gap-2 py-1.5 border-b border-line">
+              <span className="text-[12px] text-muted min-w-0 truncate">{q.label}</span>
+              <span className="text-[13px] font-medium text-ink whitespace-nowrap tabular-nums">{fmt(q.key, answers[q.key] ?? '')}</span>
             </div>
           ))}
         </div>
         {answers['growth_priority'] && (
-          <div className="mt-4 pt-4 border-t border-[#e4e4e0]">
-            <p className="text-[12px] text-[#8a8a85] mb-1">Главный приоритет</p>
-            <p className="text-[13px] text-[#111110] leading-relaxed">{answers['growth_priority']}</p>
+          <div className="mt-4 pt-4 border-t border-line">
+            <p className="text-[12px] text-muted mb-1">Главный приоритет</p>
+            <p className="text-[13px] text-ink leading-relaxed">{answers['growth_priority']}</p>
           </div>
         )}
       </div>

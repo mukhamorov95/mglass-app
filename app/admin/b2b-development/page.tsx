@@ -276,9 +276,9 @@ export default function B2BDevelopmentPage() {
     <div className="max-w-7xl mx-auto px-6 py-8">
       <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Только для владельца</p>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">B2B Development</h1>
-          <p className="text-[13px] text-[#6b6b66] mt-1">B2B Growth System — поиск, скоринг, outreach, аналитика</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Только для владельца</p>
+          <h1 className="text-[22px] font-semibold text-ink tracking-tight">B2B Development</h1>
+          <p className="text-[13px] text-ink-soft mt-1">B2B Growth System — поиск, скоринг, outreach, аналитика</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -287,7 +287,7 @@ export default function B2BDevelopmentPage() {
           >⚡ Пополнить базу</button>
           <button
             onClick={() => { setLeadForm(EMPTY_LEAD); setEditLeadId(null); setShowLeadForm(true) }}
-            className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors"
+            className="px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors"
           >+ Лид</button>
         </div>
       </div>
@@ -295,14 +295,14 @@ export default function B2BDevelopmentPage() {
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         {[
-          { label: 'Всего лидов', value: leads.length, color: 'text-[#111110]' },
+          { label: 'Всего лидов', value: leads.length, color: 'text-ink' },
           { label: 'Score A',     value: aLeads.length, color: 'text-emerald-700' },
           { label: 'Клиентов',    value: leads.filter(l => l.status === 'regular' || l.status === 'test_order').length, color: 'text-blue-700' },
           { label: 'Потенциал',   value: `${Math.round(totalPotential / 1000)}k`, color: 'text-purple-700' },
         ].map(s => (
-          <div key={s.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-            <p className="text-[11px] text-[#8a8a85]">{s.label}</p>
-            <p className={`text-[20px] font-bold ${s.color}`}>{s.value}</p>
+          <div key={s.label} className="bg-surface border border-line rounded-xl px-4 py-3">
+            <p className="text-[11px] text-muted">{s.label}</p>
+            <p className={`text-[20px] font-semibold ${s.color}`}>{s.value}</p>
           </div>
         ))}
       </div>
@@ -311,7 +311,7 @@ export default function B2BDevelopmentPage() {
       <div className="flex gap-1 mb-5 bg-[#f5f5f0] rounded-xl p-1 w-fit flex-wrap">
         {([['pipeline', 'Pipeline'], ['list', 'Список'], ['intake', '⚡ Пополнение'], ['outreach', 'Outreach'], ['analytics', 'Аналитика'], ['strategy', 'Стратегия']] as [Tab, string][]).map(([t, l]) => (
           <button key={t} onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${tab === t ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'}`}>
+            className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${tab === t ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
             {l}
           </button>
         ))}
@@ -319,24 +319,24 @@ export default function B2BDevelopmentPage() {
 
       {/* Filters */}
       <div className="flex gap-2 flex-wrap mb-5">
-        <button onClick={() => setSegFilter('')} className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!segFilter ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>Все</button>
+        <button onClick={() => setSegFilter('')} className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!segFilter ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft'}`}>Все</button>
         {SEGMENTS.map(s => (
           <button key={s.value} onClick={() => setSegFilter(segFilter === s.value ? '' : s.value)}
-            className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${segFilter === s.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>
+            className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${segFilter === s.value ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft'}`}>
             {s.icon} {s.label}
           </button>
         ))}
-        <div className="w-px bg-[#e4e4e0] self-stretch mx-1" />
+        <div className="w-px bg-line self-stretch mx-1" />
         {SCORES.map(s => (
           <button key={s.value} onClick={() => setScoreFilter(scoreFilter === s.value ? '' : s.value)}
-            className={`px-2.5 py-1.5 rounded-lg text-[12px] font-bold transition-colors ${scoreFilter === s.value ? s.color : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>
+            className={`px-2.5 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${scoreFilter === s.value ? s.color : 'bg-[#f5f5f0] text-ink-soft'}`}>
             {s.value}
           </button>
         ))}
       </div>
 
       {loading ? (
-        <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="py-16 text-center text-[13px] text-muted">Загрузка...</div>
       ) : (
         <div className="flex gap-6">
           <div className="flex-1 min-w-0">
@@ -344,13 +344,13 @@ export default function B2BDevelopmentPage() {
             {/* PIPELINE */}
             {tab === 'pipeline' && (
               <div className="space-y-6">
-                {pipelineGroups.length === 0 && <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет лидов. Нажмите «+ Лид».</div>}
+                {pipelineGroups.length === 0 && <div className="text-center py-16 text-[13px] text-muted">Нет лидов. Нажмите «+ Лид».</div>}
                 {pipelineGroups.map(group => (
                   <div key={group.value}>
                     <div className="flex items-center gap-3 mb-3">
                       <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${group.color}`}>{group.label}</span>
-                      <span className="text-[11px] text-[#8a8a85]">{group.leads.length}</span>
-                      <div className="flex-1 h-px bg-[#e4e4e0]" />
+                      <span className="text-[11px] text-muted">{group.leads.length}</span>
+                      <div className="flex-1 h-px bg-line" />
                     </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3">
                       {group.leads.map(lead => (
@@ -376,37 +376,37 @@ export default function B2BDevelopmentPage() {
 
             {/* LIST */}
             {tab === 'list' && (
-              <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div className="bg-surface border border-line rounded-xl overflow-hidden">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="border-b border-[#e4e4e0] bg-[#fafaf8]">
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Компания</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Сегмент</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Статус</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Score</th>
-                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider">Потенциал</th>
+                    <tr className="border-b border-line bg-[#fafaf8]">
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-wider">Компания</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-wider">Сегмент</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-wider">Статус</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-wider">Score</th>
+                      <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-wider">Потенциал</th>
                       <th className="px-4 py-3" />
                     </tr>
                   </thead>
                   <tbody>
-                    {leads.length === 0 && <tr><td colSpan={6} className="text-center py-12 text-[#8a8a85]">Нет лидов</td></tr>}
+                    {leads.length === 0 && <tr><td colSpan={6} className="text-center py-12 text-muted">Нет лидов</td></tr>}
                     {leads.map(lead => {
                       const st = statusInfo(lead.status)
                       const sc = SCORES.find(s => s.value === lead.score)
                       return (
-                        <tr key={lead.id} className="border-b border-[#f0f0ec] hover:bg-[#fafaf8] cursor-pointer" onClick={() => openLead(lead)}>
+                        <tr key={lead.id} className="border-b border-line-soft hover:bg-[#fafaf8] cursor-pointer" onClick={() => openLead(lead)}>
                           <td className="px-4 py-3">
-                            <p className="font-medium text-[#111110]">{lead.company_name}</p>
-                            {lead.contact_name && <p className="text-[12px] text-[#8a8a85]">{lead.contact_name}</p>}
+                            <p className="font-medium text-ink">{lead.company_name}</p>
+                            {lead.contact_name && <p className="text-[12px] text-muted">{lead.contact_name}</p>}
                           </td>
-                          <td className="px-4 py-3 text-[#6b6b66]">{segmentInfo(lead.segment).icon} {segmentInfo(lead.segment).label}</td>
+                          <td className="px-4 py-3 text-ink-soft">{segmentInfo(lead.segment).icon} {segmentInfo(lead.segment).label}</td>
                           <td className="px-4 py-3">
                             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${st.color}`}>{st.label}</span>
                           </td>
                           <td className="px-4 py-3">
-                            {sc && <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${sc.color}`}>{sc.value}</span>}
+                            {sc && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${sc.color}`}>{sc.value}</span>}
                           </td>
-                          <td className="px-4 py-3 text-[#6b6b66]">
+                          <td className="px-4 py-3 text-ink-soft">
                             {lead.potential_monthly ? `${lead.potential_monthly.toLocaleString('ru-RU')} ₽/мес` : '—'}
                           </td>
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
@@ -436,36 +436,36 @@ export default function B2BDevelopmentPage() {
           {/* Activity sidebar */}
           {selectedLead && (
             <div className="w-80 flex-shrink-0">
-              <div className="bg-white border border-[#e4e4e0] rounded-xl sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
-                <div className="p-4 border-b border-[#e4e4e0]">
+              <div className="bg-surface border border-line rounded-xl sticky top-6 max-h-[calc(100vh-6rem)] overflow-y-auto">
+                <div className="p-4 border-b border-line">
                   <div className="flex items-start justify-between gap-2 mb-2">
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
-                        <p className="text-[14px] font-semibold text-[#111110]">{selectedLead.company_name}</p>
+                        <p className="text-[14px] font-semibold text-ink">{selectedLead.company_name}</p>
                         {selectedLead.score && (
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${SCORES.find(s => s.value === selectedLead.score)?.color ?? ''}`}>
+                          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${SCORES.find(s => s.value === selectedLead.score)?.color ?? ''}`}>
                             {selectedLead.score}
                           </span>
                         )}
                       </div>
-                      <p className="text-[12px] text-[#8a8a85]">{segmentInfo(selectedLead.segment).icon} {segmentInfo(selectedLead.segment).label} · {selectedLead.city}</p>
+                      <p className="text-[12px] text-muted">{segmentInfo(selectedLead.segment).icon} {segmentInfo(selectedLead.segment).label} · {selectedLead.city}</p>
                     </div>
-                    <button onClick={() => setSelectedLead(null)} className="text-[#c0c0bb] hover:text-[#111110] text-sm flex-shrink-0">✕</button>
+                    <button onClick={() => setSelectedLead(null)} className="text-[#c0c0bb] hover:text-ink text-sm flex-shrink-0">✕</button>
                   </div>
 
                   {selectedLead.ai_summary && (
-                    <p className="text-[11px] text-[#6b6b66] italic mb-2 bg-[#fafaf8] px-2 py-1.5 rounded-lg">{selectedLead.ai_summary}</p>
+                    <p className="text-[11px] text-ink-soft italic mb-2 bg-[#fafaf8] px-2 py-1.5 rounded-lg">{selectedLead.ai_summary}</p>
                   )}
 
                   <select
                     value={selectedLead.status}
                     onChange={e => updateLeadStatus(selectedLead, e.target.value)}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] bg-white focus:outline-none mb-2"
+                    className="w-full border border-line rounded-lg px-2 py-1.5 text-[12px] bg-surface focus:outline-none mb-2"
                   >
                     {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
 
-                  <div className="space-y-1 text-[12px] text-[#6b6b66] mb-3">
+                  <div className="space-y-1 text-[12px] text-ink-soft mb-3">
                     {selectedLead.phone     && <p>📞 {selectedLead.phone}</p>}
                     {selectedLead.email     && <p>📧 {selectedLead.email}</p>}
                     {selectedLead.instagram && <p>📸 {selectedLead.instagram}</p>}
@@ -473,7 +473,7 @@ export default function B2BDevelopmentPage() {
                     {selectedLead.potential_monthly && (
                       <p className="text-emerald-700 font-medium">💰 {selectedLead.potential_monthly.toLocaleString('ru-RU')} ₽/мес</p>
                     )}
-                    {selectedLead.notes && <p className="italic text-[#8a8a85]">{selectedLead.notes}</p>}
+                    {selectedLead.notes && <p className="italic text-muted">{selectedLead.notes}</p>}
                   </div>
 
                   <div className="flex gap-2">
@@ -488,32 +488,32 @@ export default function B2BDevelopmentPage() {
                   </div>
 
                   {aiMessage && (
-                    <div className="mt-2 bg-[#fafaf8] border border-[#e4e4e0] rounded-lg p-3">
-                      <p className="text-[12px] text-[#111110] leading-relaxed whitespace-pre-wrap">{aiMessage}</p>
+                    <div className="mt-2 bg-[#fafaf8] border border-line rounded-lg p-3">
+                      <p className="text-[12px] text-ink leading-relaxed whitespace-pre-wrap">{aiMessage}</p>
                       <button onClick={() => navigator.clipboard.writeText(aiMessage)}
-                        className="mt-1.5 text-[11px] text-[#8a8a85] hover:text-[#111110]">Копировать</button>
+                        className="mt-1.5 text-[11px] text-muted hover:text-ink">Копировать</button>
                     </div>
                   )}
                 </div>
 
                 <div className="p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[12px] font-semibold text-[#111110]">История</p>
+                    <p className="text-[12px] font-semibold text-ink">История</p>
                     <button onClick={() => { setActForm(EMPTY_ACT); setShowActForm(true) }}
-                      className="text-[11px] px-2.5 py-1 bg-[#111110] text-white rounded-lg hover:bg-[#333] transition-colors">+ Контакт</button>
+                      className="text-[11px] px-2.5 py-1 bg-ink text-white rounded-lg hover:bg-[#333] transition-colors">+ Контакт</button>
                   </div>
                   {loadingAct ? (
-                    <div className="text-center py-4 text-[12px] text-[#8a8a85]">Загрузка...</div>
+                    <div className="text-center py-4 text-[12px] text-muted">Загрузка...</div>
                   ) : activities.length === 0 ? (
-                    <div className="text-center py-4 text-[12px] text-[#8a8a85]">Нет контактов</div>
+                    <div className="text-center py-4 text-[12px] text-muted">Нет контактов</div>
                   ) : (
                     <div className="space-y-3">
                       {activities.map(act => (
                         <div key={act.id} className="flex gap-2.5">
                           <span className="flex-shrink-0 text-base mt-0.5">{activityIcon(act.type)}</span>
                           <div className="min-w-0">
-                            <p className="text-[12px] text-[#111110] leading-relaxed">{act.note}</p>
-                            {act.outcome && <p className="text-[11px] text-[#6b6b66]">{act.outcome}</p>}
+                            <p className="text-[12px] text-ink leading-relaxed">{act.note}</p>
+                            {act.outcome && <p className="text-[11px] text-ink-soft">{act.outcome}</p>}
                             {act.next_action && <p className="text-[11px] text-blue-600">→ {act.next_action}</p>}
                             <p className="text-[10px] text-[#c0c0bb] mt-0.5">
                               {new Date(act.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
@@ -533,93 +533,93 @@ export default function B2BDevelopmentPage() {
       {/* Lead form modal */}
       {showLeadForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editLeadId ? 'Изменить лид' : 'Новый B2B лид'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">{editLeadId ? 'Изменить лид' : 'Новый B2B лид'}</h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Компания *</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Компания *</label>
                   <input type="text" value={leadForm.company_name} onChange={e => setLeadForm(f => ({ ...f, company_name: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Сегмент</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Сегмент</label>
                   <select value={leadForm.segment} onChange={e => setLeadForm(f => ({ ...f, segment: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     {SEGMENTS.map(s => <option key={s.value} value={s.value}>{s.icon} {s.label}</option>)}
                   </select>
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Контакт</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Контакт</label>
                   <input type="text" value={leadForm.contact_name ?? ''} onChange={e => setLeadForm(f => ({ ...f, contact_name: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Телефон</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Телефон</label>
                   <input type="text" value={leadForm.phone ?? ''} onChange={e => setLeadForm(f => ({ ...f, phone: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Email</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Email</label>
                   <input type="email" value={leadForm.email ?? ''} onChange={e => setLeadForm(f => ({ ...f, email: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Instagram</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Instagram</label>
                   <input type="text" value={leadForm.instagram ?? ''} onChange={e => setLeadForm(f => ({ ...f, instagram: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Сайт</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Сайт</label>
                   <input type="text" value={leadForm.website ?? ''} onChange={e => setLeadForm(f => ({ ...f, website: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
               </div>
               <div className="grid grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Статус</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Статус</label>
                   <select value={leadForm.status} onChange={e => setLeadForm(f => ({ ...f, status: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Score</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Score</label>
                   <select value={leadForm.score ?? 'C'} onChange={e => setLeadForm(f => ({ ...f, score: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     {SCORES.map(s => <option key={s.value} value={s.value}>{s.value} — {s.desc}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Размер</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Размер</label>
                   <select value={leadForm.size_category ?? 'small'} onChange={e => setLeadForm(f => ({ ...f, size_category: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     {SIZES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Потенциал ₽/мес</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Потенциал ₽/мес</label>
                   <input type="number" value={leadForm.potential_monthly ?? ''} onChange={e => setLeadForm(f => ({ ...f, potential_monthly: e.target.value ? +e.target.value : null }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Заметки</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Заметки</label>
                 <textarea value={leadForm.notes ?? ''} onChange={e => setLeadForm(f => ({ ...f, notes: e.target.value }))}
-                  rows={3} className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
+                  rows={3} className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={saveLead} disabled={savingLead}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {savingLead ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowLeadForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Отмена</button>
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-[#f5f5f0] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
@@ -628,51 +628,51 @@ export default function B2BDevelopmentPage() {
       {/* Activity modal */}
       {showActForm && selectedLead && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">Добавить контакт — {selectedLead.company_name}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-lg p-6">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">Добавить контакт — {selectedLead.company_name}</h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Тип</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Тип</label>
                   <select value={actForm.type} onChange={e => setActForm(f => ({ ...f, type: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     {ACTIVITY_TYPES.map(t => <option key={t.value} value={t.value}>{t.icon} {t.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Результат</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Результат</label>
                   <select value={actForm.outcome ?? ''} onChange={e => setActForm(f => ({ ...f, outcome: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                     <option value="">— не выбрано —</option>
                     {OUTCOMES.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Заметка *</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Заметка *</label>
                 <textarea value={actForm.note} onChange={e => setActForm(f => ({ ...f, note: e.target.value }))}
-                  rows={3} className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
+                  rows={3} className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Следующий шаг</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Следующий шаг</label>
                   <input type="text" value={actForm.next_action ?? ''} onChange={e => setActForm(f => ({ ...f, next_action: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Дата</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Дата</label>
                   <input type="date" value={actForm.next_action_date ?? ''} onChange={e => setActForm(f => ({ ...f, next_action_date: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 </div>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={saveActivity} disabled={savingAct}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {savingAct ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowActForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Отмена</button>
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-[#f5f5f0] transition-colors">Отмена</button>
             </div>
           </div>
         </div>
@@ -692,19 +692,19 @@ function LeadCard({ lead, selected, onClick, onStatusChange, onEdit, onDelete }:
   const seg = segmentInfo(lead.segment)
   return (
     <div
-      className={`bg-white border rounded-xl p-4 cursor-pointer transition-all ${selected ? 'border-[#111110] ring-1 ring-[#111110]' : 'border-[#e4e4e0] hover:border-[#c0c0bb]'}`}
+      className={`bg-surface border rounded-xl p-4 cursor-pointer transition-all ${selected ? 'border-ink ring-1 ring-ink' : 'border-line hover:border-[#c0c0bb]'}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 mb-0.5">
-            {sc && <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${sc.color}`}>{sc.value}</span>}
-            <p className="text-[13px] font-semibold text-[#111110] truncate">{lead.company_name}</p>
+            {sc && <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded flex-shrink-0 ${sc.color}`}>{sc.value}</span>}
+            <p className="text-[13px] font-semibold text-ink truncate">{lead.company_name}</p>
           </div>
-          <p className="text-[11px] text-[#8a8a85]">{seg.icon} {seg.label}{lead.contact_name ? ` · ${lead.contact_name}` : ''}</p>
+          <p className="text-[11px] text-muted">{seg.icon} {seg.label}{lead.contact_name ? ` · ${lead.contact_name}` : ''}</p>
         </div>
         <div className="flex gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
-          <button onClick={onEdit} className="text-[11px] text-[#8a8a85] hover:text-[#111110] px-1">✎</button>
+          <button onClick={onEdit} className="text-[11px] text-muted hover:text-ink px-1">✎</button>
           <button onClick={onDelete} className="text-[11px] text-red-400 hover:text-red-600 px-1">✕</button>
         </div>
       </div>
@@ -712,10 +712,10 @@ function LeadCard({ lead, selected, onClick, onStatusChange, onEdit, onDelete }:
       {lead.potential_monthly && (
         <p className="text-[12px] text-emerald-700 font-medium mt-1.5">💰 {lead.potential_monthly.toLocaleString('ru-RU')} ₽/мес</p>
       )}
-      {lead.phone && <p className="text-[12px] text-[#6b6b66] mt-1">📞 {lead.phone}</p>}
+      {lead.phone && <p className="text-[12px] text-ink-soft mt-1">📞 {lead.phone}</p>}
       <div onClick={e => e.stopPropagation()} className="mt-2">
         <select value={lead.status} onChange={e => onStatusChange(e.target.value)}
-          className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white focus:outline-none">
+          className="w-full border border-line rounded-lg px-2 py-1 text-[11px] bg-surface focus:outline-none">
           {STATUSES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
       </div>
@@ -861,7 +861,7 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
         <div className="flex gap-1 bg-[#f5f5f0] rounded-xl p-1">
           {([['ai', '🤖 AI Проспектинг'], ['quick', '⚡ Быстрый захват'], ['csv', '📋 CSV Импорт']] as const).map(([m, l]) => (
             <button key={m} onClick={() => setMode(m)}
-              className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${mode === m ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'}`}>
+              className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${mode === m ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'}`}>
               {l}
             </button>
           ))}
@@ -877,10 +877,10 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
 
       {/* ── AI PROSPECTING ── */}
       {mode === 'ai' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+        <div className="bg-surface border border-line rounded-xl p-6">
           <div className="mb-5">
-            <h3 className="text-[15px] font-semibold text-[#111110] mb-1">AI Проспектинг</h3>
-            <p className="text-[12px] text-[#8a8a85]">
+            <h3 className="text-[15px] font-semibold text-ink mb-1">AI Проспектинг</h3>
+            <p className="text-[12px] text-muted">
               AI генерирует список компаний для прозвона по описанию сегмента. Лиды добавляются в базу со статусом «Новый» — дальше вы их исследуете и контактируете.
             </p>
           </div>
@@ -888,23 +888,23 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Сегмент</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Сегмент</label>
                 <select value={aiSeg} onChange={e => setAiSeg(e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-amber-300">
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none focus:ring-2 focus:ring-amber-300">
                   {SEGMENTS.map(s => <option key={s.value} value={s.value}>{s.icon} {s.label}</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Количество компаний</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Количество компаний</label>
                 <select value={aiCount} onChange={e => setAiCount(+e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none">
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none">
                   {[5, 10, 15, 20].map(n => <option key={n} value={n}>{n} компаний</option>)}
                 </select>
               </div>
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">
+              <label className="block text-[12px] font-medium text-ink-soft mb-1.5">
                 Уточни задачу <span className="text-[#c0c0bb] font-normal">(необязательно)</span>
               </label>
               <textarea
@@ -912,7 +912,7 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
                 onChange={e => setAiDesc(e.target.value)}
                 rows={3}
                 placeholder="Например: дизайнеры с Instagram 5k+ подписчиков, которые показывают ванные комнаты. Или: мебельные фабрики в МО с собственным производством."
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-[#c0c0bb]"
+                className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none focus:ring-2 focus:ring-amber-300 placeholder:text-[#c0c0bb]"
               />
             </div>
 
@@ -935,9 +935,9 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
             )}
           </div>
 
-          <div className="mt-5 pt-5 border-t border-[#f0f0ec]">
-            <p className="text-[11px] text-[#8a8a85] leading-relaxed">
-              <strong className="text-[#6b6b66]">Как использовать:</strong> AI создаёт правдоподобные профили компаний, которые стоит исследовать.
+          <div className="mt-5 pt-5 border-t border-line-soft">
+            <p className="text-[11px] text-muted leading-relaxed">
+              <strong className="text-ink-soft">Как использовать:</strong> AI создаёт правдоподобные профили компаний, которые стоит исследовать.
               Это не реальные данные — менеджер открывает каждый лид, ищет компанию в 2ГИС / Instagram / Google,
               находит контакт и переводит статус в «Исследован» → «Написали».
             </p>
@@ -947,10 +947,10 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
 
       {/* ── QUICK CAPTURE ── */}
       {mode === 'quick' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+        <div className="bg-surface border border-line rounded-xl p-6">
           <div className="mb-5">
-            <h3 className="text-[15px] font-semibold text-[#111110] mb-1">Быстрый захват лидов</h3>
-            <p className="text-[12px] text-[#8a8a85]">
+            <h3 className="text-[15px] font-semibold text-ink mb-1">Быстрый захват лидов</h3>
+            <p className="text-[12px] text-muted">
               Добавляй лиды один за другим без лишних кликов. Вводишь данные → Enter → поле очищается → следующий.
             </p>
           </div>
@@ -963,11 +963,11 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
 
           <div className="space-y-3">
             <div>
-              <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Сегмент</label>
+              <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Сегмент</label>
               <div className="flex gap-1.5 flex-wrap">
                 {SEGMENTS.map(s => (
                   <button key={s.value} onClick={() => setQSeg(s.value)}
-                    className={`px-2.5 py-1 rounded-lg text-[12px] font-medium transition-colors ${qSeg === s.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:bg-[#eeeeea]'}`}>
+                    className={`px-2.5 py-1 rounded-lg text-[12px] font-medium transition-colors ${qSeg === s.value ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft hover:bg-[#eeeeea]'}`}>
                     {s.icon} {s.label}
                   </button>
                 ))}
@@ -975,7 +975,7 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Название компании *</label>
+              <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Название компании *</label>
               <input
                 ref={nameRef}
                 type="text"
@@ -983,37 +983,37 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
                 onChange={e => setQName(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') quickSave() }}
                 placeholder="Студия Reroom..."
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#111110] placeholder:text-[#c0c0bb]"
+                className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ink placeholder:text-[#c0c0bb]"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Телефон / WhatsApp</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Телефон / WhatsApp</label>
                 <input type="text" value={qPhone} onChange={e => setQPhone(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') quickSave() }}
                   placeholder="+7 916 ..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#111110] placeholder:text-[#c0c0bb]" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ink placeholder:text-[#c0c0bb]" />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Instagram</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Instagram</label>
                 <input type="text" value={qInsta} onChange={e => setQInsta(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter') quickSave() }}
                   placeholder="@studio.name"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#111110] placeholder:text-[#c0c0bb]" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ink placeholder:text-[#c0c0bb]" />
               </div>
             </div>
 
             <div>
-              <label className="block text-[12px] font-medium text-[#6b6b66] mb-1.5">Заметка</label>
+              <label className="block text-[12px] font-medium text-ink-soft mb-1.5">Заметка</label>
               <input type="text" value={qNote} onChange={e => setQNote(e.target.value)}
                 onKeyDown={e => { if (e.key === 'Enter') quickSave() }}
                 placeholder="Откуда нашли, что интересно..."
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-[#111110] placeholder:text-[#c0c0bb]" />
+                className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-ink placeholder:text-[#c0c0bb]" />
             </div>
 
             <button onClick={quickSave} disabled={qSaving || !qName.trim()}
-              className="w-full py-2.5 bg-[#111110] text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-40 transition-colors">
+              className="w-full py-2.5 bg-ink text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-40 transition-colors">
               {qSaving ? 'Сохраняю...' : '+ Добавить и следующий (Enter)'}
             </button>
           </div>
@@ -1022,24 +1022,24 @@ function IntakeTab({ onAdded }: { onAdded: () => void }) {
 
       {/* ── CSV IMPORT ── */}
       {mode === 'csv' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+        <div className="bg-surface border border-line rounded-xl p-6">
           <div className="mb-5">
-            <h3 className="text-[15px] font-semibold text-[#111110] mb-1">CSV Импорт</h3>
-            <p className="text-[12px] text-[#8a8a85]">
+            <h3 className="text-[15px] font-semibold text-ink mb-1">CSV Импорт</h3>
+            <p className="text-[12px] text-muted">
               Вставь CSV из Excel / Google Sheets. Поддерживаемые колонки:
             </p>
-            <div className="mt-2 bg-[#f5f5f0] rounded-lg px-3 py-2 font-mono text-[11px] text-[#6b6b66]">
+            <div className="mt-2 bg-[#f5f5f0] rounded-lg px-3 py-2 font-mono text-[11px] text-ink-soft">
               company_name, segment, contact_name, phone, instagram, website, city, notes
             </div>
-            <p className="mt-2 text-[11px] text-[#8a8a85]">
+            <p className="mt-2 text-[11px] text-muted">
               Первая строка — заголовки. Остальные — данные. Разделитель — запятая.
             </p>
           </div>
 
           <div className="space-y-3">
-            <div className="bg-[#fafaf8] border border-[#e4e4e0] rounded-xl p-3">
-              <p className="text-[11px] font-semibold text-[#6b6b66] mb-1.5">Пример формата:</p>
-              <pre className="text-[11px] text-[#8a8a85] font-mono leading-relaxed">{`company_name,segment,phone,instagram
+            <div className="bg-[#fafaf8] border border-line rounded-xl p-3">
+              <p className="text-[11px] font-semibold text-ink-soft mb-1.5">Пример формата:</p>
+              <pre className="text-[11px] text-muted font-mono leading-relaxed">{`company_name,segment,phone,instagram
 Студия Reroom,designer,+7 916 123-45-67,@reroom.studio
 Artwood Interior,designer,+7 985 456-78-90,@artwood.interior
 Кухни MARTA,furniture,+7 985 901-23-45,@kuhni.marta`}</pre>
@@ -1050,7 +1050,7 @@ Artwood Interior,designer,+7 985 456-78-90,@artwood.interior
               onChange={e => { setCsvText(e.target.value); setCsvParsed(null); setCsvMsg('') }}
               rows={8}
               placeholder="Вставь CSV сюда..."
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] font-mono resize-none focus:outline-none focus:ring-2 focus:ring-[#111110] placeholder:text-[#c0c0bb]"
+              className="w-full border border-line rounded-lg px-3 py-2 text-[12px] font-mono resize-none focus:outline-none focus:ring-2 focus:ring-ink placeholder:text-[#c0c0bb]"
             />
 
             {csvMsg && (
@@ -1061,11 +1061,11 @@ Artwood Interior,designer,+7 985 456-78-90,@artwood.interior
 
             <div className="flex gap-3">
               <button onClick={parseCSV} disabled={!csvText.trim()}
-                className="px-4 py-2 border border-[#e4e4e0] rounded-xl text-[13px] font-medium text-[#6b6b66] hover:bg-[#f5f5f0] disabled:opacity-40 transition-colors">
+                className="px-4 py-2 border border-line rounded-xl text-[13px] font-medium text-ink-soft hover:bg-[#f5f5f0] disabled:opacity-40 transition-colors">
                 Проверить
               </button>
               <button onClick={importCSV} disabled={!csvParsed || csvImporting}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-40 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-semibold hover:bg-[#333] disabled:opacity-40 transition-colors">
                 {csvImporting ? 'Импортирую...' : `Импортировать${csvParsed ? ` (${csvParsed.length})` : ''}`}
               </button>
             </div>
@@ -1107,52 +1107,52 @@ function OutreachTab() {
 
   return (
     <div>
-      <div className="bg-[#fafaf8] border border-[#e4e4e0] rounded-xl p-4 mb-5 text-[13px] text-[#6b6b66]">
+      <div className="bg-[#fafaf8] border border-line rounded-xl p-4 mb-5 text-[13px] text-ink-soft">
         Готовые шаблоны outreach по сегментам. Подставь [Имя] и [Менеджер], адаптируй под конкретную компанию.
       </div>
 
       <div className="flex gap-2 flex-wrap mb-4">
-        <button onClick={() => setSegFilter('')} className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!segFilter ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>Все</button>
+        <button onClick={() => setSegFilter('')} className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!segFilter ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft'}`}>Все</button>
         {SEGMENTS.map(s => (
           <button key={s.value} onClick={() => setSegFilter(segFilter === s.value ? '' : s.value)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${segFilter === s.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${segFilter === s.value ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft'}`}>
             {s.icon} {s.label}
           </button>
         ))}
-        <div className="w-px bg-[#e4e4e0] self-stretch mx-1" />
+        <div className="w-px bg-line self-stretch mx-1" />
         {STAGES.map(s => (
           <button key={s.value} onClick={() => setStageFilter(stageFilter === s.value ? '' : s.value)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${stageFilter === s.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${stageFilter === s.value ? 'bg-ink text-white' : 'bg-[#f5f5f0] text-ink-soft'}`}>
             {s.label}
           </button>
         ))}
       </div>
 
-      {loading ? <div className="py-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div> : (
+      {loading ? <div className="py-8 text-center text-[13px] text-muted">Загрузка...</div> : (
         <div className="space-y-2">
           {templates.map(t => (
-            <div key={t.id} className="bg-white border border-[#e4e4e0] rounded-xl">
+            <div key={t.id} className="bg-surface border border-line rounded-xl">
               <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === t.id ? null : t.id)}>
                 <span className="text-lg flex-shrink-0">{t.channel === 'whatsapp' ? '💬' : t.channel === 'email' ? '📧' : '✈️'}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-[13px] font-medium text-[#111110] truncate">{t.title}</p>
-                  <p className="text-[11px] text-[#8a8a85]">{segmentInfo(t.segment).label} · {STAGES.find(s => s.value === t.stage)?.label}</p>
+                  <p className="text-[13px] font-medium text-ink truncate">{t.title}</p>
+                  <p className="text-[11px] text-muted">{segmentInfo(t.segment).label} · {STAGES.find(s => s.value === t.stage)?.label}</p>
                 </div>
                 <button onClick={e => { e.stopPropagation(); copy(t) }}
-                  className="text-[11px] px-2.5 py-1 border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors flex-shrink-0">
+                  className="text-[11px] px-2.5 py-1 border border-line rounded-lg text-ink-soft hover:bg-[#f5f5f0] transition-colors flex-shrink-0">
                   {copied === t.id ? '✓' : 'Копировать'}
                 </button>
                 <span className="text-[#c0c0bb] text-sm flex-shrink-0">{expanded === t.id ? '▲' : '▼'}</span>
               </div>
               {expanded === t.id && (
-                <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3">
-                  <pre className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-4">{t.body}</pre>
+                <div className="border-t border-line-soft px-4 pb-4 pt-3">
+                  <pre className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-4">{t.body}</pre>
                   {t.cta && <p className="text-[12px] text-blue-700 mt-2 font-medium">CTA: {t.cta}</p>}
                 </div>
               )}
             </div>
           ))}
-          {templates.length === 0 && <div className="text-center py-12 text-[13px] text-[#8a8a85]">Нет шаблонов для выбранных фильтров</div>}
+          {templates.length === 0 && <div className="text-center py-12 text-[13px] text-muted">Нет шаблонов для выбранных фильтров</div>}
         </div>
       )}
     </div>
@@ -1182,32 +1182,32 @@ function AnalyticsTab({ leads }: { leads: Lead[] }) {
     <div className="space-y-5">
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
-          { label: 'Лидов всего', value: total, color: 'text-[#111110]' },
+          { label: 'Лидов всего', value: total, color: 'text-ink' },
           { label: 'Score A', value: byScore.find(s => s.value === 'A')?.count ?? 0, color: 'text-emerald-700' },
           { label: 'Постоянных', value: clients, color: 'text-blue-700' },
           { label: 'Потенциал', value: `${Math.round(potential / 1000)}k ₽`, color: 'text-purple-700' },
         ].map(m => (
-          <div key={m.label} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[11px] text-[#8a8a85] mb-1">{m.label}</p>
-            <p className={`text-[22px] font-bold ${m.color}`}>{m.value}</p>
+          <div key={m.label} className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[11px] text-muted mb-1">{m.label}</p>
+            <p className={`text-[22px] font-semibold ${m.color}`}>{m.value}</p>
           </div>
         ))}
       </div>
 
       {/* Funnel */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <p className="text-[14px] font-semibold text-[#111110] mb-4">Воронка B2B</p>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <p className="text-[14px] font-semibold text-ink mb-4">Воронка B2B</p>
         <div className="space-y-2">
           {funnelSteps.map((step, i) => {
             const w = total > 0 ? Math.round((step.count / total) * 100) : 0
             return (
               <div key={i} className="flex items-center gap-3">
-                <span className="text-[12px] text-[#6b6b66] w-44 flex-shrink-0">{step.label}</span>
-                <div className="flex-1 h-2 bg-[#f0f0ec] rounded-full">
-                  <div className="h-2 bg-[#111110] rounded-full transition-all" style={{ width: `${w}%` }} />
+                <span className="text-[12px] text-ink-soft w-44 flex-shrink-0">{step.label}</span>
+                <div className="flex-1 h-2 bg-line-soft rounded-full">
+                  <div className="h-2 bg-ink rounded-full transition-all" style={{ width: `${w}%` }} />
                 </div>
-                <span className="text-[12px] font-medium text-[#111110] w-12 text-right flex-shrink-0">{step.count}</span>
-                <span className="text-[11px] text-[#8a8a85] w-8 text-right flex-shrink-0">{w}%</span>
+                <span className="text-[12px] font-medium text-ink w-12 text-right flex-shrink-0">{step.count}</span>
+                <span className="text-[11px] text-muted w-8 text-right flex-shrink-0">{w}%</span>
               </div>
             )
           })}
@@ -1215,32 +1215,32 @@ function AnalyticsTab({ leads }: { leads: Lead[] }) {
       </div>
 
       <div className="grid grid-cols-2 gap-5">
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-          <p className="text-[13px] font-semibold text-[#111110] mb-3">По сегментам</p>
+        <div className="bg-surface border border-line rounded-xl p-5">
+          <p className="text-[13px] font-semibold text-ink mb-3">По сегментам</p>
           <div className="space-y-2">
             {bySeg.map(s => (
               <div key={s.value} className="flex items-center gap-2">
-                <span className="text-[12px] text-[#6b6b66] w-24 flex-shrink-0">{s.icon} {s.label}</span>
-                <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full">
-                  <div className="h-1.5 bg-[#111110] rounded-full" style={{ width: `${total > 0 ? (s.count / total) * 100 : 0}%` }} />
+                <span className="text-[12px] text-ink-soft w-24 flex-shrink-0">{s.icon} {s.label}</span>
+                <div className="flex-1 h-1.5 bg-line-soft rounded-full">
+                  <div className="h-1.5 bg-ink rounded-full" style={{ width: `${total > 0 ? (s.count / total) * 100 : 0}%` }} />
                 </div>
-                <span className="text-[12px] font-medium text-[#111110] w-6 text-right">{s.count}</span>
+                <span className="text-[12px] font-medium text-ink w-6 text-right">{s.count}</span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-          <p className="text-[13px] font-semibold text-[#111110] mb-3">Score распределение</p>
+        <div className="bg-surface border border-line rounded-xl p-5">
+          <p className="text-[13px] font-semibold text-ink mb-3">Score распределение</p>
           <div className="space-y-3">
             {byScore.map(s => (
               <div key={s.value} className="flex items-center gap-3">
-                <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${s.color} flex-shrink-0`}>{s.value}</span>
-                <span className="text-[12px] text-[#6b6b66] flex-shrink-0">{s.desc}</span>
-                <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full">
-                  <div className="h-1.5 bg-[#111110] rounded-full" style={{ width: `${total > 0 ? (s.count / total) * 100 : 0}%` }} />
+                <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${s.color} flex-shrink-0`}>{s.value}</span>
+                <span className="text-[12px] text-ink-soft flex-shrink-0">{s.desc}</span>
+                <div className="flex-1 h-1.5 bg-line-soft rounded-full">
+                  <div className="h-1.5 bg-ink rounded-full" style={{ width: `${total > 0 ? (s.count / total) * 100 : 0}%` }} />
                 </div>
-                <span className="text-[12px] font-medium text-[#111110]">{s.count}</span>
+                <span className="text-[12px] font-medium text-ink">{s.count}</span>
               </div>
             ))}
           </div>
@@ -1294,33 +1294,33 @@ function StrategyTab({ leads }: { leads: Lead[] }) {
 
   return (
     <div className="space-y-5">
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
+      <div className="bg-surface border border-line rounded-xl p-5">
         <div className="flex items-start justify-between gap-4 mb-4">
           <div>
-            <h3 className="text-[14px] font-semibold text-[#111110]">AI Анализ сегментов</h3>
-            <p className="text-[12px] text-[#8a8a85]">Анализирует текущую базу и даёт стратегические рекомендации</p>
+            <h3 className="text-[14px] font-semibold text-ink">AI Анализ сегментов</h3>
+            <p className="text-[12px] text-muted">Анализирует текущую базу и даёт стратегические рекомендации</p>
           </div>
           <button onClick={analyze} disabled={loading}
-            className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+            className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
             {loading ? 'Анализирую...' : 'Запустить анализ'}
           </button>
         </div>
         {analysis ? (
-          <div className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap bg-[#fafaf8] rounded-xl p-4">{analysis}</div>
+          <div className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap bg-[#fafaf8] rounded-xl p-4">{analysis}</div>
         ) : (
-          <div className="text-[13px] text-[#8a8a85] bg-[#fafaf8] rounded-xl p-4">Нажмите «Запустить анализ» — AI проанализирует текущую базу лидов и даст рекомендации по сегментам, приоритетам и поиску новых клиентов.</div>
+          <div className="text-[13px] text-muted bg-[#fafaf8] rounded-xl p-4">Нажмите «Запустить анализ» — AI проанализирует текущую базу лидов и даст рекомендации по сегментам, приоритетам и поиску новых клиентов.</div>
         )}
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <h3 className="text-[14px] font-semibold text-[#111110] mb-4">Где искать B2B клиентов в Москве</h3>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <h3 className="text-[14px] font-semibold text-ink mb-4">Где искать B2B клиентов в Москве</h3>
         <div className="space-y-3">
           {SEARCH_TIPS.map(tip => (
             <div key={tip.platform} className="flex gap-3">
-              <span className="text-[12px] font-bold text-[#111110] w-20 flex-shrink-0 pt-0.5">{tip.platform}</span>
+              <span className="text-[12px] font-semibold text-ink w-20 flex-shrink-0 pt-0.5">{tip.platform}</span>
               <div>
-                <p className="text-[12px] font-medium text-[#6b6b66] mb-0.5">{tip.desc}</p>
-                <p className="text-[12px] text-[#8a8a85] font-mono">{tip.query}</p>
+                <p className="text-[12px] font-medium text-ink-soft mb-0.5">{tip.desc}</p>
+                <p className="text-[12px] text-muted font-mono">{tip.query}</p>
               </div>
             </div>
           ))}
@@ -1337,7 +1337,7 @@ function StrategyTab({ leads }: { leads: Lead[] }) {
             { seg: '🏗️ Строители / Renovation', why: 'Высокий объём на объект, но нерегулярно. Важны сроки и надёжность. Хорошо работает через рекомендации от дизайнеров.' },
           ].map(item => (
             <div key={item.seg} className="flex gap-3">
-              <p className="text-[13px] font-bold text-amber-900 w-44 flex-shrink-0">{item.seg}</p>
+              <p className="text-[13px] font-semibold text-amber-900 w-44 flex-shrink-0">{item.seg}</p>
               <p className="text-[13px] text-amber-800">{item.why}</p>
             </div>
           ))}

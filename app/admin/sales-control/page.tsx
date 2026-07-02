@@ -101,11 +101,11 @@ function redFlags(m: ManagerStat, period: Period): number {
 function numColor(val: number, green: number, orange: number): string {
   if (val >= green)  return 'text-green-600 font-semibold'
   if (val >= orange) return 'text-orange-500 font-semibold'
-  return val === 0 ? 'text-[#c4c4be]' : 'text-red-500 font-semibold'
+  return val === 0 ? 'text-faint' : 'text-red-500 font-semibold'
 }
 
 function Badge({ n, color }: { n: number; color: string }) {
-  if (n === 0) return <span className="text-[#c4c4be]">—</span>
+  if (n === 0) return <span className="text-faint">—</span>
   return (
     <span className={`inline-block text-[11px] font-semibold px-1.5 py-0.5 rounded ${color}`}>
       {n}
@@ -115,7 +115,7 @@ function Badge({ n, color }: { n: number; color: string }) {
 
 function Th({ children, right }: { children: React.ReactNode; right?: boolean }) {
   return (
-    <th className={`px-3 py-2 text-[10px] font-semibold uppercase tracking-wider text-[#9a9a95] whitespace-nowrap ${right ? 'text-right' : 'text-left'}`}>
+    <th className={`px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-muted whitespace-nowrap ${right ? 'text-right' : 'text-left'}`}>
       {children}
     </th>
   )
@@ -131,10 +131,10 @@ function Td({ children, right, className = '' }: { children: React.ReactNode; ri
 
 function SkeletonRow() {
   return (
-    <tr className="border-b border-[#f0f0ec]">
+    <tr className="border-b border-line-soft">
       {Array.from({ length: 14 }).map((_, i) => (
         <td key={i} className="px-3 py-2.5">
-          <div className="h-4 bg-[#f0f0ec] rounded animate-pulse" style={{ width: i === 0 ? 80 : 32 }} />
+          <div className="h-4 bg-line-soft rounded animate-pulse" style={{ width: i === 0 ? 80 : 32 }} />
         </td>
       ))}
     </tr>
@@ -159,8 +159,8 @@ function DrawerStaleList({
   if (noDetailNote || !deals) {
     return (
       <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
-        <p className="text-[13px] font-medium text-[#6b6b66] mb-1">Текущие данные</p>
-        <p className="text-[12px] text-[#9a9a95] max-w-[340px]">
+        <p className="text-[13px] font-medium text-ink-soft mb-1">Текущие данные</p>
+        <p className="text-[12px] text-muted max-w-[340px]">
           Детализация сделок доступна только в режиме «Сегодня» (данные в реальном времени из AmoCRM).
         </p>
       </div>
@@ -177,25 +177,25 @@ function DrawerStaleList({
   }
 
   return (
-    <div className="divide-y divide-[#f0f0ec]">
+    <div className="divide-y divide-line-soft">
       {deals.map(d => (
-        <div key={d.id} className="flex items-center justify-between px-5 py-3 hover:bg-[#fafaf9] transition-colors">
+        <div key={d.id} className="flex items-center justify-between px-5 py-3 hover:bg-subtle transition-colors">
           <div className="min-w-0 flex-1 pr-3">
             {domain ? (
               <a
                 href={`https://${domain}/leads/detail/${d.id}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-[13px] font-medium text-[#111110] hover:text-blue-600 transition-colors truncate block"
+                className="text-[13px] font-medium text-ink hover:text-blue-600 transition-colors truncate block"
               >
                 {d.name || `Сделка #${d.id}`}
               </a>
             ) : (
-              <p className="text-[13px] font-medium text-[#111110] truncate">{d.name || `Сделка #${d.id}`}</p>
+              <p className="text-[13px] font-medium text-ink truncate">{d.name || `Сделка #${d.id}`}</p>
             )}
-            <p className="text-[11px] text-[#9a9a95] mt-0.5 truncate">{d.stageName}</p>
+            <p className="text-[11px] text-muted mt-0.5 truncate">{d.stageName}</p>
           </div>
-          <span className={`flex-shrink-0 text-[11px] font-bold px-2 py-1 rounded ${badgeColor}`}>
+          <span className={`flex-shrink-0 text-[11px] font-semibold px-2 py-1 rounded ${badgeColor}`}>
             {d.daysStale}д
           </span>
         </div>
@@ -225,32 +225,32 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
       label: 'Движения карточек',
       value: <span className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved}</span>,
     },
-    { label: 'Активных сделок', value: <span className="font-semibold text-[#111110]">{m.activeLeads}</span> },
+    { label: 'Активных сделок', value: <span className="font-semibold text-ink">{m.activeLeads}</span> },
     { label: 'Квалификация (зона 1)', value: <span className="font-semibold text-blue-600">{m.zone1}</span>, sub: 'новые заявки, проработка, прогрев' },
     { label: 'Продажа (зона 2)',      value: <span className="font-semibold text-orange-500">{m.zone2}</span>, sub: 'замер → КП → счёт' },
     { label: 'Оплата / Производство', value: <span className="font-semibold text-green-600">{m.zone3}</span>, sub: 'зона 3' },
   ]
 
   const problemRows: { label: string; value: React.ReactNode; color: string }[] = [
-    { label: 'Без касания',      value: m.staleZone1,   color: m.staleZone1   > 0 ? 'text-red-600 font-semibold' : 'text-[#c4c4be]' },
-    { label: 'Продажа >3д',      value: m.staleZone2,   color: m.staleZone2   > 0 ? 'text-orange-600 font-semibold' : 'text-[#c4c4be]' },
-    { label: 'Производство >3д', value: m.staleZone3,   color: m.staleZone3   > 0 ? 'text-yellow-600 font-semibold' : 'text-[#c4c4be]' },
-    { label: 'Счета >5д',        value: m.invoiceStale, color: m.invoiceStale > 0 ? 'text-red-600 font-semibold' : 'text-[#c4c4be]' },
+    { label: 'Без касания',      value: m.staleZone1,   color: m.staleZone1   > 0 ? 'text-red-600 font-semibold' : 'text-faint' },
+    { label: 'Продажа >3д',      value: m.staleZone2,   color: m.staleZone2   > 0 ? 'text-orange-600 font-semibold' : 'text-faint' },
+    { label: 'Производство >3д', value: m.staleZone3,   color: m.staleZone3   > 0 ? 'text-yellow-600 font-semibold' : 'text-faint' },
+    { label: 'Счета >5д',        value: m.invoiceStale, color: m.invoiceStale > 0 ? 'text-red-600 font-semibold' : 'text-faint' },
   ]
 
   return (
     <div className="px-5 py-4 space-y-4">
       {/* Activity */}
-      <div className="bg-[#fafaf9] border border-[#f0f0ec] rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-[#f0f0ec]">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Активность</p>
+      <div className="bg-subtle border border-line-soft rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-line-soft">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Активность</p>
         </div>
-        <div className="divide-y divide-[#f0f0ec]">
+        <div className="divide-y divide-line-soft">
           {rows.map(r => (
             <div key={r.label} className="flex items-center justify-between px-4 py-2.5">
               <div>
-                <p className="text-[13px] text-[#111110]">{r.label}</p>
-                {r.sub && <p className="text-[11px] text-[#9a9a95] mt-0.5">{r.sub}</p>}
+                <p className="text-[13px] text-ink">{r.label}</p>
+                {r.sub && <p className="text-[11px] text-muted mt-0.5">{r.sub}</p>}
               </div>
               <p className="text-[16px] font-mono">{r.value}</p>
             </div>
@@ -259,14 +259,14 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
       </div>
 
       {/* Problems */}
-      <div className="bg-[#fafaf9] border border-[#f0f0ec] rounded-xl overflow-hidden">
-        <div className="px-4 py-2.5 border-b border-[#f0f0ec]">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-[#9a9a95]">Проблемные зоны</p>
+      <div className="bg-subtle border border-line-soft rounded-xl overflow-hidden">
+        <div className="px-4 py-2.5 border-b border-line-soft">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Проблемные зоны</p>
         </div>
-        <div className="divide-y divide-[#f0f0ec]">
+        <div className="divide-y divide-line-soft">
           {problemRows.map(r => (
             <div key={r.label} className="flex items-center justify-between px-4 py-2.5">
-              <p className="text-[13px] text-[#111110]">{r.label}</p>
+              <p className="text-[13px] text-ink">{r.label}</p>
               <p className={`text-[16px] font-mono ${r.color}`}>{r.value}</p>
             </div>
           ))}
@@ -293,7 +293,7 @@ function DrawerOverview({ m, period }: { m: ManagerStat; period: Period }) {
       </div>
 
       {m.days !== undefined && (
-        <p className="text-[11px] text-[#c4c4be] text-center">
+        <p className="text-[11px] text-faint text-center">
           Данные за {m.days} {m.days === 1 ? 'день' : m.days < 5 ? 'дня' : 'дней'} · агрегированные
         </p>
       )}
@@ -401,21 +401,21 @@ function ManagerDrawer({
       {/* Drawer panel */}
       <div
         ref={drawerRef}
-        className="fixed right-0 top-0 h-full z-50 flex flex-col bg-white shadow-2xl
+        className="fixed right-0 top-0 h-full z-50 flex flex-col bg-surface shadow-2xl
                    w-full sm:w-[560px] lg:w-[640px] transition-transform duration-200"
       >
         {/* Header */}
-        <div className="flex-shrink-0 border-b border-[#f0f0ec]">
+        <div className="flex-shrink-0 border-b border-line-soft">
           <div className="flex items-start justify-between px-5 py-4">
             <div>
-              <h2 className="text-[16px] font-semibold text-[#111110] tracking-tight">{firstName}</h2>
-              <p className="text-[12px] text-[#9a9a95] mt-0.5">
+              <h2 className="text-[16px] font-semibold text-ink tracking-tight">{firstName}</h2>
+              <p className="text-[12px] text-muted mt-0.5">
                 {manager.name} · {PERIOD_LABELS[period]}
               </p>
             </div>
             <button
               onClick={onClose}
-              className="mt-0.5 w-7 h-7 flex items-center justify-center rounded-md text-[#9a9a95] hover:text-[#111110] hover:bg-[#f0f0ec] transition-colors"
+              className="mt-0.5 w-7 h-7 flex items-center justify-center rounded-md text-muted hover:text-ink hover:bg-line-soft transition-colors"
               aria-label="Закрыть"
             >
               <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -432,22 +432,22 @@ function ManagerDrawer({
                 onClick={() => setTab(t.id)}
                 className={`flex-shrink-0 px-3 py-2 text-[12px] font-medium border-b-2 transition-all ${
                   tab === t.id
-                    ? 'border-[#111110] text-[#111110]'
-                    : 'border-transparent text-[#9a9a95] hover:text-[#6b6b66]'
+                    ? 'border-ink text-ink'
+                    : 'border-transparent text-muted hover:text-ink-soft'
                 }`}
               >
                 {t.label}
                 {t.id === 'stale1' && manager.staleZone1 > 0 && (
-                  <span className="ml-1.5 text-[10px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone1}</span>
+                  <span className="ml-1.5 text-[11px] bg-red-100 text-red-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone1}</span>
                 )}
                 {t.id === 'stale2' && manager.staleZone2 > 0 && (
-                  <span className="ml-1.5 text-[10px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone2}</span>
+                  <span className="ml-1.5 text-[11px] bg-orange-100 text-orange-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone2}</span>
                 )}
                 {t.id === 'stale3' && manager.staleZone3 > 0 && (
-                  <span className="ml-1.5 text-[10px] bg-yellow-100 text-yellow-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone3}</span>
+                  <span className="ml-1.5 text-[11px] bg-yellow-100 text-yellow-600 px-1 py-0.5 rounded font-semibold">{manager.staleZone3}</span>
                 )}
                 {t.id === 'longstale' && (longstaleDeals?.length ?? 0) > 0 && (
-                  <span className="ml-1.5 text-[10px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded font-semibold">{longstaleDeals!.length}</span>
+                  <span className="ml-1.5 text-[11px] bg-purple-100 text-purple-600 px-1 py-0.5 rounded font-semibold">{longstaleDeals!.length}</span>
                 )}
               </button>
             ))}
@@ -512,14 +512,14 @@ export default function SalesControlPage() {
   const isToday = period === 'today'
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1400px] mx-auto px-4 py-5">
 
         {/* Header */}
         <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
           <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">Sales Control</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Аналитика команды · управленческий вид</p>
+            <h1 className="text-[16px] font-semibold text-ink tracking-tight">Sales Control</h1>
+            <p className="text-[12px] text-muted mt-0.5">Аналитика команды · управленческий вид</p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             {/* Manager filter */}
@@ -527,7 +527,7 @@ export default function SalesControlPage() {
               <select
                 value={managerFilter}
                 onChange={e => setManagerFilter(e.target.value === 'all' ? 'all' : Number(e.target.value))}
-                className="text-[12px] border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 bg-white text-[#111110] outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="text-[12px] border border-line rounded-lg px-2.5 py-1.5 bg-surface text-ink outline-none focus:ring-2 focus:ring-blue-500/20"
               >
                 <option value="all">Все менеджеры</option>
                 {data.managers.map(m => (
@@ -536,11 +536,11 @@ export default function SalesControlPage() {
               </select>
             )}
             {/* Period tabs */}
-            <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
+            <div className="flex bg-line-soft rounded-lg p-0.5">
               {(Object.keys(PERIOD_LABELS) as Period[]).map(p => (
                 <button key={p} onClick={() => setPeriod(p)}
                   className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${
-                    period === p ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
+                    period === p ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
                   }`}>
                   {PERIOD_LABELS[p]}
                 </button>
@@ -582,22 +582,22 @@ export default function SalesControlPage() {
               { label: 'Активных',  value: totals?.activeLeads,  good: 0,  orange: 0 },
               { label: 'Флаги',     value: totals?.flags,        good: -1, orange: -1 },
             ].map(k => (
-              <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{k.label}</p>
+              <div key={k.label} className="bg-surface border border-line rounded-xl px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-1">{k.label}</p>
                 {loading ? (
-                  <div className="h-7 w-12 bg-[#f0f0ec] rounded animate-pulse" />
+                  <div className="h-7 w-12 bg-line-soft rounded animate-pulse" />
                 ) : (
-                  <p className={`text-[22px] font-bold font-mono leading-none ${
+                  <p className={`text-[22px] font-semibold font-mono leading-none ${
                     k.label === 'Флаги'
                       ? (k.value ?? 0) > 0 ? 'text-red-500' : 'text-green-600'
                       : k.label === 'Активных'
-                        ? 'text-[#111110]'
+                        ? 'text-ink'
                         : numColor(k.value ?? 0, k.good, k.orange)
                   }`}>
                     {k.value ?? 0}
                   </p>
                 )}
-                <p className="text-[10px] text-[#c4c4be] mt-1">
+                <p className="text-[11px] text-faint mt-1">
                   {managerFilter === 'all' ? 'вся команда' : 'менеджер'} · {PERIOD_LABELS[period].toLowerCase()}
                 </p>
               </div>
@@ -607,10 +607,10 @@ export default function SalesControlPage() {
 
         {/* Table */}
         {!error && !data?.noData && (
-          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-x-auto">
+          <div className="bg-surface border border-line rounded-xl overflow-x-auto">
             <table className="w-full border-collapse">
               <thead>
-                <tr className="border-b border-[#f0f0ec] bg-[#fafaf9]">
+                <tr className="border-b border-line-soft bg-subtle">
                   <Th>Менеджер</Th>
                   <Th right>Лиды</Th>
                   <Th right>Сообщ</Th>
@@ -637,20 +637,20 @@ export default function SalesControlPage() {
                         <tr
                           key={m.id}
                           onClick={() => setSelectedManager(m)}
-                          className="border-b border-[#f0f0ec] hover:bg-[#fafaf9] transition-colors cursor-pointer group"
+                          className="border-b border-line-soft hover:bg-subtle transition-colors cursor-pointer group"
                           title={`Открыть детали: ${firstName}`}
                         >
                           <Td>
-                            <span className="font-medium text-[#111110] group-hover:text-blue-600 transition-colors">{firstName}</span>
+                            <span className="font-medium text-ink group-hover:text-blue-600 transition-colors">{firstName}</span>
                             {m.days !== undefined && (
-                              <span className="ml-1.5 text-[10px] text-[#c4c4be]">{m.days}д</span>
+                              <span className="ml-1.5 text-[11px] text-faint">{m.days}д</span>
                             )}
                           </Td>
                           <Td right className={numColor(m.newLeads, 2, 1)}>{m.newLeads}</Td>
                           <Td right className={numColor(m.messagesSent, 5, 2)}>{m.messagesSent}</Td>
                           <Td right className={numColor(m.callsMade, 3, 1)}>{m.callsMade}</Td>
                           <Td right className={numColor(m.cardsMoved, 3, 1)}>{m.cardsMoved}</Td>
-                          <Td right className="text-[#111110] font-mono">{m.activeLeads}</Td>
+                          <Td right className="text-ink font-mono">{m.activeLeads}</Td>
                           <Td right className="text-blue-600 font-mono">{m.zone1}</Td>
                           <Td right className="text-orange-500 font-mono">{m.zone2}</Td>
                           <Td right className="text-green-600 font-mono">{m.zone3}</Td>
@@ -673,13 +673,13 @@ export default function SalesControlPage() {
 
                 {/* Footer totals */}
                 {!loading && totals && managers.length > 1 && (
-                  <tr className="border-t-2 border-[#e4e4e0] bg-[#fafaf9]">
-                    <Td><span className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Итого</span></Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.newLeads}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.messagesSent}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.callsMade}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.cardsMoved}</Td>
-                    <Td right className="font-semibold text-[#111110]">{totals.activeLeads}</Td>
+                  <tr className="border-t-2 border-line bg-subtle">
+                    <Td><span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Итого</span></Td>
+                    <Td right className="font-semibold text-ink">{totals.newLeads}</Td>
+                    <Td right className="font-semibold text-ink">{totals.messagesSent}</Td>
+                    <Td right className="font-semibold text-ink">{totals.callsMade}</Td>
+                    <Td right className="font-semibold text-ink">{totals.cardsMoved}</Td>
+                    <Td right className="font-semibold text-ink">{totals.activeLeads}</Td>
                     <Td right className="text-blue-600 font-semibold">{managers.reduce((s, m) => s + m.zone1, 0)}</Td>
                     <Td right className="text-orange-500 font-semibold">{managers.reduce((s, m) => s + m.zone2, 0)}</Td>
                     <Td right className="text-green-600 font-semibold">{managers.reduce((s, m) => s + m.zone3, 0)}</Td>
@@ -702,7 +702,7 @@ export default function SalesControlPage() {
 
             {/* Empty state */}
             {!loading && managers.length === 0 && !data?.noData && (
-              <div className="px-5 py-10 text-center text-[13px] text-[#9a9a95]">
+              <div className="px-5 py-10 text-center text-[13px] text-muted">
                 Нет данных по выбранному менеджеру
               </div>
             )}
@@ -711,19 +711,19 @@ export default function SalesControlPage() {
 
         {/* Click hint */}
         {!loading && managers.length > 0 && !data?.noData && (
-          <p className="text-[11px] text-[#c4c4be] mt-3 text-center">
+          <p className="text-[11px] text-faint mt-3 text-center">
             Нажмите на строку менеджера для подробностей
           </p>
         )}
 
         {/* Footer */}
         {!loading && !error && period !== 'today' && data?.fromDate && (
-          <p className="text-[11px] text-[#c4c4be] mt-2 text-center">
+          <p className="text-[11px] text-faint mt-2 text-center">
             Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
           </p>
         )}
         {!loading && !error && period === 'today' && (
-          <p className="text-[11px] text-[#c4c4be] mt-2 text-center">
+          <p className="text-[11px] text-faint mt-2 text-center">
             Данные в реальном времени из AmoCRM · {PERIOD_LABELS[period]}
           </p>
         )}

@@ -50,18 +50,18 @@ export default function GuidePage() {
   const allAcked = unread === 0
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7] p-6">
+    <div className="min-h-screen bg-canvas p-6">
       <div className="max-w-3xl mx-auto space-y-5">
 
         <div>
-          <h1 className="text-[18px] font-semibold text-[#111110]">Регламент: Логист / Закупщик</h1>
-          <p className="text-[12px] text-[#9a9a95] mt-0.5">Вера — MGlass, версия май 2025</p>
+          <h1 className="text-[18px] font-semibold text-ink">Регламент: Логист / Закупщик</h1>
+          <p className="text-[12px] text-muted mt-0.5">Вера — MGlass, версия май 2025</p>
         </div>
 
         {/* Баннер */}
-        <div className="bg-[#111110] text-white rounded-xl px-6 py-5">
-          <p className="text-[24px] font-extrabold leading-tight">📌 Регламент постоянно пополняется.</p>
-          <p className="text-[15px] text-[#a0a09a] mt-1">Новые разделы подсвечены жёлтым — прочитай и нажми «Ознакомилась».</p>
+        <div className="bg-ink text-white rounded-xl px-6 py-5">
+          <p className="text-[24px] font-semibold leading-tight">📌 Регламент постоянно пополняется.</p>
+          <p className="text-[15px] text-muted mt-1">Новые разделы подсвечены жёлтым — прочитай и нажми «Ознакомилась».</p>
           {allAcked ? (
             <p className="mt-3 text-[13px] text-emerald-400 font-semibold">✓ Все разделы прочитаны</p>
           ) : (
@@ -72,14 +72,14 @@ export default function GuidePage() {
         {/* Главная цель */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="bg-emerald-50 border border-emerald-100 rounded-xl px-5 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-emerald-600 mb-1">🛒 Закупщик — цель</p>
-            <p className="text-[13px] text-[#111110] font-medium leading-snug">Обеспечить производство материалами по лучшим ценам в нужные сроки.</p>
-            <p className="text-[11px] text-[#6b6b66] mt-1">Результат: непрерывное производство без простоев.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-emerald-600 mb-1">🛒 Закупщик — цель</p>
+            <p className="text-[13px] text-ink font-medium leading-snug">Обеспечить производство материалами по лучшим ценам в нужные сроки.</p>
+            <p className="text-[11px] text-ink-soft mt-1">Результат: непрерывное производство без простоев.</p>
           </div>
           <div className="bg-orange-50 border border-orange-100 rounded-xl px-5 py-4">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-orange-600 mb-1">🚚 Логист — цель</p>
-            <p className="text-[13px] text-[#111110] font-medium leading-snug">Организовать доставку готовых изделий клиентам вовремя и без повреждений.</p>
-            <p className="text-[11px] text-[#6b6b66] mt-1">Результат: заказ клиенту в целости и в срок.</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-orange-600 mb-1">🚚 Логист — цель</p>
+            <p className="text-[13px] text-ink font-medium leading-snug">Организовать доставку готовых изделий клиентам вовремя и без повреждений.</p>
+            <p className="text-[11px] text-ink-soft mt-1">Результат: заказ клиенту в целости и в срок.</p>
           </div>
         </div>
 
@@ -88,7 +88,7 @@ export default function GuidePage() {
         <NewSection id="daily-checklist" title="☀️ Ежедневный чеклист (утро)" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
+              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
                 <Li>Критические позиции на складе (ниже минимума) — раздел «Критические остатки»</Li>
                 <Li>Ожидаемые поставки сегодня</Li>
@@ -98,7 +98,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
+              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
               <ul className="space-y-1.5">
                 <Li>Маршрутный лист на сегодня — готовится накануне вечером</Li>
                 <Li>Заказы, ожидающие доставки</Li>
@@ -113,7 +113,7 @@ export default function GuidePage() {
         <NewSection id="responsibilities" title="📋 Обязанности" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
+              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
                 <Li>Мониторинг складских остатков вручную</Li>
                 <Li>Своевременное размещение заказов у поставщиков</Li>
@@ -125,7 +125,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
+              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
               <ul className="space-y-1.5">
                 <Li>Составление маршрутных листов для клиентских доставок</Li>
                 <Li>Составление маршрутных листов к поставщикам</Li>
@@ -140,7 +140,7 @@ export default function GuidePage() {
         </NewSection>
 
         <NewSection id="production-requests" title="🏭 Заявки от производства" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Производственный процесс: Дмитрий (монтаж) → Бигзат (производство) → Вера (закупка)
           </p>
           <Steps>
@@ -150,7 +150,7 @@ export default function GuidePage() {
             <Step n={4}>Сообщает Дмитрию/Бигзату: ожидаемую дату поставки или дату ближайшей закупки.</Step>
             <Step n={5}>После получения материала — обновляет <b>остаток в системе</b> (раздел «Критические остатки»).</Step>
           </Steps>
-          <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+          <div className="mt-3 bg-blue-50 border border-blue-100 rounded-lg px-3 py-2 text-[12px] text-ink-soft">
             📌 Правило: производство не должно останавливаться ни дня. Если есть риск простоя — сразу уведоми руководителя.
           </div>
         </NewSection>
@@ -164,13 +164,13 @@ export default function GuidePage() {
             <Step n={5}>Обнови факт. остаток в строке — появится кнопка <b>«Сохр.»</b> — нажми. Данные сохраняются в базу.</Step>
             <Step n={6}>Чтобы пометить позицию как критическую для мониторинга — нажми <b>«☆ Нет»</b> → станет <b>«★ Да»</b>.</Step>
           </Steps>
-          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-ink-soft">
             ⚠️ Остатки <b>не обновляются автоматически</b>. Обновляй после каждой приёмки товара.
           </div>
         </NewSection>
 
         <NewSection id="system-procurement" title="💳 Работа в системе — Канбан закупок" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Канбан отражает жизненный цикл каждого счёта от поставщика — от получения до закрытия.
           </p>
           <Steps>
@@ -181,13 +181,13 @@ export default function GuidePage() {
             <Step n={5}>Если есть проблема — открой карточку → напиши в <b>«Проблема»</b>. Карточка выделится красным.</Step>
             <Step n={6}>Когда товар получен и закрыт — переведи в <b>«Закрыто»</b>.</Step>
           </Steps>
-          <div className="mt-3 text-[12px] text-[#6b6b66]">
+          <div className="mt-3 text-[12px] text-ink-soft">
             Статусы: Получен счёт → На согласовании → Ожидает оплаты → Частично оплачен → Оплачен → В дороге → Самовывоз → Закрыто
           </div>
         </NewSection>
 
         <NewSection id="system-routes" title="🗺️ Работа в системе — Маршруты к поставщикам" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Маршрутные листы к поставщикам составляются <b>накануне вечером</b> на следующий день.
           </p>
           <Steps>
@@ -198,13 +198,13 @@ export default function GuidePage() {
             <Step n={5}>Нажми <b>«🖨 Распечатать»</b> — откроется печатная версия. Кнопка «Печать» → бумажный лист водителю.</Step>
             <Step n={6}>В день маршрута водитель отмечает статус каждой точки: В очереди / Выполнено / Проблема.</Step>
           </Steps>
-          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+          <div className="mt-3 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 text-[12px] text-ink-soft">
             📌 Правило: маршрутный лист всегда должен быть готов накануне до 18:00. Сергей Васильевич должен знать план заранее.
           </div>
         </NewSection>
 
         <NewSection id="price-monitoring" title="📈 Мониторинг цен" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Цель: покупать по рынку или ниже. Не переплачивать из-за лени проверить альтернативу.
           </p>
           <Steps>
@@ -214,18 +214,18 @@ export default function GuidePage() {
             <Step n={4}>Для новых поставщиков: запрашивай прайс, вноси в систему как нового поставщика, добавляй тестовую закупку в Канбан.</Step>
             <Step n={5}>Правило двух поставщиков: на каждую ключевую позицию должно быть минимум <b>2 активных поставщика</b>.</Step>
           </Steps>
-          <div className="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-[#4b4b47]">
+          <div className="mt-3 bg-red-50 border border-red-100 rounded-lg px-3 py-2 text-[12px] text-ink-soft">
             🚫 Запрещено покупать по первой предложенной цене без сравнения хотя бы с одним альтернативным поставщиком.
           </div>
         </NewSection>
 
         <NewSection id="supplier-db" title="🏢 База поставщиков" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Все поставщики хранятся в разделе <b>«Поставщики»</b>. База должна быть актуальной.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Что вносить</p>
+              <p className="text-[11px] font-semibold text-ink uppercase tracking-wide mb-2">Что вносить</p>
               <ul className="space-y-1.5">
                 <Li>Полное название компании</Li>
                 <Li>Адрес склада/офиса (для маршрутов)</Li>
@@ -236,7 +236,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Правила</p>
+              <p className="text-[11px] font-semibold text-ink uppercase tracking-wide mb-2">Правила</p>
               <ul className="space-y-1.5">
                 <Li>Новый поставщик → сразу вноси в базу, не держи только в телефоне</Li>
                 <Li>Поставщик прекратил работу → не удаляй, поставь статус «Неактивен»</Li>
@@ -248,12 +248,12 @@ export default function GuidePage() {
         </NewSection>
 
         <NewSection id="vera-sergey" title="🤝 Взаимодействие с Сергеем Васильевичем" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             Сергей Васильевич — водитель и кладовщик MGlass. Вера — его непосредственный координатор по логистике.
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
-              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Ежедневно</p>
+              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-2">Ежедневно</p>
               <ul className="space-y-1.5">
                 <Li>Передаёт маршрутный лист (бумажный или сообщением)</Li>
                 <Li>Проверяет готовность к выезду</Li>
@@ -262,7 +262,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Важно</p>
+              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">Важно</p>
               <ul className="space-y-1.5">
                 <Li>Сергей не планирует маршрут — только выполняет. Вера планирует.</Li>
                 <Li>При отсутствии Сергея — Вера немедленно сообщает руководителю</Li>
@@ -291,7 +291,7 @@ export default function GuidePage() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] font-bold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
+              <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wide mb-2">Закупки</p>
               <ul className="space-y-1.5">
                 <Li>Нет остановок производства из-за отсутствия материалов</Li>
                 <Li>Экономия на закупках ≥ 5% к прошлому периоду</Li>
@@ -301,7 +301,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
+              <p className="text-[11px] font-semibold text-orange-600 uppercase tracking-wide mb-2">Логистика</p>
               <ul className="space-y-1.5">
                 <Li>Доставки в срок ≥ 95%</Li>
                 <Li>Повреждения при доставке &lt; 0.5%</Li>
@@ -316,7 +316,7 @@ export default function GuidePage() {
         <NewSection id="mistakes" title="🚫 Типичные ошибки и запреты" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] font-bold text-red-500 uppercase tracking-wide mb-2">Не делать</p>
+              <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wide mb-2">Не делать</p>
               <ul className="space-y-1.5">
                 <Li>Закупать по первой цене без сравнения с рынком</Li>
                 <Li>Не иметь 2–3 альтернативных поставщиков на позицию</Li>
@@ -329,7 +329,7 @@ export default function GuidePage() {
               </ul>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-red-700 uppercase tracking-wide mb-2">Запрещено</p>
+              <p className="text-[11px] font-semibold text-red-700 uppercase tracking-wide mb-2">Запрещено</p>
               <ul className="space-y-1.5">
                 <Li>Подписывать договоры с поставщиками без согласования</Li>
                 <Li>Оплачивать счета без согласования с руководством</Li>
@@ -345,18 +345,18 @@ export default function GuidePage() {
         <NewSection id="tools" title="🛠️ Инструменты" acked={acked} onAck={acknowledge}>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Система MGlass</p>
+              <p className="text-[11px] font-semibold text-ink uppercase tracking-wide mb-2">Система MGlass</p>
               <div className="flex flex-wrap gap-2">
                 {['Критические остатки', 'Канбан закупок', 'Маршруты к поставщикам', 'Заказы MGlass', 'Маршрутный лист', 'Фурнитура душевых', 'Поставщики', 'Материалы', 'B2B Заказы'].map(t => (
-                  <span key={t} className="px-2.5 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[11px] rounded-full">{t}</span>
+                  <span key={t} className="px-2.5 py-1 bg-line-soft text-ink-soft text-[11px] rounded-full">{t}</span>
                 ))}
               </div>
             </div>
             <div>
-              <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wide mb-2">Внешние</p>
+              <p className="text-[11px] font-semibold text-ink uppercase tracking-wide mb-2">Внешние</p>
               <div className="flex flex-wrap gap-2">
                 {['Telegram', 'Яндекс.Карты', 'WhatsApp (поставщики)', 'Excel (резервно)'].map(t => (
-                  <span key={t} className="px-2.5 py-1 bg-[#f0f0ec] text-[#4b4b47] text-[11px] rounded-full">{t}</span>
+                  <span key={t} className="px-2.5 py-1 bg-line-soft text-ink-soft text-[11px] rounded-full">{t}</span>
                 ))}
               </div>
             </div>
@@ -364,7 +364,7 @@ export default function GuidePage() {
         </NewSection>
 
         <NewSection id="future" title="🔭 Что будет добавлено в систему" acked={acked} onAck={acknowledge}>
-          <p className="text-[12px] text-[#6b6b66] mb-3">
+          <p className="text-[12px] text-ink-soft mb-3">
             MGlass строит единый центр снабжения и логистики. Эти разделы появятся по мере готовности:
           </p>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -401,10 +401,10 @@ function NewSection({
 
   return (
     <div className={`rounded-xl border px-6 py-5 transition-colors ${
-      isNew ? 'bg-yellow-50 border-yellow-300' : 'bg-white border-[#e4e4e0]'
+      isNew ? 'bg-yellow-50 border-yellow-300' : 'bg-surface border-line'
     }`}>
       <div className="flex items-start justify-between gap-3 mb-3">
-        <h2 className="text-[14px] font-semibold text-[#111110]">
+        <h2 className="text-[14px] font-semibold text-ink">
           {isNew && <span className="inline-block w-2 h-2 rounded-full bg-yellow-400 mr-2 mb-0.5" />}
           {title}
         </h2>
@@ -416,18 +416,18 @@ function NewSection({
           </button>
         )}
       </div>
-      <div className="text-[13px] text-[#4b4b47] leading-relaxed">{children}</div>
+      <div className="text-[13px] text-ink-soft leading-relaxed">{children}</div>
     </div>
   )
 }
 
 function FutureItem({ label, desc }: { label: string; desc: string }) {
   return (
-    <div className="flex items-start gap-2 bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2">
-      <span className="text-[11px] font-bold text-[#9a9a95] mt-0.5 flex-shrink-0">🔧</span>
+    <div className="flex items-start gap-2 bg-canvas border border-line rounded-lg px-3 py-2">
+      <span className="text-[11px] font-semibold text-muted mt-0.5 flex-shrink-0">🔧</span>
       <div>
-        <p className="text-[12px] font-semibold text-[#6b6b66]">{label}</p>
-        <p className="text-[11px] text-[#9a9a95]">{desc}</p>
+        <p className="text-[12px] font-semibold text-ink-soft">{label}</p>
+        <p className="text-[11px] text-muted">{desc}</p>
       </div>
     </div>
   )
@@ -440,8 +440,8 @@ function Steps({ children }: { children: React.ReactNode }) {
 function Step({ n, children }: { n: number; children: React.ReactNode }) {
   return (
     <li className="flex gap-3">
-      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-[#111110] text-white text-[10px] font-bold flex items-center justify-center mt-0.5">{n}</span>
-      <span className="text-[13px] text-[#4b4b47] leading-relaxed">{children}</span>
+      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-ink text-white text-[11px] font-semibold flex items-center justify-center mt-0.5">{n}</span>
+      <span className="text-[13px] text-ink-soft leading-relaxed">{children}</span>
     </li>
   )
 }
@@ -449,7 +449,7 @@ function Step({ n, children }: { n: number; children: React.ReactNode }) {
 function Li({ children }: { children: React.ReactNode }) {
   return (
     <li className="flex gap-2 items-start">
-      <span className="text-[#c4c4be] mt-1 flex-shrink-0">•</span>
+      <span className="text-faint mt-1 flex-shrink-0">•</span>
       <span>{children}</span>
     </li>
   )

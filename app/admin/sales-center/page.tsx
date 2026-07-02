@@ -132,14 +132,14 @@ export default function SalesCenterPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Только для владельца</p>
-        <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Sales Center</h1>
-        <p className="text-[13px] text-[#6b6b66] mt-1">
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Только для владельца</p>
+        <h1 className="text-[22px] font-semibold text-ink tracking-tight">Sales Center</h1>
+        <p className="text-[13px] text-ink-soft mt-1">
           Скрипты, база знаний, follow-up шаблоны, обучение и слепые зоны
         </p>
       </div>
 
-      <div className="flex gap-1 mb-6 bg-[#f5f5f0] rounded-xl p-1 w-fit flex-wrap">
+      <div className="flex gap-1 mb-6 bg-canvas rounded-xl p-1 w-fit flex-wrap">
         {([
           ['scripts',    'Скрипты'],
           ['knowledge',  'База знаний'],
@@ -151,7 +151,7 @@ export default function SalesCenterPage() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-              tab === t ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
+              tab === t ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
             }`}
           >
             {label}
@@ -238,7 +238,7 @@ function ScriptsTab() {
     ? SCRIPT_GROUPS.filter(g => g.label === filterGroup)
     : SCRIPT_GROUPS
 
-  if (loading) return <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  if (loading) return <div className="py-16 text-center text-[13px] text-muted">Загрузка...</div>
 
   return (
     <div>
@@ -246,19 +246,19 @@ function ScriptsTab() {
         <div className="flex gap-1 flex-wrap">
           <button
             onClick={() => setFilterGroup('')}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!filterGroup ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:text-[#111110]'}`}
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!filterGroup ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'}`}
           >Все</button>
           {SCRIPT_GROUPS.map(g => (
             <button
               key={g.label}
               onClick={() => setFilterGroup(filterGroup === g.label ? '' : g.label)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterGroup === g.label ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:text-[#111110]'}`}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterGroup === g.label ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'}`}
             >{g.label}</button>
           ))}
         </div>
         <button
           onClick={() => { setForm(EMPTY_SCRIPT); setEditId(null); setShowForm(true) }}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors"
+          className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors"
         >+ Скрипт</button>
       </div>
 
@@ -270,9 +270,9 @@ function ScriptsTab() {
           return (
             <div key={group.label}>
               <div className="flex items-center gap-3 mb-3">
-                <span className="text-[12px] font-bold text-[#111110] uppercase tracking-wider">{group.label}</span>
-                <div className="flex-1 h-px bg-[#e4e4e0]" />
-                <span className="text-[11px] text-[#8a8a85]">{groupScripts.length} скриптов</span>
+                <span className="text-[12px] font-semibold text-ink uppercase tracking-wider">{group.label}</span>
+                <div className="flex-1 h-px bg-line" />
+                <span className="text-[11px] text-muted">{groupScripts.length} скриптов</span>
               </div>
               <div className="space-y-5">
                 {group.categories.map(cat => {
@@ -280,35 +280,35 @@ function ScriptsTab() {
                   if (!items?.length) return null
                   return (
                     <div key={cat.value}>
-                      <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">{cat.label}</p>
+                      <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">{cat.label}</p>
                       <div className="space-y-2">
                         {items.map(s => (
-                          <div key={s.id} className={`bg-white border rounded-xl transition-opacity ${s.active ? 'border-[#e4e4e0]' : 'border-[#f0f0ec] opacity-50'}`}>
+                          <div key={s.id} className={`bg-surface border rounded-xl transition-opacity ${s.active ? 'border-line' : 'border-line-soft opacity-50'}`}>
                             <div className="flex items-center justify-between gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === s.id ? null : s.id)}>
                               <div className="flex items-center gap-2 min-w-0">
                                 {s.is_featured && <span className="text-amber-400 text-sm flex-shrink-0">★</span>}
-                                <span className="text-[13px] font-medium text-[#111110] truncate">{s.title}</span>
-                                {s.trigger_desc && <span className="hidden sm:block text-[12px] text-[#8a8a85] truncate">— {s.trigger_desc}</span>}
+                                <span className="text-[13px] font-medium text-ink truncate">{s.title}</span>
+                                {s.trigger_desc && <span className="hidden sm:block text-[12px] text-muted truncate">— {s.trigger_desc}</span>}
                               </div>
                               <div className="flex items-center gap-2 flex-shrink-0">
-                                <button onClick={e => { e.stopPropagation(); copy(s) }} className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                                <button onClick={e => { e.stopPropagation(); copy(s) }} className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">
                                   {copied === s.id ? '✓' : 'Копировать'}
                                 </button>
-                                <button onClick={e => { e.stopPropagation(); toggle(s, 'is_featured') }} className={`text-[11px] px-2 py-1 rounded-lg transition-colors ${s.is_featured ? 'text-amber-500' : 'text-[#c0c0bb] hover:text-amber-400'}`}>★</button>
-                                <button onClick={e => { e.stopPropagation(); startEdit(s) }} className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Ред.</button>
-                                <button onClick={e => { e.stopPropagation(); toggle(s, 'active') }} className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">{s.active ? 'Откл.' : 'Вкл.'}</button>
+                                <button onClick={e => { e.stopPropagation(); toggle(s, 'is_featured') }} className={`text-[11px] px-2 py-1 rounded-lg transition-colors ${s.is_featured ? 'text-amber-500' : 'text-faint hover:text-amber-400'}`}>★</button>
+                                <button onClick={e => { e.stopPropagation(); startEdit(s) }} className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">Ред.</button>
+                                <button onClick={e => { e.stopPropagation(); toggle(s, 'active') }} className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">{s.active ? 'Откл.' : 'Вкл.'}</button>
                                 <button onClick={e => { e.stopPropagation(); del(s.id) }} className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:text-red-600 transition-colors">✕</button>
-                                <span className="text-[#c0c0bb] text-sm">{expanded === s.id ? '▲' : '▼'}</span>
+                                <span className="text-faint text-sm">{expanded === s.id ? '▲' : '▼'}</span>
                               </div>
                             </div>
                             {expanded === s.id && (
-                              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3">
+                              <div className="border-t border-line-soft px-4 pb-4 pt-3">
                                 {s.trigger_desc && (
                                   <p className="text-[12px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2 mb-3">
                                     <span className="font-semibold">Когда использовать:</span> {s.trigger_desc}
                                   </p>
                                 )}
-                                <pre className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-4">{s.body}</pre>
+                                <pre className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap font-sans bg-subtle rounded-lg p-4">{s.body}</pre>
                               </div>
                             )}
                           </div>
@@ -322,20 +322,20 @@ function ScriptsTab() {
           )
         })}
         {scripts.length === 0 && (
-          <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет скриптов. Нажмите «+ Скрипт» чтобы добавить первый.</div>
+          <div className="text-center py-16 text-[13px] text-muted">Нет скриптов. Нажмите «+ Скрипт» чтобы добавить первый.</div>
         )}
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editId ? 'Изменить скрипт' : 'Новый скрипт'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">{editId ? 'Изменить скрипт' : 'Новый скрипт'}</h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Категория</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Категория</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none focus:ring-2 focus:ring-blue-300">
                     {SCRIPT_GROUPS.map(g => (
                       <optgroup key={g.label} label={g.label}>
                         {g.categories.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
@@ -344,42 +344,42 @@ function ScriptsTab() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Название</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Название</label>
                   <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                     placeholder="Первый ответ на запрос цены"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Когда использовать</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Когда использовать</label>
                 <input type="text" value={form.trigger_desc ?? ''} onChange={e => setForm(f => ({ ...f, trigger_desc: e.target.value }))}
                   placeholder="Клиент написал 'сколько стоит' без деталей"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Текст скрипта</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Текст скрипта</label>
                 <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                   rows={8} placeholder="Введите текст скрипта..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300 font-mono" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300 font-mono" />
               </div>
               <div className="flex gap-4">
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.is_featured} onChange={e => setForm(f => ({ ...f, is_featured: e.target.checked }))} className="w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#111110]">★ Лучший скрипт</span>
+                  <span className="text-[13px] text-ink">★ Лучший скрипт</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))} className="w-4 h-4 rounded" />
-                  <span className="text-[13px] text-[#111110]">Активен</span>
+                  <span className="text-[13px] text-ink">Активен</span>
                 </label>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
             </div>
@@ -443,7 +443,7 @@ function KnowledgeTab() {
     setShowForm(true)
   }
 
-  if (loading) return <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  if (loading) return <div className="py-16 text-center text-[13px] text-muted">Загрузка...</div>
 
   return (
     <div>
@@ -451,38 +451,38 @@ function KnowledgeTab() {
         <div className="flex gap-1 flex-wrap">
           {KB_CATEGORIES.map(c => (
             <button key={c.value} onClick={() => setCatFilter(c.value)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${catFilter === c.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:text-[#111110]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${catFilter === c.value ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'}`}>
               {c.label}
             </button>
           ))}
         </div>
         <button onClick={() => { setForm(EMPTY_KB); setTagInput(''); setEditId(null); setShowForm(true) }}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
+          className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
           + Статья
         </button>
       </div>
 
       <div className="space-y-2">
         {articles.map(a => (
-          <div key={a.id} className="bg-white border border-[#e4e4e0] rounded-xl">
+          <div key={a.id} className="bg-surface border border-line rounded-xl">
             <div className="flex items-center justify-between gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === a.id ? null : a.id)}>
               <div className="flex items-center gap-3 min-w-0">
-                <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f5f5f0] text-[#6b6b66] flex-shrink-0">
+                <span className="text-[11px] px-2 py-0.5 rounded-full bg-canvas text-ink-soft flex-shrink-0">
                   {KB_CATEGORIES.find(c => c.value === a.category)?.label ?? a.category}
                 </span>
-                <span className="text-[13px] font-medium text-[#111110] truncate">{a.title}</span>
+                <span className="text-[13px] font-medium text-ink truncate">{a.title}</span>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={e => { e.stopPropagation(); startEdit(a) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Ред.</button>
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">Ред.</button>
                 <button onClick={e => { e.stopPropagation(); del(a.id) }}
                   className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:text-red-600 transition-colors">✕</button>
-                <span className="text-[#c0c0bb] text-sm">{expanded === a.id ? '▲' : '▼'}</span>
+                <span className="text-faint text-sm">{expanded === a.id ? '▲' : '▼'}</span>
               </div>
             </div>
             {expanded === a.id && (
-              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3">
-                <p className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap">{a.content}</p>
+              <div className="border-t border-line-soft px-4 pb-4 pt-3">
+                <p className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap">{a.content}</p>
                 {a.tags.length > 0 && (
                   <div className="flex gap-1.5 flex-wrap mt-3">
                     {a.tags.map(t => (
@@ -495,58 +495,58 @@ function KnowledgeTab() {
           </div>
         ))}
         {articles.length === 0 && (
-          <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет статей в выбранной категории.</div>
+          <div className="text-center py-16 text-[13px] text-muted">Нет статей в выбранной категории.</div>
         )}
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editId ? 'Изменить статью' : 'Новая статья'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">{editId ? 'Изменить статью' : 'Новая статья'}</h2>
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Категория</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Категория</label>
                   <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none focus:ring-2 focus:ring-blue-300">
                     {KB_CATEGORIES.filter(c => c.value).map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Порядок</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Порядок</label>
                   <input type="number" value={form.sort_order} onChange={e => setForm(f => ({ ...f, sort_order: +e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Заголовок</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Заголовок</label>
                 <input type="text" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
                   placeholder="Закалённое стекло vs обычное"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Содержание</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Содержание</label>
                 <textarea value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))}
                   rows={6} placeholder="Объяснение, факты, аргументы для менеджера..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Теги (через запятую)</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Теги (через запятую)</label>
                 <input type="text" value={tagInput} onChange={e => {
                   setTagInput(e.target.value)
                   setForm(f => ({ ...f, tags: e.target.value.split(',').map(t => t.trim()).filter(Boolean) }))
                 }}
                   placeholder="стекло, безопасность, закалка"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
             </div>
@@ -615,7 +615,7 @@ function FollowupTab() {
     setShowForm(true)
   }
 
-  if (loading) return <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+  if (loading) return <div className="py-16 text-center text-[13px] text-muted">Загрузка...</div>
 
   return (
     <div>
@@ -623,47 +623,47 @@ function FollowupTab() {
         <div className="flex gap-1 flex-wrap">
           {FOLLOWUP_CONTEXTS.map(c => (
             <button key={c.value} onClick={() => setCtxFilter(c.value)}
-              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${ctxFilter === c.value ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66] hover:text-[#111110]'}`}>
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${ctxFilter === c.value ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:text-ink'}`}>
               {c.label}
             </button>
           ))}
         </div>
         <button onClick={() => { setForm(EMPTY_FOLLOWUP); setEditId(null); setShowForm(true) }}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
+          className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] transition-colors">
           + Шаблон
         </button>
       </div>
 
       <div className="space-y-3">
         {followups.map(f => (
-          <div key={f.id} className="bg-white border border-[#e4e4e0] rounded-xl">
+          <div key={f.id} className="bg-surface border border-line rounded-xl">
             <div className="flex items-center justify-between gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === f.id ? null : f.id)}>
               <div className="flex items-center gap-3 min-w-0">
                 <span className="text-lg flex-shrink-0">{CHANNEL_ICONS[f.channel] ?? '📨'}</span>
                 <div className="min-w-0">
-                  <span className="text-[13px] font-medium text-[#111110] block truncate">{f.name}</span>
-                  <span className="text-[11px] text-[#8a8a85]">День {f.delay_days} · {FOLLOWUP_CONTEXTS.find(c => c.value === f.context)?.label ?? f.context}</span>
+                  <span className="text-[13px] font-medium text-ink block truncate">{f.name}</span>
+                  <span className="text-[11px] text-muted">День {f.delay_days} · {FOLLOWUP_CONTEXTS.find(c => c.value === f.context)?.label ?? f.context}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button onClick={e => { e.stopPropagation(); copy(f) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">
                   {copied === f.id ? '✓' : 'Копировать'}
                 </button>
                 <button onClick={e => { e.stopPropagation(); startEdit(f) }}
-                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">Ред.</button>
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-line text-ink-soft hover:bg-canvas transition-colors">Ред.</button>
                 <button onClick={e => { e.stopPropagation(); del(f.id) }}
                   className="text-[11px] px-2 py-1 rounded-lg text-red-400 hover:text-red-600 transition-colors">✕</button>
-                <span className="text-[#c0c0bb] text-sm">{expanded === f.id ? '▲' : '▼'}</span>
+                <span className="text-faint text-sm">{expanded === f.id ? '▲' : '▼'}</span>
               </div>
             </div>
             {expanded === f.id && (
-              <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3 space-y-3">
-                <pre className="text-[13px] text-[#111110] leading-relaxed whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-4">{f.body}</pre>
+              <div className="border-t border-line-soft px-4 pb-4 pt-3 space-y-3">
+                <pre className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap font-sans bg-subtle rounded-lg p-4">{f.body}</pre>
                 {f.cta && (
                   <div className="flex items-center gap-2">
-                    <span className="text-[11px] font-semibold text-[#6b6b66] uppercase tracking-wider">CTA:</span>
-                    <span className="text-[13px] text-[#111110]">{f.cta}</span>
+                    <span className="text-[11px] font-semibold text-ink-soft uppercase tracking-wider">CTA:</span>
+                    <span className="text-[13px] text-ink">{f.cta}</span>
                   </div>
                 )}
                 {f.bonus_offer && (
@@ -677,31 +677,31 @@ function FollowupTab() {
           </div>
         ))}
         {followups.length === 0 && (
-          <div className="text-center py-16 text-[13px] text-[#8a8a85]">Нет шаблонов. Нажмите «+ Шаблон» чтобы добавить первый.</div>
+          <div className="text-center py-16 text-[13px] text-muted">Нет шаблонов. Нажмите «+ Шаблон» чтобы добавить первый.</div>
         )}
       </div>
 
       {showForm && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
-            <h2 className="text-[16px] font-semibold text-[#111110] mb-5">{editId ? 'Изменить шаблон' : 'Новый шаблон'}</h2>
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-2xl p-6 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-[16px] font-semibold text-ink mb-5">{editId ? 'Изменить шаблон' : 'Новый шаблон'}</h2>
             <div className="space-y-4">
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Название</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Название</label>
                 <input type="text" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                   placeholder="После КП — день 1"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">День</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">День</label>
                   <input type="number" value={form.delay_days} onChange={e => setForm(f => ({ ...f, delay_days: +e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Канал</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Канал</label>
                   <select value={form.channel} onChange={e => setForm(f => ({ ...f, channel: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none focus:ring-2 focus:ring-blue-300">
                     <option value="whatsapp">WhatsApp</option>
                     <option value="telegram">Telegram</option>
                     <option value="call">Звонок</option>
@@ -709,41 +709,41 @@ function FollowupTab() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Контекст</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Контекст</label>
                   <select value={form.context} onChange={e => setForm(f => ({ ...f, context: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-300">
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] bg-surface focus:outline-none focus:ring-2 focus:ring-blue-300">
                     {FOLLOWUP_CONTEXTS.filter(c => c.value).map(c => <option key={c.value} value={c.value}>{c.label}</option>)}
                   </select>
                 </div>
               </div>
               <div>
-                <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Текст сообщения</label>
+                <label className="block text-[12px] font-medium text-ink-soft mb-1">Текст сообщения</label>
                 <textarea value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))}
                   rows={6} placeholder="Добрый день, [Имя]! ..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-y focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">CTA (призыв к действию)</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">CTA (призыв к действию)</label>
                   <input type="text" value={form.cta ?? ''} onChange={e => setForm(f => ({ ...f, cta: e.target.value }))}
                     placeholder="Когда удобно пообщаться?"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
                 <div>
-                  <label className="block text-[12px] font-medium text-[#6b6b66] mb-1">Бонус-оффер</label>
+                  <label className="block text-[12px] font-medium text-ink-soft mb-1">Бонус-оффер</label>
                   <input type="text" value={form.bonus_offer ?? ''} onChange={e => setForm(f => ({ ...f, bonus_offer: e.target.value }))}
                     placeholder="Бесплатный замер без обязательств"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 </div>
               </div>
             </div>
             <div className="mt-5 flex gap-3">
               <button onClick={save} disabled={saving}
-                className="px-5 py-2 bg-[#111110] text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+                className="px-5 py-2 bg-ink text-white rounded-xl text-[13px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
                 {saving ? 'Сохранение...' : 'Сохранить'}
               </button>
               <button onClick={() => setShowForm(false)}
-                className="px-5 py-2 border border-[#e4e4e0] rounded-xl text-[13px] text-[#6b6b66] hover:bg-[#f5f5f0] transition-colors">
+                className="px-5 py-2 border border-line rounded-xl text-[13px] text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
             </div>
@@ -776,31 +776,31 @@ const CLIENT_TACTICS = [
 function TrainingTab() {
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <h3 className="text-[14px] font-semibold text-[#111110] mb-1">6 ошибок менеджера и как их исправить</h3>
-        <p className="text-[12px] text-[#8a8a85] mb-4">Разобрать с командой на еженедельном разборе звонков</p>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <h3 className="text-[14px] font-semibold text-ink mb-1">6 ошибок менеджера и как их исправить</h3>
+        <p className="text-[12px] text-muted mb-4">Разобрать с командой на еженедельном разборе звонков</p>
         <div className="space-y-4">
           {MISTAKES.map((m, i) => (
             <div key={i} className="flex gap-4">
-              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-[11px] font-bold text-red-500">{i + 1}</div>
+              <div className="flex-shrink-0 w-6 h-6 rounded-full bg-red-50 border border-red-200 flex items-center justify-center text-[11px] font-semibold text-red-500">{i + 1}</div>
               <div>
                 <p className="text-[13px] font-semibold text-red-700 mb-1">✕ {m.title}</p>
-                <p className="text-[13px] text-[#6b6b66]"><span className="font-semibold text-emerald-700">✓ Как надо: </span>{m.fix}</p>
+                <p className="text-[13px] text-ink-soft"><span className="font-semibold text-emerald-700">✓ Как надо: </span>{m.fix}</p>
               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <h3 className="text-[14px] font-semibold text-[#111110] mb-1">Тактика по типу клиента</h3>
-        <p className="text-[12px] text-[#8a8a85] mb-4">Определяй тип в первых 2-3 сообщениях — тактика зависит от этого</p>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <h3 className="text-[14px] font-semibold text-ink mb-1">Тактика по типу клиента</h3>
+        <p className="text-[12px] text-muted mb-4">Определяй тип в первых 2-3 сообщениях — тактика зависит от этого</p>
         <div className="space-y-4">
           {CLIENT_TACTICS.map(c => (
             <div key={c.type} className={`pl-4 border-l-4 ${c.color}`}>
-              <p className="text-[13px] font-semibold text-[#111110]">{c.type}</p>
-              <p className="text-[12px] text-[#8a8a85] mb-1"><span className="font-medium text-[#6b6b66]">Признаки: </span>{c.signs}</p>
-              <p className="text-[13px] text-[#6b6b66]">{c.tactic}</p>
+              <p className="text-[13px] font-semibold text-ink">{c.type}</p>
+              <p className="text-[12px] text-muted mb-1"><span className="font-medium text-ink-soft">Признаки: </span>{c.signs}</p>
+              <p className="text-[13px] text-ink-soft">{c.tactic}</p>
             </div>
           ))}
         </div>
@@ -916,15 +916,15 @@ function BlindZonesTab() {
 
   return (
     <div>
-      <div className="bg-[#fafaf8] border border-[#e4e4e0] rounded-xl p-4 mb-5 text-[13px] text-[#6b6b66]">
+      <div className="bg-subtle border border-line rounded-xl p-4 mb-5 text-[13px] text-ink-soft">
         Это не чек-лист — это зоны где MGlass теряет деньги прямо сейчас. Каждый пункт — конкретная проблема с конкретным действием.
       </div>
 
       <div className="flex gap-1 mb-5">
-        <button onClick={() => setFilter('')} className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!filter ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>Все ({BLIND_ZONES.length})</button>
+        <button onClick={() => setFilter('')} className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${!filter ? 'bg-ink text-white' : 'bg-canvas text-ink-soft'}`}>Все ({BLIND_ZONES.length})</button>
         {['red', 'amber', 'blue'].map(s => (
           <button key={s} onClick={() => setFilter(filter === s ? '' : s)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filter === s ? 'bg-[#111110] text-white' : 'bg-[#f5f5f0] text-[#6b6b66]'}`}>
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filter === s ? 'bg-ink text-white' : 'bg-canvas text-ink-soft'}`}>
             {SEVERITY_LABEL[s]} ({BLIND_ZONES.filter(z => z.severity === s).length})
           </button>
         ))}
@@ -935,19 +935,19 @@ function BlindZonesTab() {
           const idx = BLIND_ZONES.indexOf(z)
           const st = SEVERITY_STYLE[z.severity]
           return (
-            <div key={i} className={`bg-white border rounded-xl ${st.border}`}>
+            <div key={i} className={`bg-surface border rounded-xl ${st.border}`}>
               <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => setExpanded(expanded === idx ? null : idx)}>
                 <div className={`w-2 h-2 rounded-full flex-shrink-0 ${st.dot}`} />
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${st.badge}`}>{SEVERITY_LABEL[z.severity]}</span>
-                <span className="text-[13px] font-medium text-[#111110] flex-1 truncate">{z.title}</span>
-                <span className="text-[#c0c0bb] text-sm flex-shrink-0">{expanded === idx ? '▲' : '▼'}</span>
+                <span className="text-[13px] font-medium text-ink flex-1 truncate">{z.title}</span>
+                <span className="text-faint text-sm flex-shrink-0">{expanded === idx ? '▲' : '▼'}</span>
               </div>
               {expanded === idx && (
-                <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3 space-y-3">
-                  <p className="text-[13px] text-[#6b6b66] leading-relaxed">{z.desc}</p>
-                  <div className="bg-[#f5f5f0] rounded-lg px-4 py-3">
-                    <p className="text-[11px] font-bold text-[#111110] uppercase tracking-wider mb-1">Что делать</p>
-                    <p className="text-[13px] text-[#111110] leading-relaxed">{z.action}</p>
+                <div className="border-t border-line-soft px-4 pb-4 pt-3 space-y-3">
+                  <p className="text-[13px] text-ink-soft leading-relaxed">{z.desc}</p>
+                  <div className="bg-canvas rounded-lg px-4 py-3">
+                    <p className="text-[11px] font-semibold text-ink uppercase tracking-wider mb-1">Что делать</p>
+                    <p className="text-[13px] text-ink leading-relaxed">{z.action}</p>
                   </div>
                 </div>
               )}

@@ -294,20 +294,20 @@ export default function B2BServicesPage() {
   return (
     <div className="max-w-[860px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">B2B Доп. услуги</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Справочник услуг обработки + производственные настройки</p>
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">B2B Доп. услуги</h1>
+        <p className="text-[13px] text-muted mt-0.5">Справочник услуг обработки + производственные настройки</p>
       </div>
 
       {/* ── Производственные настройки ── */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-6">
+      <div className="bg-surface border border-line rounded-xl p-5 mb-6">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-[13px] font-semibold text-[#111110]">Производственные настройки</h2>
-            <p className="text-[11px] text-[#9a9a95] mt-0.5">Используются для автоматического расчёта себестоимости услуг</p>
+            <h2 className="text-[13px] font-semibold text-ink">Производственные настройки</h2>
+            <p className="text-[11px] text-muted mt-0.5">Используются для автоматического расчёта себестоимости услуг</p>
           </div>
           <div className="text-right">
-            <div className="text-[11px] text-[#9a9a95]">Стоимость рабочего часа</div>
-            <div className="text-[16px] font-bold text-[#111110] font-mono">{fmtRub(hourlyRate)}</div>
+            <div className="text-[11px] text-muted">Стоимость рабочего часа</div>
+            <div className="text-[16px] font-semibold text-ink font-mono">{fmtRub(hourlyRate)}</div>
             <div className="text-[10px] text-[#b4b4ae]">Минута: {minuteRate.toFixed(2)} ₽</div>
           </div>
         </div>
@@ -320,9 +320,9 @@ export default function B2BServicesPage() {
             { key: 'default_margin_percent', label: 'Наценка (%)', placeholder: '40', step: 1 },
           ] as { key: keyof ProductionSettings; label: string; placeholder: string; step: number }[]).map(f => (
             <div key={f.key}>
-              <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">{f.label}</label>
+              <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">{f.label}</label>
               <input type="number" min="0" step={f.step}
-                className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                 value={ps[f.key]}
                 onChange={e => updatePs(f.key, Number(e.target.value))}
               />
@@ -331,23 +331,23 @@ export default function B2BServicesPage() {
         </div>
         {psError && <p className="text-[12px] text-red-600 mb-3">{psError}</p>}
         <button onClick={saveProductionSettings} disabled={psSaving || !psDirty}
-          className="bg-[#111110] text-white text-[12px] font-medium px-4 py-1.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+          className="bg-ink text-white text-[12px] font-medium px-4 py-1.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
           {psSaving ? 'Сохранение...' : psDirty ? 'Сохранить настройки' : 'Настройки сохранены'}
         </button>
       </div>
 
       {/* ── Справка по типам ── */}
-      <div className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-xl px-4 py-3 mb-6 text-[12px] text-[#6b6b66] space-y-1">
-        <p><span className="font-semibold text-[#111110]">% от цены изделия</span> — наценка за сложность (напр. 30% за непрямоугольную форму)</p>
-        <p><span className="font-semibold text-[#111110]">₽ × м²</span> — умножается на площадь (напр. пескоструй, полимер, триплекс)</p>
-        <p><span className="font-semibold text-[#111110]">₽ фиксированно</span> — фиксированная сумма × кол-во штук</p>
-        <p><span className="font-semibold text-[#111110]">Расчёт от трудозатрат</span> — себестоимость из нормы времени + амортизация + расходники + накладные. Поддерживает диапазоны по размеру.</p>
+      <div className="bg-canvas border border-line rounded-xl px-4 py-3 mb-6 text-[12px] text-ink-soft space-y-1">
+        <p><span className="font-semibold text-ink">% от цены изделия</span> — наценка за сложность (напр. 30% за непрямоугольную форму)</p>
+        <p><span className="font-semibold text-ink">₽ × м²</span> — умножается на площадь (напр. пескоструй, полимер, триплекс)</p>
+        <p><span className="font-semibold text-ink">₽ фиксированно</span> — фиксированная сумма × кол-во штук</p>
+        <p><span className="font-semibold text-ink">Расчёт от трудозатрат</span> — себестоимость из нормы времени + амортизация + расходники + накладные. Поддерживает диапазоны по размеру.</p>
       </div>
 
       {/* ── Форма добавления/редактирования ── */}
-      <div className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
+      <div className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             {editingId !== null ? `Редактировать — ID ${editingId}` : 'Добавить услугу'}
           </h2>
           {editingId !== null && (
@@ -357,18 +357,18 @@ export default function B2BServicesPage() {
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Название</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Название</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="Обработка кривых деталей (полировка торца)"
             />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Тип расчёта</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Тип расчёта</label>
             <select
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={form.type}
               onChange={e => setForm({ ...form, type: e.target.value as B2BService['type'] })}>
               <option value="percent">% от цены изделия</option>
@@ -379,9 +379,9 @@ export default function B2BServicesPage() {
             </select>
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Единица отображения</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Единица отображения</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={form.unit_label}
               onChange={e => setForm({ ...form, unit_label: e.target.value })}
               placeholder="₽/шт"
@@ -400,22 +400,22 @@ export default function B2BServicesPage() {
           {form.type !== 'calculated' && form.type !== 'film' && (
             <>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">
                   {form.type === 'percent' ? 'Процент (%)' : 'Сумма (₽)'}
                 </label>
                 <input type="number" min="0"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
                   value={form.value}
                   onChange={e => setForm({ ...form, value: Number(e.target.value) })}
                   placeholder={form.type === 'percent' ? '30' : '1200'}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">
                   Себестоимость (₽{form.type === 'per_m2' ? '/м²' : '/шт'})
                 </label>
                 <input type="number" min="0"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
                   value={form.cost_price}
                   onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
                   placeholder="0"
@@ -427,32 +427,32 @@ export default function B2BServicesPage() {
 
         {/* ── Блок для calculated-услуги ── */}
         {form.type === 'calculated' && (
-          <div className="border border-[#e4e4e0] rounded-xl p-4 mb-4 bg-white space-y-4">
-            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">Параметры трудозатрат</p>
+          <div className="border border-line rounded-xl p-4 mb-4 bg-surface space-y-4">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Параметры трудозатрат</p>
 
             <div className="grid grid-cols-3 gap-3">
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Время (мин)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Время (мин)</label>
                 <input type="number" min="0" step="0.5"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.time_minutes}
                   onChange={e => setForm({ ...form, time_minutes: Number(e.target.value) })}
                   placeholder="20"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Амортизация обор. (₽)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Амортизация обор. (₽)</label>
                 <input type="number" min="0" step="1"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.equipment_depr_rub}
                   onChange={e => setForm({ ...form, equipment_depr_rub: Number(e.target.value) })}
                   placeholder="30"
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Расходники (₽)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Расходники (₽)</label>
                 <input type="number" min="0" step="1"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.consumables_cost_rub}
                   onChange={e => setForm({ ...form, consumables_cost_rub: Number(e.target.value) })}
                   placeholder="80"
@@ -464,36 +464,36 @@ export default function B2BServicesPage() {
                 <p className="text-[10px] font-semibold text-[#6b6b9a] uppercase tracking-wider mb-2">Помощник расчёта → заполнит поля выше автоматически</p>
                 <div className="grid grid-cols-4 gap-2 items-end">
                   <div>
-                    <label className="block text-[10px] text-[#8a8a85] mb-1">Стоимость станка (₽)</label>
+                    <label className="block text-[10px] text-muted mb-1">Стоимость станка (₽)</label>
                     <input type="number" min="0"
-                      className="w-full bg-white border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
+                      className="w-full bg-surface border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
                       value={equipCost}
                       onChange={e => setEquipCost(e.target.value)}
                       placeholder="800 000"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-[#8a8a85] mb-1">Срок службы (лет)</label>
+                    <label className="block text-[10px] text-muted mb-1">Срок службы (лет)</label>
                     <input type="number" min="1" max="20"
-                      className="w-full bg-white border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
+                      className="w-full bg-surface border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
                       value={equipLife}
                       onChange={e => setEquipLife(e.target.value)}
                       placeholder="5"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-[#8a8a85] mb-1">Расходник (₽/шт)</label>
+                    <label className="block text-[10px] text-muted mb-1">Расходник (₽/шт)</label>
                     <input type="number" min="0"
-                      className="w-full bg-white border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
+                      className="w-full bg-surface border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
                       value={consUnit}
                       onChange={e => setConsUnit(e.target.value)}
                       placeholder="500"
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] text-[#8a8a85] mb-1">Ресурс расходника (опер.)</label>
+                    <label className="block text-[10px] text-muted mb-1">Ресурс расходника (опер.)</label>
                     <input type="number" min="1"
-                      className="w-full bg-white border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
+                      className="w-full bg-surface border border-[#ddddf0] rounded-md px-2 py-1.5 text-[12px] font-mono outline-none focus:border-[#6b6bcc]"
                       value={consLife}
                       onChange={e => setConsLife(e.target.value)}
                       placeholder="20"
@@ -547,27 +547,27 @@ export default function B2BServicesPage() {
                 })()}
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Накладные % (пусто = по умолчанию)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Накладные % (пусто = по умолчанию)</label>
                 <input type="number" min="0" max="100"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.overhead_override_pct}
                   onChange={e => setForm({ ...form, overhead_override_pct: e.target.value })}
                   placeholder={`${ps.overhead_percent} (по умолч.)`}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Наценка % (пусто = по умолчанию)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Наценка % (пусто = по умолчанию)</label>
                 <input type="number" min="0" max="100"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.margin_override_pct}
                   onChange={e => setForm({ ...form, margin_override_pct: e.target.value })}
                   placeholder={`${ps.default_margin_percent} (по умолч.)`}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">Ручная цена продажи (₽)</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-wider mb-1">Ручная цена продажи (₽)</label>
                 <input type="number" min="0"
-                  className="w-full bg-[#f9f9f8] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]"
+                  className="w-full bg-[#f9f9f8] border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-ink"
                   value={form.sale_price_override}
                   onChange={e => setForm({ ...form, sale_price_override: e.target.value })}
                   placeholder="Оставьте пустым для автоматического"
@@ -589,9 +589,9 @@ export default function B2BServicesPage() {
                   <span>Накладные расходы ({form.overhead_override_pct || ps.overhead_percent}%)</span>
                   <span className="font-mono text-right">{fmtRub(formCostPreview.overhead_cost)}</span>
                   <span className="font-semibold border-t border-[#bbf7d0] pt-1">Себестоимость</span>
-                  <span className="font-mono font-bold text-right border-t border-[#bbf7d0] pt-1">{fmtRub(formCostPreview.cost_price)}</span>
+                  <span className="font-mono font-semibold text-right border-t border-[#bbf7d0] pt-1">{fmtRub(formCostPreview.cost_price)}</span>
                   <span className="font-semibold text-[#166534]">Цена продажи ({form.sale_price_override ? 'ручная' : `наценка ${form.margin_override_pct || ps.default_margin_percent}%`})</span>
-                  <span className="font-mono font-bold text-right text-[#166534]">{fmtRub(formCostPreview.sale_price)}</span>
+                  <span className="font-mono font-semibold text-right text-[#166534]">{fmtRub(formCostPreview.sale_price)}</span>
                 </div>
               </div>
             )}
@@ -599,17 +599,17 @@ export default function B2BServicesPage() {
             {/* Диапазоны по размеру */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">Диапазоны по размеру</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Диапазоны по размеру</p>
                 <button onClick={addTier}
                   className="text-[11px] font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded transition-colors">
                   + Добавить диапазон
                 </button>
               </div>
               {form.size_tiers.length === 0 ? (
-                <p className="text-[12px] text-[#9a9a95] italic">Без диапазонов — базовые поля выше применяются ко всем размерам</p>
+                <p className="text-[12px] text-muted italic">Без диапазонов — базовые поля выше применяются ко всем размерам</p>
               ) : (
                 <div className="space-y-2">
-                  <div className="grid grid-cols-[1fr_100px_80px_100px_28px] gap-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider px-1">
+                  <div className="grid grid-cols-[1fr_100px_80px_100px_28px] gap-2 text-[10px] font-semibold text-muted uppercase tracking-wider px-1">
                     <span>Название диапазона</span>
                     <span>Макс. размер (мм)</span>
                     <span>Время (мин)</span>
@@ -627,34 +627,34 @@ export default function B2BServicesPage() {
                     return (
                       <div key={idx} className="grid grid-cols-[1fr_100px_80px_100px_28px] gap-2 items-center">
                         <input
-                          className="bg-white border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] outline-none focus:border-[#111110]"
+                          className="bg-surface border border-line rounded-md px-2 py-1 text-[12px] outline-none focus:border-ink"
                           value={tier.label}
                           onChange={e => updateTier(idx, 'label', e.target.value)}
                           placeholder="500–1000 мм"
                         />
                         <input type="number" min="0"
-                          className="bg-white border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]"
+                          className="bg-surface border border-line rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-ink"
                           value={tier.max_mm ?? ''}
                           onChange={e => updateTier(idx, 'max_mm', e.target.value)}
                           placeholder="∞"
                         />
                         <input type="number" min="0" step="0.5"
-                          className="bg-white border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]"
+                          className="bg-surface border border-line rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-ink"
                           value={tier.time_minutes}
                           onChange={e => updateTier(idx, 'time_minutes', e.target.value)}
                         />
                         <div className="relative">
                           <input type="number" min="0"
-                            className="w-full bg-white border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]"
+                            className="w-full bg-surface border border-line rounded-md px-2 py-1 text-[12px] font-mono outline-none focus:border-ink"
                             value={tier.consumables_cost_rub}
                             onChange={e => updateTier(idx, 'consumables_cost_rub', e.target.value)}
                           />
-                          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-[#9a9a95] pointer-events-none">
+                          <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[9px] text-muted pointer-events-none">
                             → {fmtRub(tierPreview.sale_price)}
                           </span>
                         </div>
                         <button onClick={() => removeTier(idx)}
-                          className="text-[#c4c4be] hover:text-red-500 transition-colors text-sm font-bold leading-none">
+                          className="text-faint hover:text-red-500 transition-colors text-sm font-semibold leading-none">
                           ✕
                         </button>
                       </div>
@@ -668,17 +668,17 @@ export default function B2BServicesPage() {
 
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Порядок сортировки</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Порядок сортировки</label>
             <input type="number" min="0"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={form.sort_order}
               onChange={e => setForm({ ...form, sort_order: Number(e.target.value) })}
             />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Описание (необязательно)</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Описание (необязательно)</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={form.description}
               onChange={e => setForm({ ...form, description: e.target.value })}
               placeholder="Пояснение для менеджера"
@@ -690,12 +690,12 @@ export default function B2BServicesPage() {
 
         <div className="flex gap-2 mt-4">
           <button onClick={handleSave} disabled={saving || !form.name.trim()}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
             {saving ? 'Сохранение...' : editingId !== null ? 'Сохранить' : 'Добавить'}
           </button>
           {editingId !== null && (
             <button onClick={() => { setEditingId(null); setForm(EMPTY_FORM); setError(null) }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
               Отмена
             </button>
           )}
@@ -704,13 +704,13 @@ export default function B2BServicesPage() {
 
       {/* ── Справочник плёнок ── */}
       <div className="mt-10 mb-2">
-        <h2 className="text-[16px] font-semibold text-[#111110] tracking-tight">Справочник плёнок</h2>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Плёнки для услуги «Приклейка плёнки» — себестоимость и продажная цена за м²</p>
+        <h2 className="text-[16px] font-semibold text-ink tracking-tight">Справочник плёнок</h2>
+        <p className="text-[13px] text-muted mt-0.5">Плёнки для услуги «Приклейка плёнки» — себестоимость и продажная цена за м²</p>
       </div>
 
-      <div className={`rounded-xl border p-5 mb-6 transition-all ${editingFilmId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
+      <div className={`rounded-xl border p-5 mb-6 transition-all ${editingFilmId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
         <div className="flex items-center justify-between mb-4">
-          <h3 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             {editingFilmId !== null ? `Редактировать плёнку — ID ${editingFilmId}` : 'Добавить плёнку'}
           </h3>
           {editingFilmId !== null && (
@@ -719,9 +719,9 @@ export default function B2BServicesPage() {
         </div>
         <div className="grid grid-cols-2 gap-3 mb-4">
           <div className="col-span-2">
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Название плёнки</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Название плёнки</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={filmForm.name}
               onChange={e => setFilmForm({ ...filmForm, name: e.target.value })}
               placeholder="Плёнка матовая белая"
@@ -730,21 +730,21 @@ export default function B2BServicesPage() {
 
           {/* Плёнка (материал) */}
           <div className="col-span-2">
-            <p className="text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2 mt-1">Плёнка (материал)</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2 mt-1">Плёнка (материал)</p>
           </div>
           <div>
-            <label className="block text-[10px] text-[#8a8a85] mb-1">Себестоимость ₽/м²</label>
+            <label className="block text-[10px] text-muted mb-1">Себестоимость ₽/м²</label>
             <input type="number" min="0" step="0.01"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={filmForm.cost_price_per_m2}
               onChange={e => setFilmForm({ ...filmForm, cost_price_per_m2: Number(e.target.value) })}
               placeholder="350"
             />
           </div>
           <div>
-            <label className="block text-[10px] text-[#8a8a85] mb-1">Цена продажи ₽/м²</label>
+            <label className="block text-[10px] text-muted mb-1">Цена продажи ₽/м²</label>
             <input type="number" min="0" step="0.01"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={filmForm.sale_price_per_m2}
               onChange={e => setFilmForm({ ...filmForm, sale_price_per_m2: Number(e.target.value) })}
               placeholder="600"
@@ -753,21 +753,21 @@ export default function B2BServicesPage() {
 
           {/* Работа (приклейка) */}
           <div className="col-span-2">
-            <p className="text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2 mt-1">Работа (приклейка)</p>
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2 mt-1">Работа (приклейка)</p>
           </div>
           <div>
-            <label className="block text-[10px] text-[#8a8a85] mb-1">Себестоимость ₽/м²</label>
+            <label className="block text-[10px] text-muted mb-1">Себестоимость ₽/м²</label>
             <input type="number" min="0" step="0.01"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={filmForm.work_cost_per_m2}
               onChange={e => setFilmForm({ ...filmForm, work_cost_per_m2: Number(e.target.value) })}
               placeholder="200"
             />
           </div>
           <div>
-            <label className="block text-[10px] text-[#8a8a85] mb-1">Цена продажи ₽/м²</label>
+            <label className="block text-[10px] text-muted mb-1">Цена продажи ₽/м²</label>
             <input type="number" min="0" step="0.01"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={filmForm.work_sale_per_m2}
               onChange={e => setFilmForm({ ...filmForm, work_sale_per_m2: Number(e.target.value) })}
               placeholder="400"
@@ -778,28 +778,28 @@ export default function B2BServicesPage() {
           {(filmForm.sale_price_per_m2 > 0 || filmForm.work_sale_per_m2 > 0) && (
             <div className="col-span-2 flex items-center justify-between px-4 py-2.5 bg-[#f0fdf4] border border-[#bbf7d0] rounded-lg">
               <span className="text-[12px] text-[#166534] font-semibold">Итого клиенту:</span>
-              <span className="text-[14px] font-bold font-mono text-[#166534]">
+              <span className="text-[14px] font-semibold font-mono text-[#166534]">
                 {(filmForm.sale_price_per_m2 + filmForm.work_sale_per_m2).toLocaleString('ru-RU')} ₽/м²
               </span>
-              <span className="text-[11px] text-[#9a9a95]">
+              <span className="text-[11px] text-muted">
                 ({filmForm.sale_price_per_m2.toLocaleString('ru-RU')} плёнка + {filmForm.work_sale_per_m2.toLocaleString('ru-RU')} работа)
               </span>
             </div>
           )}
 
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Описание (необязательно)</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Описание (необязательно)</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink"
               value={filmForm.description}
               onChange={e => setFilmForm({ ...filmForm, description: e.target.value })}
               placeholder="Пояснение для менеджера"
             />
           </div>
           <div>
-            <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Порядок сортировки</label>
+            <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Порядок сортировки</label>
             <input type="number" min="0"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink"
               value={filmForm.sort_order}
               onChange={e => setFilmForm({ ...filmForm, sort_order: Number(e.target.value) })}
             />
@@ -808,30 +808,30 @@ export default function B2BServicesPage() {
         {filmError && <p className="mt-2 text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{filmError}</p>}
         <div className="flex gap-2 mt-4">
           <button onClick={handleSaveFilm} disabled={filmSaving || !filmForm.name.trim()}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
             {filmSaving ? 'Сохранение...' : editingFilmId !== null ? 'Сохранить' : 'Добавить плёнку'}
           </button>
           {editingFilmId !== null && (
             <button onClick={() => { setEditingFilmId(null); setFilmForm(EMPTY_FILM_FORM); setFilmError(null) }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
               Отмена
             </button>
           )}
         </div>
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-10">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden mb-10">
         {films.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет плёнок — добавьте первую</div>
+          <div className="p-8 text-center text-[13px] text-muted">Нет плёнок — добавьте первую</div>
         ) : (
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#f0f0ec]">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Название</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Плёнка себ.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Плёнка прод.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Работа себ.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Работа прод.</th>
+              <tr className="border-b border-line-soft">
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Название</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Плёнка себ.</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Плёнка прод.</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Работа себ.</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Работа прод.</th>
                 <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-emerald-700 uppercase tracking-widest w-28">Итого клиенту</th>
                 <th className="w-36 px-4 py-2.5"></th>
               </tr>
@@ -839,30 +839,30 @@ export default function B2BServicesPage() {
             <tbody>
               {films.map(f => (
                 <tr key={f.id}
-                  className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${editingFilmId === f.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'} ${!f.active ? 'opacity-35' : ''}`}>
+                  className={`border-b border-canvas last:border-0 transition-colors ${editingFilmId === f.id ? 'bg-blue-50' : 'hover:bg-subtle'} ${!f.active ? 'opacity-35' : ''}`}>
                   <td className="px-4 py-3">
-                    <p className="font-medium text-[#111110]">{f.name}</p>
-                    {f.description && <p className="text-[12px] text-[#9a9a95] mt-0.5">{f.description}</p>}
+                    <p className="font-medium text-ink">{f.name}</p>
+                    {f.description && <p className="text-[12px] text-muted mt-0.5">{f.description}</p>}
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12px] text-[#6b6b66]">
+                  <td className="px-4 py-3 text-right font-mono text-[12px] text-ink-soft">
                     {f.cost_price_per_m2.toLocaleString('ru-RU')} ₽
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12px] text-[#111110]">
+                  <td className="px-4 py-3 text-right font-mono text-[12px] text-ink">
                     {f.sale_price_per_m2.toLocaleString('ru-RU')} ₽
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12px] text-[#6b6b66]">
+                  <td className="px-4 py-3 text-right font-mono text-[12px] text-ink-soft">
                     {(f.work_cost_per_m2 ?? 0).toLocaleString('ru-RU')} ₽
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-[12px] text-[#111110]">
+                  <td className="px-4 py-3 text-right font-mono text-[12px] text-ink">
                     {(f.work_sale_per_m2 ?? 0).toLocaleString('ru-RU')} ₽
                   </td>
-                  <td className="px-4 py-3 text-right font-mono font-bold text-[12px] text-emerald-700">
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-[12px] text-emerald-700">
                     {(f.sale_price_per_m2 + (f.work_sale_per_m2 ?? 0)).toLocaleString('ru-RU')} ₽
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 justify-end">
                       <button onClick={() => startEditFilm(f)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800 transition-colors">Изменить</button>
-                      <button onClick={() => toggleFilmActive(f.id, f.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                      <button onClick={() => toggleFilmActive(f.id, f.active)} className="text-[12px] text-muted hover:text-ink-soft transition-colors">
                         {f.active ? 'Скрыть' : 'Показать'}
                       </button>
                       <button onClick={() => deleteFilm(f.id, f.name)} className="text-[12px] text-red-400 hover:text-red-600 transition-colors">Удалить</button>
@@ -876,19 +876,19 @@ export default function B2BServicesPage() {
       </div>
 
       {/* ── Список услуг ── */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+          <div className="p-8 text-center text-[13px] text-muted">Загрузка...</div>
         ) : services.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет услуг — добавьте первую</div>
+          <div className="p-8 text-center text-[13px] text-muted">Нет услуг — добавьте первую</div>
         ) : (
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#f0f0ec]">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Услуга</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Тип</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Себест.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Цена прод.</th>
+              <tr className="border-b border-line-soft">
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Услуга</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Тип</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Себест.</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-28">Цена прод.</th>
                 <th className="w-36 px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -908,30 +908,30 @@ export default function B2BServicesPage() {
                   : null
                 return (
                   <tr key={s.id}
-                    className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${editingId === s.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'} ${!s.active ? 'opacity-35' : ''}`}>
+                    className={`border-b border-canvas last:border-0 transition-colors ${editingId === s.id ? 'bg-blue-50' : 'hover:bg-subtle'} ${!s.active ? 'opacity-35' : ''}`}>
                     <td className="px-4 py-3">
-                      <p className="font-medium text-[#111110]">{s.name}</p>
-                      {s.description && <p className="text-[12px] text-[#9a9a95] mt-0.5">{s.description}</p>}
+                      <p className="font-medium text-ink">{s.name}</p>
+                      {s.description && <p className="text-[12px] text-muted mt-0.5">{s.description}</p>}
                       {isCalc && s.size_tiers && s.size_tiers.length > 0 && (
                         <p className="text-[10px] text-blue-500 mt-0.5">{s.size_tiers.length} диапазона по размеру</p>
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isCalc ? 'bg-purple-50 text-purple-700' : 'bg-[#f0f0ec] text-[#6b6b66]'}`}>
+                      <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${isCalc ? 'bg-purple-50 text-purple-700' : 'bg-line-soft text-ink-soft'}`}>
                         {TYPE_LABELS[s.type]}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-right font-mono text-[12px] text-[#6b6b66]">
+                    <td className="px-4 py-3 text-right font-mono text-[12px] text-ink-soft">
                       {isCalc
                         ? <span className="text-purple-700">{fmtRub(liveCost!.cost_price)}</span>
                         : (s.cost_price ?? 0) > 0
                           ? `${(s.cost_price ?? 0).toLocaleString('ru-RU')} ₽`
-                          : <span className="text-[#c4c4be]">—</span>
+                          : <span className="text-faint">—</span>
                       }
                     </td>
-                    <td className="px-4 py-3 text-right font-mono font-semibold text-[12px] text-[#111110]">
+                    <td className="px-4 py-3 text-right font-mono font-semibold text-[12px] text-ink">
                       {isCalc
-                        ? <span className="text-purple-700 font-bold">{fmtRub(liveCost!.sale_price)}</span>
+                        ? <span className="text-purple-700 font-semibold">{fmtRub(liveCost!.sale_price)}</span>
                         : s.type === 'percent'
                           ? `${s.value}%`
                           : `${s.value.toLocaleString('ru-RU')} ₽`
@@ -940,7 +940,7 @@ export default function B2BServicesPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3 justify-end">
                         <button onClick={() => startEdit(s)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800 transition-colors">Изменить</button>
-                        <button onClick={() => toggleActive(s.id, s.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                        <button onClick={() => toggleActive(s.id, s.active)} className="text-[12px] text-muted hover:text-ink-soft transition-colors">
                           {s.active ? 'Скрыть' : 'Показать'}
                         </button>
                         <button onClick={() => deleteService(s.id, s.name)} className="text-[12px] text-red-400 hover:text-red-600 transition-colors">Удалить</button>

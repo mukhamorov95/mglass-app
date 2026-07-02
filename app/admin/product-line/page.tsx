@@ -219,9 +219,9 @@ function StrategyTab() {
   return (
     <div className="space-y-6">
       {/* Vision */}
-      <div className="bg-gradient-to-br from-[#111110] to-[#333] text-white rounded-2xl p-6">
+      <div className="bg-gradient-to-br from-ink to-[#333] text-white rounded-2xl p-6">
         <p className="text-[11px] font-semibold uppercase tracking-widest opacity-60 mb-2">Стратегия</p>
-        <h2 className="text-[22px] font-bold leading-tight mb-3">
+        <h2 className="text-[22px] font-semibold leading-tight mb-3">
           MGlass: от локального производства → к product brand
         </h2>
         <p className="text-[13px] opacity-75 leading-relaxed">
@@ -235,7 +235,7 @@ function StrategyTab() {
             { label: 'Год 2-3', text: '30+ SKU\nРФ-доставка\nИнфлюенсер-канал' },
           ].map(s => (
             <div key={s.label}>
-              <p className="text-[10px] font-bold uppercase tracking-widest opacity-50 mb-1">{s.label}</p>
+              <p className="text-[10px] font-semibold uppercase tracking-widest opacity-50 mb-1">{s.label}</p>
               <pre className="text-[12px] opacity-85 whitespace-pre-wrap font-sans leading-relaxed">{s.text}</pre>
             </div>
           ))}
@@ -243,18 +243,18 @@ function StrategyTab() {
       </div>
 
       {/* Priority SKUs */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <p className="text-[12px] font-semibold text-[#111110] mb-1">Запускать первыми — именно эти SKU</p>
-        <p className="text-[11px] text-[#8a8a85] mb-4">Максимальный потенциал при минимальной сложности</p>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <p className="text-[12px] font-semibold text-ink mb-1">Запускать первыми — именно эти SKU</p>
+        <p className="text-[11px] text-muted mb-4">Максимальный потенциал при минимальной сложности</p>
         <div className="space-y-3">
           {PRIORITY_SKUS.map((s, i) => (
             <div key={i} className="flex gap-3 items-start">
-              <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-bold flex-shrink-0">
+              <span className="w-6 h-6 rounded-full bg-amber-500 text-white flex items-center justify-center text-[11px] font-semibold flex-shrink-0">
                 {i + 1}
               </span>
               <div>
-                <p className="text-[13px] font-semibold text-[#111110]">{s.name}</p>
-                <p className="text-[12px] text-[#6b6b66]">{s.why}</p>
+                <p className="text-[13px] font-semibold text-ink">{s.name}</p>
+                <p className="text-[12px] text-ink-soft">{s.why}</p>
               </div>
             </div>
           ))}
@@ -263,8 +263,8 @@ function StrategyTab() {
 
       {/* Blind zones */}
       <div>
-        <p className="text-[12px] font-semibold text-[#111110] mb-1">Слепые зоны — что owner не замечает</p>
-        <p className="text-[11px] text-[#8a8a85] mb-4">
+        <p className="text-[12px] font-semibold text-ink mb-1">Слепые зоны — что owner не замечает</p>
+        <p className="text-[11px] text-muted mb-4">
           Критический анализ перед запуском продуктовой модели
         </p>
         <div className="grid grid-cols-2 gap-3">
@@ -291,8 +291,8 @@ function StrategyTab() {
       </div>
 
       {/* Не делать */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-        <p className="text-[12px] font-semibold text-[#111110] mb-3">Чего НЕ делать при запуске</p>
+      <div className="bg-surface border border-line rounded-xl p-5">
+        <p className="text-[12px] font-semibold text-ink mb-3">Чего НЕ делать при запуске</p>
         <div className="grid grid-cols-2 gap-2">
           {[
             'Запускать 50 SKU сразу — размоете внимание и деньги',
@@ -304,7 +304,7 @@ function StrategyTab() {
             'Запускать без фото/видео — продукт без контента не продаётся',
             'Планировать монтаж для всей РФ без партнёрской сети',
           ].map((item, i) => (
-            <div key={i} className="flex gap-2 text-[12px] text-[#6b6b66]">
+            <div key={i} className="flex gap-2 text-[12px] text-ink-soft">
               <span className="text-red-400 flex-shrink-0">✕</span>
               <span>{item}</span>
             </div>
@@ -375,47 +375,47 @@ function MatrixTab() {
     <div className="space-y-5">
       <div className="flex justify-between items-center">
         <div>
-          <p className="text-[14px] font-semibold text-[#111110]">Матрица продуктовых линеек</p>
-          <p className="text-[12px] text-[#8a8a85]">Управление категориями и линейками</p>
+          <p className="text-[14px] font-semibold text-ink">Матрица продуктовых линеек</p>
+          <p className="text-[12px] text-muted">Управление категориями и линейками</p>
         </div>
         <button onClick={() => setShowAdd(v => !v)}
-          className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
+          className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
           + Добавить линейку
         </button>
       </div>
 
       {showAdd && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110]">Новая продуктовая линейка</p>
+        <div className="bg-surface border border-line rounded-xl p-5 space-y-3">
+          <p className="text-[13px] font-semibold text-ink">Новая продуктовая линейка</p>
           <div className="grid grid-cols-3 gap-3">
             <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select value={form.line_type} onChange={e => setForm(f => ({ ...f, line_type: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               {Object.entries(LINE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
             <select value={form.status} onChange={e => setForm(f => ({ ...f, status: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               {Object.entries(STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-2 gap-3">
             <input placeholder="Название линейки *" value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
             <input placeholder="Слоган (необязательно)" value={form.tagline}
               onChange={e => setForm(f => ({ ...f, tagline: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
           </div>
           <div className="flex gap-2">
             <button onClick={add} disabled={!form.name.trim() || saving}
-              className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium disabled:opacity-50">
+              className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium disabled:opacity-50">
               {saving ? 'Сохранение...' : 'Создать'}
             </button>
             <button onClick={() => setShowAdd(false)}
-              className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[12px]">
+              className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[12px]">
               Отмена
             </button>
           </div>
@@ -423,37 +423,37 @@ function MatrixTab() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="text-center py-12 text-[13px] text-muted">Загрузка...</div>
       ) : (
         <div className="space-y-6">
           {byCategory.map(({ cat, label, lines: catLines }) => (
             <div key={cat}>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[#8a8a85] mb-3">{label}</p>
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-3">{label}</p>
               {catLines.length === 0 ? (
-                <p className="text-[12px] text-[#8a8a85] italic pl-2">Линеек нет</p>
+                <p className="text-[12px] text-muted italic pl-2">Линеек нет</p>
               ) : (
                 <div className="grid grid-cols-3 gap-3">
                   {catLines.map(line => (
-                    <div key={line.id} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+                    <div key={line.id} className="bg-surface border border-line rounded-xl p-4">
                       <div className="flex items-start justify-between gap-2 mb-2">
                         <div>
                           <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[line.status] ?? 'bg-gray-100 text-gray-600'}`}>
                             {STATUS_LABELS[line.status] ?? line.status}
                           </span>
-                          <span className="ml-1.5 text-[10px] text-[#8a8a85]">{LINE_LABELS[line.line_type] ?? line.line_type}</span>
+                          <span className="ml-1.5 text-[10px] text-muted">{LINE_LABELS[line.line_type] ?? line.line_type}</span>
                         </div>
                         <button onClick={() => del(line.id)} className="text-[#c4c4c0] hover:text-red-400 text-[12px]">×</button>
                       </div>
-                      <p className="text-[14px] font-semibold text-[#111110]">{line.name}</p>
-                      {line.tagline && <p className="text-[11px] text-[#8a8a85] mt-0.5 italic">{line.tagline}</p>}
+                      <p className="text-[14px] font-semibold text-ink">{line.name}</p>
+                      {line.tagline && <p className="text-[11px] text-muted mt-0.5 italic">{line.tagline}</p>}
                       <div className="mt-3 flex gap-1">
                         {Object.entries(STATUS_LABELS).map(([s, sl]) => (
                           <button key={s} onClick={() => updateStatus(line.id, s)}
                             disabled={line.status === s}
                             className={`text-[10px] px-2 py-0.5 rounded border transition-colors ${
                               line.status === s
-                                ? 'bg-[#111110] text-white border-[#111110]'
-                                : 'border-[#e4e4e0] text-[#8a8a85] hover:border-gray-400'
+                                ? 'bg-ink text-white border-ink'
+                                : 'border-line text-muted hover:border-gray-400'
                             }`}>
                             {sl}
                           </button>
@@ -523,42 +523,42 @@ function UEPanel({ sku }: { sku: Sku }) {
   }
 
   if (!ue) return (
-    <div className="text-[12px] text-[#8a8a85] p-3">Нет данных unit-экономики</div>
+    <div className="text-[12px] text-muted p-3">Нет данных unit-экономики</div>
   )
 
   const marginColor = (pct: number) =>
     pct >= 35 ? 'text-green-600' : pct >= 20 ? 'text-amber-600' : 'text-red-600'
 
   return (
-    <div className="border-t border-[#e4e4e0] mt-3 pt-4 space-y-4">
+    <div className="border-t border-line mt-3 pt-4 space-y-4">
       {/* Calculated results */}
       {calc && (
         <div className="bg-[#f8f8f6] rounded-xl p-4">
-          <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-3">Результат расчёта</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-3">Результат расчёта</p>
           <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-[12px]">
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Прямые расходы</span>
-              <span className="font-medium text-[#111110]">{r(calc.directWithDefects)} ₽</span>
+              <span className="text-ink-soft">Прямые расходы</span>
+              <span className="font-medium text-ink">{r(calc.directWithDefects)} ₽</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Косвенные (% от цены)</span>
-              <span className="font-medium text-[#111110]">{p(calc.indirectPct)}%</span>
+              <span className="text-ink-soft">Косвенные (% от цены)</span>
+              <span className="font-medium text-ink">{p(calc.indirectPct)}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Точка безубыточности</span>
-              <span className="font-semibold text-[#111110]">{r(calc.breakEven)} ₽</span>
+              <span className="text-ink-soft">Точка безубыточности</span>
+              <span className="font-semibold text-ink">{r(calc.breakEven)} ₽</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Розничная цена</span>
-              <span className="font-bold text-[#111110]">{r(calc.retailPrice)} ₽</span>
+              <span className="text-ink-soft">Розничная цена</span>
+              <span className="font-semibold text-ink">{r(calc.retailPrice)} ₽</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Валовая маржа</span>
+              <span className="text-ink-soft">Валовая маржа</span>
               <span className={`font-semibold ${marginColor(calc.grossMarginPct)}`}>{p(calc.grossMarginPct)}%</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-[#6b6b66]">Чистая маржа</span>
-              <span className={`font-bold ${marginColor(calc.netMarginPct)}`}>{p(calc.netMarginPct)}%</span>
+              <span className="text-ink-soft">Чистая маржа</span>
+              <span className={`font-semibold ${marginColor(calc.netMarginPct)}`}>{p(calc.netMarginPct)}%</span>
             </div>
           </div>
 
@@ -579,8 +579,8 @@ function UEPanel({ sku }: { sku: Sku }) {
           )}
 
           {/* Price grid */}
-          <div className="mt-4 pt-3 border-t border-[#e4e4e0]">
-            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Ценовая матрица</p>
+          <div className="mt-4 pt-3 border-t border-line">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Ценовая матрица</p>
             <div className="grid grid-cols-3 gap-2">
               {[
                 { label: 'Минимум (15%)',   val: calc.priceMin,        cls: 'bg-red-50 border-red-200 text-red-800' },
@@ -592,13 +592,13 @@ function UEPanel({ sku }: { sku: Sku }) {
               ].map(pr => (
                 <div key={pr.label} className={`rounded-lg border px-2 py-2 text-center ${pr.cls}`}>
                   <p className="text-[10px] font-medium opacity-70">{pr.label}</p>
-                  <p className="text-[13px] font-bold mt-0.5">{r(pr.val)} ₽</p>
+                  <p className="text-[13px] font-semibold mt-0.5">{r(pr.val)} ₽</p>
                 </div>
               ))}
             </div>
             <div className="mt-2 p-2 bg-orange-50 border border-orange-200 rounded-lg text-center">
               <p className="text-[10px] text-orange-700 font-medium">Маркетплейс (+20% покрытие комиссии)</p>
-              <p className="text-[14px] font-bold text-orange-800">{r(calc.priceMarketplace)} ₽</p>
+              <p className="text-[14px] font-semibold text-orange-800">{r(calc.priceMarketplace)} ₽</p>
             </div>
           </div>
         </div>
@@ -607,37 +607,37 @@ function UEPanel({ sku }: { sku: Sku }) {
       {/* Direct costs editor */}
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Прямые расходы (₽)</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Прямые расходы (₽)</p>
           <div className="space-y-1.5">
             {UE_DIRECT_FIELDS.map(({ key, label }) => (
               <div key={key as string} className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-[#6b6b66] flex-1">{label}</span>
+                <span className="text-[12px] text-ink-soft flex-1">{label}</span>
                 <input
                   type="number"
                   min="0"
                   value={ue[key] as number}
                   onChange={e => update(key, parseFloat(e.target.value) || 0)}
-                  className="w-24 border border-[#e4e4e0] rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+                  className="w-24 border border-line rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
                 />
               </div>
             ))}
-            <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#e4e4e0]">
-              <span className="text-[12px] text-[#6b6b66]">Брак (%)</span>
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line">
+              <span className="text-[12px] text-ink-soft">Брак (%)</span>
               <input type="number" min="0" max="20" step="0.5"
                 value={ue.cost_defects_pct}
                 onChange={e => update('cost_defects_pct', parseFloat(e.target.value) || 0)}
-                className="w-24 border border-[#e4e4e0] rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+                className="w-24 border border-line rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
               />
             </div>
           </div>
         </div>
 
         <div>
-          <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Косвенные расходы (%)</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Косвенные расходы (%)</p>
           <div className="space-y-1.5">
             {UE_INDIRECT_FIELDS.map(({ key, label }) => (
               <div key={key as string} className="flex items-center justify-between gap-2">
-                <span className="text-[12px] text-[#6b6b66] flex-1">{label}</span>
+                <span className="text-[12px] text-ink-soft flex-1">{label}</span>
                 <input
                   type="number"
                   min="0"
@@ -645,30 +645,30 @@ function UEPanel({ sku }: { sku: Sku }) {
                   step="0.5"
                   value={ue[key] as number}
                   onChange={e => update(key, parseFloat(e.target.value) || 0)}
-                  className="w-20 border border-[#e4e4e0] rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+                  className="w-20 border border-line rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
                 />
               </div>
             ))}
-            <div className="flex items-center justify-between gap-2 pt-1 border-t border-[#e4e4e0]">
-              <span className="text-[12px] text-[#6b6b66]">CAC (₽)</span>
+            <div className="flex items-center justify-between gap-2 pt-1 border-t border-line">
+              <span className="text-[12px] text-ink-soft">CAC (₽)</span>
               <input type="number" min="0"
                 value={ue.cac}
                 onChange={e => update('cac', parseFloat(e.target.value) || 0)}
-                className="w-20 border border-[#e4e4e0] rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+                className="w-20 border border-line rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
               />
             </div>
             <div className="flex items-center justify-between gap-2">
-              <span className="text-[12px] text-[#6b6b66]">Цена (override, 0=авто)</span>
+              <span className="text-[12px] text-ink-soft">Цена (override, 0=авто)</span>
               <input type="number" min="0"
                 value={ue.price_retail_override}
                 onChange={e => update('price_retail_override', parseFloat(e.target.value) || 0)}
-                className="w-24 border border-[#e4e4e0] rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
+                className="w-24 border border-line rounded px-2 py-1 text-[12px] text-right focus:outline-none focus:ring-1 focus:ring-blue-300"
               />
             </div>
           </div>
 
           <button onClick={save} disabled={saving}
-            className="mt-4 w-full py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
+            className="mt-4 w-full py-2 bg-ink text-white rounded-xl text-[12px] font-medium hover:bg-[#333] disabled:opacity-50 transition-colors">
             {saving ? 'Сохранение...' : 'Сохранить unit-экономику'}
           </button>
         </div>
@@ -772,68 +772,68 @@ function SkuTab() {
         <div className="flex gap-2 flex-wrap">
           {['', ...Object.keys(CATEGORY_LABELS)].map(cat => (
             <button key={cat} onClick={() => setFilterCat(cat)}
-              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterCat === cat ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterCat === cat ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
               {cat ? CATEGORY_LABELS[cat] : 'Все'}
             </button>
           ))}
           {['', ...SKU_STATUS_STEPS].map(s => (
             <button key={s} onClick={() => setFilterStatus(s)}
-              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterStatus === s ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#8a8a85]'}`}>
+              className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${filterStatus === s ? 'bg-ink text-white border-ink' : 'border-line text-muted'}`}>
               {s ? STATUS_LABELS[s] : 'Все статусы'}
             </button>
           ))}
         </div>
         <button onClick={() => setShowAdd(v => !v)}
-          className="flex-shrink-0 px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
+          className="flex-shrink-0 px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
           + Добавить SKU
         </button>
       </div>
 
       {showAdd && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110]">Новый SKU</p>
+        <div className="bg-surface border border-line rounded-xl p-5 space-y-3">
+          <p className="text-[13px] font-semibold text-ink">Новый SKU</p>
           <div className="grid grid-cols-4 gap-3">
             <input placeholder="SKU-код *" value={form.sku}
               onChange={e => setForm(f => ({ ...f, sku: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
             <input placeholder="Название *" value={form.name}
               onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              className="col-span-2 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              className="col-span-2 border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
             <select value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               {Object.entries(CATEGORY_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </div>
           <div className="grid grid-cols-4 gap-3">
             <input placeholder="Ширина мм" value={form.width_mm}
               onChange={e => setForm(f => ({ ...f, width_mm: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
             <input placeholder="Высота мм" value={form.height_mm}
               onChange={e => setForm(f => ({ ...f, height_mm: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
             <select value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               <option value="chrome">Chrome</option>
               <option value="black">Black</option>
               <option value="brushed_gold">Brushed Gold</option>
               <option value="white">White</option>
             </select>
             <select value={form.line_id} onChange={e => setForm(f => ({ ...f, line_id: e.target.value }))}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
               <option value="">Линейка...</option>
               {lines.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
             </select>
           </div>
           <textarea placeholder="Заметки" value={form.notes}
             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} rows={2}
-            className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
+            className="w-full border border-line rounded-lg px-3 py-2 text-[13px] resize-none focus:outline-none" />
           <div className="flex gap-2">
             <button onClick={add} disabled={!form.sku.trim() || !form.name.trim() || saving}
-              className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium disabled:opacity-50">
+              className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium disabled:opacity-50">
               {saving ? 'Создание...' : 'Создать SKU'}
             </button>
             <button onClick={() => setShowAdd(false)}
-              className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[12px]">
+              className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[12px]">
               Отмена
             </button>
           </div>
@@ -841,9 +841,9 @@ function SkuTab() {
       )}
 
       {loading ? (
-        <div className="text-center py-12 text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="text-center py-12 text-[13px] text-muted">Загрузка...</div>
       ) : skus.length === 0 ? (
-        <div className="text-center py-12 text-[13px] text-[#8a8a85]">
+        <div className="text-center py-12 text-[13px] text-muted">
           SKU нет. Добавьте первый продукт.
         </div>
       ) : (
@@ -853,27 +853,27 @@ function SkuTab() {
             const calc = ue ? calcUE(ue) : null
             const isUEOpen = openUE === sku.id
             return (
-              <div key={sku.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+              <div key={sku.id} className="bg-surface border border-line rounded-xl overflow-hidden">
                 <div className="px-4 py-3 flex items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_COLORS[sku.status] ?? 'bg-gray-100'}`}>
                         {STATUS_LABELS[sku.status] ?? sku.status}
                       </span>
-                      <span className="text-[10px] font-mono text-[#8a8a85] bg-[#f4f4f0] px-1.5 py-0.5 rounded">
+                      <span className="text-[10px] font-mono text-muted bg-[#f4f4f0] px-1.5 py-0.5 rounded">
                         {sku.sku}
                       </span>
-                      <span className="text-[11px] text-[#8a8a85]">{CATEGORY_LABELS[sku.category] ?? sku.category}</span>
+                      <span className="text-[11px] text-muted">{CATEGORY_LABELS[sku.category] ?? sku.category}</span>
                       {sku.width_mm && sku.height_mm && (
-                        <span className="text-[11px] text-[#8a8a85]">{sku.width_mm}×{sku.height_mm} мм</span>
+                        <span className="text-[11px] text-muted">{sku.width_mm}×{sku.height_mm} мм</span>
                       )}
-                      {sku.color && <span className="text-[11px] text-[#8a8a85]">{sku.color}</span>}
+                      {sku.color && <span className="text-[11px] text-muted">{sku.color}</span>}
                     </div>
-                    <p className="text-[14px] font-semibold text-[#111110]">{sku.name}</p>
+                    <p className="text-[14px] font-semibold text-ink">{sku.name}</p>
                     {calc && (
                       <div className="flex gap-4 mt-1 text-[11px]">
-                        <span className="text-[#8a8a85]">
-                          Цена: <span className="font-semibold text-[#111110]">{r(calc.retailPrice)} ₽</span>
+                        <span className="text-muted">
+                          Цена: <span className="font-semibold text-ink">{r(calc.retailPrice)} ₽</span>
                         </span>
                         <span className={`font-semibold ${
                           calc.netMarginPct >= 35 ? 'text-green-600' :
@@ -881,7 +881,7 @@ function SkuTab() {
                         }`}>
                           Маржа: {p(calc.netMarginPct)}%
                         </span>
-                        <span className="text-[#8a8a85]">
+                        <span className="text-muted">
                           Себестоимость: {r(calc.directWithDefects)} ₽
                         </span>
                       </div>
@@ -890,12 +890,12 @@ function SkuTab() {
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {sku.status !== 'archived' && (
                       <button onClick={() => nextStatus(sku)}
-                        className="text-[11px] px-2.5 py-1 rounded-lg bg-[#f4f4f0] text-[#6b6b66] hover:bg-[#e4e4e0]">
+                        className="text-[11px] px-2.5 py-1 rounded-lg bg-[#f4f4f0] text-ink-soft hover:bg-line">
                         →
                       </button>
                     )}
                     <button onClick={() => setOpenUE(isUEOpen ? null : sku.id)}
-                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${isUEOpen ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                      className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors ${isUEOpen ? 'bg-ink text-white border-ink' : 'border-line text-ink-soft'}`}>
                       {isUEOpen ? 'Скрыть UE' : 'Unit Economics'}
                     </button>
                     <button onClick={() => del(sku.id)}
@@ -1029,9 +1029,9 @@ function InfluencersTab() {
           { label: 'Лиды', value: totalLeads },
           { label: 'ROMI', value: `${romi > 0 ? '+' : ''}${Math.round(romi)}%` },
         ].map(s => (
-          <div key={s.label} className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-            <p className="text-[11px] text-[#8a8a85] uppercase tracking-wider">{s.label}</p>
-            <p className="text-[22px] font-bold text-[#111110] mt-1">{s.value}</p>
+          <div key={s.label} className="bg-surface border border-line rounded-xl p-4 text-center">
+            <p className="text-[11px] text-muted uppercase tracking-wider">{s.label}</p>
+            <p className="text-[22px] font-semibold text-ink mt-1">{s.value}</p>
           </div>
         ))}
       </div>
@@ -1040,7 +1040,7 @@ function InfluencersTab() {
       <div className="flex gap-1 bg-[#f4f4f0] rounded-xl p-1">
         {([['list', 'Блогеры'], ['campaigns', 'Кампании']] as const).map(([k, l]) => (
           <button key={k} onClick={() => setTab(k)}
-            className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${tab === k ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
+            className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${tab === k ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft'}`}>
             {l}
           </button>
         ))}
@@ -1050,55 +1050,55 @@ function InfluencersTab() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button onClick={() => setShowAdd(v => !v)}
-              className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
+              className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
               + Добавить блогера
             </button>
           </div>
 
           {showAdd && (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-3">
-              <p className="text-[13px] font-semibold text-[#111110]">Новый блогер</p>
+            <div className="bg-surface border border-line rounded-xl p-5 space-y-3">
+              <p className="text-[13px] font-semibold text-ink">Новый блогер</p>
               <div className="grid grid-cols-3 gap-3">
                 <input placeholder="Имя *" value={infForm.name}
                   onChange={e => setInfForm(f => ({ ...f, name: e.target.value }))}
-                  className="col-span-2 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="col-span-2 border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
                 <select value={infForm.platform} onChange={e => setInfForm(f => ({ ...f, platform: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
                   {Object.entries(PLATFORM_ICONS).map(([k, v]) => <option key={k} value={k}>{v} {k}</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-4 gap-3">
                 <input placeholder="@handle" value={infForm.handle}
                   onChange={e => setInfForm(f => ({ ...f, handle: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Подписчики" value={infForm.followers}
                   onChange={e => setInfForm(f => ({ ...f, followers: e.target.value }))} type="number"
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="ER %" value={infForm.er_pct}
                   onChange={e => setInfForm(f => ({ ...f, er_pct: e.target.value }))} type="number" step="0.1"
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Стоимость поста ₽" value={infForm.cost_per_post}
                   onChange={e => setInfForm(f => ({ ...f, cost_per_post: e.target.value }))} type="number"
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <input placeholder="Ниша" value={infForm.niche}
                   onChange={e => setInfForm(f => ({ ...f, niche: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Город" value={infForm.city}
                   onChange={e => setInfForm(f => ({ ...f, city: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Ссылка профиля" value={infForm.url}
                   onChange={e => setInfForm(f => ({ ...f, url: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
               </div>
               <div className="flex gap-2">
                 <button onClick={addInfluencer} disabled={!infForm.name.trim() || saving}
-                  className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] disabled:opacity-50">
+                  className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] disabled:opacity-50">
                   {saving ? 'Сохранение...' : 'Добавить'}
                 </button>
                 <button onClick={() => setShowAdd(false)}
-                  className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[12px]">
+                  className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[12px]">
                   Отмена
                 </button>
               </div>
@@ -1106,22 +1106,22 @@ function InfluencersTab() {
           )}
 
           {loading ? (
-            <div className="text-center py-8 text-[13px] text-[#8a8a85]">Загрузка...</div>
+            <div className="text-center py-8 text-[13px] text-muted">Загрузка...</div>
           ) : influencers.length === 0 ? (
-            <div className="text-center py-12 text-[13px] text-[#8a8a85]">Блогеров нет. Добавьте первого.</div>
+            <div className="text-center py-12 text-[13px] text-muted">Блогеров нет. Добавьте первого.</div>
           ) : (
             <div className="space-y-2">
               {influencers.map(inf => (
-                <div key={inf.id} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 flex items-center gap-4">
+                <div key={inf.id} className="bg-surface border border-line rounded-xl px-4 py-3 flex items-center gap-4">
                   <span className="text-[20px]">{PLATFORM_ICONS[inf.platform] ?? '👤'}</span>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <p className="text-[13px] font-semibold text-[#111110]">{inf.name}</p>
-                      {inf.handle && <span className="text-[11px] text-[#8a8a85]">@{inf.handle}</span>}
-                      {inf.niche && <span className="text-[11px] text-[#8a8a85]">· {inf.niche}</span>}
-                      {inf.city && <span className="text-[11px] text-[#8a8a85]">· {inf.city}</span>}
+                      <p className="text-[13px] font-semibold text-ink">{inf.name}</p>
+                      {inf.handle && <span className="text-[11px] text-muted">@{inf.handle}</span>}
+                      {inf.niche && <span className="text-[11px] text-muted">· {inf.niche}</span>}
+                      {inf.city && <span className="text-[11px] text-muted">· {inf.city}</span>}
                     </div>
-                    <div className="flex gap-4 text-[11px] text-[#6b6b66]">
+                    <div className="flex gap-4 text-[11px] text-ink-soft">
                       <span>{inf.followers.toLocaleString('ru')} подп.</span>
                       {inf.er_pct > 0 && <span>ER {inf.er_pct}%</span>}
                       {inf.cost_per_post > 0 && <span>{r(inf.cost_per_post)} ₽/пост</span>}
@@ -1133,7 +1133,7 @@ function InfluencersTab() {
                         className={`text-[10px] px-2 py-0.5 rounded-full transition-colors ${
                           inf.status === s
                             ? (INF_STATUS_COLORS[s] ?? 'bg-gray-100 text-gray-600') + ' font-semibold'
-                            : 'bg-[#f4f4f0] text-[#8a8a85]'
+                            : 'bg-[#f4f4f0] text-muted'
                         }`}>
                         {sl}
                       </button>
@@ -1150,42 +1150,42 @@ function InfluencersTab() {
         <div className="space-y-4">
           <div className="flex justify-end">
             <button onClick={() => setShowCampAdd(v => !v)}
-              className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
+              className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] font-medium hover:bg-[#333] transition-colors">
               + Добавить кампанию
             </button>
           </div>
 
           {showCampAdd && (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-3">
-              <p className="text-[13px] font-semibold text-[#111110]">Новая кампания</p>
+            <div className="bg-surface border border-line rounded-xl p-5 space-y-3">
+              <p className="text-[13px] font-semibold text-ink">Новая кампания</p>
               <div className="grid grid-cols-3 gap-3">
                 <select value={campForm.influencer_id} onChange={e => setCampForm(f => ({ ...f, influencer_id: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none">
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none">
                   <option value="">Блогер *</option>
                   {influencers.map(i => <option key={i.id} value={i.id}>{PLATFORM_ICONS[i.platform]} {i.name}</option>)}
                 </select>
                 <input placeholder="Название кампании *" value={campForm.title}
                   onChange={e => setCampForm(f => ({ ...f, title: e.target.value }))}
-                  className="col-span-2 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="col-span-2 border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-blue-300" />
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <input type="date" value={campForm.campaign_date}
                   onChange={e => setCampForm(f => ({ ...f, campaign_date: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Оплата ₽" value={campForm.payment} type="number"
                   onChange={e => setCampForm(f => ({ ...f, payment: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
                 <input placeholder="Стоимость изделия ₽" value={campForm.product_cost} type="number"
                   onChange={e => setCampForm(f => ({ ...f, product_cost: e.target.value }))}
-                  className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
+                  className="border border-line rounded-lg px-3 py-2 text-[13px] focus:outline-none" />
               </div>
               <div className="flex gap-2">
                 <button onClick={addCampaign} disabled={!campForm.title.trim() || !campForm.influencer_id || saving}
-                  className="px-4 py-2 bg-[#111110] text-white rounded-xl text-[12px] disabled:opacity-50">
+                  className="px-4 py-2 bg-ink text-white rounded-xl text-[12px] disabled:opacity-50">
                   {saving ? 'Сохранение...' : 'Создать'}
                 </button>
                 <button onClick={() => setShowCampAdd(false)}
-                  className="px-4 py-2 border border-[#e4e4e0] text-[#6b6b66] rounded-xl text-[12px]">
+                  className="px-4 py-2 border border-line text-ink-soft rounded-xl text-[12px]">
                   Отмена
                 </button>
               </div>
@@ -1193,7 +1193,7 @@ function InfluencersTab() {
           )}
 
           {campaigns.length === 0 ? (
-            <div className="text-center py-12 text-[13px] text-[#8a8a85]">Кампаний нет.</div>
+            <div className="text-center py-12 text-[13px] text-muted">Кампаний нет.</div>
           ) : (
             <div className="space-y-2">
               {campaigns.map(c => {
@@ -1201,26 +1201,26 @@ function InfluencersTab() {
                 const roi = totalCost > 0 ? ((c.revenue - totalCost) / totalCost * 100) : 0
                 const campInf = (c as unknown as { influencers?: { name: string; platform: string } }).influencers
                 return (
-                  <div key={c.id} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
+                  <div key={c.id} className="bg-surface border border-line rounded-xl px-4 py-3">
                     <div className="flex items-start justify-between gap-3">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-0.5">
-                          <p className="text-[13px] font-semibold text-[#111110]">{c.title}</p>
+                          <p className="text-[13px] font-semibold text-ink">{c.title}</p>
                           {campInf && (
-                            <span className="text-[11px] text-[#8a8a85]">
+                            <span className="text-[11px] text-muted">
                               {PLATFORM_ICONS[campInf.platform] ?? '👤'} {campInf.name}
                             </span>
                           )}
                           {c.campaign_date && (
-                            <span className="text-[11px] text-[#8a8a85]">{new Date(c.campaign_date).toLocaleDateString('ru')}</span>
+                            <span className="text-[11px] text-muted">{new Date(c.campaign_date).toLocaleDateString('ru')}</span>
                           )}
                         </div>
                         <div className="flex gap-4 text-[11px]">
-                          <span className="text-[#6b6b66]">Бюджет: {r(totalCost)} ₽</span>
-                          <span className="text-[#6b6b66]">Просмотры: {c.views.toLocaleString('ru')}</span>
-                          <span className="text-[#6b6b66]">Лиды: {c.leads}</span>
-                          <span className="text-[#6b6b66]">Заказы: {c.orders}</span>
-                          <span className="text-[#6b6b66]">Выручка: {r(c.revenue)} ₽</span>
+                          <span className="text-ink-soft">Бюджет: {r(totalCost)} ₽</span>
+                          <span className="text-ink-soft">Просмотры: {c.views.toLocaleString('ru')}</span>
+                          <span className="text-ink-soft">Лиды: {c.leads}</span>
+                          <span className="text-ink-soft">Заказы: {c.orders}</span>
+                          <span className="text-ink-soft">Выручка: {r(c.revenue)} ₽</span>
                           <span className={`font-semibold ${roi >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                             ROI: {roi >= 0 ? '+' : ''}{Math.round(roi)}%
                           </span>
@@ -1234,11 +1234,11 @@ function InfluencersTab() {
                         { key: 'orders', label: '📦' }, { key: 'revenue', label: '₽' },
                       ] as { key: keyof Campaign; label: string }[]).map(({ key, label }) => (
                         <label key={key as string} className="flex items-center gap-1 text-[11px]">
-                          <span className="text-[#8a8a85]">{label}</span>
+                          <span className="text-muted">{label}</span>
                           <input type="number" min="0"
                             defaultValue={c[key] as number}
                             onBlur={e => updateCampResult(c.id, { [key]: parseFloat(e.target.value) || 0 })}
-                            className="w-20 border border-[#e4e4e0] rounded px-1.5 py-0.5 text-[11px] focus:outline-none"
+                            className="w-20 border border-line rounded px-1.5 py-0.5 text-[11px] focus:outline-none"
                           />
                         </label>
                       ))}
@@ -1276,10 +1276,10 @@ export default function ProductLinePage() {
           <span className="text-[11px] px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-semibold uppercase tracking-wider">
             Admin only
           </span>
-          <span className="text-[11px] text-[#8a8a85]">Product Line Center</span>
+          <span className="text-[11px] text-muted">Product Line Center</span>
         </div>
-        <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Product Line</h1>
-        <p className="text-[13px] text-[#6b6b66] mt-0.5">
+        <h1 className="text-[22px] font-semibold text-ink tracking-tight">Product Line</h1>
+        <p className="text-[13px] text-ink-soft mt-0.5">
           Стратегический центр развития продуктовой линейки MGlass — от кастома к масштабируемому product brand
         </p>
       </div>
@@ -1289,7 +1289,7 @@ export default function ProductLinePage() {
         {TABS.map(t => (
           <button key={t.key} onClick={() => setTab(t.key)}
             className={`flex-1 py-2 rounded-lg text-[12px] font-medium transition-colors ${
-              tab === t.key ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
+              tab === t.key ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
             }`}>
             {t.label}
           </button>

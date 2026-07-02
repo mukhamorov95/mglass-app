@@ -51,20 +51,20 @@ export default function SettingsPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
     <div className="max-w-[800px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Финансовые настройки</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Налог и маржа для каждого типа продукта</p>
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Финансовые настройки</h1>
+        <p className="text-[13px] text-muted mt-0.5">Налог и маржа для каждого типа продукта</p>
       </div>
 
       {error && <p className="text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
 
       {rows.length === 0 && (
-        <p className="text-[13px] text-[#8a8a85]">Нет записей в таблице financial_settings</p>
+        <p className="text-[13px] text-muted">Нет записей в таблице financial_settings</p>
       )}
 
       <div className="space-y-4">
@@ -74,14 +74,14 @@ export default function SettingsPage() {
           const example = divisor > 0 ? Math.round(10000 / divisor) : 0
 
           return (
-            <div key={row.id} className="bg-white border border-[#e4e4e0] rounded-xl p-5">
+            <div key={row.id} className="bg-surface border border-line rounded-xl p-5">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h2 className="text-[14px] font-semibold text-[#111110]">{label}</h2>
-                  <p className="text-[11px] text-[#8a8a85] mt-0.5">id={row.id} · product_type={row.product_type ?? '—'} · tier={row.tier}</p>
+                  <h2 className="text-[14px] font-semibold text-ink">{label}</h2>
+                  <p className="text-[11px] text-muted mt-0.5">id={row.id} · product_type={row.product_type ?? '—'} · tier={row.tier}</p>
                 </div>
                 {example > 0 && (
-                  <span className="text-[12px] text-[#6b6b66] bg-[#f8f8f7] px-3 py-1.5 rounded-lg font-mono">
+                  <span className="text-[12px] text-ink-soft bg-canvas px-3 py-1.5 rounded-lg font-mono">
                     10 000 → {example.toLocaleString('ru-RU')} ₽
                   </span>
                 )}
@@ -100,12 +100,12 @@ export default function SettingsPage() {
                   ['sla_days_in_work',    'SLA в работе, дней'],
                 ] as [keyof FinancialSettings, string][]).map(([key, lbl]) => (
                   <div key={key}>
-                    <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">{lbl}</label>
+                    <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">{lbl}</label>
                     <input
                       type="number" min="0"
                       max={key === 'sla_days_approved' || key === 'sla_days_in_work' ? 365 : 100}
                       step={key === 'sla_days_approved' || key === 'sla_days_in_work' ? 1 : 0.5}
-                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#0071e3] transition-all"
+                      className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-[#0071e3] transition-all"
                       value={row[key] as number}
                       onChange={e => update(row.id, key, Number(e.target.value))}
                     />
@@ -114,7 +114,7 @@ export default function SettingsPage() {
               </div>
 
               <div className="flex items-center justify-between">
-                <p className="text-[11px] text-[#8a8a85]">
+                <p className="text-[11px] text-muted">
                   Формула: 10 000 / (1 − {row.tax_percent}% − {row.default_margin}%) = <strong>{example > 0 ? example.toLocaleString('ru-RU') : 'n/a'} ₽</strong>
                 </p>
                 <button
@@ -123,7 +123,7 @@ export default function SettingsPage() {
                   className={`text-[13px] font-medium px-5 py-2 rounded-lg transition-colors disabled:opacity-40 ${
                     saved === row.id
                       ? 'bg-green-600 text-white'
-                      : 'bg-[#111110] text-white hover:bg-[#2a2a28]'
+                      : 'bg-ink text-white hover:bg-[#2a2a28]'
                   }`}
                 >
                   {saved === row.id ? 'Сохранено ✓' : saving === row.id ? 'Сохранение...' : 'Сохранить'}

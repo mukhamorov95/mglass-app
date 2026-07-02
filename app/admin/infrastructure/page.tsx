@@ -227,7 +227,7 @@ function StatusDot({ status }: { status: 'online' | 'offline' | 'warning' }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span className={`w-2 h-2 rounded-full ${colors[status]}`} />
-      <span className="text-[12px] text-[#6b6b66]">{labels[status]}</span>
+      <span className="text-[12px] text-ink-soft">{labels[status]}</span>
     </span>
   )
 }
@@ -251,18 +251,18 @@ function OverviewTab() {
     <div className="space-y-8">
       {/* Status grid */}
       <div>
-        <h2 className="text-[13px] font-semibold text-[#111110] mb-3 uppercase tracking-wide">Статус сервисов</h2>
+        <h2 className="text-[13px] font-semibold text-ink mb-3 uppercase tracking-wide">Статус сервисов</h2>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           {SERVICES.map(s => (
-            <div key={s.id} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <div key={s.id} className="bg-surface border border-line rounded-xl p-4">
               <div className="flex items-start justify-between mb-2">
-                <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-bold ${s.color}`}>
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[15px] font-semibold ${s.color}`}>
                   {s.icon}
                 </span>
                 <StatusDot status={s.status} />
               </div>
-              <p className="text-[13px] font-semibold text-[#111110] mt-1">{s.name}</p>
-              <p className="text-[11px] text-[#8a8a85] mt-0.5">{s.category}</p>
+              <p className="text-[13px] font-semibold text-ink mt-1">{s.name}</p>
+              <p className="text-[11px] text-muted mt-0.5">{s.category}</p>
             </div>
           ))}
         </div>
@@ -270,8 +270,8 @@ function OverviewTab() {
 
       {/* Dependency flow */}
       <div>
-        <h2 className="text-[13px] font-semibold text-[#111110] mb-3 uppercase tracking-wide">Как всё связано</h2>
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6">
+        <h2 className="text-[13px] font-semibold text-ink mb-3 uppercase tracking-wide">Как всё связано</h2>
+        <div className="bg-surface border border-line rounded-xl p-6">
           <div className="flex flex-col items-center gap-0">
 
             {/* Row 1: GitHub */}
@@ -284,7 +284,7 @@ function OverviewTab() {
 
             {/* Row 3: MGlass App */}
             <div className="bg-blue-600 text-white rounded-xl px-6 py-3 text-center shadow-sm">
-              <p className="text-[13px] font-bold">MGlass App</p>
+              <p className="text-[13px] font-semibold">MGlass App</p>
               <p className="text-[11px] opacity-75">mglass.vercel.app</p>
             </div>
 
@@ -326,7 +326,7 @@ function OverviewTab() {
 
       {/* Quick links */}
       <div>
-        <h2 className="text-[13px] font-semibold text-[#111110] mb-3 uppercase tracking-wide">Быстрые ссылки</h2>
+        <h2 className="text-[13px] font-semibold text-ink mb-3 uppercase tracking-wide">Быстрые ссылки</h2>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
           {[
             { label: 'Vercel Dashboard', url: 'https://vercel.com/dashboard', icon: '▲', color: 'bg-slate-800' },
@@ -337,12 +337,12 @@ function OverviewTab() {
             { label: 'AmoCRM', url: 'https://mglass.amocrm.ru', icon: '📊', color: 'bg-violet-600' },
           ].map(link => (
             <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-3 bg-white border border-[#e4e4e0] rounded-xl p-4 hover:border-[#111110] hover:shadow-sm transition-all group">
-              <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[13px] font-bold text-white flex-shrink-0 ${link.color}`}>
+              className="flex items-center gap-3 bg-surface border border-line rounded-xl p-4 hover:border-ink hover:shadow-sm transition-all group">
+              <span className={`w-8 h-8 rounded-lg flex items-center justify-center text-[13px] font-semibold text-white flex-shrink-0 ${link.color}`}>
                 {link.icon}
               </span>
-              <span className="text-[13px] font-medium text-[#111110] group-hover:text-blue-600">{link.label}</span>
-              <svg className="w-3.5 h-3.5 text-[#c4c4be] ml-auto group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <span className="text-[13px] font-medium text-ink group-hover:text-blue-600">{link.label}</span>
+              <svg className="w-3.5 h-3.5 text-faint ml-auto group-hover:text-blue-400 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
               </svg>
             </a>
@@ -356,8 +356,8 @@ function OverviewTab() {
 function FlowBox({ label, sub, color }: { label: string; sub: string; color: string }) {
   return (
     <div className={`${color} rounded-xl px-5 py-2.5 text-center shadow-sm min-w-[120px]`}>
-      <p className="text-[12px] font-bold">{label}</p>
-      <p className="text-[10px] opacity-70 mt-0.5">{sub}</p>
+      <p className="text-[12px] font-semibold">{label}</p>
+      <p className="text-[11px] opacity-70 mt-0.5">{sub}</p>
     </div>
   )
 }
@@ -365,11 +365,11 @@ function FlowBox({ label, sub, color }: { label: string; sub: string; color: str
 function FlowArrow({ label }: { label: string }) {
   return (
     <div className="flex flex-col items-center my-1">
-      <div className="w-px h-4 bg-[#e4e4e0]" />
-      <svg className="w-3 h-3 text-[#c4c4be] -mt-1" fill="currentColor" viewBox="0 0 24 24">
+      <div className="w-px h-4 bg-line" />
+      <svg className="w-3 h-3 text-faint -mt-1" fill="currentColor" viewBox="0 0 24 24">
         <path d="M12 16l-6-6h12z" />
       </svg>
-      {label && <p className="text-[10px] text-[#9a9a95] -mt-0.5">{label}</p>}
+      {label && <p className="text-[11px] text-muted -mt-0.5">{label}</p>}
     </div>
   )
 }
@@ -380,23 +380,23 @@ function ServicesTab() {
   return (
     <div className="space-y-4">
       {SERVICES.map(s => (
-        <div key={s.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+        <div key={s.id} className="bg-surface border border-line rounded-xl overflow-hidden">
           <button
             onClick={() => setExpanded(expanded === s.id ? null : s.id)}
-            className="w-full flex items-center gap-4 p-5 hover:bg-[#f8f8f7] transition-colors text-left">
-            <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-[16px] font-bold flex-shrink-0 ${s.color}`}>
+            className="w-full flex items-center gap-4 p-5 hover:bg-canvas transition-colors text-left">
+            <span className={`w-10 h-10 rounded-xl flex items-center justify-center text-[16px] font-semibold flex-shrink-0 ${s.color}`}>
               {s.icon}
             </span>
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <p className="text-[14px] font-semibold text-[#111110]">{s.name}</p>
+                <p className="text-[14px] font-semibold text-ink">{s.name}</p>
                 <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${s.badge}`}>{s.category}</span>
               </div>
-              <p className="text-[12px] text-[#6b6b66] mt-0.5 line-clamp-1">{s.description}</p>
+              <p className="text-[12px] text-ink-soft mt-0.5 line-clamp-1">{s.description}</p>
             </div>
             <div className="flex items-center gap-3 flex-shrink-0">
               <StatusDot status={s.status} />
-              <svg className={`w-4 h-4 text-[#c4c4be] transition-transform ${expanded === s.id ? 'rotate-180' : ''}`}
+              <svg className={`w-4 h-4 text-faint transition-transform ${expanded === s.id ? 'rotate-180' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
@@ -404,17 +404,17 @@ function ServicesTab() {
           </button>
 
           {expanded === s.id && (
-            <div className="border-t border-[#f0f0ec] p-5 space-y-5">
-              <p className="text-[13px] text-[#6b6b66]">{s.description}</p>
+            <div className="border-t border-line-soft p-5 space-y-5">
+              <p className="text-[13px] text-ink-soft">{s.description}</p>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {/* Отвечает за */}
                 <div>
-                  <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-2">Отвечает за</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Отвечает за</p>
                   <ul className="space-y-1">
                     {s.responsible.map((r, i) => (
-                      <li key={i} className="flex items-start gap-2 text-[13px] text-[#6b6b66]">
-                        <span className="text-[#c4c4be] mt-0.5">—</span>
+                      <li key={i} className="flex items-start gap-2 text-[13px] text-ink-soft">
+                        <span className="text-faint mt-0.5">—</span>
                         {r}
                       </li>
                     ))}
@@ -424,7 +424,7 @@ function ServicesTab() {
                 {/* Ссылки */}
                 {s.links.length > 0 && (
                   <div>
-                    <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-2">Ссылки</p>
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Ссылки</p>
                     <div className="space-y-2">
                       {s.links.map((link, i) => (
                         <div key={i}>
@@ -439,10 +439,10 @@ function ServicesTab() {
               {/* ENV */}
               {s.envVars.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-2">Переменные окружения</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Переменные окружения</p>
                   <div className="flex flex-wrap gap-2">
                     {s.envVars.map(v => (
-                      <code key={v} className="text-[11px] bg-[#f0f0ec] text-[#6b6b66] px-2 py-1 rounded-md font-mono">{v}</code>
+                      <code key={v} className="text-[11px] bg-line-soft text-ink-soft px-2 py-1 rounded-md font-mono">{v}</code>
                     ))}
                   </div>
                 </div>
@@ -451,7 +451,7 @@ function ServicesTab() {
               {/* Dependencies */}
               {s.dependsOn.length > 0 && (
                 <div>
-                  <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-2">Зависит от</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-2">Зависит от</p>
                   <div className="flex flex-wrap gap-2">
                     {s.dependsOn.map(d => (
                       <span key={d} className="text-[11px] bg-amber-50 text-amber-700 px-2 py-1 rounded-md font-medium">{d}</span>
@@ -482,28 +482,28 @@ function EnvTab() {
         </div>
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         <table className="w-full">
           <thead>
-            <tr className="border-b border-[#f0f0ec] bg-[#f8f8f7]">
-              <th className="text-left text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider px-4 py-3">Переменная</th>
-              <th className="text-left text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider px-4 py-3">Назначение</th>
-              <th className="text-left text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider px-4 py-3">Сервис</th>
-              <th className="text-left text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider px-4 py-3">Тип</th>
+            <tr className="border-b border-line-soft bg-canvas">
+              <th className="text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-4 py-3">Переменная</th>
+              <th className="text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-4 py-3">Назначение</th>
+              <th className="text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-4 py-3">Сервис</th>
+              <th className="text-left text-[11px] font-semibold text-muted uppercase tracking-wider px-4 py-3">Тип</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f0f0ec]">
+          <tbody className="divide-y divide-line-soft">
             {ENV_VARS.map(v => (
-              <tr key={v.name} className="hover:bg-[#f8f8f7] transition-colors">
+              <tr key={v.name} className="hover:bg-canvas transition-colors">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-2">
-                    <code className="text-[11px] font-mono text-[#111110] bg-[#f0f0ec] px-2 py-1 rounded">{v.name}</code>
-                    {v.critical && <span className="text-[10px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-semibold">критично</span>}
+                    <code className="text-[11px] font-mono text-ink bg-line-soft px-2 py-1 rounded">{v.name}</code>
+                    {v.critical && <span className="text-[11px] bg-red-50 text-red-600 px-1.5 py-0.5 rounded font-semibold">критично</span>}
                   </div>
                 </td>
-                <td className="px-4 py-3 text-[13px] text-[#6b6b66]">{v.desc}</td>
+                <td className="px-4 py-3 text-[13px] text-ink-soft">{v.desc}</td>
                 <td className="px-4 py-3">
-                  <span className="text-[12px] text-[#6b6b66] font-medium">{v.service}</span>
+                  <span className="text-[12px] text-ink-soft font-medium">{v.service}</span>
                 </td>
                 <td className="px-4 py-3">
                   {v.secret
@@ -536,31 +536,31 @@ function DiagnosticsTab() {
       </div>
 
       {TROUBLESHOOTING.map(section => (
-        <div key={section.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+        <div key={section.id} className="bg-surface border border-line rounded-xl overflow-hidden">
           <button
             onClick={() => setExpanded(expanded === section.id ? null : section.id)}
-            className="w-full flex items-center justify-between p-5 hover:bg-[#f8f8f7] transition-colors text-left">
-            <p className="text-[14px] font-semibold text-[#111110]">{section.title}</p>
-            <svg className={`w-4 h-4 text-[#c4c4be] flex-shrink-0 transition-transform ${expanded === section.id ? 'rotate-180' : ''}`}
+            className="w-full flex items-center justify-between p-5 hover:bg-canvas transition-colors text-left">
+            <p className="text-[14px] font-semibold text-ink">{section.title}</p>
+            <svg className={`w-4 h-4 text-faint flex-shrink-0 transition-transform ${expanded === section.id ? 'rotate-180' : ''}`}
               fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
             </svg>
           </button>
 
           {expanded === section.id && (
-            <div className="border-t border-[#f0f0ec] p-5">
+            <div className="border-t border-line-soft p-5">
               <ol className="space-y-3">
                 {section.steps.map((step, i) => (
                   <li key={i} className="flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#f0f0ec] text-[#6b6b66] flex items-center justify-center text-[11px] font-bold flex-shrink-0 mt-0.5">
+                    <span className="w-6 h-6 rounded-full bg-line-soft text-ink-soft flex items-center justify-center text-[11px] font-semibold flex-shrink-0 mt-0.5">
                       {i + 1}
                     </span>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[13px] font-semibold text-[#111110]">{step.step}</span>
+                        <span className="text-[13px] font-semibold text-ink">{step.step}</span>
                         {step.url && <ExternalLink url={step.url} label="открыть" />}
                       </div>
-                      <p className="text-[12px] text-[#6b6b66] mt-0.5">{step.action}</p>
+                      <p className="text-[12px] text-ink-soft mt-0.5">{step.action}</p>
                     </div>
                   </li>
                 ))}
@@ -591,8 +591,8 @@ function InstructionsTab() {
           <button key={s.id} onClick={() => setSection(s.id)}
             className={`w-full text-left px-3 py-2 rounded-lg text-[13px] transition-colors ${
               section === s.id
-                ? 'bg-[#111110] text-white font-semibold'
-                : 'text-[#6b6b66] hover:bg-[#f0f0ec] hover:text-[#111110]'
+                ? 'bg-ink text-white font-semibold'
+                : 'text-ink-soft hover:bg-line-soft hover:text-ink'
             }`}>
             {s.label}
           </button>
@@ -603,8 +603,8 @@ function InstructionsTab() {
       <div className="flex-1 min-w-0">
         {section === 'deploy' && (
           <div className="space-y-4">
-            <h2 className="text-[16px] font-bold text-[#111110]">Как обновляется система</h2>
-            <p className="text-[13px] text-[#6b6b66]">
+            <h2 className="text-[16px] font-semibold text-ink">Как обновляется система</h2>
+            <p className="text-[13px] text-ink-soft">
               MGlass работает на автоматическом CI/CD — изменения в коде автоматически деплоятся на production.
             </p>
 
@@ -616,30 +616,30 @@ function InstructionsTab() {
                 { num: 4, title: 'Vercel автодеплой', desc: 'Vercel автоматически замечает push и запускает сборку проекта (~2-3 мин)', icon: '⚡' },
                 { num: 5, title: 'Production обновлён', desc: 'После успешной сборки — mglass.vercel.app обновляется автоматически', icon: '✅' },
               ].map(step => (
-                <div key={step.num} className="flex items-start gap-4 bg-white border border-[#e4e4e0] rounded-xl p-4">
+                <div key={step.num} className="flex items-start gap-4 bg-surface border border-line rounded-xl p-4">
                   <span className="text-[20px] flex-shrink-0">{step.icon}</span>
                   <div>
-                    <p className="text-[13px] font-semibold text-[#111110]">{step.num}. {step.title}</p>
-                    <p className="text-[12px] text-[#6b6b66] mt-0.5">{step.desc}</p>
+                    <p className="text-[13px] font-semibold text-ink">{step.num}. {step.title}</p>
+                    <p className="text-[12px] text-ink-soft mt-0.5">{step.desc}</p>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-xl p-4 space-y-2">
-              <p className="text-[13px] font-semibold text-[#111110]">Где смотреть статус деплоя</p>
+            <div className="bg-canvas border border-line rounded-xl p-4 space-y-2">
+              <p className="text-[13px] font-semibold text-ink">Где смотреть статус деплоя</p>
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2">
                   <ExternalLink url="https://vercel.com/mukhamorov95-1222/mglass-app/deployments" label="Список деплоев" />
-                  <span className="text-[12px] text-[#8a8a85]">— видно Ready / Error</span>
+                  <span className="text-[12px] text-muted">— видно Ready / Error</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <ExternalLink url="https://vercel.com/mukhamorov95-1222/mglass-app/logs" label="Runtime Logs" />
-                  <span className="text-[12px] text-[#8a8a85]">— ошибки в реальном времени</span>
+                  <span className="text-[12px] text-muted">— ошибки в реальном времени</span>
                 </div>
               </div>
-              <p className="text-[13px] font-semibold text-[#111110] mt-3">Как откатить версию</p>
-              <p className="text-[12px] text-[#6b6b66]">
+              <p className="text-[13px] font-semibold text-ink mt-3">Как откатить версию</p>
+              <p className="text-[12px] text-ink-soft">
                 Vercel Dashboard → Deployments → найди предыдущий "Ready" деплой → нажми три точки → "Promote to Production".
                 Откат занимает ~30 секунд.
               </p>
@@ -649,7 +649,7 @@ function InstructionsTab() {
 
         {section === 'backup' && (
           <div className="space-y-4">
-            <h2 className="text-[16px] font-bold text-[#111110]">Backup и восстановление</h2>
+            <h2 className="text-[16px] font-semibold text-ink">Backup и восстановление</h2>
 
             <div className="grid grid-cols-1 gap-4">
               {[
@@ -688,15 +688,15 @@ function InstructionsTab() {
                   link: { label: 'ENV в Vercel', url: 'https://vercel.com/mukhamorov95-1222/mglass-app/settings/environment-variables' },
                 },
               ].map(item => (
-                <div key={item.title} className="bg-white border border-[#e4e4e0] rounded-xl p-5">
+                <div key={item.title} className="bg-surface border border-line rounded-xl p-5">
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-[14px] font-semibold text-[#111110]">{item.title}</p>
+                    <p className="text-[14px] font-semibold text-ink">{item.title}</p>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${item.statusColor}`}>{item.status}</span>
                   </div>
                   <ul className="space-y-1.5 mb-3">
                     {item.items.map((i, idx) => (
-                      <li key={idx} className="flex items-start gap-2 text-[13px] text-[#6b6b66]">
-                        <span className="text-[#c4c4be] mt-0.5 flex-shrink-0">—</span>
+                      <li key={idx} className="flex items-start gap-2 text-[13px] text-ink-soft">
+                        <span className="text-faint mt-0.5 flex-shrink-0">—</span>
                         {i}
                       </li>
                     ))}
@@ -710,8 +710,8 @@ function InstructionsTab() {
 
         {section === 'ai' && (
           <div className="space-y-4">
-            <h2 className="text-[16px] font-bold text-[#111110]">AI Memory / Knowledge Base</h2>
-            <p className="text-[13px] text-[#6b6b66]">Где хранятся знания AI и как ими управлять.</p>
+            <h2 className="text-[16px] font-semibold text-ink">AI Memory / Knowledge Base</h2>
+            <p className="text-[13px] text-ink-soft">Где хранятся знания AI и как ими управлять.</p>
 
             <div className="space-y-3">
               {[
@@ -746,16 +746,16 @@ function InstructionsTab() {
                   editWhere: 'В коде → деплой',
                 },
               ].map(item => (
-                <div key={item.title} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-                  <p className="text-[13px] font-semibold text-[#111110] mb-1">{item.title}</p>
-                  <p className="text-[12px] text-[#6b6b66] mb-2">{item.desc}</p>
+                <div key={item.title} className="bg-surface border border-line rounded-xl p-4">
+                  <p className="text-[13px] font-semibold text-ink mb-1">{item.title}</p>
+                  <p className="text-[12px] text-ink-soft mb-2">{item.desc}</p>
                   <div className="flex flex-wrap gap-3">
                     <div>
-                      <span className="text-[10px] text-[#9a9a95] uppercase font-bold">Где лежит:</span>
-                      <code className="block text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-2 py-1 rounded mt-1">{item.location}</code>
+                      <span className="text-[11px] text-muted uppercase font-semibold">Где лежит:</span>
+                      <code className="block text-[11px] font-mono text-ink-soft bg-line-soft px-2 py-1 rounded mt-1">{item.location}</code>
                     </div>
                     <div>
-                      <span className="text-[10px] text-[#9a9a95] uppercase font-bold">Как изменить:</span>
+                      <span className="text-[11px] text-muted uppercase font-semibold">Как изменить:</span>
                       <p className="text-[12px] text-blue-600 font-medium mt-1">{item.editWhere}</p>
                     </div>
                   </div>
@@ -767,7 +767,7 @@ function InstructionsTab() {
 
         {section === 'risks' && (
           <div className="space-y-4">
-            <h2 className="text-[16px] font-bold text-[#111110]">Риски и рекомендации</h2>
+            <h2 className="text-[16px] font-semibold text-ink">Риски и рекомендации</h2>
 
             <div className="space-y-3">
               {[
@@ -778,21 +778,21 @@ function InstructionsTab() {
                 { severity: 'low', title: 'Отсутствует audit log', desc: 'Нет записей кто что изменил в системе.', fix: 'Добавить таблицу audit_log в Supabase с триггерами на ключевые таблицы', status: '⚠️ можно позже' },
                 { severity: 'low', title: 'Ротация API ключей', desc: 'API ключи не ротируются.', fix: 'Раз в 6 месяцев обновлять ключи Anthropic, OpenAI, Telegram → обновить в Vercel ENV', status: '⚠️ можно позже' },
               ].map(risk => (
-                <div key={risk.title} className={`bg-white border rounded-xl p-4 ${
-                  risk.severity === 'high' ? 'border-red-200' : risk.severity === 'medium' ? 'border-amber-200' : 'border-[#e4e4e0]'
+                <div key={risk.title} className={`bg-surface border rounded-xl p-4 ${
+                  risk.severity === 'high' ? 'border-red-200' : risk.severity === 'medium' ? 'border-amber-200' : 'border-line'
                 }`}>
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <p className="text-[13px] font-semibold text-[#111110]">{risk.title}</p>
+                        <p className="text-[13px] font-semibold text-ink">{risk.title}</p>
                         <span className={`text-[11px] px-2 py-0.5 rounded font-medium ${
                           risk.severity === 'high' ? 'bg-red-50 text-red-600' :
                           risk.severity === 'medium' ? 'bg-amber-50 text-amber-700' :
                           'bg-gray-50 text-gray-600'
                         }`}>{risk.status}</span>
                       </div>
-                      <p className="text-[12px] text-[#6b6b66] mb-2">{risk.desc}</p>
-                      <p className="text-[12px] text-[#111110]"><strong>Как исправить:</strong> {risk.fix}</p>
+                      <p className="text-[12px] text-ink-soft mb-2">{risk.desc}</p>
+                      <p className="text-[12px] text-ink"><strong>Как исправить:</strong> {risk.fix}</p>
                     </div>
                   </div>
                 </div>
@@ -822,18 +822,18 @@ export default function InfrastructurePage() {
     <div className="max-w-5xl mx-auto px-6 py-8">
       {/* Header */}
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110]">Технический центр</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Карта инфраструктуры MGlass — сервисы, ключи, диагностика, инструкции</p>
+        <h1 className="text-[20px] font-semibold text-ink">Технический центр</h1>
+        <p className="text-[13px] text-muted mt-0.5">Карта инфраструктуры MGlass — сервисы, ключи, диагностика, инструкции</p>
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-[#f0f0ec] rounded-xl p-1 overflow-x-auto">
+      <div className="flex gap-1 mb-6 bg-line-soft rounded-xl p-1 overflow-x-auto">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-shrink-0 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
               tab === t.id
-                ? 'bg-white text-[#111110] shadow-sm'
-                : 'text-[#6b6b66] hover:text-[#111110]'
+                ? 'bg-surface text-ink shadow-sm'
+                : 'text-ink-soft hover:text-ink'
             }`}>
             {t.label}
           </button>

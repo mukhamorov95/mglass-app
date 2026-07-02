@@ -27,7 +27,7 @@ const ORG = [
     name: 'Владислав',
     color: 'bg-[#111110] text-white',
     accent: 'border-[#111110]',
-    textColor: 'text-[#111110]',
+    textColor: 'text-ink',
     level: 0,
     systemAccess: ['Дашборд собственника', 'Вся аналитика', 'Финансовые настройки', 'Технический центр', 'Telegram-бот'],
     missing: ['Дашборд в реальном времени', 'P&L отчёт', 'Алерты аномалий'],
@@ -234,10 +234,10 @@ function OrgCard({ person, expanded, onToggle }: {
   const done = person.systemAccess.length
   const missing = person.missing.length
   return (
-    <div className={`border-2 rounded-xl overflow-hidden transition-shadow hover:shadow-md ${person.accent} bg-white`} style={{ minWidth: 200 }}>
+    <div className={`border-2 rounded-xl overflow-hidden transition-shadow hover:shadow-md ${person.accent} bg-surface`} style={{ minWidth: 200 }}>
       <button onClick={onToggle} className="w-full text-left">
         <div className={`px-4 py-3 ${person.color}`}>
-          <p className="text-[13px] font-bold">{person.title}</p>
+          <p className="text-[13px] font-semibold">{person.title}</p>
           {'name' in person && <p className="text-[11px] opacity-70 mt-0.5">{(person as any).name}</p>}
         </div>
         <div className="px-4 py-2 flex items-center justify-between">
@@ -245,23 +245,23 @@ function OrgCard({ person, expanded, onToggle }: {
             <span className="text-[11px] bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full font-semibold">✓ {done}</span>
             <span className="text-[11px] bg-red-50 text-red-600 px-2 py-0.5 rounded-full font-semibold">! {missing}</span>
           </div>
-          <svg className={`w-3.5 h-3.5 text-[#9a9a95] transition-transform ${expanded ? 'rotate-180' : ''}`}
+          <svg className={`w-3.5 h-3.5 text-muted transition-transform ${expanded ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
           </svg>
         </div>
       </button>
       {expanded && (
-        <div className="px-4 pb-4 border-t border-[#f0f0ec]">
-          <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider mt-3 mb-1.5">В системе есть</p>
+        <div className="px-4 pb-4 border-t border-line-soft">
+          <p className="text-[11px] font-semibold text-emerald-600 uppercase tracking-wider mt-3 mb-1.5">В системе есть</p>
           {person.systemAccess.map((a, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[12px] text-[#6b6b66] mb-1">
+            <div key={i} className="flex items-center gap-1.5 text-[12px] text-ink-soft mb-1">
               <span className="text-emerald-500 flex-shrink-0">✓</span>{a}
             </div>
           ))}
-          <p className="text-[10px] font-bold text-red-500 uppercase tracking-wider mt-3 mb-1.5">Нужно добавить</p>
+          <p className="text-[11px] font-semibold text-red-500 uppercase tracking-wider mt-3 mb-1.5">Нужно добавить</p>
           {person.missing.map((m, i) => (
-            <div key={i} className="flex items-center gap-1.5 text-[12px] text-[#6b6b66] mb-1">
+            <div key={i} className="flex items-center gap-1.5 text-[12px] text-ink-soft mb-1">
               <span className="text-red-400 flex-shrink-0">—</span>{m}
             </div>
           ))}
@@ -290,23 +290,23 @@ function OrgTab() {
     <div className="space-y-8">
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4">
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-          <p className="text-[28px] font-bold text-[#111110]">{ORG.length}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">ролей в оргструктуре</p>
+        <div className="bg-surface border border-line rounded-xl p-4 text-center">
+          <p className="text-[28px] font-semibold text-ink">{ORG.length}</p>
+          <p className="text-[12px] text-muted mt-0.5">ролей в оргструктуре</p>
         </div>
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-          <p className="text-[28px] font-bold text-emerald-600">{totalDone}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">функций уже работает</p>
+        <div className="bg-surface border border-line rounded-xl p-4 text-center">
+          <p className="text-[28px] font-semibold text-emerald-600">{totalDone}</p>
+          <p className="text-[12px] text-muted mt-0.5">функций уже работает</p>
         </div>
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-          <p className="text-[28px] font-bold text-red-500">{totalMissing}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">функций нужно добавить</p>
+        <div className="bg-surface border border-line rounded-xl p-4 text-center">
+          <p className="text-[28px] font-semibold text-red-500">{totalMissing}</p>
+          <p className="text-[12px] text-muted mt-0.5">функций нужно добавить</p>
         </div>
       </div>
 
       {/* Org tree */}
       <div>
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-4">
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-4">
           Нажми на карточку — увидишь что есть и чего не хватает для этой роли
         </p>
 
@@ -319,17 +319,17 @@ function OrgTab() {
 
         {/* Connector */}
         <div className="flex justify-center mb-0">
-          <div className="w-px h-6 bg-[#e4e4e0]" />
+          <div className="w-px h-6 bg-line" />
         </div>
         <div className="flex justify-center mb-4">
-          <div className="h-px bg-[#e4e4e0]" style={{ width: '90%' }} />
+          <div className="h-px bg-line" style={{ width: '90%' }} />
         </div>
 
         {/* Level 1 */}
         <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 mb-2">
           {level1.map(r => (
             <div key={r.id} className="flex flex-col items-center">
-              <div className="w-px h-4 bg-[#e4e4e0] mb-1" />
+              <div className="w-px h-4 bg-line mb-1" />
               <OrgCard person={r} expanded={expanded.has(r.id)} onToggle={() => toggle(r.id)} />
             </div>
           ))}
@@ -338,15 +338,15 @@ function OrgTab() {
         {/* Level 2 */}
         <div className="mt-6">
           <div className="flex justify-center mb-1">
-            <div className="w-px h-4 bg-[#e4e4e0]" />
+            <div className="w-px h-4 bg-line" />
           </div>
           <div className="flex justify-center mb-4">
-            <div className="h-px bg-[#e4e4e0]" style={{ width: '70%' }} />
+            <div className="h-px bg-line" style={{ width: '70%' }} />
           </div>
           <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3">
             {level2.map(r => (
               <div key={r.id} className="flex flex-col items-center">
-                <div className="w-px h-4 bg-[#e4e4e0] mb-1" />
+                <div className="w-px h-4 bg-line mb-1" />
                 <OrgCard person={r} expanded={expanded.has(r.id)} onToggle={() => toggle(r.id)} />
               </div>
             ))}
@@ -355,14 +355,14 @@ function OrgTab() {
       </div>
 
       {/* Legend */}
-      <div className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-xl p-4">
-        <p className="text-[12px] font-semibold text-[#111110] mb-2">Легенда</p>
+      <div className="bg-canvas border border-line rounded-xl p-4">
+        <p className="text-[12px] font-semibold text-ink mb-2">Легенда</p>
         <div className="flex flex-wrap gap-4">
-          <div className="flex items-center gap-2 text-[12px] text-[#6b6b66]">
+          <div className="flex items-center gap-2 text-[12px] text-ink-soft">
             <span className="w-4 h-4 bg-emerald-50 border-2 border-emerald-500 rounded" />
             Цифра — сколько функций системы уже доступно этой роли
           </div>
-          <div className="flex items-center gap-2 text-[12px] text-[#6b6b66]">
+          <div className="flex items-center gap-2 text-[12px] text-ink-soft">
             <span className="w-4 h-4 bg-red-50 border-2 border-red-500 rounded" />
             Цифра — сколько функций нужно добавить
           </div>
@@ -419,15 +419,15 @@ function RoadmapTab() {
   return (
     <div className="space-y-6">
       {/* Progress bar */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
+      <div className="bg-surface border border-line rounded-xl p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-[14px] font-bold text-[#111110]">Общий прогресс внедрения</p>
-            <p className="text-[12px] text-[#8a8a85] mt-0.5">{doneCount} из {totalCount} задач выполнено{progressCount > 0 ? `, ${progressCount} в работе` : ''}</p>
+            <p className="text-[14px] font-semibold text-ink">Общий прогресс внедрения</p>
+            <p className="text-[12px] text-muted mt-0.5">{doneCount} из {totalCount} задач выполнено{progressCount > 0 ? `, ${progressCount} в работе` : ''}</p>
           </div>
-          <p className="text-[28px] font-bold text-[#111110]">{pct}%</p>
+          <p className="text-[28px] font-semibold text-ink">{pct}%</p>
         </div>
-        <div className="h-3 bg-[#f0f0ec] rounded-full overflow-hidden">
+        <div className="h-3 bg-line-soft rounded-full overflow-hidden">
           <div
             className="h-full bg-emerald-500 rounded-full transition-all duration-500"
             style={{ width: `${pct}%` }}
@@ -439,8 +439,8 @@ function RoadmapTab() {
             const done  = tasks.filter(t => getStatus(t) === 'done').length
             return (
               <div key={p.phase} className="text-center">
-                <p className="text-[11px] font-semibold text-[#6b6b66]">{p.label.split(' — ')[1]}</p>
-                <p className="text-[12px] font-bold text-[#111110] mt-0.5">{done}/{tasks.length}</p>
+                <p className="text-[11px] font-semibold text-ink-soft">{p.label.split(' — ')[1]}</p>
+                <p className="text-[12px] font-semibold text-ink mt-0.5">{done}/{tasks.length}</p>
               </div>
             )
           })}
@@ -451,13 +451,13 @@ function RoadmapTab() {
       <div className="flex gap-2 flex-wrap">
         <button
           onClick={() => setFilterRole('all')}
-          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterRole === 'all' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+          className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterRole === 'all' ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-line'}`}>
           Все роли
         </button>
         {allRoles.map(role => (
           <button key={role}
             onClick={() => setFilterRole(role)}
-            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterRole === role ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+            className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filterRole === role ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-line'}`}>
             {role}
           </button>
         ))}
@@ -473,7 +473,7 @@ function RoadmapTab() {
             <div className="px-5 py-3 flex items-center justify-between border-b border-current border-opacity-20">
               <div className="flex items-center gap-2">
                 <span className={`w-2.5 h-2.5 rounded-full ${dot}`} />
-                <p className="text-[13px] font-bold text-[#111110]">{label}</p>
+                <p className="text-[13px] font-semibold text-ink">{label}</p>
               </div>
               <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold ${badge}`}>
                 {phaseDone}/{tasks.length} готово
@@ -498,19 +498,19 @@ function RoadmapTab() {
                     {/* Content */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-start gap-2 flex-wrap">
-                        <p className={`text-[13px] font-semibold text-[#111110] ${status === 'done' ? 'line-through text-[#9a9a95]' : ''}`}>
+                        <p className={`text-[13px] font-semibold text-ink ${status === 'done' ? 'line-through text-muted' : ''}`}>
                           {task.title}
                         </p>
                         {task.effort !== '—' && (
-                          <span className="text-[10px] bg-white border border-[#e4e4e0] text-[#8a8a85] px-1.5 py-0.5 rounded font-medium flex-shrink-0">
+                          <span className="text-[11px] bg-surface border border-line text-muted px-1.5 py-0.5 rounded font-medium flex-shrink-0">
                             ~{task.effort}
                           </span>
                         )}
                       </div>
-                      <p className="text-[12px] text-[#6b6b66] mt-0.5">{task.desc}</p>
+                      <p className="text-[12px] text-ink-soft mt-0.5">{task.desc}</p>
                       <div className="flex gap-1.5 mt-1.5 flex-wrap">
                         {task.roles.map(role => (
-                          <span key={role} className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[role] ?? 'bg-gray-100 text-gray-600'}`}>
+                          <span key={role} className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${ROLE_COLORS[role] ?? 'bg-gray-100 text-gray-600'}`}>
                             {role}
                           </span>
                         ))}
@@ -554,11 +554,11 @@ function ProgressTab() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
-          <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Прогресс по ролям</p>
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
+        <div className="px-5 py-3 bg-canvas border-b border-line">
+          <p className="text-[12px] font-semibold text-muted uppercase tracking-wider">Прогресс по ролям</p>
         </div>
-        <div className="divide-y divide-[#f0f0ec]">
+        <div className="divide-y divide-line-soft">
           {byRole.map(r => {
             const pct = r.total > 0 ? Math.round((r.done / r.total) * 100) : 0
             return (
@@ -567,14 +567,14 @@ function ProgressTab() {
                   <span className={`text-[12px] px-2.5 py-1 rounded-full font-semibold ${ROLE_COLORS[r.role] ?? 'bg-gray-100 text-gray-700'}`}>
                     {r.role}
                   </span>
-                  <div className="flex items-center gap-3 text-[12px] text-[#8a8a85]">
+                  <div className="flex items-center gap-3 text-[12px] text-muted">
                     <span className="text-emerald-600 font-semibold">{r.done} готово</span>
                     {r.active > 0 && <span className="text-blue-600 font-semibold">{r.active} в работе</span>}
                     <span>{r.pending} ожидает</span>
-                    <span className="font-bold text-[#111110] w-10 text-right">{pct}%</span>
+                    <span className="font-semibold text-ink w-10 text-right">{pct}%</span>
                   </div>
                 </div>
-                <div className="h-2 bg-[#f0f0ec] rounded-full overflow-hidden">
+                <div className="h-2 bg-line-soft rounded-full overflow-hidden">
                   <div className="h-full flex">
                     <div className="h-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} />
                     {r.active > 0 && (
@@ -589,25 +589,25 @@ function ProgressTab() {
       </div>
 
       {/* Next actions */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
-          <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">Следующие 7 задач для запуска</p>
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
+        <div className="px-5 py-3 bg-canvas border-b border-line">
+          <p className="text-[12px] font-semibold text-muted uppercase tracking-wider">Следующие 7 задач для запуска</p>
         </div>
-        <div className="divide-y divide-[#f0f0ec]">
+        <div className="divide-y divide-line-soft">
           {TASKS.filter(t => (statuses[t.id] ?? t.defaultStatus) === 'planned' && t.phase > 0)
             .slice(0, 7)
             .map((task, i) => {
               const meta = PHASE_META.find(p => p.phase === task.phase)!
               return (
                 <div key={task.id} className="px-5 py-3.5 flex items-center gap-4">
-                  <span className="text-[13px] font-bold text-[#c4c4be] w-5 flex-shrink-0">{i + 1}</span>
+                  <span className="text-[13px] font-semibold text-faint w-5 flex-shrink-0">{i + 1}</span>
                   <div className="flex-1">
-                    <p className="text-[13px] font-semibold text-[#111110]">{task.title}</p>
+                    <p className="text-[13px] font-semibold text-ink">{task.title}</p>
                     <div className="flex items-center gap-2 mt-0.5">
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded font-semibold ${meta.badge}`}>{meta.label.split(' — ')[1]}</span>
-                      <span className="text-[11px] text-[#8a8a85]">~{task.effort}</span>
+                      <span className={`text-[11px] px-1.5 py-0.5 rounded font-semibold ${meta.badge}`}>{meta.label.split(' — ')[1]}</span>
+                      <span className="text-[11px] text-muted">~{task.effort}</span>
                       {task.roles.slice(0, 2).map(role => (
-                        <span key={role} className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${ROLE_COLORS[role] ?? 'bg-gray-100 text-gray-600'}`}>{role}</span>
+                        <span key={role} className={`text-[11px] px-1.5 py-0.5 rounded-full font-medium ${ROLE_COLORS[role] ?? 'bg-gray-100 text-gray-600'}`}>{role}</span>
                       ))}
                     </div>
                   </div>
@@ -634,15 +634,15 @@ export default function RoadmapPage() {
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110]">Дорожная карта MGlass</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Оргструктура, план внедрения и прогресс по каждой роли</p>
+        <h1 className="text-[20px] font-semibold text-ink">Дорожная карта MGlass</h1>
+        <p className="text-[13px] text-muted mt-0.5">Оргструктура, план внедрения и прогресс по каждой роли</p>
       </div>
 
-      <div className="flex gap-1 mb-6 bg-[#f0f0ec] rounded-xl p-1">
+      <div className="flex gap-1 mb-6 bg-line-soft rounded-xl p-1">
         {tabs.map(t => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex-1 px-4 py-2 rounded-lg text-[13px] font-medium transition-all ${
-              tab === t.id ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'
+              tab === t.id ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft hover:text-ink'
             }`}>
             {t.label}
           </button>

@@ -203,8 +203,8 @@ export default function ArchitecturePage() {
   return (
     <div className="max-w-[1100px] mx-auto px-6 py-8">
       <div className="mb-8">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Карта данных MGlass</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-1">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Карта данных MGlass</h1>
+        <p className="text-[13px] text-muted mt-1">
           Какие таблицы существуют, что они содержат, где редактируются и какими модулями используются.
         </p>
       </div>
@@ -214,39 +214,39 @@ export default function ArchitecturePage() {
         {ARCHITECTURE.map(section => (
           <div key={section.section} className={`border rounded-xl overflow-hidden ${section.color}`}>
             <div className="px-4 py-2.5 border-b border-inherit">
-              <h2 className="text-[13px] font-bold text-[#111110]">{section.section}</h2>
+              <h2 className="text-[13px] font-semibold text-ink">{section.section}</h2>
             </div>
             <table className="w-full text-[12px]">
               <thead>
                 <tr className="border-b border-inherit">
-                  <th className="px-4 py-2 text-left font-semibold text-[#6b6b66] w-[200px]">Таблица</th>
-                  <th className="px-4 py-2 text-left font-semibold text-[#6b6b66]">Содержимое</th>
-                  <th className="px-4 py-2 text-left font-semibold text-[#6b6b66] w-[220px]">Используется в</th>
-                  <th className="px-4 py-2 text-left font-semibold text-[#6b6b66] w-[160px]">Редактировать</th>
+                  <th className="px-4 py-2 text-left font-semibold text-ink-soft w-[200px]">Таблица</th>
+                  <th className="px-4 py-2 text-left font-semibold text-ink-soft">Содержимое</th>
+                  <th className="px-4 py-2 text-left font-semibold text-ink-soft w-[220px]">Используется в</th>
+                  <th className="px-4 py-2 text-left font-semibold text-ink-soft w-[160px]">Редактировать</th>
                 </tr>
               </thead>
               <tbody>
                 {section.rows.map(row => (
                   <tr key={row.table} className="border-t border-inherit">
-                    <td className="px-4 py-3 font-mono text-[11px] text-[#111110] font-semibold align-top">
+                    <td className="px-4 py-3 font-mono text-[11px] text-ink font-semibold align-top">
                       {row.table}
                     </td>
-                    <td className="px-4 py-3 text-[#4b4b47] align-top">
+                    <td className="px-4 py-3 text-ink-soft align-top">
                       {row.description}
                       {row.note && (
-                        <p className="mt-1 text-[11px] text-[#f59e0b] font-medium">⚡ {row.note}</p>
+                        <p className="mt-1 text-[11px] text-amber-500 font-medium">⚡ {row.note}</p>
                       )}
                     </td>
                     <td className="px-4 py-3 align-top">
                       <ul className="space-y-0.5">
                         {row.usedBy.map(u => (
-                          <li key={u} className="text-[11px] text-[#6b6b66]">• {u}</li>
+                          <li key={u} className="text-[11px] text-ink-soft">• {u}</li>
                         ))}
                       </ul>
                     </td>
                     <td className="px-4 py-3 align-top">
                       <a href={row.editedAt}
-                        className="text-[11px] text-[#0071e3] hover:underline font-mono break-all">
+                        className="text-[11px] text-blue-600 hover:underline font-mono break-all">
                         {row.editedAt}
                       </a>
                     </td>
@@ -260,20 +260,20 @@ export default function ArchitecturePage() {
 
       {/* Roadmap */}
       <div>
-        <h2 className="text-[16px] font-semibold text-[#111110] mb-4">Roadmap консолидации</h2>
+        <h2 className="text-[16px] font-semibold text-ink mb-4">Roadmap консолидации</h2>
         <div className="space-y-2">
           {ROADMAP.map((item, i) => (
             <div key={i} className={`flex items-start gap-3 px-4 py-3 rounded-xl border ${
               item.status === 'done'
                 ? 'bg-green-50 border-green-200'
-                : 'bg-white border-[#e4e4e0]'
+                : 'bg-surface border-line'
             }`}>
               <span className="text-[16px] mt-0.5 flex-shrink-0">{item.status === 'done' ? '✅' : '⬜'}</span>
               <div>
-                <p className={`text-[13px] font-medium ${item.status === 'done' ? 'text-green-700 line-through' : 'text-[#111110]'}`}>
+                <p className={`text-[13px] font-medium ${item.status === 'done' ? 'text-green-700 line-through' : 'text-ink'}`}>
                   {item.label}
                 </p>
-                <p className="text-[12px] text-[#8a8a85] mt-0.5">{item.detail}</p>
+                <p className="text-[12px] text-muted mt-0.5">{item.detail}</p>
               </div>
             </div>
           ))}

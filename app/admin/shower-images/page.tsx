@@ -48,11 +48,11 @@ export default function ShowerImagesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6">
+    <div className="min-h-screen bg-canvas p-6">
       <div className="max-w-5xl mx-auto">
         <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">Изображения моделей душевых</h1>
-          <p className="text-sm text-gray-500 mt-1">
+          <h1 className="text-2xl font-semibold text-ink">Изображения моделей душевых</h1>
+          <p className="text-sm text-muted mt-1">
             Загрузите фото для каждой модели. Рекомендуется JPG/PNG, не более 10 МБ.
             Если изображение не загружено — будет показана схема-иконка.
           </p>
@@ -65,7 +65,7 @@ export default function ShowerImagesPage() {
         )}
 
         {loading ? (
-          <div className="text-gray-400 text-sm">Загрузка...</div>
+          <div className="text-muted text-sm">Загрузка...</div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
             {SHOWER_MODELS.map(m => {
@@ -74,10 +74,10 @@ export default function ShowerImagesPage() {
 
               return (
                 <div key={m.id}
-                  className="bg-white rounded-xl border border-gray-200 overflow-hidden flex flex-col">
+                  className="bg-surface rounded-xl border border-line overflow-hidden flex flex-col">
 
                   {/* превью */}
-                  <div className="relative bg-gray-50 flex items-center justify-center"
+                  <div className="relative bg-subtle flex items-center justify-center"
                     style={{ height: 140 }}>
                     {imgUrl ? (
                       <img src={imgUrl} alt={m.label}
@@ -95,7 +95,7 @@ export default function ShowerImagesPage() {
                     {imgUrl && !isUploading && (
                       <button
                         onClick={() => handleDelete(m.id)}
-                        className="absolute top-1 right-1 w-6 h-6 bg-white rounded-full shadow text-gray-400 hover:text-red-500 text-xs flex items-center justify-center leading-none">
+                        className="absolute top-1 right-1 w-6 h-6 bg-surface rounded-full shadow text-muted hover:text-red-500 text-xs flex items-center justify-center leading-none">
                         ×
                       </button>
                     )}
@@ -104,18 +104,18 @@ export default function ShowerImagesPage() {
                   {/* инфо */}
                   <div className="p-3 flex flex-col gap-2 flex-1">
                     <div>
-                      <span className="text-sm font-bold text-gray-900">{m.label}</span>
-                      <span className="ml-1.5 text-[10px] bg-gray-100 text-gray-400 px-1 rounded">
+                      <span className="text-sm font-semibold text-ink">{m.label}</span>
+                      <span className="ml-1.5 text-[11px] bg-line-soft text-muted px-1 rounded">
                         {m.glassCount} ст.
                       </span>
-                      <div className="text-[11px] text-gray-400 leading-tight mt-0.5">{m.desc}</div>
+                      <div className="text-[11px] text-muted leading-tight mt-0.5">{m.desc}</div>
                     </div>
 
                     <button
                       onClick={() => fileRefs.current[m.id]?.click()}
                       disabled={isUploading}
-                      className="mt-auto w-full text-xs py-1.5 rounded-lg border border-gray-200
-                        text-gray-600 hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700
+                      className="mt-auto w-full text-xs py-1.5 rounded-lg border border-line
+                        text-ink-soft hover:bg-blue-50 hover:border-blue-300 hover:text-blue-700
                         transition-colors disabled:opacity-40 font-medium">
                       {imgUrl ? '🔄 Заменить' : '📷 Загрузить фото'}
                     </button>

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PageHeader, Field, SelectField } from '@/components/ds'
 
 type LogEntry = {
   id: number
@@ -29,7 +30,7 @@ const ACTION_LABELS: Record<string, { label: string; color: string }> = {
   'quote.delete':           { label: 'Архивирован просчёт',    color: 'bg-red-50 text-red-700' },
   'calculation.create':     { label: 'Создан расчёт',          color: 'bg-emerald-50 text-emerald-700' },
   'calculation.update':     { label: 'Обновлён расчёт',        color: 'bg-blue-50 text-blue-700' },
-  'pdf.download':           { label: 'Скачан PDF',             color: 'bg-[#f5f5f3] text-[#6b6b66]' },
+  'pdf.download':           { label: 'Скачан PDF',             color: 'bg-canvas text-ink-soft' },
 }
 
 function fmtDate(s: string) {
@@ -79,13 +80,13 @@ export default function ActivityLogPage() {
 
   if (!tableExists) {
     return (
-      <div className="min-h-screen bg-[#f8f8f7] p-6">
+      <div className="min-h-screen bg-canvas p-6">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-[18px] font-semibold text-[#111110] mb-2">Лог действий</h1>
+          <h1 className="text-[18px] font-semibold text-ink mb-2">Лог действий</h1>
           <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
             <p className="text-[13px] font-semibold text-amber-800 mb-2">Таблица activity_log не создана</p>
             <p className="text-[12px] text-amber-700 mb-3">Выполни SQL-миграцию в Supabase SQL Editor:</p>
-            <pre className="text-[11px] bg-white border border-amber-200 rounded-lg p-3 overflow-x-auto text-amber-900">{`CREATE TABLE IF NOT EXISTS activity_log (
+            <pre className="text-[11px] bg-surface border border-amber-200 rounded-lg p-3 overflow-x-auto text-amber-900">{`CREATE TABLE IF NOT EXISTS activity_log (
   id         bigserial PRIMARY KEY,
   user_id    uuid REFERENCES auth.users(id) ON DELETE SET NULL,
   user_name  text,
@@ -103,93 +104,92 @@ CREATE INDEX IF NOT EXISTS idx_actlog_created ON activity_log(created_at DESC);`
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7] p-6">
+    <div className="min-h-screen bg-canvas p-6">
       <div className="max-w-5xl mx-auto">
 
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-[18px] font-semibold text-[#111110]">Лог действий</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">История всех действий в системе</p>
-          </div>
-          <button onClick={loadLog} className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f5f5f3]">
-            Обновить
-          </button>
-        </div>
+        <PageHeader
+          title="Лог действий"
+          subtitle="История всех действий в системе"
+          actions={
+            <button onClick={loadLog} className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas transition-colors">
+              Обновить
+            </button>
+          }
+        />
 
         {/* Фильтры */}
         <div className="flex gap-2 mb-4">
-          <select
+          <SelectField
             value={filterAction}
-            onChange={e => setFilterAction(e.target.value)}
-            className="h-8 border border-[#e4e4e0] rounded-lg px-2.5 text-[12px] outline-none focus:border-[#9a9a95] bg-white text-[#4b4b47]">
+            onChange={e => setFilterAction(e.target.value)}>
             <option value="">Все действия</option>
             {uniqueActions.map(a => (
               <option key={a} value={a}>{ACTION_LABELS[a]?.label ?? a}</option>
             ))}
-          </select>
-          <input
+          </SelectField>
+          <Field
             type="text" placeholder="Фильтр по сотруднику"
             value={filterUser}
             onChange={e => setFilterUser(e.target.value)}
-            className="h-8 border border-[#e4e4e0] rounded-lg px-2.5 text-[12px] outline-none focus:border-[#9a9a95] bg-white w-52"
+            className="w-52"
           />
           {(filterAction || filterUser) && (
             <button
               onClick={() => { setFilterAction(''); setFilterUser('') }}
-              className="h-8 px-3 text-[12px] border border-[#e4e4e0] rounded-lg text-[#9a9a95] hover:bg-[#f5f5f3]">
+              className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-muted hover:bg-canvas transition-colors">
               Сбросить
             </button>
           )}
-          <span className="ml-auto text-[11px] text-[#9a9a95] self-center">{filtered.length} записей</span>
+          <span className="ml-auto text-[11px] text-muted self-center">{filtered.length} записей</span>
         </div>
 
-        <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-line overflow-hidden">
           {loading ? (
-            <div className="p-8 text-center text-[13px] text-[#9a9a95]">Загрузка...</div>
+            <div className="p-8 text-center text-[13px] text-muted">Загрузка...</div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-[13px] text-[#9a9a95]">
+            <div className="p-8 text-center text-[13px] text-muted">
               {entries.length === 0 ? 'Действий пока не зафиксировано' : 'Нет результатов по фильтру'}
             </div>
           ) : (
             <table className="w-full text-[12px]">
-              <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+              <thead className="bg-subtle border-b border-line">
                 <tr>
-                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-36">Дата</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-28">Сотрудник</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Действие</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Объект</th>
-                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Детали</th>
+                  <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-36">Дата</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-28">Сотрудник</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Действие</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest w-24">Объект</th>
+                  <th className="text-left px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-widest">Детали</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#f8f8f7]">
+              <tbody className="divide-y divide-canvas">
                 {filtered.map(entry => {
                   const meta = ACTION_LABELS[entry.action]
                   return (
-                    <tr key={entry.id} className="hover:bg-[#fafaf9]">
-                      <td className="px-4 py-2.5 text-[11px] text-[#9a9a95] font-mono whitespace-nowrap">
+                    <tr key={entry.id} className="hover:bg-subtle">
+                      <td className="px-4 py-2.5 text-[11px] text-muted font-mono whitespace-nowrap">
                         {fmtDate(entry.created_at)}
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className="text-[12px] font-medium text-[#111110]">
-                          {entry.user_name ?? <span className="text-[#c4c4be] italic">система</span>}
+                        <span className="text-[12px] font-medium text-ink">
+                          {entry.user_name ?? <span className="text-faint italic">система</span>}
                         </span>
                       </td>
                       <td className="px-3 py-2.5">
-                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${meta?.color ?? 'bg-[#f5f5f3] text-[#6b6b66]'}`}>
+                        <span className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-medium ${meta?.color ?? 'bg-canvas text-ink-soft'}`}>
                           {meta?.label ?? entry.action}
                         </span>
                       </td>
-                      <td className="px-3 py-2.5 text-[11px] text-[#6b6b66]">
+                      <td className="px-3 py-2.5 text-[11px] text-ink-soft">
                         {entry.entity_type && (
                           <span>
-                            <span className="text-[#9a9a95]">{entry.entity_type}</span>
+                            <span className="text-muted">{entry.entity_type}</span>
                             {entry.entity_id && <span className="font-mono ml-1">#{entry.entity_id}</span>}
                           </span>
                         )}
                       </td>
-                      <td className="px-3 py-2.5 text-[11px] text-[#6b6b66] max-w-xs">
+                      <td className="px-3 py-2.5 text-[11px] text-ink-soft max-w-xs">
                         {entry.details && (
-                          <span className="font-mono text-[10px] text-[#9a9a95] truncate block" title={JSON.stringify(entry.details)}>
+                          <span className="font-mono text-[10px] text-muted truncate block" title={JSON.stringify(entry.details)}>
                             {JSON.stringify(entry.details).slice(0, 80)}
                             {JSON.stringify(entry.details).length > 80 ? '…' : ''}
                           </span>

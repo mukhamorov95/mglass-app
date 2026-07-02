@@ -232,16 +232,16 @@ function PricingModelBlock({ rows }: { rows: PricingRow[] }) {
   const cstPct = Math.round(100 - margin - tax)
 
   return (
-    <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
-        <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Модель ценообразования</p>
-        <p className="text-[10px] text-[#c4c4be] mt-0.5">Цена = Себестоимость ÷ (1 − Маржа% − Налог%)</p>
+    <div className="bg-surface rounded-lg border border-line overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-line">
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Модель ценообразования</p>
+        <p className="text-[11px] text-faint mt-0.5">Цена = Себестоимость ÷ (1 − Маржа% − Налог%)</p>
       </div>
-      <div className="flex border-b border-[#e4e4e0] overflow-x-auto">
+      <div className="flex border-b border-line overflow-x-auto">
         {rows.map((r, i) => (
           <button key={r.id} onClick={() => setIdx(i)}
-            className={`px-3 py-2 text-[10px] font-medium whitespace-nowrap border-r border-[#e4e4e0] transition-colors
-              ${i === activeIdx ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'}`}>
+            className={`px-3 py-2 text-[11px] font-medium whitespace-nowrap border-r border-line transition-colors
+              ${i === activeIdx ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'}`}>
             {PRODUCT_LABELS[r.product_type] ?? r.product_type}
           </button>
         ))}
@@ -252,17 +252,17 @@ function PricingModelBlock({ rows }: { rows: PricingRow[] }) {
             {[
               { label: 'Маржа',    value: `${margin}%`,              cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
               { label: 'Налог',    value: `${tax}%`,                 cls: 'bg-slate-50 text-slate-600 border-slate-200' },
-              { label: 'Множитель',value: `×${(1/denom).toFixed(2)}`, cls: 'bg-[#f5f5f3] text-[#111110] border-[#e4e4e0]' },
+              { label: 'Множитель',value: `×${(1/denom).toFixed(2)}`, cls: 'bg-canvas text-ink border-line' },
             ].map(item => (
               <div key={item.label} className={`rounded-lg border px-3 py-2.5 ${item.cls}`}>
-                <p className="text-[10px] opacity-70">{item.label}</p>
-                <p className="text-lg font-bold font-mono mt-0.5">{item.value}</p>
+                <p className="text-[11px] opacity-70">{item.label}</p>
+                <p className="text-lg font-semibold font-mono mt-0.5">{item.value}</p>
               </div>
             ))}
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1.5">Структура цены клиенту</p>
-            <div className="flex h-8 rounded-lg overflow-hidden text-white text-[10px] font-bold">
+            <p className="text-[11px] text-muted mb-1.5">Структура цены клиенту</p>
+            <div className="flex h-8 rounded-lg overflow-hidden text-white text-[11px] font-semibold">
               <div className="flex items-center justify-center bg-[#2563eb]" style={{ width: `${cstPct}%` }}>
                 {cstPct >= 15 && `${cstPct}%`}
               </div>
@@ -275,48 +275,48 @@ function PricingModelBlock({ rows }: { rows: PricingRow[] }) {
             </div>
             <div className="flex gap-4 mt-1.5">
               {[['bg-[#2563eb]','Себестоимость'],['bg-emerald-500','Маржа'],['bg-slate-400',`Налог ${tax}%`]].map(([c,l]) => (
-                <span key={l} className="flex items-center gap-1 text-[10px] text-[#6b6b66]">
+                <span key={l} className="flex items-center gap-1 text-[11px] text-ink-soft">
                   <span className={`inline-block w-2 h-2 rounded-sm ${c}`} />{l}
                 </span>
               ))}
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#fafaf9] rounded-lg border border-[#e4e4e0] px-3 py-2">
-              <p className="text-[10px] text-[#9a9a95]">Минимальная маржа</p>
-              <p className="font-bold text-red-600 font-mono">{row.min_margin}%</p>
+            <div className="bg-subtle rounded-lg border border-line px-3 py-2">
+              <p className="text-[11px] text-muted">Минимальная маржа</p>
+              <p className="font-semibold text-red-600 font-mono">{row.min_margin}%</p>
             </div>
-            <div className="bg-[#fafaf9] rounded-lg border border-[#e4e4e0] px-3 py-2">
-              <p className="text-[10px] text-[#9a9a95]">Макс. скидка</p>
-              <p className="font-bold text-amber-600 font-mono">{row.max_discount_percent}%</p>
+            <div className="bg-subtle rounded-lg border border-line px-3 py-2">
+              <p className="text-[11px] text-muted">Макс. скидка</p>
+              <p className="font-semibold text-amber-600 font-mono">{row.max_discount_percent}%</p>
             </div>
           </div>
         </div>
-        <div className="bg-[#fafaf9] rounded-xl border border-[#e4e4e0] p-4 space-y-4">
-          <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Калькулятор</p>
+        <div className="bg-subtle rounded-xl border border-line p-4 space-y-4">
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Калькулятор</p>
           <div>
-            <label className="text-[10px] text-[#9a9a95] block mb-1">Себестоимость, ₽</label>
+            <label className="text-[11px] text-muted block mb-1">Себестоимость, ₽</label>
             <input type="number" value={cost} onChange={e => setCost(Math.max(0, Number(e.target.value)))}
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-sm font-mono font-bold focus:outline-none focus:border-[#111110] bg-white" />
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm font-mono font-semibold focus:outline-none focus:border-ink bg-surface" />
           </div>
           <div className="space-y-2 text-xs">
             {[
               { label: 'Себестоимость', value: cost,    cls: 'text-[#2563eb]' },
               { label: `Маржа ${margin}%`, value: mrgAmt, cls: 'text-emerald-600' },
-              { label: `Налог ${tax}%`,  value: taxAmt, cls: 'text-[#6b6b66]' },
+              { label: `Налог ${tax}%`,  value: taxAmt, cls: 'text-ink-soft' },
             ].map(r => (
               <div key={r.label} className="flex justify-between">
-                <span className="text-[#9a9a95]">{r.label}</span>
+                <span className="text-muted">{r.label}</span>
                 <span className={`font-mono font-medium ${r.cls}`}>{r.value.toLocaleString('ru-RU')} ₽</span>
               </div>
             ))}
-            <div className="flex justify-between pt-2 border-t border-[#e4e4e0]">
-              <span className="font-semibold text-[#111110]">Цена клиенту</span>
-              <span className="font-bold font-mono text-[#111110] text-sm">{price.toLocaleString('ru-RU')} ₽</span>
+            <div className="flex justify-between pt-2 border-t border-line">
+              <span className="font-semibold text-ink">Цена клиенту</span>
+              <span className="font-semibold font-mono text-ink text-sm">{price.toLocaleString('ru-RU')} ₽</span>
             </div>
           </div>
-          <div className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-2 text-[10px] text-[#6b6b66]">
-            <p className="font-mono text-[#111110] mb-0.5">{cost.toLocaleString('ru-RU')} ÷ {denom.toFixed(2)} = {price.toLocaleString('ru-RU')} ₽</p>
+          <div className="bg-surface rounded-lg border border-line px-3 py-2 text-[11px] text-ink-soft">
+            <p className="font-mono text-ink mb-0.5">{cost.toLocaleString('ru-RU')} ÷ {denom.toFixed(2)} = {price.toLocaleString('ru-RU')} ₽</p>
             <p>1 − {margin/100} − {tax/100} = {denom.toFixed(2)}</p>
           </div>
         </div>
@@ -329,12 +329,12 @@ function PricingModelBlock({ rows }: { rows: PricingRow[] }) {
 
 function SectionHead({ label, planLabel = 'ПЛАН', factLabel = 'ФАКТ' }: { label: string; planLabel?: string; factLabel?: string }) {
   return (
-    <div className="flex items-center bg-[#111110] text-white px-3 py-2 mt-2 first:mt-0">
-      <div className="flex-1 text-[10px] font-bold uppercase tracking-widest">{label}</div>
-      <div className="w-[130px] text-right text-[9px] text-white/50 font-medium">{planLabel}</div>
-      <div className="w-[130px] text-right text-[9px] text-white/50 font-medium">{factLabel}</div>
-      <div className="w-[110px] text-right text-[9px] text-white/50 font-medium">ОТКЛ.</div>
-      <div className="w-[56px] text-right text-[9px] text-white/50 font-medium">ВЫПОЛ.</div>
+    <div className="flex items-center bg-ink text-white px-3 py-2 mt-2 first:mt-0">
+      <div className="flex-1 text-[11px] font-semibold uppercase tracking-widest">{label}</div>
+      <div className="w-[130px] text-right text-[11px] text-white/50 font-medium">{planLabel}</div>
+      <div className="w-[130px] text-right text-[11px] text-white/50 font-medium">{factLabel}</div>
+      <div className="w-[110px] text-right text-[11px] text-white/50 font-medium">ОТКЛ.</div>
+      <div className="w-[56px] text-right text-[11px] text-white/50 font-medium">ВЫПОЛ.</div>
     </div>
   )
 }
@@ -350,10 +350,10 @@ function DataRow({
   const exec  = plan && plan !== 0 && actual !== undefined ? Math.round(actual / plan * 100) : undefined
 
   const rowCls = bold
-    ? 'bg-[#f0f0ec] border-t border-[#e4e4e0] font-semibold'
-    : 'hover:bg-[#fafaf9] border-b border-[#f5f5f3]'
+    ? 'bg-line-soft border-t border-line font-semibold'
+    : 'hover:bg-subtle border-b border-canvas'
 
-  const labelCls = indent ? 'pl-5 text-[#6b6b66]' : ''
+  const labelCls = indent ? 'pl-5 text-ink-soft' : ''
   const textSz = 'text-[12px]'
 
   return (
@@ -368,10 +368,10 @@ function DataRow({
               type="number"
               value={plan}
               onChange={e => onEdit?.(editKey, Number(e.target.value))}
-              className="w-full text-right border border-[#c4c4be] rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none focus:border-[#111110] bg-white"
+              className="w-full text-right border border-faint rounded px-1.5 py-0.5 text-[11px] font-mono focus:outline-none focus:border-ink bg-surface"
             />
           ) : (
-            <span className={`font-mono ${textSz} ${negative ? 'text-red-600' : 'text-[#6b6b66]'}`}>
+            <span className={`font-mono ${textSz} ${negative ? 'text-red-600' : 'text-ink-soft'}`}>
               {negative ? '−' : ''}{num(Math.abs(plan))}
             </span>
           )
@@ -381,7 +381,7 @@ function DataRow({
       {/* Actual */}
       <div className="w-[130px] text-right">
         {actual !== undefined && (
-          <span className={`font-mono ${textSz} font-medium ${dimActual ? 'text-[#c4c4be]' : actual < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
+          <span className={`font-mono ${textSz} font-medium ${dimActual ? 'text-faint' : actual < 0 ? 'text-red-600' : 'text-ink'}`}>
             {actual !== 0 || !dimActual ? (actual < 0 ? '−' : '') + num(Math.abs(actual)) : '—'}
           </span>
         )}
@@ -412,17 +412,17 @@ function TotalRow({ label, plan, actual, highlight }: {
   label: string; plan: number; actual: number; highlight?: 'red' | 'green' | 'amber'
 }) {
   const delta = actual - plan
-  const hlCls = highlight === 'green' ? 'bg-emerald-50' : highlight === 'red' ? 'bg-red-50' : highlight === 'amber' ? 'bg-amber-50' : 'bg-[#f0f0ec]'
-  const valCls = actual < 0 ? 'text-red-700' : actual > 0 ? 'text-emerald-700' : 'text-[#111110]'
+  const hlCls = highlight === 'green' ? 'bg-emerald-50' : highlight === 'red' ? 'bg-red-50' : highlight === 'amber' ? 'bg-amber-50' : 'bg-line-soft'
+  const valCls = actual < 0 ? 'text-red-700' : actual > 0 ? 'text-emerald-700' : 'text-ink'
   return (
-    <div className={`flex items-center px-3 py-2 ${hlCls} border-t-2 border-[#e4e4e0]`}>
-      <div className="flex-1 text-[12px] font-bold">{label}</div>
-      <div className="w-[130px] text-right font-mono font-bold text-[12px] text-[#6b6b66]">{num(plan)}</div>
-      <div className={`w-[130px] text-right font-mono font-bold text-[13px] ${valCls}`}>{num(actual)}</div>
+    <div className={`flex items-center px-3 py-2 ${hlCls} border-t-2 border-line`}>
+      <div className="flex-1 text-[12px] font-semibold">{label}</div>
+      <div className="w-[130px] text-right font-mono font-semibold text-[12px] text-ink-soft">{num(plan)}</div>
+      <div className={`w-[130px] text-right font-mono font-semibold text-[13px] ${valCls}`}>{num(actual)}</div>
       <div className={`w-[110px] text-right font-mono text-[12px] ${delta >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
         {delta >= 0 ? '+' : '−'}{num(Math.abs(delta))}
       </div>
-      <div className="w-[56px] text-right font-mono text-[11px] text-[#9a9a95]">
+      <div className="w-[56px] text-right font-mono text-[11px] text-muted">
         {plan ? Math.round(actual / plan * 100) + '%' : '—'}
       </div>
     </div>
@@ -431,10 +431,10 @@ function TotalRow({ label, plan, actual, highlight }: {
 
 function MetricRow({ label, plan, actual }: { label: string; plan: string; actual: string }) {
   return (
-    <div className="flex items-center px-3 py-[6px] bg-[#fafaf9] border-b border-[#f0f0ec]">
-      <div className="flex-1 text-[11px] text-[#9a9a95]">{label}</div>
-      <div className="w-[130px] text-right font-mono text-[11px] text-[#6b6b66]">{plan}</div>
-      <div className="w-[130px] text-right font-mono text-[11px] font-medium text-[#111110]">{actual}</div>
+    <div className="flex items-center px-3 py-[6px] bg-subtle border-b border-line-soft">
+      <div className="flex-1 text-[11px] text-muted">{label}</div>
+      <div className="w-[130px] text-right font-mono text-[11px] text-ink-soft">{plan}</div>
+      <div className="w-[130px] text-right font-mono text-[11px] font-medium text-ink">{actual}</div>
       <div className="w-[110px]" />
       <div className="w-[56px]" />
     </div>
@@ -453,18 +453,18 @@ function TBWidget({ label, target, actual, color }: {
   return (
     <div className="space-y-1">
       <div className="flex justify-between items-center">
-        <span className={`text-[10px] font-semibold ${textClr}`}>{label}</span>
-        <span className={`text-[10px] font-mono ${reached ? 'text-emerald-600' : textClr}`}>
+        <span className={`text-[11px] font-semibold ${textClr}`}>{label}</span>
+        <span className={`text-[11px] font-mono ${reached ? 'text-emerald-600' : textClr}`}>
           {isFinite(target) ? fmt(target) : '∞'}
         </span>
       </div>
-      <div className="h-2 bg-[#f0f0ec] rounded-full overflow-hidden">
+      <div className="h-2 bg-line-soft rounded-full overflow-hidden">
         <div className={`h-full ${reached ? 'bg-emerald-400' : clr} rounded-full transition-all`}
           style={{ width: `${pct}%` }} />
       </div>
       <div className="flex justify-between">
-        <span className="text-[10px] text-[#9a9a95]">Факт: {fmt(actual)}</span>
-        <span className={`text-[10px] font-medium ${reached ? 'text-emerald-600' : textClr}`}>
+        <span className="text-[11px] text-muted">Факт: {fmt(actual)}</span>
+        <span className={`text-[11px] font-medium ${reached ? 'text-emerald-600' : textClr}`}>
           {reached ? '✓ Достигнут' : `-${fmt(target - actual)}`}
         </span>
       </div>
@@ -603,24 +603,24 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
   // ── Render ───────────────────────────────────────────────────────────────────
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[1200px] mx-auto px-4 py-4 space-y-3">
 
         {/* Page header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Финансовая модель</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">{monthLabel} · Единственный источник финансовой правды</p>
+            <h1 className="text-sm font-semibold text-ink">CFO Center — Финансовая модель</h1>
+            <p className="text-[11px] text-muted mt-0.5">{monthLabel} · Единственный источник финансовой правды</p>
           </div>
-          {savedAt && <span className="text-[10px] text-emerald-600">Сохранено в {savedAt}</span>}
+          {savedAt && <span className="text-[11px] text-emerald-600">Сохранено в {savedAt}</span>}
         </div>
 
         {/* Tab bar */}
-        <div className="flex bg-white border border-[#e4e4e0] rounded-lg p-0.5 gap-0.5 w-fit">
+        <div className="flex bg-surface border border-line rounded-lg p-0.5 gap-0.5 w-fit">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`px-3 py-1.5 rounded-md text-[11px] font-medium transition-all ${
-                tab === t.id ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'
+                tab === t.id ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'
               }`}>
               {t.label}
             </button>
@@ -634,28 +634,28 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
           <div className="grid grid-cols-[1fr_300px] gap-4">
 
             {/* Left: P&L statement */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+            <div className="bg-surface rounded-lg border border-line overflow-hidden">
 
               {/* Table header controls */}
-              <div className="flex items-center justify-between px-3 py-2.5 border-b border-[#e4e4e0] bg-[#fafaf9]">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+              <div className="flex items-center justify-between px-3 py-2.5 border-b border-line bg-subtle">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">
                   P&L — {monthLabel}
                 </p>
                 <div className="flex gap-2">
                   {editPlan ? (
                     <>
                       <button onClick={() => { setRevPlan(DEFAULT_REV_PLAN); setFunds(DEFAULT_FUNDS); setEditPlan(false) }}
-                        className="px-2.5 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-white">
+                        className="px-2.5 py-1 text-[11px] border border-line rounded text-ink-soft hover:bg-surface">
                         Сброс
                       </button>
                       <button onClick={savePlan}
-                        className="px-2.5 py-1 text-[10px] bg-[#111110] text-white rounded font-medium">
+                        className="px-2.5 py-1 text-[11px] bg-ink text-white rounded font-medium">
                         Сохранить план
                       </button>
                     </>
                   ) : (
                     <button onClick={() => setEditPlan(true)}
-                      className="px-2.5 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-white transition-colors">
+                      className="px-2.5 py-1 text-[11px] border border-line rounded text-ink-soft hover:bg-surface transition-colors">
                       Редактировать план
                     </button>
                   )}
@@ -730,48 +730,48 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
               {/* ═══ ФОНДЫ ═══════════════════════════════════════ */}
               <SectionHead label={`ФОНДЫ ИЗ ПРИБЫЛИ (${fundsPct}%)`} />
               {funds.map((fund, fi) => (
-                <div key={fund.id} className="flex items-center px-3 py-[7px] border-b border-[#f5f5f3] hover:bg-[#fafaf9]">
+                <div key={fund.id} className="flex items-center px-3 py-[7px] border-b border-canvas hover:bg-subtle">
                   <div className="flex-1 flex items-center gap-2">
                     {editPlan && (
                       <input type="checkbox" checked={fund.enabled}
                         onChange={e => setFunds(p => p.map((f, i) => i === fi ? { ...f, enabled: e.target.checked } : f))}
                         className="w-3 h-3" />
                     )}
-                    <span className={`text-[12px] pl-5 ${!fund.enabled ? 'text-[#c4c4be] line-through' : 'text-[#6b6b66]'}`}>
+                    <span className={`text-[12px] pl-5 ${!fund.enabled ? 'text-faint line-through' : 'text-ink-soft'}`}>
                       {editPlan ? (
                         <input value={fund.name}
                           onChange={e => setFunds(p => p.map((f, i) => i === fi ? { ...f, name: e.target.value } : f))}
-                          className="border border-[#e4e4e0] rounded px-1 text-[11px] focus:outline-none w-40" />
+                          className="border border-line rounded px-1 text-[11px] focus:outline-none w-40" />
                       ) : fund.name}
                     </span>
                   </div>
-                  <div className="w-[130px] text-right font-mono text-[11px] text-[#9a9a95]">
+                  <div className="w-[130px] text-right font-mono text-[11px] text-muted">
                     {editPlan ? (
                       <div className="flex items-center justify-end gap-1">
                         <input type="number" value={fund.pct}
                           onChange={e => setFunds(p => p.map((f, i) => i === fi ? { ...f, pct: Number(e.target.value) } : f))}
-                          className="w-12 text-right border border-[#e4e4e0] rounded px-1 text-[11px] font-mono focus:outline-none" />
-                        <span className="text-[10px]">%</span>
+                          className="w-12 text-right border border-line rounded px-1 text-[11px] font-mono focus:outline-none" />
+                        <span className="text-[11px]">%</span>
                       </div>
                     ) : `${fund.pct}%`}
                   </div>
-                  <div className="w-[130px] text-right font-mono text-[12px] font-medium text-[#6b6b66]">
+                  <div className="w-[130px] text-right font-mono text-[12px] font-medium text-ink-soft">
                     {num(Math.round(Math.max(0, planEBITDA) * fund.pct / 100))}
                   </div>
-                  <div className="w-[110px] text-right font-mono text-[12px] text-[#111110]">
+                  <div className="w-[110px] text-right font-mono text-[12px] text-ink">
                     {num(Math.round(Math.max(0, actualEBITDA) * fund.pct / 100))}
                   </div>
                   <div className="w-[56px]" />
                 </div>
               ))}
               {editPlan && (
-                <div className="flex items-center gap-2 px-3 py-2 border-b border-[#f5f5f3]">
-                  <span className="pl-5 text-[12px] text-[#9a9a95]">+ Новый фонд:</span>
+                <div className="flex items-center gap-2 px-3 py-2 border-b border-canvas">
+                  <span className="pl-5 text-[12px] text-muted">+ Новый фонд:</span>
                   <input value={newFundName} onChange={e => setNewFundName(e.target.value)}
                     placeholder="Название фонда"
-                    className="flex-1 border border-[#e4e4e0] rounded px-2 py-1 text-[11px] focus:outline-none focus:border-[#111110]" />
+                    className="flex-1 border border-line rounded px-2 py-1 text-[11px] focus:outline-none focus:border-ink" />
                   <button onClick={addFund}
-                    className="px-2 py-1 bg-[#111110] text-white text-[10px] rounded font-medium">
+                    className="px-2 py-1 bg-ink text-white text-[11px] rounded font-medium">
                     Добавить
                   </button>
                 </div>
@@ -795,33 +795,33 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
             <div className="space-y-3">
 
               {/* TB0 / TB1 */}
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+              <div className="bg-surface rounded-lg border border-line p-4 space-y-4">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">
                   Точки безубыточности
                 </p>
                 <TBWidget label="ТБ0 — работаем в ноль" target={tb0} actual={totalActualRev} color="amber" />
                 <TBWidget label="ТБ1 — с выводом прибыли" target={tb1} actual={totalActualRev} color="red" />
-                <div className="pt-2 border-t border-[#f0f0ec] space-y-1">
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-[#9a9a95]">VC% (план)</span>
+                <div className="pt-2 border-t border-line-soft space-y-1">
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted">VC% (план)</span>
                     <span className="font-mono font-medium">{s.avg_variable_pct}%</span>
                   </div>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-[#9a9a95]">Фонды%</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted">Фонды%</span>
                     <span className="font-mono font-medium">{fundsPct}%</span>
                   </div>
-                  <div className="flex justify-between text-[10px]">
-                    <span className="text-[#9a9a95]">FC (план)</span>
+                  <div className="flex justify-between text-[11px]">
+                    <span className="text-muted">FC (план)</span>
                     <span className="font-mono font-medium">{fmt(fc)}</span>
                   </div>
                 </div>
               </div>
 
               {/* AI CFO */}
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-3">
+              <div className="bg-surface rounded-lg border border-line p-4 space-y-3">
                 <div className="flex items-center gap-2">
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">AI CFO Анализ</p>
-                  <span className="text-[9px] bg-[#f0f0ec] text-[#9a9a95] px-1.5 py-0.5 rounded font-medium">AUTO</span>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">AI CFO Анализ</p>
+                  <span className="text-[11px] bg-line-soft text-muted px-1.5 py-0.5 rounded font-medium">AUTO</span>
                 </div>
                 <div className="space-y-2">
                   {insights.map((ins, i) => (
@@ -837,14 +837,14 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                     </div>
                   ))}
                 </div>
-                <div className="pt-2 border-t border-[#f0f0ec]">
-                  <p className="text-[9px] text-[#c4c4be]">Анализ обновляется при изменении данных финмодели</p>
+                <div className="pt-2 border-t border-line-soft">
+                  <p className="text-[11px] text-faint">Анализ обновляется при изменении данных финмодели</p>
                 </div>
               </div>
 
               {/* Quick plan summary */}
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-2">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сводка плана</p>
+              <div className="bg-surface rounded-lg border border-line p-4 space-y-2">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Сводка плана</p>
                 {[
                   { label: 'Плановая выручка',     value: fmt(totalPlanRev) },
                   { label: 'Плановая маржа%',      value: `${planMargPct.toFixed(1)}%` },
@@ -853,8 +853,8 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                   { label: 'Прогноз (ср.3м)',      value: fmt(forecastRev) },
                 ].map(row => (
                   <div key={row.label} className="flex justify-between text-[11px]">
-                    <span className="text-[#9a9a95]">{row.label}</span>
-                    <span className="font-mono font-medium text-[#111110]">{row.value}</span>
+                    <span className="text-muted">{row.label}</span>
+                    <span className="font-mono font-medium text-ink">{row.value}</span>
                   </div>
                 ))}
               </div>
@@ -875,26 +875,26 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
         {tab === 'dds' && (
           <div className="space-y-4">
             {/* Scenarios */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сценарный анализ</p>
-                <p className="text-[10px] text-[#c4c4be] mt-0.5">
+            <div className="bg-surface rounded-lg border border-line overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-line">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Сценарный анализ</p>
+                <p className="text-[11px] text-faint mt-0.5">
                   база — ср. выручка за 3 мес. · VC {s.avg_variable_pct}% · FC {fmt(fc)}
                 </p>
               </div>
-              <div className="grid grid-cols-3 divide-x divide-[#e4e4e0]">
+              <div className="grid grid-cols-3 divide-x divide-line">
                 {scenarios.map(sc => {
                   const d = calcDds(sc.rev, s.tax_system, s.avg_variable_pct, fc)
                   const taxLabel = TAX_SYSTEMS.find(t => t.value === s.tax_system)?.label ?? ''
                   return (
                     <div key={sc.label} className="px-4 py-4 space-y-3">
                       <div className="flex items-center justify-between">
-                        <p className={`text-xs font-bold ${sc.color}`}>{sc.label}</p>
+                        <p className={`text-xs font-semibold ${sc.color}`}>{sc.label}</p>
                         {sc.rev >= tb1_old
-                          ? <span className="text-[10px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">ТБ1 ✓</span>
+                          ? <span className="text-[11px] bg-emerald-100 text-emerald-700 px-1.5 py-0.5 rounded">ТБ1 ✓</span>
                           : sc.rev >= tb0_old
-                          ? <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">ТБ0 ✓</span>
-                          : <span className="text-[10px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">ниже ТБ0</span>
+                          ? <span className="text-[11px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">ТБ0 ✓</span>
+                          : <span className="text-[11px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded">ниже ТБ0</span>
                         }
                       </div>
                       {[
@@ -907,10 +907,10 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                         { label: 'Чистая прибыль', value: d.net, bold: true },
                       ].map(row => (
                         <div key={row.label} className="flex justify-between text-xs">
-                          <span className="text-[#9a9a95]">{row.label}</span>
+                          <span className="text-muted">{row.label}</span>
                           <span className={`font-mono ${row.bold
-                            ? row.value > 0 ? 'font-bold text-emerald-700' : 'font-bold text-red-600'
-                            : 'text-[#4b4b47]'}`}>
+                            ? row.value > 0 ? 'font-semibold text-emerald-700' : 'font-semibold text-red-600'
+                            : 'text-ink-soft'}`}>
                             {fmt(row.value)}
                           </span>
                         </div>
@@ -922,15 +922,15 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
             </div>
 
             {/* DDS */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-              <div className="px-4 py-2.5 border-b border-[#e4e4e0] flex items-center justify-between">
+            <div className="bg-surface rounded-lg border border-line overflow-hidden">
+              <div className="px-4 py-2.5 border-b border-line flex items-center justify-between">
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">ДДС — прогноз</p>
-                  <p className="text-[10px] text-[#c4c4be] mt-0.5">
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">ДДС — прогноз</p>
+                  <p className="text-[11px] text-faint mt-0.5">
                     {TAX_SYSTEMS.find(t => t.value === s.tax_system)?.label} · прогноз = ср. за 3 мес.
                   </p>
                 </div>
-                <p className={`text-sm font-bold font-mono ${dds.net > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                <p className={`text-sm font-semibold font-mono ${dds.net > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                   {fmt(dds.net)}
                 </p>
               </div>
@@ -945,33 +945,33 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                       ...(dds.vatNet > 0    ? [{ label: '(−) НДС к уплате',  value: dds.vatNet,    sign: -1 }] : []),
                       { label: '(−) Налог',           value: dds.tax,      sign: -1 },
                     ].map(row => (
-                      <tr key={row.label} className="border-b border-[#f5f5f3] last:border-0">
-                        <td className="py-1.5 text-[#6b6b66]">{row.label}</td>
-                        <td className={`py-1.5 text-right font-mono font-medium ${row.sign > 0 ? 'text-[#111110]' : 'text-[#4b4b47]'}`}>
+                      <tr key={row.label} className="border-b border-canvas last:border-0">
+                        <td className="py-1.5 text-ink-soft">{row.label}</td>
+                        <td className={`py-1.5 text-right font-mono font-medium ${row.sign > 0 ? 'text-ink' : 'text-ink-soft'}`}>
                           {row.sign > 0 ? '' : '−'}{fmt(row.value)}
                         </td>
                       </tr>
                     ))}
-                    <tr className="bg-[#fafaf9]">
-                      <td className="py-2 font-semibold text-[#111110]">= Чистая прибыль</td>
-                      <td className={`py-2 text-right font-bold font-mono text-sm ${dds.net > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                    <tr className="bg-subtle">
+                      <td className="py-2 font-semibold text-ink">= Чистая прибыль</td>
+                      <td className={`py-2 text-right font-semibold font-mono text-sm ${dds.net > 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                         {fmt(dds.net)}
                       </td>
                     </tr>
                   </tbody>
                 </table>
                 {dds.net > 0 && (
-                  <div className="mt-3 pt-3 border-t border-[#e4e4e0]">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Раздел прибыли</p>
+                  <div className="mt-3 pt-3 border-t border-line">
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Раздел прибыли</p>
                     <div className="grid grid-cols-3 gap-2">
                       {[
                         { label: `Собственник (${s.profit_split.owner_pct}%)`,   pct: s.profit_split.owner_pct },
                         { label: `Обучение (${s.profit_split.education_pct}%)`,  pct: s.profit_split.education_pct },
                         { label: `Резерв (${s.profit_split.reserve_pct}%)`,      pct: s.profit_split.reserve_pct },
                       ].map(item => (
-                        <div key={item.label} className="bg-[#fafaf9] rounded-lg px-3 py-2 border border-[#e4e4e0]">
-                          <p className="text-[10px] text-[#9a9a95]">{item.label}</p>
-                          <p className="text-sm font-bold font-mono text-emerald-700 mt-0.5">
+                        <div key={item.label} className="bg-subtle rounded-lg px-3 py-2 border border-line">
+                          <p className="text-[11px] text-muted">{item.label}</p>
+                          <p className="text-sm font-semibold font-mono text-emerald-700 mt-0.5">
                             {fmt(Math.round(dds.net * (item.pct / 100)))}
                           </p>
                         </div>
@@ -988,20 +988,20 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
             TAB: ГРАФИК
             ════════════════════════════════════ */}
         {tab === 'chart' && (
-          <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-3">
+          <div className="bg-surface rounded-lg border border-line p-4 space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Выручка — последние 12 мес.</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Выручка — последние 12 мес.</p>
               <div className="flex gap-3">
-                <span className="flex items-center gap-1 text-[10px] text-amber-600">
+                <span className="flex items-center gap-1 text-[11px] text-amber-600">
                   <span className="inline-block w-4 border-t-2 border-dashed border-amber-500" />ТБ0
                 </span>
-                <span className="flex items-center gap-1 text-[10px] text-red-600">
+                <span className="flex items-center gap-1 text-[11px] text-red-600">
                   <span className="inline-block w-4 border-t-2 border-dashed border-red-500" />ТБ1
                 </span>
               </div>
             </div>
             <RevenueChart months={months} tb0={tb0} tb1={tb1} />
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-[#f5f5f3]">
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-canvas">
               {[
                 { label: 'Покрыт ТБ0', ok: currentMonthRev >= tb0,
                   detail: currentMonthRev >= tb0 ? `+${fmt(currentMonthRev-tb0)}` : `-${fmt(tb0-currentMonthRev)}` },
@@ -1011,8 +1011,8 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
                   detail: forecastRev > 0 ? `${Math.round(currentMonthRev/forecastRev*100)}%` : '—' },
               ].map(item => (
                 <div key={item.label} className={`rounded-lg px-3 py-2 ${item.ok ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                  <p className={`text-[10px] font-medium ${item.ok ? 'text-emerald-700' : 'text-red-700'}`}>{item.label}</p>
-                  <p className={`text-xs font-bold font-mono mt-0.5 ${item.ok ? 'text-emerald-700' : 'text-red-700'}`}>{item.detail}</p>
+                  <p className={`text-[11px] font-medium ${item.ok ? 'text-emerald-700' : 'text-red-700'}`}>{item.label}</p>
+                  <p className={`text-xs font-semibold font-mono mt-0.5 ${item.ok ? 'text-emerald-700' : 'text-red-700'}`}>{item.detail}</p>
                 </div>
               ))}
             </div>
@@ -1024,23 +1024,23 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
             ════════════════════════════════════ */}
         {tab === 'settings' && (
           <div className="grid grid-cols-[340px_1fr] gap-4">
-            <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-4">
+            <div className="bg-surface rounded-lg border border-line p-4 space-y-4">
               <div className="flex items-center justify-between">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Параметры FC / VC</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Параметры FC / VC</p>
                 {editSettings ? (
                   <div className="flex gap-1.5">
                     <button onClick={() => { setS(initialSettings); setEditSett(false) }}
-                      className="px-2 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-[#f5f5f3]">
+                      className="px-2 py-1 text-[11px] border border-line rounded text-ink-soft hover:bg-canvas">
                       Отмена
                     </button>
                     <button onClick={saveSettings} disabled={saving}
-                      className="px-2 py-1 text-[10px] bg-[#111110] text-white rounded font-medium disabled:opacity-50">
+                      className="px-2 py-1 text-[11px] bg-ink text-white rounded font-medium disabled:opacity-50">
                       {saving ? '…' : 'Сохранить'}
                     </button>
                   </div>
                 ) : (
                   <button onClick={() => setEditSett(true)}
-                    className="px-2 py-1 text-[10px] border border-[#e4e4e0] rounded text-[#6b6b66] hover:bg-[#f5f5f3]">
+                    className="px-2 py-1 text-[11px] border border-line rounded text-ink-soft hover:bg-canvas">
                     Изменить
                   </button>
                 )}
@@ -1048,64 +1048,64 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
 
               {/* Tax system */}
               <div>
-                <p className="text-[10px] text-[#9a9a95] mb-1">Система налогообложения</p>
+                <p className="text-[11px] text-muted mb-1">Система налогообложения</p>
                 {editSettings ? (
                   <select value={s.tax_system} onChange={e => setS(p => ({ ...p, tax_system: e.target.value }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs focus:outline-none focus:border-[#111110]">
+                    className="w-full border border-line rounded px-2 py-1 text-xs focus:outline-none focus:border-ink">
                     {TAX_SYSTEMS.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                   </select>
                 ) : (
-                  <p className="text-xs font-semibold text-[#111110]">{TAX_SYSTEMS.find(t => t.value === s.tax_system)?.label}</p>
+                  <p className="text-xs font-semibold text-ink">{TAX_SYSTEMS.find(t => t.value === s.tax_system)?.label}</p>
                 )}
               </div>
 
               {/* Variable costs % */}
               <div>
-                <p className="text-[10px] text-[#9a9a95] mb-1">Переменные расходы (средний %)</p>
+                <p className="text-[11px] text-muted mb-1">Переменные расходы (средний %)</p>
                 {editSettings ? (
                   <input type="number" value={s.avg_variable_pct}
                     onChange={e => setS(p => ({ ...p, avg_variable_pct: Number(e.target.value) }))}
-                    className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-[#111110]" />
+                    className="w-full border border-line rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-ink" />
                 ) : (
-                  <p className="text-xs font-mono font-semibold text-[#111110]">{s.avg_variable_pct}%</p>
+                  <p className="text-xs font-mono font-semibold text-ink">{s.avg_variable_pct}%</p>
                 )}
               </div>
 
               {/* Fixed costs */}
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">Постоянные расходы</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Постоянные расходы</p>
                 {(Object.keys(s.fixed_costs) as (keyof typeof s.fixed_costs)[]).map(key => (
                   <div key={key}>
-                    <p className="text-[10px] text-[#9a9a95] mb-0.5">{FC_LABELS[key] ?? key}</p>
+                    <p className="text-[11px] text-muted mb-0.5">{FC_LABELS[key] ?? key}</p>
                     {editSettings ? (
                       <input type="number" value={s.fixed_costs[key]}
                         onChange={e => setS(p => ({ ...p, fixed_costs: { ...p.fixed_costs, [key]: Number(e.target.value) } }))}
-                        className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-[#111110]" />
+                        className="w-full border border-line rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-ink" />
                     ) : (
-                      <p className="text-xs font-mono font-semibold text-[#111110]">{s.fixed_costs[key].toLocaleString('ru-RU')} ₽</p>
+                      <p className="text-xs font-mono font-semibold text-ink">{s.fixed_costs[key].toLocaleString('ru-RU')} ₽</p>
                     )}
                   </div>
                 ))}
-                <div className="flex justify-between pt-1 border-t border-[#f5f5f3]">
-                  <span className="text-[10px] text-[#9a9a95]">Итого FC</span>
-                  <span className="text-xs font-bold font-mono text-[#111110]">{fc.toLocaleString('ru-RU')} ₽</span>
+                <div className="flex justify-between pt-1 border-t border-canvas">
+                  <span className="text-[11px] text-muted">Итого FC</span>
+                  <span className="text-xs font-semibold font-mono text-ink">{fc.toLocaleString('ru-RU')} ₽</span>
                 </div>
               </div>
 
               {/* Profit split */}
               <div className="space-y-2">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider">Раздел прибыли (ДДС)</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wider">Раздел прибыли (ДДС)</p>
                 {(['owner_pct','education_pct','reserve_pct'] as const).map(key => {
                   const label = key === 'owner_pct' ? 'Собственник %' : key === 'education_pct' ? 'Обучение %' : 'Резерв %'
                   return (
                     <div key={key}>
-                      <p className="text-[10px] text-[#9a9a95] mb-0.5">{label}</p>
+                      <p className="text-[11px] text-muted mb-0.5">{label}</p>
                       {editSettings ? (
                         <input type="number" value={s.profit_split[key]}
                           onChange={e => setS(p => ({ ...p, profit_split: { ...p.profit_split, [key]: Number(e.target.value) } }))}
-                          className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-[#111110]" />
+                          className="w-full border border-line rounded px-2 py-1 text-xs font-mono focus:outline-none focus:border-ink" />
                       ) : (
-                        <p className="text-xs font-mono font-semibold text-[#111110]">{s.profit_split[key]}%</p>
+                        <p className="text-xs font-mono font-semibold text-ink">{s.profit_split[key]}%</p>
                       )}
                     </div>
                   )
@@ -1115,23 +1115,23 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
 
             {/* Settings info */}
             <div className="space-y-3">
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Структура расходов</p>
+              <div className="bg-surface rounded-lg border border-line p-4">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Структура расходов</p>
                 {(Object.keys(s.fixed_costs) as (keyof typeof s.fixed_costs)[]).map(key => {
                   const pct = fc > 0 ? Math.round(s.fixed_costs[key] / fc * 100) : 0
                   return (
                     <div key={key} className="mb-2">
-                      <div className="flex justify-between text-[10px] mb-0.5">
-                        <span className="text-[#6b6b66]">{FC_LABELS[key]}</span>
-                        <span className="font-mono text-[#111110]">{num(s.fixed_costs[key])} ₽ · {pct}%</span>
+                      <div className="flex justify-between text-[11px] mb-0.5">
+                        <span className="text-ink-soft">{FC_LABELS[key]}</span>
+                        <span className="font-mono text-ink">{num(s.fixed_costs[key])} ₽ · {pct}%</span>
                       </div>
-                      <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-                        <div className="h-full bg-[#111110] rounded-full" style={{ width: `${pct}%` }} />
+                      <div className="h-1.5 bg-line-soft rounded-full overflow-hidden">
+                        <div className="h-full bg-ink rounded-full" style={{ width: `${pct}%` }} />
                       </div>
                     </div>
                   )
                 })}
-                <div className="flex justify-between text-[10px] pt-2 border-t border-[#e4e4e0] font-semibold">
+                <div className="flex justify-between text-[11px] pt-2 border-t border-line font-semibold">
                   <span>Итого FC</span>
                   <span className="font-mono">{num(fc)} ₽</span>
                 </div>
@@ -1139,8 +1139,8 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
 
               {/* SQL migration hint */}
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
-                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-1">SQL — создание таблицы</p>
-                <pre className="text-[10px] font-mono text-amber-800 bg-amber-100 rounded p-2 overflow-x-auto whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS cfo_settings (
+                <p className="text-[11px] font-semibold text-amber-700 uppercase tracking-wider mb-1">SQL — создание таблицы</p>
+                <pre className="text-[11px] font-mono text-amber-800 bg-amber-100 rounded p-2 overflow-x-auto whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS cfo_settings (
   id                     serial PRIMARY KEY,
   entity_type            text DEFAULT 'ip',
   tax_system             text DEFAULT 'usn_6',

@@ -121,30 +121,30 @@ export default function AnalyticsMglassClient({ calcs, users }: Props) {
   }
 
   function tierColor(revenue: number) {
-    if (revenue >= 4_000_000) return 'text-emerald-700 font-bold'
+    if (revenue >= 4_000_000) return 'text-emerald-700 font-semibold'
     if (revenue >= 3_000_000) return 'text-amber-700 font-semibold'
     if (revenue >= 2_000_000) return 'text-blue-700 font-semibold'
-    if (revenue > 0) return 'text-[#4b4b47]'
-    return 'text-[#d4d4d0]'
+    if (revenue > 0) return 'text-ink-soft'
+    return 'text-faint'
   }
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[1100px] mx-auto px-4 py-4 space-y-4">
 
         {/* Шапка */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-sm font-semibold text-[#111110]">Аналитика МГласс</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">Выручка по менеджерам</p>
+            <h1 className="text-sm font-semibold text-ink">Аналитика МГласс</h1>
+            <p className="text-[10px] text-muted mt-0.5">Выручка по менеджерам</p>
           </div>
           <div className="flex gap-1.5">
             {/* Статус */}
-            <div className="flex gap-1 bg-white border border-[#e4e4e0] rounded-lg p-0.5">
+            <div className="flex gap-1 bg-surface border border-line rounded-lg p-0.5">
               {(['approved', 'all'] as StatusFilter[]).map(s => (
                 <button key={s} onClick={() => setStatusFilter(s)}
                   className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-colors ${
-                    statusFilter === s ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'
+                    statusFilter === s ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'
                   }`}>
                   {s === 'approved' ? 'Принятые' : 'Все'}
                 </button>
@@ -157,43 +157,43 @@ export default function AnalyticsMglassClient({ calcs, users }: Props) {
         <div className="grid grid-cols-2 gap-3">
           {historicalSummary.map(ys => (
             <div key={ys.year}
-              className={`bg-white rounded-lg border px-4 py-3 cursor-pointer transition-all ${
-                year === ys.year ? 'border-[#111110] shadow-sm' : 'border-[#e4e4e0] hover:border-[#9a9a95]'
+              className={`bg-surface rounded-lg border px-4 py-3 cursor-pointer transition-all ${
+                year === ys.year ? 'border-ink shadow-sm' : 'border-line hover:border-muted'
               }`}
               onClick={() => setYear(ys.year as 2025 | 2026)}>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+                <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">
                   {ys.year} год{ys.year === 2026 ? ' (янв–апр)' : ''}
                 </p>
-                {year === ys.year && <span className="text-[9px] bg-[#111110] text-white px-1.5 py-0.5 rounded">Выбран</span>}
+                {year === ys.year && <span className="text-[9px] bg-ink text-white px-1.5 py-0.5 rounded">Выбран</span>}
               </div>
-              <p className="text-2xl font-bold font-mono text-[#111110]">{fmtFull(ys.total)}</p>
+              <p className="text-2xl font-semibold font-mono text-ink">{fmtFull(ys.total)}</p>
             </div>
           ))}
         </div>
 
         {/* Таблица по месяцам */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-[#e4e4e0] flex items-center justify-between">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+        <div className="bg-surface rounded-lg border border-line overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-line flex items-center justify-between">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">
               {year} — по месяцам
             </p>
-            <p className="text-xs font-mono font-semibold text-[#111110]">{fmtFull(grandTotal)}</p>
+            <p className="text-xs font-mono font-semibold text-ink">{fmtFull(grandTotal)}</p>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full text-xs border-collapse min-w-[700px]">
               <thead>
-                <tr className="bg-[#fafaf9]">
-                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider border-b border-[#e4e4e0] w-28 sticky left-0 bg-[#fafaf9]">
+                <tr className="bg-subtle">
+                  <th className="text-left px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-line w-28 sticky left-0 bg-subtle">
                     Менеджер
                   </th>
                   {months.map(m => (
-                    <th key={m} className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider border-b border-[#e4e4e0] text-right whitespace-nowrap">
+                    <th key={m} className="px-2 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-line text-right whitespace-nowrap">
                       {MONTH_NAMES[m]}
                     </th>
                   ))}
-                  <th className="px-3 py-2 text-[10px] font-semibold text-emerald-700 uppercase tracking-wider border-b border-[#e4e4e0] text-right whitespace-nowrap sticky right-0 bg-[#fafaf9]">
+                  <th className="px-3 py-2 text-[10px] font-semibold text-emerald-700 uppercase tracking-wider border-b border-line text-right whitespace-nowrap sticky right-0 bg-subtle">
                     Итого
                   </th>
                 </tr>
@@ -202,19 +202,19 @@ export default function AnalyticsMglassClient({ calcs, users }: Props) {
                 {activeUsers.map((u, idx) => {
                   const userTotal = months.reduce((s, m) => s + (userMonthMap[u.id]?.[m] ?? 0), 0)
                   return (
-                    <tr key={u.id} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafaf9]/50'}>
-                      <td className={`px-3 py-2 font-medium text-[#111110] border-b border-[#f5f5f3] sticky left-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafaf9]/50'}`}>
+                    <tr key={u.id} className={idx % 2 === 0 ? 'bg-surface' : 'bg-subtle/50'}>
+                      <td className={`px-3 py-2 font-medium text-ink border-b border-line-soft sticky left-0 ${idx % 2 === 0 ? 'bg-surface' : 'bg-subtle/50'}`}>
                         {userName(u)}
                       </td>
                       {months.map(m => {
                         const v = userMonthMap[u.id]?.[m] ?? 0
                         return (
-                          <td key={m} className={`px-2 py-2 text-right border-b border-[#f5f5f3] font-mono whitespace-nowrap ${tierColor(v)}`}>
+                          <td key={m} className={`px-2 py-2 text-right border-b border-line-soft font-mono whitespace-nowrap ${tierColor(v)}`}>
                             {fmt(v)}
                           </td>
                         )
                       })}
-                      <td className="px-3 py-2 text-right border-b border-[#f5f5f3] font-mono font-bold text-emerald-700 whitespace-nowrap sticky right-0 bg-white">
+                      <td className="px-3 py-2 text-right border-b border-line-soft font-mono font-semibold text-emerald-700 whitespace-nowrap sticky right-0 bg-surface">
                         {fmtFull(userTotal)}
                       </td>
                     </tr>
@@ -222,14 +222,14 @@ export default function AnalyticsMglassClient({ calcs, users }: Props) {
                 })}
 
                 {/* Строка итого */}
-                <tr className="bg-[#fafaf9] border-t border-[#e4e4e0]">
-                  <td className="px-3 py-2 font-semibold text-[#4b4b47] sticky left-0 bg-[#fafaf9]">Итого</td>
+                <tr className="bg-subtle border-t border-line">
+                  <td className="px-3 py-2 font-semibold text-ink-soft sticky left-0 bg-subtle">Итого</td>
                   {months.map(m => (
-                    <td key={m} className="px-2 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                    <td key={m} className="px-2 py-2 text-right font-mono font-semibold text-ink whitespace-nowrap">
                       {fmt(monthTotals[m] ?? 0)}
                     </td>
                   ))}
-                  <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700 whitespace-nowrap sticky right-0 bg-[#fafaf9]">
+                  <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap sticky right-0 bg-subtle">
                     {fmtFull(grandTotal)}
                   </td>
                 </tr>
@@ -238,30 +238,30 @@ export default function AnalyticsMglassClient({ calcs, users }: Props) {
           </div>
 
           {/* Легенда тиров */}
-          <div className="px-4 py-2 border-t border-[#e4e4e0] flex gap-4">
+          <div className="px-4 py-2 border-t border-line flex gap-4">
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />
-              <span className="text-[10px] text-[#9a9a95]">4M+ (тир 5%)</span>
+              <span className="text-[10px] text-muted">4M+ (тир 5%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
-              <span className="text-[10px] text-[#9a9a95]">3–4M (тир 4%)</span>
+              <span className="text-[10px] text-muted">3–4M (тир 4%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0" />
-              <span className="text-[10px] text-[#9a9a95]">2–3M (тир 3%)</span>
+              <span className="text-[10px] text-muted">2–3M (тир 3%)</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-gray-400 flex-shrink-0" />
-              <span className="text-[10px] text-[#9a9a95]">до 2M (тир 2%)</span>
+              <span className="text-[10px] text-muted">до 2M (тир 2%)</span>
             </div>
           </div>
         </div>
 
         {activeUsers.length === 0 && (
-          <div className="bg-white rounded-lg border border-[#e4e4e0] p-8 text-center">
-            <p className="text-xs text-[#9a9a95]">Нет данных за {year} год</p>
-            <p className="text-[10px] text-[#c4c4be] mt-1">Расчёты появятся здесь по мере сохранения заказов</p>
+          <div className="bg-surface rounded-lg border border-line p-8 text-center">
+            <p className="text-xs text-muted">Нет данных за {year} год</p>
+            <p className="text-[10px] text-faint mt-1">Расчёты появятся здесь по мере сохранения заказов</p>
           </div>
         )}
 
@@ -300,11 +300,11 @@ function HistoricalTable({ year }: { year: 2025 | 2026 }) {
   const year2026Total = managers.reduce((s, mg) => s + Object.values(HISTORICAL[mg]?.['2026'] ?? {}).reduce((a, b) => a + b, 0), 0)
 
   function tierColor(revenue: number) {
-    if (revenue >= 4_000_000) return 'text-emerald-700 font-bold'
+    if (revenue >= 4_000_000) return 'text-emerald-700 font-semibold'
     if (revenue >= 3_000_000) return 'text-amber-700 font-semibold'
     if (revenue >= 2_000_000) return 'text-blue-700 font-semibold'
-    if (revenue > 0) return 'text-[#4b4b47]'
-    return 'text-[#d4d4d0]'
+    if (revenue > 0) return 'text-ink-soft'
+    return 'text-faint'
   }
 
   function fmt(n: number) {
@@ -319,34 +319,34 @@ function HistoricalTable({ year }: { year: 2025 | 2026 }) {
   }
 
   return (
-    <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-      <div className="px-4 py-2.5 border-b border-[#e4e4e0]">
+    <div className="bg-surface rounded-lg border border-line overflow-hidden">
+      <div className="px-4 py-2.5 border-b border-line">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">
               Поступления — управленческая таблица
             </p>
-            <p className="text-[10px] text-[#c4c4be] mt-0.5">фактические оплаты из CRM</p>
+            <p className="text-[10px] text-faint mt-0.5">фактические оплаты из CRM</p>
           </div>
           <div className="text-right">
-            <p className="text-xs font-mono font-bold text-[#111110]">{fmtFull(grandTotal)}</p>
-            <p className="text-[10px] text-[#9a9a95]">{year} год</p>
+            <p className="text-xs font-mono font-semibold text-ink">{fmtFull(grandTotal)}</p>
+            <p className="text-[10px] text-muted">{year} год</p>
           </div>
         </div>
 
         {/* Итого по годам */}
-        <div className="flex gap-4 mt-2 pt-2 border-t border-[#f5f5f3]">
+        <div className="flex gap-4 mt-2 pt-2 border-t border-line-soft">
           <div>
-            <p className="text-[10px] text-[#9a9a95]">2025 всего</p>
-            <p className="text-sm font-bold font-mono text-[#111110]">{fmtFull(year2025Total)}</p>
+            <p className="text-[10px] text-muted">2025 всего</p>
+            <p className="text-sm font-semibold font-mono text-ink">{fmtFull(year2025Total)}</p>
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95]">2026 янв–апр</p>
-            <p className="text-sm font-bold font-mono text-[#111110]">{fmtFull(year2026Total)}</p>
+            <p className="text-[10px] text-muted">2026 янв–апр</p>
+            <p className="text-sm font-semibold font-mono text-ink">{fmtFull(year2026Total)}</p>
           </div>
           <div className="ml-auto text-right">
-            <p className="text-[10px] text-[#9a9a95]">2025+2026</p>
-            <p className="text-sm font-bold font-mono text-emerald-700">{fmtFull(year2025Total + year2026Total)}</p>
+            <p className="text-[10px] text-muted">2025+2026</p>
+            <p className="text-sm font-semibold font-mono text-emerald-700">{fmtFull(year2025Total + year2026Total)}</p>
           </div>
         </div>
       </div>
@@ -354,49 +354,49 @@ function HistoricalTable({ year }: { year: 2025 | 2026 }) {
       <div className="overflow-x-auto">
         <table className="w-full text-xs border-collapse min-w-[600px]">
           <thead>
-            <tr className="bg-[#fafaf9]">
-              <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider border-b border-[#e4e4e0] sticky left-0 bg-[#fafaf9]">
+            <tr className="bg-subtle">
+              <th className="text-left px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-line sticky left-0 bg-subtle">
                 Менеджер
               </th>
               {months.map(m => (
-                <th key={m} className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wider border-b border-[#e4e4e0] text-right whitespace-nowrap">
+                <th key={m} className="px-2 py-2 text-[10px] font-semibold text-muted uppercase tracking-wider border-b border-line text-right whitespace-nowrap">
                   {MONTH_NAMES[m - 1]}
                 </th>
               ))}
-              <th className="px-3 py-2 text-[10px] font-semibold text-emerald-700 uppercase tracking-wider border-b border-[#e4e4e0] text-right sticky right-0 bg-[#fafaf9]">
+              <th className="px-3 py-2 text-[10px] font-semibold text-emerald-700 uppercase tracking-wider border-b border-line text-right sticky right-0 bg-subtle">
                 Итого
               </th>
             </tr>
           </thead>
           <tbody>
             {managers.map((mg, idx) => (
-              <tr key={mg} className={idx % 2 === 0 ? 'bg-white' : 'bg-[#fafaf9]/50'}>
-                <td className={`px-3 py-2 font-medium text-[#111110] border-b border-[#f5f5f3] sticky left-0 ${idx % 2 === 0 ? 'bg-white' : 'bg-[#fafaf9]/50'}`}>
+              <tr key={mg} className={idx % 2 === 0 ? 'bg-surface' : 'bg-subtle/50'}>
+                <td className={`px-3 py-2 font-medium text-ink border-b border-line-soft sticky left-0 ${idx % 2 === 0 ? 'bg-surface' : 'bg-subtle/50'}`}>
                   {mg}
                 </td>
                 {months.map(m => {
                   const v = val(mg, m)
                   return (
-                    <td key={m} className={`px-2 py-2 text-right border-b border-[#f5f5f3] font-mono whitespace-nowrap ${tierColor(v)}`}>
+                    <td key={m} className={`px-2 py-2 text-right border-b border-line-soft font-mono whitespace-nowrap ${tierColor(v)}`}>
                       {fmt(v)}
                     </td>
                   )
                 })}
-                <td className="px-3 py-2 text-right border-b border-[#f5f5f3] font-mono font-bold text-emerald-700 whitespace-nowrap sticky right-0 bg-white">
+                <td className="px-3 py-2 text-right border-b border-line-soft font-mono font-semibold text-emerald-700 whitespace-nowrap sticky right-0 bg-surface">
                   {fmtFull(userTotal(mg))}
                 </td>
               </tr>
             ))}
 
             {/* Итого по месяцам */}
-            <tr className="bg-[#fafaf9] border-t border-[#e4e4e0]">
-              <td className="px-3 py-2 font-semibold text-[#4b4b47] sticky left-0 bg-[#fafaf9]">Итого</td>
+            <tr className="bg-subtle border-t border-line">
+              <td className="px-3 py-2 font-semibold text-ink-soft sticky left-0 bg-subtle">Итого</td>
               {months.map(m => (
-                <td key={m} className="px-2 py-2 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                <td key={m} className="px-2 py-2 text-right font-mono font-semibold text-ink whitespace-nowrap">
                   {fmt(monthTotal(m))}
                 </td>
               ))}
-              <td className="px-3 py-2 text-right font-mono font-bold text-emerald-700 whitespace-nowrap sticky right-0 bg-[#fafaf9]">
+              <td className="px-3 py-2 text-right font-mono font-semibold text-emerald-700 whitespace-nowrap sticky right-0 bg-subtle">
                 {fmtFull(grandTotal)}
               </td>
             </tr>
@@ -405,24 +405,24 @@ function HistoricalTable({ year }: { year: 2025 | 2026 }) {
       </div>
 
       {/* Итого по каждому за оба года */}
-      <div className="px-4 py-3 border-t border-[#e4e4e0] bg-[#fafaf9]">
-        <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Итого за 2025+2026</p>
+      <div className="px-4 py-3 border-t border-line bg-subtle">
+        <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Итого за 2025+2026</p>
         <div className="grid grid-cols-4 gap-2">
           {managers.map(mg => {
             const total25 = Object.values(HISTORICAL[mg]?.['2025'] ?? {}).reduce((a, b) => a + b, 0)
             const total26 = Object.values(HISTORICAL[mg]?.['2026'] ?? {}).reduce((a, b) => a + b, 0)
             return (
-              <div key={mg} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-2">
-                <p className="text-xs font-semibold text-[#111110]">{mg}</p>
-                <p className="text-base font-bold font-mono text-emerald-700 mt-0.5">{fmtFull(total25 + total26)}</p>
+              <div key={mg} className="bg-surface rounded-lg border border-line px-3 py-2">
+                <p className="text-xs font-semibold text-ink">{mg}</p>
+                <p className="text-base font-semibold font-mono text-emerald-700 mt-0.5">{fmtFull(total25 + total26)}</p>
                 <div className="mt-1 space-y-0.5">
                   <div className="flex justify-between">
-                    <span className="text-[10px] text-[#9a9a95]">2025</span>
-                    <span className="text-[10px] font-mono text-[#4b4b47]">{fmtFull(total25)}</span>
+                    <span className="text-[10px] text-muted">2025</span>
+                    <span className="text-[10px] font-mono text-ink-soft">{fmtFull(total25)}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-[10px] text-[#9a9a95]">2026</span>
-                    <span className="text-[10px] font-mono text-[#4b4b47]">{fmtFull(total26)}</span>
+                    <span className="text-[10px] text-muted">2026</span>
+                    <span className="text-[10px] font-mono text-ink-soft">{fmtFull(total26)}</span>
                   </div>
                 </div>
               </div>

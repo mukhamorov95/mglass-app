@@ -75,9 +75,9 @@ export default async function OwnerCenterPage() {
 
       {/* Header */}
       <div className="mb-8">
-        <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wider mb-1">Только для владельца</p>
-        <h1 className="text-[24px] font-bold text-[#111110] tracking-tight">Owner Center</h1>
-        <p className="text-[14px] text-[#6b6b66] mt-1">Полный доступ к управлению платформой MGlass</p>
+        <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Только для владельца</p>
+        <h1 className="text-[24px] font-semibold text-ink tracking-tight">Owner Center</h1>
+        <p className="text-[14px] text-ink-soft mt-1">Полный доступ к управлению платформой MGlass</p>
       </div>
 
       {/* Sections */}
@@ -85,19 +85,19 @@ export default async function OwnerCenterPage() {
         {SECTIONS.map(section => (
           <div key={section.title}>
             <div className="flex items-center gap-3 mb-3">
-              <h2 className="text-[13px] font-bold text-[#111110]">{section.title}</h2>
-              <div className="flex-1 h-px bg-[#e4e4e0]" />
+              <h2 className="text-[13px] font-semibold text-ink">{section.title}</h2>
+              <div className="flex-1 h-px bg-line" />
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {section.items.map(item => (
                 <Link key={item.href} href={item.href}
-                  className={`flex items-start gap-3 bg-white border-2 ${section.color} rounded-xl p-4 hover:shadow-md hover:border-opacity-60 transition-all group`}>
+                  className={`flex items-start gap-3 bg-surface border-2 ${section.color} rounded-xl p-4 hover:shadow-md hover:border-opacity-60 transition-all group`}>
                   <span className="text-xl mt-0.5 flex-shrink-0">{item.emoji}</span>
                   <div className="min-w-0">
-                    <p className="text-[14px] font-semibold text-[#111110] group-hover:text-blue-600 transition-colors leading-tight">
+                    <p className="text-[14px] font-semibold text-ink group-hover:text-blue-600 transition-colors leading-tight">
                       {item.label}
                     </p>
-                    <p className="text-[12px] text-[#6b6b66] mt-0.5 leading-snug">{item.desc}</p>
+                    <p className="text-[12px] text-ink-soft mt-0.5 leading-snug">{item.desc}</p>
                   </div>
                 </Link>
               ))}

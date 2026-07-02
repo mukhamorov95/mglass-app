@@ -105,19 +105,19 @@ function fmtPrice(n: number | undefined) {
 
 function SectionHead({ title }: { title: string }) {
   return (
-    <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide mb-2">{title}</p>
+    <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-2">{title}</p>
   )
 }
 
 function SafetyFlag({ label, value }: { label: string; value: boolean }) {
   return (
     <div className="flex items-center gap-1.5">
-      <span className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+      <span className={`w-4 h-4 rounded flex items-center justify-center text-[10px] font-semibold flex-shrink-0 ${
         value ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-600'
       }`}>
         {value ? '!' : '✓'}
       </span>
-      <span className="text-[11px] text-[#6b6b66]">{label}</span>
+      <span className="text-[11px] text-ink-soft">{label}</span>
       <span className={`text-[10px] font-mono ${value ? 'text-red-500' : 'text-emerald-600'}`}>
         {String(value)}
       </span>
@@ -231,19 +231,19 @@ export default function AIProposalDetailPage() {
   // ── Render guards ──────────────────────────────────────────────────────────
 
   if (loading) return (
-    <div className="min-h-screen bg-[#f7f7f6] flex items-center justify-center">
-      <div className="flex items-center gap-2 text-[#9a9a95] text-xs">
-        <div className="w-4 h-4 border-2 border-[#d0d0cc] border-t-[#9a9a95] rounded-full animate-spin" />
+    <div className="min-h-screen bg-canvas flex items-center justify-center">
+      <div className="flex items-center gap-2 text-muted text-xs">
+        <div className="w-4 h-4 border-2 border-faint border-t-muted rounded-full animate-spin" />
         Загрузка черновика...
       </div>
     </div>
   )
 
   if (fetchError || !proposal) return (
-    <div className="min-h-screen bg-[#f7f7f6] flex flex-col items-center justify-center gap-3">
+    <div className="min-h-screen bg-canvas flex flex-col items-center justify-center gap-3">
       <p className="text-sm text-red-500">{fetchError ?? 'Не найдено'}</p>
       <button onClick={() => router.push('/admin/ai-proposals')}
-        className="text-xs text-[#9a9a95] underline">← Назад к списку</button>
+        className="text-xs text-muted underline">← Назад к списку</button>
     </div>
   )
 
@@ -265,29 +265,29 @@ export default function AIProposalDetailPage() {
   ].filter(l => l != null).join('\n') : ''
 
   return (
-    <div className="min-h-screen bg-[#f7f7f6]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-3xl mx-auto px-4 py-4">
 
         {/* Nav */}
         <div className="flex items-center gap-3 mb-4">
           <button onClick={() => router.push('/admin/ai-proposals')}
-            className="text-[11px] text-[#9a9a95] hover:text-[#4b4b47] transition-colors flex items-center gap-1">
+            className="text-[11px] text-muted hover:text-ink-soft transition-colors flex items-center gap-1">
             ← Черновики КП
           </button>
-          <span className="text-[#d0d0cc] text-xs">/</span>
-          <span className="text-[11px] text-[#6b6b66]">#{proposal.id}</span>
+          <span className="text-faint text-xs">/</span>
+          <span className="text-[11px] text-ink-soft">#{proposal.id}</span>
         </div>
 
         {/* Title row */}
         <div className="flex items-start justify-between gap-3 mb-4">
           <div>
-            <h1 className="text-base font-semibold text-[#111110]">
+            <h1 className="text-base font-semibold text-ink">
               {proposal.proposal_title ?? `AI КП #${proposal.id}`}
             </h1>
             {proposal.client_name && (
-              <p className="text-xs text-[#9a9a95] mt-0.5">Клиент: {proposal.client_name}</p>
+              <p className="text-xs text-muted mt-0.5">Клиент: {proposal.client_name}</p>
             )}
-            <p className="text-[10px] text-[#b8b8b4] mt-0.5">
+            <p className="text-[10px] text-faint mt-0.5">
               Создан {fmtDate(proposal.created_at)}
               {proposal.created_by && ` · ${proposal.created_by}`}
             </p>
@@ -306,7 +306,7 @@ export default function AIProposalDetailPage() {
         </div>
 
         {/* Safety flags */}
-        <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+        <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-3">
           <SectionHead title="Safety-флаги" />
           <div className="grid grid-cols-2 gap-1.5">
             <SafetyFlag label="approval_required"   value={proposal.approval_required} />
@@ -319,7 +319,7 @@ export default function AIProposalDetailPage() {
 
         {/* Actions */}
         {!isFinal && (
-          <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+          <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-3">
             <SectionHead title="Действия" />
 
             <div className="flex items-start gap-2 flex-wrap">
@@ -346,7 +346,7 @@ export default function AIProposalDetailPage() {
               {managerText && (
                 <button
                   onClick={() => copyText(managerText, 'msg')}
-                  className="h-8 px-3 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                  className="h-8 px-3 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-canvas transition-colors">
                   {copied === 'msg' ? '✓ Скопировано' : '📋 Скопировать сообщение'}
                 </button>
               )}
@@ -355,7 +355,7 @@ export default function AIProposalDetailPage() {
               {fullDraftText && (
                 <button
                   onClick={() => copyText(fullDraftText, 'draft')}
-                  className="h-8 px-3 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                  className="h-8 px-3 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-canvas transition-colors">
                   {copied === 'draft' ? '✓ Скопировано' : '📄 Скопировать черновик'}
                 </button>
               )}
@@ -363,7 +363,7 @@ export default function AIProposalDetailPage() {
               {/* Open print / PDF view */}
               <button
                 onClick={() => window.open(`/admin/ai-proposals/${id}/print`, '_blank')}
-                className="h-8 px-3 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                className="h-8 px-3 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-canvas transition-colors">
                 🖨 Открыть КП для печати
               </button>
             </div>
@@ -377,7 +377,7 @@ export default function AIProposalDetailPage() {
                   onChange={e => setRejectReason(e.target.value)}
                   placeholder="Укажите причину..."
                   rows={2}
-                  className="w-full text-[12px] px-3 py-2 rounded-lg border border-red-200 bg-white resize-none focus:outline-none focus:ring-1 focus:ring-red-300 text-[#111110] placeholder:text-[#b8b8b4]"
+                  className="w-full text-[12px] px-3 py-2 rounded-lg border border-red-200 bg-surface resize-none focus:outline-none focus:ring-1 focus:ring-red-300 text-ink placeholder:text-faint"
                 />
                 <div className="flex gap-2 mt-2">
                   <button
@@ -390,7 +390,7 @@ export default function AIProposalDetailPage() {
                   </button>
                   <button
                     onClick={() => { setShowRejectForm(false); setRejectReason(''); setRejectError(null) }}
-                    className="h-7 px-3 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-white transition-colors">
+                    className="h-7 px-3 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-surface transition-colors">
                     Отмена
                   </button>
                 </div>
@@ -409,7 +409,7 @@ export default function AIProposalDetailPage() {
           <div className={`mb-4 px-4 py-3 rounded-xl border ${
             proposal.status === 'approved'
               ? 'bg-emerald-50 border-emerald-200'
-              : 'bg-[#f5f5f3] border-[#e8e8e5]'
+              : 'bg-canvas border-line'
           }`}>
             {proposal.status === 'approved' && (
               <div>
@@ -443,11 +443,11 @@ export default function AIProposalDetailPage() {
             )}
             {proposal.status === 'rejected' && (
               <div>
-                <p className="text-[12px] font-medium text-[#4b4b47]">
+                <p className="text-[12px] font-medium text-ink-soft">
                   Отклонено {fmtDate(proposal.rejected_at)}
                 </p>
                 {proposal.rejection_reason && (
-                  <p className="text-[11px] text-[#6b6b66] mt-0.5">{proposal.rejection_reason}</p>
+                  <p className="text-[11px] text-ink-soft mt-0.5">{proposal.rejection_reason}</p>
                 )}
               </div>
             )}
@@ -456,42 +456,42 @@ export default function AIProposalDetailPage() {
 
         {/* Draft content */}
         {draft ? (
-          <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+          <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-3">
             <SectionHead title="Черновик КП" />
 
             {/* Client summary */}
             {draft.client_summary && (
-              <div className="mb-3 px-3 py-2.5 bg-[#f7f7f6] rounded-lg">
-                <p className="text-[11px] text-[#9a9a95] mb-0.5">Резюме клиента</p>
-                <p className="text-[12px] text-[#111110] leading-relaxed">{draft.client_summary}</p>
+              <div className="mb-3 px-3 py-2.5 bg-canvas rounded-lg">
+                <p className="text-[11px] text-muted mb-0.5">Резюме клиента</p>
+                <p className="text-[12px] text-ink leading-relaxed">{draft.client_summary}</p>
               </div>
             )}
 
             {/* Items */}
             {draft.items && draft.items.length > 0 && (
               <div className="mb-3">
-                <p className="text-[11px] text-[#9a9a95] mb-1.5">Позиции</p>
-                <div className="border border-[#f0f0ee] rounded-lg overflow-hidden">
+                <p className="text-[11px] text-muted mb-1.5">Позиции</p>
+                <div className="border border-line-soft rounded-lg overflow-hidden">
                   <table className="w-full text-[11px]">
                     <thead>
-                      <tr className="bg-[#fafafa] border-b border-[#f0f0ee]">
-                        <th className="px-3 py-2 text-left font-medium text-[#9a9a95]">Наименование</th>
-                        <th className="px-3 py-2 text-right font-medium text-[#9a9a95] w-12">Кол.</th>
-                        <th className="px-3 py-2 text-right font-medium text-[#9a9a95] w-24">Цена</th>
-                        <th className="px-3 py-2 text-right font-medium text-[#9a9a95] w-24">Сумма</th>
+                      <tr className="bg-subtle border-b border-line-soft">
+                        <th className="px-3 py-2 text-left font-medium text-muted">Наименование</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted w-12">Кол.</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted w-24">Цена</th>
+                        <th className="px-3 py-2 text-right font-medium text-muted w-24">Сумма</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#f7f7f7]">
+                    <tbody className="divide-y divide-line-soft">
                       {draft.items.map((item, i) => (
                         <tr key={i}>
-                          <td className="px-3 py-2 text-[#111110]">
+                          <td className="px-3 py-2 text-ink">
                             {item.line_item}
-                            {item.dimensions && <span className="text-[#9a9a95]"> · {item.dimensions}</span>}
-                            {item.note       && <span className="block text-[10px] text-[#b8b8b4]">{item.note}</span>}
+                            {item.dimensions && <span className="text-muted"> · {item.dimensions}</span>}
+                            {item.note       && <span className="block text-[10px] text-faint">{item.note}</span>}
                           </td>
-                          <td className="px-3 py-2 text-right text-[#6b6b66]">{item.quantity}</td>
-                          <td className="px-3 py-2 text-right text-[#6b6b66]">{fmtPrice(item.unit_price)}</td>
-                          <td className="px-3 py-2 text-right font-medium text-[#111110]">{fmtPrice(item.total_price)}</td>
+                          <td className="px-3 py-2 text-right text-ink-soft">{item.quantity}</td>
+                          <td className="px-3 py-2 text-right text-ink-soft">{fmtPrice(item.unit_price)}</td>
+                          <td className="px-3 py-2 text-right font-medium text-ink">{fmtPrice(item.total_price)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -502,18 +502,18 @@ export default function AIProposalDetailPage() {
 
             {/* Price summary */}
             {draft.price_summary && (
-              <div className="mb-3 px-3 py-2.5 bg-[#f7f7f6] rounded-lg text-[11px]">
-                <p className="text-[#9a9a95] mb-1.5">Итог</p>
-                {draft.price_summary.subtotal      != null && <div className="flex justify-between text-[#6b6b66]"><span>Стоимость</span><span>{fmtPrice(draft.price_summary.subtotal)}</span></div>}
-                {draft.price_summary.installation  != null && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж</span><span>{fmtPrice(draft.price_summary.installation)}</span></div>}
-                {draft.price_summary.delivery      != null && <div className="flex justify-between text-[#6b6b66]"><span>Доставка</span><span>{fmtPrice(draft.price_summary.delivery)}</span></div>}
-                {draft.price_summary.discount_percent != null && <div className="flex justify-between text-[#6b6b66]"><span>Скидка</span><span>{draft.price_summary.discount_percent}%</span></div>}
-                <div className="flex justify-between font-semibold text-[#111110] mt-1 pt-1 border-t border-[#e8e8e5]">
+              <div className="mb-3 px-3 py-2.5 bg-canvas rounded-lg text-[11px]">
+                <p className="text-muted mb-1.5">Итог</p>
+                {draft.price_summary.subtotal      != null && <div className="flex justify-between text-ink-soft"><span>Стоимость</span><span>{fmtPrice(draft.price_summary.subtotal)}</span></div>}
+                {draft.price_summary.installation  != null && <div className="flex justify-between text-ink-soft"><span>Монтаж</span><span>{fmtPrice(draft.price_summary.installation)}</span></div>}
+                {draft.price_summary.delivery      != null && <div className="flex justify-between text-ink-soft"><span>Доставка</span><span>{fmtPrice(draft.price_summary.delivery)}</span></div>}
+                {draft.price_summary.discount_percent != null && <div className="flex justify-between text-ink-soft"><span>Скидка</span><span>{draft.price_summary.discount_percent}%</span></div>}
+                <div className="flex justify-between font-semibold text-ink mt-1 pt-1 border-t border-line">
                   <span>Итого</span>
                   <span>{fmtPrice(draft.price_summary.total)}</span>
                 </div>
                 {draft.price_summary.vat_included && (
-                  <p className="text-[10px] text-[#b8b8b4] mt-0.5">{draft.price_summary.vat_included}</p>
+                  <p className="text-[10px] text-faint mt-0.5">{draft.price_summary.vat_included}</p>
                 )}
               </div>
             )}
@@ -521,8 +521,8 @@ export default function AIProposalDetailPage() {
             {/* Terms */}
             {draft.terms && (
               <div className="mb-3 text-[11px]">
-                <p className="text-[#9a9a95] mb-1">Условия</p>
-                <div className="space-y-0.5 text-[#6b6b66]">
+                <p className="text-muted mb-1">Условия</p>
+                <div className="space-y-0.5 text-ink-soft">
                   {draft.terms.lead_time_days && <p>Срок: {draft.terms.lead_time_days[0]}–{draft.terms.lead_time_days[1]} дн.</p>}
                   <p>Оплата: {draft.terms.payment_terms}</p>
                   <p>Гарантия: {draft.terms.warranty}</p>
@@ -534,11 +534,11 @@ export default function AIProposalDetailPage() {
             {/* Exclusions */}
             {draft.exclusions && draft.exclusions.length > 0 && (
               <div className="mb-3">
-                <p className="text-[11px] text-[#9a9a95] mb-1">Не входит в стоимость</p>
+                <p className="text-[11px] text-muted mb-1">Не входит в стоимость</p>
                 <ul className="space-y-0.5">
                   {draft.exclusions.map((ex, i) => (
-                    <li key={i} className="text-[11px] text-[#6b6b66] flex items-start gap-1.5">
-                      <span className="text-[#b8b8b4] mt-0.5 flex-shrink-0">—</span>
+                    <li key={i} className="text-[11px] text-ink-soft flex items-start gap-1.5">
+                      <span className="text-faint mt-0.5 flex-shrink-0">—</span>
                       {ex}
                     </li>
                   ))}
@@ -561,22 +561,22 @@ export default function AIProposalDetailPage() {
             )}
           </div>
         ) : (
-          <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-6 text-center">
-            <p className="text-[12px] text-[#9a9a95]">Черновик КП не был сгенерирован</p>
-            <p className="text-[11px] text-[#b8b8b4] mt-0.5">Возможно, произошла ошибка на этапе генерации</p>
+          <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-6 text-center">
+            <p className="text-[12px] text-muted">Черновик КП не был сгенерирован</p>
+            <p className="text-[11px] text-faint mt-0.5">Возможно, произошла ошибка на этапе генерации</p>
           </div>
         )}
 
         {/* Input snapshot */}
-        <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+        <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-3">
           <SectionHead title="Входные данные" />
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
             {Object.entries(proposal.input_snapshot)
               .filter(([, v]) => v != null && v !== '')
               .map(([k, v]) => (
                 <div key={k} className="flex gap-1.5 items-start">
-                  <span className="text-[#b8b8b4] flex-shrink-0 font-mono">{k}:</span>
-                  <span className="text-[#4b4b47] break-words">{String(v)}</span>
+                  <span className="text-faint flex-shrink-0 font-mono">{k}:</span>
+                  <span className="text-ink-soft break-words">{String(v)}</span>
                 </div>
               ))}
           </div>
@@ -584,7 +584,7 @@ export default function AIProposalDetailPage() {
 
         {/* Warnings */}
         {proposal.warnings.length > 0 && (
-          <div className="mb-4 bg-white rounded-xl border border-amber-100 px-4 py-3">
+          <div className="mb-4 bg-surface rounded-xl border border-amber-100 px-4 py-3">
             <SectionHead title={`Предупреждения (${proposal.warnings.length})`} />
             <ul className="space-y-1">
               {proposal.warnings.map((w, i) => (
@@ -598,15 +598,15 @@ export default function AIProposalDetailPage() {
 
         {/* Errors */}
         {proposal.errors.length > 0 && (
-          <div className="mb-4 bg-white rounded-xl border border-red-100 px-4 py-3">
+          <div className="mb-4 bg-surface rounded-xl border border-red-100 px-4 py-3">
             <SectionHead title={`Ошибки (${proposal.errors.length})`} />
             <ul className="space-y-1.5">
               {proposal.errors.map((e, i) => (
                 <li key={i} className="text-[11px]">
                   <span className="font-mono text-red-500 text-[10px]">[{e.code}]</span>
-                  <span className="text-[#4b4b47] ml-1">{e.message}</span>
-                  {e.step  && <span className="text-[#9a9a95] ml-1">· step: {e.step}</span>}
-                  {e.field && <span className="text-[#9a9a95] ml-1">· field: {e.field}</span>}
+                  <span className="text-ink-soft ml-1">{e.message}</span>
+                  {e.step  && <span className="text-muted ml-1">· step: {e.step}</span>}
+                  {e.field && <span className="text-muted ml-1">· field: {e.field}</span>}
                 </li>
               ))}
             </ul>
@@ -614,14 +614,14 @@ export default function AIProposalDetailPage() {
         )}
 
         {/* Meta */}
-        <div className="mb-4 bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+        <div className="mb-4 bg-surface rounded-xl border border-line px-4 py-3">
           <SectionHead title="Мета" />
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[11px]">
-            <div className="flex gap-1.5"><span className="text-[#b8b8b4] font-mono">agent_key:</span><span className="text-[#4b4b47]">{proposal.agent_key}</span></div>
-            <div className="flex gap-1.5"><span className="text-[#b8b8b4] font-mono">skill_key:</span><span className="text-[#4b4b47]">{proposal.skill_key ?? '—'}</span></div>
-            <div className="flex gap-1.5"><span className="text-[#b8b8b4] font-mono">action_type:</span><span className="text-[#4b4b47]">{proposal.action_type}</span></div>
-            <div className="flex gap-1.5"><span className="text-[#b8b8b4] font-mono">workflow_key:</span><span className="text-[#4b4b47]">{proposal.workflow_key ?? '—'}</span></div>
-            {proposal.model_name && <div className="flex gap-1.5"><span className="text-[#b8b8b4] font-mono">model:</span><span className="text-[#4b4b47]">{proposal.model_name}</span></div>}
+            <div className="flex gap-1.5"><span className="text-faint font-mono">agent_key:</span><span className="text-ink-soft">{proposal.agent_key}</span></div>
+            <div className="flex gap-1.5"><span className="text-faint font-mono">skill_key:</span><span className="text-ink-soft">{proposal.skill_key ?? '—'}</span></div>
+            <div className="flex gap-1.5"><span className="text-faint font-mono">action_type:</span><span className="text-ink-soft">{proposal.action_type}</span></div>
+            <div className="flex gap-1.5"><span className="text-faint font-mono">workflow_key:</span><span className="text-ink-soft">{proposal.workflow_key ?? '—'}</span></div>
+            {proposal.model_name && <div className="flex gap-1.5"><span className="text-faint font-mono">model:</span><span className="text-ink-soft">{proposal.model_name}</span></div>}
           </div>
         </div>
 

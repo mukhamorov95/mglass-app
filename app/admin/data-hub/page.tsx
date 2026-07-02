@@ -93,16 +93,16 @@ export default function DataHubPage() {
   const [tab, setTab] = useState<Tab>('overview')
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-5xl mx-auto px-6 py-6">
 
         <div className="mb-5">
-          <h1 className="text-[18px] font-semibold text-[#111110]">Центр данных MGlass</h1>
-          <p className="text-[12px] text-[#9a9a95] mt-0.5">Единая точка импорта, синхронизации и управления источниками данных</p>
+          <h1 className="text-[18px] font-semibold text-ink">Центр данных MGlass</h1>
+          <p className="text-[12px] text-muted mt-0.5">Единая точка импорта, синхронизации и управления источниками данных</p>
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 mb-5 border-b border-[#e4e4e0]">
+        <div className="flex gap-1 mb-5 border-b border-line">
           {([
             { key: 'overview', label: 'Обзор' },
             { key: 'import',   label: 'Импорт' },
@@ -110,7 +110,7 @@ export default function DataHubPage() {
             { key: 'logs',     label: 'Логи' },
           ] as const).map(t => (
             <button key={t.key} onClick={() => setTab(t.key)}
-              className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px ${tab === t.key ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95] hover:text-[#6b6b66]'}`}>
+              className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-colors -mb-px ${tab === t.key ? 'border-ink text-ink' : 'border-transparent text-muted hover:text-ink-soft'}`}>
               {t.label}
             </button>
           ))}
@@ -191,9 +191,9 @@ function OverviewTab() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-[#111110] text-white rounded-xl px-6 py-5">
-        <p className="text-[15px] font-bold">🔗 MGlass становится единым центром данных</p>
-        <p className="text-[12px] text-[#a0a09a] mt-1">
+      <div className="bg-ink text-white rounded-xl px-6 py-5">
+        <p className="text-[15px] font-semibold">🔗 MGlass становится единым центром данных</p>
+        <p className="text-[12px] text-muted mt-1">
           Google Sheets и Telegram — источники для миграции и начального импорта. Финальное хранилище — MGlass Platform.
         </p>
       </div>
@@ -202,16 +202,16 @@ function OverviewTab() {
         {integrations.map(i => {
           const sm = statusMeta[i.status as keyof typeof statusMeta]
           return (
-            <div key={i.name} className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4">
+            <div key={i.name} className="bg-surface border border-line rounded-xl px-5 py-4">
               <div className="flex items-start justify-between gap-3 mb-2">
                 <div className="flex items-center gap-2">
                   <span className="text-xl">{i.icon}</span>
-                  <p className="text-[14px] font-semibold text-[#111110]">{i.name}</p>
+                  <p className="text-[14px] font-semibold text-ink">{i.name}</p>
                 </div>
                 <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border flex-shrink-0 ${sm.cls}`}>{sm.label}</span>
               </div>
-              <p className="text-[12px] text-[#6b6b66] leading-relaxed">{i.desc}</p>
-              {i.sub && <p className="text-[11px] text-[#9a9a95] mt-1">{i.sub}</p>}
+              <p className="text-[12px] text-ink-soft leading-relaxed">{i.desc}</p>
+              {i.sub && <p className="text-[11px] text-muted mt-1">{i.sub}</p>}
             </div>
           )
         })}
@@ -226,7 +226,7 @@ function OverviewTab() {
             { title: 'Ручной ввод', items: ['Корректировки остатков', 'Фактические оплаты', 'Расходы и затраты', 'Статусы маршрутов', 'Комментарии и логи'] },
           ].map(col => (
             <div key={col.title}>
-              <p className="font-bold text-blue-700 mb-1.5">{col.title}</p>
+              <p className="font-semibold text-blue-700 mb-1.5">{col.title}</p>
               <ul className="space-y-0.5 text-blue-600">
                 {col.items.map(i => <li key={i}>• {i}</li>)}
               </ul>
@@ -315,9 +315,9 @@ function ImportTab() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <p className="text-[13px] font-semibold text-[#111110]">Импортировать в:</p>
+        <p className="text-[13px] font-semibold text-ink">Импортировать в:</p>
         <select value={target} onChange={e => { setTarget(e.target.value as ImportTarget); setStep('upload'); setRows([]) }}
-          className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white">
+          className="border border-line rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-ink bg-surface">
           {(Object.keys(IMPORT_TARGETS) as ImportTarget[]).map(k => (
             <option key={k} value={k}>{IMPORT_TARGETS[k].label}</option>
           ))}
@@ -329,10 +329,10 @@ function ImportTab() {
           onClick={() => fileRef.current?.click()}
           onDragOver={e => e.preventDefault()}
           onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) handleFile(f) }}
-          className="border-2 border-dashed border-[#e4e4e0] rounded-xl p-12 text-center cursor-pointer hover:border-[#111110] transition-colors">
+          className="border-2 border-dashed border-line rounded-xl p-12 text-center cursor-pointer hover:border-ink transition-colors">
           <p className="text-3xl mb-3">📄</p>
-          <p className="text-[14px] font-semibold text-[#111110]">Перетащи CSV-файл или нажми</p>
-          <p className="text-[12px] text-[#9a9a95] mt-1">Поддерживается: CSV с кодировкой UTF-8 или Windows-1251</p>
+          <p className="text-[14px] font-semibold text-ink">Перетащи CSV-файл или нажми</p>
+          <p className="text-[12px] text-muted mt-1">Поддерживается: CSV с кодировкой UTF-8 или Windows-1251</p>
           <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden"
             onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f) }} />
         </div>
@@ -340,35 +340,35 @@ function ImportTab() {
 
       {step === 'map' && (
         <div className="space-y-4">
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[13px] font-semibold text-[#111110] mb-3">
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[13px] font-semibold text-ink mb-3">
               Найдено строк: {rows.length} · Столбцов: {headers.length}
             </p>
             <div className="overflow-x-auto">
               <table className="text-[11px] border-collapse">
                 <thead>
-                  <tr>{headers.slice(0, 6).map(h => <th key={h} className="px-2 py-1 bg-[#f8f8f7] border border-[#e4e4e0] text-left font-semibold text-[#9a9a95] whitespace-nowrap">{h}</th>)}</tr>
+                  <tr>{headers.slice(0, 6).map(h => <th key={h} className="px-2 py-1 bg-canvas border border-line text-left font-semibold text-muted whitespace-nowrap">{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, 3).map((row, i) => (
-                    <tr key={i}>{headers.slice(0, 6).map(h => <td key={h} className="px-2 py-1 border border-[#f0f0ec] text-[#4b4b47] max-w-[120px] truncate">{row[h]}</td>)}</tr>
+                    <tr key={i}>{headers.slice(0, 6).map(h => <td key={h} className="px-2 py-1 border border-line-soft text-ink-soft max-w-[120px] truncate">{row[h]}</td>)}</tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[13px] font-semibold text-[#111110] mb-3">Сопоставление столбцов</p>
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[13px] font-semibold text-ink mb-3">Сопоставление столбцов</p>
             <div className="space-y-2">
               {headers.map(h => (
                 <div key={h} className="flex items-center gap-3">
-                  <span className="text-[12px] text-[#6b6b66] w-40 flex-shrink-0 truncate" title={h}>{h}</span>
-                  <span className="text-[#c4c4be]">→</span>
+                  <span className="text-[12px] text-ink-soft w-40 flex-shrink-0 truncate" title={h}>{h}</span>
+                  <span className="text-faint">→</span>
                   <select
                     value={mapping[h] ?? ''}
                     onChange={e => setMapping(prev => ({ ...prev, [h]: e.target.value }))}
-                    className="flex-1 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] outline-none focus:border-[#111110] bg-white">
+                    className="flex-1 border border-line rounded-lg px-2 py-1 text-[11px] outline-none focus:border-ink bg-surface">
                     <option value="">— не импортировать —</option>
                     {targetFields.map(f => (
                       <option key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</option>
@@ -381,11 +381,11 @@ function ImportTab() {
 
           <div className="flex gap-2">
             <button onClick={doImport} disabled={importing}
-              className="flex-1 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
+              className="flex-1 py-2.5 bg-ink text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
               {importing ? 'Импортируется...' : `Импортировать ${rows.length} строк`}
             </button>
             <button onClick={() => { setStep('upload'); setRows([]) }}
-              className="px-4 py-2.5 border border-[#e4e4e0] text-[12px] text-[#6b6b66] rounded-xl hover:bg-[#f8f8f7]">
+              className="px-4 py-2.5 border border-line text-[12px] text-ink-soft rounded-xl hover:bg-canvas">
               Назад
             </button>
           </div>
@@ -393,9 +393,9 @@ function ImportTab() {
       )}
 
       {step === 'done' && result && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6 space-y-3 text-center">
+        <div className="bg-surface border border-line rounded-xl p-6 space-y-3 text-center">
           <p className="text-3xl">{result.err === 0 ? '✅' : '⚠️'}</p>
-          <p className="text-[16px] font-semibold text-[#111110]">Импорт завершён</p>
+          <p className="text-[16px] font-semibold text-ink">Импорт завершён</p>
           <div className="flex justify-center gap-6 text-[13px]">
             <span className="text-emerald-700">✓ Успешно: {result.ok}</span>
             {result.err > 0 && <span className="text-red-600">✗ Ошибок: {result.err}</span>}
@@ -406,7 +406,7 @@ function ImportTab() {
             </div>
           )}
           <button onClick={() => { setStep('upload'); setRows([]); setResult(null) }}
-            className="px-4 py-2 bg-[#111110] text-white text-[12px] rounded-lg hover:bg-[#2a2a28]">
+            className="px-4 py-2 bg-ink text-white text-[12px] rounded-lg hover:bg-[#2a2a28]">
             Импортировать ещё
           </button>
         </div>
@@ -499,24 +499,24 @@ function SheetsTab({ onImported }: { onImported: () => void }) {
       </div>
 
       {step === 'input' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-3">
+        <div className="bg-surface border border-line rounded-xl p-5 space-y-3">
           <div>
-            <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">Ссылка на Google Sheets</p>
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1">Ссылка на Google Sheets</p>
             <input value={url} onChange={e => setUrl(e.target.value)}
               placeholder="https://docs.google.com/spreadsheets/d/..."
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110]" />
+              className="w-full border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink" />
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">ID листа (gid, необязательно)</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1">ID листа (gid, необязательно)</p>
               <input value={gid} onChange={e => setGid(e.target.value)}
                 placeholder="0"
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110]" />
+                className="w-full border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">Импортировать в</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wide mb-1">Импортировать в</p>
               <select value={target} onChange={e => setTarget(e.target.value as ImportTarget)}
-                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white">
+                className="w-full border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink bg-surface">
                 {(Object.keys(IMPORT_TARGETS) as ImportTarget[]).map(k => (
                   <option key={k} value={k}>{IMPORT_TARGETS[k].label}</option>
                 ))}
@@ -525,7 +525,7 @@ function SheetsTab({ onImported }: { onImported: () => void }) {
           </div>
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <button onClick={fetchSheet} disabled={loading}
-            className="w-full py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
+            className="w-full py-2.5 bg-ink text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
             {loading ? 'Загружаю таблицу...' : 'Загрузить и просмотреть'}
           </button>
         </div>
@@ -533,31 +533,31 @@ function SheetsTab({ onImported }: { onImported: () => void }) {
 
       {step === 'map' && (
         <div className="space-y-4">
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[13px] font-semibold text-[#111110] mb-3">Предпросмотр (первые 10 строк)</p>
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[13px] font-semibold text-ink mb-3">Предпросмотр (первые 10 строк)</p>
             <div className="overflow-x-auto">
               <table className="text-[11px] border-collapse">
                 <thead>
-                  <tr>{headers.slice(0, 6).map(h => <th key={h} className="px-2 py-1 bg-[#f8f8f7] border border-[#e4e4e0] text-left font-semibold text-[#9a9a95] whitespace-nowrap">{h}</th>)}</tr>
+                  <tr>{headers.slice(0, 6).map(h => <th key={h} className="px-2 py-1 bg-canvas border border-line text-left font-semibold text-muted whitespace-nowrap">{h}</th>)}</tr>
                 </thead>
                 <tbody>
                   {rows.slice(0, 3).map((row, i) => (
-                    <tr key={i}>{headers.slice(0, 6).map(h => <td key={h} className="px-2 py-1 border border-[#f0f0ec] text-[#4b4b47] max-w-[120px] truncate">{row[h]}</td>)}</tr>
+                    <tr key={i}>{headers.slice(0, 6).map(h => <td key={h} className="px-2 py-1 border border-line-soft text-ink-soft max-w-[120px] truncate">{row[h]}</td>)}</tr>
                   ))}
                 </tbody>
               </table>
             </div>
           </div>
 
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[13px] font-semibold text-[#111110] mb-3">Сопоставление столбцов</p>
+          <div className="bg-surface border border-line rounded-xl p-4">
+            <p className="text-[13px] font-semibold text-ink mb-3">Сопоставление столбцов</p>
             <div className="space-y-2">
               {headers.map(h => (
                 <div key={h} className="flex items-center gap-3">
-                  <span className="text-[12px] text-[#6b6b66] w-40 flex-shrink-0 truncate">{h}</span>
-                  <span className="text-[#c4c4be]">→</span>
+                  <span className="text-[12px] text-ink-soft w-40 flex-shrink-0 truncate">{h}</span>
+                  <span className="text-faint">→</span>
                   <select value={mapping[h] ?? ''} onChange={e => setMapping(prev => ({ ...prev, [h]: e.target.value }))}
-                    className="flex-1 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] outline-none focus:border-[#111110] bg-white">
+                    className="flex-1 border border-line rounded-lg px-2 py-1 text-[11px] outline-none focus:border-ink bg-surface">
                     <option value="">— не импортировать —</option>
                     {targetFields.map(f => <option key={f.key} value={f.key}>{f.label}{f.required ? ' *' : ''}</option>)}
                   </select>
@@ -569,11 +569,11 @@ function SheetsTab({ onImported }: { onImported: () => void }) {
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button onClick={doImport} disabled={importing}
-              className="flex-1 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
+              className="flex-1 py-2.5 bg-ink text-white text-[13px] font-semibold rounded-xl disabled:opacity-40 hover:bg-[#2a2a28]">
               {importing ? 'Импортируется...' : 'Импортировать все строки'}
             </button>
             <button onClick={() => { setStep('input'); setRows([]) }}
-              className="px-4 py-2.5 border border-[#e4e4e0] text-[12px] text-[#6b6b66] rounded-xl hover:bg-[#f8f8f7]">
+              className="px-4 py-2.5 border border-line text-[12px] text-ink-soft rounded-xl hover:bg-canvas">
               Назад
             </button>
           </div>
@@ -581,20 +581,20 @@ function SheetsTab({ onImported }: { onImported: () => void }) {
       )}
 
       {step === 'done' && result && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-6 text-center space-y-3">
+        <div className="bg-surface border border-line rounded-xl p-6 text-center space-y-3">
           <p className="text-3xl">{result.err === 0 ? '✅' : '⚠️'}</p>
-          <p className="text-[16px] font-semibold text-[#111110]">Импорт завершён</p>
+          <p className="text-[16px] font-semibold text-ink">Импорт завершён</p>
           <div className="flex justify-center gap-6 text-[13px]">
             <span className="text-emerald-700">✓ Успешно: {result.ok}</span>
             {result.err > 0 && <span className="text-red-600">✗ Ошибок: {result.err}</span>}
           </div>
           <div className="flex justify-center gap-2">
             <button onClick={() => { setStep('input'); setRows([]); setResult(null); setUrl('') }}
-              className="px-4 py-2 bg-[#111110] text-white text-[12px] rounded-lg hover:bg-[#2a2a28]">
+              className="px-4 py-2 bg-ink text-white text-[12px] rounded-lg hover:bg-[#2a2a28]">
               Импортировать ещё
             </button>
             <button onClick={onImported}
-              className="px-4 py-2 border border-[#e4e4e0] text-[12px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+              className="px-4 py-2 border border-line text-[12px] text-ink-soft rounded-lg hover:bg-canvas">
               Посмотреть логи
             </button>
           </div>
@@ -626,39 +626,39 @@ function LogsTab() {
   return (
     <div className="space-y-3">
       {loading ? (
-        <p className="text-center py-8 text-[13px] text-[#9a9a95]">Загрузка...</p>
+        <p className="text-center py-8 text-[13px] text-muted">Загрузка...</p>
       ) : logs.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-          <p className="text-[13px] text-[#9a9a95]">Импортов ещё не было</p>
-          <p className="text-[11px] text-[#9a9a95] mt-1">Используй вкладку «Импорт» или «Google Sheets»</p>
+        <div className="bg-surface border border-line rounded-xl p-12 text-center">
+          <p className="text-[13px] text-muted">Импортов ещё не было</p>
+          <p className="text-[11px] text-muted mt-1">Используй вкладку «Импорт» или «Google Sheets»</p>
         </div>
       ) : (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
           <table className="w-full text-[12px]">
-            <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="text-left px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Источник</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Файл / URL</th>
-                <th className="text-left px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Куда</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Строк</th>
-                <th className="text-center px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Статус</th>
-                <th className="text-right px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Время</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Источник</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Файл / URL</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Куда</th>
+                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Строк</th>
+                <th className="text-center px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Статус</th>
+                <th className="text-right px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Время</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f8f8f7]">
+            <tbody className="divide-y divide-line-soft">
               {logs.map(log => (
-                <tr key={log.id} className="hover:bg-[#fafaf9]">
+                <tr key={log.id} className="hover:bg-subtle">
                   <td className="px-4 py-2.5">
                     <span className="text-base">{SOURCE_ICONS[log.source] ?? '📌'}</span>
-                    <span className="ml-1 text-[#6b6b66]">{log.source}</span>
+                    <span className="ml-1 text-ink-soft">{log.source}</span>
                   </td>
-                  <td className="px-4 py-2.5 text-[#9a9a95] max-w-[180px] truncate" title={log.source_name ?? ''}>
+                  <td className="px-4 py-2.5 text-muted max-w-[180px] truncate" title={log.source_name ?? ''}>
                     {log.source_name ?? '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-[#6b6b66]">
+                  <td className="px-4 py-2.5 text-ink-soft">
                     {targetLabels[log.target_module ?? ''] ?? log.target_module ?? '—'}
                   </td>
-                  <td className="px-4 py-2.5 text-center font-mono text-[#111110]">
+                  <td className="px-4 py-2.5 text-center font-mono text-ink">
                     {log.rows_total ?? 0}
                   </td>
                   <td className="px-4 py-2.5 text-center">
@@ -672,7 +672,7 @@ function LogsTab() {
                       </span>
                     )}
                   </td>
-                  <td className="px-4 py-2.5 text-right text-[#9a9a95]">{fmtDate(log.created_at)}</td>
+                  <td className="px-4 py-2.5 text-right text-muted">{fmtDate(log.created_at)}</td>
                 </tr>
               ))}
             </tbody>

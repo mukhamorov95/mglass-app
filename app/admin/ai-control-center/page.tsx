@@ -86,28 +86,28 @@ function IssueCard({
     <div className={`rounded-xl border overflow-hidden ${border}`}>
       <div className={`px-5 py-3 flex items-start justify-between gap-3 ${hdr}`}>
         <div className="flex items-start gap-3 flex-1 min-w-0">
-          <span className={`text-[15px] font-bold flex-shrink-0 mt-0.5 ${STATUS_COLOR[check.status]}`}>{STATUS_ICON[check.status]}</span>
+          <span className={`text-[15px] font-semibold flex-shrink-0 mt-0.5 ${STATUS_COLOR[check.status]}`}>{STATUS_ICON[check.status]}</span>
           <div>
-            <p className="text-[13px] font-semibold text-[#1a1a18]">{check.name}</p>
-            <p className="text-[11px] text-[#8a8a85] mt-0.5">{check.module}</p>
+            <p className="text-[13px] font-semibold text-ink">{check.name}</p>
+            <p className="text-[11px] text-muted mt-0.5">{check.module}</p>
           </div>
         </div>
         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${SEVERITY_COLOR[meta.severity]}`}>
           {SEVERITY_LABEL[meta.severity]}
         </span>
       </div>
-      <div className="px-5 py-4 bg-white space-y-3">
-        {check.detail && <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Описание</p><p className={`text-[12px] ${check.status === 'error' ? 'text-red-700' : 'text-amber-700'}`}>{check.detail}</p></div>}
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Причина</p><p className="text-[12px] text-[#3a3a38]">{meta.cause}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Влияние</p><p className="text-[12px] text-[#3a3a38]">{meta.impact}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-1">Рекомендация</p><p className="text-[12px] text-[#3a3a38]">{meta.recommendation}</p></div>
+      <div className="px-5 py-4 bg-surface space-y-3">
+        {check.detail && <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Описание</p><p className={`text-[12px] ${check.status === 'error' ? 'text-red-700' : 'text-amber-700'}`}>{check.detail}</p></div>}
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Причина</p><p className="text-[12px] text-ink-soft">{meta.cause}</p></div>
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Влияние</p><p className="text-[12px] text-ink-soft">{meta.impact}</p></div>
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">Рекомендация</p><p className="text-[12px] text-ink-soft">{meta.recommendation}</p></div>
         {meta.instruction && showInstr && (
-          <div className="rounded-lg bg-[#f7f7f4] border border-[#e8e8e5] p-4 space-y-2">
-            <p className="text-[11px] font-semibold text-[#4a4a46] mb-2">Инструкция</p>
+          <div className="rounded-lg bg-canvas border border-line p-4 space-y-2">
+            <p className="text-[11px] font-semibold text-ink-soft mb-2">Инструкция</p>
             {([['Где', meta.instruction.where], ['Поля', meta.instruction.fields], ['Данные', meta.instruction.data], ['Кто', meta.instruction.who], ['Проверка', meta.instruction.verify]] as [string, string][]).map(([l, v]) => (
               <div key={l} className="grid grid-cols-[80px_1fr] gap-2">
-                <span className="text-[10px] text-[#8a8a85]">{l}</span>
-                <span className="text-[11px] text-[#2a2a28]">{v}</span>
+                <span className="text-[10px] text-muted">{l}</span>
+                <span className="text-[11px] text-ink">{v}</span>
               </div>
             ))}
           </div>
@@ -118,21 +118,21 @@ function IssueCard({
           </div>
         )}
       </div>
-      <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] flex items-center gap-2 flex-wrap">
+      <div className="px-5 py-3 bg-subtle border-t border-line-soft flex items-center gap-2 flex-wrap">
         {fixState.status === 'fixed' && <span className="text-[11px] text-emerald-600 font-semibold">✓ Исправлено</span>}
         {fixState.status === 'failed' && <span className="text-[11px] text-red-600 font-semibold">✕ Не удалось</span>}
         <div className="ml-auto flex items-center gap-2">
           {canFix && meta.autoFixId && fixState.status !== 'fixed' && fixState.status !== 'fixing' && (
-            <button onClick={() => onFix(check.id, meta.autoFixId!, check.name, check.detail ?? '')} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-[#111110] text-white hover:bg-[#27272a] transition-colors">
+            <button onClick={() => onFix(check.id, meta.autoFixId!, check.name, check.detail ?? '')} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-ink text-white hover:bg-[#27272a] transition-colors">
               Исправить автоматически
             </button>
           )}
           {meta.instruction && (
-            <button onClick={() => setShowInstr(v => !v)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors">
+            <button onClick={() => setShowInstr(v => !v)} className="px-3 py-1.5 rounded-lg text-[11px] font-semibold border border-line text-ink-soft hover:bg-line-soft transition-colors">
               {showInstr ? 'Скрыть' : 'Инструкция'}
             </button>
           )}
-          <button onClick={() => onIgnore(check.id)} className="px-2 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#5a5a55] transition-colors">Игнор.</button>
+          <button onClick={() => onIgnore(check.id)} className="px-2 py-1.5 text-[11px] text-muted hover:text-ink-soft transition-colors">Игнор.</button>
         </div>
       </div>
     </div>
@@ -153,29 +153,29 @@ function RecommendationCard({
 
   return (
     <div className={`rounded-xl border overflow-hidden transition-opacity ${isDone ? 'opacity-60' : isDismissed ? 'opacity-40' : ''}`}>
-      <div className="px-5 py-3 bg-white flex items-start justify-between gap-3">
+      <div className="px-5 py-3 bg-surface flex items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_COLOR[rec.priority]}`}>
               {PRIORITY_LABEL[rec.priority]}
             </span>
-            <span className="text-[10px] text-[#9a9a95] bg-[#f4f3f1] px-2 py-0.5 rounded-full">{rec.category}</span>
+            <span className="text-[10px] text-muted bg-canvas px-2 py-0.5 rounded-full">{rec.category}</span>
             {rec.source === 'ai' && <span className="text-[10px] text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">AI</span>}
           </div>
-          <p className="text-[13px] font-semibold text-[#1a1a18]">{rec.title}</p>
+          <p className="text-[13px] font-semibold text-ink">{rec.title}</p>
         </div>
-        <span className="text-[10px] text-[#9a9a95] flex-shrink-0 mt-1">
+        <span className="text-[10px] text-muted flex-shrink-0 mt-1">
           {STATUS_LABEL_REC[rec.status]}
         </span>
       </div>
-      <div className="px-5 pb-4 bg-white space-y-2">
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Проблема</p><p className="text-[12px] text-[#3a3a38]">{rec.problem}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Влияние</p><p className="text-[12px] text-[#3a3a38]">{rec.impact}</p></div>
-        <div><p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-0.5">Рекомендация</p><p className="text-[12px] text-[#3a3a38]">{rec.recommendation}</p></div>
+      <div className="px-5 pb-4 bg-surface space-y-2">
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">Проблема</p><p className="text-[12px] text-ink-soft">{rec.problem}</p></div>
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">Влияние</p><p className="text-[12px] text-ink-soft">{rec.impact}</p></div>
+        <div><p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-0.5">Рекомендация</p><p className="text-[12px] text-ink-soft">{rec.recommendation}</p></div>
         {rec.metric && <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2"><p className="text-[11px] text-emerald-700 font-medium">📈 {rec.metric}</p></div>}
       </div>
       {!isDone && !isDismissed && (
-        <div className="px-5 py-3 bg-[#fafaf8] border-t border-[#f0f0ec] flex items-center gap-2">
+        <div className="px-5 py-3 bg-subtle border-t border-line-soft flex items-center gap-2">
           <button
             onClick={() => { onStatusChange(rec.id, 'done'); onLog(rec, 'Отмечено внедрённым') }}
             className="px-3 py-1.5 rounded-lg text-[11px] font-semibold bg-emerald-600 text-white hover:bg-emerald-700 transition-colors"
@@ -184,13 +184,13 @@ function RecommendationCard({
           </button>
           <button
             onClick={() => { onStatusChange(rec.id, 'deferred'); onLog(rec, 'Отложено') }}
-            className="px-3 py-1.5 rounded-lg text-[11px] border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors"
+            className="px-3 py-1.5 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-line-soft transition-colors"
           >
             Отложить
           </button>
           <button
             onClick={() => { onStatusChange(rec.id, 'dismissed'); onLog(rec, 'Отклонено') }}
-            className="px-2 py-1.5 text-[11px] text-[#9a9a95] hover:text-[#5a5a55] transition-colors ml-auto"
+            className="px-2 py-1.5 text-[11px] text-muted hover:text-ink-soft transition-colors ml-auto"
           >
             Отклонить
           </button>
@@ -512,8 +512,8 @@ export default function AIControlCenter() {
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-semibold text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full uppercase tracking-wide">Owner Center</span>
           </div>
-          <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">AI Control Center</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-1">
+          <h1 className="text-[22px] font-semibold text-ink tracking-tight">AI Control Center</h1>
+          <p className="text-[13px] text-muted mt-1">
             Единый центр управления, диагностики и развития платформы MGlass
           </p>
         </div>
@@ -530,20 +530,20 @@ export default function AIControlCenter() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-[#f4f3f1] rounded-xl p-1">
+      <div className="flex gap-1 mb-6 bg-canvas rounded-xl p-1">
         {TABS.map(t => (
           <button
             key={t.id}
             onClick={() => setTab(t.id)}
             className={`flex-1 py-2 px-2 rounded-lg text-[12px] font-semibold transition-all flex items-center justify-center gap-1.5 ${
               tab === t.id
-                ? 'bg-white text-[#111110] shadow-sm'
-                : 'text-[#8a8a85] hover:text-[#4a4a46]'
+                ? 'bg-surface text-ink shadow-sm'
+                : 'text-muted hover:text-ink-soft'
             }`}
           >
             {t.label}
             {t.badge ? (
-              <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-red-100 text-red-600' : 'bg-red-100 text-red-500'}`}>
+              <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${tab === t.id ? 'bg-red-100 text-red-600' : 'bg-red-100 text-red-500'}`}>
                 {t.badge}
               </span>
             ) : null}
@@ -561,39 +561,39 @@ export default function AIControlCenter() {
               { label: 'Заказов в системе',  value: metrics ? fmt(metrics.orders) : '…', icon: '📦', color: 'border-emerald-100' },
               { label: 'Пользователей',       value: metrics ? fmt(metrics.users) : '…', icon: '👥', color: 'border-purple-100' },
             ].map(m => (
-              <div key={m.label} className={`bg-white rounded-xl border ${m.color} px-5 py-4`}>
+              <div key={m.label} className={`bg-surface rounded-xl border ${m.color} px-5 py-4`}>
                 <p className="text-[24px] mb-1">{m.icon}</p>
-                <p className="text-[22px] font-bold text-[#111110]">{m.value}</p>
-                <p className="text-[11px] text-[#8a8a85] mt-0.5">{m.label}</p>
+                <p className="text-[22px] font-semibold text-ink">{m.value}</p>
+                <p className="text-[11px] text-muted mt-0.5">{m.label}</p>
               </div>
             ))}
           </div>
 
           {/* Status + quick actions */}
           <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border border-[#e8e8e5] p-5">
-              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Статус системы</p>
+            <div className="bg-surface rounded-xl border border-line p-5">
+              <p className="text-[12px] font-semibold text-ink-soft mb-3">Статус системы</p>
               {!hcDone ? (
-                <p className="text-[12px] text-[#9a9a95]">Запустите проверку, чтобы увидеть статус</p>
+                <p className="text-[12px] text-muted">Запустите проверку, чтобы увидеть статус</p>
               ) : (
                 <div className="space-y-2">
-                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /><span className="text-[12px] text-[#3a3a38]">{okCount} проверок успешно</span></div>
-                  {warnCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" /><span className="text-[12px] text-[#3a3a38]">{warnCount} предупреждений</span></div>}
-                  {errorCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" /><span className="text-[12px] text-[#3a3a38]">{errorCount} ошибок</span></div>}
-                  {fixedCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" /><span className="text-[12px] text-[#3a3a38]">{fixedCount} исправлено</span></div>}
+                  <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" /><span className="text-[12px] text-ink-soft">{okCount} проверок успешно</span></div>
+                  {warnCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" /><span className="text-[12px] text-ink-soft">{warnCount} предупреждений</span></div>}
+                  {errorCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" /><span className="text-[12px] text-ink-soft">{errorCount} ошибок</span></div>}
+                  {fixedCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-blue-400 flex-shrink-0" /><span className="text-[12px] text-ink-soft">{fixedCount} исправлено</span></div>}
                 </div>
               )}
             </div>
-            <div className="bg-white rounded-xl border border-[#e8e8e5] p-5">
-              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Быстрые действия</p>
+            <div className="bg-surface rounded-xl border border-line p-5">
+              <p className="text-[12px] font-semibold text-ink-soft mb-3">Быстрые действия</p>
               <div className="space-y-2">
-                <button onClick={() => { setTab('health'); startHealthCheck() }} className="w-full h-9 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-[#27272a] transition-colors">
+                <button onClick={() => { setTab('health'); startHealthCheck() }} className="w-full h-9 rounded-lg bg-ink text-white text-[12px] font-semibold hover:bg-[#27272a] transition-colors">
                   Запустить Health Check
                 </button>
-                <button onClick={() => setTab('ai')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[#4a4a46] text-[12px] font-semibold hover:bg-[#f0f0ec] transition-colors">
+                <button onClick={() => setTab('ai')} className="w-full h-9 rounded-lg border border-line text-ink-soft text-[12px] font-semibold hover:bg-line-soft transition-colors">
                   Получить AI анализ →
                 </button>
-                <button onClick={() => setTab('recommendations')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[#4a4a46] text-[12px] font-semibold hover:bg-[#f0f0ec] transition-colors">
+                <button onClick={() => setTab('recommendations')} className="w-full h-9 rounded-lg border border-line text-ink-soft text-[12px] font-semibold hover:bg-line-soft transition-colors">
                   Рекомендации ({recs.filter(r => r.status === 'pending').length}) →
                 </button>
               </div>
@@ -629,7 +629,7 @@ export default function AIControlCenter() {
                 <p className={`text-[14px] font-semibold ${overallStatus === 'ok' ? 'text-emerald-800' : overallStatus === 'warn' ? 'text-amber-800' : 'text-red-800'}`}>
                   {overallStatus === 'ok' ? 'Система работает нормально' : overallStatus === 'warn' ? 'Есть предупреждения' : 'Обнаружены ошибки'}
                 </p>
-                <p className="text-[12px] text-[#6b6b66] mt-0.5">
+                <p className="text-[12px] text-ink-soft mt-0.5">
                   {okCount} ОК · {warnCount} предупреждений · {errorCount} ошибок · {checks.length} проверок
                   {fixedCount > 0 && ` · ${fixedCount} исправлено`}
                   {hcStarted && ` · ${hcStarted.toLocaleTimeString('ru-RU')}`}
@@ -639,7 +639,7 @@ export default function AIControlCenter() {
           )}
 
           <button onClick={startHealthCheck} disabled={hcRunning}
-            className={`w-full h-12 rounded-xl text-[14px] font-semibold transition-colors mb-8 ${hcRunning ? 'bg-[#f0f0ec] text-[#9a9a95] cursor-not-allowed' : 'bg-[#111110] text-white hover:bg-[#27272a]'}`}>
+            className={`w-full h-12 rounded-xl text-[14px] font-semibold transition-colors mb-8 ${hcRunning ? 'bg-line-soft text-muted cursor-not-allowed' : 'bg-ink text-white hover:bg-[#27272a]'}`}>
             {hcRunning ? '⟳  Проверка...' : hcDone ? 'Запустить повторно' : 'Запустить проверку системы'}
           </button>
 
@@ -647,9 +647,9 @@ export default function AIControlCenter() {
           {hcDone && issues.length > 0 && (
             <div className="mb-8">
               <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-[14px] font-semibold text-[#2a2a28]">Ошибки и предупреждения</h2>
+                <h2 className="text-[14px] font-semibold text-ink">Ошибки и предупреждения</h2>
                 <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${errorCount > 0 ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'}`}>{issues.length}</span>
-                {!canFix && <span className="text-[11px] text-[#9a9a95] ml-2">Автоисправление доступно только администратору</span>}
+                {!canFix && <span className="text-[11px] text-muted ml-2">Автоисправление доступно только администратору</span>}
               </div>
               <div className="space-y-3">
                 {issues.map(check => {
@@ -665,7 +665,7 @@ export default function AIControlCenter() {
                 })}
               </div>
               {fixedCount > 0 && (
-                <button onClick={startHealthCheck} className="mt-4 w-full h-10 rounded-xl text-[13px] font-semibold border border-[#d8d8d4] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors">
+                <button onClick={startHealthCheck} className="mt-4 w-full h-10 rounded-xl text-[13px] font-semibold border border-line text-ink-soft hover:bg-line-soft transition-colors">
                   Запустить проверку повторно
                 </button>
               )}
@@ -684,25 +684,25 @@ export default function AIControlCenter() {
               const mc = ids.map(id => byId[id]).filter(Boolean)
               const badge = mc.some(c => c.status === 'running') ? 'running' : mc.some(c => c.status === 'error') ? 'error' : mc.some(c => c.status === 'warn') ? 'warn' : mc.every(c => c.status === 'ok') ? 'ok' : 'pending'
               return (
-                <div key={module} className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-[#f2f2f0] bg-[#fafaf8]">
-                    <span className="text-[12px] font-semibold text-[#4b4b47] uppercase tracking-wide">{module}</span>
-                    <span className={`text-[11px] font-mono font-bold ${STATUS_COLOR[badge as CheckStatus]}`}>
+                <div key={module} className="bg-surface rounded-xl border border-line overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-line-soft bg-subtle">
+                    <span className="text-[12px] font-semibold text-ink-soft uppercase tracking-wide">{module}</span>
+                    <span className={`text-[11px] font-mono font-semibold ${STATUS_COLOR[badge as CheckStatus]}`}>
                       {STATUS_ICON[badge as CheckStatus]} {badge === 'running' ? 'проверка...' : badge === 'ok' ? 'ок' : badge === 'warn' ? 'предупреждение' : badge === 'error' ? 'ошибка' : '—'}
                     </span>
                   </div>
-                  <div className="divide-y divide-[#f5f5f3]">
+                  <div className="divide-y divide-line-soft">
                     {mc.map(c => (
                       <div key={c.id} className={`flex items-start gap-3 px-4 py-3 ${STATUS_BG[c.status]} transition-colors`}>
-                        <span className={`text-[13px] font-bold mt-0.5 flex-shrink-0 ${STATUS_COLOR[c.status]}`}>{STATUS_ICON[c.status]}</span>
+                        <span className={`text-[13px] font-semibold mt-0.5 flex-shrink-0 ${STATUS_COLOR[c.status]}`}>{STATUS_ICON[c.status]}</span>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-[12px] font-medium text-[#2a2a28]">{c.name}</span>
-                            {c.ms != null && <span className="text-[10px] text-[#c0c0bc] font-mono">{c.ms}ms</span>}
+                            <span className="text-[12px] font-medium text-ink">{c.name}</span>
+                            {c.ms != null && <span className="text-[10px] text-faint font-mono">{c.ms}ms</span>}
                             {fixStates[c.id]?.status === 'fixed' && <span className="text-[10px] text-emerald-600 font-semibold">✓ исправлено</span>}
                           </div>
-                          {c.detail && <p className={`text-[11px] mt-0.5 ${c.status === 'error' ? 'text-red-600' : c.status === 'warn' ? 'text-amber-600' : 'text-[#6b6b66]'}`}>{c.detail}</p>}
-                          {c.hint  && <p className="text-[11px] text-[#9a9a95] mt-0.5 italic">{c.hint}</p>}
+                          {c.detail && <p className={`text-[11px] mt-0.5 ${c.status === 'error' ? 'text-red-600' : c.status === 'warn' ? 'text-amber-600' : 'text-ink-soft'}`}>{c.detail}</p>}
+                          {c.hint  && <p className="text-[11px] text-muted mt-0.5 italic">{c.hint}</p>}
                         </div>
                       </div>
                     ))}
@@ -719,18 +719,18 @@ export default function AIControlCenter() {
         <div className="grid grid-cols-2 gap-6">
           {/* Left: Example calculation */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Пример расчёта</h2>
+            <h2 className="text-[14px] font-semibold text-ink">Пример расчёта</h2>
             {calcLoading ? (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
-                <p className="text-[13px] text-[#9a9a95]">Загрузка данных...</p>
+              <div className="bg-surface rounded-xl border border-line p-8 text-center">
+                <p className="text-[13px] text-muted">Загрузка данных...</p>
               </div>
             ) : calcData ? (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                <div className="bg-[#fafaf8] px-5 py-3 border-b border-[#f0f0ec]">
-                  <p className="text-[13px] font-semibold text-[#2a2a28]">Зеркало {calcData.widthMm}×{calcData.heightMm} мм</p>
-                  <p className="text-[11px] text-[#8a8a85]">{calcData.materialName}</p>
+              <div className="bg-surface rounded-xl border border-line overflow-hidden">
+                <div className="bg-subtle px-5 py-3 border-b border-line-soft">
+                  <p className="text-[13px] font-semibold text-ink">Зеркало {calcData.widthMm}×{calcData.heightMm} мм</p>
+                  <p className="text-[11px] text-muted">{calcData.materialName}</p>
                 </div>
-                <div className="divide-y divide-[#f5f5f3]">
+                <div className="divide-y divide-line-soft">
                   {[
                     { label: 'Площадь', value: `${calcData.areaSqm.toFixed(3)} м²` },
                     { label: `Цена материала (себест.)`, value: `${fmt(calcData.costPerSqm)} ₽/м²` },
@@ -742,27 +742,27 @@ export default function AIControlCenter() {
                     { label: 'Монтаж', value: `+${fmt(calcData.installCost)} ₽` },
                     { label: 'Доставка', value: `+${fmt(calcData.deliveryCost)} ₽` },
                   ].map((row, i) => (
-                    <div key={i} className={`flex items-center justify-between px-5 py-3 ${row.bold ? 'bg-[#fafaf8]' : ''}`}>
-                      <span className={`text-[12px] ${row.bold ? 'font-semibold text-[#2a2a28]' : 'text-[#5a5a55]'}`}>{row.label}</span>
-                      <span className={`text-[12px] font-mono ${row.bold ? 'font-semibold text-[#111110]' : 'text-[#4a4a46]'}`}>{row.value}</span>
+                    <div key={i} className={`flex items-center justify-between px-5 py-3 ${row.bold ? 'bg-subtle' : ''}`}>
+                      <span className={`text-[12px] ${row.bold ? 'font-semibold text-ink' : 'text-ink-soft'}`}>{row.label}</span>
+                      <span className={`text-[12px] font-mono ${row.bold ? 'font-semibold text-ink' : 'text-ink-soft'}`}>{row.value}</span>
                     </div>
                   ))}
-                  <div className="flex items-center justify-between px-5 py-4 bg-[#111110]">
-                    <span className="text-[13px] font-bold text-white">Итого клиенту</span>
-                    <span className="text-[16px] font-bold text-white font-mono">{fmt(calcData.totalPrice)} ₽</span>
+                  <div className="flex items-center justify-between px-5 py-4 bg-ink">
+                    <span className="text-[13px] font-semibold text-white">Итого клиенту</span>
+                    <span className="text-[16px] font-semibold text-white font-mono">{fmt(calcData.totalPrice)} ₽</span>
                   </div>
                 </div>
               </div>
             ) : (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
-                <p className="text-[12px] text-[#9a9a95]">Нет данных в glass_price_matrix</p>
+              <div className="bg-surface rounded-xl border border-line p-8 text-center">
+                <p className="text-[12px] text-muted">Нет данных в glass_price_matrix</p>
               </div>
             )}
           </div>
 
           {/* Right: Formula breakdown */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Формула расчёта</h2>
+            <h2 className="text-[14px] font-semibold text-ink">Формула расчёта</h2>
             <div className="space-y-3">
               {[
                 {
@@ -786,21 +786,21 @@ export default function AIControlCenter() {
                   note: 'LED — периметр × цена LED-ленты; услуги — из таблицы services',
                 },
               ].map(s => (
-                <div key={s.step} className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
+                <div key={s.step} className="bg-surface rounded-xl border border-line px-5 py-4">
                   <div className="flex items-start gap-3">
-                    <span className="w-6 h-6 rounded-full bg-[#111110] text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0 mt-0.5">{s.step}</span>
+                    <span className="w-6 h-6 rounded-full bg-ink text-white text-[11px] font-semibold flex items-center justify-center flex-shrink-0 mt-0.5">{s.step}</span>
                     <div>
-                      <p className="text-[12px] font-semibold text-[#2a2a28] mb-1">{s.title}</p>
+                      <p className="text-[12px] font-semibold text-ink mb-1">{s.title}</p>
                       <code className="text-[11px] text-violet-700 bg-violet-50 px-2 py-1 rounded font-mono block mb-1">{s.formula}</code>
-                      <p className="text-[11px] text-[#8a8a85]">{s.note}</p>
+                      <p className="text-[11px] text-muted">{s.note}</p>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div className="bg-white rounded-xl border border-[#e8e8e5] px-5 py-4">
-              <p className="text-[12px] font-semibold text-[#4a4a46] mb-3">Задействованные таблицы</p>
+            <div className="bg-surface rounded-xl border border-line px-5 py-4">
+              <p className="text-[12px] font-semibold text-ink-soft mb-3">Задействованные таблицы</p>
               {[
                 ['glass_price_matrix', 'Цены на стекло/зеркало'],
                 ['financial_settings', 'Финансовые параметры'],
@@ -808,9 +808,9 @@ export default function AIControlCenter() {
                 ['mirror_lighting_components', 'LED, каркасы, БП'],
                 ['facet_prices',       'Фацетная обработка'],
               ].map(([table, desc]) => (
-                <div key={table} className="flex items-center justify-between py-1.5 border-b border-[#f5f5f3] last:border-0">
+                <div key={table} className="flex items-center justify-between py-1.5 border-b border-line-soft last:border-0">
                   <code className="text-[11px] text-blue-600 font-mono">{table}</code>
-                  <span className="text-[11px] text-[#8a8a85]">{desc}</span>
+                  <span className="text-[11px] text-muted">{desc}</span>
                 </div>
               ))}
             </div>
@@ -823,31 +823,31 @@ export default function AIControlCenter() {
         <div className="grid grid-cols-[1fr_1.5fr] gap-6">
           {/* Left: context */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">Контекст системы</h2>
-            <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-3">
+            <h2 className="text-[14px] font-semibold text-ink">Контекст системы</h2>
+            <div className="bg-surface rounded-xl border border-line p-4 space-y-3">
               {metrics && (
                 <>
-                  <div className="flex justify-between items-center py-1.5 border-b border-[#f5f5f3]">
-                    <span className="text-[11px] text-[#8a8a85]">Расчётов в системе</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.calcs)}</span>
+                  <div className="flex justify-between items-center py-1.5 border-b border-line-soft">
+                    <span className="text-[11px] text-muted">Расчётов в системе</span>
+                    <span className="text-[12px] font-semibold text-ink">{fmt(metrics.calcs)}</span>
                   </div>
-                  <div className="flex justify-between items-center py-1.5 border-b border-[#f5f5f3]">
-                    <span className="text-[11px] text-[#8a8a85]">Заказов</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.orders)}</span>
+                  <div className="flex justify-between items-center py-1.5 border-b border-line-soft">
+                    <span className="text-[11px] text-muted">Заказов</span>
+                    <span className="text-[12px] font-semibold text-ink">{fmt(metrics.orders)}</span>
                   </div>
                   <div className="flex justify-between items-center py-1.5">
-                    <span className="text-[11px] text-[#8a8a85]">Пользователей</span>
-                    <span className="text-[12px] font-semibold text-[#2a2a28]">{fmt(metrics.users)}</span>
+                    <span className="text-[11px] text-muted">Пользователей</span>
+                    <span className="text-[12px] font-semibold text-ink">{fmt(metrics.users)}</span>
                   </div>
                 </>
               )}
             </div>
             {hcDone && (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-4 space-y-2">
-                <p className="text-[11px] font-semibold text-[#4a4a46] mb-2">Последний Health Check</p>
-                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-[11px] text-[#3a3a38]">{okCount} ок</span></div>
-                {warnCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-[11px] text-[#3a3a38]">{warnCount} предупреждений</span></div>}
-                {errorCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[11px] text-[#3a3a38]">{errorCount} ошибок</span></div>}
+              <div className="bg-surface rounded-xl border border-line p-4 space-y-2">
+                <p className="text-[11px] font-semibold text-ink-soft mb-2">Последний Health Check</p>
+                <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-emerald-500" /><span className="text-[11px] text-ink-soft">{okCount} ок</span></div>
+                {warnCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-amber-400" /><span className="text-[11px] text-ink-soft">{warnCount} предупреждений</span></div>}
+                {errorCount > 0 && <div className="flex items-center gap-2"><span className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[11px] text-ink-soft">{errorCount} ошибок</span></div>}
               </div>
             )}
             {!hcDone && (
@@ -859,15 +859,15 @@ export default function AIControlCenter() {
 
           {/* Right: AI panel */}
           <div className="space-y-4">
-            <h2 className="text-[14px] font-semibold text-[#2a2a28]">AI Анализ</h2>
+            <h2 className="text-[14px] font-semibold text-ink">AI Анализ</h2>
 
             {/* Perspective selector */}
-            <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
-              <p className="text-[11px] font-semibold text-[#4a4a46] mb-2">Перспектива анализа</p>
+            <div className="bg-surface rounded-xl border border-line p-4">
+              <p className="text-[11px] font-semibold text-ink-soft mb-2">Перспектива анализа</p>
               <div className="flex flex-wrap gap-2">
                 {PERSPECTIVES.map(p => (
                   <button key={p.id} onClick={() => setPerspective(p.id)}
-                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${perspective === p.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
+                    className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${perspective === p.id ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:bg-line-soft'}`}>
                     {p.icon} {p.label}
                   </button>
                 ))}
@@ -875,7 +875,7 @@ export default function AIControlCenter() {
             </div>
 
             <button onClick={runAIAnalysis} disabled={aiLoading}
-              className={`w-full h-12 rounded-xl text-[14px] font-semibold transition-colors ${aiLoading ? 'bg-[#f0f0ec] text-[#9a9a95] cursor-not-allowed' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
+              className={`w-full h-12 rounded-xl text-[14px] font-semibold transition-colors ${aiLoading ? 'bg-line-soft text-muted cursor-not-allowed' : 'bg-violet-600 text-white hover:bg-violet-700'}`}>
               {aiLoading ? '⟳  Анализ...' : '✦  Получить AI анализ'}
             </button>
 
@@ -887,19 +887,19 @@ export default function AIControlCenter() {
 
             {aiRecs.length > 0 && (
               <div className="space-y-3">
-                <p className="text-[12px] font-semibold text-[#4a4a46]">Получено {aiRecs.length} рекомендаций — добавлены во вкладку «Рекомендации»</p>
+                <p className="text-[12px] font-semibold text-ink-soft">Получено {aiRecs.length} рекомендаций — добавлены во вкладку «Рекомендации»</p>
                 {aiRecs.slice(0, 3).map(r => (
-                  <div key={r.id} className="bg-white rounded-xl border border-[#e8e8e5] px-4 py-3">
+                  <div key={r.id} className="bg-surface rounded-xl border border-line px-4 py-3">
                     <div className="flex items-center gap-2 mb-1">
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${PRIORITY_COLOR[r.priority]}`}>{PRIORITY_LABEL[r.priority]}</span>
                       <span className="text-[10px] text-violet-600 bg-violet-50 px-2 py-0.5 rounded-full">AI</span>
                     </div>
-                    <p className="text-[12px] font-semibold text-[#2a2a28]">{r.title}</p>
-                    <p className="text-[11px] text-[#6a6a65] mt-1">{r.recommendation}</p>
+                    <p className="text-[12px] font-semibold text-ink">{r.title}</p>
+                    <p className="text-[11px] text-ink-soft mt-1">{r.recommendation}</p>
                   </div>
                 ))}
                 {aiRecs.length > 3 && (
-                  <button onClick={() => setTab('recommendations')} className="w-full h-9 rounded-lg border border-[#d8d8d4] text-[12px] text-[#4a4a46] hover:bg-[#f0f0ec] transition-colors">
+                  <button onClick={() => setTab('recommendations')} className="w-full h-9 rounded-lg border border-line text-[12px] text-ink-soft hover:bg-line-soft transition-colors">
                     Показать все {aiRecs.length} → вкладка «Рекомендации»
                   </button>
                 )}
@@ -907,9 +907,9 @@ export default function AIControlCenter() {
             )}
 
             {!aiLoading && aiRecs.length === 0 && (
-              <div className="bg-[#f7f7f4] rounded-xl border border-[#e8e8e5] p-6 text-center">
-                <p className="text-[13px] text-[#8a8a85]">Нажмите «Получить AI анализ», чтобы Claude проанализировал систему MGlass</p>
-                <p className="text-[11px] text-[#b0b0aa] mt-2">Анализ учитывает данные БД, health check и бизнес-метрики</p>
+              <div className="bg-canvas rounded-xl border border-line p-6 text-center">
+                <p className="text-[13px] text-muted">Нажмите «Получить AI анализ», чтобы Claude проанализировал систему MGlass</p>
+                <p className="text-[11px] text-faint mt-2">Анализ учитывает данные БД, health check и бизнес-метрики</p>
               </div>
             )}
           </div>
@@ -932,7 +932,7 @@ export default function AIControlCenter() {
               { id: 'dismissed', label: 'Отклонено' },
             ].map(f => (
               <button key={f.id} onClick={() => setRecFilter(f.id)}
-                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === f.id ? 'bg-[#111110] text-white' : 'bg-[#f4f3f1] text-[#4a4a46] hover:bg-[#ebebе8]'}`}>
+                className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${recFilter === f.id ? 'bg-ink text-white' : 'bg-canvas text-ink-soft hover:bg-line-soft'}`}>
                 {f.label}
                 {f.id === 'all' && recs.length > 0 && <span className="ml-1 text-[10px] opacity-60">{recs.length}</span>}
               </button>
@@ -945,9 +945,9 @@ export default function AIControlCenter() {
           </div>
 
           {filteredRecs.length === 0 ? (
-            <div className="bg-[#f7f7f4] rounded-xl border border-[#e8e8e5] p-10 text-center">
-              <p className="text-[14px] text-[#8a8a85] mb-2">Нет рекомендаций</p>
-              <p className="text-[12px] text-[#b0b0aa]">Запустите AI анализ во вкладке «AI Анализ»</p>
+            <div className="bg-canvas rounded-xl border border-line p-10 text-center">
+              <p className="text-[14px] text-muted mb-2">Нет рекомендаций</p>
+              <p className="text-[12px] text-faint">Запустите AI анализ во вкладке «AI Анализ»</p>
             </div>
           ) : (
             <div className="space-y-3">
@@ -966,20 +966,20 @@ export default function AIControlCenter() {
           {fixLog.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[13px] font-semibold text-[#4b4b47]">Журнал исправлений</h2>
-                <button onClick={() => { setFixLog([]); try { localStorage.removeItem(LOG_KEY) } catch {} fetch('/api/admin/health-fix-log', { method: 'DELETE' }).catch(() => {}) }} className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55]">Очистить</button>
+                <h2 className="text-[13px] font-semibold text-ink-soft">Журнал исправлений</h2>
+                <button onClick={() => { setFixLog([]); try { localStorage.removeItem(LOG_KEY) } catch {} fetch('/api/admin/health-fix-log', { method: 'DELETE' }).catch(() => {}) }} className="text-[11px] text-muted hover:text-ink-soft">Очистить</button>
               </div>
-              <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                <div className="divide-y divide-[#f5f5f3]">
+              <div className="bg-surface rounded-xl border border-line overflow-hidden">
+                <div className="divide-y divide-line-soft">
                   {[...fixLog].reverse().map(e => (
                     <div key={e.id} className="px-4 py-3 flex items-start gap-4">
                       <div className="flex-shrink-0 w-[72px]">
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-[10px] text-muted">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
+                        <p className="text-[10px] text-muted">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-[#2a2a28]">{e.checkName}</p>
-                        <p className="text-[11px] text-[#6a6a65] mt-0.5">{e.action}</p>
+                        <p className="text-[12px] font-medium text-ink">{e.checkName}</p>
+                        <p className="text-[11px] text-ink-soft mt-0.5">{e.action}</p>
                         {e.after && <p className={`text-[11px] mt-0.5 ${e.result === 'success' ? 'text-emerald-600' : 'text-red-600'}`}>→ {e.after}</p>}
                       </div>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full flex-shrink-0 ${e.result === 'success' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
@@ -996,20 +996,20 @@ export default function AIControlCenter() {
           {implLog.length > 0 && (
             <div>
               <div className="flex items-center justify-between mb-3">
-                <h2 className="text-[13px] font-semibold text-[#4b4b47]">Журнал рекомендаций</h2>
-                <button onClick={() => { setImplLog([]); try { localStorage.removeItem(IMPL_LOG_KEY) } catch {} }} className="text-[11px] text-[#9a9a95] hover:text-[#5a5a55]">Очистить</button>
+                <h2 className="text-[13px] font-semibold text-ink-soft">Журнал рекомендаций</h2>
+                <button onClick={() => { setImplLog([]); try { localStorage.removeItem(IMPL_LOG_KEY) } catch {} }} className="text-[11px] text-muted hover:text-ink-soft">Очистить</button>
               </div>
-              <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
-                <div className="divide-y divide-[#f5f5f3]">
+              <div className="bg-surface rounded-xl border border-line overflow-hidden">
+                <div className="divide-y divide-line-soft">
                   {implLog.map((e, i) => (
                     <div key={i} className="px-4 py-3 flex items-start gap-4">
                       <div className="flex-shrink-0 w-[72px]">
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-[10px] text-muted">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
+                        <p className="text-[10px] text-muted">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="text-[12px] font-medium text-[#2a2a28]">{e.title}</p>
-                        <p className="text-[11px] text-[#6a6a65] mt-0.5">{e.action}</p>
+                        <p className="text-[12px] font-medium text-ink">{e.title}</p>
+                        <p className="text-[11px] text-ink-soft mt-0.5">{e.action}</p>
                       </div>
                     </div>
                   ))}
@@ -1019,9 +1019,9 @@ export default function AIControlCenter() {
           )}
 
           {fixLog.length === 0 && implLog.length === 0 && (
-            <div className="bg-[#f7f7f4] rounded-xl border border-[#e8e8e5] p-10 text-center">
-              <p className="text-[13px] text-[#8a8a85]">Журнал пуст</p>
-              <p className="text-[11px] text-[#b0b0aa] mt-1">Здесь появятся исправления из Health Check и действия с рекомендациями</p>
+            <div className="bg-canvas rounded-xl border border-line p-10 text-center">
+              <p className="text-[13px] text-muted">Журнал пуст</p>
+              <p className="text-[11px] text-faint mt-1">Здесь появятся исправления из Health Check и действия с рекомендациями</p>
             </div>
           )}
         </div>
@@ -1029,7 +1029,7 @@ export default function AIControlCenter() {
 
       {/* Legend */}
       {tab === 'health' && (
-        <div className="mt-8 flex gap-4 text-[11px] text-[#9a9a95]">
+        <div className="mt-8 flex gap-4 text-[11px] text-muted">
           <span className="text-emerald-600 font-semibold">✓ Работает</span>
           <span className="text-amber-500 font-semibold">⚠ Предупреждение</span>
           <span className="text-red-500 font-semibold">✕ Ошибка</span>

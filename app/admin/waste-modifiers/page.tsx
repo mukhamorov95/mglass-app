@@ -109,12 +109,12 @@ export default function WasteModifiersPage() {
   return (
     <div className="max-w-[900px] mx-auto px-6 py-8">
       {toast && (
-        <div className="fixed top-4 right-4 bg-[#111110] text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">{toast}</div>
+        <div className="fixed top-4 right-4 bg-ink text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">{toast}</div>
       )}
 
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Модификаторы расхода</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Модификаторы расхода</h1>
+        <p className="text-[13px] text-muted mt-0.5">
           Дополнительные надбавки к базовому расходу материала. Применяются автоматически по форме изделия или условиям раскроя.
         </p>
         <div className="mt-2 bg-[#fffbeb] border border-[#fbbf24] rounded-lg px-4 py-2.5 text-[12px] text-[#92400e]">
@@ -124,28 +124,28 @@ export default function WasteModifiersPage() {
       </div>
 
       {loading ? (
-        <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
+        <div className="text-[13px] text-muted py-12 text-center">Загрузка...</div>
       ) : (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-4">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden mb-4">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="bg-[#f8f8f7] border-b border-[#e4e4e0]">
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Название правила</th>
-                <th className="px-3 py-3 text-center font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider w-[80px]">+%</th>
-                <th className="px-3 py-3 text-center font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider w-[130px]">Применять к</th>
-                <th className="px-3 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Описание</th>
-                <th className="px-3 py-3 text-center font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider w-[70px]">Активно</th>
+              <tr className="bg-canvas border-b border-line">
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Название правила</th>
+                <th className="px-3 py-3 text-center font-semibold text-muted text-[11px] uppercase tracking-wider w-[80px]">+%</th>
+                <th className="px-3 py-3 text-center font-semibold text-muted text-[11px] uppercase tracking-wider w-[130px]">Применять к</th>
+                <th className="px-3 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Описание</th>
+                <th className="px-3 py-3 text-center font-semibold text-muted text-[11px] uppercase tracking-wider w-[70px]">Активно</th>
                 <th className="w-20" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f0f0ee]">
+            <tbody className="divide-y divide-line-soft">
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-[#8a8a85]">Нет правил. Добавьте ниже.</td>
+                  <td colSpan={6} className="px-4 py-8 text-center text-muted">Нет правил. Добавьте ниже.</td>
                 </tr>
               )}
               {rows.map(row => (
-                <tr key={row.id} className={`hover:bg-[#fafaf9] ${!row.active ? 'opacity-50' : ''}`}>
+                <tr key={row.id} className={`hover:bg-subtle ${!row.active ? 'opacity-50' : ''}`}>
                   {editId === row.id ? (
                     <>
                       <td className="px-3 py-2">
@@ -158,7 +158,7 @@ export default function WasteModifiersPage() {
                       </td>
                       <td className="px-3 py-2 text-center">
                         <select value={draft.applies_to ?? 'all'} onChange={e => setDraft(p => ({ ...p, applies_to: e.target.value }))}
-                          className="border border-[#0071e3] rounded px-1.5 py-1 text-[12px] outline-none bg-white w-full">
+                          className="border border-[#0071e3] rounded px-1.5 py-1 text-[12px] outline-none bg-surface w-full">
                           {APPLIES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                       </td>
@@ -170,29 +170,29 @@ export default function WasteModifiersPage() {
                       <td className="px-3 py-2 text-center">
                         <div className="flex items-center gap-1">
                           <button onClick={saveEdit} className="text-[12px] font-medium px-2.5 py-1 rounded bg-[#0071e3] text-white hover:bg-[#0062c4]">OK</button>
-                          <button onClick={() => { setEditId(null); setDraft({}) }} className="text-[12px] px-2 py-1 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]">✕</button>
+                          <button onClick={() => { setEditId(null); setDraft({}) }} className="text-[12px] px-2 py-1 rounded border border-line text-ink-soft hover:bg-canvas">✕</button>
                         </div>
                       </td>
                     </>
                   ) : (
                     <>
-                      <td className="px-4 py-2.5 font-medium text-[#111110]">
+                      <td className="px-4 py-2.5 font-medium text-ink">
                         {row.rule_name}
-                        <span className="ml-2 text-[11px] text-[#b0b0aa] font-mono">{row.rule_key}</span>
+                        <span className="ml-2 text-[11px] text-faint font-mono">{row.rule_key}</span>
                       </td>
                       <td className="px-3 py-2.5 text-center font-mono font-semibold text-[#b45309]">+{row.percent_add}%</td>
-                      <td className="px-3 py-2.5 text-center text-[12px] text-[#8a8a85]">{appliesLabel(row.applies_to)}</td>
-                      <td className="px-3 py-2.5 text-[12px] text-[#8a8a85]">{row.description ?? '—'}</td>
+                      <td className="px-3 py-2.5 text-center text-[12px] text-muted">{appliesLabel(row.applies_to)}</td>
+                      <td className="px-3 py-2.5 text-[12px] text-muted">{row.description ?? '—'}</td>
                       <td className="px-3 py-2.5 text-center">
                         <button onClick={() => toggleActive(row)}
                           className={`w-8 h-4 rounded-full transition-colors relative ${row.active ? 'bg-[#34c759]' : 'bg-[#d8d8d4]'}`}>
-                          <span className={`absolute top-0.5 w-3 h-3 bg-white rounded-full shadow transition-all ${row.active ? 'left-4' : 'left-0.5'}`} />
+                          <span className={`absolute top-0.5 w-3 h-3 bg-surface rounded-full shadow transition-all ${row.active ? 'left-4' : 'left-0.5'}`} />
                         </button>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <div className="flex items-center gap-1 justify-center">
                           <button onClick={() => startEdit(row)}
-                            className="text-[12px] px-2 py-1 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]">✎</button>
+                            className="text-[12px] px-2 py-1 rounded border border-line text-ink-soft hover:bg-canvas">✎</button>
                           <button onClick={() => deleteRow(row.id)}
                             className="text-[12px] px-2 py-1 rounded border border-red-200 text-red-500 hover:bg-red-50">✕</button>
                         </div>
@@ -211,7 +211,7 @@ export default function WasteModifiersPage() {
                       className="w-full border border-[#0071e3] rounded px-2 py-1 text-[13px] outline-none" />
                     <input placeholder="rule_key (уникальный)" value={newRow.rule_key}
                       onChange={e => setNewRow(p => ({ ...p, rule_key: e.target.value }))}
-                      className="w-full border border-[#d0d0cc] rounded px-2 py-1 text-[12px] outline-none mt-1 font-mono" />
+                      className="w-full border border-faint rounded px-2 py-1 text-[12px] outline-none mt-1 font-mono" />
                   </td>
                   <td className="px-3 py-2 text-center">
                     <input type="number" value={newRow.percent_add}
@@ -220,20 +220,20 @@ export default function WasteModifiersPage() {
                   </td>
                   <td className="px-3 py-2 text-center">
                     <select value={newRow.applies_to} onChange={e => setNewRow(p => ({ ...p, applies_to: e.target.value }))}
-                      className="border border-[#0071e3] rounded px-1.5 py-1 text-[12px] outline-none bg-white w-full">
+                      className="border border-[#0071e3] rounded px-1.5 py-1 text-[12px] outline-none bg-surface w-full">
                       {APPLIES_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </td>
                   <td className="px-3 py-2">
                     <input placeholder="Описание (необязательно)" value={newRow.description ?? ''}
                       onChange={e => setNewRow(p => ({ ...p, description: e.target.value }))}
-                      className="w-full border border-[#d0d0cc] rounded px-2 py-1 text-[13px] outline-none" />
+                      className="w-full border border-faint rounded px-2 py-1 text-[13px] outline-none" />
                   </td>
                   <td className="px-3 py-2 text-center">—</td>
                   <td className="px-3 py-2 text-center">
                     <div className="flex items-center gap-1">
                       <button onClick={addRow} className="text-[12px] font-medium px-2.5 py-1 rounded bg-[#0071e3] text-white hover:bg-[#0062c4]">OK</button>
-                      <button onClick={() => { setAdding(false); setNewRow({ ...EMPTY }) }} className="text-[12px] px-2 py-1 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]">✕</button>
+                      <button onClick={() => { setAdding(false); setNewRow({ ...EMPTY }) }} className="text-[12px] px-2 py-1 rounded border border-line text-ink-soft hover:bg-canvas">✕</button>
                     </div>
                   </td>
                 </tr>
@@ -244,11 +244,11 @@ export default function WasteModifiersPage() {
       )}
 
       <button onClick={() => setAdding(true)} disabled={adding}
-        className="text-[13px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+        className="text-[13px] font-medium px-4 py-2 rounded-lg bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
         + Добавить правило
       </button>
 
-      <div className="mt-6 border-t border-[#f0f0ee] pt-4">
+      <div className="mt-6 border-t border-line-soft pt-4">
         <a href="/admin/glass-prices" className="text-[13px] text-[#0071e3] hover:underline">
           ← Справочник цен на стекло и зеркало
         </a>

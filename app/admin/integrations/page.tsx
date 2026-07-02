@@ -171,7 +171,7 @@ export default function IntegrationsMonitor() {
   const errors = data?.errors ?? []
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">
       Загрузка...
     </div>
   )
@@ -180,8 +180,8 @@ export default function IntegrationsMonitor() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center">
         <p className="text-[32px] mb-2">🔒</p>
-        <p className="text-[16px] font-semibold text-[#111110]">Нет доступа</p>
-        <p className="text-[13px] text-[#8a8a85] mt-1">Этот раздел доступен только Владиславу</p>
+        <p className="text-[16px] font-semibold text-ink">Нет доступа</p>
+        <p className="text-[13px] text-muted mt-1">Этот раздел доступен только Владиславу</p>
       </div>
     </div>
   )
@@ -190,7 +190,7 @@ export default function IntegrationsMonitor() {
     <div className="max-w-[1100px] mx-auto px-6 py-8">
       {/* Toast */}
       {toast && (
-        <div className="fixed top-4 right-4 bg-[#111110] text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">
+        <div className="fixed top-4 right-4 bg-ink text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">
           {toast}
         </div>
       )}
@@ -198,10 +198,10 @@ export default function IntegrationsMonitor() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">
+          <h1 className="text-[20px] font-semibold text-ink tracking-tight">
             Интеграции — Avito / AmoCRM Monitor
           </h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">
+          <p className="text-[13px] text-muted mt-0.5">
             Статус очереди сообщений и синхронизации с AmoCRM
           </p>
         </div>
@@ -216,7 +216,7 @@ export default function IntegrationsMonitor() {
           <button
             onClick={load}
             disabled={loading}
-            className="text-[13px] font-medium px-4 py-2 rounded-lg bg-white border border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors"
+            className="text-[13px] font-medium px-4 py-2 rounded-lg bg-surface border border-line text-ink hover:bg-canvas disabled:opacity-40 transition-colors"
           >
             ↻ Обновить
           </button>
@@ -227,29 +227,29 @@ export default function IntegrationsMonitor() {
       {stats && (
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-3 mb-6">
           {([
-            ['Получено',  stats.total_received,   'text-[#111110]'],
+            ['Получено',  stats.total_received,   'text-ink'],
             ['Ожидает',   stats.pending,           'text-yellow-600'],
             ['В AmoCRM',  stats.synced_to_amocrm + stats.ai_processed, 'text-green-600'],
             ['В очереди', stats.processing + stats.retry_scheduled,    'text-blue-600'],
             ['Ошибки',    stats.failed,            'text-red-600'],
             ['Повторы',   stats.retry_scheduled,   'text-orange-600'],
           ] as [string, number, string][]).map(([label, val, cls]) => (
-            <div key={label} className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-              <p className={`text-[24px] font-bold ${cls}`}>{val}</p>
-              <p className="text-[11px] text-[#8a8a85] mt-0.5">{label}</p>
+            <div key={label} className="bg-surface border border-line rounded-xl p-4 text-center">
+              <p className={`text-[24px] font-semibold ${cls}`}>{val}</p>
+              <p className="text-[11px] text-muted mt-0.5">{label}</p>
             </div>
           ))}
         </div>
       )}
 
       {/* ── Backfill panel ── */}
-      <div className="bg-white border-2 border-[#0071e3] rounded-xl p-5 mb-6">
+      <div className="bg-surface border-2 border-[#0071e3] rounded-xl p-5 mb-6">
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-[15px] font-semibold text-[#111110]">
+            <h2 className="text-[15px] font-semibold text-ink">
               🔄 Подгрузить непоставленные сообщения
             </h2>
-            <p className="text-[13px] text-[#6b6b66] mt-1 max-w-[520px]">
+            <p className="text-[13px] text-ink-soft mt-1 max-w-[520px]">
               Импортирует историю из ai_conversations, найдёт сообщения без записи в очереди,
               сбросит ошибки и обработает всю очередь — отправит в AmoCRM всё что не дошло.
             </p>
@@ -278,9 +278,9 @@ export default function IntegrationsMonitor() {
               ['Ошибок сброшено',       backfillResult.summary.failedReset,     'text-orange-700'],
               ['Отправлено в AmoCRM',   backfillResult.summary.queueProcessed,  'text-green-700'],
             ] as [string, number, string][]).map(([label, val, cls]) => (
-              <div key={label} className="bg-[#f8f8f7] rounded-lg p-3 text-center">
-                <p className={`text-[22px] font-bold ${cls}`}>{val}</p>
-                <p className="text-[11px] text-[#8a8a85] mt-0.5">{label}</p>
+              <div key={label} className="bg-canvas rounded-lg p-3 text-center">
+                <p className={`text-[22px] font-semibold ${cls}`}>{val}</p>
+                <p className="text-[11px] text-muted mt-0.5">{label}</p>
               </div>
             ))}
             {backfillResult.summary.errors.length > 0 && (
@@ -295,13 +295,13 @@ export default function IntegrationsMonitor() {
       </div>
 
       {/* Health check */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 mb-6">
+      <div className="bg-surface border border-line rounded-xl p-4 mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-[14px] font-semibold text-[#111110]">Проверить интеграцию</h2>
+          <h2 className="text-[14px] font-semibold text-ink">Проверить интеграцию</h2>
           <button
             onClick={runHealth}
             disabled={healthLoading}
-            className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors"
+            className="text-[13px] font-medium px-4 py-2 rounded-lg border border-line hover:bg-canvas disabled:opacity-40 transition-colors"
           >
             {healthLoading ? 'Проверяю...' : '🔍 Проверить'}
           </button>
@@ -317,7 +317,7 @@ export default function IntegrationsMonitor() {
                 </div>
               ))}
             </div>
-            <div className="flex gap-4 text-[12px] text-[#8a8a85]">
+            <div className="flex gap-4 text-[12px] text-muted">
               {Object.entries(health.queue as Record<string, number>).map(([k, v]) => (
                 <span key={k}>{k}: <strong>{v}</strong></span>
               ))}
@@ -333,7 +333,7 @@ export default function IntegrationsMonitor() {
             key={t}
             onClick={() => setTab(t)}
             className={`text-[13px] font-medium px-4 py-2 rounded-lg transition-colors ${
-              tab === t ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f4]'
+              tab === t ? 'bg-ink text-white' : 'bg-surface border border-line text-ink hover:bg-canvas'
             }`}
           >
             {t === 'messages' ? `Сообщения (${messages.length})` : `Ошибки (${errors.length})`}
@@ -352,38 +352,38 @@ export default function IntegrationsMonitor() {
 
       {/* Messages table */}
       {tab === 'messages' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#e4e4e0] bg-[#f8f8f7]">
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Время</th>
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Чат</th>
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Сообщение</th>
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Статус</th>
-                <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">Действия</th>
+              <tr className="border-b border-line bg-canvas">
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Время</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Чат</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Сообщение</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Статус</th>
+                <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider">Действия</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f0f0ee]">
+            <tbody className="divide-y divide-line-soft">
               {messages.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="px-4 py-8 text-center text-[#8a8a85]">Нет сообщений</td>
+                  <td colSpan={5} className="px-4 py-8 text-center text-muted">Нет сообщений</td>
                 </tr>
               )}
               {messages.map(msg => (
-                <tr key={msg.id} className="hover:bg-[#fafaf9]">
-                  <td className="px-4 py-3 text-[#8a8a85] whitespace-nowrap">{fmt(msg.received_at)}</td>
+                <tr key={msg.id} className="hover:bg-subtle">
+                  <td className="px-4 py-3 text-muted whitespace-nowrap">{fmt(msg.received_at)}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1.5">
                       <span>{channelIcon(msg.chat_type)}</span>
                       <div>
-                        <p className="font-medium text-[#111110] truncate max-w-[120px]">{msg.contact_name ?? msg.chat_id}</p>
-                        <p className="text-[11px] text-[#8a8a85]">{msg.chat_type}</p>
+                        <p className="font-medium text-ink truncate max-w-[120px]">{msg.contact_name ?? msg.chat_id}</p>
+                        <p className="text-[11px] text-muted">{msg.chat_type}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-4 py-3 max-w-[280px]">
                     <span className="mr-1">{msgTypeIcon(msg.message_type)}</span>
-                    <span className="text-[#111110] truncate">
+                    <span className="text-ink truncate">
                       {msg.text ? (msg.text.length > 60 ? msg.text.slice(0, 60) + '…' : msg.text) : `[${msg.message_type}]`}
                     </span>
                   </td>
@@ -422,13 +422,13 @@ export default function IntegrationsMonitor() {
                       )}
                       <button
                         onClick={() => setRawOpen(rawOpen === msg.id ? null : msg.id)}
-                        className="text-[12px] text-[#8a8a85] hover:text-[#111110]"
+                        className="text-[12px] text-muted hover:text-ink"
                       >
                         {rawOpen === msg.id ? 'Скрыть' : 'Raw'}
                       </button>
                     </div>
                     {rawOpen === msg.id && (
-                      <pre className="mt-2 p-3 bg-[#f8f8f7] rounded-lg text-[11px] text-[#111110] max-w-[400px] overflow-auto max-h-[200px] whitespace-pre-wrap break-all">
+                      <pre className="mt-2 p-3 bg-canvas rounded-lg text-[11px] text-ink max-w-[400px] overflow-auto max-h-[200px] whitespace-pre-wrap break-all">
                         {JSON.stringify(msg, null, 2)}
                       </pre>
                     )}
@@ -444,17 +444,17 @@ export default function IntegrationsMonitor() {
       {tab === 'errors' && (
         <div className="space-y-3">
           {errors.length === 0 && (
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center text-[#8a8a85]">
+            <div className="bg-surface border border-line rounded-xl p-8 text-center text-muted">
               Нет ошибок 🎉
             </div>
           )}
           {errors.map(err => (
-            <div key={err.id} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <div key={err.id} className="bg-surface border border-line rounded-xl p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
                     <StatusBadge status={err.status} />
-                    <span className="text-[12px] text-[#8a8a85]">
+                    <span className="text-[12px] text-muted">
                       Попытка {err.attempts} · {fmt(err.updated_at)}
                     </span>
                     {err.amo_lead_id && (

@@ -257,14 +257,14 @@ export default function AIProposalsPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-[#f7f7f6]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-5xl mx-auto px-4 py-4">
 
         {/* Header */}
         <div className="flex items-start justify-between mb-4">
           <div>
-            <h1 className="text-base font-semibold text-[#111110]">AI Черновики КП</h1>
-            <p className="text-xs text-[#9a9a95] mt-0.5">
+            <h1 className="text-base font-semibold text-ink">AI Черновики КП</h1>
+            <p className="text-xs text-muted mt-0.5">
               Черновики, сгенерированные proposal-engineer агентом
             </p>
           </div>
@@ -273,15 +273,15 @@ export default function AIProposalsPage() {
               onClick={formOpen ? closeForm : openForm}
               className={`h-7 px-2.5 rounded-lg text-[11px] font-medium transition-colors ${
                 formOpen
-                  ? 'bg-[#f0f0ee] border border-[#e0e0dc] text-[#4b4b47] hover:bg-[#e8e8e4]'
-                  : 'bg-[#111110] text-white hover:bg-[#2a2a28]'
+                  ? 'bg-line-soft border border-line text-ink-soft hover:bg-line'
+                  : 'bg-ink text-white hover:bg-[#2a2a28]'
               }`}
             >
               {formOpen ? '✕ Закрыть' : '+ Создать AI-КП'}
             </button>
             <button
               onClick={load}
-              className="h-7 px-2.5 rounded-lg text-[11px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-white transition-colors"
+              className="h-7 px-2.5 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-surface transition-colors"
             >
               ↻ Обновить
             </button>
@@ -299,13 +299,13 @@ export default function AIProposalsPage() {
         {/* Create form panel */}
         {formOpen && (
           <form onSubmit={handleSubmit} noValidate
-            className="mb-4 bg-white rounded-xl border border-[#e8e8e5] p-4">
+            className="mb-4 bg-surface rounded-xl border border-line p-4">
 
-            <h2 className="text-sm font-semibold text-[#111110] mb-3">Создать AI-черновик КП</h2>
+            <h2 className="text-sm font-semibold text-ink mb-3">Создать AI-черновик КП</h2>
 
             {/* Inner safety block */}
-            <div className="mb-4 px-3 py-2 bg-[#f7f7f6] border border-[#ebebea] rounded-lg">
-              <p className="text-[11px] text-[#6b6b66]">
+            <div className="mb-4 px-3 py-2 bg-canvas border border-line rounded-lg">
+              <p className="text-[11px] text-ink-soft">
                 Создание AI-КП <strong>не отправляет</strong> предложение клиенту,
                 не пишет в CRM и не создаёт заказ.
                 Черновик попадёт на внутреннюю проверку.
@@ -338,7 +338,7 @@ export default function AIProposalsPage() {
 
               {/* client_request */}
               <div>
-                <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                <label className="block text-[11px] font-medium text-ink-soft mb-1">
                   Запрос клиента <span className="text-red-400">*</span>
                 </label>
                 <textarea
@@ -346,20 +346,20 @@ export default function AIProposalsPage() {
                   onChange={e => setField('client_request', e.target.value)}
                   placeholder="Например: нужна душевая кабина без поддона, 120×80 см, с монтажом"
                   rows={3}
-                  className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] placeholder-[#c0c0bc] focus:outline-none focus:border-[#b0b0aa] resize-none"
+                  className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink placeholder-faint focus:outline-none focus:border-faint resize-none"
                 />
               </div>
 
               {/* product_type + width + height */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div className="col-span-2">
-                  <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-soft mb-1">
                     Тип изделия <span className="text-red-400">*</span>
                   </label>
                   <select
                     value={form.product_type}
                     onChange={e => setField('product_type', e.target.value as ProductType)}
-                    className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink bg-surface focus:outline-none focus:border-faint"
                   >
                     <option value="shower">Душевая (shower)</option>
                     <option value="mirror">Зеркало (mirror)</option>
@@ -373,7 +373,7 @@ export default function AIProposalsPage() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-soft mb-1">
                     Ширина (мм) <span className="text-red-400">*</span>
                   </label>
                   <input
@@ -382,12 +382,12 @@ export default function AIProposalsPage() {
                     value={form.width}
                     onChange={e => setField('width', e.target.value)}
                     placeholder="1200"
-                    className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] placeholder-[#c0c0bc] focus:outline-none focus:border-[#b0b0aa]"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink placeholder-faint focus:outline-none focus:border-faint"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-soft mb-1">
                     Высота (мм) <span className="text-red-400">*</span>
                   </label>
                   <input
@@ -396,25 +396,25 @@ export default function AIProposalsPage() {
                     value={form.height}
                     onChange={e => setField('height', e.target.value)}
                     placeholder="2000"
-                    className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] placeholder-[#c0c0bc] focus:outline-none focus:border-[#b0b0aa]"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink placeholder-faint focus:outline-none focus:border-faint"
                   />
                 </div>
               </div>
 
               {/* Mirror-specific options — shown only for product_type=mirror */}
               {form.product_type === 'mirror' && (
-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 p-3 bg-[#f7f7f6] rounded-lg border border-[#ebebea]">
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 p-3 bg-canvas rounded-lg border border-line">
                   <div className="col-span-2 sm:col-span-4">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-2">Параметры зеркала</p>
+                    <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-2">Параметры зеркала</p>
                   </div>
 
                   {/* mirrorType */}
                   <div className="col-span-2">
-                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Тип зеркала</label>
+                    <label className="block text-[11px] font-medium text-ink-soft mb-1">Тип зеркала</label>
                     <select
                       value={form.mirrorType}
                       onChange={e => setField('mirrorType', e.target.value as MirrorType)}
-                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink bg-surface focus:outline-none focus:border-faint"
                     >
                       <option value="silver">Серебро</option>
                       <option value="crystal_vision">Осветлённое</option>
@@ -423,11 +423,11 @@ export default function AIProposalsPage() {
 
                   {/* thicknessMm */}
                   <div>
-                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Толщина</label>
+                    <label className="block text-[11px] font-medium text-ink-soft mb-1">Толщина</label>
                     <select
                       value={form.thicknessMm}
                       onChange={e => setField('thicknessMm', Number(e.target.value))}
-                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink bg-surface focus:outline-none focus:border-faint"
                     >
                       <option value={4}>4 мм</option>
                       <option value={6}>6 мм</option>
@@ -436,11 +436,11 @@ export default function AIProposalsPage() {
 
                   {/* mirrorShape */}
                   <div>
-                    <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">Форма</label>
+                    <label className="block text-[11px] font-medium text-ink-soft mb-1">Форма</label>
                     <select
                       value={form.mirrorShape}
                       onChange={e => setField('mirrorShape', e.target.value as MirrorShape)}
-                      className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] bg-white focus:outline-none focus:border-[#b0b0aa]"
+                      className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink bg-surface focus:outline-none focus:border-faint"
                     >
                       <option value="rectangle">Прямоугольное</option>
                       <option value="circle">Круглое</option>
@@ -457,7 +457,7 @@ export default function AIProposalsPage() {
                         onChange={e => setField('hasLighting', e.target.checked)}
                         className="w-3.5 h-3.5 accent-[#111110]"
                       />
-                      <span className="text-[11px] text-[#4b4b47]">Подсветка</span>
+                      <span className="text-[11px] text-ink-soft">Подсветка</span>
                     </label>
                   </div>
                 </div>
@@ -466,7 +466,7 @@ export default function AIProposalsPage() {
               {/* quantity + client_name */}
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <div>
-                  <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-soft mb-1">
                     Количество
                   </label>
                   <input
@@ -474,12 +474,12 @@ export default function AIProposalsPage() {
                     min={1}
                     value={form.quantity}
                     onChange={e => setField('quantity', e.target.value)}
-                    className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] focus:outline-none focus:border-[#b0b0aa]"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink focus:outline-none focus:border-faint"
                   />
                 </div>
 
                 <div className="col-span-1 sm:col-span-3">
-                  <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                  <label className="block text-[11px] font-medium text-ink-soft mb-1">
                     Имя клиента
                   </label>
                   <input
@@ -487,7 +487,7 @@ export default function AIProposalsPage() {
                     value={form.client_name}
                     onChange={e => setField('client_name', e.target.value)}
                     placeholder="Иван Петров"
-                    className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] placeholder-[#c0c0bc] focus:outline-none focus:border-[#b0b0aa]"
+                    className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink placeholder-faint focus:outline-none focus:border-faint"
                   />
                 </div>
               </div>
@@ -501,7 +501,7 @@ export default function AIProposalsPage() {
                     onChange={e => setField('installation_required', e.target.checked)}
                     className="w-3.5 h-3.5 accent-[#111110]"
                   />
-                  <span className="text-[11px] text-[#4b4b47]">Монтаж</span>
+                  <span className="text-[11px] text-ink-soft">Монтаж</span>
                 </label>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
                   <input
@@ -510,13 +510,13 @@ export default function AIProposalsPage() {
                     onChange={e => setField('delivery_required', e.target.checked)}
                     className="w-3.5 h-3.5 accent-[#111110]"
                   />
-                  <span className="text-[11px] text-[#4b4b47]">Доставка</span>
+                  <span className="text-[11px] text-ink-soft">Доставка</span>
                 </label>
               </div>
 
               {/* manager_notes */}
               <div>
-                <label className="block text-[11px] font-medium text-[#4b4b47] mb-1">
+                <label className="block text-[11px] font-medium text-ink-soft mb-1">
                   Заметки менеджера
                 </label>
                 <textarea
@@ -524,7 +524,7 @@ export default function AIProposalsPage() {
                   onChange={e => setField('manager_notes', e.target.value)}
                   placeholder="Дополнительный контекст для AI (необязательно)…"
                   rows={2}
-                  className="w-full rounded-lg border border-[#e8e8e5] px-3 py-2 text-[12px] text-[#111110] placeholder-[#c0c0bc] focus:outline-none focus:border-[#b0b0aa] resize-none"
+                  className="w-full rounded-lg border border-line px-3 py-2 text-[12px] text-ink placeholder-faint focus:outline-none focus:border-faint resize-none"
                 />
               </div>
 
@@ -533,7 +533,7 @@ export default function AIProposalsPage() {
                 <button
                   type="submit"
                   disabled={submitting}
-                  className="h-8 px-4 rounded-lg text-[12px] font-medium bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="h-8 px-4 rounded-lg text-[12px] font-medium bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {submitting ? (
                     <span className="flex items-center gap-1.5">
@@ -546,7 +546,7 @@ export default function AIProposalsPage() {
                   type="button"
                   disabled={submitting}
                   onClick={closeForm}
-                  className="h-8 px-3 rounded-lg text-[12px] border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3] disabled:opacity-50 transition-colors"
+                  className="h-8 px-3 rounded-lg text-[12px] border border-line text-ink-soft hover:bg-canvas disabled:opacity-50 transition-colors"
                 >
                   Отмена
                 </button>
@@ -562,8 +562,8 @@ export default function AIProposalsPage() {
             <button key={f.key} onClick={() => setFilter(f.key)}
               className={`h-7 px-3 rounded-lg text-[11px] font-medium transition-colors ${
                 filter === f.key
-                  ? 'bg-[#111110] text-white'
-                  : 'bg-white border border-[#e8e8e5] text-[#6b6b66] hover:bg-[#f5f5f3]'
+                  ? 'bg-ink text-white'
+                  : 'bg-surface border border-line text-ink-soft hover:bg-canvas'
               }`}>
               {f.label}
             </button>
@@ -572,49 +572,49 @@ export default function AIProposalsPage() {
 
         {/* Content */}
         {loading ? (
-          <div className="flex items-center gap-2 text-[#9a9a95] text-xs py-12 justify-center">
-            <div className="w-4 h-4 border-2 border-[#d0d0cc] border-t-[#9a9a95] rounded-full animate-spin" />
+          <div className="flex items-center gap-2 text-muted text-xs py-12 justify-center">
+            <div className="w-4 h-4 border-2 border-faint border-t-muted rounded-full animate-spin" />
             Загрузка...
           </div>
         ) : error ? (
-          <div className="bg-white rounded-xl border border-red-100 px-4 py-8 text-center">
+          <div className="bg-surface rounded-xl border border-red-100 px-4 py-8 text-center">
             <p className="text-sm text-red-500">{error}</p>
-            <button onClick={load} className="mt-3 text-xs text-[#9a9a95] underline">Повторить</button>
+            <button onClick={load} className="mt-3 text-xs text-muted underline">Повторить</button>
           </div>
         ) : items.length === 0 ? (
-          <div className="bg-white rounded-xl border border-[#e8e8e5] px-4 py-12 text-center">
-            <p className="text-sm text-[#9a9a95]">Черновики не найдены</p>
+          <div className="bg-surface rounded-xl border border-line px-4 py-12 text-center">
+            <p className="text-sm text-muted">Черновики не найдены</p>
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
+          <div className="bg-surface rounded-xl border border-line overflow-hidden">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-[#f0f0ee]">
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide w-12">#</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide">Черновик</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide">Статус</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide">Создан</th>
-                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide">Флаги</th>
-                  <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wide"></th>
+                <tr className="border-b border-line-soft">
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-wide w-12">#</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-wide">Черновик</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-wide">Статус</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-wide">Создан</th>
+                  <th className="px-4 py-2.5 text-left text-[10px] font-semibold text-muted uppercase tracking-wide">Флаги</th>
+                  <th className="px-4 py-2.5 text-right text-[10px] font-semibold text-muted uppercase tracking-wide"></th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#f7f7f7]">
+              <tbody className="divide-y divide-line-soft">
                 {items.map(item => {
                   const badge     = statusBadge(item.status)
                   const warnCount = Array.isArray(item.warnings) ? item.warnings.length : 0
                   const errCount  = Array.isArray(item.errors)   ? item.errors.length   : 0
                   return (
-                    <tr key={item.id} className="hover:bg-[#fafafa] transition-colors">
-                      <td className="px-4 py-3 text-[11px] text-[#9a9a95] font-mono">{item.id}</td>
+                    <tr key={item.id} className="hover:bg-subtle transition-colors">
+                      <td className="px-4 py-3 text-[11px] text-muted font-mono">{item.id}</td>
                       <td className="px-4 py-3">
-                        <p className="text-[12px] font-medium text-[#111110] truncate max-w-xs">
-                          {item.proposal_title ?? <span className="text-[#9a9a95] font-normal italic">Без названия</span>}
+                        <p className="text-[12px] font-medium text-ink truncate max-w-xs">
+                          {item.proposal_title ?? <span className="text-muted font-normal italic">Без названия</span>}
                         </p>
                         {item.client_name && (
-                          <p className="text-[10px] text-[#9a9a95] mt-0.5">{item.client_name}</p>
+                          <p className="text-[10px] text-muted mt-0.5">{item.client_name}</p>
                         )}
                         {item.created_by && (
-                          <p className="text-[10px] text-[#b8b8b4] mt-0.5">{item.created_by}</p>
+                          <p className="text-[10px] text-faint mt-0.5">{item.created_by}</p>
                         )}
                       </td>
                       <td className="px-4 py-3">
@@ -622,7 +622,7 @@ export default function AIProposalsPage() {
                           {badge.label}
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-[11px] text-[#6b6b66] whitespace-nowrap">
+                      <td className="px-4 py-3 text-[11px] text-ink-soft whitespace-nowrap">
                         {fmtDate(item.created_at)}
                       </td>
                       <td className="px-4 py-3">
@@ -638,13 +638,13 @@ export default function AIProposalsPage() {
                             </span>
                           )}
                           {warnCount === 0 && errCount === 0 && (
-                            <span className="text-[10px] text-[#d0d0cc]">—</span>
+                            <span className="text-[10px] text-faint">—</span>
                           )}
                         </div>
                       </td>
                       <td className="px-4 py-3 text-right">
                         <Link href={`/admin/ai-proposals/${item.id}`}
-                          className="h-6 px-2.5 rounded-lg text-[11px] border border-[#e8e8e5] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors inline-flex items-center gap-1">
+                          className="h-6 px-2.5 rounded-lg text-[11px] border border-line text-ink-soft hover:bg-canvas transition-colors inline-flex items-center gap-1">
                           Открыть →
                         </Link>
                       </td>
@@ -658,7 +658,7 @@ export default function AIProposalsPage() {
 
         {/* Footer note */}
         {items.length > 0 && (
-          <p className="mt-3 text-[10px] text-[#b8b8b4] text-center">
+          <p className="mt-3 text-[10px] text-faint text-center">
             Показано {items.length} записей · одобрение не отправляет КП клиенту
           </p>
         )}
