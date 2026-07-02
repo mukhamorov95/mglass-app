@@ -97,11 +97,11 @@ const BUYER_B2B_MGLASS: NavItem[] = [
 // ─── Production role ──────────────────────────────────────────────────────────
 
 const PRODUCTION_ITEMS: NavItem[] = [
-  { href: '/b2b-pipeline',   label: 'Воронка продаж',    icon: '📌' },
-  { href: '/b2b-production', label: 'Производство B2B',  icon: '🔧' },
-  { href: '/b2b-cutting',    label: 'Раскрой стекла',    icon: '✂️' },
-  { href: '/production',     label: 'Производство',      icon: '⚙️' },
-  { href: '/production-app', label: 'Production App',    icon: '📱' },
+  { href: '/production-app',            label: 'Производство',        icon: '📱' },
+  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭' },
+  { href: '/b2b-cutting',               label: 'Раскрой стекла',      icon: '✂️' },
+  // Старые контуры (/b2b-pipeline, /b2b-production, /production) скрыты из меню —
+  // живой контур это /production-app. Доступ по URL пока сохранён (allowlist не трогаем).
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────

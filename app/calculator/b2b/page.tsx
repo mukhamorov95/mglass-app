@@ -750,11 +750,11 @@ export default function B2BCalculatorPage() {
         const path = `${savedId}/${Date.now()}_${safeName}`
         const { error: uploadErr } = await sb.storage.from('b2b-attachments').upload(path, attachFile)
         if (!uploadErr) {
-          const { data: urlData } = sb.storage.from('b2b-attachments').getPublicUrl(path)
+          // Bucket приватный — храним ПУТЬ; отдаётся через /api/b2b/attachments/[id] (signed URL).
           await sb.from('b2b_calculation_attachments').insert({
             order_id: savedId,
             file_name: attachFile.name,
-            file_url: urlData.publicUrl,
+            file_url: path,
             file_type: attachFile.type || attachFile.name.split('.').pop() || '',
             file_size: attachFile.size,
           })

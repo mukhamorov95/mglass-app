@@ -1224,7 +1224,7 @@ export default function B2BQuotesPage() {
                       return (
                         <div className="px-4 py-2.5 border-t border-[#f0f0ec] flex flex-wrap gap-2">
                           {files.map(f => (
-                            <a key={f.id} href={f.file_url} target="_blank" rel="noopener noreferrer"
+                            <a key={f.id} href={`/api/b2b/attachments/${f.id}`} target="_blank" rel="noopener noreferrer"
                               className="flex items-center gap-1.5 px-2.5 py-1.5 border border-[#e4e4e0] rounded-lg text-[11px] text-[#111110] hover:bg-[#fafaf9] hover:border-[#c4c4be] transition-colors">
                               <span className="text-[13px]">
                                 {/\.pdf$/i.test(f.file_name) ? '📄' :
