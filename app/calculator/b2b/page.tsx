@@ -769,9 +769,9 @@ export default function B2BCalculatorPage() {
   if (isBuyer) return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="text-center space-y-4">
-        <p className="text-[15px] font-medium text-[#111110]">У вас нет доступа к B2B-калькулятору</p>
+        <p className="text-[15px] font-medium text-ink">У вас нет доступа к B2B-калькулятору</p>
         <a href="/admin/procurement"
-          className="inline-block bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
+          className="inline-block bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
           Открыть закупки
         </a>
       </div>
@@ -783,7 +783,7 @@ export default function B2BCalculatorPage() {
       <div className="text-center space-y-3">
         <p className="text-[14px] text-red-600">{loadError}</p>
         <button onClick={() => window.location.reload()}
-          className="text-[13px] font-medium px-4 py-2 bg-[#f0f0ec] rounded-lg hover:bg-[#e8e8e4] text-[#111110]">
+          className="text-[13px] font-medium px-4 py-2 bg-line-soft rounded-lg hover:bg-[#e8e8e4] text-ink">
           Повторить
         </button>
       </div>
@@ -791,12 +791,12 @@ export default function B2BCalculatorPage() {
   )
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   return (
     <>
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1400px] mx-auto px-4 py-4">
 
         {draftToast && (
@@ -816,18 +816,18 @@ export default function B2BCalculatorPage() {
         )}
 
         <div className="flex items-center justify-between mb-4">
-          <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">B2B Просчёт</h1>
+          <h1 className="text-[16px] font-semibold text-ink tracking-tight">B2B Просчёт</h1>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start">
 
           {/* ══ ЛЕВАЯ КОЛОНКА ══ */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-3 lg:sticky lg:top-4">
+          <div className="bg-surface border border-line rounded-xl p-4 space-y-3 lg:sticky lg:top-4">
 
             {/* Клиент */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Клиент</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest">Клиент</label>
                 {!mglassOnly && (
                   <button
                     onClick={() => setShowNewClient(true)}
@@ -837,13 +837,13 @@ export default function B2BCalculatorPage() {
                 )}
               </div>
               {mglassOnly ? (
-                <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] font-semibold flex items-center justify-between">
+                <div className="w-full bg-canvas border border-line rounded-lg px-3 py-2 text-[13px] text-ink font-semibold flex items-center justify-between">
                   <span>{selectedClient?.name ?? 'M GLASS'}</span>
-                  <span className="text-[10px] uppercase tracking-widest text-[#9a9a95]">фиксировано</span>
+                  <span className="text-[10px] uppercase tracking-widest text-muted">фиксировано</span>
                 </div>
               ) : (
                 <select
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink transition-all"
                   value={clientId ?? ''}
                   onChange={e => setClientId(e.target.value ? Number(e.target.value) : null)}>
                   <option value="">— Выберите клиента —</option>
@@ -859,21 +859,21 @@ export default function B2BCalculatorPage() {
             {/* Номера заказа */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Наш номер</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Наш номер</label>
                 <input
                   type="text"
                   placeholder="МГ-001"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                   value={ourOrderNumber}
                   onChange={e => setOurOrderNumber(e.target.value)}
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">№ клиента</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">№ клиента</label>
                 <input
                   type="text"
                   placeholder="необязательно"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                  className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all placeholder:text-faint"
                   value={clientOrderNumber}
                   onChange={e => setClientOrderNumber(e.target.value)}
                 />
@@ -882,23 +882,23 @@ export default function B2BCalculatorPage() {
 
             {/* Дней производства */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Срок производства, дней</label>
+              <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Срок производства, дней</label>
               <input type="number" min="1" max="90"
-                className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                 value={fProductionDays}
                 onChange={e => setFProductionDays(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
 
-            <div className="h-px bg-[#f0f0ec]" />
+            <div className="h-px bg-line-soft" />
 
             {/* Стекло / Зеркало — табы */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
+              <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Материал</label>
               <div className="flex gap-1.5">
                 {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                   <button key={s.value} onClick={() => handleSuperCatChange(s.value)}
-                    className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${fSuperCat === s.value ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                    className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${fSuperCat === s.value ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -908,18 +908,18 @@ export default function B2BCalculatorPage() {
             {/* Толщина + Тип */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Толщина</label>
                 <select
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                   value={fThickness ?? ''}
                   onChange={e => handleThicknessChange(Number(e.target.value))}>
                   {availableThickness.map(t => <option key={t} value={t}>{t} мм</option>)}
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Тип</label>
                 <select
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] text-ink outline-none focus:border-ink transition-all"
                   value={fMatId ?? ''}
                   onChange={e => handleMaterialChange(Number(e.target.value))}>
                   {thicknessMaterials.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
@@ -933,20 +933,20 @@ export default function B2BCalculatorPage() {
               </div>
             )}
 
-            <div className="h-px bg-[#f0f0ec]" />
+            <div className="h-px bg-line-soft" />
 
             {/* Размеры */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+              <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Размеры и количество</label>
               <div className="grid grid-cols-3 gap-2">
                 <input ref={widthRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                   value={fWidth} onChange={e => setFWidth(e.target.value)} onKeyDown={handleWidthKeyDown} placeholder="Ш, мм" />
                 <input ref={heightRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                   value={fHeight} onChange={e => setFHeight(e.target.value)} onKeyDown={handleHeightKeyDown} placeholder="В, мм" />
                 <input ref={qtyRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink transition-all"
                   value={fQty} onChange={e => setFQty(e.target.value)} onKeyDown={handleQtyKeyDown} placeholder="Шт" />
               </div>
             </div>
@@ -954,7 +954,7 @@ export default function B2BCalculatorPage() {
             {/* Отход + Закалка */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">
                   Отход
                   {selectedMaterial && !selectedMaterial.passthrough && fWaste === selectedMaterial.waste_percent && (
                     <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">авто</span>
@@ -962,12 +962,12 @@ export default function B2BCalculatorPage() {
                   {selectedMaterial?.passthrough && <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>}
                 </label>
                 {selectedMaterial?.passthrough ? (
-                  <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
+                  <div className="w-full bg-canvas border border-line rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
                     10% — проходной
                   </div>
                 ) : (
                   <select
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink transition-all"
                     value={fWaste} onChange={e => setFWaste(Number(e.target.value))}>
                     {WASTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
@@ -975,11 +975,11 @@ export default function B2BCalculatorPage() {
               </div>
               {fSuperCat === 'стекло' && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Закалка</label>
-                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTempering ? 'border-orange-300 bg-orange-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Закалка</label>
+                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTempering ? 'border-orange-300 bg-orange-50' : 'border-line hover:border-faint'}`}>
                     <input type="checkbox" checked={fTempering} onChange={e => setFTempering(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className={`text-[13px] font-medium ${fTempering ? 'text-orange-700' : 'text-[#111110]'}`}>
+                    <span className={`text-[13px] font-medium ${fTempering ? 'text-orange-700' : 'text-ink'}`}>
                       {fTempering ? 'Закалённое' : 'Без закалки'}
                     </span>
                   </label>
@@ -987,17 +987,17 @@ export default function B2BCalculatorPage() {
               )}
               {facetPrices.length > 0 && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Фацет</label>
-                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Фацет</label>
+                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fFacet ? 'border-purple-300 bg-purple-50' : 'border-line hover:border-faint'}`}>
                     <input type="checkbox" checked={fFacet} onChange={e => setFFacet(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className={`text-[13px] font-medium ${fFacet ? 'text-purple-700' : 'text-[#111110]'}`}>
+                    <span className={`text-[13px] font-medium ${fFacet ? 'text-purple-700' : 'text-ink'}`}>
                       {fFacet ? 'Фацет' : 'Без фацета'}
                     </span>
                   </label>
                   {fFacet && (
                     <select
-                      className="mt-1 w-full bg-white border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-purple-500"
+                      className="mt-1 w-full bg-surface border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-purple-500"
                       value={fFacetMm} onChange={e => setFFacetMm(Number(e.target.value))}>
                       {facetPrices.map(f => (
                         <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
@@ -1007,21 +1007,21 @@ export default function B2BCalculatorPage() {
                 </div>
               )}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Сверловка</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Сверловка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fHoles ? 'border-blue-300 bg-blue-50' : 'border-line hover:border-faint'}`}>
                   <input type="checkbox" checked={fHoles} onChange={e => setFHoles(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fHoles ? 'text-blue-700' : 'text-[#111110]'}`}>
+                  <span className={`text-[13px] font-medium ${fHoles ? 'text-blue-700' : 'text-ink'}`}>
                     {fHoles ? 'Есть отверстия' : 'Без отверстий'}
                   </span>
                 </label>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Криволинейка</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Криволинейка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fCurved ? 'border-teal-300 bg-teal-50' : 'border-line hover:border-faint'}`}>
                   <input type="checkbox" checked={fCurved} onChange={e => setFCurved(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-[#111110]'}`}>
+                  <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-ink'}`}>
                     {fCurved ? 'Криволинейный рез' : 'Прямой рез'}
                   </span>
                 </label>
@@ -1031,7 +1031,7 @@ export default function B2BCalculatorPage() {
             {/* Комментарий к позиции */}
             <div>
               <input type="text" maxLength={120}
-                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
+                className="w-full bg-canvas border border-line rounded-lg px-3 py-1.5 text-[12px] text-ink outline-none focus:border-ink transition-all placeholder:text-faint"
                 value={fComment} onChange={e => setFComment(e.target.value)} onKeyDown={handleKeyDown}
                 placeholder="Комментарий к позиции (опционально)" />
             </div>
@@ -1040,23 +1040,23 @@ export default function B2BCalculatorPage() {
             <button
               onClick={handleAddItem}
               disabled={!selectedMaterial || !fWidth || !fHeight || (selectedMaterial?.sale_price ?? 0) === 0}
-              className="w-full bg-[#111110] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+              className="w-full bg-ink text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
               + Добавить позицию
             </button>
 
             {/* Доп. услуги */}
             {services.length > 0 && (
               <details className="group">
-                <summary className="flex items-center justify-between px-3 py-2 rounded-lg border border-[#e4e4e0] cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Доп. услуги</span>
+                <summary className="flex items-center justify-between px-3 py-2 rounded-lg border border-line cursor-pointer select-none list-none hover:bg-subtle transition-colors">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">Доп. услуги</span>
                   <div className="flex items-center gap-2">
                     {fServiceIds.length > 0 && (
                       <span className="text-[10px] font-semibold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">{fServiceIds.length}</span>
                     )}
-                    <span className="text-[#c4c4be] text-[10px] group-open:rotate-180 transition-transform inline-block">▼</span>
+                    <span className="text-faint text-[10px] group-open:rotate-180 transition-transform inline-block">▼</span>
                   </div>
                 </summary>
-                <div className="mt-1 border border-[#e4e4e0] rounded-lg overflow-hidden">
+                <div className="mt-1 border border-line rounded-lg overflow-hidden">
                   {services.map(s => {
                     const checked = fServiceIds.includes(s.id)
                     const tiers = s.size_tiers ?? []
@@ -1069,12 +1069,12 @@ export default function B2BCalculatorPage() {
                         ? (selectedFilm ? selectedFilm.sale_price_per_m2 + (selectedFilm.work_sale_per_m2 ?? 0) : null)
                         : null
                     return (
-                      <div key={s.id} className={`border-b border-[#f8f8f7] last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                      <div key={s.id} className={`border-b border-canvas last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-subtle'}`}>
                         <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none transition-colors">
                           <input type="checkbox" checked={checked} onChange={() => toggleService(s.id)}
                             className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
-                          <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
-                          <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                          <span className="text-[12px] text-ink flex-1 leading-tight">{s.name}</span>
+                          <span className="text-[11px] text-muted flex-shrink-0 font-mono">
                             {s.type === 'percent' ? `${s.value}%`
                               : s.type === 'film' ? (selectedFilm ? `${selectedFilm.sale_price_per_m2.toLocaleString('ru-RU')} ₽/м²` : '—')
                               : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ₽`}
@@ -1082,14 +1082,14 @@ export default function B2BCalculatorPage() {
                         </label>
                         {checked && s.type === 'film' && (
                           <div className="px-3 pb-1.5 flex items-center gap-2">
-                            <span className="text-[10px] text-[#9a9a95] flex-shrink-0">Плёнка:</span>
+                            <span className="text-[10px] text-muted flex-shrink-0">Плёнка:</span>
                             {films.length === 0 ? (
                               <span className="text-[10px] text-orange-500">Нет плёнок в справочнике</span>
                             ) : (
                               <select
                                 value={selectedFilmId ?? ''}
                                 onChange={e => setFFilmSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
-                                className="flex-1 text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                className="flex-1 text-[11px] border border-line rounded-md px-1.5 py-0.5 bg-surface outline-none focus:border-ink">
                                 <option value="">— выберите плёнку —</option>
                                 {films.map(f => {
                                   const total = f.sale_price_per_m2 + (f.work_sale_per_m2 ?? 0)
@@ -1104,11 +1104,11 @@ export default function B2BCalculatorPage() {
                         )}
                         {checked && tiers.length > 0 && s.type !== 'film' && (
                           <div className="px-3 pb-1.5 flex items-center gap-2">
-                            <span className="text-[10px] text-[#9a9a95]">Размер:</span>
+                            <span className="text-[10px] text-muted">Размер:</span>
                             <select
                               value={tierIdx}
                               onChange={e => setFTierSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
-                              className="text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                              className="text-[11px] border border-line rounded-md px-1.5 py-0.5 bg-surface outline-none focus:border-ink">
                               {tiers.map((t, i) => (
                                 <option key={i} value={i}>{t.label}</option>
                               ))}
@@ -1124,23 +1124,23 @@ export default function B2BCalculatorPage() {
 
             {/* Чертёж / файл */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
+              <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">
                 Чертёж / файл клиента
               </label>
               {attachFile ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-[#e4e4e0] rounded-lg bg-[#f8f8f7]">
-                  <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
-                  <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
+                <div className="flex items-center gap-2 px-3 py-2 border border-line rounded-lg bg-canvas">
+                  <span className="text-[11px] text-ink flex-1 truncate font-medium">{attachFile.name}</span>
+                  <span className="text-[10px] text-muted flex-shrink-0">
                     {attachFile.size < 1024 * 1024
                       ? `${(attachFile.size / 1024).toFixed(0)} КБ`
                       : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
                   </span>
                   <button onClick={() => setAttachFile(null)}
-                    className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
+                    className="text-muted hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
                 </div>
               ) : (
                 <button onClick={() => attachInputRef.current?.click()}
-                  className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-[#d4d4ce] rounded-lg text-[12px] text-[#9a9a95] hover:border-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                  className="w-full flex items-center justify-center gap-1.5 py-2 border border-dashed border-[#d4d4ce] rounded-lg text-[12px] text-muted hover:border-muted hover:text-ink-soft transition-colors">
                   📎 Прикрепить файл
                 </button>
               )}
@@ -1152,12 +1152,12 @@ export default function B2BCalculatorPage() {
 
             {/* Примечание к заказу */}
             <details className="group">
-              <summary className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none hover:text-[#6b6b66] transition-colors">
+              <summary className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-muted cursor-pointer select-none list-none hover:text-ink-soft transition-colors">
                 <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                 Примечание к заказу
               </summary>
               <textarea
-                className="mt-2 w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all resize-none"
+                className="mt-2 w-full bg-canvas border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink transition-all resize-none"
                 rows={2} value={notes} onChange={e => setNotes(e.target.value)}
                 placeholder="Общий комментарий к заказу..."
               />
@@ -1168,14 +1168,14 @@ export default function B2BCalculatorPage() {
           <div className="space-y-4">
 
             {/* Таблица позиций */}
-            <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-              <div className="px-5 py-3.5 border-b border-[#f0f0ec] flex items-center justify-between">
+            <div className="bg-surface border border-line rounded-xl overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-line-soft flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">
                     Позиции {items.length > 0 && `— ${items.length} шт.`}
                   </span>
                   {selectedClient && (
-                    <span className="text-[12px] text-[#6b6b66]">{selectedClient.name}</span>
+                    <span className="text-[12px] text-ink-soft">{selectedClient.name}</span>
                   )}
                   {discount > 0 && (
                     <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${discount > maxDiscount ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-700'}`}>
@@ -1191,12 +1191,12 @@ export default function B2BCalculatorPage() {
               </div>
 
               {items.length === 0 ? (
-                <div className="py-16 text-center text-[13px] text-[#c4c4be]">Добавьте первую позицию</div>
+                <div className="py-16 text-center text-[13px] text-faint">Добавьте первую позицию</div>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
-                      <tr className="border-b border-[#f0f0ec] bg-[#fafaf9] text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">
+                      <tr className="border-b border-line-soft bg-subtle text-[10px] font-semibold text-muted uppercase tracking-widest whitespace-nowrap">
                         <th className="px-3 py-2.5 text-center w-8">#</th>
                         <th className="px-3 py-2.5 text-left min-w-[140px]">Материал</th>
                         <th className="px-3 py-2.5 text-left min-w-[80px]">Тип</th>
@@ -1208,22 +1208,22 @@ export default function B2BCalculatorPage() {
                         <th className="px-3 py-2.5 text-right w-16">Вес, кг</th>
                         <th className="px-3 py-2.5 text-right w-20">Цена/м²</th>
                         <th className="px-3 py-2.5 text-right w-14">Скид.%</th>
-                        <th className="px-3 py-2.5 text-right w-24 text-[#111110]">Итого</th>
-                        <th className="px-3 py-2.5 text-right w-24 text-[#9a9a95]">Себест.</th>
+                        <th className="px-3 py-2.5 text-right w-24 text-ink">Итого</th>
+                        <th className="px-3 py-2.5 text-right w-24 text-muted">Себест.</th>
                         <th className="px-3 py-2.5 text-right w-16">Маржа</th>
                         <th className="px-3 py-2.5 text-left min-w-[80px]">Комм.</th>
                         <th className="w-20"></th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-[#f8f8f7]">
+                    <tbody className="divide-y divide-canvas">
                       {items.map((item, idx) => {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
                         const em = effectiveItemMargin(item, discount)
                         return (
-                          <tr key={item.localId} className="hover:bg-[#fafaf9] transition-colors">
-                            <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
+                          <tr key={item.localId} className="hover:bg-subtle transition-colors">
+                            <td className="px-3 py-2.5 text-center text-[10px] font-semibold text-faint">{idx + 1}</td>
                             <td className="px-3 py-2.5">
-                              <div className="font-medium text-[#111110]">{item.materialName}</div>
+                              <div className="font-medium text-ink">{item.materialName}</div>
                               {(item.hasTempering || item.hasFacet || item.services.length > 0 || item.minPriceApplied) && (
                                 <div className="flex gap-1 mt-0.5 flex-wrap">
                                   {item.hasTempering && (
@@ -1241,20 +1241,20 @@ export default function B2BCalculatorPage() {
                                 </div>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 text-[#6b6b66] whitespace-nowrap">{item.category}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.thickness}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.width}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.height}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.quantity}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{fmtN(item.totalAreaNet)}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{fmtN(item.totalWeight, 1)}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.pricePerM2.toLocaleString('ru-RU')}</td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{discount > 0 ? `${discount}%` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
+                            <td className="px-3 py-2.5 text-ink-soft whitespace-nowrap">{item.category}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{item.thickness}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{item.width}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{item.height}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{item.quantity}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{fmtN(item.totalAreaNet)}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink-soft">{fmtN(item.totalWeight, 1)}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink">{item.pricePerM2.toLocaleString('ru-RU')}</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-ink-soft">{discount > 0 ? `${discount}%` : '—'}</td>
+                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-ink whitespace-nowrap">
                               {item.minPriceApplied && item.originalLinePrice !== undefined
                                 ? (
                                   <>
-                                    <span className="line-through text-[10px] text-[#c4c4be] block leading-tight">
+                                    <span className="line-through text-[10px] text-faint block leading-tight">
                                       {item.originalLinePrice.toLocaleString('ru-RU')} ₽
                                     </span>
                                     {item.saleIncVat.toLocaleString('ru-RU')} ₽
@@ -1263,27 +1263,27 @@ export default function B2BCalculatorPage() {
                                 : <>{itemAfterDiscount.toLocaleString('ru-RU')} ₽</>
                               }
                             </td>
-                            <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{item.costExVat.toLocaleString('ru-RU')} ₽</td>
+                            <td className="px-3 py-2.5 text-right font-mono text-muted whitespace-nowrap">{item.costExVat.toLocaleString('ru-RU')} ₽</td>
                             <td className="px-3 py-2.5 text-right">
                               <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(em)}`}>
                                 {em}%
                               </span>
                             </td>
-                            <td className="px-3 py-2.5 text-[11px] text-[#9a9a95] max-w-[100px] truncate">
+                            <td className="px-3 py-2.5 text-[11px] text-muted max-w-[100px] truncate">
                               {item.comment || ''}
                             </td>
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-1 justify-center">
                                 <button onClick={() => openEdit(item)} title="Редактировать"
-                                  className="text-[11px] text-[#c4c4be] hover:text-[#111110] transition-colors px-1.5 py-0.5 rounded hover:bg-[#f0f0ec] leading-none">
+                                  className="text-[11px] text-faint hover:text-ink transition-colors px-1.5 py-0.5 rounded hover:bg-line-soft leading-none">
                                   ✎
                                 </button>
                                 <button onClick={() => copyItem(item.localId)} title="Дублировать строку"
-                                  className="text-[11px] text-[#c4c4be] hover:text-blue-500 transition-colors px-1.5 py-0.5 rounded hover:bg-blue-50 leading-none">
+                                  className="text-[11px] text-faint hover:text-blue-500 transition-colors px-1.5 py-0.5 rounded hover:bg-blue-50 leading-none">
                                   ⧉
                                 </button>
                                 <button onClick={() => removeItem(item.localId)}
-                                  className="text-[#c4c4be] hover:text-red-400 transition-colors text-lg leading-none">×</button>
+                                  className="text-faint hover:text-red-400 transition-colors text-lg leading-none">×</button>
                               </div>
                             </td>
                           </tr>
@@ -1292,20 +1292,20 @@ export default function B2BCalculatorPage() {
                     </tbody>
                     {totals && (
                       <tfoot>
-                        <tr className="border-t-2 border-[#e4e4e0] bg-[#fafaf9] font-semibold text-[#111110]">
-                          <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#9a9a95]">∑</td>
-                          <td className="px-3 py-2.5 text-[11px] text-[#6b6b66]">{items.length} позиций</td>
+                        <tr className="border-t-2 border-line bg-subtle font-semibold text-ink">
+                          <td className="px-3 py-2.5 text-center text-[10px] font-semibold text-muted">∑</td>
+                          <td className="px-3 py-2.5 text-[11px] text-ink-soft">{items.length} позиций</td>
                           <td></td>
                           <td></td>
                           <td></td>
                           <td></td>
                           <td className="px-3 py-2.5 text-right font-mono">{items.reduce((s, i) => s + i.quantity, 0)}</td>
                           <td className="px-3 py-2.5 text-right font-mono">{fmtN(totals.totalAreaNet)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{fmtN(totals.totalWeight, 1)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-ink-soft">{fmtN(totals.totalWeight, 1)}</td>
                           <td></td>
                           <td></td>
-                          <td className="px-3 py-2.5 text-right font-mono font-bold whitespace-nowrap">{fmt(totals.totalAfterDiscount)}</td>
-                          <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{totals.totalCostExVat.toLocaleString('ru-RU')} ₽</td>
+                          <td className="px-3 py-2.5 text-right font-mono font-semibold whitespace-nowrap">{fmt(totals.totalAfterDiscount)}</td>
+                          <td className="px-3 py-2.5 text-right font-mono text-muted whitespace-nowrap">{totals.totalCostExVat.toLocaleString('ru-RU')} ₽</td>
                           <td className="px-3 py-2.5 text-right">
                             {items.length > 0 && (() => {
                               const avg = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
@@ -1324,17 +1324,17 @@ export default function B2BCalculatorPage() {
 
             {/* КП для клиента */}
             {kpText && (
-              <details className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden group">
-                <summary className="px-5 py-3 border-b border-[#f0f0ec] flex items-center gap-2 cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
-                  <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform inline-block">▶</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Клиентский расчёт (КП)</span>
-                  <span className="text-[11px] text-[#c4c4be] ml-auto">нажмите чтобы раскрыть</span>
+              <details className="bg-surface border border-line rounded-xl overflow-hidden group">
+                <summary className="px-5 py-3 border-b border-line-soft flex items-center gap-2 cursor-pointer select-none list-none hover:bg-subtle transition-colors">
+                  <span className="text-[10px] text-muted group-open:rotate-90 transition-transform inline-block">▶</span>
+                  <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">Клиентский расчёт (КП)</span>
+                  <span className="text-[11px] text-faint ml-auto">нажмите чтобы раскрыть</span>
                 </summary>
                 <div className="p-5">
-                  <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-[#111110] bg-[#f8f8f7] rounded-xl px-4 py-3 mb-3 border border-[#e8e8e4]">{kpText}</pre>
+                  <pre className="text-[12px] font-mono leading-relaxed whitespace-pre-wrap text-ink bg-canvas rounded-xl px-4 py-3 mb-3 border border-[#e8e8e4]">{kpText}</pre>
                   <button
                     onClick={() => navigator.clipboard?.writeText(kpText)}
-                    className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors">
+                    className="text-[12px] font-medium px-4 py-1.5 rounded-lg border border-line text-ink-soft hover:bg-[#f5f5f4] transition-colors">
                     Скопировать текст
                   </button>
                 </div>
@@ -1343,18 +1343,18 @@ export default function B2BCalculatorPage() {
 
             {/* Итоговый блок + кнопка сохранить */}
             {totals && (
-              <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-4">
+              <div className="bg-surface border border-line rounded-xl p-5 space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     {discount > 0 && (
-                      <p className="text-[12px] text-[#9a9a95] line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
+                      <p className="text-[12px] text-muted line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
                     )}
-                    <p className="text-[24px] font-bold text-[#111110] font-mono leading-none">{fmt(totals.totalAfterDiscount)}</p>
+                    <p className="text-[24px] font-semibold text-ink font-mono leading-none">{fmt(totals.totalAfterDiscount)}</p>
                     {discount > 0 && (
                       <p className="text-[11px] text-emerald-600 mt-0.5">скидка {discount}%</p>
                     )}
                   </div>
-                  <div className="text-right text-[12px] text-[#8a8a85] space-y-0.5">
+                  <div className="text-right text-[12px] text-muted space-y-0.5">
                     <p className="font-mono">{fmtN(totals.totalAreaNet)} м²</p>
                     <p className="font-mono">{fmtN(totals.totalWeight, 1)} кг</p>
                     <p className="font-mono text-[11px]">
@@ -1367,37 +1367,37 @@ export default function B2BCalculatorPage() {
                 {(() => {
                   const avgEm = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
                   return (
-                    <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
-                      <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
-                      <span className="text-[12px] text-[#6b6b66]">средняя маржа</span>
-                      <span className="ml-auto text-[12px] font-semibold font-mono text-[#111110]">
+                    <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-canvas border border-line-soft">
+                      <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
+                      <span className="text-[12px] text-ink-soft">средняя маржа</span>
+                      <span className="ml-auto text-[12px] font-semibold font-mono text-ink">
                         {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
                       </span>
-                      <span className="text-[11px] text-[#9a9a95]">прибыль</span>
+                      <span className="text-[11px] text-muted">прибыль</span>
                     </div>
                   )
                 })()}
 
                 <details className="group">
-                  <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                  <summary className="text-[11px] font-semibold uppercase tracking-widest text-muted cursor-pointer select-none list-none flex items-center gap-1.5">
                     <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                     Аналитика (только для менеджера)
                   </summary>
-                  <div className="mt-3 space-y-1.5 border-t border-[#f0f0ec] pt-3 text-[13px]">
+                  <div className="mt-3 space-y-1.5 border-t border-line-soft pt-3 text-[13px]">
                     <div className="flex justify-between">
-                      <span className="text-[#6b6b66]">Себестоимость без НДС</span>
-                      <span className="font-mono text-[#111110]">{fmt(totals.totalCostExVat)}</span>
+                      <span className="text-ink-soft">Себестоимость без НДС</span>
+                      <span className="font-mono text-ink">{fmt(totals.totalCostExVat)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#6b6b66]">Продажа без НДС</span>
-                      <span className="font-mono text-[#111110]">{fmt(totals.totalSaleExVat)}</span>
+                      <span className="text-ink-soft">Продажа без НДС</span>
+                      <span className="font-mono text-ink">{fmt(totals.totalSaleExVat)}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[#6b6b66]">НДС к уплате в бюджет</span>
-                      <span className="font-mono text-[#111110]">{fmt(totals.vatToState)}</span>
+                      <span className="text-ink-soft">НДС к уплате в бюджет</span>
+                      <span className="font-mono text-ink">{fmt(totals.vatToState)}</span>
                     </div>
-                    <div className="flex justify-between font-semibold border-t border-[#f0f0ec] pt-1.5 mt-1.5">
-                      <span className="text-[#111110]">Прибыль (ориент.)</span>
+                    <div className="flex justify-between font-semibold border-t border-line-soft pt-1.5 mt-1.5">
+                      <span className="text-ink">Прибыль (ориент.)</span>
                       <span className={`font-mono ${totals.profit > 0 ? 'text-emerald-600' : 'text-red-500'}`}>{fmt(totals.profit)}</span>
                     </div>
                   </div>
@@ -1423,10 +1423,10 @@ export default function B2BCalculatorPage() {
                   </div>
                 )}
                 {editingOrderId != null && (
-                  <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
+                  <p className="text-[11px] text-muted text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
                 )}
                 <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
-                  className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="w-full bg-ink text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...'
                     : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
                     : !clientId ? 'Выберите клиента'
@@ -1450,7 +1450,7 @@ export default function B2BCalculatorPage() {
                     </p>
                     <button
                       onClick={() => router.push('/b2b-quotes')}
-                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-ink text-white hover:bg-[#2a2a28] transition-colors">
                       Перейти к просчётам →
                     </button>
                   </div>
@@ -1472,21 +1472,21 @@ export default function B2BCalculatorPage() {
                   if (!summary.totalSheets) return null
                   const fmtRub = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
                   return (
-                    <details className="group border-t border-[#f0f0ec] pt-3">
-                      <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                    <details className="group border-t border-line-soft pt-3">
+                      <summary className="text-[11px] font-semibold uppercase tracking-widest text-muted cursor-pointer select-none list-none flex items-center gap-1.5">
                         <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                         📦 Предварительная закупка
                       </summary>
                       <div className="mt-3 space-y-1.5">
                         {summary.rows.map(row => (
-                          <div key={row.matKey} className="flex items-center justify-between text-[12px] py-1 border-b border-[#f8f8f7] last:border-0">
+                          <div key={row.matKey} className="flex items-center justify-between text-[12px] py-1 border-b border-canvas last:border-0">
                             <div>
-                              <span className="font-semibold text-[#111110]">{row.matLabel}</span>
-                              <span className="ml-2 text-blue-700 font-bold">≈ {row.sheetsNeeded} л.</span>
-                              <span className="text-[#9a9a95] ml-1 text-[11px]">({row.sheetW}×{row.sheetH})</span>
+                              <span className="font-semibold text-ink">{row.matLabel}</span>
+                              <span className="ml-2 text-blue-700 font-semibold">≈ {row.sheetsNeeded} л.</span>
+                              <span className="text-muted ml-1 text-[11px]">({row.sheetW}×{row.sheetH})</span>
                             </div>
                             <div className="text-right">
-                              <span className="font-mono text-[#111110]">{fmtRub(row.sheetCost)}</span>
+                              <span className="font-mono text-ink">{fmtRub(row.sheetCost)}</span>
                               {row.temperingCost > 0 && (
                                 <span className="text-amber-600 ml-1.5 text-[11px]">+{fmtRub(row.temperingCost)} закалка</span>
                               )}
@@ -1494,8 +1494,8 @@ export default function B2BCalculatorPage() {
                           </div>
                         ))}
                         <div className="flex justify-between text-[12px] pt-1.5 font-semibold">
-                          <span className="text-[#6b6b66]">Итого листов: {summary.totalSheets} шт</span>
-                          <span className="font-mono text-[#111110]">{fmtRub(summary.grandTotal)}</span>
+                          <span className="text-ink-soft">Итого листов: {summary.totalSheets} шт</span>
+                          <span className="font-mono text-ink">{fmtRub(summary.grandTotal)}</span>
                         </div>
                       </div>
                     </details>
@@ -1504,27 +1504,27 @@ export default function B2BCalculatorPage() {
 
                 {/* Раскрой */}
                 {cuttingResults && cuttingResults.length > 0 && (
-                  <details className="group border-t border-[#f0f0ec] pt-3">
-                    <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                  <details className="group border-t border-line-soft pt-3">
+                    <summary className="text-[11px] font-semibold uppercase tracking-widest text-muted cursor-pointer select-none list-none flex items-center gap-1.5">
                       <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                       ✂️ Раскрой листов
                     </summary>
                     <div className="mt-3 space-y-2">
                       <table className="w-full text-[12px]">
                         <thead>
-                          <tr className="border-b border-[#f0f0ec]">
-                            <th className="text-left py-1.5 text-[#9a9a95] font-medium">Материал</th>
-                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-20">Листов</th>
-                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-24">Лист</th>
-                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-16">КПД</th>
+                          <tr className="border-b border-line-soft">
+                            <th className="text-left py-1.5 text-muted font-medium">Материал</th>
+                            <th className="text-center py-1.5 text-muted font-medium w-20">Листов</th>
+                            <th className="text-center py-1.5 text-muted font-medium w-24">Лист</th>
+                            <th className="text-center py-1.5 text-muted font-medium w-16">КПД</th>
                           </tr>
                         </thead>
                         <tbody>
                           {cuttingResults.map(r => (
-                            <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
-                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
-                              <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
-                              <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
+                            <tr key={r.materialKey} className="border-b border-line-soft last:border-0">
+                              <td className="py-2 font-semibold text-ink">{r.materialLabel}</td>
+                              <td className="py-2 text-center font-semibold text-blue-700">{r.sheetsNeeded}</td>
+                              <td className="py-2 text-center text-ink-soft font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
                                 <span className={`text-[11px] font-semibold ${r.avgEfficiency >= 70 ? 'text-emerald-600' : r.avgEfficiency >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
                                   {r.avgEfficiency}%
@@ -1534,7 +1534,7 @@ export default function B2BCalculatorPage() {
                           ))}
                         </tbody>
                       </table>
-                      <p className="text-[11px] text-[#9a9a95]">
+                      <p className="text-[11px] text-muted">
                         Зазор 2 мм · Кромка 2 мм · Поворот разрешён
                         {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
                       </p>
@@ -1559,22 +1559,22 @@ export default function B2BCalculatorPage() {
 
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-surface rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto shadow-2xl">
 
-            <div className="px-5 py-4 border-b border-[#f0f0ec] flex items-center justify-between sticky top-0 bg-white z-10">
-              <h2 className="text-[15px] font-semibold text-[#111110]">Редактировать позицию</h2>
-              <button onClick={cancelEdit} className="text-[#9a9a95] hover:text-[#111110] transition-colors text-lg leading-none">✕</button>
+            <div className="px-5 py-4 border-b border-line-soft flex items-center justify-between sticky top-0 bg-surface z-10">
+              <h2 className="text-[15px] font-semibold text-ink">Редактировать позицию</h2>
+              <button onClick={cancelEdit} className="text-muted hover:text-ink transition-colors text-lg leading-none">✕</button>
             </div>
 
             <div className="p-5 space-y-3">
 
               {/* Стекло / Зеркало */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Материал</label>
                 <div className="flex gap-1.5">
                   {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                     <button key={s.value} onClick={() => handleEditSuperCatChange(s.value)}
-                      className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${eSuperCat === s.value ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                      className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${eSuperCat === s.value ? 'bg-ink text-white' : 'bg-line-soft text-ink-soft hover:bg-[#e8e8e4]'}`}>
                       {s.label}
                     </button>
                   ))}
@@ -1584,18 +1584,18 @@ export default function B2BCalculatorPage() {
               {/* Толщина + Тип */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Толщина</label>
                   <select
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                     value={eThickness ?? ''}
                     onChange={e => handleEditThicknessChange(Number(e.target.value))}>
                     {eAvailThick.map(t => <option key={t} value={t}>{t} мм</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип</label>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Тип</label>
                   <select
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110]"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] text-ink outline-none focus:border-ink"
                     value={eMatId ?? ''}
                     onChange={e => handleEditMatChange(Number(e.target.value))}>
                     {eThickMats.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
@@ -1605,27 +1605,27 @@ export default function B2BCalculatorPage() {
 
               {/* Цена материала */}
               {eSelectedMat && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-[#f8f8f7] rounded-lg text-[12px]">
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-canvas rounded-lg text-[12px]">
                   {eSelectedMat.sale_price > 0
-                    ? <span className="font-semibold text-[#111110] font-mono">{eSelectedMat.sale_price.toLocaleString('ru-RU')} ₽/м²</span>
+                    ? <span className="font-semibold text-ink font-mono">{eSelectedMat.sale_price.toLocaleString('ru-RU')} ₽/м²</span>
                     : <span className="text-orange-500 font-medium">цена не задана</span>}
                   <span className="text-[#d4d4ce]">·</span>
-                  <span className="text-[#8a8a85]">отход {eWaste}%</span>
+                  <span className="text-muted">отход {eWaste}%</span>
                 </div>
               )}
 
               {/* Размеры + количество */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Размеры и количество</label>
                 <div className="grid grid-cols-3 gap-2">
                   <input type="number" min="1"
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                     value={eWidth} onChange={e => setEWidth(e.target.value)} placeholder="Ш, мм" />
                   <input type="number" min="1"
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                     value={eHeight} onChange={e => setEHeight(e.target.value)} placeholder="В, мм" />
                   <input type="number" min="1"
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                    className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                     value={eQty} onChange={e => setEQty(e.target.value)} placeholder="Шт" />
                 </div>
               </div>
@@ -1633,39 +1633,39 @@ export default function B2BCalculatorPage() {
               {/* Отход + Закалка */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Отход</label>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Отход</label>
                   {eSelectedMat?.passthrough ? (
-                    <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
+                    <div className="w-full bg-canvas border border-line rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
                       10% — проходной
                     </div>
                   ) : (
                     <select
-                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
                       value={eWaste} onChange={e => setEWaste(Number(e.target.value))}>
                       {WASTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Опции</label>
                   <div className="space-y-1">
                     {eSuperCat === 'стекло' && (
-                      <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
+                      <label className="flex items-center gap-2 h-[34px] px-3 border border-line rounded-lg cursor-pointer hover:border-faint transition-all">
                         <input type="checkbox" checked={eTempering} onChange={e => setETempering(e.target.checked)}
                           className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                        <span className="text-[13px] text-[#111110]">Закалка</span>
+                        <span className="text-[13px] text-ink">Закалка</span>
                       </label>
                     )}
                     {facetPrices.length > 0 && (
                       <>
-                        <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                        <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eFacet ? 'border-purple-300 bg-purple-50' : 'border-line hover:border-faint'}`}>
                           <input type="checkbox" checked={eFacet} onChange={e => setEFacet(e.target.checked)}
                             className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                          <span className={`text-[13px] ${eFacet ? 'text-purple-700 font-medium' : 'text-[#111110]'}`}>Фацет</span>
+                          <span className={`text-[13px] ${eFacet ? 'text-purple-700 font-medium' : 'text-ink'}`}>Фацет</span>
                         </label>
                         {eFacet && (
                           <select
-                            className="w-full bg-white border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-purple-500"
+                            className="w-full bg-surface border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-purple-500"
                             value={eFacetMm} onChange={e => setEFacetMm(Number(e.target.value))}>
                             {facetPrices.map(f => (
                               <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
@@ -1674,15 +1674,15 @@ export default function B2BCalculatorPage() {
                         )}
                       </>
                     )}
-                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eHoles ? 'border-blue-300 bg-blue-50' : 'border-line hover:border-faint'}`}>
                       <input type="checkbox" checked={eHoles} onChange={e => setEHoles(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                      <span className={`text-[13px] ${eHoles ? 'text-blue-700 font-medium' : 'text-[#111110]'}`}>Сверловка</span>
+                      <span className={`text-[13px] ${eHoles ? 'text-blue-700 font-medium' : 'text-ink'}`}>Сверловка</span>
                     </label>
-                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eCurved ? 'border-teal-300 bg-teal-50' : 'border-line hover:border-faint'}`}>
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                      <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
+                      <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-ink'}`}>Криволинейка</span>
                     </label>
                   </div>
                 </div>
@@ -1691,8 +1691,8 @@ export default function B2BCalculatorPage() {
               {/* Доп. услуги */}
               {services.length > 0 && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Доп. услуги</label>
-                  <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
+                  <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Доп. услуги</label>
+                  <div className="border border-line rounded-lg overflow-hidden">
                     {services.map(s => {
                       const checked = eServiceIds.includes(s.id)
                       const tiers = s.size_tiers ?? []
@@ -1705,12 +1705,12 @@ export default function B2BCalculatorPage() {
                           ? (selectedFilm ? selectedFilm.sale_price_per_m2 + (selectedFilm.work_sale_per_m2 ?? 0) : null)
                           : null
                       return (
-                        <div key={s.id} className={`border-b border-[#f8f8f7] last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                        <div key={s.id} className={`border-b border-canvas last:border-0 ${checked ? 'bg-blue-50' : 'hover:bg-subtle'}`}>
                           <label className="flex items-center gap-2 px-3 py-1.5 cursor-pointer select-none transition-colors">
                             <input type="checkbox" checked={checked} onChange={() => toggleEditService(s.id)}
                               className="w-3 h-3 rounded accent-[#111110] flex-shrink-0" />
-                            <span className="text-[12px] text-[#111110] flex-1 leading-tight">{s.name}</span>
-                            <span className="text-[11px] text-[#9a9a95] flex-shrink-0 font-mono">
+                            <span className="text-[12px] text-ink flex-1 leading-tight">{s.name}</span>
+                            <span className="text-[11px] text-muted flex-shrink-0 font-mono">
                               {s.type === 'percent' ? `${s.value}%`
                                 : s.type === 'film' ? (selectedFilm ? `${selectedFilm.sale_price_per_m2.toLocaleString('ru-RU')} ₽/м²` : '—')
                                 : `${(displayPrice ?? s.value).toLocaleString('ru-RU')} ₽`}
@@ -1718,14 +1718,14 @@ export default function B2BCalculatorPage() {
                           </label>
                           {checked && s.type === 'film' && (
                             <div className="px-3 pb-1.5 flex items-center gap-2">
-                              <span className="text-[10px] text-[#9a9a95] flex-shrink-0">Плёнка:</span>
+                              <span className="text-[10px] text-muted flex-shrink-0">Плёнка:</span>
                               {films.length === 0 ? (
                                 <span className="text-[10px] text-orange-500">Нет плёнок в справочнике</span>
                               ) : (
                                 <select
                                   value={selectedFilmId ?? ''}
                                   onChange={e => setEFilmSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
-                                  className="flex-1 text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                  className="flex-1 text-[11px] border border-line rounded-md px-1.5 py-0.5 bg-surface outline-none focus:border-ink">
                                   <option value="">— выберите плёнку —</option>
                                   {films.map(f => {
                                     const total = f.sale_price_per_m2 + (f.work_sale_per_m2 ?? 0)
@@ -1740,11 +1740,11 @@ export default function B2BCalculatorPage() {
                           )}
                           {checked && tiers.length > 0 && s.type !== 'film' && (
                             <div className="px-3 pb-1.5 flex items-center gap-2">
-                              <span className="text-[10px] text-[#9a9a95]">Размер:</span>
+                              <span className="text-[10px] text-muted">Размер:</span>
                               <select
                                 value={tierIdx}
                                 onChange={e => setETierSel(prev => ({ ...prev, [s.id]: Number(e.target.value) }))}
-                                className="text-[11px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 bg-white outline-none focus:border-[#111110]">
+                                className="text-[11px] border border-line rounded-md px-1.5 py-0.5 bg-surface outline-none focus:border-ink">
                                 {tiers.map((t, i) => (
                                   <option key={i} value={i}>{t.label}</option>
                                 ))}
@@ -1760,20 +1760,20 @@ export default function B2BCalculatorPage() {
 
               {/* Комментарий */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Комментарий</label>
                 <input type="text" maxLength={120}
-                  className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                  className="w-full bg-canvas border border-line rounded-lg px-3 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
                   value={eComment} onChange={e => setEComment(e.target.value)}
                   placeholder="Комментарий к позиции..." />
               </div>
 
               <div className="flex gap-2 pt-1">
                 <button onClick={cancelEdit}
-                  className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                  className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:bg-canvas transition-colors">
                   Отмена
                 </button>
                 <button onClick={saveEdit} disabled={!eCanSave}
-                  className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="flex-1 py-2.5 rounded-lg bg-ink text-white text-[13px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   Сохранить
                 </button>
               </div>
@@ -1785,47 +1785,47 @@ export default function B2BCalculatorPage() {
       {/* ══ Модалка: Новый клиент ══ */}
       {showNewClient && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+          <div className="bg-surface rounded-2xl shadow-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-4">
-              <h2 className="text-[15px] font-semibold text-[#111110]">Новый B2B клиент</h2>
+              <h2 className="text-[15px] font-semibold text-ink">Новый B2B клиент</h2>
               <button onClick={() => { setShowNewClient(false); setNcError(null) }}
-                className="text-[#9a9a95] hover:text-[#111110] text-lg transition-colors">✕</button>
+                className="text-muted hover:text-ink text-lg transition-colors">✕</button>
             </div>
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Название компании *</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Название компании *</label>
                 <input
                   type="text" placeholder="ООО Ромашка"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink"
                   value={ncName} onChange={e => setNcName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Контактное лицо</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Контактное лицо</label>
                 <input
                   type="text" placeholder="Иван Иванов"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink"
                   value={ncContact} onChange={e => setNcContact(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Телефон</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Телефон</label>
                 <input
                   type="text" placeholder="+7 999 000 00 00"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink"
                   value={ncPhone} onChange={e => setNcPhone(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Скидка %</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Скидка %</label>
                 <input
                   type="number" min="0" max="50" step="1"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink"
                   value={ncDiscount} onChange={e => setNcDiscount(Number(e.target.value))} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <label className="block text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">Комментарий</label>
                 <textarea
                   rows={2} placeholder="Дополнительная информация..."
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] resize-none"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink resize-none"
                   value={ncNotes} onChange={e => setNcNotes(e.target.value)} />
               </div>
 
@@ -1833,7 +1833,7 @@ export default function B2BCalculatorPage() {
 
               <div className="flex gap-2 pt-1">
                 <button onClick={() => { setShowNewClient(false); setNcError(null) }}
-                  className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
+                  className="flex-1 py-2.5 rounded-lg border border-line text-[13px] font-medium text-ink-soft hover:bg-canvas transition-colors">
                   Отмена
                 </button>
                 <button onClick={handleCreateClient} disabled={ncSaving || !ncName.trim()}

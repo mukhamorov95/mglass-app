@@ -77,7 +77,7 @@ function Seg<T extends string>({ options, value, onChange, small }: {
         <button key={o.v} onClick={() => onChange(o.v)}
           className={`px-3 ${small ? 'py-1 text-[12px]' : 'py-1.5 text-[13px]'} rounded-[8px] font-medium transition-all ${
             value === o.v
-              ? 'bg-white text-[#1d1d1f] shadow-[0_1px_3px_rgba(0,0,0,0.12)]'
+              ? 'bg-surface text-[#1d1d1f] shadow-[0_1px_3px_rgba(0,0,0,0.12)]'
               : 'text-[#6e6e73] hover:text-[#1d1d1f]'
           }`}>
           {o.l}
@@ -87,7 +87,7 @@ function Seg<T extends string>({ options, value, onChange, small }: {
   )
 }
 
-const inp = 'w-full bg-white border border-[#e8e8ed] rounded-[10px] px-3 py-2 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]'
+const inp = 'w-full bg-surface border border-[#e8e8ed] rounded-[10px] px-3 py-2 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]'
 
 export default function ShowerCalculatorPage() {
   const [materials, setMaterials]         = useState<Material[]>([])
@@ -486,21 +486,21 @@ export default function ShowerCalculatorPage() {
           </div>
           <div className="flex items-center gap-2">
             <button onClick={handleCopy} disabled={showerBlocked}
-              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-surface border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {copied ? '✓ Скопировано' : 'Копировать КП'}
             </button>
             <button onClick={handleAddToCart} disabled={showerBlocked}
-              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-surface border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {addedToCart ? '✓ Добавлено' : '+ В заказ'}
             </button>
             <button onClick={handleSave} disabled={saving || showerBlocked || discountExceeded}
               title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
-              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
+              className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-surface border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {saving ? 'Сохранение...' : savedId ? `#${savedId} ✓` : editCalcId ? 'Сохранить как новый расчёт' : 'Сохранить расчёт'}
             </button>
             {savedId && (
               <a href={`/calculations/${savedId}`}
-                className="px-3 py-1.5 text-[13px] text-[#0071e3] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] transition-colors">
+                className="px-3 py-1.5 text-[13px] text-[#0071e3] bg-surface border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] transition-colors">
                 → История
               </a>
             )}
@@ -518,14 +518,14 @@ export default function ShowerCalculatorPage() {
             { l: 'Стационарная 80×200',    action: () => { setTier('standard'); setStdShowerType('stationary'); setWidth('800'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(false); setDiscount('0'); } },
           ] as { l: string; action: () => void }[]).map(p => (
             <button key={p.l} onClick={p.action}
-              className="px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e8e8ed] rounded-[10px] hover:border-[#0071e3] hover:text-[#0071e3] whitespace-nowrap flex-shrink-0 transition-colors">
+              className="px-3 py-1.5 text-[12px] font-medium bg-surface border border-[#e8e8ed] rounded-[10px] hover:border-[#0071e3] hover:text-[#0071e3] whitespace-nowrap flex-shrink-0 transition-colors">
               {p.l}
             </button>
           ))}
         </div>
 
         {/* ── Конфигуратор ──────────────────────────────────── */}
-        <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4 mb-4">
+        <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4 mb-4">
           <div className="space-y-4">
 
             {/* Шаг 1: Класс + Тип системы */}
@@ -597,7 +597,7 @@ export default function ShowerCalculatorPage() {
 
             {/* Budget: model grid */}
             {tier === 'budget' && (
-              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
                 <Label>Модель перегородки</Label>
                 <div className="grid grid-cols-4 gap-1.5">
                   {SHOWER_MODELS.map(m => {
@@ -607,7 +607,7 @@ export default function ShowerCalculatorPage() {
                         className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${
                           active ? 'border-[#0071e3] bg-[#f0f7ff]' : 'border-[#e8e8ed] hover:border-[#c7c7cc]'
                         }`}>
-                        <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center ${active ? 'bg-white' : 'bg-[#f5f5f7]'} ${m.image_url ? 'h-[108px]' : 'p-1'}`}>
+                        <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center ${active ? 'bg-surface' : 'bg-[#f5f5f7]'} ${m.image_url ? 'h-[108px]' : 'p-1'}`}>
                           {m.image_url ? (
                             <img src={m.image_url} alt={m.label}
                               className="w-full h-full object-contain" />
@@ -616,7 +616,7 @@ export default function ShowerCalculatorPage() {
                           )}
                         </div>
                         <div className="flex items-center justify-between mb-0.5">
-                          <span className={`text-[12px] font-bold ${active ? 'text-[#0071e3]' : 'text-[#1d1d1f]'}`}>{m.label}</span>
+                          <span className={`text-[12px] font-semibold ${active ? 'text-[#0071e3]' : 'text-[#1d1d1f]'}`}>{m.label}</span>
                           <span className={`text-[9px] font-semibold rounded px-1 ${active ? 'bg-[#ddeeff] text-[#0071e3]' : 'bg-[#f2f2f7] text-[#86868b]'}`}>{m.glassCount}ст</span>
                         </div>
                         <span className="text-[9px] text-[#86868b] leading-tight">{m.desc}</span>
@@ -628,7 +628,7 @@ export default function ShowerCalculatorPage() {
             )}
 
             {/* Dimensions */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               <Label>Размеры, мм</Label>
 
               {tier === 'standard' && (
@@ -665,7 +665,7 @@ export default function ShowerCalculatorPage() {
             </section>
 
             {/* Glass */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               {tier === 'standard' ? (
                 <div>
                   <Label>Стекло</Label>
@@ -707,7 +707,7 @@ export default function ShowerCalculatorPage() {
 
             {/* Hardware items list (standard only) */}
             {tier === 'standard' && (
-              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+              <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
 
                 {/* Цвет + Поставщик — шапка секции */}
                 <div className="grid grid-cols-2 gap-4 mb-4 pb-4 border-b border-[#f2f2f7]">
@@ -726,7 +726,7 @@ export default function ShowerCalculatorPage() {
                           className={`py-1.5 px-3 rounded-[10px] text-[12px] font-medium border transition-all ${
                             stdSupplierId === s.id
                               ? 'bg-[#0071e3] text-white border-[#0071e3]'
-                              : 'bg-white border-[#e8e8ed] text-[#1d1d1f] hover:border-[#c7c7cc]'
+                              : 'bg-surface border-[#e8e8ed] text-[#1d1d1f] hover:border-[#c7c7cc]'
                           }`}>
                           {s.name}
                           <span className={`ml-1.5 text-[10px] ${stdSupplierId === s.id ? 'text-blue-200' : 'text-[#86868b]'}`}>
@@ -754,7 +754,7 @@ export default function ShowerCalculatorPage() {
                     {Object.entries(catalogByCategory).map(([cat, items]) => (
                       <div key={cat}>
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest">{cat}</span>
+                          <span className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest">{cat}</span>
                           <div className="flex-1 h-px bg-[#e8e8ed]"/>
                         </div>
                         <div className="space-y-1">
@@ -779,7 +779,7 @@ export default function ShowerCalculatorPage() {
                                   ? 'border-[#0071e3] bg-[#f0f7ff] cursor-pointer'
                                   : price === 0
                                   ? 'border-[#f2f2f7] bg-[#fafafa] opacity-60 cursor-pointer'
-                                  : 'border-[#e8e8ed] bg-white hover:border-[#c7c7cc] cursor-pointer'
+                                  : 'border-[#e8e8ed] bg-surface hover:border-[#c7c7cc] cursor-pointer'
                               }`}>
                                 <input type="checkbox" checked={selected} disabled={isRequired}
                                   onChange={e => setHwSelection(prev => {
@@ -790,7 +790,7 @@ export default function ShowerCalculatorPage() {
                                   className="w-4 h-4 flex-shrink-0 accent-[#0071e3]"/>
                                 <span className={`flex-1 text-[13px] font-medium leading-tight ${isRequired ? 'text-[#1d7a3a]' : 'text-[#1d1d1f]'}`}>
                                   {item.name}
-                                  {isRequired && <span className="ml-1.5 text-[9px] font-bold text-[#34c759] uppercase tracking-wide">обяз.</span>}
+                                  {isRequired && <span className="ml-1.5 text-[9px] font-semibold text-[#34c759] uppercase tracking-wide">обяз.</span>}
                                   {isAddon    && <span className="ml-1.5 text-[9px] text-[#86868b] uppercase tracking-wide">доп.</span>}
                                 </span>
                                 <span className={`text-[12px] whitespace-nowrap ${price > 0 ? 'text-[#86868b]' : 'text-[#c7c7cc] italic'}`}>
@@ -807,7 +807,7 @@ export default function ShowerCalculatorPage() {
                                           ...prev,
                                           [item.id]: { qty: Math.min(maxQty ?? 9999, Math.max(minQty, Number(e.target.value) || minQty)) },
                                         }))}
-                                        className="w-12 border border-[#c7c7cc] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3] bg-white"/>
+                                        className="w-12 border border-[#c7c7cc] rounded-[8px] px-2 py-1 text-[13px] text-center outline-none focus:border-[#0071e3] bg-surface"/>
                                     )}
                                     <span className="text-[13px] font-semibold font-mono text-[#0071e3] w-[72px] text-right whitespace-nowrap">
                                       {price > 0 ? `${(price * sel.qty).toLocaleString('ru-RU')} ₽` : '—'}
@@ -826,7 +826,7 @@ export default function ShowerCalculatorPage() {
             )}
 
             {/* Services */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               <Label>Услуги</Label>
               <div className="space-y-2">
                 <label className="flex items-center gap-3 cursor-pointer">
@@ -876,7 +876,7 @@ export default function ShowerCalculatorPage() {
             </section>
 
             {/* Financial params */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               <Label>Параметры расчёта</Label>
               <div className="grid grid-cols-3 gap-3">
                 <SField label="Маржа, %">
@@ -906,8 +906,8 @@ export default function ShowerCalculatorPage() {
             )}
 
             {/* Cost breakdown */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Себестоимость</p>
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest mb-3">Себестоимость</p>
               <div className="space-y-1.5">
                 {result.costLines.map((l, i) => (
                   <div key={i} className="flex justify-between items-start gap-2">
@@ -923,8 +923,8 @@ export default function ShowerCalculatorPage() {
             </section>
 
             {/* Price calc */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Ценообразование</p>
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest mb-3">Ценообразование</p>
               <div className="space-y-1.5 text-[13px]">
                 {[
                   { l: 'Себестоимость',            v: fmt(result.totalCost) },
@@ -963,7 +963,7 @@ export default function ShowerCalculatorPage() {
                     className="mt-2 w-full flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-[#f5fff8] border border-[#c6f0d4] hover:bg-[#ecfcf2] transition-colors text-left">
                     <span className="text-[11px] text-[#1a7f37] font-medium">+10% к марже</span>
                     <div className="text-right">
-                      <span className="text-[12px] font-mono font-bold text-[#1a7f37]">{nf.toLocaleString('ru-RU')} ₽</span>
+                      <span className="text-[12px] font-mono font-semibold text-[#1a7f37]">{nf.toLocaleString('ru-RU')} ₽</span>
                       <span className="text-[10px] text-[#57a86d] ml-1.5">+{(nf-result.finalPrice).toLocaleString('ru-RU')}</span>
                     </div>
                   </button>
@@ -973,8 +973,8 @@ export default function ShowerCalculatorPage() {
 
             {/* Services */}
             {result.serviceLines.length > 0 && (
-              <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-                <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-2">Услуги</p>
+              <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
+                <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest mb-2">Услуги</p>
                 <div className="space-y-1.5">
                   {result.serviceLines.map((s, i) => (
                     <div key={i} className="flex justify-between text-[13px]">
@@ -987,10 +987,10 @@ export default function ShowerCalculatorPage() {
             )}
 
             {/* Margin + total */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               <div className="flex justify-between items-center mb-3">
                 <span className="text-[13px] text-[#6e6e73]">Маржа</span>
-                <span className="text-[20px] font-bold font-mono" style={{ color: marginColor }}>{result.margin}%</span>
+                <span className="text-[20px] font-semibold font-mono" style={{ color: marginColor }}>{result.margin}%</span>
               </div>
               <div className="flex justify-between items-center mb-3">
                 <span className="text-[13px] text-[#6e6e73]">Прибыль</span>
@@ -1024,13 +1024,13 @@ export default function ShowerCalculatorPage() {
               <div className="h-px bg-[#f2f2f7] mb-3"/>
               <div className="flex justify-between items-baseline">
                 <span className="text-[13px] font-semibold text-[#1d1d1f]">ИТОГО</span>
-                <span className="text-[24px] font-bold font-mono text-[#1d1d1f]">{fmt(result.grandTotal)}</span>
+                <span className="text-[24px] font-semibold font-mono text-[#1d1d1f]">{fmt(result.grandTotal)}</span>
               </div>
             </section>
 
             {/* Client info */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-2">Клиент (необязательно)</p>
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
+              <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest mb-2">Клиент (необязательно)</p>
               <div className="grid grid-cols-2 gap-2">
                 <input
                   type="text"
@@ -1050,14 +1050,14 @@ export default function ShowerCalculatorPage() {
             </section>
 
             {/* КП text */}
-            <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+            <section className="bg-surface rounded-2xl border border-[#e8e8ed] p-4">
               <div className="flex items-center justify-between mb-2">
-                <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest">Текст КП</p>
+                <p className="text-[11px] font-semibold text-[#86868b] uppercase tracking-widest">Текст КП</p>
                 <button onClick={handleCopy} className="text-[12px] text-[#0071e3] hover:underline">
                   {copied ? 'Скопировано' : 'Копировать'}
                 </button>
               </div>
-              <pre className="text-[11px] text-[#4b4b47] whitespace-pre-wrap leading-relaxed font-sans">
+              <pre className="text-[11px] text-ink-soft whitespace-pre-wrap leading-relaxed font-sans">
                 {result.clientText}
               </pre>
             </section>
@@ -1065,7 +1065,7 @@ export default function ShowerCalculatorPage() {
             {/* What's Next — appears after save */}
             {savedId && (
               <section className="bg-[#f0f7ff] rounded-2xl border border-[#bdd9ff] p-4">
-                <p className="text-[11px] font-bold text-[#0071e3] uppercase tracking-wider mb-3">
+                <p className="text-[11px] font-semibold text-[#0071e3] uppercase tracking-wider mb-3">
                   ✓ Расчёт #{savedId} сохранён — что дальше?
                 </p>
                 <button onClick={handleCopy}
@@ -1074,19 +1074,19 @@ export default function ShowerCalculatorPage() {
                 </button>
                 <div className="grid grid-cols-2 gap-2">
                   <a href={`/calculations/${savedId}/print`} target="_blank" rel="noopener noreferrer"
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     📄 PDF КП
                   </a>
                   <a href={`/calculations/${savedId}`}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     ✏️ Открыть расчёт
                   </a>
                   <a href="/calculations"
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     📋 История
                   </a>
                   <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
-                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
+                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-surface border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     ➕ Новый расчёт
                   </button>
                 </div>

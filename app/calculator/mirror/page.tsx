@@ -102,7 +102,7 @@ function CheckBox({ value, onClick }: { value: boolean; onClick: () => void }) {
   return (
     <div onClick={onClick}
       className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-all
-        ${value ? 'bg-[#111110] border-[#111110]' : 'border-[#d0d0cc] hover:border-[#9a9a95]'}`}>
+        ${value ? 'bg-ink border-ink' : 'border-[#d0d0cc] hover:border-muted'}`}>
       {value && (
         <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
@@ -119,9 +119,9 @@ function OptionRow({ label, desc, value, onClick }: {
     <div className="flex items-center justify-between cursor-pointer group py-0.5" onClick={onClick}>
       <div className="flex items-center gap-2.5">
         <CheckBox value={value} onClick={onClick} />
-        <span className="text-xs text-[#2a2a28] group-hover:text-[#111110] transition-colors">{label}</span>
+        <span className="text-xs text-[#2a2a28] group-hover:text-ink transition-colors">{label}</span>
       </div>
-      {desc && <span className="text-[11px] text-[#9a9a95] font-mono">{desc}</span>}
+      {desc && <span className="text-[11px] text-muted font-mono">{desc}</span>}
     </div>
   )
 }
@@ -129,8 +129,8 @@ function OptionRow({ label, desc, value, onClick }: {
 function PriceLine({ label, value, accent }: { label: string; value: string; accent?: string }) {
   return (
     <div className="flex justify-between items-baseline">
-      <span className={`text-xs ${accent ?? 'text-[#6b6b66]'}`}>{label}</span>
-      <span className={`text-xs font-mono ${accent ?? 'text-[#4b4b47]'}`}>{value}</span>
+      <span className={`text-xs ${accent ?? 'text-ink-soft'}`}>{label}</span>
+      <span className={`text-xs font-mono ${accent ?? 'text-ink-soft'}`}>{value}</span>
     </div>
   )
 }
@@ -147,13 +147,13 @@ function LightingAccordion({ label, isOpen, onToggle, summary, badge, children }
     <div>
       <button onClick={onToggle}
         className="w-full flex items-center justify-between py-2 text-left group transition-colors">
-        <span className="text-xs font-medium text-[#4b4b47] group-hover:text-[#111110]">{label}</span>
+        <span className="text-xs font-medium text-ink-soft group-hover:text-ink">{label}</span>
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-[#9a9a95] max-w-[140px] truncate">{summary}</span>
+          <span className="text-[11px] text-muted max-w-[140px] truncate">{summary}</span>
           {badge && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f0f0ee] text-[#9a9a95] font-mono">{badge}</span>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#f0f0ee] text-muted font-mono">{badge}</span>
           )}
-          <svg className={`w-3 h-3 text-[#c4c4be] transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+          <svg className={`w-3 h-3 text-faint transition-transform flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
             fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
           </svg>
@@ -773,8 +773,8 @@ export default function MirrorCalculatorPage() {
 
   if (loading) return (
     <div className="min-h-screen bg-[#f7f7f6] flex items-center justify-center">
-      <div className="flex items-center gap-2 text-[#9a9a95] text-xs">
-        <div className="w-4 h-4 border-2 border-[#d0d0cc] border-t-[#9a9a95] rounded-full animate-spin" />
+      <div className="flex items-center gap-2 text-muted text-xs">
+        <div className="w-4 h-4 border-2 border-[#d0d0cc] border-t-muted rounded-full animate-spin" />
         Загрузка...
       </div>
     </div>
@@ -786,9 +786,9 @@ export default function MirrorCalculatorPage() {
 
         {/* Header */}
         <div className="flex items-center gap-1.5 mb-4">
-          <a href="/" className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">← Главная</a>
+          <a href="/" className="text-[11px] text-muted hover:text-ink-soft transition-colors">← Главная</a>
           <span className="text-[#ddd]">/</span>
-          <h1 className="text-sm font-semibold text-[#111110]">Зеркало с подсветкой</h1>
+          <h1 className="text-sm font-semibold text-ink">Зеркало с подсветкой</h1>
         </div>
 
         {/* Recalculate mode banner */}
@@ -829,7 +829,7 @@ export default function MirrorCalculatorPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_304px] gap-3 items-start">
 
           {/* ── LEFT: Configurator ─────────────────────────────────────────── */}
-          <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden divide-y divide-[#f2f2f0]">
+          <div className="bg-surface rounded-xl border border-[#e8e8e5] overflow-hidden divide-y divide-[#f2f2f0]">
 
             {/* ① ИЗДЕЛИЕ */}
             <div className="p-4">
@@ -841,10 +841,10 @@ export default function MirrorCalculatorPage() {
                   <p className="text-[10px] text-[#a8a8a3] mb-1.5">Размеры, мм</p>
                   <div className="flex items-center gap-1.5">
                     <input type="number" value={width} onChange={e => setWidth(e.target.value)}
-                      className="w-[76px] h-8 border border-[#e8e8e5] rounded-lg px-2 text-sm font-mono text-center focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9] transition-colors" />
-                    <span className="text-sm text-[#c4c4be]">×</span>
+                      className="w-[76px] h-8 border border-[#e8e8e5] rounded-lg px-2 text-sm font-mono text-center focus:outline-none focus:border-muted bg-subtle transition-colors" />
+                    <span className="text-sm text-faint">×</span>
                     <input type="number" value={height} onChange={e => setHeight(e.target.value)}
-                      className="w-[76px] h-8 border border-[#e8e8e5] rounded-lg px-2 text-sm font-mono text-center focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9] transition-colors" />
+                      className="w-[76px] h-8 border border-[#e8e8e5] rounded-lg px-2 text-sm font-mono text-center focus:outline-none focus:border-muted bg-subtle transition-colors" />
                   </div>
                   {result && (
                     <p className="text-[10px] text-[#a8a8a3] mt-1.5 leading-snug">
@@ -867,8 +867,8 @@ export default function MirrorCalculatorPage() {
                       return (
                         <button key={name} onClick={() => handleMirrorNameChange(name)}
                           className={`flex items-center gap-1.5 h-7 px-2.5 rounded-lg text-xs font-medium border transition-all ${
-                            active ? 'bg-[#111110] text-white border-[#111110]'
-                                   : 'border-[#e8e8e5] text-[#4b4b47] hover:border-[#b8b8b4] bg-white'
+                            active ? 'bg-ink text-white border-ink'
+                                   : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4] bg-surface'
                           }`}>
                           <div className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
                           {name}
@@ -881,8 +881,8 @@ export default function MirrorCalculatorPage() {
                       {availMm.map(mm => (
                         <button key={mm} onClick={() => setMirrorMm(mm)}
                           className={`h-6 px-2.5 rounded-md text-[11px] font-medium border transition-all ${
-                            mirrorMm === mm ? 'bg-[#111110] text-white border-[#111110]'
-                                           : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#9a9a95]'
+                            mirrorMm === mm ? 'bg-ink text-white border-ink'
+                                           : 'border-[#e8e8e5] text-ink-soft hover:border-muted'
                           }`}>
                           {mm} мм
                         </button>
@@ -909,8 +909,8 @@ export default function MirrorCalculatorPage() {
                     ] as { v: MirrorShape; l: string }[]).map(s => (
                       <button key={s.v} onClick={() => setShape(s.v)}
                         className={`h-7 px-3 rounded-lg text-xs font-medium border transition-all text-left whitespace-nowrap ${
-                          shape === s.v ? 'bg-[#111110] text-white border-[#111110]'
-                                       : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4] bg-white'
+                          shape === s.v ? 'bg-ink text-white border-ink'
+                                       : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4] bg-surface'
                         }`}>
                         {s.l}
                         {s.v === 'complex' && shapeModPct > 0 && shape === 'complex' && (
@@ -934,7 +934,7 @@ export default function MirrorCalculatorPage() {
                       {([12, 24] as const).map(v => (
                         <button key={v} onClick={() => setVoltage(v)}
                           className={`px-3 py-0.5 rounded-md text-[11px] font-semibold transition-all ${
-                            voltage === v ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                            voltage === v ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink-soft'
                           }`}>
                           {v}V
                         </button>
@@ -942,8 +942,8 @@ export default function MirrorCalculatorPage() {
                     </div>
                   )}
                   <button onClick={() => setHasLighting(!hasLighting)}
-                    className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${hasLighting ? 'bg-[#111110]' : 'bg-[#d0d0cc]'}`}>
-                    <div className={`absolute top-0.5 w-4 h-4 bg-white rounded-full shadow-sm transition-transform ${hasLighting ? 'translate-x-4' : 'translate-x-0.5'}`} />
+                    className={`w-9 h-5 rounded-full transition-colors relative flex-shrink-0 ${hasLighting ? 'bg-ink' : 'bg-[#d0d0cc]'}`}>
+                    <div className={`absolute top-0.5 w-4 h-4 bg-surface rounded-full shadow-sm transition-transform ${hasLighting ? 'translate-x-4' : 'translate-x-0.5'}`} />
                   </button>
                 </div>
               </div>
@@ -953,7 +953,7 @@ export default function MirrorCalculatorPage() {
               )}
 
               {hasLighting && (
-                <div className="space-y-0 divide-y divide-[#f5f5f3]">
+                <div className="space-y-0 divide-y divide-canvas">
 
                   {/* LED strip — most important, default open */}
                   <LightingAccordion
@@ -964,7 +964,7 @@ export default function MirrorCalculatorPage() {
                     badge={totalLedWatts > 0 ? `${totalLedWatts.toFixed(0)} Вт` : undefined}
                   >
                     {leds.length === 0 ? (
-                      <p className="text-xs text-[#9a9a95] py-1">
+                      <p className="text-xs text-muted py-1">
                         Нет лент для {voltage}V.{' '}
                         <a href="/admin/mirror-lighting" className="text-blue-500 hover:underline">Добавить в справочник →</a>
                       </p>
@@ -976,19 +976,19 @@ export default function MirrorCalculatorPage() {
                           const active = ledStripId === l.id
                           return (
                             <label key={l.id}
-                              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${active ? 'bg-[#f4f4f2]' : 'hover:bg-[#fafaf9]'}`}>
-                              <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${active ? 'border-[#111110]' : 'border-[#d0d0cc]'}`}>
-                                {active && <div className="w-1.5 h-1.5 bg-[#111110] rounded-full" />}
+                              className={`flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${active ? 'bg-[#f4f4f2]' : 'hover:bg-subtle'}`}>
+                              <div className={`w-3.5 h-3.5 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-all ${active ? 'border-ink' : 'border-[#d0d0cc]'}`}>
+                                {active && <div className="w-1.5 h-1.5 bg-ink rounded-full" />}
                               </div>
                               <input type="radio" className="hidden" checked={active} onChange={() => setLedStripId(l.id)} />
                               <div className={`w-2 h-2 rounded-full flex-shrink-0 ${tempDot}`} />
                               <div className="flex-1 min-w-0">
                                 <span className="text-xs font-medium text-[#2a2a28]">{dn(l)}</span>
-                                {l.power_per_meter && <span className="text-[10px] text-[#9a9a95] ml-1.5 font-mono">{l.power_per_meter}W/м</span>}
-                                {temp && <span className="text-[10px] text-[#9a9a95] ml-1 font-mono">{temp}K</span>}
+                                {l.power_per_meter && <span className="text-[10px] text-muted ml-1.5 font-mono">{l.power_per_meter}W/м</span>}
+                                {temp && <span className="text-[10px] text-muted ml-1 font-mono">{temp}K</span>}
                               </div>
                               <div className="text-right flex-shrink-0">
-                                <p className="text-[11px] font-mono text-[#4b4b47]">{l.cost_price} ₽/м</p>
+                                <p className="text-[11px] font-mono text-ink-soft">{l.cost_price} ₽/м</p>
                                 {perimeterM > 0 && l.power_per_meter && (
                                   <p className="text-[10px] text-[#b8b8b4]">{(l.power_per_meter * perimeterM).toFixed(0)} Вт</p>
                                 )}
@@ -1009,7 +1009,7 @@ export default function MirrorCalculatorPage() {
                     badge={selFrame ? `${selFrame.cost_price} ₽/м` : undefined}
                   >
                     {frames.length === 0 ? (
-                      <p className="text-xs text-[#9a9a95] py-1">
+                      <p className="text-xs text-muted py-1">
                         <a href="/admin/mirror-lighting" className="text-blue-500 hover:underline">Добавить в справочник →</a>
                       </p>
                     ) : (
@@ -1017,11 +1017,11 @@ export default function MirrorCalculatorPage() {
                         {frames.map(f => (
                           <button key={f.id} onClick={() => setFrameId(frameId === f.id ? null : f.id)}
                             className={`h-7 px-3 rounded-lg text-[11px] font-medium border transition-all ${
-                              frameId === f.id ? 'bg-[#111110] text-white border-[#111110]'
-                                             : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4]'
+                              frameId === f.id ? 'bg-ink text-white border-ink'
+                                             : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4]'
                             }`}>
                             {dn(f)}
-                            <span className={`ml-1.5 text-[10px] ${frameId === f.id ? 'opacity-50' : 'text-[#9a9a95]'}`}>{f.cost_price}₽</span>
+                            <span className={`ml-1.5 text-[10px] ${frameId === f.id ? 'opacity-50' : 'text-muted'}`}>{f.cost_price}₽</span>
                           </button>
                         ))}
                       </div>
@@ -1037,17 +1037,17 @@ export default function MirrorCalculatorPage() {
                     badge={psuLoadPct > 0 ? `${psuLoadPct}% нагр.` : undefined}
                   >
                     {psus.length === 0 ? (
-                      <p className="text-xs text-[#9a9a95] py-1">Нет БП для {voltage}V</p>
+                      <p className="text-xs text-muted py-1">Нет БП для {voltage}V</p>
                     ) : (
                       <div className="flex flex-wrap gap-1 pt-1">
                         {psus.map(p => (
                           <button key={p.id} onClick={() => setPsuId(p.id)}
                             className={`h-7 px-3 rounded-lg text-[11px] font-medium border transition-all ${
-                              psuId === p.id ? 'bg-[#111110] text-white border-[#111110]'
-                                           : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4]'
+                              psuId === p.id ? 'bg-ink text-white border-ink'
+                                           : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4]'
                             }`}>
                             {p.max_power} Вт
-                            <span className={`ml-1.5 text-[10px] ${psuId === p.id ? 'opacity-50' : 'text-[#9a9a95]'}`}>{p.cost_price}₽</span>
+                            <span className={`ml-1.5 text-[10px] ${psuId === p.id ? 'opacity-50' : 'text-muted'}`}>{p.cost_price}₽</span>
                           </button>
                         ))}
                       </div>
@@ -1071,8 +1071,8 @@ export default function MirrorCalculatorPage() {
                       {diffusers.map(d => (
                         <button key={d.id} onClick={() => setDiffuserId(d.id)}
                           className={`h-7 px-3 rounded-lg text-[11px] font-medium border transition-all ${
-                            diffuserId === d.id ? 'bg-[#111110] text-white border-[#111110]'
-                                              : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4]'
+                            diffuserId === d.id ? 'bg-ink text-white border-ink'
+                                              : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4]'
                           }`}>
                           {dn(d)}
                         </button>
@@ -1096,11 +1096,11 @@ export default function MirrorCalculatorPage() {
                       ] as { v: 'none' | 'sensor' | 'wave'; l: string; p: number }[]).map(b => (
                         <button key={b.v} onClick={() => setButtonType(b.v)}
                           className={`flex-1 h-8 rounded-lg text-[11px] font-medium border transition-all ${
-                            buttonType === b.v ? 'bg-[#111110] text-white border-[#111110]'
-                                              : 'border-[#e8e8e5] text-[#6b6b66] hover:border-[#b8b8b4]'
+                            buttonType === b.v ? 'bg-ink text-white border-ink'
+                                              : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4]'
                           }`}>
                           <span>{b.l}</span>
-                          {b.p > 0 && <span className={`ml-1 text-[10px] ${buttonType === b.v ? 'opacity-50' : 'text-[#9a9a95]'}`}>{b.p}₽</span>}
+                          {b.p > 0 && <span className={`ml-1 text-[10px] ${buttonType === b.v ? 'opacity-50' : 'text-muted'}`}>{b.p}₽</span>}
                         </button>
                       ))}
                     </div>
@@ -1124,7 +1124,7 @@ export default function MirrorCalculatorPage() {
                   {hasSubstrate && (
                     <div className="flex items-center gap-1">
                       <input type="number" value={substratePrice} onChange={e => setSubstratePrice(e.target.value)}
-                        className="w-20 h-7 border border-[#e8e8e5] rounded-lg px-2 text-xs font-mono text-right focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9]" />
+                        className="w-20 h-7 border border-[#e8e8e5] rounded-lg px-2 text-xs font-mono text-right focus:outline-none focus:border-muted bg-subtle" />
                       <span className="text-xs text-[#a8a8a3]">₽</span>
                     </div>
                   )}
@@ -1151,8 +1151,8 @@ export default function MirrorCalculatorPage() {
                           <button key={f.type_mm} onClick={() => setFacetTypeMm(f.type_mm)}
                             className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-all ${
                               facetTypeMm === f.type_mm
-                                ? 'bg-[#111110] text-white border-[#111110]'
-                                : 'border-[#e8e8e5] text-[#4b4b47] hover:border-[#b8b8b4] bg-white'
+                                ? 'bg-ink text-white border-ink'
+                                : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4] bg-surface'
                             }`}>
                             {f.type_mm} мм
                           </button>
@@ -1178,7 +1178,7 @@ export default function MirrorCalculatorPage() {
                 {hasFrame && (
                   <div className="ml-6 mt-1.5 space-y-2">
                     {mirrorFrames.length === 0 ? (
-                      <p className="text-xs text-[#9a9a95]">
+                      <p className="text-xs text-muted">
                         Нет рамок в справочнике.{' '}
                         <a href="/admin/mirror-frames" className="text-blue-500 hover:underline">Добавить →</a>
                       </p>
@@ -1191,12 +1191,12 @@ export default function MirrorCalculatorPage() {
                             return (
                               <button key={f.id} onClick={() => setMirrorFrameId(f.id)}
                                 className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-all text-left ${
-                                  active ? 'bg-[#111110] text-white border-[#111110]'
-                                         : 'border-[#e8e8e5] text-[#4b4b47] hover:border-[#b8b8b4] bg-white'
+                                  active ? 'bg-ink text-white border-ink'
+                                         : 'border-[#e8e8e5] text-ink-soft hover:border-[#b8b8b4] bg-surface'
                                 }`}>
                                 {f.name}
                                 {colorEntry && (
-                                  <span className={`ml-1.5 text-[10px] ${active ? 'opacity-50' : 'text-[#9a9a95]'}`}>
+                                  <span className={`ml-1.5 text-[10px] ${active ? 'opacity-50' : 'text-muted'}`}>
                                     {colorEntry.label.toLowerCase()}
                                   </span>
                                 )}
@@ -1207,10 +1207,10 @@ export default function MirrorCalculatorPage() {
                         {selectedMirrorFrame && (() => {
                           const fc = calcFrameCost(selectedMirrorFrame, Number(width) || 0, Number(height) || 0, frameMinuteRate, frameSaleMinuteRate)
                           return (
-                            <div className="text-[10px] text-[#9a9a95] space-y-0.5">
+                            <div className="text-[10px] text-muted space-y-0.5">
                               <p>Периметр {fc.perimeterM.toFixed(2)} м · профиль {fc.profileNeededM.toFixed(2)} м · {fc.whipsNeeded} хлыст{fc.whipsNeeded > 1 ? 'а' : ''} × {fc.whipLengthM} м</p>
                               <p>Остаток {fc.leftoverM.toFixed(2)} м · сборка {fc.totalMinutes} мин</p>
-                              <p className="text-[#6b6b66]">Профиль {fc.profileCost.toLocaleString('ru-RU')} ₽ · сборка {fc.assemblySale.toLocaleString('ru-RU')} ₽ = <span className="font-semibold">{(fc.profileCost + fc.assemblySale).toLocaleString('ru-RU')} ₽</span></p>
+                              <p className="text-ink-soft">Профиль {fc.profileCost.toLocaleString('ru-RU')} ₽ · сборка {fc.assemblySale.toLocaleString('ru-RU')} ₽ = <span className="font-semibold">{(fc.profileCost + fc.assemblySale).toLocaleString('ru-RU')} ₽</span></p>
                             </div>
                           )
                         })()}
@@ -1242,8 +1242,8 @@ export default function MirrorCalculatorPage() {
                     <div className="mt-1.5 ml-6 flex items-center gap-2">
                       <span className="text-[11px] text-[#a8a8a3]">км от МКАД</span>
                       <input type="number" min="0" max="200" value={kmFromMkad} onChange={e => setKmFromMkad(e.target.value)} placeholder="0"
-                        className="w-14 h-6 border border-[#e8e8e5] rounded-md px-2 text-xs text-center focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9]" />
-                      {km > 0 && <span className="text-xs font-mono text-[#6b6b66]">{fmt(deliveryCost!)}</span>}
+                        className="w-14 h-6 border border-[#e8e8e5] rounded-md px-2 text-xs text-center focus:outline-none focus:border-muted bg-subtle" />
+                      {km > 0 && <span className="text-xs font-mono text-ink-soft">{fmt(deliveryCost!)}</span>}
                     </div>
                   )}
                 </div>
@@ -1255,7 +1255,7 @@ export default function MirrorCalculatorPage() {
             {settings && (
               <div className="p-4">
                 <SectionLabel>Коммерческие условия V2</SectionLabel>
-                <p className="text-[11px] text-[#9a9a95] -mt-2 mb-3 leading-snug">
+                <p className="text-[11px] text-muted -mt-2 mb-3 leading-snug">
                   Влияют на цену клиента в КП: маржа B2C, скидка и дизайнерские.
                 </p>
                 <PricingBlock
@@ -1275,7 +1275,7 @@ export default function MirrorCalculatorPage() {
             {result ? (
               <>
                 {/* ① Price card */}
-                <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
+                <div className="bg-surface rounded-xl border border-[#e8e8e5] p-4">
 
                   {/* Main price — V2 commercial pipeline: изделие после маржи / партнёра /
                       скидки + услуги. B2B = себестоимость от производства.
@@ -1285,14 +1285,14 @@ export default function MirrorCalculatorPage() {
                       <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
                         Цена клиенту
                       </p>
-                      <p className="text-[28px] font-bold font-mono leading-none tracking-tight text-emerald-700">
+                      <p className="text-[28px] font-semibold font-mono leading-none tracking-tight text-emerald-700">
                         {quotePrice.toLocaleString('ru-RU')} ₽
                       </p>
 
                       <div className="mt-3 space-y-1">
                         <div className="flex justify-between items-baseline">
-                          <span className="text-[11px] text-[#6b6b66]">Изделие</span>
-                          <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(productQuotePrice)}</span>
+                          <span className="text-[11px] text-ink-soft">Изделие</span>
+                          <span className="text-[12px] font-mono text-ink-soft">{fmt(productQuotePrice)}</span>
                         </div>
                         {v2Commercial.partnerAmount > 0 && (
                           <div className="flex justify-between items-baseline">
@@ -1308,12 +1308,12 @@ export default function MirrorCalculatorPage() {
                         )}
                         {selectedServicesTotal > 0 && (
                           <div className="flex justify-between items-baseline">
-                            <span className="text-[11px] text-[#6b6b66]">Услуги</span>
-                            <span className="text-[12px] font-mono text-[#4b4b47]">{fmt(selectedServicesTotal)}</span>
+                            <span className="text-[11px] text-ink-soft">Услуги</span>
+                            <span className="text-[12px] font-mono text-ink-soft">{fmt(selectedServicesTotal)}</span>
                           </div>
                         )}
                         <div className="flex justify-between items-baseline pt-1.5 mt-1.5 border-t border-[#f2f2f0]">
-                          <span className="text-[11px] text-[#6b6b66]">Себестоимость от производства</span>
+                          <span className="text-[11px] text-ink-soft">Себестоимость от производства</span>
                           <span className="text-[12px] font-mono font-semibold text-[#2a2a28]">{fmt(v2Commercial.b2bPrice)}</span>
                         </div>
                         <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
@@ -1326,7 +1326,7 @@ export default function MirrorCalculatorPage() {
                       <p className="text-[10px] font-medium text-[#a8a8a3] uppercase tracking-[0.08em] mb-1">
                         Цена клиенту (live fallback)
                       </p>
-                      <p className={`text-[26px] font-bold font-mono leading-none tracking-tight ${priceColor}`}>
+                      <p className={`text-[26px] font-semibold font-mono leading-none tracking-tight ${priceColor}`}>
                         {result.grandTotal.toLocaleString('ru-RU')} ₽
                       </p>
                       <p className="text-[10px] text-amber-600 mt-1 leading-snug">
@@ -1343,7 +1343,7 @@ export default function MirrorCalculatorPage() {
                       Настроить финмодель →
                     </a>
                     {isOwner && (
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold whitespace-nowrap ${marginBadge}`}>
+                      <span className={`px-2 py-0.5 rounded text-[10px] font-semibold whitespace-nowrap ${marginBadge}`}>
                         live маржа {result.margin}%
                       </span>
                     )}
@@ -1351,20 +1351,20 @@ export default function MirrorCalculatorPage() {
                 </div>
 
                 {/* ② Расчёт цены — единый блок: live-детализация + V2 финмодель + диагностика. По умолчанию свёрнут. */}
-                <div className="bg-white rounded-xl border border-[#e8e8e5] overflow-hidden">
+                <div className="bg-surface rounded-xl border border-[#e8e8e5] overflow-hidden">
                   <button onClick={() => setIsPriceBreakdownOpen(!isPriceBreakdownOpen)}
-                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-subtle transition-colors">
                     <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em]">Расчёт цены</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.grandTotal)}</span>
-                      <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${isPriceBreakdownOpen ? 'rotate-180' : ''}`}
+                      <span className="text-[11px] font-mono text-muted">{fmt(result.grandTotal)}</span>
+                      <svg className={`w-3 h-3 text-faint transition-transform ${isPriceBreakdownOpen ? 'rotate-180' : ''}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
                   </button>
                   {isPriceBreakdownOpen && (
-                    <div className="px-4 pb-4 border-t border-[#f5f5f3]">
+                    <div className="px-4 pb-4 border-t border-canvas">
 
                       {/* 0. Live-маржа alert — показывать только админу */}
                       {isOwner && result.belowMinMargin && (
@@ -1395,18 +1395,18 @@ export default function MirrorCalculatorPage() {
                           <>
                             <div className="space-y-1.5">
                               <div className="flex items-baseline justify-between">
-                                <span className="text-xs text-[#4b4b47]">Себестоимость от производства</span>
+                                <span className="text-xs text-ink-soft">Себестоимость от производства</span>
                                 <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                   {fmt(v2Commercial.b2bPrice)}
                                 </span>
                               </div>
                               <div className="flex items-baseline justify-between">
-                                <span className="text-xs text-[#6b6b66]">B2C маржа</span>
-                                <span className="text-xs font-mono text-[#6b6b66]">{v2Commercial.selectedB2cMarginPercent}%</span>
+                                <span className="text-xs text-ink-soft">B2C маржа</span>
+                                <span className="text-xs font-mono text-ink-soft">{v2Commercial.selectedB2cMarginPercent}%</span>
                               </div>
                               <div className="flex items-baseline justify-between">
-                                <span className="text-xs text-[#4b4b47]">Цена изделия до дизайнерских</span>
-                                <span className="text-xs font-mono text-[#4b4b47]">{fmt(v2Commercial.b2cProductBase)}</span>
+                                <span className="text-xs text-ink-soft">Цена изделия до дизайнерских</span>
+                                <span className="text-xs font-mono text-ink-soft">{fmt(v2Commercial.b2cProductBase)}</span>
                               </div>
                               {v2Commercial.partnerAmount > 0 && (
                                 <div className="flex items-baseline justify-between">
@@ -1421,22 +1421,22 @@ export default function MirrorCalculatorPage() {
                                 </div>
                               )}
                               <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
-                                <span className="text-xs text-[#4b4b47]">Цена изделия клиенту</span>
+                                <span className="text-xs text-ink-soft">Цена изделия клиенту</span>
                                 <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                   {fmt(v2Commercial.productAfterDiscount)}
                                 </span>
                               </div>
                               {selectedServicesTotal > 0 && (
                                 <div className="flex items-baseline justify-between">
-                                  <span className="text-xs text-[#4b4b47]">Услуги</span>
+                                  <span className="text-xs text-ink-soft">Услуги</span>
                                   <span className="text-xs font-mono font-semibold text-[#2a2a28]">
                                     {fmt(selectedServicesTotal)}
                                   </span>
                                 </div>
                               )}
                               <div className="flex items-baseline justify-between pt-1.5 border-t border-[#f0f0ee]">
-                                <span className="text-sm font-bold text-[#111110]">Итого КП</span>
-                                <span className="text-base font-mono font-bold text-emerald-700">
+                                <span className="text-sm font-semibold text-ink">Итого КП</span>
+                                <span className="text-base font-mono font-semibold text-emerald-700">
                                   {fmt(quotePrice)}
                                 </span>
                               </div>
@@ -1449,7 +1449,7 @@ export default function MirrorCalculatorPage() {
                                 <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">В расчёте изделия учтено</p>
                                 <ul className="space-y-0.5">
                                   {v2Preview.costLines.map((line, i) => (
-                                    <li key={i} className="text-[11px] text-[#6b6b66] leading-snug">
+                                    <li key={i} className="text-[11px] text-ink-soft leading-snug">
                                       · {line.name}
                                     </li>
                                   ))}
@@ -1463,7 +1463,7 @@ export default function MirrorCalculatorPage() {
                                 <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider mb-1">Услуги</p>
                                 <ul className="space-y-0.5">
                                   {result.serviceLines.map((s, i) => (
-                                    <li key={i} className="flex justify-between items-baseline text-[11px] text-[#6b6b66] leading-snug">
+                                    <li key={i} className="flex justify-between items-baseline text-[11px] text-ink-soft leading-snug">
                                       <span>· {s.name}</span>
                                       <span className="font-mono">{fmt(s.total)} ₽</span>
                                     </li>
@@ -1487,7 +1487,7 @@ export default function MirrorCalculatorPage() {
                               <p className="text-[10px] text-emerald-600">подсказка, не меняет цену в КП</p>
                             </div>
                             <div className="text-right whitespace-nowrap">
-                              <span className="text-[11px] font-mono font-bold text-emerald-700">+10%: {fmt(upsell)}</span>
+                              <span className="text-[11px] font-mono font-semibold text-emerald-700">+10%: {fmt(upsell)}</span>
                               <span className="text-[10px] text-emerald-500 ml-1.5">+{fmt(delta)}</span>
                             </div>
                           </div>
@@ -1507,26 +1507,26 @@ export default function MirrorCalculatorPage() {
                           {twoStagePreview.available && (
                             <div className="mb-3 space-y-1">
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">Внутренняя Factory Cost</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.factoryCost)}</span>
+                                <span className="text-[11px] text-ink-soft">Внутренняя Factory Cost</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(twoStagePreview.pricing.factoryCost)}</span>
                               </div>
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">B2B Price</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2b.price)}</span>
+                                <span className="text-[11px] text-ink-soft">B2B Price</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(twoStagePreview.pricing.b2b.price)}</span>
                               </div>
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">B2C Price (admin config {twoStagePreview.config.b2cMarginPercent}%)</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(twoStagePreview.pricing.b2c.price)}</span>
+                                <span className="text-[11px] text-ink-soft">B2C Price (admin config {twoStagePreview.config.b2cMarginPercent}%)</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(twoStagePreview.pricing.b2c.price)}</span>
                               </div>
                               {v2Commercial.available && (
                                 <>
                                   <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                    <span className="text-[11px] text-[#6b6b66]">B2C base (selected margin {v2Commercial.selectedB2cMarginPercent}%)</span>
-                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.b2cProductBase)}</span>
+                                    <span className="text-[11px] text-ink-soft">B2C base (selected margin {v2Commercial.selectedB2cMarginPercent}%)</span>
+                                    <span className="text-[11px] font-mono text-ink-soft">{fmt(v2Commercial.b2cProductBase)}</span>
                                   </div>
                                   <div className="flex justify-between items-baseline">
-                                    <span className="text-[11px] text-[#6b6b66]">Partner gross-up</span>
-                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.productWithPartner)}</span>
+                                    <span className="text-[11px] text-ink-soft">Partner gross-up</span>
+                                    <span className="text-[11px] font-mono text-ink-soft">{fmt(v2Commercial.productWithPartner)}</span>
                                   </div>
                                   <div className="flex justify-between items-baseline">
                                     <span className="text-[11px] text-purple-600">Partner amount ({v2Commercial.partnerPercent}%)</span>
@@ -1537,22 +1537,22 @@ export default function MirrorCalculatorPage() {
                                     <span className="text-[11px] font-mono text-orange-500">−{fmt(v2Commercial.discountAmount)}</span>
                                   </div>
                                   <div className="flex justify-between items-baseline">
-                                    <span className="text-[11px] text-[#6b6b66]">Product after discount</span>
-                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(v2Commercial.productAfterDiscount)}</span>
+                                    <span className="text-[11px] text-ink-soft">Product after discount</span>
+                                    <span className="text-[11px] font-mono text-ink-soft">{fmt(v2Commercial.productAfterDiscount)}</span>
                                   </div>
                                 </>
                               )}
                               <div className="flex justify-between items-baseline">
-                                <span className="text-[11px] text-[#6b6b66]">Services Total (sale)</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(selectedServicesTotal)}</span>
+                                <span className="text-[11px] text-ink-soft">Services Total (sale)</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(selectedServicesTotal)}</span>
                               </div>
                               <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                <span className="text-[11px] font-semibold text-[#4b4b47]">Quote Total (saved)</span>
-                                <span className="text-[11px] font-mono font-semibold text-[#4b4b47]">{fmt(quotePrice)}</span>
+                                <span className="text-[11px] font-semibold text-ink-soft">Quote Total (saved)</span>
+                                <span className="text-[11px] font-mono font-semibold text-ink-soft">{fmt(quotePrice)}</span>
                               </div>
                               <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                <span className="text-[11px] text-[#6b6b66]">Legacy live price</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.grandTotal)}</span>
+                                <span className="text-[11px] text-ink-soft">Legacy live price</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(result.grandTotal)}</span>
                               </div>
                               <p className="text-[10px] text-[#b8b8b4] mt-1 leading-snug">
                                 Live маржа: {result.margin}% · Live прибыль: {fmt(result.profit)}
@@ -1562,15 +1562,15 @@ export default function MirrorCalculatorPage() {
                           )}
 
                           {twoStagePreview.available && (
-                            <div className="mb-3 px-3 py-2 bg-[#f5f5f3] rounded-lg space-y-1">
-                              <p className="text-[10px] font-semibold text-[#6b6b66] uppercase tracking-wider">Формула V2</p>
-                              <p className="text-[10px] font-mono text-[#6b6b66] leading-snug">
+                            <div className="mb-3 px-3 py-2 bg-canvas rounded-lg space-y-1">
+                              <p className="text-[10px] font-semibold text-ink-soft uppercase tracking-wider">Формула V2</p>
+                              <p className="text-[10px] font-mono text-ink-soft leading-snug">
                                 B2B = {fmt(twoStagePreview.pricing.factoryCost)} / (1 − налог {twoStagePreview.config.productionTaxPercent}% − маржа {twoStagePreview.config.productionMarginPercent}%)
                               </p>
-                              <p className="text-[10px] font-mono text-[#6b6b66] leading-snug">
+                              <p className="text-[10px] font-mono text-ink-soft leading-snug">
                                 B2C = {fmt(twoStagePreview.pricing.b2b.price)} / (1 − налог {twoStagePreview.config.b2cTaxPercent}% − маржа {twoStagePreview.config.b2cMarginPercent}%)
                               </p>
-                              <p className="text-[10px] text-[#9a9a95] leading-snug pt-1">
+                              <p className="text-[10px] text-muted leading-snug pt-1">
                                 накладные {twoStagePreview.config.factoryOverheadPercent}%
                                 {' · '}резерв {twoStagePreview.config.scrapReservePercent}%
                                 {' · '}упаковка {fmt(twoStagePreview.config.packagingCostPerM2)} ₽/м²
@@ -1580,7 +1580,7 @@ export default function MirrorCalculatorPage() {
 
                           {/* Legacy live — внутри owner-блока, без слова «итого клиенту» */}
                           <details className="mt-2">
-                            <summary className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider cursor-pointer hover:text-[#6b6b66]">
+                            <summary className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-wider cursor-pointer hover:text-ink-soft">
                               Legacy live breakdown (для сверки старой модели)
                             </summary>
                             <div className="mt-2 pl-2 border-l border-[#eaeae6] space-y-2">
@@ -1590,18 +1590,18 @@ export default function MirrorCalculatorPage() {
                                   {result.costLines.map((line, i) => (
                                     <div key={i} className="flex items-baseline justify-between py-1">
                                       <div className="flex-1 min-w-0 pr-2">
-                                        <p className="text-[11px] text-[#6b6b66] truncate">{line.name}</p>
+                                        <p className="text-[11px] text-ink-soft truncate">{line.name}</p>
                                         <p className="text-[10px] text-[#b8b8b4]">{line.qty} {line.unit} × {line.price.toLocaleString('ru-RU')} ₽</p>
                                       </div>
-                                      <span className="text-[11px] font-mono text-[#6b6b66] flex-shrink-0">
+                                      <span className="text-[11px] font-mono text-ink-soft flex-shrink-0">
                                         {line.total.toLocaleString('ru-RU')} ₽
                                       </span>
                                     </div>
                                   ))}
                                 </div>
                                 <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                  <span className="text-[11px] text-[#6b6b66]">Live totalCost</span>
-                                  <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.totalCost)}</span>
+                                  <span className="text-[11px] text-ink-soft">Live totalCost</span>
+                                  <span className="text-[11px] font-mono text-ink-soft">{fmt(result.totalCost)}</span>
                                 </div>
                               </div>
                               <div>
@@ -1609,8 +1609,8 @@ export default function MirrorCalculatorPage() {
                                 <PriceLine label={`Налог ${inputs.tax}%`}   value={`+${fmt(result.expensesAmount)}`} />
                                 <PriceLine label={`Маржа ${inputs.margin}%`} value={`+${fmt(result.marginAmount)}`} />
                                 <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                  <span className="text-[11px] text-[#6b6b66]">Live basePrice</span>
-                                  <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.basePrice)}</span>
+                                  <span className="text-[11px] text-ink-soft">Live basePrice</span>
+                                  <span className="text-[11px] font-mono text-ink-soft">{fmt(result.basePrice)}</span>
                                 </div>
                                 {result.partnerAmount > 0 && (
                                   <PriceLine label={`Партнёрские ${inputs.partnerPercent}%`}
@@ -1621,13 +1621,13 @@ export default function MirrorCalculatorPage() {
                                     value={`−${fmt(result.discountAmount)}`} accent="text-orange-400" />
                                 )}
                                 <div className="flex justify-between items-baseline pt-1 mt-1 border-t border-[#f0f0ee]">
-                                  <span className="text-[11px] text-[#6b6b66]">Live finalPrice</span>
-                                  <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.finalPrice)}</span>
+                                  <span className="text-[11px] text-ink-soft">Live finalPrice</span>
+                                  <span className="text-[11px] font-mono text-ink-soft">{fmt(result.finalPrice)}</span>
                                 </div>
                                 {result.serviceLines.length > 0 && (
                                   <div className="flex justify-between items-baseline pt-1 mt-1">
-                                    <span className="text-[11px] text-[#6b6b66]">Live услуги</span>
-                                    <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.servicesTotal)}</span>
+                                    <span className="text-[11px] text-ink-soft">Live услуги</span>
+                                    <span className="text-[11px] font-mono text-ink-soft">{fmt(result.servicesTotal)}</span>
                                   </div>
                                 )}
                               </div>
@@ -1659,37 +1659,37 @@ export default function MirrorCalculatorPage() {
                 </div>
 
                 {/* ⑤ KP text */}
-                <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
+                <div className="bg-surface rounded-xl border border-[#e8e8e5] p-4">
                   <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em] mb-2.5">Текст КП</p>
-                  <pre className="text-[11px] text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#f9f9f8] rounded-lg p-3 mb-3 border border-[#f0f0ee]">
+                  <pre className="text-[11px] text-ink-soft whitespace-pre-wrap font-sans leading-relaxed bg-[#f9f9f8] rounded-lg p-3 mb-3 border border-[#f0f0ee]">
                     {result.clientText}
                   </pre>
                   <button onClick={handleCopy}
                     className={`w-full h-8 rounded-lg text-[11px] font-medium border transition-colors ${
                       copied
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
-                        : 'border-[#e8e8e5] text-[#4b4b47] hover:bg-[#fafaf9]'
+                        : 'border-[#e8e8e5] text-ink-soft hover:bg-subtle'
                     }`}>
                     {copied ? '✓ Скопировано' : 'Копировать КП'}
                   </button>
                 </div>
 
                 {/* ⑤ Client */}
-                <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
+                <div className="bg-surface rounded-xl border border-[#e8e8e5] p-4">
                   <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em] mb-2.5">Клиент</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
                       placeholder="Имя"
-                      className="h-8 border border-[#e8e8e5] rounded-lg px-2.5 text-xs focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9] transition-colors placeholder:text-[#c4c4be]" />
+                      className="h-8 border border-[#e8e8e5] rounded-lg px-2.5 text-xs focus:outline-none focus:border-muted bg-subtle transition-colors placeholder:text-faint" />
                     <input type="text" value={clientPhone} onChange={e => setClientPhone(e.target.value)}
                       placeholder="+7 (000) 000-00-00"
-                      className="h-8 border border-[#e8e8e5] rounded-lg px-2.5 text-xs focus:outline-none focus:border-[#9a9a95] bg-[#fafaf9] transition-colors placeholder:text-[#c4c4be]" />
+                      className="h-8 border border-[#e8e8e5] rounded-lg px-2.5 text-xs focus:outline-none focus:border-muted bg-subtle transition-colors placeholder:text-faint" />
                   </div>
                 </div>
 
                 {/* ⑥ Actions */}
                 <div className="space-y-1.5">
-                  <p className={`text-[10px] leading-snug px-1 ${quoteIsV2 ? 'text-[#9a9a95]' : 'text-amber-600'}`}>
+                  <p className={`text-[10px] leading-snug px-1 ${quoteIsV2 ? 'text-muted' : 'text-amber-600'}`}>
                     {quoteIsV2
                       ? selectedServicesTotal > 0
                         ? `КП будет создано по итоговой цене V2: ${fmt(quotePrice)} ₽ (изделие ${fmt(productQuotePrice)} + услуги ${fmt(selectedServicesTotal)})`
@@ -1701,7 +1701,7 @@ export default function MirrorCalculatorPage() {
                     className={`w-full h-10 text-white rounded-xl text-sm font-semibold disabled:opacity-40 transition-colors ${
                       editCalcId
                         ? 'bg-amber-600 hover:bg-amber-700 active:bg-amber-800'
-                        : 'bg-[#111110] hover:bg-[#27272a] active:bg-[#3f3f46]'
+                        : 'bg-ink hover:bg-[#27272a] active:bg-[#3f3f46]'
                     }`}>
                     {saving
                       ? 'Сохранение...'
@@ -1714,14 +1714,14 @@ export default function MirrorCalculatorPage() {
                   </button>
                   <div className="grid grid-cols-2 gap-1.5">
                     <button onClick={handleCopy}
-                      className="h-9 border border-[#e8e8e5] rounded-xl text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                      className="h-9 border border-[#e8e8e5] rounded-xl text-xs font-medium text-ink-soft hover:bg-subtle transition-colors">
                       {copied ? '✓ КП скопировано' : 'Копировать КП'}
                     </button>
                     <button onClick={handleAddToCart}
                       className={`h-9 rounded-xl text-xs font-medium border transition-colors ${
                         addedToCart
                           ? 'bg-emerald-600 text-white border-emerald-600'
-                          : 'border-[#e8e8e5] text-[#4b4b47] hover:bg-[#fafaf9]'
+                          : 'border-[#e8e8e5] text-ink-soft hover:bg-subtle'
                       }`}>
                       {addedToCart ? '✓ В корзине' : '+ В корзину'}
                     </button>
@@ -1741,12 +1741,12 @@ export default function MirrorCalculatorPage() {
                         { href: '/calculations',                   label: '📋 История' },
                       ].map(l => (
                         <a key={l.href} href={l.href} target={l.target}
-                          className="h-8 flex items-center justify-center text-[11px] font-medium bg-white border border-[#dde8f5] rounded-lg text-[#3b3b38] hover:bg-[#f5f9ff] transition-colors">
+                          className="h-8 flex items-center justify-center text-[11px] font-medium bg-surface border border-[#dde8f5] rounded-lg text-[#3b3b38] hover:bg-[#f5f9ff] transition-colors">
                           {l.label}
                         </a>
                       ))}
                       <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0) }}
-                        className="h-8 flex items-center justify-center text-[11px] font-medium bg-white border border-[#dde8f5] rounded-lg text-[#3b3b38] hover:bg-[#f5f9ff] transition-colors">
+                        className="h-8 flex items-center justify-center text-[11px] font-medium bg-surface border border-[#dde8f5] rounded-lg text-[#3b3b38] hover:bg-[#f5f9ff] transition-colors">
                         ➕ Новый
                       </button>
                     </div>
@@ -1754,7 +1754,7 @@ export default function MirrorCalculatorPage() {
                 )}
               </>
             ) : (
-              <div className="bg-white rounded-xl border border-[#e8e8e5] p-8 text-center">
+              <div className="bg-surface rounded-xl border border-[#e8e8e5] p-8 text-center">
                 <p className="text-xs text-[#a8a8a3]">Введите размеры и выберите параметры</p>
               </div>
             )}

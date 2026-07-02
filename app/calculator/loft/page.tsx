@@ -20,7 +20,7 @@ function loadSaved(): Record<string, unknown> {
 function Check({ value, onClick }: { value: boolean; onClick: () => void }) {
   return (
     <div onClick={onClick}
-      className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${value ? 'bg-blue-600 border-blue-600' : 'border-[#c4c4be] hover:border-blue-400'}`}>
+      className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 cursor-pointer transition-colors ${value ? 'bg-blue-600 border-blue-600' : 'border-faint hover:border-blue-400'}`}>
       {value && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" /></svg>}
     </div>
   )
@@ -31,8 +31,8 @@ function Toggle({ value, onClick, label, desc }: { value: boolean; onClick: () =
     <div className="flex items-start gap-2 cursor-pointer" onClick={onClick}>
       <Check value={value} onClick={onClick} />
       <div className="min-w-0">
-        <p className="text-xs text-[#111110] leading-tight">{label}</p>
-        {desc && <p className="text-[10px] text-[#9a9a95] leading-tight mt-0.5">{desc}</p>}
+        <p className="text-xs text-ink leading-tight">{label}</p>
+        {desc && <p className="text-[10px] text-muted leading-tight mt-0.5">{desc}</p>}
       </div>
     </div>
   )
@@ -361,14 +361,14 @@ export default function LoftCalculatorPage() {
 
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[#9a9a95] text-sm">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-muted text-sm">Загрузка...</div>
   )
 
   const installPrice = installSvc ? (installSvc.sale_price ?? installSvc.cost_price) : 0
   const deliveryPrice = deliverySvc ? (deliverySvc.sale_price ?? deliverySvc.cost_price) : 0
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
+    <div className="bg-canvas min-h-screen">
       <div className="max-w-[1100px] mx-auto px-4 py-4">
 
         {/* Шапка */}
@@ -386,17 +386,17 @@ export default function LoftCalculatorPage() {
         )}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <a href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</a>
-            <span className="text-[#d4d4d0]">/</span>
-            <h1 className="text-sm font-semibold text-[#111110]">Лофт-перегородка</h1>
+            <a href="/" className="text-muted hover:text-ink-soft text-xs">← Главная</a>
+            <span className="text-faint">/</span>
+            <h1 className="text-sm font-semibold text-ink">Лофт-перегородка</h1>
           </div>
-          <div className="flex gap-1 p-1 bg-[#ececea] rounded-lg">
+          <div className="flex gap-1 p-1 bg-line-soft rounded-lg">
             {(['standard', 'b2b'] as const).map(t => (
               <button key={t} onClick={() => setCalcTier(t)}
                 className={`px-3 py-1 rounded-md text-[12px] font-medium transition-all ${
                   calcTier === t
-                    ? t === 'b2b' ? 'bg-orange-500 text-white shadow-sm' : 'bg-white text-[#111110] shadow-sm'
-                    : 'text-[#6b6b66] hover:text-[#111110]'
+                    ? t === 'b2b' ? 'bg-orange-500 text-white shadow-sm' : 'bg-surface text-ink shadow-sm'
+                    : 'text-ink-soft hover:text-ink'
                 }`}>
                 {t === 'standard' ? 'Стандартная' : `B2B −${b2bDiscount}%`}
               </button>
@@ -406,7 +406,7 @@ export default function LoftCalculatorPage() {
 
         {/* ── Quick presets ─────────────────────────────────── */}
         <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
-          <span className="text-[11px] font-semibold text-[#86868b] flex-shrink-0 whitespace-nowrap">Быстрый старт:</span>
+          <span className="text-[11px] font-semibold text-muted flex-shrink-0 whitespace-nowrap">Быстрый старт:</span>
           {([
             { l: 'Глухая 200×240 / 3 секц.',    action: () => { setSystemType('fixed');   setWidth('2000'); setHeight('2400'); setSections('3'); setDivisions('2'); setSelectedHwIds(new Set()); } },
             { l: 'Раздвижная 150×240 / 2 секц.', action: () => { setSystemType('sliding'); setWidth('1500'); setHeight('2400'); setSections('2'); setDivisions('1'); setSelectedHwIds(new Set()); } },
@@ -414,7 +414,7 @@ export default function LoftCalculatorPage() {
             { l: 'Офис 400×270 раздвижная',      action: () => { setSystemType('sliding'); setWidth('4000'); setHeight('2700'); setSections('5'); setDivisions('2'); setSelectedHwIds(new Set()); } },
           ] as { l: string; action: () => void }[]).map(p => (
             <button key={p.l} onClick={p.action}
-              className="px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e4e4e0] rounded-[10px] hover:border-blue-400 hover:text-blue-600 whitespace-nowrap flex-shrink-0 transition-colors">
+              className="px-3 py-1.5 text-[12px] font-medium bg-surface border border-line rounded-[10px] hover:border-blue-400 hover:text-blue-600 whitespace-nowrap flex-shrink-0 transition-colors">
               {p.l}
             </button>
           ))}
@@ -426,26 +426,26 @@ export default function LoftCalculatorPage() {
           <div className="space-y-2">
 
             {/* Карточка 1: Конфигурация */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+            <div className="bg-surface rounded-lg border border-line p-3">
               <div className="grid grid-cols-[auto_auto_1fr] gap-x-5 items-start">
 
                 {/* Размеры */}
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Размеры (мм)</p>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Размеры (мм)</p>
                   <div className="flex gap-2">
                     <div>
-                      <p className="text-[10px] text-[#9a9a95] mb-1">Ширина</p>
+                      <p className="text-[10px] text-muted mb-1">Ширина</p>
                       <input type="number" value={width} onChange={e => setWidth(e.target.value)}
-                        className="w-24 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                        className="w-24 border border-line rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-[#9a9a95] mb-1">Высота</p>
+                      <p className="text-[10px] text-muted mb-1">Высота</p>
                       <input type="number" value={height} onChange={e => setHeight(e.target.value)}
-                        className="w-24 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                        className="w-24 border border-line rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
                     </div>
                   </div>
                   {result && (
-                    <p className="text-[10px] text-[#9a9a95] mt-1.5">
+                    <p className="text-[10px] text-muted mt-1.5">
                       {result.area} м² · проф. {result.metalLength} пог.м · стекло {result.glassAreaNet} м²
                       {result.glassWastePct > 0 && (
                         <span className="text-[#b45309]"> +{result.glassWastePct}% расход = {result.glassArea} м²</span>
@@ -456,26 +456,26 @@ export default function LoftCalculatorPage() {
 
                 {/* Структура + визуализация */}
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Структура</p>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Структура</p>
                   <div className="flex gap-2 items-end">
                     <div>
-                      <p className="text-[10px] text-[#9a9a95] mb-1">Секции</p>
+                      <p className="text-[10px] text-muted mb-1">Секции</p>
                       <input type="number" min="1" max="20" value={sections} onChange={e => setSections(e.target.value)}
-                        className="w-14 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                        className="w-14 border border-line rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-[#9a9a95] mb-1">Деления</p>
+                      <p className="text-[10px] text-muted mb-1">Деления</p>
                       <input type="number" min="0" max="10" value={divisions} onChange={e => setDivisions(e.target.value)}
-                        className="w-14 border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
+                        className="w-14 border border-line rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400" />
                     </div>
                     {Number(sections) > 0 && (
-                      <div className="border-2 border-[#9a9a95] rounded flex-shrink-0"
+                      <div className="border-2 border-muted rounded flex-shrink-0"
                         style={{ display: 'grid', gridTemplateColumns: `repeat(${Number(sections)}, 1fr)`, width: 56, height: 44 }}>
                         {Array.from({ length: Number(sections) }).map((_, si) => (
-                          <div key={si} className={si > 0 ? 'border-l-2 border-[#9a9a95]' : ''}
+                          <div key={si} className={si > 0 ? 'border-l-2 border-muted' : ''}
                             style={{ display: 'grid', gridTemplateRows: `repeat(${Number(divisions) + 1}, 1fr)` }}>
                             {Array.from({ length: Number(divisions) + 1 }).map((_, di) => (
-                              <div key={di} className={`bg-blue-50 ${di > 0 ? 'border-t-2 border-[#9a9a95]' : ''}`} />
+                              <div key={di} className={`bg-blue-50 ${di > 0 ? 'border-t-2 border-muted' : ''}`} />
                             ))}
                           </div>
                         ))}
@@ -486,7 +486,7 @@ export default function LoftCalculatorPage() {
 
                 {/* Тип системы */}
                 <div>
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Тип системы</p>
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Тип системы</p>
                   <div className="flex gap-1">
                     {([
                       { value: 'fixed', label: 'Глухая' },
@@ -495,7 +495,7 @@ export default function LoftCalculatorPage() {
                     ] as const).map(s => (
                       <button key={s.value}
                         onClick={() => { setSystemType(s.value); setSelectedHwIds(new Set()) }}
-                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium border transition-colors ${systemType === s.value ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
+                        className={`flex-1 py-1.5 px-2 rounded-md text-xs font-medium border transition-colors ${systemType === s.value ? 'bg-ink text-white border-ink' : 'bg-surface text-ink-soft border-line hover:bg-subtle'}`}>
                         {s.label}
                       </button>
                     ))}
@@ -505,14 +505,14 @@ export default function LoftCalculatorPage() {
             </div>
 
             {/* Карточка 2: Всё остальное */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] p-3 space-y-3">
+            <div className="bg-surface rounded-lg border border-line p-3 space-y-3">
 
               {/* Стекло */}
               <div className="flex items-center gap-3">
                 <div className="flex-1">
-                  <p className="text-[10px] text-[#9a9a95] mb-1">Стекло · закалка включена</p>
+                  <p className="text-[10px] text-muted mb-1">Стекло · закалка включена</p>
                   <select value={glassId ?? ''} onChange={e => setGlassId(Number(e.target.value))}
-                    className="w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400">
+                    className="w-full border border-line rounded-md px-2 py-1.5 text-xs bg-surface focus:outline-none focus:border-blue-400">
                     {glassMaterials.length === 0 && <option value="">— нет стекла в справочнике —</option>}
                     {glassMaterials.map(m => {
                       const price = m.id === glassId && glassCalcPrice
@@ -539,14 +539,14 @@ export default function LoftCalculatorPage() {
                     desc={km > 0 ? `${fmt(deliveryCost!)} · ${deliveryBase.toLocaleString('ru-RU')} + ${km} км × ${deliveryPerKm} ₽` : deliverySvc ? `${fmt(deliveryPrice)} · по Москве` : undefined} />
                   {hasDelivery && (
                     <div className="mt-1.5 ml-6 flex items-center gap-2">
-                      <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">км от МКАД:</span>
+                      <span className="text-[11px] text-muted whitespace-nowrap">км от МКАД:</span>
                       <input
                         type="number" min="0" max="200" placeholder="0"
                         value={kmFromMkad}
                         onChange={e => setKmFromMkad(e.target.value)}
-                        className="w-16 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] text-center outline-none focus:border-[#0071e3]"
+                        className="w-16 border border-line rounded-lg px-2 py-1 text-[12px] text-center outline-none focus:border-[#0071e3]"
                       />
-                      {km > 0 && <span className="text-[11px] text-[#6b6b66]">{fmt(deliveryCost!)}</span>}
+                      {km > 0 && <span className="text-[11px] text-ink-soft">{fmt(deliveryCost!)}</span>}
                     </div>
                   )}
                 </div>
@@ -554,23 +554,23 @@ export default function LoftCalculatorPage() {
 
               {/* Фурнитура */}
               {systemType !== 'fixed' && relevantHardware.length > 0 && (
-                <div className="pt-2 border-t border-[#f0f0ec]">
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Фурнитура</p>
+                <div className="pt-2 border-t border-line-soft">
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Фурнитура</p>
                   <div className="grid grid-cols-2 gap-x-4 gap-y-2">
                     {relevantHardware.map(hw => (
                       <div key={hw.id} className="flex items-center gap-2">
                         <Check value={selectedHwIds.has(hw.id)} onClick={() => toggleHw(hw.id)} />
                         <div className="flex-1 min-w-0 cursor-pointer" onClick={() => toggleHw(hw.id)}>
-                          <p className="text-xs text-[#111110] leading-tight">{hw.name}</p>
-                          <p className="text-[10px] text-[#9a9a95]">{(hw.cost_price ?? 0) > 0 ? `${(hw.cost_price ?? 0).toLocaleString('ru-RU')} ₽/${hw.unit}` : '—'}</p>
+                          <p className="text-xs text-ink leading-tight">{hw.name}</p>
+                          <p className="text-[10px] text-muted">{(hw.cost_price ?? 0) > 0 ? `${(hw.cost_price ?? 0).toLocaleString('ru-RU')} ₽/${hw.unit}` : '—'}</p>
                         </div>
                         {selectedHwIds.has(hw.id) && (
                           <div className="flex items-center gap-0.5 flex-shrink-0">
                             <button onClick={() => setHwQty(q => ({ ...q, [hw.id]: Math.max(1, (q[hw.id] ?? 1) - 1) }))}
-                              className="w-5 h-5 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] flex items-center justify-center text-sm">−</button>
+                              className="w-5 h-5 rounded border border-line text-ink-soft hover:bg-canvas flex items-center justify-center text-sm">−</button>
                             <span className="w-5 text-center text-xs font-mono">{hwQty[hw.id] ?? 1}</span>
                             <button onClick={() => setHwQty(q => ({ ...q, [hw.id]: (q[hw.id] ?? 1) + 1 }))}
-                              className="w-5 h-5 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] flex items-center justify-center text-sm">+</button>
+                              className="w-5 h-5 rounded border border-line text-ink-soft hover:bg-canvas flex items-center justify-center text-sm">+</button>
                           </div>
                         )}
                       </div>
@@ -581,7 +581,7 @@ export default function LoftCalculatorPage() {
 
               {/* Коммерческие условия */}
               {settings && (
-                <div className="pt-2 border-t border-[#f0f0ec]">
+                <div className="pt-2 border-t border-line-soft">
                   <PricingBlock
                     settings={settings}
                     margin={margin} onMarginChange={setMargin}
@@ -612,11 +612,11 @@ export default function LoftCalculatorPage() {
                       {isB2B ? 'B2B · без монтажа' : result.servicesTotal > 0 ? 'Итого с услугами' : 'Цена клиенту'}
                     </span>
                     <div className="text-right">
-                      <p className={`text-2xl font-bold font-mono leading-none ${isB2B ? 'text-orange-500' : marginColor}`}>
+                      <p className={`text-2xl font-semibold font-mono leading-none ${isB2B ? 'text-orange-500' : marginColor}`}>
                         {fmt(isB2B ? b2bPrice : result.grandTotal)}
                       </p>
                       {result.area > 0 && (
-                        <p className="text-[10px] text-[#9a9a95] mt-1">
+                        <p className="text-[10px] text-muted mt-1">
                           {Math.round((isB2B ? b2bPrice : result.grandTotal) / result.area).toLocaleString('ru-RU')} ₽/м²
                         </p>
                       )}
@@ -624,25 +624,25 @@ export default function LoftCalculatorPage() {
                   </div>
                   <div className="grid grid-cols-2 gap-2 pt-2 border-t border-black/5">
                     <div className="text-center">
-                      <p className="text-[10px] text-[#9a9a95]">Маржа</p>
-                      <p className={`text-sm font-bold ${isB2B ? b2bMarginColor : marginColor}`}>
+                      <p className="text-[10px] text-muted">Маржа</p>
+                      <p className={`text-sm font-semibold ${isB2B ? b2bMarginColor : marginColor}`}>
                         {isB2B ? b2bMargin.toFixed(1) : result.margin}%
                       </p>
                     </div>
                     <div className="text-center">
-                      <p className="text-[10px] text-[#9a9a95]">Прибыль</p>
-                      <p className="text-sm font-bold text-[#111110]">
+                      <p className="text-[10px] text-muted">Прибыль</p>
+                      <p className="text-sm font-semibold text-ink">
                         {fmt(isB2B ? b2bProfit : result.profit)}
                       </p>
                     </div>
                   </div>
                   {isB2B && (
                     <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between">
-                      <p className="text-[10px] text-[#9a9a95]">Скидка B2B</p>
+                      <p className="text-[10px] text-muted">Скидка B2B</p>
                       <div className="flex gap-1">
                         {[20, 25, 30].map(d => (
                           <button key={d} onClick={() => setB2bDiscount(d)}
-                            className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${b2bDiscount === d ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#fafaf9]'}`}>
+                            className={`px-2 py-0.5 rounded text-[11px] font-medium border transition-colors ${b2bDiscount === d ? 'bg-orange-500 text-white border-orange-500' : 'bg-surface text-ink-soft border-line hover:bg-subtle'}`}>
                             {d}%
                           </button>
                         ))}
@@ -651,46 +651,46 @@ export default function LoftCalculatorPage() {
                   )}
                   {!isB2B && (
                     <div className="mt-2 pt-2 border-t border-black/5 flex items-center justify-between">
-                      <p className="text-[10px] text-[#9a9a95]">B2B −{b2bDiscount}%</p>
-                      <p className="text-[11px] font-mono text-[#9a9a95]">{fmt(b2bPrice)}</p>
+                      <p className="text-[10px] text-muted">B2B −{b2bDiscount}%</p>
+                      <p className="text-[11px] font-mono text-muted">{fmt(b2bPrice)}</p>
                     </div>
                   )}
                 </div>
 
 
                 {/* Детали расчёта — раскрывающийся */}
-                <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+                <div className="bg-surface rounded-lg border border-line overflow-hidden">
                   <button onClick={() => setShowDetails(!showDetails)}
-                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-[#fafaf9] transition-colors">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Детали расчёта</p>
-                    <svg className={`w-3 h-3 text-[#9a9a95] transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-subtle transition-colors">
+                    <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Детали расчёта</p>
+                    <svg className={`w-3 h-3 text-muted transition-transform ${showDetails ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </button>
                   {showDetails && (
-                    <div className="border-t border-[#f0f0ec] px-3 py-2.5 space-y-3">
+                    <div className="border-t border-line-soft px-3 py-2.5 space-y-3">
 
                       {/* Себестоимость */}
                       <div>
-                        <p className="text-[10px] text-[#9a9a95] mb-1.5">Себестоимость</p>
+                        <p className="text-[10px] text-muted mb-1.5">Себестоимость</p>
                         {result.costLines.map((line, i) => (
                           <div key={i} className="flex items-baseline justify-between py-0.5">
                             <div className="flex-1 min-w-0 pr-2">
-                              <span className="text-[11px] text-[#4b4b47]">{line.name}</span>
-                              <span className="text-[10px] text-[#c4c4be] ml-1">{line.qty} {line.unit}</span>
+                              <span className="text-[11px] text-ink-soft">{line.name}</span>
+                              <span className="text-[10px] text-faint ml-1">{line.qty} {line.unit}</span>
                             </div>
-                            <span className="text-[11px] font-mono text-[#111110] flex-shrink-0">{line.total.toLocaleString('ru-RU')} ₽</span>
+                            <span className="text-[11px] font-mono text-ink flex-shrink-0">{line.total.toLocaleString('ru-RU')} ₽</span>
                           </div>
                         ))}
-                        <div className="flex justify-between pt-1.5 mt-1 border-t border-[#f0f0ec]">
-                          <span className="text-xs font-semibold text-[#4b4b47]">Итого себест.</span>
-                          <span className="text-xs font-mono font-bold text-[#111110]">{fmt(result.totalCost)}</span>
+                        <div className="flex justify-between pt-1.5 mt-1 border-t border-line-soft">
+                          <span className="text-xs font-semibold text-ink-soft">Итого себест.</span>
+                          <span className="text-xs font-mono font-semibold text-ink">{fmt(result.totalCost)}</span>
                         </div>
                       </div>
 
                       {/* Финмодель */}
-                      <div className="pt-1 border-t border-[#f0f0ec]">
-                        <p className="text-[10px] text-[#9a9a95] mb-1.5">Ценообразование</p>
+                      <div className="pt-1 border-t border-line-soft">
+                        <p className="text-[10px] text-muted mb-1.5">Ценообразование</p>
                         {(() => {
                           const priceBase = isB2B ? b2bPrice : result.basePrice
                           const expAmt    = isB2B ? b2bExpensesAmount : result.expensesAmount
@@ -698,23 +698,23 @@ export default function LoftCalculatorPage() {
                           return (
                             <>
                               <div className="flex justify-between py-0.5">
-                                <span className="text-[11px] text-[#9a9a95]">Себестоимость</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(result.totalCost)}</span>
+                                <span className="text-[11px] text-muted">Себестоимость</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(result.totalCost)}</span>
                               </div>
                               <div className="flex justify-between py-0.5">
-                                <span className="text-[11px] text-[#9a9a95]">Налог {result.expensesPercent}%</span>
-                                <span className="text-[11px] font-mono text-[#6b6b66]">{fmt(expAmt)}</span>
+                                <span className="text-[11px] text-muted">Налог {result.expensesPercent}%</span>
+                                <span className="text-[11px] font-mono text-ink-soft">{fmt(expAmt)}</span>
                               </div>
                               <div className="flex justify-between py-0.5">
-                                <span className="text-[11px] text-[#6b6b66]">{isB2B ? 'Прибыль' : `Маржа ${inputs.margin}%`}</span>
-                                <span className="text-[11px] font-mono text-[#111110]">{fmt(profit)}</span>
+                                <span className="text-[11px] text-ink-soft">{isB2B ? 'Прибыль' : `Маржа ${inputs.margin}%`}</span>
+                                <span className="text-[11px] font-mono text-ink">{fmt(profit)}</span>
                               </div>
                             </>
                           )
                         })()}
-                        <div className="flex justify-between py-0.5 pt-1.5 border-t border-[#f0f0ec] mt-1">
-                          <span className="text-[11px] font-semibold text-[#4b4b47]">Цена изделия</span>
-                          <span className="text-[11px] font-mono font-bold text-[#111110]">{fmt(result.finalPrice)}</span>
+                        <div className="flex justify-between py-0.5 pt-1.5 border-t border-line-soft mt-1">
+                          <span className="text-[11px] font-semibold text-ink-soft">Цена изделия</span>
+                          <span className="text-[11px] font-mono font-semibold text-ink">{fmt(result.finalPrice)}</span>
                         </div>
                         {result.partnerAmount > 0 && (
                           <div className="flex justify-between py-0.5">
@@ -730,8 +730,8 @@ export default function LoftCalculatorPage() {
                         )}
                         {result.serviceLines.map((s, i) => (
                           <div key={i} className="flex justify-between py-0.5">
-                            <span className="text-[11px] text-[#6b6b66]">{s.name}</span>
-                            <span className="text-[11px] font-mono text-[#111110]">{fmt(s.total)}</span>
+                            <span className="text-[11px] text-ink-soft">{s.name}</span>
+                            <span className="text-[11px] font-mono text-ink">{fmt(s.total)}</span>
                           </div>
                         ))}
                       </div>
@@ -742,42 +742,42 @@ export default function LoftCalculatorPage() {
                 {/* Действия */}
                 <div className="flex gap-1.5">
                   <button onClick={handleAddToCart}
-                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${addedToCart ? 'bg-emerald-600 text-white' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                    className={`flex-1 py-2 rounded-lg text-xs font-semibold transition-colors ${addedToCart ? 'bg-emerald-600 text-white' : 'bg-ink text-white hover:bg-[#2a2a28]'}`}>
                     {addedToCart ? '✓ В корзине' : '+ В корзину'}
                   </button>
                   <button onClick={handleSave} disabled={saving || discountExceeded}
                     title={discountExceeded ? `Скидка превышает лимит ${strategy.max_manager_discount}%` : undefined}
-                    className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] disabled:opacity-50 whitespace-nowrap">
+                    className="px-3 py-2 rounded-lg text-xs font-medium border border-line bg-surface text-ink-soft hover:bg-subtle disabled:opacity-50 whitespace-nowrap">
                     {saving ? '...' : savedId ? `#${savedId} ✓` : editCalcId ? 'Сохранить как новый расчёт' : 'Сохранить расчёт'}
                   </button>
                   <button onClick={handleCopy}
-                    className="px-3 py-2 rounded-lg text-xs font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] whitespace-nowrap">
+                    className="px-3 py-2 rounded-lg text-xs font-medium border border-line bg-surface text-ink-soft hover:bg-subtle whitespace-nowrap">
                     {copied ? '✓ КП' : 'Копировать КП'}
                   </button>
                 </div>
 
                 {/* Клиент */}
-                <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
-                  <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Клиент (необязательно)</p>
+                <div className="bg-surface rounded-lg border border-line p-3">
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-2">Клиент (необязательно)</p>
                   <div className="grid grid-cols-2 gap-2">
                     <input type="text" value={clientName} onChange={e => setClientName(e.target.value)}
                       placeholder="Имя клиента"
-                      className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
+                      className="border border-line rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
                     <input type="text" value={clientPhone} onChange={e => setClientPhone(e.target.value)}
                       placeholder="+7 000 000-00-00"
-                      className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
+                      className="border border-line rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-blue-400 transition-colors" />
                   </div>
                 </div>
 
                 {/* Клиентский текст */}
-                <div className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+                <div className="bg-surface rounded-lg border border-line p-3">
                   <div className="flex items-center justify-between mb-2">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Текст КП</p>
+                    <p className="text-[10px] font-semibold text-muted uppercase tracking-widest">Текст КП</p>
                     <button onClick={handleCopy} className="text-[11px] text-blue-600 hover:underline">
                       {copied ? 'Скопировано' : 'Копировать'}
                     </button>
                   </div>
-                  <pre className="text-xs text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#fafaf9] rounded p-2">
+                  <pre className="text-xs text-ink-soft whitespace-pre-wrap font-sans leading-relaxed bg-subtle rounded p-2">
                     {result.clientText}
                   </pre>
                 </div>
@@ -785,7 +785,7 @@ export default function LoftCalculatorPage() {
                 {/* What's Next */}
                 {savedId && (
                   <div className="bg-[#f0f7ff] rounded-lg border border-[#bdd9ff] p-3">
-                    <p className="text-[10px] font-bold text-[#0071e3] uppercase tracking-wider mb-2.5">
+                    <p className="text-[10px] font-semibold text-[#0071e3] uppercase tracking-wider mb-2.5">
                       ✓ Расчёт #{savedId} сохранён — что дальше?
                     </p>
                     <button onClick={handleCopy}
@@ -794,19 +794,19 @@ export default function LoftCalculatorPage() {
                     </button>
                     <div className="grid grid-cols-2 gap-1.5">
                       <a href={`/calculations/${savedId}/print`} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-surface border border-line rounded-lg text-xs font-medium text-ink-soft hover:bg-subtle transition-colors">
                         📄 PDF КП
                       </a>
                       <a href={`/calculations/${savedId}`}
-                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-surface border border-line rounded-lg text-xs font-medium text-ink-soft hover:bg-subtle transition-colors">
                         ✏️ Открыть расчёт
                       </a>
                       <a href="/calculations"
-                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-surface border border-line rounded-lg text-xs font-medium text-ink-soft hover:bg-subtle transition-colors">
                         📋 История
                       </a>
                       <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
-                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                        className="flex items-center justify-center gap-1 px-2 py-1.5 bg-surface border border-line rounded-lg text-xs font-medium text-ink-soft hover:bg-subtle transition-colors">
                         ➕ Новый расчёт
                       </button>
                     </div>
@@ -814,7 +814,7 @@ export default function LoftCalculatorPage() {
                 )}
               </>
             ) : (
-              <div className={`rounded-lg border p-8 text-center text-xs ${loftExpensesPercent + Number(margin) >= 100 ? 'bg-red-50 border-red-200 text-red-700 font-semibold' : 'bg-white border-[#e4e4e0] text-[#9a9a95]'}`}>
+              <div className={`rounded-lg border p-8 text-center text-xs ${loftExpensesPercent + Number(margin) >= 100 ? 'bg-red-50 border-red-200 text-red-700 font-semibold' : 'bg-surface border-line text-muted'}`}>
                 {loftExpensesPercent + Number(margin) >= 100
                   ? 'Сумма маржи и расходов не может быть ≥ 100%'
                   : 'Введите размеры и выберите параметры'}
