@@ -1,3 +1,13 @@
+## СКОРОСТЬ/НАДЁЖНОСТЬ + UI ПОЛЬЗОВАТЕЛЕЙ (2026-07-02, последнее)
+Всё на проде, авто-пуш в main работает (пользователь создал `.claude/settings.local.json` с `Bash(git push:*)`; сам файл создать не могу — harness блокирует self-modification).
+- **UI /admin/users**: две сворачивающиеся группы **M-Glass / Производство** (свёрнуты по умолчанию); станции рабочего → выпадающий **«Этапы»** (свёрнуто показывает назначенные, клик → переключатели ✓ добавить/убрать). Проверено ВЖИВУЮ на проде. → `app/admin/users/page.tsx`
+- **Батч 1** (`8dacfab`): `app/error.tsx` + `app/global-error.tsx` (нет белых экранов; Next 16 проп ретрая = `unstable_retry`, в кнопке `location.reload()`); try/catch/finally + «Повторить» в 6 загрузчиках (admin/dashboard, manager-dashboard, cfo/margins, cfo/unit, admin/users, calculator/shower).
+- **Батч 2** (`e48bb65`): ещё ~40 загрузчиков — `.catch(() => setLoading(false))` (паттерн из my-earnings) по калькуляторам/аналитике/цеху/админ-конфигам/marketing; loft — полный try/finally. Вечный спиннер устранён.
+- **Индексы** (`d1d3bf2` + ПРИМЕНЕНЫ в прод через SQL Editor): idx b2b_orders.created_at, b2b_orders(created_by,created_at), calculations(created_by,created_at). «Success. No rows returned».
+- **Ложный бейдж** (`ac23e32`): убран триггер «Похоже, это уже заказ» по client_order_number (референс клиента, не признак заказа).
+- НЕ трогал: b2b_orders payload (items нужен для прогресса, сузить нельзя — глубокая оптимизация = lazy-load по годам, отдельным аккуратным проходом с замерами). Preview-деплои Vercel красные из-за env-scope (только Production) — прод не затронут.
+- Предсуществующее: 31 TS-ошибка в `__tests__/calculators/mirror.test.ts` (сигнатуры), next build их не типизирует.
+
 ## МИГРАЦИЯ КАБИНЕТА ПРИМЕНЕНА (2026-07-02)
 - 20260702_partner_cabinet.sql ПРИМЕНЕНА в прод через Supabase SQL Editor (Chrome MCP; MCP-токена нет, DDL иначе не идёт). Проверено: b2b_clients.user_id ✅, b2b_orders.source ✅, RLS «Partner reads own orders»/«own client» ✅, non-internal заказов 0.
 - Функцию auth.is_partner() НЕ создаём (SQL-редактор не даёт объекты в auth, ERROR 42501; не нужна — политики используют auth.uid() напрямую). Файл миграции приведён в соответствие.
