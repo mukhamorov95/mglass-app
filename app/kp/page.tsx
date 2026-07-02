@@ -30,7 +30,7 @@ type Form = {
 }
 
 type HistoryRow = {
-  id: number; number: string; client_name: string | null; title: string | null
+  id: number; number: string; client_name: string | null
   total: number | null; status: string; manager_name: string | null; created_at: string
   content: Record<string, unknown>
 }
@@ -392,7 +392,7 @@ export default function KpPage() {
                       {g.rows.map(r => (
                         <div key={r.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#fafaf9]">
                           <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-[#111110] truncate">№ {r.number} · {r.title ?? r.client_name ?? 'без названия'}</p>
+                            <p className="text-[13px] font-semibold text-[#111110] truncate">№ {r.number} · {(r.content?.title as string) ?? r.client_name ?? 'без названия'}</p>
                             <p className="text-[11px] text-[#9a9a95]">{r.client_name ?? ''} · {r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</p>
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0">

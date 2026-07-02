@@ -37,7 +37,7 @@ export async function GET() {
   // RLS сам ограничит выборку (свои или все для owner/see_all)
   const { data, error } = await sb
     .from('commercial_proposals')
-    .select('id, number, client_name, title, total, status, manager_name, created_at, content')
+    .select('id, number, client_name, total, status, manager_name, created_at, content')
     .order('created_at', { ascending: false })
     .limit(1000)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -60,7 +60,6 @@ export async function POST(req: Request) {
   const { data, error } = await svc.from('commercial_proposals').insert({
     number: (content.number as string) || number,
     client_name: flat.client_name,
-    title: flat.title,
     items: flat.items,
     subtotal: flat.subtotal,
     total: flat.total,
@@ -95,7 +94,7 @@ export async function PATCH(req: Request) {
     const flat = flatFromContent(body.content)
     Object.assign(patch, {
       content: body.content,
-      client_name: flat.client_name, title: flat.title,
+      client_name: flat.client_name,
       items: flat.items, subtotal: flat.subtotal, total: flat.total,
       valid_until: flat.valid_until, number: (body.content.number as string) || undefined,
       photos: Array.isArray(body.content.photos) ? body.content.photos : undefined,
