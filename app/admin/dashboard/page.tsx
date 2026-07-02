@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import { PageHeader, SectionHeader, StatusPill } from '@/components/ds'
 
 type DashData = {
   revenueToday:    number
@@ -169,7 +170,7 @@ export default function DashboardPage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка дашборда...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка дашборда...</div>
   )
   if (!data) return null
 
@@ -178,27 +179,25 @@ export default function DashboardPage() {
   return (
     <div className="max-w-6xl mx-auto px-6 py-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[20px] font-semibold text-[#111110]">Дашборд</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">
-            {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {(role === 'admin' || role === 'ceo') && (
-            <Link
-              href="/admin/health-check"
-              className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
-            >
-              <span>✓</span> Проверить систему
-            </Link>
-          )}
-          <button onClick={load} className="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] transition-colors">
-            Обновить
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        title="Дашборд"
+        subtitle={new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+        actions={
+          <>
+            {(role === 'admin' || role === 'ceo') && (
+              <Link
+                href="/admin/health-check"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors"
+              >
+                <span>✓</span> Проверить систему
+              </Link>
+            )}
+            <button onClick={load} className="px-3 py-1.5 text-[12px] font-medium rounded-lg bg-line-soft text-ink-soft hover:bg-line transition-colors">
+              Обновить
+            </button>
+          </>
+        }
+      />
 
       {/* Alerts */}
       {data.unpaidCount > 0 && (
@@ -233,21 +232,21 @@ export default function DashboardPage() {
               ? (data.revenueMonth >= strategy.monthly_revenue_target ? 'text-emerald-600'
                 : data.revenueMonth >= strategy.monthly_revenue_target * 0.7 ? 'text-amber-600'
                 : 'text-red-500')
-              : monthDelta !== null ? (monthDelta >= 0 ? 'text-emerald-600' : 'text-red-500') : 'text-[#8a8a85]',
+              : monthDelta !== null ? (monthDelta >= 0 ? 'text-emerald-600' : 'text-red-500') : 'text-muted',
             icon: '💰',
           },
           {
             label: 'Сегодня',
             value: data.calcsToday > 0 ? `${data.calcsToday} расчётов` : '— расчётов',
             sub: fmt(data.revenueToday, true) + ' по расчётам',
-            subColor: 'text-[#8a8a85]',
+            subColor: 'text-muted',
             icon: '📊',
           },
           {
             label: 'В работе',
             value: `${data.ordersActive} заказов`,
             sub: `${data.ordersCompleted} завершено всего`,
-            subColor: 'text-[#8a8a85]',
+            subColor: 'text-muted',
             icon: '⚙️',
           },
           {
@@ -258,12 +257,12 @@ export default function DashboardPage() {
             icon: data.avgMargin >= strategy.target_margin ? '🟢' : data.avgMargin >= strategy.min_margin ? '🟡' : '🔴',
           },
         ].map(kpi => (
-          <div key={kpi.label} className="bg-white border border-[#e4e4e0] rounded-xl p-5">
+          <div key={kpi.label} className="bg-surface border border-line rounded-xl p-5">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">{kpi.label}</p>
+              <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">{kpi.label}</p>
               <span className="text-lg">{kpi.icon}</span>
             </div>
-            <p className="text-[22px] font-bold text-[#111110] leading-tight">{kpi.value}</p>
+            <p className="text-[22px] font-semibold text-ink leading-tight tabular-nums">{kpi.value}</p>
             <p className={`text-[11px] mt-1 ${kpi.subColor}`}>{kpi.sub}</p>
           </div>
         ))}
@@ -272,35 +271,37 @@ export default function DashboardPage() {
       {/* Middle row: orders in work + by product */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
         {/* Orders in work */}
-        <div className="lg:col-span-2 bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-[#111110]">Заказы в работе</p>
-            <Link href="/orders" className="text-[11px] text-blue-600 hover:underline">Все заказы →</Link>
+        <div className="lg:col-span-2 bg-surface border border-line rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-soft">
+            <SectionHeader
+              title="Заказы в работе"
+              actions={<Link href="/orders" className="text-[11px] text-blue-600 hover:underline">Все заказы →</Link>}
+            />
           </div>
           {data.ordersInWork.length === 0 ? (
-            <div className="px-5 py-8 text-center text-[13px] text-[#9a9a95]">Нет активных заказов</div>
+            <div className="px-5 py-8 text-center text-[13px] text-muted">Нет активных заказов</div>
           ) : (
-            <div className="divide-y divide-[#f0f0ec]">
+            <div className="divide-y divide-line-soft">
               {data.ordersInWork.map(o => {
                 const days = o.deadline ? Math.ceil((new Date(o.deadline).getTime() - Date.now()) / 86400000) : null
                 const isPaid = o.payment === 'paid'
                 return (
                   <Link key={o.id} href={`/orders/${o.id}`}
-                    className="flex items-center gap-3 px-5 py-3 hover:bg-[#f8f8f7] transition-colors">
+                    className="flex items-center gap-3 px-5 py-3 hover:bg-subtle transition-colors">
                     <div className={`w-2 h-2 rounded-full flex-shrink-0 ${isPaid ? 'bg-emerald-500' : 'bg-amber-400'}`} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-[12px] font-mono font-semibold text-[#111110]">{o.number}</span>
-                        <span className="text-[12px] text-[#6b6b66] truncate">{o.client}</span>
+                        <span className="text-[12px] font-mono font-semibold text-ink">{o.number}</span>
+                        <span className="text-[12px] text-ink-soft truncate">{o.client}</span>
                       </div>
                       {!isPaid && (
-                        <span className="text-[10px] text-amber-600 font-medium">не оплачен</span>
+                        <div className="mt-0.5"><StatusPill tone="warning">не оплачен</StatusPill></div>
                       )}
                     </div>
                     <div className="text-right flex-shrink-0">
-                      <p className="text-[12px] font-mono font-semibold text-[#111110]">{fmt(o.price, true)}</p>
+                      <p className="text-[12px] font-mono font-semibold text-ink tabular-nums">{fmt(o.price, true)}</p>
                       {days !== null && (
-                        <p className={`text-[10px] ${days < 0 ? 'text-red-600 font-bold' : days <= 3 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>
+                        <p className={`text-[10px] ${days < 0 ? 'text-red-600 font-bold' : days <= 3 ? 'text-amber-600' : 'text-muted'}`}>
                           {days < 0 ? `просрочка ${Math.abs(days)}д` : `${days}д`}
                         </p>
                       )}
@@ -313,9 +314,9 @@ export default function DashboardPage() {
         </div>
 
         {/* By product */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#f0f0ec]">
-            <p className="text-[13px] font-semibold text-[#111110]">По продуктам (месяц)</p>
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-soft">
+            <SectionHeader title="По продуктам (месяц)" />
           </div>
           <div className="p-4 space-y-3">
             {data.byProduct.map(p => {
@@ -324,18 +325,18 @@ export default function DashboardPage() {
               return (
                 <div key={p.type}>
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-[12px] font-medium text-[#111110]">{PRODUCT_LABELS[p.type] ?? p.type}</span>
-                    <span className="text-[11px] text-[#6b6b66] font-mono">{fmt(p.revenue, true)}</span>
+                    <span className="text-[12px] font-medium text-ink">{PRODUCT_LABELS[p.type] ?? p.type}</span>
+                    <span className="text-[11px] text-ink-soft font-mono tabular-nums">{fmt(p.revenue, true)}</span>
                   </div>
-                  <div className="h-2 bg-[#f0f0ec] rounded-full overflow-hidden">
-                    <div className="h-full bg-[#111110] rounded-full" style={{ width: `${pct}%` }} />
+                  <div className="h-2 bg-line-soft rounded-full overflow-hidden">
+                    <div className="h-full bg-ink rounded-full" style={{ width: `${pct}%` }} />
                   </div>
-                  <p className="text-[10px] text-[#9a9a95] mt-0.5">{p.count} расчётов · {pct}%</p>
+                  <p className="text-[10px] text-muted mt-0.5">{p.count} расчётов · {pct}%</p>
                 </div>
               )
             })}
             {data.byProduct.length === 0 && (
-              <p className="text-[12px] text-[#9a9a95] text-center py-4">Нет данных</p>
+              <p className="text-[12px] text-muted text-center py-4">Нет данных</p>
             )}
           </div>
         </div>
@@ -344,58 +345,60 @@ export default function DashboardPage() {
       {/* Bottom row: top managers + recent calcs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Top managers */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#f0f0ec]">
-            <p className="text-[13px] font-semibold text-[#111110]">Менеджеры — этот месяц</p>
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-soft">
+            <SectionHeader title="Менеджеры — этот месяц" />
           </div>
-          <div className="divide-y divide-[#f0f0ec]">
+          <div className="divide-y divide-line-soft">
             {data.topManagers.map((m, i) => (
               <div key={m.name} className="flex items-center gap-3 px-5 py-3">
-                <span className="text-[12px] font-bold text-[#c4c4be] w-4">{i + 1}</span>
+                <span className="text-[12px] font-bold text-faint w-4">{i + 1}</span>
                 <div className="flex-1">
-                  <p className="text-[13px] font-medium text-[#111110]">{m.name}</p>
-                  <p className="text-[11px] text-[#9a9a95]">{m.count} расчётов</p>
+                  <p className="text-[13px] font-medium text-ink">{m.name}</p>
+                  <p className="text-[11px] text-muted">{m.count} расчётов</p>
                 </div>
-                <p className="text-[13px] font-mono font-semibold text-[#111110]">{fmt(m.revenue, true)}</p>
+                <p className="text-[13px] font-mono font-semibold text-ink tabular-nums">{fmt(m.revenue, true)}</p>
               </div>
             ))}
             {data.topManagers.length === 0 && (
-              <p className="px-5 py-6 text-[12px] text-[#9a9a95] text-center">Нет данных за этот месяц</p>
+              <p className="px-5 py-6 text-[12px] text-muted text-center">Нет данных за этот месяц</p>
             )}
           </div>
         </div>
 
         {/* Recent calcs */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-          <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
-            <p className="text-[13px] font-semibold text-[#111110]">Последние расчёты (7 дней)</p>
-            <Link href="/calculations" className="text-[11px] text-blue-600 hover:underline">Все →</Link>
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-line-soft">
+            <SectionHeader
+              title="Последние расчёты (7 дней)"
+              actions={<Link href="/calculations" className="text-[11px] text-blue-600 hover:underline">Все →</Link>}
+            />
           </div>
-          <div className="divide-y divide-[#f0f0ec]">
+          <div className="divide-y divide-line-soft">
             {data.recentCalcs.map(c => {
               const mColor = c.margin >= 35 ? 'text-emerald-600' : c.margin >= 25 ? 'text-amber-600' : 'text-red-500'
               return (
                 <Link key={c.id} href={`/calculations/${c.id}`}
-                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-[#f8f8f7] transition-colors">
+                  className="flex items-center gap-3 px-5 py-2.5 hover:bg-subtle transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[11px] text-[#c4c4be] font-mono">#{c.id}</span>
-                      <span className="text-[11px] text-[#9a9a95]">{PRODUCT_LABELS[c.type] ?? c.type}</span>
-                      {c.manager && <span className="text-[10px] text-[#b4b4b0] truncate">{c.manager}</span>}
+                      <span className="text-[11px] text-faint font-mono">#{c.id}</span>
+                      <span className="text-[11px] text-muted">{PRODUCT_LABELS[c.type] ?? c.type}</span>
+                      {c.manager && <span className="text-[10px] text-faint truncate">{c.manager}</span>}
                     </div>
-                    <p className="text-[11px] text-[#9a9a95]">
+                    <p className="text-[11px] text-muted">
                       {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">
-                    <p className="text-[13px] font-mono font-semibold text-[#111110]">{fmt(c.price, true)}</p>
+                    <p className="text-[13px] font-mono font-semibold text-ink tabular-nums">{fmt(c.price, true)}</p>
                     <p className={`text-[11px] font-semibold ${mColor}`}>{c.margin.toFixed(1)}%</p>
                   </div>
                 </Link>
               )
             })}
             {data.recentCalcs.length === 0 && (
-              <p className="px-5 py-6 text-[12px] text-[#9a9a95] text-center">Расчётов за 7 дней нет</p>
+              <p className="px-5 py-6 text-[12px] text-muted text-center">Расчётов за 7 дней нет</p>
             )}
           </div>
         </div>

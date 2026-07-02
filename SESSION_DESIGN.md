@@ -12,10 +12,20 @@
   (ink/ink-soft/muted/faint/line/line-soft). Ролевые акценты и логика не тронуты.
   Фикс бага: `border-[#ebebе8]` (кириллическая «е», невалидный цвет) → `border-line`.
 
+## Ф4 — раскатка по разделам (в процессе)
+Готово (build ✓, отдельные коммиты): calculations, orders, b2b-quotes, admin/dashboard.
+Паттерн: субагент мигрирует (визуал-только, rich-карточки ретокенизируем на месте,
+не впихивая в RowCard) → build → коммит.
+
 ## Следующий шаг
-Ф4 — раскатка по разделам: перевести страницы на примитивы ds.
-Порядок: manager → admin → cfo → b2b → production → marketing.
-Начать с самых заметных клиентских страниц (calculations, orders, b2b-quotes, admin/dashboard).
+Продолжить раскатку. Кандидаты по разделам:
+- manager: /manager, /manager-dashboard, /clients, /calendar, /measurer, /my-earnings
+- b2b: /b2b-orders, /b2b-crm, /b2b-cutting, /b2b-analytics, /b2b-pipeline
+- cfo: /cfo, /cfo/margins, /cfo/unit, /admin/cfo, /admin/pnl
+- admin: /admin/users, /admin/warehouse, /admin/suppliers, /admin/* справочники
+- production: /production-app/*
+- marketing: /marketing/*
+В конце: build всего + merge design-system → main (PR).
 
 ## Контекст
 - Раскатка централизованная: палитра не меняется, меняем форму через ds.tsx + токены.
