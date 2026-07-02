@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PageHeader } from '@/components/ds'
 
 type StaleInfo = { id: number; name: string; daysStale: number; stageName: string }
 
@@ -24,7 +25,7 @@ function ZoneBadge({ zone, count }: { zone: 1 | 2 | 3; count: number }) {
   return (
     <div className={`rounded-xl border px-5 py-4 ${cfg.color}`}>
       <p className="text-[11px] font-semibold uppercase tracking-widest opacity-60 mb-1">{cfg.label}</p>
-      <p className="text-[32px] font-bold leading-none font-mono">{count}</p>
+      <p className="text-[32px] font-semibold leading-none font-mono tabular-nums">{count}</p>
       <p className="text-[11px] mt-1 opacity-60">сделок</p>
     </div>
   )
@@ -35,20 +36,20 @@ function StaleList({ title, items, domain, color }: {
 }) {
   if (items.length === 0) return null
   return (
-    <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-      <div className={`px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between`}>
-        <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">{title}</span>
-        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${color}`}>{items.length}</span>
+    <div className="bg-surface border border-line rounded-xl overflow-hidden">
+      <div className={`px-5 py-3 border-b border-line-soft flex items-center justify-between`}>
+        <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">{title}</span>
+        <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full tabular-nums ${color}`}>{items.length}</span>
       </div>
-      <div className="divide-y divide-[#f8f8f7]">
+      <div className="divide-y divide-canvas">
         {items.map(s => (
           <a key={s.id} href={`https://${domain}/leads/detail/${s.id}`} target="_blank" rel="noreferrer"
-            className="px-5 py-3 flex items-center justify-between hover:bg-[#fafaf9] transition-colors">
+            className="px-5 py-3 flex items-center justify-between hover:bg-subtle transition-colors">
             <div>
-              <p className="text-[13px] font-medium text-[#111110]">{s.name}</p>
-              <p className="text-[11px] text-[#9a9a95] mt-0.5">{s.stageName}</p>
+              <p className="text-[13px] font-medium text-ink">{s.name}</p>
+              <p className="text-[11px] text-muted mt-0.5">{s.stageName}</p>
             </div>
-            <span className="text-[12px] font-semibold text-red-600 shrink-0 ml-3">{s.daysStale}д</span>
+            <span className="text-[12px] font-semibold text-red-600 shrink-0 ml-3 tabular-nums">{s.daysStale}д</span>
           </a>
         ))}
       </div>
@@ -78,7 +79,7 @@ export default function ManagerPage() {
   }, [])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">
       Загружаю данные из AmoCRM…
     </div>
   )
@@ -87,13 +88,13 @@ export default function ManagerPage() {
     <div className="min-h-screen flex items-center justify-center">
       <div className="max-w-md text-center px-6">
         <div className="text-4xl mb-4">🔗</div>
-        <h2 className="text-[16px] font-semibold text-[#111110] mb-2">AmoCRM не привязан</h2>
-        <p className="text-[13px] text-[#6b6b66] leading-relaxed mb-4">
+        <h2 className="text-[16px] font-semibold text-ink mb-2">AmoCRM не привязан</h2>
+        <p className="text-[13px] text-ink-soft leading-relaxed mb-4">
           Попросите администратора привязать ваш аккаунт к AmoCRM в разделе
           <strong> Пользователи → ваш профиль → AmoCRM User ID</strong>.
         </p>
         <Link href="/manager-dashboard"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-[#111110] text-white rounded-lg text-[13px] font-medium hover:bg-[#2a2a28] transition-colors">
+          className="inline-flex items-center gap-2 px-4 py-2 bg-ink text-white rounded-lg text-[13px] font-medium hover:bg-[#2a2a28] transition-colors">
           B2B Дашборд →
         </Link>
       </div>
@@ -110,24 +111,20 @@ export default function ManagerPage() {
   const hasStale  = data.staleZone1.length + data.staleZone2.length + data.invoiceStale.length
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1100px] mx-auto px-4 py-5">
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">
-              Мои сделки — {firstName}
-            </h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">
-              {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
-            </p>
-          </div>
-          <a href={`https://${data.domain}/leads/`} target="_blank" rel="noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-[12px] text-[#6b6b66] hover:bg-white hover:text-[#111110] transition-colors">
-            Открыть AmoCRM ↗
-          </a>
-        </div>
+        <PageHeader
+          title={`Мои сделки — ${firstName}`}
+          subtitle={new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+          actions={
+            <a href={`https://${data.domain}/leads/`} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-line rounded-lg text-[12px] text-ink-soft hover:bg-surface hover:text-ink transition-colors">
+              Открыть AmoCRM ↗
+            </a>
+          }
+        />
 
         {/* Активность сегодня */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
@@ -137,20 +134,20 @@ export default function ManagerPage() {
             { label: 'Сообщений',      value: data.today.messagesSent, icon: '💬' },
             { label: 'Перемещений',    value: data.today.cardsMoved,   icon: '🔀' },
           ].map(k => (
-            <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">
+            <div key={k.label} className="bg-surface border border-line rounded-xl px-4 py-3">
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-1">
                 {k.icon} {k.label}
               </p>
-              <p className="text-[28px] font-bold font-mono leading-none text-[#111110]">{k.value}</p>
-              <p className="text-[10px] text-[#c4c4be] mt-1">за сегодня</p>
+              <p className="text-[28px] font-semibold font-mono leading-none text-ink tabular-nums">{k.value}</p>
+              <p className="text-[10px] text-faint mt-1">за сегодня</p>
             </div>
           ))}
         </div>
 
         {/* Зоны */}
         <div className="mb-5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
-            Всего активных: <span className="text-[#111110] text-[13px]">{data.activeLeads}</span>
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-3">
+            Всего активных: <span className="text-ink text-[13px] tabular-nums">{data.activeLeads}</span>
           </p>
           <div className="grid grid-cols-3 gap-3">
             <ZoneBadge zone={1} count={data.zone1} />
@@ -162,7 +159,7 @@ export default function ManagerPage() {
         {/* Требуют внимания */}
         {hasStale > 0 && (
           <div className="mb-5">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-3">
               Требуют внимания сегодня
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -193,8 +190,8 @@ export default function ManagerPage() {
         )}
 
         {/* Быстрые действия */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Быстрые действия</p>
+        <div className="bg-surface border border-line rounded-xl p-5">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-muted mb-3">Быстрые действия</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               { href: '/calculator/mirror', icon: '🪞', label: 'Зеркало' },
@@ -203,7 +200,7 @@ export default function ManagerPage() {
               { href: '/calculations',      icon: '📋', label: 'История КП' },
             ].map(l => (
               <Link key={l.href} href={l.href}
-                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110] hover:bg-[#f8f8f7] transition-colors">
+                className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-line text-[13px] text-ink hover:bg-canvas transition-colors">
                 <span>{l.icon}</span> {l.label}
               </Link>
             ))}

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BCRM, B2BInteraction, clientToCRM, B2B_INTERACTION_TYPES } from '@/lib/types'
+import { PageHeader } from '@/components/ds'
 
 type Quote = {
   id: number
@@ -225,7 +226,7 @@ export default function ManagerDashboardPage() {
   }, [quotes, filterUserId, filterEmail, monthStart])
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   const activeFilterLabel = effectiveMyOnly
@@ -233,48 +234,45 @@ export default function ManagerDashboardPage() {
     : 'все'
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       <div className="max-w-[1200px] mx-auto px-4 py-5">
 
         {/* Header + toggle */}
-        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">Дашборд менеджера</h1>
-            {myEmail && (
-              <p className="text-[12px] text-[#9a9a95] mt-0.5">{myEmail}</p>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 flex-wrap">
-            {/* Admin: viewAs dropdown */}
-            {role === 'admin' && myOnly && (
-              <select
-                value={viewAs ?? ''}
-                onChange={e => setViewAs(e.target.value || null)}
-                className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6b6b66] outline-none focus:border-[#111110]">
-                <option value="">— мой</option>
-                {managers.map(m => (
-                  <option key={m} value={m}>{m}</option>
-                ))}
-              </select>
-            )}
-            {/* Toggle — только для тех, кто может видеть все */}
-            {canSeeAll && (
-              <div className="flex bg-[#f0f0ec] rounded-lg p-0.5">
-                <button
-                  onClick={() => toggleMyOnly(true)}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${effectiveMyOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
-                  Только мои
-                </button>
-                <button
-                  onClick={() => toggleMyOnly(false)}
-                  className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${!effectiveMyOnly ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>
-                  Все
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
+        <PageHeader
+          title="Дашборд менеджера"
+          subtitle={myEmail ?? undefined}
+          actions={
+            <>
+              {/* Admin: viewAs dropdown */}
+              {role === 'admin' && myOnly && (
+                <select
+                  value={viewAs ?? ''}
+                  onChange={e => setViewAs(e.target.value || null)}
+                  className="bg-surface border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink-soft outline-none focus:border-ink">
+                  <option value="">— мой</option>
+                  {managers.map(m => (
+                    <option key={m} value={m}>{m}</option>
+                  ))}
+                </select>
+              )}
+              {/* Toggle — только для тех, кто может видеть все */}
+              {canSeeAll && (
+                <div className="flex bg-line-soft rounded-lg p-0.5">
+                  <button
+                    onClick={() => toggleMyOnly(true)}
+                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${effectiveMyOnly ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft'}`}>
+                    Только мои
+                  </button>
+                  <button
+                    onClick={() => toggleMyOnly(false)}
+                    className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${!effectiveMyOnly ? 'bg-surface text-ink shadow-sm' : 'text-ink-soft'}`}>
+                    Все
+                  </button>
+                </div>
+              )}
+            </>
+          }
+        />
 
         {/* KPI */}
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-5">
@@ -287,10 +285,10 @@ export default function ManagerDashboardPage() {
             { label: `Мои клиенты${myOnly ? '' : ' (все)'}`, value: String(myClients.count),
               sub: myClients.avgRevenue > 0 ? `ср. ${fmt(myClients.avgRevenue)}` : activeFilterLabel },
           ].map(k => (
-            <div key={k.label} className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">{k.label}</p>
-              <p className="text-[20px] font-bold text-[#111110] font-mono leading-none">{k.value}</p>
-              {k.sub && <p className="text-[11px] text-[#9a9a95] mt-1">{k.sub}</p>}
+            <div key={k.label} className="bg-surface border border-line rounded-xl px-4 py-3">
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-1">{k.label}</p>
+              <p className="text-[20px] font-semibold text-ink font-mono leading-none tabular-nums">{k.value}</p>
+              {k.sub && <p className="text-[11px] text-muted mt-1">{k.sub}</p>}
             </div>
           ))}
         </div>
@@ -298,31 +296,31 @@ export default function ManagerDashboardPage() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
           {/* Просроченные контакты */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Просроченные контакты</span>
+          <div className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-line-soft flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">Просроченные контакты</span>
               {overdueContacts.length > 0 && (
-                <span className="text-[11px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-full">{overdueContacts.length}</span>
+                <span className="text-[11px] font-semibold text-red-600 bg-red-50 px-2 py-0.5 rounded-full tabular-nums">{overdueContacts.length}</span>
               )}
             </div>
             {overdueContacts.length === 0 ? (
-              <div className="py-8 text-center text-[12px] text-[#c4c4be]">Всё в порядке 👍</div>
+              <div className="py-8 text-center text-[12px] text-faint">Всё в порядке 👍</div>
             ) : (
-              <div className="divide-y divide-[#f8f8f7]">
+              <div className="divide-y divide-canvas">
                 {overdueContacts.map(c => {
                   const d = daysUntil(c.crm.next_contact_date)!
                   return (
                     <div key={c.id} onClick={() => router.push(`/b2b-crm/${c.id}`)}
-                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-[#fafaf9] transition-colors">
+                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-subtle transition-colors">
                       <div>
-                        <p className="text-[13px] font-medium text-[#111110]">{c.name}</p>
+                        <p className="text-[13px] font-medium text-ink">{c.name}</p>
                         {c.lastInteraction && (
-                          <p className="text-[11px] text-[#9a9a95] mt-0.5 truncate max-w-[220px]">
+                          <p className="text-[11px] text-muted mt-0.5 truncate max-w-[220px]">
                             {typeIcon(c.lastInteraction.type)} {c.lastInteraction.note}
                           </p>
                         )}
                         {c.crm.manager_name && !myOnly && (
-                          <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.crm.manager_name}</p>
+                          <p className="text-[10px] text-faint mt-0.5">{c.crm.manager_name}</p>
                         )}
                       </div>
                       <div className="text-right shrink-0">
@@ -351,35 +349,35 @@ export default function ManagerDashboardPage() {
           </div>
 
           {/* КП без ответа */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">КП без ответа (&gt;2 дней)</span>
+          <div className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-line-soft flex items-center justify-between">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">КП без ответа (&gt;2 дней)</span>
               {noReply.length > 0 && (
-                <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">{noReply.length}</span>
+                <span className="text-[11px] font-semibold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full tabular-nums">{noReply.length}</span>
               )}
             </div>
             {noReply.length === 0 ? (
-              <div className="py-8 text-center text-[12px] text-[#c4c4be]">Все ответили 👍</div>
+              <div className="py-8 text-center text-[12px] text-faint">Все ответили 👍</div>
             ) : (
-              <div className="divide-y divide-[#f8f8f7]">
+              <div className="divide-y divide-canvas">
                 {noReply.map(q => {
                   const total = q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat
                   const manager = parseNotes(q.notes).manager_name as string | null
                   return (
                     <div key={q.id} onClick={() => router.push('/b2b-quotes')}
-                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-[#fafaf9] transition-colors">
+                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-subtle transition-colors">
                       <div>
-                        <p className="text-[13px] font-medium text-[#111110]">{q.client_name}</p>
-                        <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                        <p className="text-[13px] font-medium text-ink">{q.client_name}</p>
+                        <p className="text-[11px] text-muted mt-0.5">
                           {new Date(q.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
                         </p>
                         {manager && !myOnly && (
-                          <p className="text-[10px] text-[#c4c4be] mt-0.5">{manager}</p>
+                          <p className="text-[10px] text-faint mt-0.5">{manager}</p>
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-[13px] font-semibold font-mono text-[#111110]">{fmt(total)}</p>
-                        <p className="text-[11px] text-amber-600 mt-0.5">{daysAgo(q.created_at)} дн. ожидания</p>
+                        <p className="text-[13px] font-semibold font-mono text-ink tabular-nums">{fmt(total)}</p>
+                        <p className="text-[11px] text-amber-600 mt-0.5 tabular-nums">{daysAgo(q.created_at)} дн. ожидания</p>
                       </div>
                     </div>
                   )
@@ -389,29 +387,29 @@ export default function ManagerDashboardPage() {
           </div>
 
           {/* Горячие клиенты A */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-[#f0f0ec]">
-              <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Горячие клиенты — класс A</span>
+          <div className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-line-soft">
+              <span className="text-[11px] font-semibold uppercase tracking-widest text-muted">Горячие клиенты — класс A</span>
             </div>
             {hotClients.length === 0 ? (
-              <div className="py-8 text-center text-[12px] text-[#c4c4be]">Нет клиентов класса A</div>
+              <div className="py-8 text-center text-[12px] text-faint">Нет клиентов класса A</div>
             ) : (
-              <div className="divide-y divide-[#f8f8f7]">
+              <div className="divide-y divide-canvas">
                 {hotClients.map(c => {
                   const nc = daysUntil(c.crm.next_contact_date)
                   return (
                     <div key={c.id} onClick={() => router.push(`/b2b-crm/${c.id}`)}
-                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-[#fafaf9] transition-colors">
+                      className="px-5 py-3 flex items-center justify-between cursor-pointer hover:bg-subtle transition-colors">
                       <div>
-                        <p className="text-[13px] font-medium text-[#111110]">{c.name}</p>
-                        <p className="text-[11px] text-[#9a9a95] mt-0.5">{c.contact ?? c.phone ?? ''}</p>
+                        <p className="text-[13px] font-medium text-ink">{c.name}</p>
+                        <p className="text-[11px] text-muted mt-0.5">{c.contact ?? c.phone ?? ''}</p>
                       </div>
                       <div className="text-right">
                         {c.yearTotal > 0 && (
-                          <p className="text-[13px] font-semibold font-mono text-[#111110]">{fmt(c.yearTotal)}</p>
+                          <p className="text-[13px] font-semibold font-mono text-ink tabular-nums">{fmt(c.yearTotal)}</p>
                         )}
                         {nc !== null && (
-                          <p className={`text-[11px] mt-0.5 ${nc <= 0 ? 'text-red-600 font-semibold' : nc <= 3 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>
+                          <p className={`text-[11px] mt-0.5 tabular-nums ${nc <= 0 ? 'text-red-600 font-semibold' : nc <= 3 ? 'text-amber-600' : 'text-muted'}`}>
                             {nc <= 0 ? `контакт просрочен ${-nc}д` : `контакт через ${nc}д`}
                           </p>
                         )}
@@ -424,8 +422,8 @@ export default function ManagerDashboardPage() {
           </div>
 
           {/* Быстрые ссылки */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-5">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Быстрые действия</p>
+          <div className="bg-surface border border-line rounded-xl p-5">
+            <p className="text-[10px] font-semibold text-muted uppercase tracking-widest mb-3">Быстрые действия</p>
             <div className="grid grid-cols-2 gap-2">
               {[
                 { href: '/b2b-crm',        icon: '🗂️', label: 'B2B CRM' },
@@ -436,7 +434,7 @@ export default function ManagerDashboardPage() {
                 { href: '/b2b-analytics',  icon: '📈', label: 'Аналитика' },
               ].map(l => (
                 <Link key={l.href} href={l.href}
-                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110] hover:bg-[#f8f8f7] transition-colors">
+                  className="flex items-center gap-2 px-3 py-2.5 rounded-lg border border-line text-[13px] text-ink hover:bg-canvas transition-colors">
                   <span>{l.icon}</span> {l.label}
                 </Link>
               ))}
