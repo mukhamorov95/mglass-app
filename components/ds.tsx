@@ -29,7 +29,7 @@ export function PageHeader({ title, subtitle, actions }: { title: string; subtit
 }
 
 // ─── SegmentedTabs: сегмент-контрол (Архив / Корзина и т.п.) ─────────────────
-export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tabs: { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
+export function SegmentedTabs<T extends string>({ tabs, value, onChange }: { tabs: readonly { value: T; label: string }[]; value: T; onChange: (v: T) => void }) {
   return (
     <div className="inline-flex gap-0.5 bg-subtle border border-line rounded-xl p-1">
       {tabs.map(t => (
