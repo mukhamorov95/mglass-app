@@ -73,6 +73,7 @@ export default function UsersPage() {
   const [users, setUsers]               = useState<User[]>([])
   const [roleFilter, setRoleFilter]     = useState('all')
   const [loading, setLoading]           = useState(true)
+  const [loadError, setLoadError]       = useState(false)
   const [showInvite, setShowInvite]     = useState(false)
   const [inviteEmail, setInviteEmail]   = useState('')
   const [invitePassword, setInvitePassword] = useState('')
@@ -100,14 +101,22 @@ export default function UsersPage() {
 
   async function fetchUsers() {
     setLoading(true)
-    const res  = await fetch('/api/admin/users')
-    const data = await res.json()
-    const rows = (Array.isArray(data) ? data : []).map((u: User) => ({
-      ...u,
-      permissions: resolvePerms(u.permissions),
-    }))
-    setUsers(rows)
-    setLoading(false)
+    setLoadError(false)
+    try {
+      const res  = await fetch('/api/admin/users')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      const data = await res.json()
+      const rows = (Array.isArray(data) ? data : []).map((u: User) => ({
+        ...u,
+        permissions: resolvePerms(u.permissions),
+      }))
+      setUsers(rows)
+    } catch (e) {
+      console.error(e)
+      setLoadError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   async function updateUser(id: string, fields: Partial<User>) {
@@ -247,7 +256,12 @@ export default function UsersPage() {
         </div>
 
         <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-          {loading ? (
+          {loadError ? (
+            <div className="p-8 text-center text-[13px] text-[#9a9a95]">
+              Не удалось загрузить пользователей.{' '}
+              <button onClick={() => fetchUsers()} className="text-[#111110] font-medium underline">Повторить</button>
+            </div>
+          ) : loading ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">Загрузка...</div>
           ) : users.length === 0 ? (
             <div className="p-8 text-center text-[13px] text-[#9a9a95]">Нет пользователей</div>

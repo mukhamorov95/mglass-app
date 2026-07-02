@@ -47,6 +47,7 @@ export default function ManagerDashboardPage() {
   const [quotes, setQuotes]   = useState<Quote[]>([])
   const [clients, setClients] = useState<ClientWithMeta[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
 
   const [myEmail, setMyEmail]       = useState<string | null>(null)
   const [myUserId, setMyUserId]     = useState<string | null>(null)
@@ -73,6 +74,8 @@ export default function ManagerDashboardPage() {
 
   async function load() {
     setLoading(true)
+    setError(false)
+    try {
     const sb = createClient()
 
     const { data: { user } } = await sb.auth.getUser()
@@ -141,8 +144,12 @@ export default function ManagerDashboardPage() {
       enriched.map((c: ClientWithMeta) => c.crm.manager_name).filter((m): m is string => !!m)
     )].sort()
     setManagers(mgrs)
-
-    setLoading(false)
+    } catch (e) {
+      console.error(e)
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
   // filterEmail — для клиентов CRM (по имени/email менеджера)
@@ -224,6 +231,14 @@ export default function ManagerDashboardPage() {
     return { kpCount: thisMonth.length, orderCount: confirmed.length, total, conversion, avgMargin }
   }, [quotes, filterUserId, filterEmail, monthStart])
 
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85] p-6">
+      <div className="text-center">
+        <p className="mb-3">Не удалось загрузить дашборд.</p>
+        <button onClick={() => load()} className="px-4 py-2 bg-[#111110] text-white rounded-lg">Повторить</button>
+      </div>
+    </div>
+  )
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
   )

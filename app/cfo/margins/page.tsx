@@ -48,6 +48,7 @@ const PERIODS = [
 export default function MarginsPage() {
   const [calcs, setCalcs]     = useState<Calc[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError]     = useState(false)
   const [period, setPeriod]   = useState(30)
   const [filter, setFilter]   = useState<'all' | 'low' | 'ok'>('all')
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
@@ -55,6 +56,8 @@ export default function MarginsPage() {
   useEffect(() => {
     async function load() {
       setLoading(true)
+      setError(false)
+      try {
       const sb    = createClient()
       let q = sb
         .from('calculations')
@@ -71,7 +74,12 @@ export default function MarginsPage() {
 
       const { data } = await q
       setCalcs((data ?? []) as unknown as Calc[])
-      setLoading(false)
+      } catch (e) {
+        console.error(e)
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [period])
@@ -155,7 +163,12 @@ export default function MarginsPage() {
         {/* Table */}
         <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
           <div className="overflow-x-auto">
-            {loading ? (
+            {error ? (
+              <div className="flex flex-col items-center justify-center h-32 text-[#9a9a95] text-sm gap-2">
+                <span>Не удалось загрузить данные.</span>
+                <button onClick={() => location.reload()} className="px-3 py-1.5 bg-[#111110] text-white rounded-lg text-xs">Повторить</button>
+              </div>
+            ) : loading ? (
               <div className="flex items-center justify-center h-32 text-[#9a9a95] text-sm">Загрузка…</div>
             ) : (
               <table className="w-full text-xs">

@@ -48,18 +48,25 @@ export default function UnitEconomicsPage() {
   const [calcs, setCalcs]       = useState<Calc[]>([])
   const [selected, setSelected] = useState<Calc | null>(null)
   const [loading, setLoading]   = useState(true)
+  const [error, setError]       = useState(false)
 
   useEffect(() => {
     async function load() {
-      const { data } = await createClient()
-        .from('calculations')
-        .select('id, created_at, product_type, final_price, base_price, discount, margin, profit, status, client_name, cost_breakdown, financial_breakdown, creator:users!created_by(name)')
-        .order('created_at', { ascending: false })
-        .limit(100)
-      const list = (data ?? []) as unknown as Calc[]
-      setCalcs(list)
-      if (list.length > 0) setSelected(list[0])
-      setLoading(false)
+      try {
+        const { data } = await createClient()
+          .from('calculations')
+          .select('id, created_at, product_type, final_price, base_price, discount, margin, profit, status, client_name, cost_breakdown, financial_breakdown, creator:users!created_by(name)')
+          .order('created_at', { ascending: false })
+          .limit(100)
+        const list = (data ?? []) as unknown as Calc[]
+        setCalcs(list)
+        if (list.length > 0) setSelected(list[0])
+      } catch (e) {
+        console.error(e)
+        setError(true)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
@@ -97,7 +104,12 @@ export default function UnitEconomicsPage() {
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Расчёты</p>
             </div>
             <div className="overflow-y-auto max-h-[calc(100vh-160px)]">
-              {loading ? (
+              {error ? (
+                <div className="p-4 text-center text-xs text-[#9a9a95]">
+                  Не удалось загрузить.{' '}
+                  <button onClick={() => location.reload()} className="underline">Повторить</button>
+                </div>
+              ) : loading ? (
                 <div className="p-4 text-center text-xs text-[#9a9a95]">Загрузка…</div>
               ) : calcs.map(calc => {
                 const m = calc.margin ?? 0

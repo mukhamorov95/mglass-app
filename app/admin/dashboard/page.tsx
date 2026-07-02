@@ -44,6 +44,7 @@ function pctChange(cur: number, prev: number) {
 export default function DashboardPage() {
   const [data, setData] = useState<DashData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(false)
   const [usersMap, setUsersMap] = useState<Record<string, string>>({})
   const [role, setRole] = useState<string | null>(null)
   const { strategy } = useOwnerStrategy()
@@ -63,8 +64,10 @@ export default function DashboardPage() {
   useEffect(() => { load() }, [])
 
   async function load() {
+    setError(false)
     const supabase = createClient()
     const now = new Date()
+    try {
     const todayStart  = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
     const monthStart  = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
     const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString()
@@ -165,9 +168,22 @@ export default function DashboardPage() {
       unpaidAmount, unpaidCount: unpaid.length,
       topManagers, byProduct, recentCalcs, ordersInWork,
     })
-    setLoading(false)
+    } catch (e) {
+      console.error(e)
+      setError(true)
+    } finally {
+      setLoading(false)
+    }
   }
 
+  if (error) return (
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85] p-6">
+      <div className="text-center">
+        <p className="mb-3">Не удалось загрузить дашборд.</p>
+        <button onClick={() => { setLoading(true); load() }} className="px-4 py-2 bg-[#111110] text-white rounded-lg">Повторить</button>
+      </div>
+    </div>
+  )
   if (loading) return (
     <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка дашборда...</div>
   )

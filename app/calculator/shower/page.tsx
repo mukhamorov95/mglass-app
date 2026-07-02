@@ -102,6 +102,7 @@ export default function ShowerCalculatorPage() {
   // glass_price_matrix sale rows: name → { t4, t6, t8, t10, t12, … }
   const [glassMatrix, setGlassMatrix]     = useState<Record<string, Record<string, number | null>>>({})
   const [loading, setLoading]     = useState(true)
+  const [loadError, setLoadError] = useState(false)
   const [copied, setCopied]       = useState(false)
   const [saving, setSaving]       = useState(false)
   const [savedId, setSavedId]     = useState<number | null>(null)
@@ -144,6 +145,8 @@ export default function ShowerCalculatorPage() {
 
   useEffect(() => {
     async function load() {
+      setLoadError(false)
+      try {
       const [
         { data: mats }, { data: svcs }, { data: pts }, { data: fins },
         { data: items }, { data: prices }, { data: colors }, { data: sups },
@@ -207,8 +210,12 @@ export default function ShowerCalculatorPage() {
           if (p.__old_final_price__) setEditCalcOldPrice(p.__old_final_price__ as number)
         }
       } catch {}
-
-      setLoading(false)
+      } catch (e) {
+        console.error(e)
+        setLoadError(true)
+      } finally {
+        setLoading(false)
+      }
     }
     load()
   }, [])
@@ -455,6 +462,14 @@ export default function ShowerCalculatorPage() {
   const discountExceeded = Number(discount) > strategy.max_manager_discount
 
 
+  if (loadError) return (
+    <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center p-6">
+      <div className="text-center">
+        <p className="text-[14px] text-[#86868b] mb-3">Не удалось загрузить калькулятор.</p>
+        <button onClick={() => location.reload()} className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg">Повторить</button>
+      </div>
+    </div>
+  )
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f7] flex items-center justify-center">
       <p className="text-[14px] text-[#86868b]">Загрузка...</p>
