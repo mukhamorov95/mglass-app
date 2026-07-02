@@ -9,7 +9,7 @@ const CSS = `
 .kp-scope{--red:#E1442E;--ink:#18181B;--text:#1D1D1F;--muted:#8C8C88;--line:#E4E4E0;--soft:#F5F5F3;--dot:#CFCFC9;
   background:#54545a;font-family:-apple-system,"Helvetica Neue","Segoe UI",Arial,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased;min-height:100vh}
 .kp-scope *{margin:0;padding:0;box-sizing:border-box}
-.kp-page{width:210mm;height:297mm;background:#fff;margin:0 auto 8mm;position:relative;padding:0 15mm 10mm;display:flex;flex-direction:column;overflow:hidden}
+.kp-page{width:210mm;min-height:297mm;background:#fff;margin:0 auto 8mm;position:relative;padding:0 15mm 10mm;display:flex;flex-direction:column}
 .kp-topbar{position:absolute;top:0;left:0;right:0;height:14px;background:var(--ink)}
 .kp-topbar::after{content:"";position:absolute;top:14px;left:0;right:0;height:4px;background:var(--red)}
 .kp-head{display:flex;justify-content:space-between;align-items:flex-start;padding-top:32px;padding-bottom:13px;border-bottom:2.5px solid var(--ink)}
@@ -28,7 +28,7 @@ const CSS = `
 .kp-metabar .v.red{color:var(--red)}
 .kp-titleblk{display:flex;justify-content:space-between;align-items:flex-start;gap:24px;margin-top:18px}
 .kp-titleblk .over{font-size:11px;letter-spacing:4px;color:var(--red);font-weight:800;margin-bottom:10px}
-.kp-titleblk h1{font-size:36px;font-weight:800;letter-spacing:-.5px;line-height:1.05}
+.kp-titleblk h1{font-size:28px;font-weight:800;letter-spacing:-.3px;line-height:1.08}
 .kp-titleblk .sub{font-size:15px;color:#4a4a4a;margin-top:10px;max-width:560px}
 .kp-totalbox{background:var(--red);color:#fff;padding:14px 26px;text-align:right;flex-shrink:0}
 .kp-totalbox .k{font-size:10px;letter-spacing:2px;font-weight:700;opacity:.9}
@@ -113,7 +113,7 @@ const CSS = `
 @media print{
   .kp-scope{background:#fff}
   .kp-toolbar{display:none}
-  .kp-page{margin:0;box-shadow:none;height:297mm;overflow:hidden;page-break-after:always}
+  .kp-page{margin:0;box-shadow:none;min-height:297mm;page-break-after:always}
   .kp-page:last-child{page-break-after:auto}
   @page{size:A4;margin:0}
 }
@@ -153,12 +153,20 @@ export default function KpPrintPage() {
     load()
   }, [id])
 
-  // Пришли по кнопке «Сохранить в PDF» (?print=1) → сразу открываем диалог печати/сохранения.
+  // Пришли по кнопке «Сохранить в PDF» (?print=1) → сразу открываем диалог сохранения.
+  // Ждём загрузки логотипа, чтобы он попал в PDF; страховка по таймауту.
   useEffect(() => {
-    if (kp && typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('print') === '1') {
-      const t = setTimeout(() => window.print(), 900)
-      return () => clearTimeout(t)
+    if (!kp || typeof window === 'undefined') return
+    if (new URLSearchParams(window.location.search).get('print') !== '1') return
+    let done = false
+    const fire = () => { if (done) return; done = true; setTimeout(() => window.print(), 300) }
+    const img = document.querySelector('.kp-head img') as HTMLImageElement | null
+    if (img && !img.complete) {
+      img.addEventListener('load', fire, { once: true })
+      img.addEventListener('error', fire, { once: true })
     }
+    const t = setTimeout(fire, 1200)
+    return () => clearTimeout(t)
   }, [kp])
 
   if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#8a8a85' }}>Загрузка КП…</div>
