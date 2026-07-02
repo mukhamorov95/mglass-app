@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
@@ -51,6 +51,12 @@ const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[]
   { key: 'see_earnings', icon: '💰', label: 'Заработки' },
 ]
 
+// Две главные группы-заголовка: офис M-Glass и цех. Обе по умолчанию свёрнуты.
+const USER_GROUPS: { key: string; label: string; hint: string; match: (u: User) => boolean }[] = [
+  { key: 'mglass',     label: 'M-Glass',     hint: 'офис, продажи, управление', match: u => u.role !== 'production' },
+  { key: 'production', label: 'Производство', hint: 'цех — рабочие по станциям',  match: u => u.role === 'production' },
+]
+
 function fmtCode(code: number | null): string {
   if (code === null) return '—'
   return String(code).padStart(2, '0')
@@ -79,6 +85,8 @@ export default function UsersPage() {
   const [editPasswordValue, setEditPasswordValue] = useState('')
   const [telegramCode, setTelegramCode] = useState<{ userId: string; code: string } | null>(null)
   const [expandedPerms, setExpandedPerms] = useState<Set<string>>(new Set())
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set())
+  const [expandedStations, setExpandedStations] = useState<Set<string>>(new Set())
 
   useEffect(() => { fetchUsers() }, [])
 
@@ -167,6 +175,22 @@ export default function UsersPage() {
     })
   }
 
+  function toggleGroup(key: string) {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      next.has(key) ? next.delete(key) : next.add(key)
+      return next
+    })
+  }
+
+  function toggleStations(id: string) {
+    setExpandedStations(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
   return (
     <div className="min-h-screen bg-[#f8f8f7] p-6">
       <div className="max-w-5xl mx-auto">
@@ -245,7 +269,23 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f8f8f7]">
-                {users.filter(u => roleFilter === 'all' || u.role === roleFilter).map(u => {
+                {USER_GROUPS.map(g => {
+                  const members = users.filter(u => (roleFilter === 'all' || u.role === roleFilter) && g.match(u))
+                  if (members.length === 0) return null
+                  const groupOpen = expandedGroups.has(g.key)
+                  return (
+                    <Fragment key={g.key}>
+                      <tr onClick={() => toggleGroup(g.key)}
+                        className="cursor-pointer select-none bg-[#f0f0ec] hover:bg-[#e8e8e4] border-t-2 border-[#e4e4e0]">
+                        <td colSpan={11} className="px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-[#6b6b66] w-3 inline-block">{groupOpen ? '▼' : '▶'}</span>
+                            <span className="font-semibold text-[14px] text-[#111110]">{g.label}</span>
+                            <span className="text-[11px] text-[#9a9a95]">· {g.hint} · {members.length}</span>
+                          </div>
+                        </td>
+                      </tr>
+                      {groupOpen && members.map(u => {
                   const rl      = ROLE_LABELS[u.role] ?? ROLE_LABELS.manager
                   const pwVisible = visiblePasswords.has(u.id)
                   const isAdmin = u.role === 'admin'
@@ -254,8 +294,8 @@ export default function UsersPage() {
                   const perms   = resolvePerms(u.permissions)
 
                   return (
-                    <>
-                      <tr key={u.id} className="hover:bg-[#fafaf9]">
+                    <Fragment key={u.id}>
+                      <tr className="hover:bg-[#fafaf9]">
 
                         {/* Сотрудник */}
                         <td className="px-4 py-3">
@@ -315,24 +355,41 @@ export default function UsersPage() {
                             <option value="seo">SEO</option>
                             <option value="admin">Администратор</option>
                           </select>
-                          {u.role === 'production' && (
-                            <div className="mt-1.5 flex flex-wrap gap-1 max-w-[220px]" title="Станции цеха — какие задачи видит рабочий">
-                              {STATIONS.map(s => {
-                                const on = (u.production_stations ?? []).includes(s.value)
-                                return (
-                                  <button key={s.value}
-                                    onClick={() => {
-                                      const cur = u.production_stations ?? []
-                                      const next = on ? cur.filter(x => x !== s.value) : [...cur, s.value]
-                                      updateUser(u.id, { production_stations: next })
-                                    }}
-                                    className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${on ? 'bg-orange-100 text-orange-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
-                                    {s.label}
-                                  </button>
-                                )
-                              })}
-                            </div>
-                          )}
+                          {u.role === 'production' && (() => {
+                            const stOpen  = expandedStations.has(u.id)
+                            const enabled = STATIONS.filter(s => (u.production_stations ?? []).includes(s.value))
+                            return (
+                              <div className="mt-1.5 max-w-[240px]">
+                                <button onClick={() => toggleStations(u.id)}
+                                  className="inline-flex items-center gap-1.5 text-[10px] font-medium px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]"
+                                  title="Этапы цеха — какие задачи видит рабочий. Нажми, чтобы добавить или убрать.">
+                                  <span className="text-[9px]">{stOpen ? '▼' : '▶'}</span>
+                                  <span>Этапы</span>
+                                  <span className="text-[#9a9a95] font-normal">
+                                    · {enabled.length ? enabled.map(s => s.label).join(', ') : 'не заданы'}
+                                  </span>
+                                </button>
+                                {stOpen && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1">
+                                    {STATIONS.map(s => {
+                                      const on = (u.production_stations ?? []).includes(s.value)
+                                      return (
+                                        <button key={s.value}
+                                          onClick={() => {
+                                            const cur = u.production_stations ?? []
+                                            const next = on ? cur.filter(x => x !== s.value) : [...cur, s.value]
+                                            updateUser(u.id, { production_stations: next })
+                                          }}
+                                          className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${on ? 'bg-orange-100 text-orange-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                          {on ? '✓ ' : ''}{s.label}
+                                        </button>
+                                      )
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })()}
                         </td>
 
                         {/* Код менеджера */}
@@ -460,7 +517,7 @@ export default function UsersPage() {
                       {/* Permissions expansion row */}
                       {!isAdmin && !isBuyer && permsExpanded && (
                         <tr key={`${u.id}-perms`} className="bg-[#fafaf9]">
-                          <td colSpan={10} className="px-6 py-4 border-t border-[#f0f0ec]">
+                          <td colSpan={11} className="px-6 py-4 border-t border-[#f0f0ec]">
                             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2.5">Разделы меню</p>
                             <div className="flex flex-wrap gap-2">
                               {PERM_LABELS.map(p => {
@@ -488,7 +545,10 @@ export default function UsersPage() {
                           </td>
                         </tr>
                       )}
-                    </>
+                    </Fragment>
+                  )
+                      })}
+                    </Fragment>
                   )
                 })}
               </tbody>
