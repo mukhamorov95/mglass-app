@@ -138,7 +138,8 @@ function getPayAmount(q: Quote): number {
 function looksLikeOrder(q: Quote): boolean {
   if (getStatus(q) !== 'quote') return false
   if (q.custom_number && q.custom_number.trim()) return true
-  if (q.client_order_number && q.client_order_number.trim()) return true
+  // client_order_number — это номер заказа КЛИЕНТА (референс), его вписывают и на
+  // свежий просчёт; сам по себе он не значит, что просчёт уже стал заказом.
   const n = parseNotes(q.notes)
   if (n.launched_at) return true
   if (n.payment_status === 'partial' || n.payment_status === 'paid') return true
