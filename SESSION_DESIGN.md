@@ -17,15 +17,23 @@
 Паттерн: субагент мигрирует (визуал-только, rich-карточки ретокенизируем на месте,
 не впихивая в RowCard) → build → коммит.
 
-## Следующий шаг
-Продолжить раскатку. Кандидаты по разделам:
-- manager: /manager, /manager-dashboard, /clients, /calendar, /measurer, /my-earnings
-- b2b: /b2b-orders, /b2b-crm, /b2b-cutting, /b2b-analytics, /b2b-pipeline
-- cfo: /cfo, /cfo/margins, /cfo/unit, /admin/cfo, /admin/pnl
-- admin: /admin/users, /admin/warehouse, /admin/suppliers, /admin/* справочники
-- production: /production-app/*
-- marketing: /marketing/*
-В конце: build всего + merge design-system → main (PR).
+## Ф4 — готово (15 коммитов, каждый build ✓)
+archive, Sidebar, calculations, orders, b2b-quotes, admin/dashboard, manager,
+manager-dashboard, b2b-orders, cfo×3, clients, b2b-crm, b2b-cutting, b2b-analytics,
+calendar, measurer, my-earnings, my-dashboard, my-notes, production-app(5 дашбордов),
+marketing(6 ядро), ceo, commercial, production. Найдено+исправлено 2 бага border-[#ebebе8].
+
+## Осталось (длинный хвост, реже используется)
+- production-app: station/[station], material, docs, cutting, orders/[id]
+- marketing: video-factory, media-library, videos, ai
+- admin/* конфиг: ~50 подстраниц (users уже поменяла вторая сессия — не трогать конфликтно)
+- ai-*: ai-assistant, ai-sales, ai-stats, amo-analysis, kp-generator, vladislav/*, ai-b2b-quote
+- прочее: objections, templates, competitors, deal-analysis, product-finder, materials,
+  cart, academy, appointments, agents
+
+## Merge
+main ушёл на 3 коммита (users/groups PR), пересечений с design-system НЕТ → merge чистый.
+Порядок: git merge design-system → main → push (деплой), только с явного согласия владельца.
 
 ## Контекст
 - Раскатка централизованная: палитра не меняется, меняем форму через ds.tsx + токены.
