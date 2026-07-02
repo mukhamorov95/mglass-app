@@ -31,9 +31,19 @@ marketing(6 ядро), ceo, commercial, production. Найдено+исправ�
 - прочее: objections, templates, competitors, deal-analysis, product-finder, materials,
   cart, academy, appointments, agents
 
-## Merge
-main ушёл на 3 коммита (users/groups PR), пересечений с design-system НЕТ → merge чистый.
-Порядок: git merge design-system → main → push (деплой), только с явного согласия владельца.
+## СТАТУС: раскатка завершена ✅
+Всё приложение переведено на дизайн-систему (Вариант 3). ~24 коммита, каждая волна — build ✓.
+Настоящий остаток = 0 (только admin/procurement-routes в print-режиме держит bg-white — намеренно).
+Кириллических багов border-[#ebebе8] не осталось (найдено+исправлено 3 шт).
+НЕ трогалось намеренно: admin/users (вторая сессия), print/kp/act/spec, API-роуты.
+
+## Merge (осталось — требует свободного чекаута mglass-app или PR)
+main ушёл вперёд (users/groups PR в admin/users), пересечений с design-system файлами НЕТ.
+Варианты merge (деплой в прод — согласовать с владельцем):
+  A) когда вторая сессия освободит mglass-app:
+     git -C mglass-app merge design-system && git -C mglass-app push
+  B) через PR: git -C mglass-design push -u origin design-system  → PR на GitHub → merge
+Ветка запушена в origin как бэкап.
 
 ## Контекст
 - Раскатка централизованная: палитра не меняется, меняем форму через ds.tsx + токены.
