@@ -131,7 +131,7 @@ export default function KpPrintPage() {
       try {
         const { data, error } = await createClient()
           .from('commercial_proposals')
-          .select('number, date, content, manager_name, valid_until, photos')
+          .select('number, content, manager_name, valid_until, photos')
           .eq('id', id)
           .maybeSingle()
         if (error || !data) { setNotFound(true); return }
