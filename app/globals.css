@@ -12,6 +12,22 @@
   --font-mono: var(--font-geist-mono);
 }
 
+/* Дизайн-система (Вариант 3) — семантические токены нейтральной палитры.
+   Существующая палитра проекта, названная по ролям. Используется в components/ds.tsx
+   и на страницах, переведённых на дизайн-систему. Утилиты Tailwind v4: text-ink,
+   bg-surface, border-line, bg-subtle, text-muted и т.д. */
+@theme {
+  --color-ink: #111110;
+  --color-ink-soft: #6b6b66;
+  --color-muted: #9a9a95;
+  --color-faint: #c4c4be;
+  --color-canvas: #f8f8f7;
+  --color-surface: #ffffff;
+  --color-subtle: #fafaf9;
+  --color-line: #e4e4e0;
+  --color-line-soft: #f0f0ec;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
