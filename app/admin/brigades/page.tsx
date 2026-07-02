@@ -90,47 +90,47 @@ export default function BrigadesPage() {
     await load()
   }
 
-  const inp = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]'
+  const inp = 'w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]'
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-bold text-[#111110]">Бригады</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Замерщики и монтажные бригады</p>
+          <h1 className="text-[20px] font-semibold text-ink">Бригады</h1>
+          <p className="text-[13px] text-muted mt-0.5">Замерщики и монтажные бригады</p>
         </div>
         <button onClick={openNew}
-          className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
+          className="px-4 py-2 bg-ink text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
           + Добавить
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-4 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110] mb-1">{editing ? 'Редактировать' : 'Новая бригада'}</p>
+        <div className="bg-surface border border-line rounded-xl p-5 mb-4 space-y-3">
+          <p className="text-[13px] font-semibold text-ink mb-1">{editing ? 'Редактировать' : 'Новая бригада'}</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Название бригады *</p>
+              <p className="text-[10px] text-muted mb-1">Название бригады *</p>
               <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className={inp} />
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Бригадир / ФИО</p>
+              <p className="text-[10px] text-muted mb-1">Бригадир / ФИО</p>
               <input value={form.lead_name ?? ''} onChange={e => setForm(f => ({...f, lead_name: e.target.value}))} className={inp} />
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Телефон</p>
+              <p className="text-[10px] text-muted mb-1">Телефон</p>
               <input value={form.phone ?? ''} onChange={e => setForm(f => ({...f, phone: e.target.value}))} className={inp} />
             </div>
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-2">Специализация</p>
+            <p className="text-[10px] text-muted mb-2">Специализация</p>
             <div className="flex flex-wrap gap-2">
               {SPECS.map(spec => (
                 <button key={spec} onClick={() => toggleSpec(spec)}
                   className={`px-3 py-1.5 text-[12px] rounded-lg border transition-colors ${
                     form.specialization.includes(spec)
-                      ? 'bg-[#111110] text-white border-[#111110]'
-                      : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f8f8f7]'
+                      ? 'bg-ink text-white border-ink'
+                      : 'bg-surface text-ink-soft border-line hover:bg-canvas'
                   }`}>
                   {spec}
                 </button>
@@ -138,17 +138,17 @@ export default function BrigadesPage() {
             </div>
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Заметки</p>
+            <p className="text-[10px] text-muted mb-1">Заметки</p>
             <textarea value={form.notes ?? ''} onChange={e => setForm(f => ({...f, notes: e.target.value}))} rows={2} className={inp + ' resize-none'} />
           </div>
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button onClick={save} disabled={saving}
-              className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+              className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
               {saving ? 'Сохраняю...' : 'Сохранить'}
             </button>
             <button onClick={() => { setShowForm(false); setEditing(null); setForm(EMPTY) }}
-              className="px-4 py-2 border border-[#e4e4e0] text-[13px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+              className="px-4 py-2 border border-line text-[13px] text-ink-soft rounded-lg hover:bg-canvas">
               Отмена
             </button>
           </div>
@@ -156,29 +156,29 @@ export default function BrigadesPage() {
       )}
 
       {loading ? (
-        <p className="text-[13px] text-[#9a9a95] text-center py-8">Загрузка...</p>
+        <p className="text-[13px] text-muted text-center py-8">Загрузка...</p>
       ) : brigades.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-          <p className="text-[13px] text-[#9a9a95]">Бригады не добавлены</p>
+        <div className="bg-surface border border-line rounded-xl p-12 text-center">
+          <p className="text-[13px] text-muted">Бригады не добавлены</p>
         </div>
       ) : (
         <div className="space-y-2">
           {brigades.map(b => (
-            <div key={b.id} className={`bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 flex items-start justify-between gap-4 ${!b.active ? 'opacity-50' : ''}`}>
+            <div key={b.id} className={`bg-surface border border-line rounded-xl px-5 py-4 flex items-start justify-between gap-4 ${!b.active ? 'opacity-50' : ''}`}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
-                  <p className="text-[14px] font-semibold text-[#111110]">{b.name}</p>
+                  <p className="text-[14px] font-semibold text-ink">{b.name}</p>
                   {!b.active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Неактивна</span>}
                   {stats[b.id] && (
-                    <span className="text-[11px] text-amber-600 font-semibold">
+                    <span className="text-[11px] text-amber-600 font-semibold tabular-nums">
                       ★ {stats[b.id].avg_rating.toFixed(1)}
-                      <span className="text-[#b4b4b0] font-normal ml-1">({stats[b.id].count} оц.)</span>
+                      <span className="text-faint font-normal ml-1">({stats[b.id].count} оц.)</span>
                     </span>
                   )}
                 </div>
                 <div className="flex gap-3 flex-wrap">
-                  {b.lead_name && <span className="text-[12px] text-[#6b6b66]">👤 {b.lead_name}</span>}
-                  {b.phone     && <span className="text-[12px] text-[#6b6b66]">📞 {b.phone}</span>}
+                  {b.lead_name && <span className="text-[12px] text-ink-soft">👤 {b.lead_name}</span>}
+                  {b.phone     && <span className="text-[12px] text-ink-soft">📞 {b.phone}</span>}
                 </div>
                 {b.specialization?.length > 0 && (
                   <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -187,15 +187,15 @@ export default function BrigadesPage() {
                     ))}
                   </div>
                 )}
-                {b.notes && <p className="text-[11px] text-[#b4b4b0] mt-1">{b.notes}</p>}
+                {b.notes && <p className="text-[11px] text-faint mt-1">{b.notes}</p>}
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 <button onClick={() => openEdit(b)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                  className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                   Изменить
                 </button>
                 <button onClick={() => toggle(b)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                  className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                   {b.active ? 'Скрыть' : 'Включить'}
                 </button>
               </div>

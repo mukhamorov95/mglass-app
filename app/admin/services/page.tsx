@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { Service } from '@/lib/types'
+import { PageHeader } from '@/components/ds'
 
 const EMPTY: Omit<Service, 'id'> = { name: '', short_name: null, unit: 'шт', cost_price: 0, sale_price: null, active: true, comment: null }
 
@@ -62,14 +63,11 @@ export default function ServicesAdminPage() {
   return (
     <div className="max-w-[900px] mx-auto px-6 py-8">
 
-      <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Услуги</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">{services.filter(s => s.active).length} активных позиций</p>
-      </div>
+      <PageHeader title="Услуги" subtitle={`${services.filter(s => s.active).length} активных позиций`} />
 
-      <div className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
+      <div className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             {editingId !== null ? `Редактировать — ID ${editingId}` : 'Добавить услугу'}
           </h2>
           {editingId !== null && (
@@ -79,44 +77,44 @@ export default function ServicesAdminPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Название</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Название</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="Название услуги"
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Единица</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Единица</label>
             <select
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.unit}
               onChange={e => setForm({ ...form, unit: e.target.value })}>
               {['шт', 'м²', 'пог.м', 'заказ', 'этаж', 'изделие'].map(u => <option key={u}>{u}</option>)}
             </select>
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Себестоимость (₽)</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Себестоимость (₽)</label>
             <input type="number"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink transition-all"
               value={form.cost_price}
               onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Цена продажи (₽)</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Цена продажи (₽)</label>
             <input type="number"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink transition-all"
               value={form.sale_price ?? ''}
               onChange={e => setForm({ ...form, sale_price: e.target.value ? Number(e.target.value) : null })}
               placeholder="пусто = по финмодели"
             />
           </div>
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Комментарий</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Комментарий</label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.comment ?? ''}
               onChange={e => setForm({ ...form, comment: e.target.value })}
               placeholder="Необязательно"
@@ -128,31 +126,31 @@ export default function ServicesAdminPage() {
 
         <div className="flex gap-2 mt-4">
           <button onClick={handleSave} disabled={saving || !form.name}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
             {saving ? 'Сохранение...' : editingId !== null ? 'Сохранить изменения' : 'Добавить позицию'}
           </button>
           {editingId !== null && (
             <button onClick={() => { setEditingId(null); setForm(EMPTY); setError(null) }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
               Отмена
             </button>
           )}
         </div>
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+          <div className="p-8 text-center text-[13px] text-muted">Загрузка...</div>
         ) : services.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет услуг</div>
+          <div className="p-8 text-center text-[13px] text-muted">Нет услуг</div>
         ) : (
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="border-b border-[#f0f0ec]">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Название</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-20">Ед.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-36">Себестоимость</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-36">Цена продажи</th>
+              <tr className="border-b border-line-soft">
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Название</th>
+                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-20">Ед.</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-36">Себестоимость</th>
+                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-36">Цена продажи</th>
                 <th className="w-36 px-4 py-2.5"></th>
               </tr>
             </thead>
@@ -160,15 +158,15 @@ export default function ServicesAdminPage() {
               {services.map(s => (
                 <tr key={s.id}
                   className={`border-b border-[#f8f8f7] last:border-0 transition-colors
-                    ${editingId === s.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}
+                    ${editingId === s.id ? 'bg-blue-50' : 'hover:bg-subtle'}
                     ${!s.active ? 'opacity-35' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-[#111110]">{s.name}</td>
-                  <td className="px-4 py-3 text-[#6b6b66]">{s.unit}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">
+                  <td className="px-4 py-3 font-medium text-ink">{s.name}</td>
+                  <td className="px-4 py-3 text-ink-soft">{s.unit}</td>
+                  <td className="px-4 py-3 text-right font-mono font-semibold text-ink tabular-nums">
                     {s.cost_price.toLocaleString('ru-RU')} ₽
                   </td>
-                  <td className="px-4 py-3 text-right font-mono text-[#6b6b66]">
-                    {s.sale_price ? `${s.sale_price.toLocaleString('ru-RU')} ₽` : <span className="text-[#c4c4be]">—</span>}
+                  <td className="px-4 py-3 text-right font-mono text-ink-soft tabular-nums">
+                    {s.sale_price ? `${s.sale_price.toLocaleString('ru-RU')} ₽` : <span className="text-faint">—</span>}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3 justify-end">
@@ -177,7 +175,7 @@ export default function ServicesAdminPage() {
                         Изменить
                       </button>
                       <button onClick={() => toggleActive(s.id, s.active)}
-                        className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                        className="text-[12px] text-muted hover:text-ink-soft transition-colors">
                         {s.active ? 'Скрыть' : 'Показать'}
                       </button>
                     </div>

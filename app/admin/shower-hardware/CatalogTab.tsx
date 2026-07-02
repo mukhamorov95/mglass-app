@@ -93,30 +93,30 @@ function PriceRowsTable({
 }) {
   return (
     <div>
-      <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
-        <div className="flex bg-[#f5f5f3] border-b border-[#e4e4e0]">
-          <div className="flex-1 px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide">Поставщик</div>
-          <div className="flex-1 px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide">Цвет</div>
-          <div className="w-28 px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide">Цена на сайте</div>
-          <div className="w-20 px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide">Скидка %</div>
-          <div className="w-28 px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide">Закупочная</div>
-          <div className="w-16 px-2 py-2 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide text-center">НДС</div>
+      <div className="border border-line rounded-lg overflow-hidden">
+        <div className="flex bg-canvas border-b border-line">
+          <div className="flex-1 px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide">Поставщик</div>
+          <div className="flex-1 px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide">Цвет</div>
+          <div className="w-28 px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide">Цена на сайте</div>
+          <div className="w-20 px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide">Скидка %</div>
+          <div className="w-28 px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide">Закупочная</div>
+          <div className="w-16 px-2 py-2 text-[10px] font-semibold text-ink-soft uppercase tracking-wide text-center">НДС</div>
           <div className="w-8" />
         </div>
         {rows.map((row, idx) => {
           const cost = Math.round((Number(row.website_price) || 0) * (1 - (Number(row.discount_percent) || 0) / 100))
           return (
-            <div key={idx} className="flex items-center border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9]">
+            <div key={idx} className="flex items-center border-b border-line-soft last:border-0 hover:bg-subtle">
               <div className="flex-1 p-1">
                 <select value={row.supplier_id ?? ''} onChange={e => onSet(idx, 'supplier_id', e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-2 py-1.5 text-[13px] border border-transparent rounded-lg outline-none bg-transparent hover:border-[#e4e4e0] focus:border-[#111110]">
+                  className="w-full px-2 py-1.5 text-[13px] border border-transparent rounded-lg outline-none bg-transparent hover:border-line focus:border-ink">
                   <option value="">— Поставщик —</option>
                   {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
               </div>
               <div className="flex-1 p-1">
                 <select value={row.color_id ?? ''} onChange={e => onSet(idx, 'color_id', e.target.value ? Number(e.target.value) : null)}
-                  className="w-full px-2 py-1.5 text-[13px] border border-transparent rounded-lg outline-none bg-transparent hover:border-[#e4e4e0] focus:border-[#111110]">
+                  className="w-full px-2 py-1.5 text-[13px] border border-transparent rounded-lg outline-none bg-transparent hover:border-line focus:border-ink">
                   <option value="">— Цвет —</option>
                   {colors.filter(c => c.active).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
@@ -124,23 +124,23 @@ function PriceRowsTable({
               <div className="w-28 p-1">
                 <input type="number" value={row.website_price} onChange={e => onSet(idx, 'website_price', e.target.value)}
                   placeholder="0"
-                  className="w-full px-2 py-1.5 text-[13px] font-mono border border-transparent rounded-lg outline-none bg-transparent hover:border-[#e4e4e0] focus:border-[#111110] placeholder-[#c0c0bb]" />
+                  className="w-full px-2 py-1.5 text-[13px] font-mono tabular-nums border border-transparent rounded-lg outline-none bg-transparent hover:border-line focus:border-ink placeholder-faint" />
               </div>
               <div className="w-20 p-1 flex items-center gap-0.5">
                 <input type="number" value={row.discount_percent} onChange={e => onSet(idx, 'discount_percent', e.target.value)}
                   placeholder="0" min="0" max="100"
-                  className="w-full px-2 py-1.5 text-[13px] font-mono border border-transparent rounded-lg outline-none bg-transparent hover:border-[#e4e4e0] focus:border-[#111110] placeholder-[#c0c0bb]" />
-                <span className="text-[12px] text-[#9a9a95] pr-1">%</span>
+                  className="w-full px-2 py-1.5 text-[13px] font-mono tabular-nums border border-transparent rounded-lg outline-none bg-transparent hover:border-line focus:border-ink placeholder-faint" />
+                <span className="text-[12px] text-muted pr-1">%</span>
               </div>
-              <div className="w-28 px-3 py-1.5 text-[13px] font-mono font-semibold text-emerald-700">
-                {row.website_price ? cost.toLocaleString('ru-RU') : <span className="text-[#d4d4d0]">—</span>}
+              <div className="w-28 px-3 py-1.5 text-[13px] font-mono tabular-nums font-semibold text-emerald-700">
+                {row.website_price ? cost.toLocaleString('ru-RU') : <span className="text-faint">—</span>}
               </div>
               <div className="w-16 flex items-center justify-center">
                 <input type="checkbox" checked={row.vat_included} onChange={e => onSet(idx, 'vat_included', e.target.checked)}
                   className="w-4 h-4 rounded cursor-pointer accent-blue-600" />
               </div>
               <div className="w-8 flex items-center justify-center">
-                <button onClick={() => onRemove(idx)} className="text-[#c0c0bb] hover:text-red-400 text-lg leading-none px-1">×</button>
+                <button onClick={() => onRemove(idx)} className="text-faint hover:text-red-400 text-lg leading-none px-1">×</button>
               </div>
             </div>
           )
@@ -462,21 +462,21 @@ export function CatalogTab({
     <div className="space-y-4">
 
       {/* ── Unified Add / Edit form ── */}
-      <div ref={formRef} className={`rounded-xl border overflow-hidden ${editId !== null ? 'border-blue-300' : 'border-[#e4e4e0]'} bg-white`}>
+      <div ref={formRef} className={`rounded-xl border overflow-hidden ${editId !== null ? 'border-blue-300' : 'border-line'} bg-surface`}>
         <button onClick={() => { if (editId !== null) return; setFormOpen(v => !v) }}
-          className={`w-full flex items-center justify-between px-5 py-3.5 transition-colors ${editId !== null ? 'bg-blue-50 cursor-default' : 'hover:bg-[#fafaf9]'}`}>
-          <span className={`text-[12px] font-bold uppercase tracking-widest ${editId !== null ? 'text-blue-700' : 'text-[#111110]'}`}>
+          className={`w-full flex items-center justify-between px-5 py-3.5 transition-colors ${editId !== null ? 'bg-blue-50 cursor-default' : 'hover:bg-subtle'}`}>
+          <span className={`text-[12px] font-semibold uppercase tracking-widest ${editId !== null ? 'text-blue-700' : 'text-ink'}`}>
             {editId !== null ? 'Редактирование позиции' : '+ Добавить позицию'}
           </span>
           {editId === null && (
-            <svg className={`w-3.5 h-3.5 text-[#9a9a95] transition-transform ${formOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <svg className={`w-3.5 h-3.5 text-muted transition-transform ${formOpen ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
             </svg>
           )}
         </button>
 
         {formOpen && (
-          <div className="px-5 pb-6 pt-4 border-t border-[#f0f0ec] space-y-5">
+          <div className="px-5 pb-6 pt-4 border-t border-line-soft space-y-5">
 
             {/* Блок 1: Основная информация */}
             <div>
@@ -531,7 +531,7 @@ export function CatalogTab({
                   <label key={t.v} className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border cursor-pointer text-[12px] font-medium transition-colors ${
                     form.shower_types.includes(t.v)
                       ? 'bg-blue-100 border-blue-300 text-blue-800'
-                      : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'
+                      : 'bg-surface border-line text-ink-soft hover:bg-canvas'
                   }`}>
                     <input type="checkbox" className="hidden" checked={form.shower_types.includes(t.v)} onChange={() => toggleST(t.v)} />
                     {t.l}
@@ -652,7 +652,7 @@ export function CatalogTab({
             {/* Блок 6: Статус */}
             <div>
               <p className="lbl mb-2">Статус</p>
-              <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#4b4b47]">
+              <label className="flex items-center gap-2 cursor-pointer text-[13px] text-ink-soft">
                 <input type="checkbox" checked={form.active} onChange={e => setFF('active', e.target.checked)} className="w-4 h-4 rounded accent-blue-600" />
                 Позиция активна
               </label>
@@ -669,18 +669,18 @@ export function CatalogTab({
             <div className="flex items-center justify-between pt-1">
               {editId !== null ? (
                 <button onClick={cancelForm}
-                  className="border border-[#e4e4e0] text-[#4b4b47] text-[13px] px-5 py-2 rounded-lg hover:bg-[#f0f0ec]">
+                  className="border border-line text-ink-soft text-[13px] px-5 py-2 rounded-lg hover:bg-line-soft">
                   Отмена
                 </button>
               ) : (
                 <button onClick={cancelForm}
-                  className="text-[13px] text-[#9a9a95] hover:text-[#4b4b47] px-2 py-2">
+                  className="text-[13px] text-muted hover:text-ink-soft px-2 py-2">
                   Очистить
                 </button>
               )}
               <button onClick={saveForm} disabled={formSaving || !form.name.trim()}
                 className={`text-white text-[13px] font-semibold px-6 py-2 rounded-lg disabled:opacity-40 transition-colors ${
-                  editId !== null ? 'bg-blue-600 hover:bg-blue-700' : 'bg-[#111110] hover:bg-[#2a2a28]'
+                  editId !== null ? 'bg-blue-600 hover:bg-blue-700' : 'bg-ink hover:bg-[#2a2a28]'
                 }`}>
                 {formSaving ? 'Сохранение...' : editId !== null ? 'Сохранить изменения' : 'Сохранить позицию'}
               </button>
@@ -692,17 +692,17 @@ export function CatalogTab({
       {/* ── Filters ── */}
       <div className="flex flex-wrap items-center gap-2">
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск..."
-          className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] w-44 bg-white" />
+          className="border border-line rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-ink w-44 bg-surface" />
         {['all', ...CATEGORIES].map(c => (
           <button key={c} onClick={() => setFilterCat(c)}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium capitalize ${filterCat === c ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium capitalize ${filterCat === c ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
             {c === 'all' ? 'Все' : c}
           </button>
         ))}
-        <span className="mx-1 text-[#e4e4e0]">|</span>
+        <span className="mx-1 text-faint">|</span>
         {SHOWER_TYPES.map(t => (
           <button key={t.v} onClick={() => setFilterType(filterType === t.v ? '' : t.v)}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${filterType === t.v ? 'bg-blue-600 text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium ${filterType === t.v ? 'bg-blue-600 text-white' : 'bg-surface border border-line text-ink-soft'}`}>
             {t.l}
           </button>
         ))}
@@ -717,35 +717,35 @@ export function CatalogTab({
       )}
 
       {/* ── Items list ── */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loadError ? (
           <div className="p-8 text-center text-[13px]">
             <p className="text-red-600 mb-3">{loadError}</p>
-            <button onClick={load} className="text-[12px] font-medium px-3 py-1.5 bg-[#f0f0ec] rounded-lg hover:bg-[#e8e8e4] text-[#111110]">Повторить</button>
+            <button onClick={load} className="text-[12px] font-medium px-3 py-1.5 bg-line-soft rounded-lg hover:bg-[#e8e8e4] text-ink">Повторить</button>
           </div>
         ) : loading ? (
-          <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
+          <div className="p-8 text-center text-muted text-[13px]">Загрузка...</div>
         ) : filtered.length === 0 ? (
-          <div className="p-8 text-center text-[#9a9a95] text-[13px]">Нет позиций</div>
+          <div className="p-8 text-center text-muted text-[13px]">Нет позиций</div>
         ) : filtered.map(item => (
-          <div key={item.id} className={`border-b border-[#f0f0ec] last:border-0 ${!item.active ? 'opacity-50' : ''}`}>
+          <div key={item.id} className={`border-b border-line-soft last:border-0 ${!item.active ? 'opacity-50' : ''}`}>
 
             {/* Row header */}
             <div onClick={() => toggleExpand(item.id)}
-              className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-[#fafaf9] ${expandedId === item.id ? 'bg-blue-50 border-b border-blue-100' : ''}`}>
-              <svg className={`w-3.5 h-3.5 text-[#9a9a95] flex-shrink-0 transition-transform ${expandedId === item.id ? 'rotate-90' : ''}`}
+              className={`flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-subtle ${expandedId === item.id ? 'bg-blue-50 border-b border-blue-100' : ''}`}>
+              <svg className={`w-3.5 h-3.5 text-muted flex-shrink-0 transition-transform ${expandedId === item.id ? 'rotate-90' : ''}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
               </svg>
               {item.photo_url ? (
-                <img src={item.photo_url} alt="" className="w-9 h-9 object-cover rounded-lg border border-[#e4e4e0] flex-shrink-0" />
+                <img src={item.photo_url} alt="" className="w-9 h-9 object-cover rounded-lg border border-line flex-shrink-0" />
               ) : (
-                <div className="w-9 h-9 bg-[#f5f5f3] rounded-lg flex-shrink-0 border border-dashed border-[#e4e4e0]" />
+                <div className="w-9 h-9 bg-canvas rounded-lg flex-shrink-0 border border-dashed border-line" />
               )}
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="text-[13px] font-semibold text-[#111110]">{item.name}</span>
-                  {item.article && <span className="text-[11px] font-mono text-[#9a9a95]">{item.article}</span>}
+                  <span className="text-[13px] font-semibold text-ink">{item.name}</span>
+                  {item.article && <span className="text-[11px] font-mono text-muted">{item.article}</span>}
                   {item.url && (
                     <a href={item.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
                       className="text-[11px] text-blue-500 hover:text-blue-700 hover:underline flex items-center gap-0.5">
@@ -755,8 +755,8 @@ export function CatalogTab({
                       ссылка
                     </a>
                   )}
-                  <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded">{item.category}</span>
-                  <span className="text-[11px] text-[#9a9a95]">{item.unit}{item.whip_length ? ` ${item.whip_length}мм` : ''}</span>
+                  <span className="text-[10px] bg-line-soft text-ink-soft px-1.5 py-0.5 rounded">{item.category}</span>
+                  <span className="text-[11px] text-muted">{item.unit}{item.whip_length ? ` ${item.whip_length}мм` : ''}</span>
                 </div>
                 {(item.shower_types.length > 0 || item.hinge_type || item.track_type || item.item_role !== 'optional') && (
                   <div className="flex flex-wrap gap-1 mt-1">
@@ -782,10 +782,10 @@ export function CatalogTab({
                       <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded-full">доп.</span>
                     )}
                     {item.lead_days && (
-                      <span className="text-[10px] bg-[#f5f5f3] text-[#6b6b66] px-1.5 py-0.5 rounded-full">{item.lead_days} дн.</span>
+                      <span className="text-[10px] bg-canvas text-ink-soft px-1.5 py-0.5 rounded-full">{item.lead_days} дн.</span>
                     )}
                     {item.subcategory && (
-                      <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded-full">{item.subcategory}</span>
+                      <span className="text-[10px] bg-line-soft text-ink-soft px-1.5 py-0.5 rounded-full">{item.subcategory}</span>
                     )}
                     {item.stock_qty > 0 && (
                       <span className="text-[10px] bg-teal-50 text-teal-700 px-1.5 py-0.5 rounded-full font-medium">склад: {item.stock_qty}</span>
@@ -795,16 +795,16 @@ export function CatalogTab({
               </div>
               <div className="flex items-center gap-2" onClick={e => e.stopPropagation()}>
                 <button onClick={() => startEdit(item)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изм.</button>
-                <button onClick={() => duplicateItem(item)} className="text-[12px] text-[#9a9a95] hover:text-[#4b4b47]" title="Дублировать позицию">Дубль</button>
+                <button onClick={() => duplicateItem(item)} className="text-[12px] text-muted hover:text-ink-soft" title="Дублировать позицию">Дубль</button>
                 <button
                   onClick={() => deleteItem(item)}
                   disabled={deletingId === item.id}
-                  className={`text-[12px] ${deletingId === item.id ? 'text-[#c0c0bb] cursor-not-allowed' : 'text-[#9a9a95] hover:text-red-600'}`}
+                  className={`text-[12px] ${deletingId === item.id ? 'text-faint cursor-not-allowed' : 'text-muted hover:text-red-600'}`}
                   title="Удалить позицию"
                 >
                   {deletingId === item.id ? 'Удаление...' : 'Удал.'}
                 </button>
-                <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">
+                <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-muted hover:text-ink-soft">
                   {item.active ? 'Скрыть' : 'Показать'}
                 </button>
               </div>
@@ -812,32 +812,32 @@ export function CatalogTab({
 
             {/* Expanded: price matrix */}
             {expandedId === item.id && (
-              <div className="px-4 pb-5 pt-3 bg-[#fafaf9]">
+              <div className="px-4 pb-5 pt-3 bg-subtle">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[11px] font-bold uppercase tracking-widest text-[#8a8a85]">Цены: поставщик × цвет</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Цены: поставщик × цвет</p>
                   <div className="relative">
                     <button onClick={() => setSupDropOpen(v => !v)}
                       className="text-[12px] font-semibold text-blue-600 hover:text-blue-800 px-2 py-0.5 rounded hover:bg-blue-50">
                       + поставщик
                     </button>
                     {supDropOpen && (
-                      <div className="absolute right-0 top-full mt-1 bg-white border border-[#e4e4e0] rounded-xl shadow-xl z-30 p-1.5 min-w-[190px]">
+                      <div className="absolute right-0 top-full mt-1 bg-surface border border-line rounded-xl shadow-xl z-30 p-1.5 min-w-[190px]">
                         {availableForAdd.length === 0 && !newSupName && (
-                          <p className="px-3 py-1.5 text-[12px] text-[#9a9a95]">Все поставщики добавлены</p>
+                          <p className="px-3 py-1.5 text-[12px] text-muted">Все поставщики добавлены</p>
                         )}
                         {availableForAdd.map(s => (
                           <button key={s.id} onClick={() => { startPriceEdit(s.id, activeColors[0]?.id); setSupDropOpen(false) }}
-                            className="w-full text-left px-3 py-1.5 text-[13px] text-[#111110] hover:bg-[#f8f8f7] rounded-lg">
+                            className="w-full text-left px-3 py-1.5 text-[13px] text-ink hover:bg-canvas rounded-lg">
                             {s.name}
                           </button>
                         ))}
-                        <div className="border-t border-[#f0f0ec] mt-1 pt-1 px-1">
+                        <div className="border-t border-line-soft mt-1 pt-1 px-1">
                           <input value={newSupName} onChange={e => setNewSupName(e.target.value)}
                             onKeyDown={e => e.key === 'Enter' && addNewSupplier(item.id)}
                             placeholder="Новый поставщик" autoFocus
-                            className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-blue-400" />
+                            className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-blue-400" />
                           <button onClick={() => addNewSupplier(item.id)}
-                            className="mt-1 w-full bg-[#111110] text-white px-2 py-1.5 rounded-lg text-[12px] font-medium">
+                            className="mt-1 w-full bg-ink text-white px-2 py-1.5 rounded-lg text-[12px] font-medium">
                             + Добавить
                           </button>
                         </div>
@@ -847,16 +847,16 @@ export function CatalogTab({
                 </div>
 
                 {supplierIdsInMatrix.length === 0 ? (
-                  <p className="text-[12px] text-[#b0b0ab] italic">Нажмите «+ поставщик» для добавления цен</p>
+                  <p className="text-[12px] text-faint italic">Нажмите «+ поставщик» для добавления цен</p>
                 ) : (
                   <div className="overflow-x-auto">
                     <div style={{ minWidth: 130 + activeColors.length * 108 }}>
-                      <div className="flex bg-[#f2f2f0] border border-[#e4e4e0] rounded-t-lg border-b-0">
-                        <div className="px-3 py-2 text-[10px] font-bold text-[#6b6b66] uppercase border-r border-[#e4e4e0]" style={{ width: 130 }}>
+                      <div className="flex bg-line-soft border border-line rounded-t-lg border-b-0">
+                        <div className="px-3 py-2 text-[10px] font-semibold text-ink-soft uppercase border-r border-line" style={{ width: 130 }}>
                           Поставщик
                         </div>
                         {activeColors.map(c => (
-                          <div key={c.id} className="px-1 py-2 text-[9px] font-bold text-[#6b6b66] uppercase text-center leading-tight border-r border-[#e4e4e0] last:border-0"
+                          <div key={c.id} className="px-1 py-2 text-[9px] font-semibold text-ink-soft uppercase text-center leading-tight border-r border-line last:border-0"
                             style={{ width: 108 }}>
                             {c.name}
                           </div>
@@ -865,34 +865,34 @@ export function CatalogTab({
                       {supplierIdsInMatrix.map((supId, idx) => {
                         const sup = suppliers.find(s => s.id === supId)
                         return (
-                          <div key={supId} className={`flex border border-[#e4e4e0] border-t-0 ${idx === supplierIdsInMatrix.length - 1 ? 'rounded-b-lg' : ''} hover:bg-[#f8f8f7]`}>
-                            <div className="px-3 py-2 text-[13px] font-semibold text-[#111110] border-r border-[#e4e4e0] flex items-center" style={{ width: 130 }}>
+                          <div key={supId} className={`flex border border-line border-t-0 ${idx === supplierIdsInMatrix.length - 1 ? 'rounded-b-lg' : ''} hover:bg-canvas`}>
+                            <div className="px-3 py-2 text-[13px] font-semibold text-ink border-r border-line flex items-center" style={{ width: 130 }}>
                               {sup?.name ?? '?'}
                             </div>
                             {activeColors.map(color => {
                               const p    = prices.find(p => p.supplier_id === supId && p.color_id === color.id)
                               const isEd = editing?.supId === supId && editing?.colId === color.id
                               return (
-                                <div key={color.id} className="border-r border-[#e4e4e0] last:border-0" style={{ width: 108 }}>
+                                <div key={color.id} className="border-r border-line last:border-0" style={{ width: 108 }}>
                                   {isEd ? (
                                     <div className="flex flex-col gap-0.5 px-1.5 py-1.5 bg-blue-50 h-full">
                                       <div className="flex items-center gap-1">
-                                        <span className="text-[9px] text-[#9a9a95] w-8 flex-shrink-0">сайт</span>
+                                        <span className="text-[9px] text-muted w-8 flex-shrink-0">сайт</span>
                                         <input ref={editRef} type="number" value={editWebsite}
                                           onChange={e => setEditWebsite(e.target.value)}
                                           onBlur={commitPrice}
                                           onKeyDown={e => { if (e.key === 'Enter') commitPrice(); if (e.key === 'Escape') setEditing(null) }}
-                                          className="flex-1 w-0 border border-blue-300 rounded px-1 py-0.5 text-[11px] outline-none" />
+                                          className="flex-1 w-0 border border-blue-300 rounded px-1 py-0.5 text-[11px] tabular-nums outline-none" />
                                       </div>
                                       <div className="flex items-center gap-1">
-                                        <span className="text-[9px] text-[#9a9a95] w-8 flex-shrink-0">скид.</span>
+                                        <span className="text-[9px] text-muted w-8 flex-shrink-0">скид.</span>
                                         <input type="number" value={editDisc}
                                           onChange={e => setEditDisc(e.target.value)}
                                           onKeyDown={e => { if (e.key === 'Enter') commitPrice(); if (e.key === 'Escape') setEditing(null) }}
-                                          className="flex-1 w-0 border border-blue-300 rounded px-1 py-0.5 text-[11px] outline-none" />
-                                        <span className="text-[9px] text-[#9a9a95]">%</span>
+                                          className="flex-1 w-0 border border-blue-300 rounded px-1 py-0.5 text-[11px] tabular-nums outline-none" />
+                                        <span className="text-[9px] text-muted">%</span>
                                       </div>
-                                      <div className="text-[10px] font-mono font-bold text-emerald-700 text-center">
+                                      <div className="text-[10px] font-mono font-semibold tabular-nums text-emerald-700 text-center">
                                         = {Math.round((Number(editWebsite)||0)*(1-(Number(editDisc)||0)/100)).toLocaleString('ru-RU')} ₽
                                       </div>
                                     </div>
@@ -901,11 +901,11 @@ export function CatalogTab({
                                       className={`w-full h-full min-h-[52px] px-1 py-1.5 text-center hover:bg-blue-50 transition-colors flex flex-col items-center justify-center gap-0.5 ${p?.cost_price ? '' : 'opacity-40 hover:opacity-100'}`}>
                                       {p?.cost_price ? (
                                         <>
-                                          <span className="text-[12px] font-mono font-semibold text-[#111110]">{p.cost_price.toLocaleString('ru-RU')}</span>
-                                          {p.discount_percent > 0 && <span className="text-[9px] text-[#9a9a95]">−{p.discount_percent}%</span>}
-                                          {p.vat_included && <span className="text-[8px] text-emerald-600 font-bold">НДС</span>}
+                                          <span className="text-[12px] font-mono font-semibold tabular-nums text-ink">{p.cost_price.toLocaleString('ru-RU')}</span>
+                                          {p.discount_percent > 0 && <span className="text-[9px] text-muted">−{p.discount_percent}%</span>}
+                                          {p.vat_included && <span className="text-[8px] text-emerald-600 font-semibold">НДС</span>}
                                         </>
-                                      ) : <span className="text-[13px] text-[#d4d4d0]">—</span>}
+                                      ) : <span className="text-[13px] text-faint">—</span>}
                                     </button>
                                   )}
                                 </div>
@@ -923,7 +923,7 @@ export function CatalogTab({
         ))}
       </div>
 
-      <style>{`.lbl{display:block;font-size:11px;font-weight:700;color:#8a8a85;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.inp{width:100%;background:white;border:1px solid #e4e4e0;border-radius:8px;padding:8px 12px;font-size:13px;color:#111110;outline:none}.inp:focus{border-color:#111110}`}</style>
+      <style>{`.lbl{display:block;font-size:11px;font-weight:600;color:var(--color-muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px}.inp{width:100%;background:var(--color-surface);border:1px solid var(--color-line);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--color-ink);outline:none}.inp:focus{border-color:var(--color-ink)}`}</style>
     </div>
   )
 }

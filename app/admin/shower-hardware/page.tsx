@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { CatalogTab, type Color, type Supplier } from './CatalogTab'
 import { BudgetKitTab } from './BudgetKitTab'
 import { StandardFilterTab } from './StandardFilterTab'
+import { PageHeader, SegmentedTabs } from '@/components/ds'
 
 // ── Types ────────────────────────────────────────────────────────
 type BudgetModel = {
@@ -62,8 +63,8 @@ function calcCostPrice(website: number, discount: number) {
 function Input({ label, ...props }: { label: string } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">{label}</label>
-      <input className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" {...props} />
+      <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">{label}</label>
+      <input className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" {...props} />
     </div>
   )
 }
@@ -71,8 +72,8 @@ function Input({ label, ...props }: { label: string } & React.InputHTMLAttribute
 function Select({ label, children, ...props }: { label: string } & React.SelectHTMLAttributes<HTMLSelectElement> & { children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">{label}</label>
-      <select className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" {...props}>{children}</select>
+      <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">{label}</label>
+      <select className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" {...props}>{children}</select>
     </div>
   )
 }
@@ -140,8 +141,8 @@ function BudgetTab() {
   return (
     <div className="space-y-6">
       {/* Форма */}
-      <div className={`rounded-xl border p-5 ${editId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-4">
+      <div className={`rounded-xl border p-5 ${editId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-4">
           {editId !== null ? `Редактировать #${editId}` : 'Добавить модель'}
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -157,13 +158,13 @@ function BudgetTab() {
           <Input label="Цена на сайте (₽)" type="number" value={form.website_price} onChange={e => setF('website_price', Number(e.target.value))} />
           <Input label="Скидка (%)" type="number" value={form.discount_percent} onChange={e => setF('discount_percent', Number(e.target.value))} />
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Закупочная цена</label>
-            <div className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono font-semibold text-emerald-700 bg-emerald-50">
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Закупочная цена</label>
+            <div className="border border-line rounded-lg px-3 py-2 text-[13px] font-mono font-semibold text-emerald-700 bg-emerald-50 tabular-nums">
               {fmt(form.cost_price)}
             </div>
           </div>
           <div className="flex items-end pb-2">
-            <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#4b4b47]">
+            <label className="flex items-center gap-2 cursor-pointer text-[13px] text-ink-soft">
               <input type="checkbox" checked={form.has_vat} onChange={e => setF('has_vat', e.target.checked)} className="w-4 h-4 rounded" />
               НДС включён
             </label>
@@ -172,8 +173,8 @@ function BudgetTab() {
             <Input label="Ссылка на фото" value={form.photo_url} onChange={e => setF('photo_url', e.target.value)} placeholder="https://..." />
           </div>
           <div className="col-span-4">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Состав комплекта</label>
-            <textarea className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] h-20 resize-none"
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Состав комплекта</label>
+            <textarea className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink h-20 resize-none"
               value={form.kit_composition} onChange={e => setF('kit_composition', e.target.value)}
               placeholder="Перечислите, что входит в комплект..." />
           </div>
@@ -183,12 +184,12 @@ function BudgetTab() {
         </div>
         <div className="flex gap-2 mt-4">
           <button onClick={save} disabled={saving || !form.name}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
             {saving ? 'Сохранение...' : editId !== null ? 'Сохранить' : 'Добавить'}
           </button>
           {editId !== null && (
             <button onClick={() => { setEditId(null); setForm(EMPTY_BUDGET) }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4]">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4]">
               Отмена
             </button>
           )}
@@ -198,53 +199,53 @@ function BudgetTab() {
       {/* Фильтры */}
       <div className="flex gap-2">
         <button onClick={() => setFilterType('all')}
-          className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${filterType === 'all' ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+          className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${filterType === 'all' ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
           Все ({items.length})
         </button>
         {SHOWER_TYPES.filter(t => t.value !== 'universal').map(t => (
           <button key={t.value} onClick={() => setFilterType(t.value)}
-            className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${filterType === t.value ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+            className={`px-3 py-1 rounded-full text-[12px] font-medium transition-colors ${filterType === t.value ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
             {t.label} ({items.filter(i => i.shower_type === t.value).length})
           </button>
         ))}
       </div>
 
       {/* Таблица */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        {loading ? <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
-          : filtered.length === 0 ? <div className="p-8 text-center text-[#9a9a95] text-[13px]">Нет позиций</div>
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
+        {loading ? <div className="p-8 text-center text-muted text-[13px]">Загрузка...</div>
+          : filtered.length === 0 ? <div className="p-8 text-center text-muted text-[13px]">Нет позиций</div>
           : (
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="border-b border-[#f0f0ec]">
+                <tr className="border-b border-line-soft">
                   {['Модель','Тип','Поставщик','Цвет','Сайт','Скидка','Закупка','НДС',''].map(h => (
-                    <th key={h} className="text-left px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">{h}</th>
+                    <th key={h} className="text-left px-3 py-2 text-[11px] font-semibold text-muted uppercase tracking-widest">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filtered.map(item => (
-                  <tr key={item.id} className={`border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9] ${!item.active ? 'opacity-40' : ''} ${editId === item.id ? 'bg-blue-50' : ''}`}>
-                    <td className="px-3 py-2.5 font-medium text-[#111110]">
+                  <tr key={item.id} className={`border-b border-line-soft last:border-0 hover:bg-subtle ${!item.active ? 'opacity-40' : ''} ${editId === item.id ? 'bg-blue-50' : ''}`}>
+                    <td className="px-3 py-2.5 font-medium text-ink">
                       <div>{item.name}</div>
-                      {item.kit_composition && <div className="text-[10px] text-[#9a9a95] truncate max-w-[160px]">{item.kit_composition}</div>}
+                      {item.kit_composition && <div className="text-[10px] text-muted truncate max-w-[160px]">{item.kit_composition}</div>}
                     </td>
                     <td className="px-3 py-2.5">
                       <span className={`px-2 py-0.5 rounded text-[11px] font-medium ${
                         item.shower_type === 'swing' ? 'bg-purple-50 text-purple-700' :
-                        item.shower_type === 'sliding' ? 'bg-blue-50 text-blue-700' : 'bg-[#f0f0ec] text-[#6b6b66]'
+                        item.shower_type === 'sliding' ? 'bg-blue-50 text-blue-700' : 'bg-line-soft text-ink-soft'
                       }`}>{SHOWER_TYPES.find(t => t.value === item.shower_type)?.label}</span>
                     </td>
-                    <td className="px-3 py-2.5 text-[#6b6b66]">{item.supplier || '—'}</td>
-                    <td className="px-3 py-2.5 text-[#6b6b66]">{item.color || '—'}</td>
-                    <td className="px-3 py-2.5 font-mono">{item.website_price > 0 ? fmt(item.website_price) : '—'}</td>
-                    <td className="px-3 py-2.5 text-[#6b6b66]">{item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}</td>
-                    <td className="px-3 py-2.5 font-mono font-semibold text-emerald-700">{item.cost_price > 0 ? fmt(item.cost_price) : '—'}</td>
+                    <td className="px-3 py-2.5 text-ink-soft">{item.supplier || '—'}</td>
+                    <td className="px-3 py-2.5 text-ink-soft">{item.color || '—'}</td>
+                    <td className="px-3 py-2.5 font-mono tabular-nums">{item.website_price > 0 ? fmt(item.website_price) : '—'}</td>
+                    <td className="px-3 py-2.5 text-ink-soft tabular-nums">{item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}</td>
+                    <td className="px-3 py-2.5 font-mono font-semibold text-emerald-700 tabular-nums">{item.cost_price > 0 ? fmt(item.cost_price) : '—'}</td>
                     <td className="px-3 py-2.5 text-center">{item.has_vat ? <span className="text-emerald-600 text-[11px] font-semibold">ДА</span> : '—'}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex gap-2 justify-end">
                         <button onClick={() => startEdit(item)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изм.</button>
-                        <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">
+                        <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-muted hover:text-ink-soft">
                           {item.active ? 'Скрыть' : 'Показать'}
                         </button>
                       </div>
@@ -337,8 +338,8 @@ function StandardTab() {
   return (
     <div className="space-y-6">
       {/* Форма */}
-      <div className={`rounded-xl border p-5 ${editId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-4">
+      <div className={`rounded-xl border p-5 ${editId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-muted mb-4">
           {editId !== null ? `Редактировать #${editId}` : 'Добавить позицию'}
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -360,8 +361,8 @@ function StandardTab() {
           <Input label="Цена на сайте (₽)" type="number" value={form.website_price} onChange={e => setF('website_price', Number(e.target.value))} />
           <Input label="Скидка (%)" type="number" value={form.discount_percent} onChange={e => setF('discount_percent', Number(e.target.value))} />
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Закупочная цена</label>
-            <div className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono font-semibold text-emerald-700 bg-emerald-50">
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Закупочная цена</label>
+            <div className="border border-line rounded-lg px-3 py-2 text-[13px] font-mono font-semibold text-emerald-700 bg-emerald-50 tabular-nums">
               {fmt(form.cost_price)}
             </div>
           </div>
@@ -369,7 +370,7 @@ function StandardTab() {
             {UNITS.map(u => <option key={u}>{u}</option>)}
           </Select>
           <div className="flex items-end pb-2">
-            <label className="flex items-center gap-2 cursor-pointer text-[13px] text-[#4b4b47]">
+            <label className="flex items-center gap-2 cursor-pointer text-[13px] text-ink-soft">
               <input type="checkbox" checked={form.has_vat} onChange={e => setF('has_vat', e.target.checked)} className="w-4 h-4 rounded" />
               НДС включён
             </label>
@@ -378,19 +379,19 @@ function StandardTab() {
             <Input label="Ссылка на фото" value={form.photo_url} onChange={e => setF('photo_url', e.target.value)} placeholder="https://..." />
           </div>
           <div className="col-span-4">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Описание</label>
-            <textarea className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] h-16 resize-none"
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Описание</label>
+            <textarea className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink h-16 resize-none"
               value={form.description} onChange={e => setF('description', e.target.value)} placeholder="Описание, характеристики..." />
           </div>
         </div>
         <div className="flex gap-2 mt-4">
           <button onClick={save} disabled={saving || !form.name}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
             {saving ? 'Сохранение...' : editId !== null ? 'Сохранить' : 'Добавить'}
           </button>
           {editId !== null && (
             <button onClick={() => { setEditId(null); setForm(EMPTY_STD); setColorsInput('') }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4]">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4]">
               Отмена
             </button>
           )}
@@ -400,23 +401,23 @@ function StandardTab() {
       {/* Фильтры */}
       <div className="flex flex-wrap gap-2">
         <div className="flex gap-1 flex-wrap">
-          <span className="text-[11px] text-[#9a9a95] self-center mr-1">Тип:</span>
+          <span className="text-[11px] text-muted self-center mr-1">Тип:</span>
           {[{ value: 'all', label: 'Все' }, ...SHOWER_TYPES].map(t => (
             <button key={t.value} onClick={() => setFilterType(t.value)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterType === t.value ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterType === t.value ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
               {t.label}
             </button>
           ))}
         </div>
         <div className="flex gap-1 flex-wrap">
-          <span className="text-[11px] text-[#9a9a95] self-center mr-1">Кат.:</span>
+          <span className="text-[11px] text-muted self-center mr-1">Кат.:</span>
           <button onClick={() => setFilterCat('all')}
-            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterCat === 'all' ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterCat === 'all' ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
             Все
           </button>
           {CATEGORIES.map(c => (
             <button key={c.value} onClick={() => setFilterCat(c.value)}
-              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterCat === c.value ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66]'}`}>
+              className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${filterCat === c.value ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft'}`}>
               {c.label} ({items.filter(i => i.category === c.value).length})
             </button>
           ))}
@@ -425,58 +426,58 @@ function StandardTab() {
 
       {/* Список по категориям */}
       {loading ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
+        <div className="bg-surface border border-line rounded-xl p-8 text-center text-muted text-[13px]">Загрузка...</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-8 text-center text-[#9a9a95] text-[13px]">Нет позиций</div>
+        <div className="bg-surface border border-line rounded-xl p-8 text-center text-muted text-[13px]">Нет позиций</div>
       ) : (
         <div className="space-y-4">
           {Object.entries(grouped).map(([cat, catItems]) => (
-            <div key={cat} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-              <div className="px-4 py-2.5 bg-[#fafaf9] border-b border-[#e4e4e0] flex items-center justify-between">
-                <p className="text-[12px] font-semibold text-[#4b4b47] uppercase tracking-wide">
+            <div key={cat} className="bg-surface border border-line rounded-xl overflow-hidden">
+              <div className="px-4 py-2.5 bg-subtle border-b border-line flex items-center justify-between">
+                <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wide">
                   {CATEGORIES.find(c => c.value === cat)?.label}
                 </p>
-                <span className="text-[11px] text-[#9a9a95]">{catItems.length} поз.</span>
+                <span className="text-[11px] text-muted">{catItems.length} поз.</span>
               </div>
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="border-b border-[#f5f5f3]">
+                  <tr className="border-b border-line-soft">
                     {['Название','Тип','Поставщик','Цвета','Ед.','Сайт','Скидка','Закупка','НДС',''].map(h => (
-                      <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">{h}</th>
+                      <th key={h} className="text-left px-3 py-2 text-[10px] font-semibold text-muted uppercase tracking-widest">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {catItems.map(item => (
-                    <tr key={item.id} className={`border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9] ${!item.active ? 'opacity-40' : ''} ${editId === item.id ? 'bg-blue-50' : ''}`}>
-                      <td className="px-3 py-2.5 font-medium text-[#111110]">
+                    <tr key={item.id} className={`border-b border-line-soft last:border-0 hover:bg-subtle ${!item.active ? 'opacity-40' : ''} ${editId === item.id ? 'bg-blue-50' : ''}`}>
+                      <td className="px-3 py-2.5 font-medium text-ink">
                         <div>{item.name}</div>
-                        {item.description && <div className="text-[10px] text-[#9a9a95] truncate max-w-[160px]">{item.description}</div>}
+                        {item.description && <div className="text-[10px] text-muted truncate max-w-[160px]">{item.description}</div>}
                       </td>
                       <td className="px-3 py-2.5">
                         <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${
                           item.shower_type === 'swing' ? 'bg-purple-50 text-purple-700' :
                           item.shower_type === 'sliding' ? 'bg-blue-50 text-blue-700' :
-                          item.shower_type === 'stationary' ? 'bg-[#f0f0ec] text-[#6b6b66]' : 'bg-gray-100 text-gray-500'
+                          item.shower_type === 'stationary' ? 'bg-line-soft text-ink-soft' : 'bg-gray-100 text-gray-500'
                         }`}>{SHOWER_TYPES.find(t => t.value === item.shower_type)?.label}</span>
                       </td>
-                      <td className="px-3 py-2.5 text-[#6b6b66] text-[12px]">{item.supplier || '—'}</td>
+                      <td className="px-3 py-2.5 text-ink-soft text-[12px]">{item.supplier || '—'}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex flex-wrap gap-0.5">
                           {item.colors.length > 0 ? item.colors.map(c => (
-                            <span key={c} className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded">{c}</span>
-                          )) : <span className="text-[#c4c4be]">—</span>}
+                            <span key={c} className="text-[10px] bg-line-soft text-ink-soft px-1.5 py-0.5 rounded">{c}</span>
+                          )) : <span className="text-faint">—</span>}
                         </div>
                       </td>
-                      <td className="px-3 py-2.5 text-[#6b6b66]">{item.unit}</td>
-                      <td className="px-3 py-2.5 font-mono text-[12px]">{item.website_price > 0 ? fmt(item.website_price) : '—'}</td>
-                      <td className="px-3 py-2.5 text-[#6b6b66] text-[12px]">{item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}</td>
-                      <td className="px-3 py-2.5 font-mono font-semibold text-emerald-700 text-[12px]">{item.cost_price > 0 ? fmt(item.cost_price) : '—'}</td>
+                      <td className="px-3 py-2.5 text-ink-soft">{item.unit}</td>
+                      <td className="px-3 py-2.5 font-mono text-[12px] tabular-nums">{item.website_price > 0 ? fmt(item.website_price) : '—'}</td>
+                      <td className="px-3 py-2.5 text-ink-soft text-[12px] tabular-nums">{item.discount_percent > 0 ? `${item.discount_percent}%` : '—'}</td>
+                      <td className="px-3 py-2.5 font-mono font-semibold text-emerald-700 text-[12px] tabular-nums">{item.cost_price > 0 ? fmt(item.cost_price) : '—'}</td>
                       <td className="px-3 py-2.5 text-center">{item.has_vat ? <span className="text-emerald-600 text-[10px] font-semibold">ДА</span> : '—'}</td>
                       <td className="px-3 py-2.5">
                         <div className="flex gap-2 justify-end">
                           <button onClick={() => startEdit(item)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изм.</button>
-                          <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">
+                          <button onClick={() => toggleActive(item.id, item.active)} className="text-[12px] text-muted hover:text-ink-soft">
                             {item.active ? 'Скрыть' : 'Показать'}
                           </button>
                         </div>
@@ -514,26 +515,21 @@ export default function ShowerHardwarePage() {
   useEffect(() => { loadShared() }, [])
 
   const TABS = [
-    { key: 'catalog',  label: 'Справочник' },
-    { key: 'budget',   label: 'Бюджетные душевые' },
-    { key: 'standard', label: 'Стандартные душевые' },
+    { value: 'catalog',  label: 'Справочник' },
+    { value: 'budget',   label: 'Бюджетные душевые' },
+    { value: 'standard', label: 'Стандартные душевые' },
   ] as const
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Фурнитура душевые</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Справочник фурнитуры, бюджетные комплекты M1–M12, стандартные позиции</p>
-      </div>
+      <PageHeader
+        title="Фурнитура душевые"
+        subtitle="Справочник фурнитуры, бюджетные комплекты M1–M12, стандартные позиции"
+      />
 
       {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-[#ececea] rounded-xl w-fit mb-6">
-        {TABS.map(t => (
-          <button key={t.key} onClick={() => setTab(t.key)}
-            className={`px-5 py-2 rounded-lg text-[13px] font-medium transition-all ${tab === t.key ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66] hover:text-[#111110]'}`}>
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-6">
+        <SegmentedTabs tabs={TABS} value={tab} onChange={setTab} />
       </div>
 
       {tab === 'catalog'  && <CatalogTab colors={colors} suppliers={suppliers} onRefreshSuppliers={loadShared} />}

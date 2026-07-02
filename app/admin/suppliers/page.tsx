@@ -176,12 +176,12 @@ export default function SuppliersPage() {
     return c
   }, [suppliers])
 
-  const inp = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white'
+  const inp = 'w-full border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink bg-surface'
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
+    <div className="min-h-screen bg-canvas">
       {toast && (
-        <div className="fixed top-4 right-4 z-50 bg-[#111110] text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
+        <div className="fixed top-4 right-4 z-50 bg-ink text-white text-[12px] px-4 py-2.5 rounded-xl shadow-lg">
           {toast}
         </div>
       )}
@@ -191,11 +191,11 @@ export default function SuppliersPage() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[18px] font-semibold text-[#111110]">Поставщики</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Централизованная база снабжения MGlass</p>
+            <h1 className="text-[18px] font-semibold text-ink">Поставщики</h1>
+            <p className="text-[12px] text-muted mt-0.5">Централизованная база снабжения MGlass</p>
           </div>
           <button onClick={openCreate}
-            className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28] transition-colors">
+            className="px-4 py-2 bg-ink text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28] transition-colors">
             + Добавить поставщика
           </button>
         </div>
@@ -211,7 +211,7 @@ export default function SuppliersPage() {
           ] as const).map(f => (
             <button key={f.key}
               onClick={() => setFilterStatus(f.key)}
-              className={`text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f.key ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`}>
+              className={`text-[11px] font-medium px-3 py-1.5 rounded-full border transition-colors ${filterStatus === f.key ? 'bg-ink text-white border-ink' : 'bg-surface text-ink-soft border-line hover:border-ink'}`}>
               {f.label}
             </button>
           ))}
@@ -222,11 +222,11 @@ export default function SuppliersPage() {
           <input
             value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по названию, телефону, городу, категории..."
-            className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white"
+            className="flex-1 border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink bg-surface"
           />
           <select
             value={filterType} onChange={e => setFilterType(e.target.value)}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-white">
+            className="border border-line rounded-lg px-3 py-2 text-[12px] outline-none focus:border-ink bg-surface">
             <option value="all">Все типы</option>
             {SUPPLIER_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
@@ -234,10 +234,10 @@ export default function SuppliersPage() {
 
         {/* List */}
         {loading ? (
-          <p className="text-center py-12 text-[13px] text-[#9a9a95]">Загрузка...</p>
+          <p className="text-center py-12 text-[13px] text-muted">Загрузка...</p>
         ) : visible.length === 0 ? (
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-            <p className="text-[13px] text-[#9a9a95]">Поставщики не найдены</p>
+          <div className="bg-surface border border-line rounded-xl p-12 text-center">
+            <p className="text-[13px] text-muted">Поставщики не найдены</p>
           </div>
         ) : (
           <div className="space-y-2">
@@ -247,11 +247,11 @@ export default function SuppliersPage() {
               return (
                 <div key={s.id}
                   onClick={() => openDetail(s)}
-                  className="bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 cursor-pointer hover:border-[#111110] transition-colors group">
+                  className="bg-surface border border-line rounded-xl px-5 py-4 cursor-pointer hover:border-ink transition-colors group">
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <p className="text-[14px] font-semibold text-[#111110]">{s.name}</p>
+                        <p className="text-[14px] font-semibold text-ink">{s.name}</p>
                         <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sm.cls}`}>{sm.label}</span>
                         <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-100">{supplierTypeLabel(s.supplier_type)}</span>
                         {s.priority === 1 && (
@@ -262,21 +262,21 @@ export default function SuppliersPage() {
                         )}
                       </div>
                       <div className="flex gap-4 flex-wrap">
-                        {s.city     && <span className="text-[11px] text-[#9a9a95]">📍 {s.city}</span>}
-                        {s.contact  && <span className="text-[11px] text-[#9a9a95]">👤 {s.contact}</span>}
-                        {s.phone    && <span className="text-[11px] text-[#9a9a95]">📞 {s.phone}</span>}
-                        {s.telegram && <span className="text-[11px] text-[#9a9a95]">✈️ {s.telegram}</span>}
-                        {s.work_hours && <span className="text-[11px] text-[#9a9a95]">🕐 {s.work_hours}</span>}
-                        {s.lead_time_days && <span className="text-[11px] text-[#9a9a95]">⏱ {s.lead_time_days} дн.</span>}
+                        {s.city     && <span className="text-[11px] text-muted">📍 {s.city}</span>}
+                        {s.contact  && <span className="text-[11px] text-muted">👤 {s.contact}</span>}
+                        {s.phone    && <span className="text-[11px] text-muted">📞 {s.phone}</span>}
+                        {s.telegram && <span className="text-[11px] text-muted">✈️ {s.telegram}</span>}
+                        {s.work_hours && <span className="text-[11px] text-muted">🕐 {s.work_hours}</span>}
+                        {s.lead_time_days && <span className="text-[11px] text-muted tabular-nums">⏱ {s.lead_time_days} дн.</span>}
                       </div>
                       {s.materials && (
-                        <p className="text-[11px] text-[#6b6b66] mt-1">{s.materials}</p>
+                        <p className="text-[11px] text-ink-soft mt-1">{s.materials}</p>
                       )}
                     </div>
                     <div className="flex gap-2 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                       <button
                         onClick={e => openEdit(s, e)}
-                        className="px-3 py-1.5 text-[11px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                        className="px-3 py-1.5 text-[11px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                         Изменить
                       </button>
                     </div>
@@ -291,12 +291,12 @@ export default function SuppliersPage() {
       {/* Create / Edit modal */}
       {(modal === 'create' || modal === 'edit') && (
         <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl p-6 space-y-4">
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-2xl p-6 space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-[16px] font-semibold text-[#111110]">
+              <h2 className="text-[16px] font-semibold text-ink">
                 {modal === 'create' ? '+ Новый поставщик' : 'Редактировать поставщика'}
               </h2>
-              <button onClick={() => setModal('none')} className="text-[#9a9a95] hover:text-[#111110] text-xl">×</button>
+              <button onClick={() => setModal('none')} className="text-muted hover:text-ink text-xl">×</button>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
@@ -379,7 +379,7 @@ export default function SuppliersPage() {
                 </select>
               </div>
               <div className="flex flex-col gap-2 pt-5">
-                <label className="flex items-center gap-2 text-[12px] text-[#4b4b47] cursor-pointer">
+                <label className="flex items-center gap-2 text-[12px] text-ink-soft cursor-pointer">
                   <input type="checkbox" checked={form.has_vat} onChange={e => setForm(f => ({...f, has_vat: e.target.checked}))} className="rounded" />
                   Работает с НДС
                 </label>
@@ -394,11 +394,11 @@ export default function SuppliersPage() {
 
             <div className="flex gap-2 pt-1">
               <button onClick={save} disabled={saving}
-                className="flex-1 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
+                className="flex-1 py-2.5 bg-ink text-white text-[13px] font-semibold rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
                 {saving ? 'Сохраняю...' : modal === 'create' ? 'Добавить поставщика' : 'Сохранить изменения'}
               </button>
               <button onClick={() => setModal('none')}
-                className="px-4 py-2.5 border border-[#e4e4e0] text-[13px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+                className="px-4 py-2.5 border border-line text-[13px] text-ink-soft rounded-lg hover:bg-canvas">
                 Отмена
               </button>
             </div>
@@ -409,10 +409,10 @@ export default function SuppliersPage() {
       {/* Detail modal */}
       {modal === 'detail' && selected && (
         <div className="fixed inset-0 z-40 flex items-start justify-center bg-black/40 overflow-y-auto py-8 px-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-lg p-6 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <h2 className="text-[16px] font-semibold text-[#111110]">{selected.name}</h2>
+                <h2 className="text-[16px] font-semibold text-ink">{selected.name}</h2>
                 <div className="flex gap-2 mt-1 flex-wrap">
                   <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${STATUS_META[selected.status]?.cls ?? ''}`}>
                     {STATUS_META[selected.status]?.label}
@@ -423,7 +423,7 @@ export default function SuppliersPage() {
                   )}
                 </div>
               </div>
-              <button onClick={() => setModal('none')} className="text-[#9a9a95] hover:text-[#111110] text-xl flex-shrink-0">×</button>
+              <button onClick={() => setModal('none')} className="text-muted hover:text-ink text-xl flex-shrink-0">×</button>
             </div>
 
             <div className="space-y-2 text-[12px]">
@@ -441,12 +441,12 @@ export default function SuppliersPage() {
             </div>
 
             <div>
-              <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide mb-2">Изменить статус</p>
+              <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-2">Изменить статус</p>
               <div className="flex gap-2 flex-wrap">
                 {(Object.keys(STATUS_META) as SupplierStatus[]).map(st => (
                   <button key={st}
                     onClick={e => { toggleStatus(selected, st, e); setSelected({ ...selected, status: st }); }}
-                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${selected.status === st ? STATUS_META[st].cls : 'bg-white text-[#9a9a95] border-[#e4e4e0] hover:border-[#111110]'}`}>
+                    className={`text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${selected.status === st ? STATUS_META[st].cls : 'bg-surface text-muted border-line hover:border-ink'}`}>
                     {STATUS_META[st].label}
                   </button>
                 ))}
@@ -455,11 +455,11 @@ export default function SuppliersPage() {
 
             <div className="flex gap-2 pt-1">
               <button onClick={() => openEdit(selected)}
-                className="flex-1 py-2 bg-[#111110] text-white text-[12px] font-semibold rounded-lg hover:bg-[#2a2a28]">
+                className="flex-1 py-2 bg-ink text-white text-[12px] font-semibold rounded-lg hover:bg-[#2a2a28]">
                 Редактировать
               </button>
               <button onClick={() => setModal('none')}
-                className="px-4 py-2 border border-[#e4e4e0] text-[12px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+                className="px-4 py-2 border border-line text-[12px] text-ink-soft rounded-lg hover:bg-canvas">
                 Закрыть
               </button>
             </div>
@@ -471,14 +471,14 @@ export default function SuppliersPage() {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">{children}</p>
+  return <p className="text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">{children}</p>
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-3">
-      <span className="text-[#9a9a95] w-28 flex-shrink-0">{label}</span>
-      <span className="text-[#111110] break-all">{value}</span>
+      <span className="text-muted w-28 flex-shrink-0">{label}</span>
+      <span className="text-ink break-all">{value}</span>
     </div>
   )
 }

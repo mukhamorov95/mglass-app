@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PageHeader } from '@/components/ds'
 
 type FacetRow = {
   id: number
@@ -88,11 +89,11 @@ export default function FacetPage() {
   if (!tableExists) {
     return (
       <div className="max-w-3xl mx-auto px-6 py-8">
-        <h1 className="text-[20px] font-semibold text-[#111110] mb-4">Фацет — прайс</h1>
+        <h1 className="text-[20px] font-semibold text-ink mb-4">Фацет — прайс</h1>
         <div className="bg-amber-50 border border-amber-200 rounded-xl p-6">
           <p className="text-[13px] font-semibold text-amber-800 mb-2">Таблица facet_prices не создана</p>
           <p className="text-[12px] text-amber-700 mb-3">Выполни SQL-миграцию в Supabase SQL Editor:</p>
-          <pre className="text-[11px] bg-white border border-amber-200 rounded-lg p-3 overflow-x-auto text-amber-900 whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS facet_prices (
+          <pre className="text-[11px] bg-surface border border-amber-200 rounded-lg p-3 overflow-x-auto text-amber-900 whitespace-pre-wrap">{`CREATE TABLE IF NOT EXISTS facet_prices (
   id             serial PRIMARY KEY,
   type_mm        integer NOT NULL,
   cost_price     numeric(10,2) NOT NULL DEFAULT 0,
@@ -113,65 +114,62 @@ INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUE
 
   return (
     <div className="max-w-[760px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Фацет — прайс</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Цены на фацетную обработку торца (₽ за погонный метр периметра)</p>
-      </div>
+      <PageHeader title="Фацет — прайс" subtitle="Цены на фацетную обработку торца (₽ за погонный метр периметра)" />
 
       {/* Пояснение */}
-      <div className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-xl px-4 py-3 mb-6 text-[12px] text-[#6b6b66] space-y-1">
-        <p><span className="font-semibold text-[#111110]">Расчёт фацета</span> = периметр детали (м) × кол-во штук × цена ₽/м.п.</p>
+      <div className="bg-canvas border border-line rounded-xl px-4 py-3 mb-6 text-[12px] text-ink-soft space-y-1">
+        <p><span className="font-semibold text-ink">Расчёт фацета</span> = периметр детали (м) × кол-во штук × цена ₽/м.п.</p>
         <p>Себестоимость = себестоимость подрядчика + транспортные расходы. Продажная цена — цена клиенту.</p>
       </div>
 
       {error && <p className="text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg mb-4">{error}</p>}
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+          <div className="p-8 text-center text-[13px] text-muted">Загрузка...</div>
         ) : rows.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">
+          <div className="p-8 text-center text-[13px] text-muted">
             Нет записей. Выполни SQL-миграцию выше для создания таблицы и базовых записей.
           </div>
         ) : (
           <table className="w-full text-[13px]">
-            <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="text-left px-4 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Тип</th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+                <th className="text-left px-4 py-3 text-[11px] font-semibold text-muted uppercase tracking-widest w-24">Тип</th>
+                <th className="text-center px-3 py-3 text-[11px] font-semibold text-muted uppercase tracking-widest">
                   Себест. подрядчика<br/>
-                  <span className="text-[9px] normal-case font-normal">₽/м.п.</span>
+                  <span className="text-[11px] normal-case font-normal">₽/м.п.</span>
                 </th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+                <th className="text-center px-3 py-3 text-[11px] font-semibold text-muted uppercase tracking-widest">
                   Транспорт<br/>
-                  <span className="text-[9px] normal-case font-normal">₽/м.п.</span>
+                  <span className="text-[11px] normal-case font-normal">₽/м.п.</span>
                 </th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-emerald-700 uppercase tracking-widest">
+                <th className="text-center px-3 py-3 text-[11px] font-semibold text-emerald-700 uppercase tracking-widest">
                   Цена клиенту<br/>
-                  <span className="text-[9px] normal-case font-normal">₽/м.п.</span>
+                  <span className="text-[11px] normal-case font-normal">₽/м.п.</span>
                 </th>
-                <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Итого себ.</th>
+                <th className="text-center px-3 py-3 text-[11px] font-semibold text-muted uppercase tracking-widest w-24">Итого себ.</th>
                 <th className="w-24 px-3 py-3"></th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f8f8f7]">
+            <tbody className="divide-y divide-canvas">
               {rows.map(row => {
                 const dirty = !!(edits[row.id] && Object.keys(edits[row.id]).length > 0)
                 const costTotal = Number(getVal(row, 'cost_price')) + Number(getVal(row, 'transport_cost'))
                 return (
-                  <tr key={row.id} className={`transition-colors ${dirty ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}`}>
+                  <tr key={row.id} className={`transition-colors ${dirty ? 'bg-blue-50' : 'hover:bg-subtle'}`}>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 text-purple-700 text-[13px] font-bold border border-purple-200">
+                        <span className="inline-flex items-center justify-center w-10 h-10 rounded-lg bg-purple-50 text-purple-700 text-[13px] font-semibold border border-purple-200 tabular-nums">
                           {row.type_mm}
                         </span>
-                        <span className="text-[12px] text-[#6b6b66]">мм</span>
+                        <span className="text-[12px] text-ink-soft">мм</span>
                       </div>
                     </td>
                     <td className="px-3 py-3 text-center">
                       <input
                         type="number" min="0" step="0.5"
-                        className={`w-24 text-center bg-white border rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110] ${dirty && 'cost_price' in (edits[row.id] ?? {}) ? 'border-blue-400' : 'border-[#e4e4e0]'}`}
+                        className={`w-24 text-center bg-surface border rounded-lg px-2 py-1.5 text-[13px] font-mono tabular-nums outline-none focus:border-ink ${dirty && 'cost_price' in (edits[row.id] ?? {}) ? 'border-blue-400' : 'border-line'}`}
                         value={getVal(row, 'cost_price') as number}
                         onChange={e => setEdit(row.id, 'cost_price', Number(e.target.value))}
                       />
@@ -179,7 +177,7 @@ INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUE
                     <td className="px-3 py-3 text-center">
                       <input
                         type="number" min="0" step="0.5"
-                        className={`w-24 text-center bg-white border rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110] ${dirty && 'transport_cost' in (edits[row.id] ?? {}) ? 'border-blue-400' : 'border-[#e4e4e0]'}`}
+                        className={`w-24 text-center bg-surface border rounded-lg px-2 py-1.5 text-[13px] font-mono tabular-nums outline-none focus:border-ink ${dirty && 'transport_cost' in (edits[row.id] ?? {}) ? 'border-blue-400' : 'border-line'}`}
                         value={getVal(row, 'transport_cost') as number}
                         onChange={e => setEdit(row.id, 'transport_cost', Number(e.target.value))}
                       />
@@ -187,24 +185,24 @@ INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUE
                     <td className="px-3 py-3 text-center">
                       <input
                         type="number" min="0" step="0.5"
-                        className={`w-24 text-center bg-white border rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110] ${dirty && 'sale_price' in (edits[row.id] ?? {}) ? 'border-emerald-400' : 'border-[#e4e4e0]'}`}
+                        className={`w-24 text-center bg-surface border rounded-lg px-2 py-1.5 text-[13px] font-mono tabular-nums outline-none focus:border-ink ${dirty && 'sale_price' in (edits[row.id] ?? {}) ? 'border-emerald-400' : 'border-line'}`}
                         value={getVal(row, 'sale_price') as number}
                         onChange={e => setEdit(row.id, 'sale_price', Number(e.target.value))}
                       />
                     </td>
-                    <td className="px-3 py-3 text-center text-[12px] font-mono text-[#6b6b66]">
-                      {costTotal > 0 ? fmtRub(costTotal) : <span className="text-[#c4c4be]">—</span>}
+                    <td className="px-3 py-3 text-center text-[12px] font-mono tabular-nums text-ink-soft">
+                      {costTotal > 0 ? fmtRub(costTotal) : <span className="text-faint">—</span>}
                     </td>
                     <td className="px-3 py-3 text-right">
                       {dirty ? (
                         <button
                           onClick={() => saveRow(row)}
                           disabled={saving === row.id}
-                          className="px-3 py-1.5 text-[12px] font-semibold bg-[#111110] text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                          className="px-3 py-1.5 text-[12px] font-semibold bg-ink text-white rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                           {saving === row.id ? '...' : 'Сохранить'}
                         </button>
                       ) : (
-                        <span className="text-[11px] text-[#c4c4be]">Сохранено</span>
+                        <span className="text-[11px] text-faint">Сохранено</span>
                       )}
                     </td>
                   </tr>
@@ -217,9 +215,9 @@ INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUE
 
       {/* Пример расчёта */}
       {rows.length > 0 && (
-        <div className="mt-6 bg-[#f8f8f7] border border-[#e4e4e0] rounded-xl p-4">
-          <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-3">Пример расчёта</p>
-          <p className="text-[12px] text-[#6b6b66] mb-2">Деталь 600×800 мм, 3 шт. → периметр = 2 × (0.6 + 0.8) = 2.8 м.п. × 3 шт. = 8.4 м.п.</p>
+        <div className="mt-6 bg-canvas border border-line rounded-xl p-4">
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Пример расчёта</p>
+          <p className="text-[12px] text-ink-soft mb-2">Деталь 600×800 мм, 3 шт. → периметр = 2 × (0.6 + 0.8) = 2.8 м.п. × 3 шт. = 8.4 м.п.</p>
           <div className="space-y-1">
             {rows.map(row => {
               const perimeter = 2 * (0.6 + 0.8)
@@ -229,11 +227,11 @@ INSERT INTO facet_prices (type_mm, cost_price, transport_cost, sale_price) VALUE
               const saleTotal = row.sale_price * totalM
               return (
                 <div key={row.id} className="flex items-center justify-between text-[12px]">
-                  <span className="text-[#6b6b66]">Фацет {row.type_mm} мм:</span>
-                  <span className="font-mono">
-                    <span className="text-[#9a9a95]">себ. {fmtRub(Math.round(costTotal))}</span>
-                    <span className="mx-2 text-[#c4c4be]">→</span>
-                    <span className="font-semibold text-[#111110]">клиенту {fmtRub(Math.round(saleTotal))}</span>
+                  <span className="text-ink-soft">Фацет {row.type_mm} мм:</span>
+                  <span className="font-mono tabular-nums">
+                    <span className="text-muted">себ. {fmtRub(Math.round(costTotal))}</span>
+                    <span className="mx-2 text-faint">→</span>
+                    <span className="font-semibold text-ink">клиенту {fmtRub(Math.round(saleTotal))}</span>
                   </span>
                 </div>
               )

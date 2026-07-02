@@ -68,7 +68,7 @@ export default function WarehousePage() {
   }
 
   if (loading) return (
-    <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+    <div className="min-h-screen flex items-center justify-center text-[13px] text-muted">Загрузка...</div>
   )
 
   const lowCount = materials.filter(m => stockStatus(m) !== 'ok').length
@@ -91,23 +91,23 @@ export default function WarehousePage() {
   return (
     <div className="max-w-[900px] mx-auto px-6 py-8">
       <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Склад</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Остатки и минимальные нормативы</p>
+        <h1 className="text-[20px] font-semibold text-ink tracking-tight">Склад</h1>
+        <p className="text-[13px] text-muted mt-0.5">Остатки и минимальные нормативы</p>
       </div>
 
       {/* Summary */}
       <div className="grid grid-cols-3 gap-4 mb-6">
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-center">
-          <p className="text-[24px] font-bold text-[#111110]">{materials.length}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">материалов</p>
+        <div className="bg-surface border border-line rounded-xl p-4 text-center">
+          <p className="text-[24px] font-semibold text-ink tabular-nums">{materials.length}</p>
+          <p className="text-[12px] text-muted mt-0.5">материалов</p>
         </div>
-        <div className={`border rounded-xl p-4 text-center ${lowCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-[#e4e4e0]'}`}>
-          <p className={`text-[24px] font-bold ${lowCount > 0 ? 'text-amber-700' : 'text-[#111110]'}`}>{lowCount}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">ниже минимума</p>
+        <div className={`border rounded-xl p-4 text-center ${lowCount > 0 ? 'bg-amber-50 border-amber-200' : 'bg-surface border-line'}`}>
+          <p className={`text-[24px] font-semibold tabular-nums ${lowCount > 0 ? 'text-amber-700' : 'text-ink'}`}>{lowCount}</p>
+          <p className="text-[12px] text-muted mt-0.5">ниже минимума</p>
         </div>
-        <div className={`border rounded-xl p-4 text-center ${outCount > 0 ? 'bg-red-50 border-red-200' : 'bg-white border-[#e4e4e0]'}`}>
-          <p className={`text-[24px] font-bold ${outCount > 0 ? 'text-red-600' : 'text-[#111110]'}`}>{outCount}</p>
-          <p className="text-[12px] text-[#8a8a85] mt-0.5">нет на складе</p>
+        <div className={`border rounded-xl p-4 text-center ${outCount > 0 ? 'bg-red-50 border-red-200' : 'bg-surface border-line'}`}>
+          <p className={`text-[24px] font-semibold tabular-nums ${outCount > 0 ? 'text-red-600' : 'text-ink'}`}>{outCount}</p>
+          <p className="text-[12px] text-muted mt-0.5">нет на складе</p>
         </div>
       </div>
 
@@ -118,12 +118,12 @@ export default function WarehousePage() {
         <input
           type="text" value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Поиск по названию..."
-          className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white w-56"
+          className="border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink bg-surface w-56"
         />
         <button
           onClick={() => setFilterLow(!filterLow)}
           className={`px-4 py-2 rounded-lg text-[13px] font-medium border transition-colors ${
-            filterLow ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:bg-[#f8f8f7]'
+            filterLow ? 'bg-amber-100 text-amber-700 border-amber-200' : 'bg-surface text-ink-soft border-line hover:bg-canvas'
           }`}
         >
           {filterLow ? '⚠ Только дефицит' : 'Все материалы'}
@@ -133,13 +133,13 @@ export default function WarehousePage() {
       {/* Materials by category */}
       <div className="space-y-4">
         {Object.entries(grouped).map(([cat, mats]) => (
-          <div key={cat} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className="px-5 py-2.5 bg-[#f8f8f7] border-b border-[#e4e4e0]">
-              <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">
+          <div key={cat} className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className="px-5 py-2.5 bg-canvas border-b border-line">
+              <p className="text-[12px] font-semibold text-muted uppercase tracking-wider">
                 {CATEGORY_LABELS[cat] ?? cat} ({mats.length})
               </p>
             </div>
-            <div className="divide-y divide-[#f0f0ec]">
+            <div className="divide-y divide-line-soft">
               {mats.map(m => {
                 const status = stockStatus(m)
                 return (
@@ -152,33 +152,33 @@ export default function WarehousePage() {
 
                     {/* Name */}
                     <div className="flex-1 min-w-0">
-                      <p className="text-[13px] font-medium text-[#111110] truncate">{m.name}</p>
-                      <p className="text-[11px] text-[#9a9a95]">{m.unit}</p>
+                      <p className="text-[13px] font-medium text-ink truncate">{m.name}</p>
+                      <p className="text-[11px] text-muted">{m.unit}</p>
                     </div>
 
                     {/* Stock qty */}
                     <div className="text-right flex-shrink-0">
-                      <p className="text-[10px] font-bold text-[#9a9a95] uppercase mb-1">Остаток</p>
+                      <p className="text-[10px] font-semibold text-muted uppercase mb-1">Остаток</p>
                       <input
                         type="number" min="0" step="0.1"
                         value={m.stock_qty}
                         onChange={e => update(m.id, 'stock_qty', Number(e.target.value))}
-                        className={`w-20 text-center border rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#0071e3] ${
+                        className={`w-20 text-center border rounded-lg px-2 py-1.5 text-[13px] font-mono tabular-nums outline-none focus:border-[#0071e3] ${
                           status === 'out' ? 'border-red-300 bg-red-50' :
                           status === 'low' ? 'border-amber-300 bg-amber-50' :
-                          'border-[#e4e4e0] bg-white'
+                          'border-line bg-surface'
                         }`}
                       />
                     </div>
 
                     {/* Min qty */}
                     <div className="text-right flex-shrink-0">
-                      <p className="text-[10px] font-bold text-[#9a9a95] uppercase mb-1">Мин.</p>
+                      <p className="text-[10px] font-semibold text-muted uppercase mb-1">Мин.</p>
                       <input
                         type="number" min="0" step="0.1"
                         value={m.min_stock_qty}
                         onChange={e => update(m.id, 'min_stock_qty', Number(e.target.value))}
-                        className="w-20 text-center border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono bg-white outline-none focus:border-[#0071e3]"
+                        className="w-20 text-center border border-line rounded-lg px-2 py-1.5 text-[13px] font-mono tabular-nums bg-surface outline-none focus:border-[#0071e3]"
                       />
                     </div>
 
@@ -186,7 +186,7 @@ export default function WarehousePage() {
                     <button
                       onClick={() => save(m)}
                       disabled={saving === m.id || !m._dirty}
-                      className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:opacity-30 hover:bg-[#2a2a28] transition-colors flex-shrink-0"
+                      className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-ink text-white disabled:opacity-30 hover:bg-[#2a2a28] transition-colors flex-shrink-0"
                     >
                       {saving === m.id ? '...' : '✓'}
                     </button>

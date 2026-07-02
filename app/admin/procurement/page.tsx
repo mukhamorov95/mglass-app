@@ -364,7 +364,7 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
 
   if (list.length === 0) {
     return (
-      <div className="mt-4 rounded-xl border border-[#e4e4e0] bg-[#fafaf8] p-4 text-sm text-[#8a8a85]">
+      <div className="mt-4 rounded-xl border border-line bg-subtle p-4 text-sm text-muted">
         Материалы не указаны
       </div>
     )
@@ -396,15 +396,15 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
   }, 0)
 
   return (
-    <div className="mt-4 rounded-xl border border-[#e4e4e0] bg-white p-4">
-      <div className="mb-3 text-xs font-bold uppercase tracking-wider text-[#9a9a95]">
+    <div className="mt-4 rounded-xl border border-line bg-surface p-4">
+      <div className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted">
         Материалы к закупке
       </div>
 
       <div className="overflow-x-auto">
         <table className="w-full min-w-[980px] text-left text-xs">
           <thead>
-            <tr className="border-b border-[#e4e4e0] text-[#9a9a95]">
+            <tr className="border-b border-line text-muted">
               <th className="py-2 pr-3 font-semibold">Материал</th>
               <th className="py-2 pr-3 font-semibold">Толщина</th>
               <th className="py-2 pr-3 font-semibold">Формат листа</th>
@@ -422,12 +422,12 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
               const ambiguousTint = needsTintClarification(item)
               const thicknessNum = num(item.thickness)
               return (
-                <tr key={index} className="border-b border-[#ededeb] last:border-0">
+                <tr key={index} className="border-b border-line-soft last:border-0">
                   <td className="py-3 pr-3 align-top">
-                    <div className="font-semibold text-[#111110]">
+                    <div className="font-semibold text-ink">
                       {text(item.material_name, 'Материал не указан')}
                     </div>
-                    <div className="mt-1 text-[11px] text-[#8a8a85]">
+                    <div className="mt-1 text-[11px] text-muted">
                       {text(item.category, 'категория не указана')}
                     </div>
                     {Boolean(item.unmatched) && (
@@ -441,25 +441,25 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
                       </div>
                     )}
                   </td>
-                  <td className="py-3 pr-3 align-top font-semibold">
+                  <td className="py-3 pr-3 align-top font-semibold tabular-nums">
                     {thicknessNum !== null ? `${thicknessNum} мм` : '—'}
                   </td>
-                  <td className="py-3 pr-3 align-top">
+                  <td className="py-3 pr-3 align-top tabular-nums">
                     {sheetFormat(item)}
                   </td>
-                  <td className="py-3 pr-3 align-top font-semibold">
+                  <td className="py-3 pr-3 align-top font-semibold tabular-nums">
                     {formatSheets(item.sheets_count)}
                   </td>
-                  <td className="py-3 pr-3 align-top text-[#6b6b66]">
+                  <td className="py-3 pr-3 align-top text-ink-soft tabular-nums">
                     {formatM2(usedAreaOnOrders(item))}
                   </td>
-                  <td className="py-3 pr-3 align-top">
+                  <td className="py-3 pr-3 align-top tabular-nums">
                     {formatM2(sheetAreaTotal(item))}
                   </td>
-                  <td className="py-3 pr-3 align-top">
+                  <td className="py-3 pr-3 align-top tabular-nums">
                     {formatKg(sheetWeightTotal(item))}
                   </td>
-                  <td className="py-3 pr-3 align-top font-semibold">
+                  <td className="py-3 pr-3 align-top font-semibold tabular-nums">
                     {formatMoney(item.estimated_cost)}
                   </td>
                   <td className="py-3 align-top">
@@ -472,7 +472,7 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
                         ))}
                       </div>
                     ) : (
-                      <span className="text-[#9a9a95]">—</span>
+                      <span className="text-muted">—</span>
                     )}
                   </td>
                 </tr>
@@ -482,9 +482,9 @@ function MaterialItemsSummary({ items }: { items: unknown }) {
         </table>
       </div>
 
-      <div className="mt-3 rounded-lg bg-[#fafaf8] px-3 py-2 text-sm font-semibold text-[#111110]">
+      <div className="mt-3 rounded-lg bg-subtle px-3 py-2 text-sm font-semibold text-ink tabular-nums">
         <div>Итого: {totalSheets} листов · {formatM2(totalArea)} · {formatKg(totalWeight)} · {formatMoney(totalCost)}</div>
-        <div className="mt-1 text-[12px] font-medium text-[#6b6b66]">Используется на заказы: {formatM2(totalUsedArea)}</div>
+        <div className="mt-1 text-[12px] font-medium text-ink-soft">Используется на заказы: {formatM2(totalUsedArea)}</div>
       </div>
     </div>
   )
@@ -683,13 +683,13 @@ export default function ProcurementPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7]">
-      <div className="px-6 py-5 flex items-center justify-between border-b border-[#e4e4e0] bg-white sticky top-0 z-10">
+    <div className="min-h-screen bg-canvas">
+      <div className="px-6 py-5 flex items-center justify-between border-b border-line bg-surface sticky top-0 z-10">
         <div>
-          <h1 className="text-[18px] font-semibold text-[#111110]">Закупки / Счета</h1>
-          <p className="text-[12px] text-[#9a9a95]">Канбан — {orders.filter(o => o.status !== 'closed').length} активных</p>
+          <h1 className="text-[18px] font-semibold text-ink">Закупки / Счета</h1>
+          <p className="text-[12px] text-muted tabular-nums">Канбан — {orders.filter(o => o.status !== 'closed').length} активных</p>
         </div>
-        <button onClick={openNew} className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
+        <button onClick={openNew} className="px-4 py-2 bg-ink text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
           + Новая закупка
         </button>
       </div>
@@ -707,46 +707,46 @@ export default function ProcurementPage() {
             const cards = orders.filter(o => o.status === col.key)
             return (
               <div key={col.key} className="w-[240px] flex-shrink-0">
-                <div className={`rounded-xl border-t-4 ${col.color} bg-white border border-[#e4e4e0] border-t-0`} style={{ borderTop: 'none' }}>
+                <div className={`rounded-xl border-t-4 ${col.color} bg-surface border border-line border-t-0`} style={{ borderTop: 'none' }}>
                   <div className={`rounded-t-xl px-3 py-2.5 ${col.bg}`}>
-                    <p className="text-[11px] font-bold text-[#4b4b47] uppercase tracking-wide">{col.label}</p>
-                    <p className="text-[10px] text-[#9a9a95]">{cards.length} {cards.length === 1 ? 'позиция' : 'позиций'}</p>
+                    <p className="text-[11px] font-semibold text-ink-soft uppercase tracking-wide">{col.label}</p>
+                    <p className="text-[10px] text-muted tabular-nums">{cards.length} {cards.length === 1 ? 'позиция' : 'позиций'}</p>
                   </div>
                   <div className="p-2 space-y-2 min-h-[120px]">
                     {cards.map(o => {
                       const next = nextStatus(o.status)
                       return (
-                        <div key={o.id} className="bg-white border border-[#e4e4e0] rounded-lg p-3 hover:border-[#c4c4be] cursor-pointer transition-colors"
+                        <div key={o.id} className="bg-surface border border-line rounded-lg p-3 hover:border-faint cursor-pointer transition-colors"
                           onClick={() => setDetail(o)}>
-                          <p className="text-[12px] font-semibold text-[#111110] leading-snug">{o.supplier_name}</p>
-                          {o.invoice_number && <p className="text-[10px] text-[#9a9a95] mt-0.5">№{o.invoice_number}</p>}
+                          <p className="text-[12px] font-semibold text-ink leading-snug">{o.supplier_name}</p>
+                          {o.invoice_number && <p className="text-[10px] text-muted mt-0.5">№{o.invoice_number}</p>}
                           {o.amount != null && (() => {
                             const a    = Number(o.amount)
                             const paid = getPaidTotal(o.id, o)
                             const debt = Math.max(a - paid, 0)
                             return (
                               <>
-                                <p className="text-[12px] font-mono font-bold text-emerald-700 mt-1">{formatMoney(a)}</p>
+                                <p className="text-[12px] font-mono font-semibold text-emerald-700 mt-1 tabular-nums">{formatMoney(a)}</p>
                                 {paid <= 0 ? (
                                   <div className="mt-1 rounded bg-red-50 px-2 py-1">
-                                    <p className="text-[9px] font-bold uppercase text-red-700 leading-tight">Не оплачен</p>
-                                    <p className="text-[10px] font-mono text-red-600">Осталось {formatMoney(a)}</p>
+                                    <p className="text-[9px] font-semibold uppercase text-red-700 leading-tight">Не оплачен</p>
+                                    <p className="text-[10px] font-mono text-red-600 tabular-nums">Осталось {formatMoney(a)}</p>
                                   </div>
                                 ) : paid < a ? (
                                   <div className="mt-1 rounded bg-red-50 px-2 py-1">
-                                    <p className="text-[9px] font-bold uppercase text-red-700 leading-tight">Частично оплачен — {formatMoney(paid)}</p>
-                                    <p className="text-[10px] font-mono text-red-600">Осталось {formatMoney(debt)}</p>
+                                    <p className="text-[9px] font-semibold uppercase text-red-700 leading-tight tabular-nums">Частично оплачен — {formatMoney(paid)}</p>
+                                    <p className="text-[10px] font-mono text-red-600 tabular-nums">Осталось {formatMoney(debt)}</p>
                                   </div>
                                 ) : (
                                   <div className="mt-1 rounded bg-green-50 px-2 py-1">
-                                    <p className="text-[9px] font-bold uppercase text-green-700 leading-tight">Оплачено — {formatMoney(paid)}</p>
+                                    <p className="text-[9px] font-semibold uppercase text-green-700 leading-tight tabular-nums">Оплачено — {formatMoney(paid)}</p>
                                   </div>
                                 )}
                               </>
                             )
                           })()}
                           {o.issue_notes && <p className="text-[10px] text-red-600 mt-1 bg-red-50 px-1.5 py-0.5 rounded">⚠ {o.issue_notes}</p>}
-                          {o.comment && <p className="text-[10px] text-[#6b6b66] mt-1 truncate">{o.comment}</p>}
+                          {o.comment && <p className="text-[10px] text-ink-soft mt-1 truncate">{o.comment}</p>}
                           {o.order_refs.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {o.order_refs.map(r => <span key={r} className="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded">{r}</span>)}
@@ -754,7 +754,7 @@ export default function ProcurementPage() {
                           )}
                           {next && (
                             <button onClick={e => { e.stopPropagation(); moveStatus(o.id, next) }}
-                              className="mt-2 w-full text-[10px] font-semibold text-[#6b6b66] hover:text-[#111110] bg-[#f8f8f7] hover:bg-[#f0f0ec] rounded py-1 transition-colors">
+                              className="mt-2 w-full text-[10px] font-semibold text-ink-soft hover:text-ink bg-canvas hover:bg-line-soft rounded py-1 transition-colors">
                               → {STATUSES.find(s => s.key === next)?.label}
                             </button>
                           )}
@@ -772,13 +772,13 @@ export default function ProcurementPage() {
       {/* Detail modal */}
       {detail && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => setDetail(null)}>
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
+          <div className="bg-surface rounded-xl border border-line p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-xl" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between mb-4">
               <div>
-                <h2 className="text-[15px] font-semibold text-[#111110]">{detail.supplier_name}</h2>
-                {detail.invoice_number && <p className="text-[12px] text-[#9a9a95]">Счёт №{detail.invoice_number}</p>}
+                <h2 className="text-[15px] font-semibold text-ink">{detail.supplier_name}</h2>
+                {detail.invoice_number && <p className="text-[12px] text-muted">Счёт №{detail.invoice_number}</p>}
               </div>
-              <span className={`text-[10px] font-bold px-2 py-1 rounded-full ${STATUSES.find(s => s.key === detail.status)?.bg ?? 'bg-gray-50'}`}>
+              <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${STATUSES.find(s => s.key === detail.status)?.bg ?? 'bg-gray-50'}`}>
                 {STATUSES.find(s => s.key === detail.status)?.label ?? detail.status}
               </span>
             </div>
@@ -791,23 +791,23 @@ export default function ProcurementPage() {
                 const debt = Math.max(a - p, 0)
                 const b    = paymentBadge(detail.amount, p > 0 ? p : detail.payment_amount)
                 return (
-                  <div className="rounded-xl border border-[#e4e4e0] bg-[#fafaf9] px-4 py-3 space-y-2">
+                  <div className="rounded-xl border border-line bg-subtle px-4 py-3 space-y-2">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">Оплата</span>
+                      <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">Оплата</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${b.cls}`}>{b.label}</span>
                     </div>
                     <div className="grid grid-cols-3 gap-3">
                       <div>
-                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Сумма счёта</p>
-                        <p className="font-semibold text-[#111110]">{a > 0 ? formatMoney(a) : '—'}</p>
+                        <p className="text-[10px] text-muted mb-0.5">Сумма счёта</p>
+                        <p className="font-semibold text-ink tabular-nums">{a > 0 ? formatMoney(a) : '—'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Оплачено</p>
-                        <p className="font-semibold text-emerald-700">{p > 0 ? formatMoney(p) : '—'}</p>
+                        <p className="text-[10px] text-muted mb-0.5">Оплачено</p>
+                        <p className="font-semibold text-emerald-700 tabular-nums">{p > 0 ? formatMoney(p) : '—'}</p>
                       </div>
                       <div>
-                        <p className="text-[10px] text-[#9a9a95] mb-0.5">Остаток</p>
-                        <p className={`font-semibold ${debt > 0 ? 'text-red-600' : 'text-[#9a9a95]'}`}>{debt > 0 ? formatMoney(debt) : '0 ₽'}</p>
+                        <p className="text-[10px] text-muted mb-0.5">Остаток</p>
+                        <p className={`font-semibold tabular-nums ${debt > 0 ? 'text-red-600' : 'text-muted'}`}>{debt > 0 ? formatMoney(debt) : '0 ₽'}</p>
                       </div>
                     </div>
                   </div>
@@ -815,34 +815,34 @@ export default function ProcurementPage() {
               })()}
 
               {/* ── Payment history + add payment ────────────────────────────── */}
-              <div className="rounded-xl border border-[#e4e4e0] overflow-hidden">
-                <div className="px-4 py-2.5 bg-[#fafaf9] border-b border-[#e4e4e0]">
-                  <span className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">История оплат</span>
+              <div className="rounded-xl border border-line overflow-hidden">
+                <div className="px-4 py-2.5 bg-subtle border-b border-line">
+                  <span className="text-[11px] font-semibold text-muted uppercase tracking-wide">История оплат</span>
                 </div>
-                <div className="divide-y divide-[#f4f4f0]">
+                <div className="divide-y divide-line-soft">
                   {(paymentsByOrderId[detail.id] ?? []).length === 0 ? (
-                    <p className="px-4 py-3 text-[12px] text-[#9a9a95]">Платежей пока нет</p>
+                    <p className="px-4 py-3 text-[12px] text-muted">Платежей пока нет</p>
                   ) : (
                     <>
                       {(paymentsByOrderId[detail.id] ?? []).map(pmt => (
                         <div key={pmt.id} className="px-4 py-2.5 flex items-start justify-between gap-3">
                           <div>
-                            <p className="text-[12px] text-[#6b6b66]">{pmt.payment_date ? formatDate(pmt.payment_date) : '—'}</p>
-                            {pmt.comment && <p className="text-[10px] text-[#9a9a95] mt-0.5">{pmt.comment}</p>}
+                            <p className="text-[12px] text-ink-soft tabular-nums">{pmt.payment_date ? formatDate(pmt.payment_date) : '—'}</p>
+                            {pmt.comment && <p className="text-[10px] text-muted mt-0.5">{pmt.comment}</p>}
                           </div>
-                          <span className="text-[13px] font-semibold font-mono text-[#111110] flex-shrink-0">{formatMoney(pmt.amount)}</span>
+                          <span className="text-[13px] font-semibold font-mono text-ink flex-shrink-0 tabular-nums">{formatMoney(pmt.amount)}</span>
                         </div>
                       ))}
                       {(() => {
                         const paid = getPaidTotal(detail.id, detail)
                         const debt = Math.max(Number(detail.amount ?? 0) - paid, 0)
                         return (
-                          <div className="px-4 py-2.5 bg-[#fafaf9] flex justify-between text-[12px]">
+                          <div className="px-4 py-2.5 bg-subtle flex justify-between text-[12px]">
                             <div className="space-y-0.5">
-                              <p className="text-[#9a9a95]">Итого оплачено</p>
-                              {debt > 0 && <p className="font-semibold text-red-600">Остаток: {formatMoney(debt)}</p>}
+                              <p className="text-muted">Итого оплачено</p>
+                              {debt > 0 && <p className="font-semibold text-red-600 tabular-nums">Остаток: {formatMoney(debt)}</p>}
                             </div>
-                            <span className="font-semibold text-emerald-700">{formatMoney(paid)}</span>
+                            <span className="font-semibold text-emerald-700 tabular-nums">{formatMoney(paid)}</span>
                           </div>
                         )
                       })()}
@@ -851,39 +851,39 @@ export default function ProcurementPage() {
                 </div>
 
                 {/* Add payment form */}
-                <div className="px-4 py-3 border-t border-[#e4e4e0] space-y-2 bg-white">
-                  <p className="text-[10px] font-bold text-[#8a8a85] uppercase tracking-wide">Добавить платёж</p>
+                <div className="px-4 py-3 border-t border-line space-y-2 bg-surface">
+                  <p className="text-[10px] font-semibold text-muted uppercase tracking-wide">Добавить платёж</p>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] text-[#9a9a95] mb-1">Сумма</label>
+                      <label className="block text-[10px] text-muted mb-1">Сумма</label>
                       <input type="number" value={newPaymentForm.amount}
                         onChange={e => setNewPaymentForm(f => ({ ...f, amount: e.target.value }))}
                         placeholder="0"
-                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                        className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-ink" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#9a9a95] mb-1">Дата</label>
+                      <label className="block text-[10px] text-muted mb-1">Дата</label>
                       <input type="date" value={newPaymentForm.date}
                         onChange={e => setNewPaymentForm(f => ({ ...f, date: e.target.value }))}
-                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                        className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-ink" />
                     </div>
                   </div>
                   <input value={newPaymentForm.comment}
                     onChange={e => setNewPaymentForm(f => ({ ...f, comment: e.target.value }))}
                     placeholder="Комментарий (необязательно)"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                    className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-ink" />
                   <button
                     onClick={() => addPayment(detail.id)}
                     disabled={addingPayment || !newPaymentForm.amount}
-                    className="w-full bg-[#111110] text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28] disabled:opacity-40">
+                    className="w-full bg-ink text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28] disabled:opacity-40">
                     {addingPayment ? 'Сохранение...' : 'Добавить платёж'}
                   </button>
                 </div>
               </div>
 
               {/* ── Pickup block ─────────────────────────────────────────────── */}
-              <div className="rounded-xl border border-[#e4e4e0] px-4 py-3 space-y-2">
-                <p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide">Вывоз материала</p>
+              <div className="rounded-xl border border-line px-4 py-3 space-y-2">
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-wide">Вывоз материала</p>
                 {detail.pickup_date || detail.pickup_by ? (
                   <div className="space-y-1">
                     {detail.pickup_by   && <Row label="Забрал"     value={detail.pickup_by} />}
@@ -892,17 +892,17 @@ export default function ProcurementPage() {
                 ) : (
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <label className="block text-[10px] text-[#9a9a95] mb-1">Кто забирает</label>
+                      <label className="block text-[10px] text-muted mb-1">Кто забирает</label>
                       <input value={pickupForm.by}
                         onChange={e => setPickupForm(f => ({ ...f, by: e.target.value }))}
                         placeholder="Сергей"
-                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                        className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-ink" />
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[#9a9a95] mb-1">Дата вывоза</label>
+                      <label className="block text-[10px] text-muted mb-1">Дата вывоза</label>
                       <input type="date" value={pickupForm.date}
                         onChange={e => setPickupForm(f => ({ ...f, date: e.target.value }))}
-                        className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                        className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-ink" />
                     </div>
                   </div>
                 )}
@@ -949,10 +949,10 @@ export default function ProcurementPage() {
             </div>
 
             <div className="flex gap-2 mt-5">
-              <button onClick={() => openEdit(detail)} className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
-              <button type="button" onClick={() => printSupplierPdf(detail.items)} className="flex-1 bg-[#f0f0ec] text-[#111110] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Сформировать PDF поставщику</button>
+              <button onClick={() => openEdit(detail)} className="flex-1 bg-ink text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28]">Редактировать</button>
+              <button type="button" onClick={() => printSupplierPdf(detail.items)} className="flex-1 bg-line-soft text-ink text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Сформировать PDF поставщику</button>
               <button onClick={() => deleteOrder(detail.id)} className="px-4 py-2 text-[13px] text-red-600 hover:bg-red-50 rounded-lg">Удалить</button>
-              <button onClick={() => setDetail(null)} className="px-4 py-2 text-[13px] text-[#6b6b66] hover:bg-[#f0f0ec] rounded-lg">Закрыть</button>
+              <button onClick={() => setDetail(null)} className="px-4 py-2 text-[13px] text-ink-soft hover:bg-line-soft rounded-lg">Закрыть</button>
             </div>
           </div>
         </div>
@@ -961,37 +961,37 @@ export default function ProcurementPage() {
       {/* Form modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto" onClick={e => { if (e.target === e.currentTarget) setModal(false) }}>
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-lg shadow-xl">
-            <h2 className="text-[15px] font-semibold text-[#111110] mb-4">{editId ? 'Редактировать закупку' : 'Новая закупка'}</h2>
+          <div className="bg-surface rounded-xl border border-line p-6 w-full max-w-lg shadow-xl">
+            <h2 className="text-[15px] font-semibold text-ink mb-4">{editId ? 'Редактировать закупку' : 'Новая закупка'}</h2>
             <div className="space-y-3">
-              <Field label="Поставщик *" required><input value={form.supplier_name} onChange={ff('supplier_name')} placeholder="Название поставщика" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-              <Field label="Номер счёта"><input value={form.invoice_number} onChange={ff('invoice_number')} placeholder="INV-001" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+              <Field label="Поставщик *" required><input value={form.supplier_name} onChange={ff('supplier_name')} placeholder="Название поставщика" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
+              <Field label="Номер счёта"><input value={form.invoice_number} onChange={ff('invoice_number')} placeholder="INV-001" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Сумма (₽)"><input type="number" value={form.amount} onChange={ff('amount')} placeholder="0" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+                <Field label="Сумма (₽)"><input type="number" value={form.amount} onChange={ff('amount')} placeholder="0" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
                 <Field label="Статус">
-                  <select value={form.status} onChange={ff('status')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]">
+                  <select value={form.status} onChange={ff('status')} className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink">
                     {STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
                   </select>
                 </Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Кто согласовал"><input value={form.approved_by} onChange={ff('approved_by')} placeholder="Владислав" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-                <Field label="Кто забирает"><input value={form.pickup_by} onChange={ff('pickup_by')} placeholder="Сергей" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+                <Field label="Кто согласовал"><input value={form.approved_by} onChange={ff('approved_by')} placeholder="Владислав" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
+                <Field label="Кто забирает"><input value={form.pickup_by} onChange={ff('pickup_by')} placeholder="Сергей" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <Field label="Дата оплаты"><input type="date" value={form.payment_date ?? ''} onChange={ff('payment_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-                <Field label="Дата забора"><input type="date" value={form.pickup_date ?? ''} onChange={ff('pickup_date')} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
+                <Field label="Дата оплаты"><input type="date" value={form.payment_date ?? ''} onChange={ff('payment_date')} className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
+                <Field label="Дата забора"><input type="date" value={form.pickup_date ?? ''} onChange={ff('pickup_date')} className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
               </div>
-              <Field label="Привязка к заказам (через запятую)"><input value={form.order_refs} onChange={ff('order_refs')} placeholder="1795, 1796" className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-              <Field label="Проблема / брак"><input value={form.issue_notes} onChange={ff('issue_notes')} placeholder="Описание проблемы..." className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110]" /></Field>
-              <Field label="Комментарий"><textarea value={form.comment} onChange={ff('comment')} placeholder="Любые заметки..." rows={2} className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] resize-none" /></Field>
+              <Field label="Привязка к заказам (через запятую)"><input value={form.order_refs} onChange={ff('order_refs')} placeholder="1795, 1796" className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
+              <Field label="Проблема / брак"><input value={form.issue_notes} onChange={ff('issue_notes')} placeholder="Описание проблемы..." className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink" /></Field>
+              <Field label="Комментарий"><textarea value={form.comment} onChange={ff('comment')} placeholder="Любые заметки..." rows={2} className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[13px] text-ink outline-none focus:border-ink resize-none" /></Field>
             </div>
             <div className="flex gap-2 mt-5">
               <button onClick={save} disabled={saving || !form.supplier_name.trim()}
-                className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28] disabled:opacity-40">
+                className="flex-1 bg-ink text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28] disabled:opacity-40">
                 {saving ? 'Сохранение...' : editId ? 'Сохранить' : 'Создать'}
               </button>
-              <button onClick={() => setModal(false)} className="flex-1 bg-[#f0f0ec] text-[#6b6b66] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Отмена</button>
+              <button onClick={() => setModal(false)} className="flex-1 bg-line-soft text-ink-soft text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">Отмена</button>
             </div>
           </div>
         </div>
@@ -1004,8 +1004,8 @@ export default function ProcurementPage() {
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3">
-      <span className="text-[#9a9a95] flex-shrink-0">{label}</span>
-      <span className="text-[#111110] font-medium text-right">{value}</span>
+      <span className="text-muted flex-shrink-0">{label}</span>
+      <span className="text-ink font-medium text-right">{value}</span>
     </div>
   )
 }
@@ -1013,7 +1013,7 @@ function Row({ label, value }: { label: string; value: string }) {
 function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <div>
-      <label className="block text-[11px] font-bold text-[#8a8a85] uppercase tracking-wide mb-1">{label}{required && ' *'}</label>
+      <label className="block text-[11px] font-semibold text-muted uppercase tracking-wide mb-1">{label}{required && ' *'}</label>
       {children}
     </div>
   )

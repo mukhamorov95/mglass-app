@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PageHeader } from '@/components/ds'
 import { MirrorFrame, FRAME_TYPES, FRAME_COLORS, calcFrameCost } from '@/lib/types'
 import { ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 
@@ -160,8 +161,8 @@ export default function MirrorFramesPage() {
     (1 + prodSettings.default_margin_percent / 100)
   const preview = previewFrame ? calcFrameCost(previewFrame, parseInt(previewW) || 1000, parseInt(previewH) || 800, minuteRate, saleMinuteRate) : null
 
-  const inp = 'w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-xs bg-white focus:outline-none focus:border-blue-400'
-  const lbl = 'text-[10px] text-[#9a9a95] mb-1 block'
+  const inp = 'w-full border border-line rounded-md px-2 py-1.5 text-xs bg-surface focus:outline-none focus:border-blue-400'
+  const lbl = 'text-[11px] text-muted mb-1 block'
 
   // Auto-calculated assembly cost from current form values
   const formTotalMinutes = (parseInt(form.cut_minutes) || 0) + (parseInt(form.assemble_minutes) || 0) + (parseInt(form.pack_minutes) || 0)
@@ -169,35 +170,33 @@ export default function MirrorFramesPage() {
   const autoAssemblySale = form.assemble_sale_rub ? parseFloat(form.assemble_sale_rub) : Math.round(formTotalMinutes * saleMinuteRate)
   const [showOverride, setShowOverride] = useState(false)
 
-  if (loading) return <div className="flex items-center justify-center h-64 text-[#9a9a95] text-sm">Загрузка...</div>
+  if (loading) return <div className="flex items-center justify-center h-64 text-muted text-sm">Загрузка...</div>
 
   return (
     <div className="max-w-[1200px] mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <h1 className="text-lg font-bold text-[#111110]">Рамки зеркал</h1>
-          <p className="text-xs text-[#9a9a95] mt-0.5">Справочник профилей для декоративных рамок</p>
-        </div>
-        {editId && (
-          <button onClick={resetForm} className="text-xs text-[#6b6b66] hover:text-[#111110] border border-[#e4e4e0] px-3 py-1.5 rounded-md">
+      <PageHeader
+        title="Рамки зеркал"
+        subtitle="Справочник профилей для декоративных рамок"
+        actions={editId ? (
+          <button onClick={resetForm} className="text-xs text-ink-soft hover:text-ink border border-line px-3 py-1.5 rounded-md">
             ← Новая рамка
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       {/* ── Guide banner ── */}
       <div className="mb-4 bg-blue-50 border border-blue-100 rounded-lg p-3.5 text-[11px] text-blue-800 space-y-1.5">
         <p className="font-semibold text-[12px]">Как заполнять справочник рамок</p>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-2 mt-1">
-          <div className="bg-white rounded-md p-2.5 border border-blue-100">
+          <div className="bg-surface rounded-md p-2.5 border border-blue-100">
             <p className="font-semibold mb-0.5">① Профиль</p>
             <p className="text-blue-600 leading-relaxed">Длина хлыста — стандартная длина, в которой продаётся профиль (напр. 2.9 м или 6 м). Закупка — цена за метр, которую вы платите поставщику. Запас 1.10 = система заказывает на 10% больше периметра, чтобы хватило на порезку углов под 45°.</p>
           </div>
-          <div className="bg-white rounded-md p-2.5 border border-blue-100">
+          <div className="bg-surface rounded-md p-2.5 border border-blue-100">
             <p className="font-semibold mb-0.5">② Трудозатраты</p>
             <p className="text-blue-600 leading-relaxed">Укажите только минуты на каждый этап — себестоимость сборки посчитается автоматически по ставке мастера из настроек производства. Ничего вручную вводить не нужно.</p>
           </div>
-          <div className="bg-white rounded-md p-2.5 border border-blue-100">
+          <div className="bg-surface rounded-md p-2.5 border border-blue-100">
             <p className="font-semibold mb-0.5">③ Продажа</p>
             <p className="text-blue-600 leading-relaxed">Цена продажи профиля за метр — та, которую вы закладываете клиенту (без работы). Стоимость сборки добавляется сверху отдельно. Итоговая цена видна в блоке «Расчёт».</p>
           </div>
@@ -207,8 +206,8 @@ export default function MirrorFramesPage() {
       <div className="grid grid-cols-1 lg:grid-cols-[380px_1fr] gap-5">
 
         {/* ── FORM ── */}
-        <div className="bg-white border border-[#e4e4e0] rounded-lg p-4 space-y-3 self-start">
-          <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">
+        <div className="bg-surface border border-line rounded-lg p-4 space-y-3 self-start">
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">
             {editId ? `Редактирование #${editId}` : 'Новая рамка'}
           </p>
 
@@ -219,11 +218,11 @@ export default function MirrorFramesPage() {
               <input className={inp} value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Slim чёрный 20×20" />
             </div>
             <div>
-              <label className={lbl}>Артикул <span className="text-[#c4c4be]">— ваш внутренний код</span></label>
+              <label className={lbl}>Артикул <span className="text-faint">— ваш внутренний код</span></label>
               <input className={inp} value={form.article} onChange={e => setForm(f => ({ ...f, article: e.target.value }))} placeholder="FR-SL-BL-20" />
             </div>
             <div>
-              <label className={lbl}>Размер профиля <span className="text-[#c4c4be]">— для КП</span></label>
+              <label className={lbl}>Размер профиля <span className="text-faint">— для КП</span></label>
               <input className={inp} value={form.profile_size} onChange={e => setForm(f => ({ ...f, profile_size: e.target.value }))} placeholder="20×20 мм" />
             </div>
           </div>
@@ -257,19 +256,19 @@ export default function MirrorFramesPage() {
           </div>
 
           {/* Profile economics */}
-          <div className="pt-2 border-t border-[#f0f0ec]">
+          <div className="pt-2 border-t border-line-soft">
             <div className="flex items-center justify-between mb-2">
               <div>
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Профиль</p>
-                <p className="text-[10px] text-[#b0b0aa]">Данные из прайса поставщика</p>
+                <p className="text-[11px] font-semibold text-muted uppercase tracking-widest">Профиль</p>
+                <p className="text-[11px] text-faint">Данные из прайса поставщика</p>
               </div>
               {/* Price mode toggle */}
-              <div className="flex bg-[#f0f0ec] rounded-md p-0.5 gap-0.5">
+              <div className="flex bg-line-soft rounded-md p-0.5 gap-0.5">
                 {(['per_m', 'per_whip'] as const).map(mode => (
                   <button key={mode} type="button"
                     onClick={() => setPriceMode(mode)}
-                    className={`px-2 py-1 rounded text-[10px] font-semibold transition-all ${
-                      priceMode === mode ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                    className={`px-2 py-1 rounded text-[11px] font-semibold transition-all ${
+                      priceMode === mode ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink-soft'
                     }`}>
                     {mode === 'per_m' ? '₽ за метр' : '₽ за хлыст'}
                   </button>
@@ -280,68 +279,68 @@ export default function MirrorFramesPage() {
               <div>
                 <label className={lbl}>Хлыст, м</label>
                 <input type="number" className={inp} value={form.whip_length_m} onChange={e => setForm(f => ({ ...f, whip_length_m: e.target.value }))} />
-                <p className="text-[9px] text-[#c4c4be] mt-0.5">Стандартная длина из прайса</p>
+                <p className="text-[11px] text-faint mt-0.5">Стандартная длина из прайса</p>
               </div>
               <div>
                 <label className={lbl}>Закупка {priceMode === 'per_whip' ? '₽/хлыст' : '₽/м'}</label>
                 <input type="number" className={inp} value={form.cost_per_m} onChange={e => setForm(f => ({ ...f, cost_per_m: e.target.value }))} />
                 {priceMode === 'per_whip' && _rawCost > 0 && _whipLen > 0 && (
-                  <p className="text-[9px] text-emerald-600 mt-0.5">= {(_rawCost / _whipLen).toFixed(2)} ₽/м</p>
+                  <p className="text-[11px] text-emerald-600 mt-0.5">= {(_rawCost / _whipLen).toFixed(2)} ₽/м</p>
                 )}
                 {priceMode === 'per_m' && _rawCost > 0 && _whipLen > 0 && (
-                  <p className="text-[9px] text-[#c4c4be] mt-0.5">= {Math.round(_rawCost * _whipLen)} ₽/хлыст</p>
+                  <p className="text-[11px] text-faint mt-0.5">= {Math.round(_rawCost * _whipLen)} ₽/хлыст</p>
                 )}
               </div>
               <div>
                 <label className={lbl}>Продажа {priceMode === 'per_whip' ? '₽/хлыст' : '₽/м'}</label>
                 <input type="number" className={inp} value={form.sale_per_m} onChange={e => setForm(f => ({ ...f, sale_per_m: e.target.value }))} />
                 {priceMode === 'per_whip' && _rawSale > 0 && _whipLen > 0 && (
-                  <p className="text-[9px] text-emerald-600 mt-0.5">= {(_rawSale / _whipLen).toFixed(2)} ₽/м</p>
+                  <p className="text-[11px] text-emerald-600 mt-0.5">= {(_rawSale / _whipLen).toFixed(2)} ₽/м</p>
                 )}
                 {priceMode === 'per_m' && _rawSale > 0 && _whipLen > 0 && (
-                  <p className="text-[9px] text-[#c4c4be] mt-0.5">= {Math.round(_rawSale * _whipLen)} ₽/хлыст</p>
+                  <p className="text-[11px] text-faint mt-0.5">= {Math.round(_rawSale * _whipLen)} ₽/хлыст</p>
                 )}
               </div>
             </div>
             <div className="mt-2">
-              <label className={lbl}>Коэффициент запаса <span className="text-[#c4c4be]">— обычно 1.10 (+10% на порезку углов)</span></label>
+              <label className={lbl}>Коэффициент запаса <span className="text-faint">— обычно 1.10 (+10% на порезку углов)</span></label>
               <input type="number" step="0.01" className={`${inp} max-w-[120px]`} value={form.waste_factor} onChange={e => setForm(f => ({ ...f, waste_factor: e.target.value }))} />
             </div>
           </div>
 
           {/* Assembly work */}
-          <div className="pt-2 border-t border-[#f0f0ec]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Трудозатраты</p>
-            <p className="text-[10px] text-[#b0b0aa] mb-2">Укажите время — себестоимость посчитается автоматически</p>
+          <div className="pt-2 border-t border-line-soft">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Трудозатраты</p>
+            <p className="text-[11px] text-faint mb-2">Укажите время — себестоимость посчитается автоматически</p>
             <div className="grid grid-cols-3 gap-2">
               <div>
                 <label className={lbl}>Распил, мин</label>
                 <input type="number" className={inp} value={form.cut_minutes} onChange={e => setForm(f => ({ ...f, cut_minutes: e.target.value }))} />
-                <p className="text-[9px] text-[#c4c4be] mt-0.5">Порезка под 45°</p>
+                <p className="text-[11px] text-faint mt-0.5">Порезка под 45°</p>
               </div>
               <div>
                 <label className={lbl}>Сборка, мин</label>
                 <input type="number" className={inp} value={form.assemble_minutes} onChange={e => setForm(f => ({ ...f, assemble_minutes: e.target.value }))} />
-                <p className="text-[9px] text-[#c4c4be] mt-0.5">Сборка углов, крепёж</p>
+                <p className="text-[11px] text-faint mt-0.5">Сборка углов, крепёж</p>
               </div>
               <div>
                 <label className={lbl}>Упаковка, мин</label>
                 <input type="number" className={inp} value={form.pack_minutes} onChange={e => setForm(f => ({ ...f, pack_minutes: e.target.value }))} />
-                <p className="text-[9px] text-[#c4c4be] mt-0.5">Пузырчатая плёнка и т.д.</p>
+                <p className="text-[11px] text-faint mt-0.5">Пузырчатая плёнка и т.д.</p>
               </div>
             </div>
 
             {/* Live cost result */}
             <div className="mt-2.5 flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-md px-3 py-2">
               <div>
-                <p className="text-[10px] text-emerald-700 font-semibold">
+                <p className="text-[11px] text-emerald-700 font-semibold">
                   Итого {formTotalMinutes} мин × {minuteRate.toFixed(2)} ₽/мин
                 </p>
-                <p className="text-[9px] text-emerald-600 mt-0.5">
+                <p className="text-[11px] text-emerald-600 mt-0.5">
                   Ставка из production_settings (з/п {prodSettings.worker_monthly_salary.toLocaleString('ru-RU')} ₽/мес)
                 </p>
               </div>
-              <p className="text-sm font-bold font-mono text-emerald-700">
+              <p className="text-sm font-semibold font-mono text-emerald-700">
                 {autoAssemblyCost.toLocaleString('ru-RU')} ₽
               </p>
             </div>
@@ -350,7 +349,7 @@ export default function MirrorFramesPage() {
             <button
               type="button"
               onClick={() => setShowOverride(v => !v)}
-              className="mt-2 text-[10px] text-[#9a9a95] hover:text-[#6b6b66] flex items-center gap-1 transition-colors"
+              className="mt-2 text-[11px] text-muted hover:text-ink-soft flex items-center gap-1 transition-colors"
             >
               <svg className={`w-2.5 h-2.5 transition-transform ${showOverride ? 'rotate-90' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
@@ -359,7 +358,7 @@ export default function MirrorFramesPage() {
             </button>
             {showOverride && (
               <div className="mt-2 p-2.5 bg-amber-50 border border-amber-100 rounded-md">
-                <p className="text-[10px] text-amber-700 mb-2">Заполните только если хотите указать фиксированную сумму вместо расчёта по минутам</p>
+                <p className="text-[11px] text-amber-700 mb-2">Заполните только если хотите указать фиксированную сумму вместо расчёта по минутам</p>
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className={lbl}>Себест. сборки ₽</label>
@@ -375,7 +374,7 @@ export default function MirrorFramesPage() {
           </div>
 
           {/* Notes + meta */}
-          <div className="pt-2 border-t border-[#f0f0ec]">
+          <div className="pt-2 border-t border-line-soft">
             <div className="grid grid-cols-2 gap-2 mb-2">
               <div>
                 <label className={lbl}>Сортировка</label>
@@ -385,7 +384,7 @@ export default function MirrorFramesPage() {
                 <label className="flex items-center gap-2 cursor-pointer">
                   <input type="checkbox" checked={form.active} onChange={e => setForm(f => ({ ...f, active: e.target.checked }))}
                     className="w-3.5 h-3.5 rounded accent-blue-600" />
-                  <span className="text-xs text-[#4b4b47]">Активна</span>
+                  <span className="text-xs text-ink-soft">Активна</span>
                 </label>
               </div>
             </div>
@@ -394,8 +393,8 @@ export default function MirrorFramesPage() {
           </div>
 
           {/* Preview calc */}
-          <div className="pt-2 border-t border-[#f0f0ec]">
-            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Расчёт (превью)</p>
+          <div className="pt-2 border-t border-line-soft">
+            <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Расчёт (превью)</p>
             <div className="flex gap-2 mb-2">
               <div className="flex-1">
                 <label className={lbl}>Ширина мм</label>
@@ -407,75 +406,75 @@ export default function MirrorFramesPage() {
               </div>
             </div>
             {preview && (
-              <div className="bg-[#fafaf9] rounded-md p-2.5 space-y-1 text-[11px]">
-                <div className="flex justify-between"><span className="text-[#9a9a95]">Периметр</span><span className="font-mono">{preview.perimeterM.toFixed(2)} м</span></div>
-                <div className="flex justify-between"><span className="text-[#9a9a95]">Нужно профиля (+{Math.round((parseFloat(form.waste_factor)||1.1)*100-100)}% запас)</span><span className="font-mono">{preview.profileNeededM.toFixed(2)} м</span></div>
-                <div className="flex justify-between"><span className="text-[#9a9a95]">Хлыстов × {preview.whipLengthM} м</span><span className="font-mono">{preview.whipsNeeded} шт (остаток {preview.leftoverM.toFixed(2)} м)</span></div>
-                <div className="flex justify-between text-[#6b6b66] border-t border-[#e4e4e0] pt-1 mt-1"><span>Материал (себест.)</span><span className="font-mono font-medium">{fmt(preview.profileCost)} ₽</span></div>
-                <div className="flex justify-between text-[#6b6b66]"><span>Сборка {preview.totalMinutes} мин (себест.)</span><span className="font-mono font-medium">{fmt(preview.assemblyCost)} ₽</span></div>
-                <div className="flex justify-between text-[#111110] font-semibold border-t border-[#e4e4e0] pt-1 mt-1"><span>Итого себест.</span><span className="font-mono">{fmt(preview.totalCost)} ₽</span></div>
-                <div className="flex justify-between text-blue-600"><span>Продажная стоимость</span><span className="font-mono">{fmt(preview.totalSale)} ₽</span></div>
+              <div className="bg-subtle rounded-md p-2.5 space-y-1 text-[11px]">
+                <div className="flex justify-between"><span className="text-muted">Периметр</span><span className="font-mono tabular-nums">{preview.perimeterM.toFixed(2)} м</span></div>
+                <div className="flex justify-between"><span className="text-muted">Нужно профиля (+{Math.round((parseFloat(form.waste_factor)||1.1)*100-100)}% запас)</span><span className="font-mono tabular-nums">{preview.profileNeededM.toFixed(2)} м</span></div>
+                <div className="flex justify-between"><span className="text-muted">Хлыстов × {preview.whipLengthM} м</span><span className="font-mono tabular-nums">{preview.whipsNeeded} шт (остаток {preview.leftoverM.toFixed(2)} м)</span></div>
+                <div className="flex justify-between text-ink-soft border-t border-line pt-1 mt-1"><span>Материал (себест.)</span><span className="font-mono tabular-nums font-medium">{fmt(preview.profileCost)} ₽</span></div>
+                <div className="flex justify-between text-ink-soft"><span>Сборка {preview.totalMinutes} мин (себест.)</span><span className="font-mono tabular-nums font-medium">{fmt(preview.assemblyCost)} ₽</span></div>
+                <div className="flex justify-between text-ink font-semibold border-t border-line pt-1 mt-1"><span>Итого себест.</span><span className="font-mono tabular-nums">{fmt(preview.totalCost)} ₽</span></div>
+                <div className="flex justify-between text-blue-600"><span>Продажная стоимость</span><span className="font-mono tabular-nums">{fmt(preview.totalSale)} ₽</span></div>
               </div>
             )}
           </div>
 
           {error && <p className="text-red-600 text-xs">{error}</p>}
           <button onClick={handleSave} disabled={saving}
-            className="w-full py-2 bg-[#111110] text-white rounded-md text-sm font-semibold hover:bg-[#2a2a28] disabled:opacity-50 transition-colors">
+            className="w-full py-2 bg-ink text-white rounded-md text-sm font-semibold hover:bg-[#2a2a28] disabled:opacity-50 transition-colors">
             {saving ? 'Сохранение...' : editId ? 'Обновить' : 'Добавить рамку'}
           </button>
         </div>
 
         {/* ── TABLE ── */}
         <div>
-          <div className="bg-white border border-[#e4e4e0] rounded-lg overflow-hidden">
+          <div className="bg-surface border border-line rounded-lg overflow-hidden">
             <table className="w-full text-xs">
-              <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+              <thead className="bg-subtle border-b border-line">
                 <tr>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Название</th>
-                  <th className="px-3 py-2 text-left text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Тип / Цвет</th>
-                  <th className="px-3 py-2 text-right text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Хлыст</th>
-                  <th className="px-3 py-2 text-right text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Закупка</th>
-                  <th className="px-3 py-2 text-right text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Продажа</th>
-                  <th className="px-3 py-2 text-right text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide">Сборка, мин</th>
-                  <th className="px-3 py-2 text-center text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide w-20">Статус</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted uppercase tracking-wide">Название</th>
+                  <th className="px-3 py-2 text-left text-[11px] font-semibold text-muted uppercase tracking-wide">Тип / Цвет</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted uppercase tracking-wide">Хлыст</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted uppercase tracking-wide">Закупка</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted uppercase tracking-wide">Продажа</th>
+                  <th className="px-3 py-2 text-right text-[11px] font-semibold text-muted uppercase tracking-wide">Сборка, мин</th>
+                  <th className="px-3 py-2 text-center text-[11px] font-semibold text-muted uppercase tracking-wide w-20">Статус</th>
                   <th className="px-3 py-2 w-20"></th>
                 </tr>
               </thead>
               <tbody>
                 {frames.length === 0 && (
-                  <tr><td colSpan={8} className="px-4 py-8 text-center text-[#9a9a95]">Нет рамок — добавьте первую</td></tr>
+                  <tr><td colSpan={8} className="px-4 py-8 text-center text-muted">Нет рамок — добавьте первую</td></tr>
                 )}
                 {frames.map(f => {
                   const typeLabel  = FRAME_TYPES.find(t => t.value === f.frame_type)?.label ?? f.frame_type
                   const colorLabel = FRAME_COLORS.find(c => c.value === f.color)?.label ?? f.color
                   const totalMins  = f.cut_minutes + f.assemble_minutes + f.pack_minutes
                   return (
-                    <tr key={f.id} className={`border-b border-[#f0f0ec] hover:bg-[#fafaf9] transition-colors ${!f.active ? 'opacity-50' : ''}`}>
+                    <tr key={f.id} className={`border-b border-line-soft hover:bg-subtle transition-colors ${!f.active ? 'opacity-50' : ''}`}>
                       <td className="px-3 py-2.5">
-                        <p className="font-medium text-[#111110]">{f.name}</p>
-                        {f.article && <p className="text-[10px] text-[#9a9a95]">{f.article}</p>}
-                        {f.profile_size && <p className="text-[10px] text-[#b0b0aa]">{f.profile_size}</p>}
+                        <p className="font-medium text-ink">{f.name}</p>
+                        {f.article && <p className="text-[11px] text-muted">{f.article}</p>}
+                        {f.profile_size && <p className="text-[11px] text-faint">{f.profile_size}</p>}
                       </td>
-                      <td className="px-3 py-2.5 text-[#6b6b66]">{typeLabel} · {colorLabel}</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#4b4b47]">{f.whip_length_m} м</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#4b4b47]">{fmt(f.cost_per_m)} ₽/м</td>
-                      <td className="px-3 py-2.5 text-right font-mono text-[#4b4b47]">{fmt(f.sale_per_m)} ₽/м</td>
-                      <td className="px-3 py-2.5 text-right text-[#6b6b66]">
+                      <td className="px-3 py-2.5 text-ink-soft">{typeLabel} · {colorLabel}</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-soft">{f.whip_length_m} м</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-soft">{fmt(f.cost_per_m)} ₽/м</td>
+                      <td className="px-3 py-2.5 text-right font-mono tabular-nums text-ink-soft">{fmt(f.sale_per_m)} ₽/м</td>
+                      <td className="px-3 py-2.5 text-right text-ink-soft">
                         {totalMins} мин
-                        <div className="text-[10px] text-[#b0b0aa]">
+                        <div className="text-[11px] text-faint">
                           {f.cut_minutes}+{f.assemble_minutes}+{f.pack_minutes}
                         </div>
                       </td>
                       <td className="px-3 py-2.5 text-center">
                         <button onClick={() => toggleActive(f)}
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${f.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]'}`}>
+                          className={`px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${f.active ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-line-soft text-muted border-line'}`}>
                           {f.active ? 'Активна' : 'Откл.'}
                         </button>
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <div className="flex gap-1 justify-end">
-                          <button onClick={() => startEdit(f)} className="px-2 py-1 text-[11px] bg-[#f5f5f3] hover:bg-[#ebebea] rounded text-[#4b4b47] transition-colors">Ред.</button>
+                          <button onClick={() => startEdit(f)} className="px-2 py-1 text-[11px] bg-canvas hover:bg-[#ebebea] rounded text-ink-soft transition-colors">Ред.</button>
                           <button onClick={() => deleteFrame(f.id)} className="px-2 py-1 text-[11px] bg-red-50 hover:bg-red-100 rounded text-red-600 transition-colors">Удал.</button>
                         </div>
                       </td>
@@ -485,7 +484,7 @@ export default function MirrorFramesPage() {
               </tbody>
             </table>
           </div>
-          <p className="text-[10px] text-[#9a9a95] mt-2 px-1">
+          <p className="text-[11px] text-muted mt-2 px-1">
             {frames.length} {frames.length === 1 ? 'рамка' : frames.length < 5 ? 'рамки' : 'рамок'} · ставка сборки: {minuteRate.toFixed(2)} ₽/мин (из production_settings)
           </p>
         </div>

@@ -119,8 +119,8 @@ export default function EleganzPricePage() {
       {/* Header */}
       <div className="mb-6 flex items-start justify-between">
         <div>
-          <h1 className="text-[22px] font-bold text-[#111110]">Прайс-лист Eleganz</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Июль 2025 г. &mdash; LED освещение</p>
+          <h1 className="text-[22px] font-semibold text-ink">Прайс-лист Eleganz</h1>
+          <p className="text-[13px] text-muted mt-0.5">Июль 2025 г. &mdash; LED освещение</p>
         </div>
         {copied.size > 0 && (
           <a href="/admin/materials"
@@ -158,36 +158,36 @@ export default function EleganzPricePage() {
         value={search}
         onChange={e => setSearch(e.target.value)}
         placeholder="Поиск по названию или артикулу..."
-        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] mb-5 outline-none focus:border-[#0071e3] bg-white"
+        className="w-full border border-line rounded-lg px-3 py-2 text-[13px] mb-5 outline-none focus:border-[#0071e3] bg-surface"
       />
 
       {loading ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-          <p className="text-[13px] text-[#9a9a95]">Загрузка прайс-листа...</p>
+        <div className="bg-surface border border-line rounded-xl p-12 text-center">
+          <p className="text-[13px] text-muted">Загрузка прайс-листа...</p>
         </div>
       ) : categories.length === 0 ? (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-12 text-center">
-          <p className="text-[13px] text-[#9a9a95]">Ничего не найдено</p>
+        <div className="bg-surface border border-line rounded-xl p-12 text-center">
+          <p className="text-[13px] text-muted">Ничего не найдено</p>
         </div>
       ) : (
         <div className="space-y-6">
           {categories.map(cat => {
             const catItems = grouped[cat]
             return (
-              <div key={cat} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-                <div className="px-4 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between">
-                  <h2 className="text-[13px] font-semibold text-[#111110]">{cat}</h2>
-                  <span className="text-[11px] text-[#9a9a95]">{catItems.length} поз.</span>
+              <div key={cat} className="bg-surface border border-line rounded-xl overflow-hidden">
+                <div className="px-4 py-3 bg-canvas border-b border-line flex items-center justify-between">
+                  <h2 className="text-[13px] font-semibold text-ink">{cat}</h2>
+                  <span className="text-[11px] text-muted tabular-nums">{catItems.length} поз.</span>
                 </div>
 
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-[#e4e4e0] bg-[#fafaf9]">
-                      <th className="px-4 py-2 text-left font-medium text-[#6b6b66] w-[110px]">Артикул</th>
-                      <th className="px-4 py-2 text-left font-medium text-[#6b6b66]">Название</th>
-                      <th className="px-4 py-2 text-left font-medium text-[#6b6b66] w-[60px]">Ед.</th>
-                      <th className="px-4 py-2 text-right font-medium text-[#6b6b66] w-[90px]">Цена ($)</th>
-                      <th className="px-4 py-2 text-right font-medium text-[#6b6b66] w-[100px]">Цена (₽)</th>
+                    <tr className="border-b border-line bg-subtle">
+                      <th className="px-4 py-2 text-left font-medium text-ink-soft w-[110px]">Артикул</th>
+                      <th className="px-4 py-2 text-left font-medium text-ink-soft">Название</th>
+                      <th className="px-4 py-2 text-left font-medium text-ink-soft w-[60px]">Ед.</th>
+                      <th className="px-4 py-2 text-right font-medium text-ink-soft w-[90px]">Цена ($)</th>
+                      <th className="px-4 py-2 text-right font-medium text-ink-soft w-[100px]">Цена (₽)</th>
                       <th className="px-2 py-2 w-[90px]"></th>
                     </tr>
                   </thead>
@@ -203,21 +203,21 @@ export default function EleganzPricePage() {
                       return (
                         <tr
                           key={item.id}
-                          className={`border-b border-[#f0f0ee] last:border-0 transition-colors ${
-                            isCopied ? 'bg-emerald-50' : idx % 2 === 0 ? 'hover:bg-[#fafaf9]' : 'bg-[#fdfdfb] hover:bg-[#fafaf9]'
+                          className={`border-b border-line-soft last:border-0 transition-colors ${
+                            isCopied ? 'bg-emerald-50' : idx % 2 === 0 ? 'hover:bg-subtle' : 'bg-[#fdfdfb] hover:bg-subtle'
                           }`}
                         >
-                          <td className="px-4 py-2 text-[#9a9a95] font-mono text-[11px] whitespace-nowrap">
+                          <td className="px-4 py-2 text-muted font-mono text-[11px] whitespace-nowrap tabular-nums">
                             {item.article ?? '—'}
                           </td>
-                          <td className="px-4 py-2 text-[#111110]">{item.name}</td>
-                          <td className="px-4 py-2 text-[#6b6b66] whitespace-nowrap">{item.unit}</td>
-                          <td className="px-4 py-2 text-right text-[#6b6b66] whitespace-nowrap">
+                          <td className="px-4 py-2 text-ink">{item.name}</td>
+                          <td className="px-4 py-2 text-ink-soft whitespace-nowrap">{item.unit}</td>
+                          <td className="px-4 py-2 text-right text-ink-soft whitespace-nowrap tabular-nums">
                             {isUsd && item.price_usd != null
                               ? `$${formatUsd(item.price_usd)}`
                               : '—'}
                           </td>
-                          <td className="px-4 py-2 text-right font-medium text-[#111110] whitespace-nowrap">
+                          <td className="px-4 py-2 text-right font-medium text-ink whitespace-nowrap tabular-nums">
                             {formatRub(priceRub)} ₽
                           </td>
                           <td className="px-2 py-1.5 text-center">
@@ -228,8 +228,8 @@ export default function EleganzPricePage() {
                                 isCopied
                                   ? 'bg-emerald-50 border-emerald-200 text-emerald-600 cursor-default'
                                   : isCopying
-                                  ? 'bg-[#f5f5f3] border-[#e4e4e0] text-[#9a9a95] cursor-wait'
-                                  : 'bg-white border-[#e4e4e0] text-[#4b4b47] hover:bg-[#f0f0ee] hover:border-[#c8c8c4]'
+                                  ? 'bg-canvas border-line text-muted cursor-wait'
+                                  : 'bg-surface border-line text-ink-soft hover:bg-line-soft hover:border-[#c8c8c4]'
                               }`}
                             >
                               {isCopied ? '✓ В материалах' : isCopying ? '...' : '+ В материалы'}
@@ -247,7 +247,7 @@ export default function EleganzPricePage() {
       )}
 
       {!loading && items.length > 0 && (
-        <p className="text-[11px] text-[#b0b0aa] text-center mt-6">
+        <p className="text-[11px] text-faint text-center mt-6">
           Всего позиций: {items.length} &mdash; Прайс Eleganz, цены в USD пересчитаны по курсу ЦБ РФ + 2 ₽
         </p>
       )}

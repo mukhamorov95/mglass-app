@@ -220,16 +220,16 @@ export default function MaterialsAdminPage() {
       {/* Transfer modal */}
       {transfer && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
-            <h2 className="text-[15px] font-semibold text-[#111110] mb-1">Перенести в специализированный справочник</h2>
-            <p className="text-[13px] text-[#6b6b66] mb-5 leading-snug">
-              <span className="font-medium text-[#111110]">{transfer.material.name}</span>
-              <span className="text-[#9a9a95]"> · {transfer.material.unit} · {transfer.material.cost_price.toLocaleString('ru-RU')} ₽</span>
+          <div className="bg-surface rounded-2xl shadow-2xl w-full max-w-md p-6">
+            <h2 className="text-[15px] font-semibold text-ink mb-1">Перенести в специализированный справочник</h2>
+            <p className="text-[13px] text-ink-soft mb-5 leading-snug">
+              <span className="font-medium text-ink">{transfer.material.name}</span>
+              <span className="text-muted"> · {transfer.material.unit} · {transfer.material.cost_price.toLocaleString('ru-RU')} ₽</span>
             </p>
 
             {/* Куда */}
             <div className="mb-4">
-              <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Куда перенести</label>
+              <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Куда перенести</label>
               <div className="grid grid-cols-2 gap-2">
                 {([
                   { value: 'mirror_lighting', label: '💡 Подсветка зеркал' },
@@ -239,8 +239,8 @@ export default function MaterialsAdminPage() {
                     onClick={() => setTransfer(t => t ? { ...t, target: opt.value } : t)}
                     className={`px-3 py-2.5 rounded-xl border text-[13px] font-medium transition-colors text-left ${
                       transfer.target === opt.value
-                        ? 'bg-[#111110] text-white border-[#111110]'
-                        : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                        ? 'bg-ink text-white border-ink'
+                        : 'border-line text-ink hover:bg-canvas'
                     }`}>
                     {opt.label}
                   </button>
@@ -251,7 +251,7 @@ export default function MaterialsAdminPage() {
             {/* Доп. поля для Подсветки */}
             {transfer.target === 'mirror_lighting' && (
               <div className="mb-4">
-                <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Тип компонента</label>
+                <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Тип компонента</label>
                 <div className="grid grid-cols-2 gap-2">
                   {([
                     { value: 'frame',          label: '🔲 Каркас (профиль)' },
@@ -263,8 +263,8 @@ export default function MaterialsAdminPage() {
                       onClick={() => setTransfer(t => t ? { ...t, componentType: opt.value } : t)}
                       className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors text-left ${
                         transfer.componentType === opt.value
-                          ? 'bg-yellow-400 text-[#111110] border-yellow-400'
-                          : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                          ? 'bg-yellow-400 text-ink border-yellow-400'
+                          : 'border-line text-ink hover:bg-canvas'
                       }`}>
                       {opt.label}
                     </button>
@@ -276,7 +276,7 @@ export default function MaterialsAdminPage() {
             {/* Доп. поля для Фурнитуры */}
             {transfer.target === 'hardware' && (
               <div className="mb-4">
-                <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Система</label>
+                <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Система</label>
                 <div className="grid grid-cols-3 gap-2">
                   {([
                     { value: 'swing',     label: '🚪 Лофт' },
@@ -287,8 +287,8 @@ export default function MaterialsAdminPage() {
                       onClick={() => setTransfer(t => t ? { ...t, systemType: opt.value } : t)}
                       className={`px-3 py-2 rounded-xl border text-[12px] font-medium transition-colors text-center ${
                         transfer.systemType === opt.value
-                          ? 'bg-[#111110] text-white border-[#111110]'
-                          : 'border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f3]'
+                          ? 'bg-ink text-white border-ink'
+                          : 'border-line text-ink hover:bg-canvas'
                       }`}>
                       {opt.label}
                     </button>
@@ -301,7 +301,7 @@ export default function MaterialsAdminPage() {
               <p className="mb-3 text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{transfer.error}</p>
             )}
 
-            <p className="text-[11px] text-[#9a9a95] mb-4">После переноса материал будет скрыт из общего справочника.</p>
+            <p className="text-[11px] text-muted mb-4">После переноса материал будет скрыт из общего справочника.</p>
 
             <div className="flex gap-2">
               <button
@@ -311,11 +311,11 @@ export default function MaterialsAdminPage() {
                   !transfer.target ||
                   (transfer.target === 'mirror_lighting' && !transfer.componentType)
                 }
-                className="flex-1 bg-[#111110] text-white text-[13px] font-medium px-4 py-2.5 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                className="flex-1 bg-ink text-white text-[13px] font-medium px-4 py-2.5 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                 {transfer.transferring ? 'Переносим...' : 'Перенести →'}
               </button>
               <button onClick={() => setTransfer(null)}
-                className="px-4 py-2.5 rounded-xl border border-[#e4e4e0] text-[13px] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+                className="px-4 py-2.5 rounded-xl border border-line text-[13px] text-ink-soft hover:bg-canvas transition-colors">
                 Отмена
               </button>
             </div>
@@ -326,8 +326,8 @@ export default function MaterialsAdminPage() {
       {/* Шапка */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Справочник материалов</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">
+          <h1 className="text-[20px] font-semibold text-ink tracking-tight">Справочник материалов</h1>
+          <p className="text-[13px] text-muted mt-0.5">
             {totalActive} активных позиций
             {queueItems.length > 0 && <span className="ml-2 text-amber-600 font-medium">· {queueItems.length} ждут обработки</span>}
           </p>
@@ -335,7 +335,7 @@ export default function MaterialsAdminPage() {
         <div className="flex items-center gap-2">
           <button
             onClick={() => toggleClearGroup(allVisibleIds, selectedForClear.size < allVisibleIds.length)}
-            className="h-8 px-3 rounded-lg text-[12px] border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+            className="h-8 px-3 rounded-lg text-[12px] border border-line text-ink-soft hover:bg-canvas transition-colors">
             {selectedForClear.size < allVisibleIds.length ? 'Выбрать все' : 'Снять все'}
           </button>
           {selectedForClear.size > 0 && (
@@ -345,22 +345,22 @@ export default function MaterialsAdminPage() {
             </button>
           )}
           <label className="flex items-center gap-2 cursor-pointer select-none ml-1">
-            <div className={`w-8 rounded-full transition-colors relative ${showInactive ? 'bg-[#111110]' : 'bg-[#e4e4e0]'}`}
+            <div className={`w-8 rounded-full transition-colors relative ${showInactive ? 'bg-ink' : 'bg-line'}`}
               style={{ height: 18 }}
               onClick={() => setShowInactive(!showInactive)}>
-              <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-white shadow-sm transition-transform ${showInactive ? 'translate-x-4' : 'translate-x-0.5'}`} />
+              <div className={`absolute top-0.5 w-3.5 h-3.5 rounded-full bg-surface shadow-sm transition-transform ${showInactive ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </div>
-            <span className="text-[12px] text-[#6b6b66]">Показать скрытые</span>
+            <span className="text-[12px] text-ink-soft">Показать скрытые</span>
           </label>
         </div>
       </div>
 
       {/* Форма добавления / редактирования */}
       <div ref={formRef}
-        className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
+        className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-surface border-line'}`}>
 
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-muted">
             {editingId !== null ? `Редактировать — ID ${editingId}` : 'Добавить позицию'}
           </h2>
           {editingId !== null && (
@@ -370,10 +370,10 @@ export default function MaterialsAdminPage() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Название (от поставщика)</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Название (от поставщика)</label>
             <input
               autoFocus={editingId !== null}
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.name}
               onChange={e => setForm({ ...form, name: e.target.value })}
               placeholder="Полное название из прайса"
@@ -381,12 +381,12 @@ export default function MaterialsAdminPage() {
           </div>
 
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">
               Короткое название
-              <span className="ml-1.5 text-[10px] font-normal text-[#b8b8b4] normal-case tracking-normal">показывается в калькуляторе вместо полного</span>
+              <span className="ml-1.5 text-[10px] font-normal text-faint normal-case tracking-normal">показывается в калькуляторе вместо полного</span>
             </label>
             <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.short_name ?? ''}
               onChange={e => setForm({ ...form, short_name: e.target.value || null })}
               placeholder="напр. «Зеркало 4 мм» вместо «Зеркало осветлённое 4 мм Guardian»"
@@ -394,25 +394,25 @@ export default function MaterialsAdminPage() {
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Категория</label>
-            <select className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Категория</label>
+            <select className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>
               {MATERIAL_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Единица</label>
-            <select className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Единица</label>
+            <select className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.unit} onChange={e => setForm({ ...form, unit: e.target.value })}>
               {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
             </select>
           </div>
 
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Закупочная цена (₽)</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Закупочная цена (₽)</label>
             <input type="number"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+              className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-ink transition-all"
               value={form.cost_price}
               onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
             />
@@ -420,32 +420,32 @@ export default function MaterialsAdminPage() {
 
           {form.category === 'зеркало' && (
             <div>
-              <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">
+              <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">
                 Цена в калькуляторе (₽)
               </label>
               <input type="number"
-                className="w-full bg-white border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-blue-600 transition-all"
+                className="w-full bg-surface border border-blue-300 rounded-lg px-3 py-2 text-[14px] font-mono text-ink outline-none focus:border-blue-600 transition-all"
                 value={form.sale_price ?? ''}
                 placeholder="напр. 2000"
                 onChange={e => setForm({ ...form, sale_price: e.target.value === '' ? null : Number(e.target.value) })}
               />
-              <p className="text-[10px] text-[#9a9a95] mt-1">Идёт в себестоимость изделия</p>
+              <p className="text-[10px] text-muted mt-1">Идёт в себестоимость изделия</p>
             </div>
           )}
 
           <div className="flex items-end pb-0.5">
             <label className="flex items-center gap-2.5 cursor-pointer select-none">
-              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${form.has_vat ? 'bg-[#111110] border-[#111110]' : 'border-[#c4c4be]'}`}
+              <div className={`w-4 h-4 rounded border-2 flex items-center justify-center flex-shrink-0 transition-colors ${form.has_vat ? 'bg-ink border-ink' : 'border-faint'}`}
                 onClick={() => setForm({ ...form, has_vat: !form.has_vat })}>
                 {form.has_vat && <svg className="w-2.5 h-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
               </div>
-              <span className="text-[13px] text-[#6b6b66]" onClick={() => setForm({ ...form, has_vat: !form.has_vat })}>НДС включён</span>
+              <span className="text-[13px] text-ink-soft" onClick={() => setForm({ ...form, has_vat: !form.has_vat })}>НДС включён</span>
             </label>
           </div>
 
           <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Комментарий</label>
-            <input className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Комментарий</label>
+            <input className="w-full bg-surface border border-line rounded-lg px-3 py-2 text-[14px] text-ink outline-none focus:border-ink transition-all"
               value={form.comment ?? ''}
               onChange={e => setForm({ ...form, comment: e.target.value })}
               placeholder="Необязательно"
@@ -459,12 +459,12 @@ export default function MaterialsAdminPage() {
 
         <div className="flex gap-2 mt-4">
           <button onClick={handleSave} disabled={saving || !form.name}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+            className="bg-ink text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
             {saving ? 'Сохранение...' : editingId !== null ? 'Сохранить изменения' : 'Добавить позицию'}
           </button>
           {editingId !== null && (
             <button onClick={cancelEdit}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
+              className="bg-line-soft text-ink text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
               Отмена
             </button>
           )}
@@ -473,7 +473,7 @@ export default function MaterialsAdminPage() {
 
       {/* Группы материалов */}
       {loading ? (
-        <div className="py-16 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
+        <div className="py-16 text-center text-[13px] text-muted">Загрузка...</div>
       ) : (
         <div className="space-y-6">
 
@@ -481,34 +481,34 @@ export default function MaterialsAdminPage() {
           {queueItems.length > 0 && (
             <div>
               <div className="flex items-center gap-3 mb-2">
-                <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
+                <span className="text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-md border bg-amber-50 text-amber-700 border-amber-200">
                   📥 Новые — обработать
                 </span>
-                <span className="text-[12px] text-[#9a9a95]">{queueItems.length} позиций</span>
-                <div className="flex-1 h-px bg-[#f0f0ec]" />
+                <span className="text-[12px] text-muted">{queueItems.length} позиций</span>
+                <div className="flex-1 h-px bg-line-soft" />
               </div>
-              <div className="bg-white border border-amber-200 rounded-xl overflow-hidden">
+              <div className="bg-surface border border-amber-200 rounded-xl overflow-hidden">
                 <table className="w-full text-[13px]">
                   <tbody>
                     {queueItems.map((m, idx) => (
-                      <tr key={m.id} className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-amber-50/40'}`}>
+                      <tr key={m.id} className={`border-b border-line-soft last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-amber-50/40'}`}>
                         <td className="pl-3 pr-1 py-3 w-8">
                           <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-0.5">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <span className="font-medium text-[#111110]">{m.name}</span>
+                              <span className="font-medium text-ink">{m.name}</span>
                               {catalogNames.has(m.name.toLowerCase().trim()) && (
                                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">дублёр</span>
                               )}
                             </div>
-                            <span className="text-[10px] text-[#b8b8b4]">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span>
+                            <span className="text-[10px] text-faint">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-3 text-[#9a9a95] text-[11px] uppercase">{m.category}</td>
-                        <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
-                        <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
+                        <td className="px-4 py-3 text-muted text-[11px] uppercase">{m.category}</td>
+                        <td className="px-4 py-3 text-ink-soft">{m.unit}</td>
+                        <td className="px-4 py-3 text-right font-mono font-semibold text-ink tabular-nums">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
                         <td className="px-4 py-3">
                           <div className="flex gap-2 justify-end">
                             <button
@@ -517,7 +517,7 @@ export default function MaterialsAdminPage() {
                               ↗ Перенести
                             </button>
                             <button onClick={() => startEdit(m)}
-                              className="h-6 px-2.5 rounded text-[11px] font-medium bg-[#f5f5f3] text-[#4b4b47] hover:bg-[#ebebea] transition-colors">
+                              className="h-6 px-2.5 rounded text-[11px] font-medium bg-canvas text-ink-soft hover:bg-[#ebebea] transition-colors">
                               Изменить
                             </button>
                             <button onClick={() => deleteMaterial(m.id, m.name)}
@@ -543,37 +543,37 @@ export default function MaterialsAdminPage() {
               <div key={group.label}>
                 {/* Заголовок группы */}
                 <div className="flex items-center gap-3 mb-2">
-                  <span className={`text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border ${group.color}`}>
+                  <span className={`text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-md border ${group.color}`}>
                     {group.label}
                   </span>
-                  <span className="text-[12px] text-[#9a9a95]">{items.filter(i => i.active).length} позиций</span>
-                  <div className="flex-1 h-px bg-[#f0f0ec]" />
+                  <span className="text-[12px] text-muted">{items.filter(i => i.active).length} позиций</span>
+                  <div className="flex-1 h-px bg-line-soft" />
                 </div>
 
                 {/* Таблица группы */}
-                <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className="bg-surface border border-line rounded-xl overflow-hidden">
                   <table className="w-full text-[13px]">
                     <thead>
-                      <tr className="border-b border-[#f0f0ec]">
+                      <tr className="border-b border-line-soft">
                         <th className="w-8 pl-3 pr-1 py-2.5"></th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Название</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-20">Ед.</th>
-                        <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-32">Закупка</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Название</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-20">Ед.</th>
+                        <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-32">Закупка</th>
                         {group.label === 'Зеркало' && (
                           <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-blue-500 uppercase tracking-widest w-36">Цена калькулятора</th>
                         )}
-                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-16">НДС</th>
-                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Наличие</th>
-                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Комментарий</th>
-                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-24">Фото</th>
+                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-16">НДС</th>
+                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-24">Наличие</th>
+                        <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest">Комментарий</th>
+                        <th className="text-center px-4 py-2.5 text-[11px] font-semibold text-muted uppercase tracking-widest w-24">Фото</th>
                         <th className="w-32 px-4 py-2.5"></th>
                       </tr>
                     </thead>
                     <tbody>
                       {items.map(m => (
                         <tr key={m.id}
-                          className={`border-b border-[#f8f8f7] last:border-0 transition-colors
-                            ${selectedForClear.has(m.id) ? 'bg-red-50' : editingId === m.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}
+                          className={`border-b border-line-soft last:border-0 transition-colors
+                            ${selectedForClear.has(m.id) ? 'bg-red-50' : editingId === m.id ? 'bg-blue-50' : 'hover:bg-subtle'}
                             ${!m.active ? 'opacity-35' : ''}`}>
                           <td className="pl-3 pr-1 py-3 w-8">
                             <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
@@ -581,7 +581,7 @@ export default function MaterialsAdminPage() {
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-[#111110]">{m.name}</span>
+                                <span className="font-medium text-ink">{m.name}</span>
                                 {catalogNames.has(m.name.toLowerCase().trim()) && (
                                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
                                     дублёр
@@ -589,23 +589,23 @@ export default function MaterialsAdminPage() {
                                 )}
                               </div>
                               {m.short_name && (
-                                <span className="text-[11px] text-[#9a9a95]">→ {m.short_name}</span>
+                                <span className="text-[11px] text-muted">→ {m.short_name}</span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
-                          <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">
+                          <td className="px-4 py-3 text-ink-soft">{m.unit}</td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold text-ink tabular-nums">
                             {m.cost_price.toLocaleString('ru-RU')} ₽
                           </td>
                           {group.label === 'Зеркало' && (
-                            <td className="px-4 py-3 text-right font-mono font-semibold text-blue-600">
+                            <td className="px-4 py-3 text-right font-mono font-semibold text-blue-600 tabular-nums">
                               {m.sale_price ? m.sale_price.toLocaleString('ru-RU') + ' ₽' : <span className="text-orange-400 text-[11px] font-normal">не задана</span>}
                             </td>
                           )}
                           <td className="px-4 py-3 text-center">
                             {m.has_vat
-                              ? <span className="text-emerald-600 font-bold text-[11px]">ДА</span>
-                              : <span className="text-[#c4c4be]">—</span>}
+                              ? <span className="text-emerald-600 font-semibold text-[11px]">ДА</span>
+                              : <span className="text-faint">—</span>}
                           </td>
                           <td className="px-4 py-3 text-center">
                             <button
@@ -618,18 +618,18 @@ export default function MaterialsAdminPage() {
                               {(m.in_stock ?? true) ? 'В наличии' : 'Под заказ'}
                             </button>
                           </td>
-                          <td className="px-4 py-3 text-[#9a9a95] text-[12px]">{m.comment ?? ''}</td>
+                          <td className="px-4 py-3 text-muted text-[12px]">{m.comment ?? ''}</td>
                           <td className="px-4 py-3 text-center">
                             {uploadingId === m.id ? (
-                              <span className="text-[11px] text-[#9a9a95]">Загрузка...</span>
+                              <span className="text-[11px] text-muted">Загрузка...</span>
                             ) : m.image_url ? (
                               <div className="flex items-center justify-center gap-1.5">
-                                <img src={m.image_url} alt={m.name} className="h-10 w-10 object-contain rounded border border-[#e4e4e0]" />
-                                <button onClick={() => removeImage(m.id)} className="text-[#c4c4be] hover:text-red-400 transition-colors text-[13px]" title="Удалить фото">×</button>
+                                <img src={m.image_url} alt={m.name} className="h-10 w-10 object-contain rounded border border-line" />
+                                <button onClick={() => removeImage(m.id)} className="text-faint hover:text-red-400 transition-colors text-[13px]" title="Удалить фото">×</button>
                               </div>
                             ) : (
                               <button onClick={() => triggerUpload(m.id)}
-                                className="text-[11px] text-[#9a9a95] hover:text-blue-600 transition-colors">
+                                className="text-[11px] text-muted hover:text-blue-600 transition-colors">
                                 📷
                               </button>
                             )}
@@ -649,7 +649,7 @@ export default function MaterialsAdminPage() {
                               </button>
                               <button
                                 onClick={() => toggleActive(m.id, m.active)}
-                                className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
+                                className="text-[12px] text-muted hover:text-ink-soft transition-colors">
                                 {m.active ? 'Скрыть' : 'Показать'}
                               </button>
                               <button
@@ -678,23 +678,23 @@ export default function MaterialsAdminPage() {
             return (
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <span className="text-[11px] font-bold uppercase tracking-widest px-2.5 py-1 rounded-md border bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]">
+                  <span className="text-[11px] font-semibold uppercase tracking-widest px-2.5 py-1 rounded-md border bg-line-soft text-ink-soft border-line">
                     Прочее
                   </span>
-                  <div className="flex-1 h-px bg-[#f0f0ec]" />
+                  <div className="flex-1 h-px bg-line-soft" />
                 </div>
-                <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className="bg-surface border border-line rounded-xl overflow-hidden">
                   <table className="w-full text-[13px]">
                     <tbody>
                       {otherItems.map(m => (
-                        <tr key={m.id} className={`border-b border-[#f8f8f7] last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-[#fafaf9]'}`}>
+                        <tr key={m.id} className={`border-b border-line-soft last:border-0 transition-colors ${selectedForClear.has(m.id) ? 'bg-red-50' : 'hover:bg-subtle'}`}>
                           <td className="pl-3 pr-1 py-3 w-8">
                             <input type="checkbox" checked={selectedForClear.has(m.id)} onChange={() => toggleClearItem(m.id)} className="w-4 h-4 cursor-pointer" />
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex flex-col gap-0.5">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="font-medium text-[#111110]">{m.name}</span>
+                                <span className="font-medium text-ink">{m.name}</span>
                                 {catalogNames.has(m.name.toLowerCase().trim()) && (
                                   <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">
                                     дублёр
@@ -702,13 +702,13 @@ export default function MaterialsAdminPage() {
                                 )}
                               </div>
                               {m.short_name && (
-                                <span className="text-[11px] text-[#9a9a95]">→ {m.short_name}</span>
+                                <span className="text-[11px] text-muted">→ {m.short_name}</span>
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3 text-[#9a9a95] text-[11px] uppercase">{m.category}</td>
-                          <td className="px-4 py-3 text-[#6b6b66]">{m.unit}</td>
-                          <td className="px-4 py-3 text-right font-mono font-semibold">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
+                          <td className="px-4 py-3 text-muted text-[11px] uppercase">{m.category}</td>
+                          <td className="px-4 py-3 text-ink-soft">{m.unit}</td>
+                          <td className="px-4 py-3 text-right font-mono font-semibold tabular-nums">{m.cost_price.toLocaleString('ru-RU')} ₽</td>
                           <td className="px-4 py-3">
                             <div className="flex gap-3 justify-end">
                               <button
@@ -717,7 +717,7 @@ export default function MaterialsAdminPage() {
                                 ↗ Перенести
                               </button>
                               <button onClick={() => startEdit(m)} className="text-[12px] font-semibold text-blue-600 hover:text-blue-800">Изменить</button>
-                              <button onClick={() => toggleActive(m.id, m.active)} className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">{m.active ? 'Скрыть' : 'Показать'}</button>
+                              <button onClick={() => toggleActive(m.id, m.active)} className="text-[12px] text-muted hover:text-ink-soft">{m.active ? 'Скрыть' : 'Показать'}</button>
                             </div>
                           </td>
                         </tr>

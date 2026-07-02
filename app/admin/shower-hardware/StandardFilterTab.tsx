@@ -67,30 +67,30 @@ export function StandardFilterTab({ colors, suppliers }: { colors: Color[]; supp
     <div className="space-y-4">
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-4 items-end bg-white border border-[#e4e4e0] rounded-xl p-4">
+      <div className="flex flex-wrap gap-4 items-end bg-surface border border-line rounded-xl p-4">
         <div>
-          <p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-widest mb-1.5">Тип душевой</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Тип душевой</p>
           <div className="flex gap-1">
             {SHOWER_TYPES.filter(t => t.v !== 'universal').map(t => (
               <button key={t.v} onClick={() => setFilterType(t.v)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${
-                  filterType === t.v ? 'bg-blue-600 text-white' : 'bg-[#f5f5f3] text-[#6b6b66] hover:bg-[#ececea]'
+                  filterType === t.v ? 'bg-blue-600 text-white' : 'bg-canvas text-ink-soft hover:bg-[#ececea]'
                 }`}>{t.l}</button>
             ))}
           </div>
         </div>
         <div>
-          <p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-widest mb-1.5">Категория</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Категория</p>
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white capitalize">
+            className="border border-line rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-ink bg-surface capitalize">
             <option value="all">Все категории</option>
             {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
         </div>
         <div>
-          <p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-widest mb-1.5">Поставщик</p>
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-1.5">Поставщик</p>
           <select value={filterSup} onChange={e => setFilterSup(Number(e.target.value))}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white">
+            className="border border-line rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-ink bg-surface">
             <option value={0}>Все поставщики</option>
             {suppliersWithData.map(sId => {
               const s = suppliers.find(s => s.id === sId)
@@ -98,30 +98,30 @@ export function StandardFilterTab({ colors, suppliers }: { colors: Color[]; supp
             })}
           </select>
         </div>
-        <div className="ml-auto text-[12px] text-[#9a9a95]">
+        <div className="ml-auto text-[12px] text-muted">
           {filtered.length} позиций
         </div>
       </div>
 
       {loading ? (
-        <div className="p-8 text-center text-[#9a9a95]">Загрузка...</div>
+        <div className="p-8 text-center text-muted">Загрузка...</div>
       ) : filtered.length === 0 ? (
-        <div className="p-8 text-center text-[#9a9a95] bg-white border border-[#e4e4e0] rounded-xl">
+        <div className="p-8 text-center text-muted bg-surface border border-line rounded-xl">
           Нет позиций для выбранных фильтров.<br />
           <span className="text-[12px]">Добавьте позиции в «Справочнике» с нужным типом душевой.</span>
         </div>
       ) : (
         Object.entries(grouped).map(([cat, catItems]) => (
-          <div key={cat} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className="px-4 py-2.5 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center gap-2">
-              <span className="text-[12px] font-bold text-[#111110] uppercase tracking-wide">{cat}</span>
-              <span className="text-[11px] text-[#9a9a95]">{catItems.length} поз.</span>
+          <div key={cat} className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className="px-4 py-2.5 bg-canvas border-b border-line flex items-center gap-2">
+              <span className="text-[12px] font-semibold text-ink uppercase tracking-wide">{cat}</span>
+              <span className="text-[11px] text-muted">{catItems.length} поз.</span>
             </div>
 
             <div className="overflow-x-auto">
               {/* One sub-table per supplier (if multiple) */}
               {displaySuppliers.length === 0 ? (
-                <div className="px-4 py-4 text-[12px] text-[#b0b0ab] italic">
+                <div className="px-4 py-4 text-[12px] text-faint italic">
                   Нет данных — добавьте цены в Справочнике
                 </div>
               ) : displaySuppliers.map(sup => {
@@ -133,18 +133,18 @@ export function StandardFilterTab({ colors, suppliers }: { colors: Color[]; supp
                 return (
                   <div key={sup.id}>
                     {displaySuppliers.length > 1 && (
-                      <div className="px-4 py-1.5 bg-[#fafaf9] border-b border-[#f0f0ec]">
-                        <span className="text-[11px] font-bold text-[#6b6b66]">{sup.name}</span>
+                      <div className="px-4 py-1.5 bg-subtle border-b border-line-soft">
+                        <span className="text-[11px] font-semibold text-ink-soft">{sup.name}</span>
                       </div>
                     )}
                     <div style={{ minWidth: 200 + activeColors.length * 88 }}>
                       {/* Color header */}
                       <div className="flex bg-[#f2f2f0] border-b border-[#e8e8e6]">
-                        <div className="px-3 py-2 text-[10px] font-bold text-[#9a9a95] uppercase border-r border-[#e8e8e6]" style={{ width: 200 }}>
+                        <div className="px-3 py-2 text-[10px] font-semibold text-muted uppercase border-r border-[#e8e8e6]" style={{ width: 200 }}>
                           {displaySuppliers.length === 1 ? `${sup.name} — наименование` : 'Наименование'}
                         </div>
                         {activeColors.map(c => (
-                          <div key={c.id} className="px-1 py-2 text-[9px] font-bold text-[#9a9a95] uppercase text-center leading-tight border-r border-[#e8e8e6] last:border-0"
+                          <div key={c.id} className="px-1 py-2 text-[9px] font-semibold text-muted uppercase text-center leading-tight border-r border-[#e8e8e6] last:border-0"
                             style={{ width: 88 }}>
                             {c.name}
                           </div>
@@ -156,23 +156,23 @@ export function StandardFilterTab({ colors, suppliers }: { colors: Color[]; supp
                         const itemPrices = relevantPrices.filter(p => p.item_id === item.id && p.supplier_id === sup.id)
                         if (itemPrices.length === 0 && filterSup === 0) return null
                         return (
-                          <div key={item.id} className="flex items-center border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9]">
-                            <div className="px-3 py-2.5 border-r border-[#f0f0ec]" style={{ width: 200 }}>
-                              <p className="text-[13px] font-medium text-[#111110]">{item.name}</p>
-                              <p className="text-[10px] text-[#9a9a95]">{item.unit}</p>
+                          <div key={item.id} className="flex items-center border-b border-line-soft last:border-0 hover:bg-subtle">
+                            <div className="px-3 py-2.5 border-r border-line-soft" style={{ width: 200 }}>
+                              <p className="text-[13px] font-medium text-ink">{item.name}</p>
+                              <p className="text-[10px] text-muted">{item.unit}</p>
                             </div>
                             {activeColors.map(color => {
                               const p = itemPrices.find(p => p.color_id === color.id)
                               return (
-                                <div key={color.id} className="px-1 py-2.5 text-center border-r border-[#f0f0ec] last:border-0"
+                                <div key={color.id} className="px-1 py-2.5 text-center border-r border-line-soft last:border-0"
                                   style={{ width: 88 }}>
                                   {p?.cost_price ? (
                                     <div>
-                                      <div className="text-[12px] font-mono font-semibold text-[#111110]">
+                                      <div className="text-[12px] font-mono font-semibold text-ink tabular-nums">
                                         {p.cost_price.toLocaleString('ru-RU')}
                                       </div>
                                       {p.discount_percent > 0 && (
-                                        <div className="text-[9px] text-[#9a9a95]">−{p.discount_percent}%</div>
+                                        <div className="text-[9px] text-muted tabular-nums">−{p.discount_percent}%</div>
                                       )}
                                     </div>
                                   ) : <span className="text-[#d4d4d0]">—</span>}

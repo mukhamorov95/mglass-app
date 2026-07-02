@@ -583,10 +583,10 @@ export default function GlassPricesPage() {
         className={`inline-block px-2 py-1.5 rounded cursor-text text-center font-mono transition-colors
           ${isDirty
             ? 'border border-[#fbbf24] bg-[#fffbeb]'
-            : 'border border-transparent hover:border-[#d0d0cc] hover:bg-[#f8f8f7]'}
+            : 'border border-transparent hover:border-[#d0d0cc] hover:bg-canvas'}
           ${opts.amber
             ? `min-w-[52px] font-semibold ${displayVal != null ? 'text-[#b45309]' : 'text-[#e8c88a]'}`
-            : `min-w-[64px] ${displayVal != null ? 'text-[#111110]' : 'text-[#c8c8c4]'}`}`}
+            : `min-w-[64px] ${displayVal != null ? 'text-ink' : 'text-[#c8c8c4]'}`}`}
         title="Нажми чтобы изменить"
       >
         {displayVal != null ? (opts.amber ? `${displayVal}%` : fmt(displayVal)) : '—'}
@@ -761,15 +761,15 @@ export default function GlassPricesPage() {
     if (active) {
       if (variant === 'blue')   return `${base} bg-[#0071e3] text-white`
       if (variant === 'purple') return `${base} bg-[#7c3aed] text-white`
-      return `${base} bg-[#111110] text-white`
+      return `${base} bg-ink text-white`
     }
-    return `${base} bg-white border border-[#e4e4e0] text-[#111110] hover:bg-[#f5f5f4]`
+    return `${base} bg-surface border border-line text-ink hover:bg-[#f5f5f4]`
   }
 
   return (
     <div className="max-w-[1200px] mx-auto px-6 py-8 pb-24">
       {toast && (
-        <div className="fixed top-4 right-4 bg-[#111110] text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">{toast}</div>
+        <div className="fixed top-4 right-4 bg-ink text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">{toast}</div>
       )}
       {undoRows && (
         <div className="fixed top-4 right-4 flex items-center gap-3 bg-[#1c1c1e] text-white text-[13px] px-4 py-2.5 rounded-xl shadow-lg z-50">
@@ -815,9 +815,9 @@ export default function GlassPricesPage() {
       <div className="mb-6">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Справочник цен на стекло и зеркало</h1>
-            <p className="text-[13px] text-[#8a8a85] mt-0.5">
-              Кликни по ячейке → введи значение → Enter. Нажми <span className="font-medium text-[#111110]">«Сохранить изменения»</span> чтобы записать в базу.
+            <h1 className="text-[20px] font-semibold text-ink tracking-tight">Справочник цен на стекло и зеркало</h1>
+            <p className="text-[13px] text-muted mt-0.5">
+              Кликни по ячейке → введи значение → Enter. Нажми <span className="font-medium text-ink">«Сохранить изменения»</span> чтобы записать в базу.
               <span className="ml-1 text-[#b45309]">Расход %</span> — базовый коэффициент потерь при раскрое.
             </p>
           </div>
@@ -827,7 +827,7 @@ export default function GlassPricesPage() {
               {syncingB2B ? 'Синхронизация...' : '⟳ Синхр. в B2B'}
             </button>
             <a href="/admin/waste-modifiers"
-              className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
+              className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-line text-ink-soft hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
               Модификаторы расхода →
             </a>
           </div>
@@ -852,7 +852,7 @@ export default function GlassPricesPage() {
       {/* ── Formula tab ── */}
       {tab === 'formula' && (
         formulaLoading
-          ? <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
+          ? <div className="text-[13px] text-muted py-12 text-center">Загрузка...</div>
           : <>
               <FormulaTab
                 formula={formula}
@@ -868,9 +868,9 @@ export default function GlassPricesPage() {
                 onEditValChange={setFormulaEditVal}
               />
               {/* Apply formula to all sale prices */}
-              <div className="mt-6 bg-white border border-[#e4e4e0] rounded-xl p-5">
-                <h2 className="text-[14px] font-semibold text-[#111110] mb-1">Применить формулу ко всем ценам</h2>
-                <p className="text-[13px] text-[#8a8a85] mb-4">
+              <div className="mt-6 bg-surface border border-line rounded-xl p-5">
+                <h2 className="text-[14px] font-semibold text-ink mb-1">Применить формулу ко всем ценам</h2>
+                <p className="text-[13px] text-muted mb-4">
                   Пересчитает и перезапишет все продажные цены на основе текущих параметров.
                   Нажми «Сохранить изменения» после проверки.
                 </p>
@@ -894,12 +894,12 @@ export default function GlassPricesPage() {
 
       {/* ── Price matrix tabs ── */}
       {tab !== 'formula' && loading ? (
-        <div className="text-[13px] text-[#8a8a85] py-12 text-center">Загрузка...</div>
+        <div className="text-[13px] text-muted py-12 text-center">Загрузка...</div>
       ) : tab !== 'formula' && loadError ? (
         <div className="py-12 flex flex-col items-center gap-3 text-center">
           <p className="text-[13px] text-red-600">Не удалось загрузить справочник стекла</p>
-          <p className="text-[11px] text-[#9a9a95]">{loadError}</p>
-          <button onClick={load} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
+          <p className="text-[11px] text-muted">{loadError}</p>
+          <button onClick={load} className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg hover:bg-[#2a2a28]">
             Повторить
           </button>
         </div>
@@ -920,7 +920,7 @@ export default function GlassPricesPage() {
               <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3">
                 <span className="text-[13px] text-amber-800">
                   <span className="font-semibold">{emptyCount}</span> ячеек без продажной цены — есть себестоимость
-                  {!formulaLoaded && <span className="ml-1 text-[#8a8a85]">(формула загружается...)</span>}
+                  {!formulaLoaded && <span className="ml-1 text-muted">(формула загружается...)</span>}
                 </span>
                 <button
                   onClick={fillByFormula}
@@ -933,22 +933,22 @@ export default function GlassPricesPage() {
             )
           })()}
 
-          <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden mb-4">
+          <div className="bg-surface border border-line rounded-xl overflow-hidden mb-4">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="bg-[#f8f8f7] border-b border-[#e4e4e0]">
+                <tr className="bg-canvas border-b border-line">
                   <th className="w-8" />
-                  <th className="px-4 py-3 text-left font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider w-[240px]">Наименование</th>
+                  <th className="px-4 py-3 text-left font-semibold text-muted text-[11px] uppercase tracking-wider w-[240px]">Наименование</th>
                   <th className="px-3 py-3 text-center font-semibold text-[#f59e0b] text-[11px] uppercase tracking-wider w-[90px]">Расход %</th>
                   {thicknesses.map(t => (
-                    <th key={t} className="px-3 py-3 text-center font-semibold text-[#8a8a85] text-[11px] uppercase tracking-wider">{t} мм</th>
+                    <th key={t} className="px-3 py-3 text-center font-semibold text-muted text-[11px] uppercase tracking-wider">{t} мм</th>
                   ))}
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#f0f0ee]">
                 {allNames.length === 0 && (
                   <tr>
-                    <td colSpan={thicknesses.length + 3} className="px-4 py-8 text-center text-[#8a8a85]">
+                    <td colSpan={thicknesses.length + 3} className="px-4 py-8 text-center text-muted">
                       Нет данных. Добавьте позицию ниже.
                     </td>
                   </tr>
@@ -962,7 +962,7 @@ export default function GlassPricesPage() {
                   const nameEditing = editKey === makeKey(origName, '__name__', tab)
 
                   return (
-                    <tr key={origName} className="hover:bg-[#fafaf9] group">
+                    <tr key={origName} className="hover:bg-subtle group">
 
                       {/* Delete */}
                       <td className="pl-3 text-center">
@@ -989,13 +989,13 @@ export default function GlassPricesPage() {
                             />
                           : <span className={`cursor-text font-medium transition-colors
                               hover:text-[#0071e3]
-                              ${nameDirty ? 'text-[#b45309] underline decoration-dotted' : 'text-[#111110]'}`}>
+                              ${nameDirty ? 'text-[#b45309] underline decoration-dotted' : 'text-ink'}`}>
                               {dispName}
                             </span>}
                         {isCostTab && (
                           <div className="flex items-center gap-1.5 mt-1.5" onClick={e => e.stopPropagation()}>
                             <select
-                              className="text-[11px] border border-[#e4e4e0] rounded px-1.5 py-0.5 text-[#6b6b66] bg-white outline-none focus:border-[#0071e3] max-w-[130px]"
+                              className="text-[11px] border border-line rounded px-1.5 py-0.5 text-ink-soft bg-surface outline-none focus:border-[#0071e3] max-w-[130px]"
                               value={rowSupplier[origName]?.supplier_id ?? ''}
                               onChange={e => {
                                 const val = e.target.value || null
@@ -1010,7 +1010,7 @@ export default function GlassPricesPage() {
                               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                             <input
-                              className="text-[11px] border border-[#e4e4e0] rounded px-1.5 py-0.5 text-[#6b6b66] outline-none focus:border-[#0071e3] w-[100px]"
+                              className="text-[11px] border border-line rounded px-1.5 py-0.5 text-ink-soft outline-none focus:border-[#0071e3] w-[100px]"
                               placeholder="наим. у пост."
                               value={rowSupplier[origName]?.supplier_material_name ?? ''}
                               onChange={e => setRowSupplier(prev => ({
@@ -1083,9 +1083,9 @@ export default function GlassPricesPage() {
             <input value={newName} onChange={e => setNewName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addGlass()}
               placeholder={`Название ${curCat === 'mirror' ? 'зеркала' : 'стекла'}...`}
-              className="text-[13px] border border-[#e4e4e0] rounded-lg px-3 py-2 outline-none focus:border-[#0071e3] w-[300px]" />
+              className="text-[13px] border border-line rounded-lg px-3 py-2 outline-none focus:border-[#0071e3] w-[300px]" />
             <button onClick={addGlass} disabled={addingRow || !newName.trim()}
-              className="text-[13px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+              className="text-[13px] font-medium px-4 py-2 rounded-lg bg-ink text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
               {addingRow ? 'Добавляю...' : '+ Добавить'}
             </button>
           </div>
@@ -1096,11 +1096,11 @@ export default function GlassPricesPage() {
               className="text-[13px] font-medium px-4 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40 transition-colors">
               {clearing ? 'Очищаю...' : `Очистить цены — ${TAB_LABEL[priceTab]}`}
             </button>
-            <span className="text-[12px] text-[#8a8a85]">Обнулит числа. Отмена в течение 6 сек.</span>
+            <span className="text-[12px] text-muted">Обнулит числа. Отмена в течение 6 сек.</span>
 
             {priceTab === 'sale_glass' && isOwner && (
               <>
-                <div className="w-px h-5 bg-[#e4e4e0]" />
+                <div className="w-px h-5 bg-line" />
                 <button onClick={migrateFromMaterials} disabled={migrating}
                   className="text-[13px] font-medium px-4 py-2 rounded-lg bg-[#0071e3] text-white hover:bg-[#0062c4] disabled:opacity-40 transition-colors">
                   {migrating ? 'Переношу...' : 'Перенести из Материалов'}
@@ -1110,12 +1110,12 @@ export default function GlassPricesPage() {
 
             {curPT === 'sale' && formulaLoaded && (
               <>
-                <div className="w-px h-5 bg-[#e4e4e0]" />
+                <div className="w-px h-5 bg-line" />
                 <button onClick={fillByFormula}
                   className="text-[13px] font-medium px-4 py-2 rounded-lg bg-[#059669] text-white hover:bg-[#047857] transition-colors">
                   Заполнить по формуле
                 </button>
-                <span className="text-[11px] text-[#8a8a85]">Только пустые ячейки</span>
+                <span className="text-[11px] text-muted">Только пустые ячейки</span>
               </>
             )}
             {curPT === 'sale' && (
@@ -1127,14 +1127,14 @@ export default function GlassPricesPage() {
 
       {/* ── Sticky save bar ── */}
       {hasDirty && tab !== 'formula' && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-[#e4e4e0] shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-surface border-t border-line shadow-[0_-4px_16px_rgba(0,0,0,0.08)]">
           <div className="max-w-[1200px] mx-auto px-6 py-3 flex items-center justify-between gap-4">
-            <span className="text-[13px] text-[#8a8a85]">
+            <span className="text-[13px] text-muted">
               {Object.keys(dirty).length === 1 ? '1 изменение' : `${Object.keys(dirty).length} изменения`} не сохранено
             </span>
             <div className="flex items-center gap-2">
               <button onClick={discardAll}
-                className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors">
+                className="text-[13px] font-medium px-4 py-2 rounded-lg border border-line text-ink-soft hover:bg-[#f5f5f4] transition-colors">
                 Отменить
               </button>
               <button onClick={saveAll} disabled={savingAll}
@@ -1219,18 +1219,18 @@ function FormulaTab({
         const rows = formula.filter(p => p.section === section)
         const meta = SECTION_META[section]
         return (
-          <div key={section} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-            <div className={`px-5 py-3 border-b border-[#e4e4e0] ${meta.bg}`}>
+          <div key={section} className="bg-surface border border-line rounded-xl overflow-hidden">
+            <div className={`px-5 py-3 border-b border-line ${meta.bg}`}>
               <h2 className={`text-[14px] font-semibold ${meta.color}`}>{meta.title}</h2>
             </div>
             <table className="w-full text-[13px]">
               <tbody className="divide-y divide-[#f0f0ee]">
                 {rows.map(p => (
-                  <tr key={p.id} className="hover:bg-[#fafaf9] group">
+                  <tr key={p.id} className="hover:bg-subtle group">
                     <td className="px-5 py-3 w-[260px]">
-                      <div className="font-medium text-[#111110]">{p.param_name}</div>
+                      <div className="font-medium text-ink">{p.param_name}</div>
                       {p.description && (
-                        <div className="text-[11px] text-[#8a8a85] mt-0.5 max-w-[400px] leading-relaxed">{p.description}</div>
+                        <div className="text-[11px] text-muted mt-0.5 max-w-[400px] leading-relaxed">{p.description}</div>
                       )}
                     </td>
                     <td className="px-4 py-3 text-center w-[120px]">
@@ -1247,16 +1247,16 @@ function FormulaTab({
                             onClick={e => e.stopPropagation()}
                             className="w-20 text-center text-[13px] border-2 border-[#7c3aed] rounded-md px-2 py-1 outline-none font-mono"
                           />
-                          <span className="text-[12px] text-[#8a8a85]">{p.unit}</span>
+                          <span className="text-[12px] text-muted">{p.unit}</span>
                           <button onClick={() => onSave(p.id, editVal)} disabled={saving}
                             className="ml-1 text-[12px] px-2 py-1 rounded bg-[#7c3aed] text-white hover:bg-[#6d28d9] disabled:opacity-50">✓</button>
                           <button onClick={onCancelEdit}
-                            className="text-[12px] px-1.5 py-1 rounded border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]">✕</button>
+                            className="text-[12px] px-1.5 py-1 rounded border border-line text-ink-soft hover:bg-[#f5f5f4]">✕</button>
                         </div>
                       ) : (
                         <button
                           onClick={() => onStartEdit(p.id, p.value)}
-                          className="font-mono font-semibold text-[15px] text-[#111110] hover:text-[#7c3aed] transition-colors group-hover:underline decoration-dotted cursor-text"
+                          className="font-mono font-semibold text-[15px] text-ink hover:text-[#7c3aed] transition-colors group-hover:underline decoration-dotted cursor-text"
                           title="Нажми чтобы изменить">
                           {p.value % 1 === 0 ? p.value.toFixed(0) : p.value.toFixed(1)}{p.unit === '%' ? '%' : ` ${p.unit}`}
                         </button>
@@ -1272,10 +1272,10 @@ function FormulaTab({
       })}
 
       {/* Live calculation example */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#e4e4e0] bg-[#f8f8f7] flex items-center justify-between">
-          <h2 className="text-[14px] font-semibold text-[#111110]">Живой пример: Стекло</h2>
-          <span className="text-[11px] text-[#8a8a85]">Меняй входные данные — расчёт обновится автоматически</span>
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
+        <div className="px-5 py-3 border-b border-line bg-canvas flex items-center justify-between">
+          <h2 className="text-[14px] font-semibold text-ink">Живой пример: Стекло</h2>
+          <span className="text-[11px] text-muted">Меняй входные данные — расчёт обновится автоматически</span>
         </div>
         <div className="p-5">
           <div className="grid grid-cols-3 gap-4 mb-5">
@@ -1285,16 +1285,16 @@ function FormulaTab({
               { label: 'Продажная цена', val: exPrice, set: setExPrice, hint: '₽, клиенту' },
             ].map(({ label, val, set, hint }) => (
               <div key={label}>
-                <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-1">{label}</label>
+                <label className="block text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">{label}</label>
                 <input type="number" value={val} onChange={e => set(e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono outline-none focus:border-[#7c3aed]" />
-                <p className="text-[11px] text-[#b0b0aa] mt-0.5">{hint}</p>
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[14px] font-mono outline-none focus:border-[#7c3aed]" />
+                <p className="text-[11px] text-faint mt-0.5">{hint}</p>
               </div>
             ))}
           </div>
 
           {/* Breakdown */}
-          <div className="bg-[#fafaf9] rounded-xl border border-[#e4e4e0] overflow-hidden">
+          <div className="bg-subtle rounded-xl border border-line overflow-hidden">
             <table className="w-full text-[13px]">
               <tbody className="divide-y divide-[#f0f0ee]">
                 <CalcRow label="Себестоимость стекла (с НДС)" value={cost} />
@@ -1309,16 +1309,16 @@ function FormulaTab({
               </tbody>
             </table>
             {/* Result */}
-            <div className="px-5 py-3.5 bg-white border-t-2 border-[#e4e4e0] flex items-center justify-between">
+            <div className="px-5 py-3.5 bg-surface border-t-2 border-line flex items-center justify-between">
               <div>
-                <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-0.5">Чистая прибыль</div>
+                <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-0.5">Чистая прибыль</div>
                 <div className="text-[20px] font-semibold font-mono" style={{ color: marginColor }}>
                   {profit.toLocaleString('ru-RU')} ₽
                 </div>
               </div>
               <div className="text-right">
-                <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-0.5">Маржа</div>
-                <div className="text-[28px] font-bold font-mono" style={{ color: marginColor }}>
+                <div className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-0.5">Маржа</div>
+                <div className="text-[28px] font-semibold font-mono" style={{ color: marginColor }}>
                   {margin.toFixed(1)}%
                 </div>
                 <div className="text-[11px] mt-0.5" style={{ color: marginColor }}>
@@ -1346,11 +1346,11 @@ function CalcRow({ label, value, sub, bold, separator }: {
 }) {
   const isNeg = value < 0
   return (
-    <tr className={separator ? 'border-t-2 border-[#e4e4e0]' : ''}>
-      <td className={`px-5 py-2.5 ${sub ? 'pl-8 text-[#8a8a85]' : bold ? 'font-semibold text-[#111110]' : 'text-[#4b4b47]'}`}>
+    <tr className={separator ? 'border-t-2 border-line' : ''}>
+      <td className={`px-5 py-2.5 ${sub ? 'pl-8 text-muted' : bold ? 'font-semibold text-ink' : 'text-ink-soft'}`}>
         {label}
       </td>
-      <td className={`px-5 py-2.5 text-right font-mono ${isNeg ? 'text-red-500' : bold ? 'text-[#111110] font-semibold' : 'text-[#4b4b47]'}`}>
+      <td className={`px-5 py-2.5 text-right font-mono ${isNeg ? 'text-red-500' : bold ? 'text-ink font-semibold' : 'text-ink-soft'}`}>
         {isNeg ? `−${Math.abs(value).toLocaleString('ru-RU')}` : value.toLocaleString('ru-RU')} ₽
       </td>
     </tr>
@@ -1385,16 +1385,16 @@ function SheetVariantsModal({
 }) {
   return (
     <div className="fixed z-50 inset-0 bg-black/25 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl border border-[#e4e4e0] w-[480px] max-h-[80vh] overflow-y-auto"
+      <div className="bg-surface rounded-xl shadow-2xl border border-line w-[480px] max-h-[80vh] overflow-y-auto"
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="px-4 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between sticky top-0">
+        <div className="px-4 py-3 bg-canvas border-b border-line flex items-center justify-between sticky top-0">
           <div>
-            <div className="text-[13px] font-semibold text-[#111110]">Форматы листов</div>
-            <div className="text-[11px] text-[#8a8a85] mt-0.5">{matName} — {thickness} мм</div>
+            <div className="text-[13px] font-semibold text-ink">Форматы листов</div>
+            <div className="text-[11px] text-muted mt-0.5">{matName} — {thickness} мм</div>
           </div>
-          <button onClick={onClose} className="text-[#8a8a85] hover:text-[#111110] text-xl leading-none ml-3">×</button>
+          <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none ml-3">×</button>
         </div>
 
         <div className="px-4 py-4 space-y-3">
@@ -1405,7 +1405,7 @@ function SheetVariantsModal({
 
           {/* No material found */}
           {materialId === null && (
-            <div className="px-4 py-4 bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg text-[13px] text-[#6b6b66] text-center">
+            <div className="px-4 py-4 bg-canvas border border-line rounded-lg text-[13px] text-ink-soft text-center">
               Материал ещё не создан в B2B.
               <br />
               <span className="text-[12px]">Нажмите <strong>«⟳ Синхр. в B2B»</strong>, затем вернитесь к форматам.</span>
@@ -1416,14 +1416,14 @@ function SheetVariantsModal({
           {materialId !== null && (
             <>
               {variants.length === 0 ? (
-                <p className="text-[12px] text-[#9a9a95] text-center py-1">Форматы листов не заданы. Добавьте первый формат.</p>
+                <p className="text-[12px] text-muted text-center py-1">Форматы листов не заданы. Добавьте первый формат.</p>
               ) : (
                 <div className="space-y-1">
                   {variants.map(v => (
-                    <div key={v.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${v.active ? 'bg-white border-[#e4e4e0]' : 'bg-[#f8f8f7] border-[#e4e4e0] opacity-50'}`}>
-                      <span className="font-mono text-[13px] text-[#111110] flex-1">{v.sheet_width} × {v.sheet_height} мм</span>
+                    <div key={v.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${v.active ? 'bg-surface border-line' : 'bg-canvas border-line opacity-50'}`}>
+                      <span className="font-mono text-[13px] text-ink flex-1">{v.sheet_width} × {v.sheet_height} мм</span>
                       {v.supplier_material_name && (
-                        <span className="text-[11px] text-[#8a8a85] truncate max-w-[90px]" title={v.supplier_material_name}>{v.supplier_material_name}</span>
+                        <span className="text-[11px] text-muted truncate max-w-[90px]" title={v.supplier_material_name}>{v.supplier_material_name}</span>
                       )}
                       {v.is_default && v.active
                         ? <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-blue-100 text-blue-600 flex-shrink-0">основной</span>
@@ -1435,7 +1435,7 @@ function SheetVariantsModal({
                         )
                       }
                       <button onClick={() => onToggleActive?.(v)}
-                        className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors flex-shrink-0">
+                        className="text-[11px] text-muted hover:text-ink-soft transition-colors flex-shrink-0">
                         {v.active ? 'скрыть' : 'показать'}
                       </button>
                     </div>
@@ -1444,29 +1444,29 @@ function SheetVariantsModal({
               )}
 
               {/* Add form */}
-              <div className="border-t border-[#f0f0ec] pt-3">
-                <div className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Добавить формат</div>
+              <div className="border-t border-line-soft pt-3">
+                <div className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-2">Добавить формат</div>
                 <div className="grid grid-cols-2 gap-2 mb-3">
                   <div>
-                    <label className="block text-[11px] text-[#9a9a95] mb-1">Длина, мм</label>
+                    <label className="block text-[11px] text-muted mb-1">Длина, мм</label>
                     <input type="number" min="100" max="9000"
-                      className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                      className="w-full border border-line rounded-lg px-3 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                       value={newVarWidth}
                       onChange={e => onWidthChange(Number(e.target.value))}
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-[#9a9a95] mb-1">Ширина, мм</label>
+                    <label className="block text-[11px] text-muted mb-1">Ширина, мм</label>
                     <input type="number" min="100" max="9000"
-                      className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                      className="w-full border border-line rounded-lg px-3 py-1.5 text-[13px] font-mono text-ink outline-none focus:border-ink"
                       value={newVarHeight}
                       onChange={e => onHeightChange(Number(e.target.value))}
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-[#9a9a95] mb-1">Поставщик</label>
+                    <label className="block text-[11px] text-muted mb-1">Поставщик</label>
                     <select
-                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      className="w-full bg-surface border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
                       value={newVarSupplierId ?? ''}
                       onChange={e => onSupplierChange(e.target.value || null)}>
                       <option value="">— не выбран —</option>
@@ -1474,9 +1474,9 @@ function SheetVariantsModal({
                     </select>
                   </div>
                   <div>
-                    <label className="block text-[11px] text-[#9a9a95] mb-1">Наим. у поставщика</label>
+                    <label className="block text-[11px] text-muted mb-1">Наим. у поставщика</label>
                     <input
-                      className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
+                      className="w-full border border-line rounded-lg px-2 py-1.5 text-[12px] text-ink outline-none focus:border-ink"
                       value={newVarSupplierMatName ?? ''}
                       onChange={e => onSupplierMatNameChange(e.target.value || null)}
                       placeholder="Необязательно"
@@ -1486,7 +1486,7 @@ function SheetVariantsModal({
                 <button
                   onClick={onAdd}
                   disabled={!newVarWidth || !newVarHeight}
-                  className="bg-[#111110] text-white text-[12px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="bg-ink text-white text-[12px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
                   + Добавить формат
                 </button>
               </div>
@@ -1512,35 +1512,35 @@ function MarginPopover({ info, name, mm, salePrice, cat, onClose }: {
   function Row({ label, value, neg, sub }: { label: string; value: string; neg?: boolean; sub?: boolean }) {
     return (
       <div className={`flex justify-between items-center py-1 ${sub ? 'pl-3' : ''}`}>
-        <span className={`text-[12px] ${sub ? 'text-[#8a8a85]' : 'text-[#4b4b47]'}`}>{label}</span>
-        <span className={`font-mono text-[12px] ${neg ? 'text-red-500' : 'text-[#4b4b47]'}`}>{value}</span>
+        <span className={`text-[12px] ${sub ? 'text-muted' : 'text-ink-soft'}`}>{label}</span>
+        <span className={`font-mono text-[12px] ${neg ? 'text-red-500' : 'text-ink-soft'}`}>{value}</span>
       </div>
     )
   }
 
   return (
     <div className="fixed z-50 inset-0 bg-black/25 flex items-center justify-center p-4" onClick={onClose}>
-      <div className="bg-white rounded-xl shadow-2xl border border-[#e4e4e0] w-[360px]"
+      <div className="bg-surface rounded-xl shadow-2xl border border-line w-[360px]"
         onClick={e => e.stopPropagation()}>
 
         {/* Header */}
-        <div className="px-4 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0] flex items-center justify-between">
+        <div className="px-4 py-3 bg-canvas border-b border-line flex items-center justify-between">
           <div>
-            <div className="text-[13px] font-semibold text-[#111110]">{name} — {mm}мм</div>
-            <div className="text-[11px] text-[#8a8a85] mt-0.5">Расход {info.wastePct}% · на 1 м² изделия</div>
+            <div className="text-[13px] font-semibold text-ink">{name} — {mm}мм</div>
+            <div className="text-[11px] text-muted mt-0.5">Расход {info.wastePct}% · на 1 м² изделия</div>
           </div>
-          <button onClick={onClose} className="text-[#8a8a85] hover:text-[#111110] text-xl leading-none ml-3">×</button>
+          <button onClick={onClose} className="text-muted hover:text-ink text-xl leading-none ml-3">×</button>
         </div>
 
         {/* Sale price */}
-        <div className="px-4 py-2.5 border-b border-[#e4e4e0] flex justify-between items-center">
-          <span className="text-[12px] text-[#8a8a85] uppercase tracking-wider font-semibold text-[11px]">Продажная цена</span>
-          <span className="font-mono font-semibold text-[#111110]">{salePrice.toLocaleString('ru-RU')} ₽</span>
+        <div className="px-4 py-2.5 border-b border-line flex justify-between items-center">
+          <span className="text-[12px] text-muted uppercase tracking-wider font-semibold text-[11px]">Продажная цена</span>
+          <span className="font-mono font-semibold text-ink">{salePrice.toLocaleString('ru-RU')} ₽</span>
         </div>
 
         {/* Cost breakdown */}
-        <div className="px-4 py-3 border-b border-[#e4e4e0] space-y-0.5">
-          <div className="text-[10px] font-semibold text-[#8a8a85] uppercase tracking-wider mb-2">Затраты</div>
+        <div className="px-4 py-3 border-b border-line space-y-0.5">
+          <div className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2">Затраты</div>
           <Row label={`Стекло (с НДС, расход +${info.wastePct}%)`} value={`${info.effectiveCost.toLocaleString('ru-RU')} ₽`} />
           {hasTemp && <Row label={`Закалка ${mm}мм (с НДС, расход +${info.wastePct}%)`} value={`${info.temperingIncVat.toLocaleString('ru-RU')} ₽`} />}
           <Row label={`НДС стекла к зачёту (${info.purchaseVatPct}%)`} value={`−${info.vatOnCost.toLocaleString('ru-RU')} ₽`} neg sub />
@@ -1549,25 +1549,25 @@ function MarginPopover({ info, name, mm, salePrice, cat, onClose }: {
         </div>
 
         {/* Results */}
-        <div className="px-4 py-3 border-b border-[#e4e4e0]">
+        <div className="px-4 py-3 border-b border-line">
           {/* Primary margin (with tempering for glass) */}
           <div className="flex justify-between items-center">
-            <span className="text-[13px] font-semibold text-[#111110]">
+            <span className="text-[13px] font-semibold text-ink">
               {hasTemp ? 'Маржа С ЗАКАЛКОЙ' : 'Маржа'}
             </span>
-            <span className="font-mono text-[22px] font-bold leading-none" style={{ color: mc(primaryMargin) }}>
+            <span className="font-mono text-[22px] font-semibold leading-none" style={{ color: mc(primaryMargin) }}>
               {primaryMargin.toFixed(1)}%
             </span>
           </div>
           {/* Secondary: without tempering */}
           {hasTemp && (
             <div className="flex justify-between items-center mt-1">
-              <span className="text-[12px] text-[#8a8a85]">Маржа без закалки</span>
-              <span className="font-mono text-[13px] text-[#8a8a85]">{info.margin.toFixed(1)}%</span>
+              <span className="text-[12px] text-muted">Маржа без закалки</span>
+              <span className="font-mono text-[13px] text-muted">{info.margin.toFixed(1)}%</span>
             </div>
           )}
           <div className="flex justify-between items-center mt-2 pt-2 border-t border-[#f0f0ee]">
-            <span className="text-[12px] text-[#4b4b47]">Чистая прибыль</span>
+            <span className="text-[12px] text-ink-soft">Чистая прибыль</span>
             <span className="font-mono text-[13px] font-semibold" style={{ color: mc(primaryMargin) }}>
               {primaryProfit.toLocaleString('ru-RU')} ₽
             </span>
@@ -1583,7 +1583,7 @@ function MarginPopover({ info, name, mm, salePrice, cat, onClose }: {
         )}
 
         {/* Legend */}
-        <div className="px-4 py-2 bg-[#f8f8f7] rounded-b-xl text-[10px] text-[#8a8a85] flex gap-3">
+        <div className="px-4 py-2 bg-canvas rounded-b-xl text-[10px] text-muted flex gap-3">
           <span style={{ color: '#059669' }}>● &gt;{info.recMargin}%</span>
           <span style={{ color: '#d97706' }}>● ≥{info.minMargin}%</span>
           <span style={{ color: '#dc2626' }}>● &lt;{info.minMargin}%</span>

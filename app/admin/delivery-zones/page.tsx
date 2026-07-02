@@ -94,50 +94,50 @@ export default function DeliveryZonesPage() {
     await load()
   }
 
-  const inp = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]'
+  const inp = 'w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]'
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-[20px] font-bold text-[#111110]">Зоны доставки</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Стоимость доставки по зонам</p>
+          <h1 className="text-[20px] font-semibold text-ink">Зоны доставки</h1>
+          <p className="text-[13px] text-muted mt-0.5">Стоимость доставки по зонам</p>
         </div>
         <button onClick={() => { setEditing(null); setForm(EMPTY); setShowForm(true) }}
-          className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
+          className="px-4 py-2 bg-ink text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
           + Добавить зону
         </button>
       </div>
 
       {showForm && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-4 space-y-3">
-          <p className="text-[13px] font-semibold text-[#111110] mb-1">{editing ? 'Редактировать зону' : 'Новая зона'}</p>
+        <div className="bg-surface border border-line rounded-xl p-5 mb-4 space-y-3">
+          <p className="text-[13px] font-semibold text-ink mb-1">{editing ? 'Редактировать зону' : 'Новая зона'}</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Название *</p>
+              <p className="text-[10px] text-muted mb-1">Название *</p>
               <input value={form.name} onChange={e => setForm(f => ({...f, name: e.target.value}))} className={inp} placeholder="В пределах МКАД" />
             </div>
             <div>
-              <p className="text-[10px] text-[#9a9a95] mb-1">Стоимость, ₽ (0 = по договору)</p>
+              <p className="text-[10px] text-muted mb-1">Стоимость, ₽ (0 = по договору)</p>
               <input type="number" min={0} value={form.price} onChange={e => setForm(f => ({...f, price: Number(e.target.value)}))} className={inp} />
             </div>
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Описание</p>
+            <p className="text-[10px] text-muted mb-1">Описание</p>
             <input value={form.description ?? ''} onChange={e => setForm(f => ({...f, description: e.target.value}))} className={inp} placeholder="Доставка по Москве" />
           </div>
           <div>
-            <p className="text-[10px] text-[#9a9a95] mb-1">Порядок сортировки</p>
-            <input type="number" min={0} value={form.sort_order} onChange={e => setForm(f => ({...f, sort_order: Number(e.target.value)}))} className="w-24 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]" />
+            <p className="text-[10px] text-muted mb-1">Порядок сортировки</p>
+            <input type="number" min={0} value={form.sort_order} onChange={e => setForm(f => ({...f, sort_order: Number(e.target.value)}))} className="w-24 border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#0071e3]" />
           </div>
           {error && <p className="text-[12px] text-red-600">{error}</p>}
           <div className="flex gap-2">
             <button onClick={save} disabled={saving}
-              className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+              className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
               {saving ? 'Сохраняю...' : 'Сохранить'}
             </button>
             <button onClick={() => { setShowForm(false); setEditing(null) }}
-              className="px-4 py-2 border border-[#e4e4e0] text-[13px] text-[#6b6b66] rounded-lg hover:bg-[#f8f8f7]">
+              className="px-4 py-2 border border-line text-[13px] text-ink-soft rounded-lg hover:bg-canvas">
               Отмена
             </button>
           </div>
@@ -146,17 +146,17 @@ export default function DeliveryZonesPage() {
 
       {/* Linear MKAD delivery settings */}
       {linearParams.length > 0 && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 mb-6">
+        <div className="bg-surface border border-line rounded-xl p-5 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <p className="text-[14px] font-semibold text-[#111110]">Линейная доставка за МКАД</p>
-              <p className="text-[12px] text-[#8a8a85] mt-0.5">Базовая стоимость + стоимость за каждый км от МКАД</p>
+              <p className="text-[14px] font-semibold text-ink">Линейная доставка за МКАД</p>
+              <p className="text-[12px] text-muted mt-0.5">Базовая стоимость + стоимость за каждый км от МКАД</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 mb-4">
             {linearParams.map(p => (
               <div key={p.id}>
-                <p className="text-[10px] text-[#9a9a95] mb-1">{p.param_name}, {p.unit}</p>
+                <p className="text-[10px] text-muted mb-1">{p.param_name}, {p.unit}</p>
                 <input
                   type="number" min="0"
                   value={linearDraft[p.id] ?? ''}
@@ -170,7 +170,7 @@ export default function DeliveryZonesPage() {
             const bp  = Number(linearDraft[linearParams.find(p => p.param_key === 'base_price')?.id ?? 0]) || 0
             const pkm = Number(linearDraft[linearParams.find(p => p.param_key === 'price_per_km')?.id ?? 0]) || 0
             return (
-              <div className="mb-3 text-[12px] text-[#6b6b66] bg-[#f8f8f7] rounded-lg px-3 py-2 space-y-0.5">
+              <div className="mb-3 text-[12px] text-ink-soft bg-canvas rounded-lg px-3 py-2 space-y-0.5 tabular-nums">
                 <p>5 км: {(bp + pkm * 5).toLocaleString('ru-RU')} ₽</p>
                 <p>20 км: {(bp + pkm * 20).toLocaleString('ru-RU')} ₽</p>
                 <p>50 км: {(bp + pkm * 50).toLocaleString('ru-RU')} ₽</p>
@@ -178,35 +178,35 @@ export default function DeliveryZonesPage() {
             )
           })()}
           <button onClick={saveLinear} disabled={linearSaving}
-            className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+            className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
             {linearSaved ? 'Сохранено' : linearSaving ? 'Сохраняю...' : 'Сохранить тарифы'}
           </button>
         </div>
       )}
 
       {loading ? (
-        <p className="text-center text-[#9a9a95] text-[13px] py-8">Загрузка...</p>
+        <p className="text-center text-muted text-[13px] py-8">Загрузка...</p>
       ) : (
         <div className="space-y-2">
           {zones.map(z => (
-            <div key={z.id} className={`bg-white border border-[#e4e4e0] rounded-xl px-5 py-4 flex items-center justify-between gap-4 ${!z.active ? 'opacity-50' : ''}`}>
+            <div key={z.id} className={`bg-surface border border-line rounded-xl px-5 py-4 flex items-center justify-between gap-4 ${!z.active ? 'opacity-50' : ''}`}>
               <div className="flex-1">
                 <div className="flex items-center gap-2">
-                  <p className="text-[14px] font-semibold text-[#111110]">{z.name}</p>
+                  <p className="text-[14px] font-semibold text-ink">{z.name}</p>
                   {!z.active && <span className="text-[10px] bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded">Скрыта</span>}
                 </div>
-                {z.description && <p className="text-[12px] text-[#6b6b66] mt-0.5">{z.description}</p>}
+                {z.description && <p className="text-[12px] text-ink-soft mt-0.5">{z.description}</p>}
               </div>
               <div className="text-right flex-shrink-0 min-w-[130px]">
-                <p className={`text-[15px] font-bold font-mono ${z.price === 0 ? 'text-[#9a9a95]' : 'text-[#111110]'}`}>{fmt(z.price)}</p>
+                <p className={`text-[15px] font-semibold font-mono tabular-nums ${z.price === 0 ? 'text-muted' : 'text-ink'}`}>{fmt(z.price)}</p>
               </div>
               <div className="flex gap-2 flex-shrink-0">
                 <button onClick={() => openEdit(z)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                  className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                   Изменить
                 </button>
                 <button onClick={() => toggle(z)}
-                  className="px-3 py-1.5 text-[12px] border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#f8f8f7]">
+                  className="px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:bg-canvas">
                   {z.active ? 'Скрыть' : 'Включить'}
                 </button>
               </div>

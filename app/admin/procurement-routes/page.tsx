@@ -131,35 +131,35 @@ export default function ProcurementRoutesPage() {
   }
 
   return (
-    <div className={`min-h-screen ${printMode ? 'bg-white' : 'bg-[#f8f8f7]'}`}>
+    <div className={`min-h-screen ${printMode ? 'bg-white' : 'bg-canvas'}`}>
       {!printMode && (
         <div className="flex h-screen">
           {/* Left panel — route list */}
-          <div className="w-64 flex-shrink-0 bg-white border-r border-[#e4e4e0] flex flex-col">
-            <div className="p-4 border-b border-[#e4e4e0]">
-              <p className="text-[13px] font-semibold text-[#111110] mb-3">Маршрутные листы</p>
+          <div className="w-64 flex-shrink-0 bg-surface border-r border-line flex flex-col">
+            <div className="p-4 border-b border-line">
+              <p className="text-[13px] font-semibold text-ink mb-3">Маршрутные листы</p>
               <div className="space-y-2">
                 <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+                  className="w-full border border-line rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-ink" />
                 <input value={newDriver} onChange={e => setNewDriver(e.target.value)}
                   placeholder="Водитель"
-                  className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+                  className="w-full border border-line rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-ink" />
                 <button onClick={createRoute}
-                  className="w-full bg-[#111110] text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28]">
+                  className="w-full bg-ink text-white text-[12px] font-medium rounded-lg py-1.5 hover:bg-[#2a2a28]">
                   + Создать маршрут
                 </button>
               </div>
             </div>
-            <div className="flex-1 overflow-y-auto divide-y divide-[#f0f0ec]">
+            <div className="flex-1 overflow-y-auto divide-y divide-line-soft">
               {routes.map(r => (
                 <button key={r.id} onClick={() => selectRoute(r)}
-                  className={`w-full text-left px-4 py-3 hover:bg-[#fafaf9] transition-colors ${selected?.id === r.id ? 'bg-blue-50' : ''}`}>
-                  <p className="text-[12px] font-semibold text-[#111110]">{fmtDate(r.route_date)}</p>
-                  <p className="text-[11px] text-[#9a9a95] mt-0.5">🚗 {r.driver_name}</p>
+                  className={`w-full text-left px-4 py-3 hover:bg-subtle transition-colors ${selected?.id === r.id ? 'bg-blue-50' : ''}`}>
+                  <p className="text-[12px] font-semibold text-ink">{fmtDate(r.route_date)}</p>
+                  <p className="text-[11px] text-muted mt-0.5">🚗 {r.driver_name}</p>
                 </button>
               ))}
               {routes.length === 0 && (
-                <p className="px-4 py-6 text-[12px] text-[#9a9a95] text-center">Нет маршрутов</p>
+                <p className="px-4 py-6 text-[12px] text-muted text-center">Нет маршрутов</p>
               )}
             </div>
           </div>
@@ -168,20 +168,20 @@ export default function ProcurementRoutesPage() {
           <div className="flex-1 overflow-y-auto p-6">
             {!selected ? (
               <div className="flex items-center justify-center h-full">
-                <p className="text-[14px] text-[#9a9a95]">Выбери маршрут слева или создай новый</p>
+                <p className="text-[14px] text-muted">Выбери маршрут слева или создай новый</p>
               </div>
             ) : (
               <div className="max-w-3xl space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h1 className="text-[18px] font-semibold text-[#111110]">
+                    <h1 className="text-[18px] font-semibold text-ink">
                       Маршрут — {fmtDate(selected.route_date)}
                     </h1>
-                    <p className="text-[12px] text-[#9a9a95]">Водитель: {selected.driver_name}</p>
+                    <p className="text-[12px] text-muted">Водитель: {selected.driver_name}</p>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => setPrint(true)}
-                      className="px-3 py-1.5 border border-[#e4e4e0] text-[12px] font-medium rounded-lg hover:bg-[#f0f0ec]">
+                      className="px-3 py-1.5 border border-line text-[12px] font-medium rounded-lg hover:bg-line-soft">
                       🖨 Распечатать
                     </button>
                     <button onClick={() => deleteRoute(selected.id)}
@@ -192,13 +192,13 @@ export default function ProcurementRoutesPage() {
                 </div>
 
                 {loading ? (
-                  <p className="text-[13px] text-[#9a9a95]">Загрузка...</p>
+                  <p className="text-[13px] text-muted">Загрузка...</p>
                 ) : (
                   <>
                     {stops.map((stop, idx) => (
-                      <div key={idx} className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-3">
+                      <div key={idx} className="bg-surface border border-line rounded-xl p-4 space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="w-6 h-6 rounded-full bg-[#111110] text-white text-[11px] font-bold flex items-center justify-center flex-shrink-0">
+                          <span className="w-6 h-6 rounded-full bg-ink text-white text-[11px] font-semibold flex items-center justify-center flex-shrink-0 tabular-nums">
                             {idx + 1}
                           </span>
                           <div className="flex items-center gap-2">
@@ -209,7 +209,7 @@ export default function ProcurementRoutesPage() {
                               <option value="completed">Выполнено</option>
                               <option value="problem">Проблема</option>
                             </select>
-                            <button onClick={() => removeStop(idx)} className="text-[#c4c4be] hover:text-red-400 text-lg">×</button>
+                            <button onClick={() => removeStop(idx)} className="text-faint hover:text-red-400 text-lg">×</button>
                           </div>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
@@ -225,7 +225,7 @@ export default function ProcurementRoutesPage() {
                       </div>
                     ))}
                     <button onClick={addStop}
-                      className="w-full border-2 border-dashed border-[#e4e4e0] rounded-xl py-3 text-[13px] font-medium text-[#9a9a95] hover:border-[#111110] hover:text-[#111110] transition-colors">
+                      className="w-full border-2 border-dashed border-line rounded-xl py-3 text-[13px] font-medium text-muted hover:border-ink hover:text-ink transition-colors">
                       + Добавить точку
                     </button>
                   </>
@@ -240,8 +240,8 @@ export default function ProcurementRoutesPage() {
       {printMode && selected && (
         <div className="max-w-[760px] mx-auto px-8 py-10">
           <div className="no-print flex justify-between mb-6">
-            <button onClick={() => setPrint(false)} className="text-[13px] text-[#6b6b66] hover:text-[#111110]">← Назад</button>
-            <button onClick={() => window.print()} className="px-4 py-2 bg-[#111110] text-white text-[13px] rounded-lg">Печать</button>
+            <button onClick={() => setPrint(false)} className="text-[13px] text-ink-soft hover:text-ink">← Назад</button>
+            <button onClick={() => window.print()} className="px-4 py-2 bg-ink text-white text-[13px] rounded-lg">Печать</button>
           </div>
           <div style={{ borderBottom: '2px solid #111', paddingBottom: 12, marginBottom: 20, display: 'flex', justifyContent: 'space-between' }}>
             <div>
@@ -285,9 +285,9 @@ export default function ProcurementRoutesPage() {
 function SInput({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div>
-      <label className="block text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide mb-1">{label}</label>
+      <label className="block text-[10px] font-semibold text-muted uppercase tracking-wide mb-1">{label}</label>
       <input value={value} onChange={e => onChange(e.target.value)}
-        className="w-full border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white" />
+        className="w-full border border-line rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-ink bg-surface" />
     </div>
   )
 }

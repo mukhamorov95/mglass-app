@@ -159,7 +159,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
         {MODELS.map(m => (
           <button key={m} onClick={() => setModel(m)}
             className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
-              model === m ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'
+              model === m ? 'bg-ink text-white' : 'bg-surface border border-line text-ink-soft hover:bg-canvas'
             }`}>{m}</button>
         ))}
       </div>
@@ -167,11 +167,11 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
       {/* Toolbar */}
       <div className="flex items-center gap-3">
         <button onClick={() => setShowAdd(v => !v)}
-          className="px-3 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-[13px] text-[#111110] hover:bg-[#f8f8f7]">
+          className="px-3 py-1.5 bg-surface border border-line rounded-lg text-[13px] text-ink hover:bg-canvas">
           + Добавить позицию из справочника
         </button>
         {total > 0 && (
-          <span className="text-[12px] text-[#9a9a95]">
+          <span className="text-[12px] text-muted">
             Заполнено: <span className={`font-semibold ${filled === total ? 'text-emerald-600' : 'text-amber-600'}`}>{filled}/{total}</span>
           </span>
         )}
@@ -183,32 +183,32 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
           <p className="text-[12px] font-semibold text-blue-700 mb-2">Выберите позицию для модели {model}</p>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Поиск по названию..."
-            className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-white mb-2" />
-          <div className="max-h-48 overflow-y-auto space-y-0.5 bg-white rounded-lg border border-[#e4e4e0]">
+            className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-surface mb-2" />
+          <div className="max-h-48 overflow-y-auto space-y-0.5 bg-surface rounded-lg border border-line">
             {addable.map(item => (
               <button key={item.id} onClick={() => addItem(item.id)}
-                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-[#111110] hover:bg-[#f8f8f7] text-left border-b border-[#f0f0ec] last:border-0">
+                className="w-full flex items-center gap-2 px-3 py-2 text-[13px] text-ink hover:bg-canvas text-left border-b border-line-soft last:border-0">
                 <span className="font-medium">{item.name}</span>
-                <span className="text-[10px] bg-[#f0f0ec] text-[#6b6b66] px-1.5 py-0.5 rounded">{item.category}</span>
-                <span className="text-[11px] text-[#9a9a95]">{item.unit}</span>
+                <span className="text-[10px] bg-line-soft text-ink-soft px-1.5 py-0.5 rounded">{item.category}</span>
+                <span className="text-[11px] text-muted">{item.unit}</span>
               </button>
             ))}
             {addable.length === 0 && (
-              <p className="px-3 py-3 text-[12px] text-[#9a9a95]">
+              <p className="px-3 py-3 text-[12px] text-muted">
                 {allItems.length === 0 ? 'Справочник пустой — сначала добавьте позиции' : 'Все позиции уже добавлены'}
               </p>
             )}
           </div>
-          <button onClick={() => setShowAdd(false)} className="mt-2 text-[12px] text-[#9a9a95] hover:text-[#6b6b66]">Отмена</button>
+          <button onClick={() => setShowAdd(false)} className="mt-2 text-[12px] text-muted hover:text-ink-soft">Отмена</button>
         </div>
       )}
 
       {/* Kit table */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
+          <div className="p-8 text-center text-muted text-[13px]">Загрузка...</div>
         ) : kitRows.length === 0 && !hasAnyManual ? (
-          <div className="p-8 text-center text-[#9a9a95] text-[13px]">
+          <div className="p-8 text-center text-muted text-[13px]">
             Комплект {model} пустой — добавьте позиции из справочника или укажите стоимость вручную ниже
           </div>
         ) : kitRows.length > 0 ? (
@@ -216,18 +216,18 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
             <div style={{ minWidth: 340 + activeColors.length * 88 }}>
 
               {/* Header */}
-              <div className="flex bg-[#f5f5f3] border-b-2 border-[#e4e4e0]">
-                <div className="px-3 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide border-r border-[#e4e4e0]" style={{ width: 190 }}>
+              <div className="flex bg-canvas border-b-2 border-line">
+                <div className="px-3 py-2.5 text-[10px] font-semibold text-ink-soft uppercase tracking-wide border-r border-line" style={{ width: 190 }}>
                   Позиция
                 </div>
-                <div className="px-3 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide border-r border-[#e4e4e0]" style={{ width: 120 }}>
+                <div className="px-3 py-2.5 text-[10px] font-semibold text-ink-soft uppercase tracking-wide border-r border-line" style={{ width: 120 }}>
                   Поставщик
                 </div>
-                <div className="px-2 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase tracking-wide text-center border-r border-[#e4e4e0]" style={{ width: 52 }}>
+                <div className="px-2 py-2.5 text-[10px] font-semibold text-ink-soft uppercase tracking-wide text-center border-r border-line" style={{ width: 52 }}>
                   Кол.
                 </div>
                 {activeColors.map(c => (
-                  <div key={c.id} className="px-1 py-2.5 text-[9px] font-bold text-[#6b6b66] uppercase text-center leading-tight border-r border-[#e4e4e0] last:border-0"
+                  <div key={c.id} className="px-1 py-2.5 text-[9px] font-semibold text-ink-soft uppercase text-center leading-tight border-r border-line last:border-0"
                     style={{ width: 88 }}>
                     {c.name}
                   </div>
@@ -247,27 +247,27 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                 const noPrice = row.supplier_id !== null && !suppliersWithPrices.includes(row.supplier_id)
 
                 return (
-                  <div key={row.id} className="flex items-center border-b border-[#f0f0ec] last:border-0 hover:bg-[#fafaf9] group">
+                  <div key={row.id} className="flex items-center border-b border-line-soft last:border-0 hover:bg-subtle group">
 
                     {/* Item name */}
-                    <div className="px-3 py-2.5 border-r border-[#f0f0ec]" style={{ width: 190 }}>
+                    <div className="px-3 py-2.5 border-r border-line-soft" style={{ width: 190 }}>
                       <div className="flex items-center gap-1.5">
                         {hasData  && <span className="w-2 h-2 rounded-full bg-emerald-500 flex-shrink-0" />}
                         {noPrice  && <span className="w-2 h-2 rounded-full bg-amber-400 flex-shrink-0" />}
                         {row.supplier_id === null && <span className="w-2 h-2 rounded-full bg-[#d4d4d0] flex-shrink-0" />}
                         <div>
-                          <p className="text-[13px] font-medium text-[#111110] leading-tight">{item.name}</p>
-                          <p className="text-[10px] text-[#9a9a95]">{item.unit}</p>
+                          <p className="text-[13px] font-medium text-ink leading-tight">{item.name}</p>
+                          <p className="text-[10px] text-muted">{item.unit}</p>
                         </div>
                       </div>
                     </div>
 
                     {/* Supplier select */}
-                    <div className="px-2 py-2.5 border-r border-[#f0f0ec]" style={{ width: 120 }}>
+                    <div className="px-2 py-2.5 border-r border-line-soft" style={{ width: 120 }}>
                       <select
                         value={row.supplier_id ?? ''}
                         onChange={e => setSupplier(row.id, e.target.value ? Number(e.target.value) : null)}
-                        className="w-full border border-[#e4e4e0] rounded px-2 py-1 text-[11px] outline-none focus:border-blue-400 bg-white">
+                        className="w-full border border-line rounded px-2 py-1 text-[11px] outline-none focus:border-blue-400 bg-surface">
                         <option value="">— выбрать —</option>
                         {suppliersWithPrices.length > 0 && (
                           <optgroup label="Есть цены">
@@ -288,12 +288,12 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                     </div>
 
                     {/* Qty */}
-                    <div className="px-1 py-2.5 text-center border-r border-[#f0f0ec]" style={{ width: 52 }}>
+                    <div className="px-1 py-2.5 text-center border-r border-line-soft" style={{ width: 52 }}>
                       <input
                         type="number" min="1"
                         value={row.qty || 1}
                         onChange={e => setQty(row.id, Number(e.target.value))}
-                        className="w-10 border border-[#e4e4e0] rounded px-1 py-0.5 text-[12px] text-center outline-none focus:border-blue-400 bg-white"
+                        className="w-10 border border-line rounded px-1 py-0.5 text-[12px] text-center outline-none focus:border-blue-400 bg-surface tabular-nums"
                       />
                     </div>
 
@@ -306,13 +306,13 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                       )
                       const lineTotal = p?.cost_price ? p.cost_price * (row.qty || 1) : null
                       return (
-                        <div key={color.id} className="px-1 py-2.5 text-center border-r border-[#f0f0ec] last:border-0"
+                        <div key={color.id} className="px-1 py-2.5 text-center border-r border-line-soft last:border-0"
                           style={{ width: 88 }}>
                           {p?.cost_price ? (
                             <div>
-                              <div className="text-[11px] text-[#9a9a95]">{p.cost_price.toLocaleString('ru-RU')}</div>
+                              <div className="text-[11px] text-muted tabular-nums">{p.cost_price.toLocaleString('ru-RU')}</div>
                               {(row.qty || 1) > 1 && (
-                                <div className="text-[12px] font-mono font-semibold text-[#111110]">
+                                <div className="text-[12px] font-mono font-semibold text-ink tabular-nums">
                                   {lineTotal!.toLocaleString('ru-RU')}
                                 </div>
                               )}
@@ -334,16 +334,16 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
 
               {/* ИТОГО row */}
               {hasAnyCalc && (
-                <div className="flex items-center bg-[#f8f8f7] border-t-2 border-[#e4e4e0]">
-                  <div className="px-3 py-2.5 text-[12px] font-bold text-[#111110] border-r border-[#e4e4e0]" style={{ width: 190 }}>
+                <div className="flex items-center bg-canvas border-t-2 border-line">
+                  <div className="px-3 py-2.5 text-[12px] font-semibold text-ink border-r border-line" style={{ width: 190 }}>
                     ИТОГО (позиции)
                   </div>
-                  <div className="border-r border-[#e4e4e0]" style={{ width: 120 }} />
-                  <div className="border-r border-[#e4e4e0]" style={{ width: 52 }} />
+                  <div className="border-r border-line" style={{ width: 120 }} />
+                  <div className="border-r border-line" style={{ width: 52 }} />
                   {activeColors.map(c => (
-                    <div key={c.id} className="px-1 py-2.5 text-center border-r border-[#e4e4e0] last:border-0" style={{ width: 88 }}>
+                    <div key={c.id} className="px-1 py-2.5 text-center border-r border-line last:border-0" style={{ width: 88 }}>
                       {calcTotals[c.id] > 0 ? (
-                        <span className="text-[13px] font-mono font-bold text-emerald-700">
+                        <span className="text-[13px] font-mono font-semibold text-emerald-700 tabular-nums">
                           {calcTotals[c.id].toLocaleString('ru-RU')}
                         </span>
                       ) : (
@@ -360,11 +360,11 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
       </div>
 
       {/* Manual price section */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+      <div className="bg-surface border border-line rounded-xl p-4">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <p className="text-[13px] font-semibold text-[#111110]">Стоимость комплекта — ручной ввод</p>
-            <p className="text-[11px] text-[#9a9a95] mt-0.5">
+            <p className="text-[13px] font-semibold text-ink">Стоимость комплекта — ручной ввод</p>
+            <p className="text-[11px] text-muted mt-0.5">
               {hasAnyCalc
                 ? 'Если заполнено — перекрывает расчёт из позиций. Оставьте 0 чтобы использовать автоподсчёт.'
                 : 'Укажите стоимость комплекта вручную пока позиции не заполнены.'}
@@ -373,20 +373,20 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
         </div>
 
         {activeColors.length === 0 ? (
-          <p className="text-[12px] text-[#9a9a95]">Нет активных цветов</p>
+          <p className="text-[12px] text-muted">Нет активных цветов</p>
         ) : (
           <div className="grid gap-3" style={{ gridTemplateColumns: `repeat(${Math.min(activeColors.length, 4)}, minmax(0,1fr))` }}>
             {activeColors.map(c => (
               <div key={c.id}>
-                <p className="text-[10px] text-[#9a9a95] mb-1 font-semibold uppercase tracking-wide">{c.name}</p>
+                <p className="text-[10px] text-muted mb-1 font-semibold uppercase tracking-wide">{c.name}</p>
                 <input
                   type="number" min="0" placeholder="0"
                   value={manDraft[c.id] ?? ''}
                   onChange={e => setManDraft(d => ({ ...d, [c.id]: e.target.value }))}
-                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#0071e3]"
+                  className="w-full border border-line rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#0071e3] tabular-nums"
                 />
                 {hasAnyCalc && calcTotals[c.id] > 0 && (
-                  <p className="text-[10px] text-[#9a9a95] mt-0.5">
+                  <p className="text-[10px] text-muted mt-0.5 tabular-nums">
                     Расчёт: {calcTotals[c.id].toLocaleString('ru-RU')} ₽
                   </p>
                 )}
@@ -402,7 +402,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
         )}
         <div className="mt-4 flex items-center gap-4">
           <button onClick={saveManualPrices} disabled={savingMan}
-            className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
+            className="px-4 py-2 bg-ink text-white text-[13px] font-medium rounded-lg disabled:opacity-40 hover:bg-[#2a2a28]">
             {savedMan ? 'Сохранено' : savingMan ? 'Сохраняю...' : 'Сохранить цены'}
           </button>
           {activeColors.length > 0 && (
@@ -411,7 +411,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
                 const eff = effectiveTotals[c.id]
                 if (!eff || eff.price === 0) return null
                 return (
-                  <span key={c.id} className={`text-[12px] ${eff.isManual ? 'text-[#0071e3]' : 'text-emerald-700'}`}>
+                  <span key={c.id} className={`text-[12px] tabular-nums ${eff.isManual ? 'text-[#0071e3]' : 'text-emerald-700'}`}>
                     {c.name}: {eff.price.toLocaleString('ru-RU')} ₽
                     <span className="text-[10px] ml-1 opacity-70">{eff.isManual ? '(вручную)' : '(авто)'}</span>
                   </span>
@@ -424,7 +424,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
 
       {/* Legend */}
       {kitRows.length > 0 && (
-        <div className="flex items-center gap-5 text-[11px] text-[#9a9a95] flex-wrap">
+        <div className="flex items-center gap-5 text-[11px] text-muted flex-wrap">
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500 inline-block"/>Данные заполнены</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block"/>Нет цен для поставщика</span>
           <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-[#d4d4d0] inline-block"/>Поставщик не выбран</span>

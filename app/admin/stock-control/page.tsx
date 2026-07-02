@@ -123,16 +123,16 @@ export default function StockControlPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f8f8f7] p-6">
+    <div className="min-h-screen bg-canvas p-6">
       <div className="max-w-5xl mx-auto space-y-4">
 
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-[18px] font-semibold text-[#111110]">Критические остатки</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Мониторинг ключевых позиций склада</p>
+            <h1 className="text-[18px] font-semibold text-ink">Критические остатки</h1>
+            <p className="text-[12px] text-muted mt-0.5">Мониторинг ключевых позиций склада</p>
           </div>
           <button onClick={() => setShowAll(v => !v)}
-            className={`text-[12px] px-3 py-1.5 rounded-lg font-medium border transition-colors ${showAll ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`}>
+            className={`text-[12px] px-3 py-1.5 rounded-lg font-medium border transition-colors ${showAll ? 'bg-ink text-white border-ink' : 'bg-surface text-ink-soft border-line hover:border-ink'}`}>
             {showAll ? 'Только критические' : 'Все позиции'}
           </button>
         </div>
@@ -145,9 +145,9 @@ export default function StockControlPage() {
             { key: 'ok',   label: 'Норма',    count: counts.ok,   cls: 'bg-emerald-50 border-emerald-200 text-emerald-700' },
           ].map(s => (
             <button key={s.key} onClick={() => setFilter(filter === s.key as typeof filter ? 'all' : s.key as typeof filter)}
-              className={`rounded-xl border px-4 py-3 text-left transition-all ${filter === s.key ? s.cls + ' ring-2 ring-offset-1 ring-current' : 'bg-white border-[#e4e4e0]'}`}>
-              <p className={`text-[24px] font-bold ${filter === s.key ? '' : 'text-[#111110]'}`}>{s.count}</p>
-              <p className={`text-[11px] font-semibold uppercase tracking-wide ${filter === s.key ? '' : 'text-[#9a9a95]'}`}>{s.label}</p>
+              className={`rounded-xl border px-4 py-3 text-left transition-all ${filter === s.key ? s.cls + ' ring-2 ring-offset-1 ring-current' : 'bg-surface border-line'}`}>
+              <p className={`text-[24px] font-semibold tabular-nums ${filter === s.key ? '' : 'text-ink'}`}>{s.count}</p>
+              <p className={`text-[11px] font-semibold uppercase tracking-wide ${filter === s.key ? '' : 'text-muted'}`}>{s.label}</p>
             </button>
           ))}
         </div>
@@ -155,57 +155,57 @@ export default function StockControlPage() {
         {/* Поиск */}
         <input value={search} onChange={e => setSearch(e.target.value)}
           placeholder="Поиск по названию..."
-          className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white" />
+          className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-ink bg-surface" />
 
         {/* Таблица */}
-        <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+        <div className="bg-surface border border-line rounded-xl overflow-hidden">
           <table className="w-full text-[12px]">
-            <thead className="bg-[#fafaf9] border-b border-[#e4e4e0]">
+            <thead className="bg-subtle border-b border-line">
               <tr>
-                <th className="text-left px-4 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide">Позиция</th>
-                <th className="text-center px-3 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide w-24">Факт</th>
-                <th className="text-center px-3 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide w-24">Минимум</th>
-                <th className="text-center px-3 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide w-28">Рекомендуемый</th>
-                <th className="text-center px-3 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide w-28">Статус</th>
-                <th className="text-center px-3 py-2.5 text-[10px] font-bold text-[#9a9a95] uppercase tracking-wide w-24">Критич.</th>
+                <th className="text-left px-4 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide">Позиция</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide w-24">Факт</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide w-24">Минимум</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide w-28">Рекомендуемый</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide w-28">Статус</th>
+                <th className="text-center px-3 py-2.5 text-[10px] font-semibold text-muted uppercase tracking-wide w-24">Критич.</th>
                 <th className="w-16" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#f8f8f7]">
+            <tbody className="divide-y divide-line-soft">
               {loading ? (
-                <tr><td colSpan={7} className="text-center py-8 text-[#9a9a95]">Загрузка...</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-muted">Загрузка...</td></tr>
               ) : display.length === 0 ? (
-                <tr><td colSpan={7} className="text-center py-8 text-[#9a9a95]">Нет позиций</td></tr>
+                <tr><td colSpan={7} className="text-center py-8 text-muted">Нет позиций</td></tr>
               ) : display.map(item => {
                 const st = status(item)
                 const sl = STATUS_LABELS[st]
                 return (
-                  <tr key={`${item._source}-${item.id}`} className={`hover:bg-[#fafaf9] ${st === 'crit' ? 'bg-red-50/30' : st === 'warn' ? 'bg-amber-50/30' : ''}`}>
+                  <tr key={`${item._source}-${item.id}`} className={`hover:bg-subtle ${st === 'crit' ? 'bg-red-50/30' : st === 'warn' ? 'bg-amber-50/30' : ''}`}>
                     <td className="px-4 py-2.5">
-                      <p className="font-semibold text-[#111110]">{item.name}</p>
-                      <p className="text-[10px] text-[#9a9a95]">{item.category} · {item._source === 'hardware' ? 'фурнитура' : 'материал'}</p>
+                      <p className="font-semibold text-ink">{item.name}</p>
+                      <p className="text-[10px] text-muted">{item.category} · {item._source === 'hardware' ? 'фурнитура' : 'материал'}</p>
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       <input type="number" min="0" value={item.stock_qty}
                         onChange={e => update(item.id, item._source, 'stock_qty', Number(e.target.value) || 0)}
-                        className="w-16 text-center border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]" />
+                        className="w-16 text-center border border-line rounded-lg px-2 py-1 text-[12px] font-mono tabular-nums outline-none focus:border-ink" />
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       <input type="number" min="0" value={item.min_stock}
                         onChange={e => update(item.id, item._source, 'min_stock', Number(e.target.value) || 0)}
-                        className="w-16 text-center border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]" />
+                        className="w-16 text-center border border-line rounded-lg px-2 py-1 text-[12px] font-mono tabular-nums outline-none focus:border-ink" />
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       <input type="number" min="0" value={item.recommended_stock}
                         onChange={e => update(item.id, item._source, 'recommended_stock', Number(e.target.value) || 0)}
-                        className="w-20 text-center border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono outline-none focus:border-[#111110]" />
+                        className="w-20 text-center border border-line rounded-lg px-2 py-1 text-[12px] font-mono tabular-nums outline-none focus:border-ink" />
                     </td>
                     <td className="px-3 py-2.5 text-center">
-                      <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border ${sl.cls}`}>{sl.label}</span>
+                      <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded-full border ${sl.cls}`}>{sl.label}</span>
                     </td>
                     <td className="px-3 py-2.5 text-center">
                       <button onClick={() => toggleCritical(item)}
-                        className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${item.is_critical ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e4e4e0]'}`}>
+                        className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${item.is_critical ? 'bg-ink text-white' : 'bg-line-soft text-muted hover:bg-line'}`}>
                         {item.is_critical ? '★ Да' : '☆ Нет'}
                       </button>
                     </td>
@@ -224,7 +224,7 @@ export default function StockControlPage() {
           </table>
         </div>
 
-        <p className="text-[11px] text-[#9a9a95] text-center">
+        <p className="text-[11px] text-muted text-center">
           Норма = остаток ≥ рекомендуемого · Внимание = ниже рекомендуемого · Критично = ниже минимума
         </p>
       </div>

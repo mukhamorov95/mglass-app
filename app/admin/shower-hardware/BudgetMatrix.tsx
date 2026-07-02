@@ -232,8 +232,8 @@ export function BudgetMatrix() {
           <button key={m} onClick={() => setSelectedModel(m)}
             className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${
               selectedModel === m
-                ? 'bg-[#111110] text-white'
-                : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'
+                ? 'bg-ink text-white'
+                : 'bg-surface border border-line text-ink-soft hover:bg-canvas'
             }`}>{m}</button>
         ))}
       </div>
@@ -241,11 +241,11 @@ export function BudgetMatrix() {
       {/* Toolbar */}
       <div className="flex items-center gap-2 flex-wrap">
         <button onClick={() => setShowAddType(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-[13px] text-[#111110] hover:bg-[#f8f8f7]">
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-line rounded-lg text-[13px] text-ink hover:bg-canvas">
           + Тип фурнитуры
         </button>
         <button onClick={() => setShowColors(v => !v)}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-[13px] text-[#6b6b66] hover:bg-[#f8f8f7]">
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-surface border border-line rounded-lg text-[13px] text-ink-soft hover:bg-canvas">
           Цвета ({activeColors.length})
         </button>
       </div>
@@ -254,34 +254,34 @@ export function BudgetMatrix() {
       {showAddType && (
         <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Наименование</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Наименование</label>
             <input value={newTypeName} onChange={e => setNewTypeName(e.target.value)}
               onKeyDown={e => { if (e.key === 'Enter') addHwType(); if (e.key === 'Escape') setShowAddType(false) }}
               placeholder="П-ПРОФИЛЬ, ШТАНГА..."
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-white" />
+              className="w-full border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-surface" />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Ед. изм.</label>
+            <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Ед. изм.</label>
             <select value={newTypeUnit} onChange={e => setNewTypeUnit(e.target.value)}
-              className="border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-white">
+              className="border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-surface">
               {UNITS.map(u => <option key={u}>{u}</option>)}
             </select>
           </div>
           {newTypeUnit === 'хлыст' && (
             <div>
-              <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Длина (мм)</label>
+              <label className="block text-[11px] font-semibold text-muted uppercase tracking-widest mb-1">Длина (мм)</label>
               <input type="number" value={newTypeWhip} onChange={e => setNewTypeWhip(e.target.value)}
                 placeholder="3000"
-                className="w-24 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-white" />
+                className="w-24 border border-line rounded-lg px-3 py-2 text-[13px] outline-none focus:border-blue-400 bg-surface tabular-nums" />
             </div>
           )}
           <div className="flex gap-2">
             <button onClick={addHwType}
-              className="bg-[#111110] text-white px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-[#2a2a28]">
+              className="bg-ink text-white px-4 py-2 rounded-lg text-[13px] font-medium hover:bg-[#2a2a28]">
               Добавить
             </button>
             <button onClick={() => setShowAddType(false)}
-              className="px-3 py-2 rounded-lg text-[13px] text-[#9a9a95] hover:text-[#6b6b66]">
+              className="px-3 py-2 rounded-lg text-[13px] text-muted hover:text-ink-soft">
               Отмена
             </button>
           </div>
@@ -290,19 +290,19 @@ export function BudgetMatrix() {
 
       {/* Colors panel */}
       {showColors && (
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-          <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-3">Цвета (колонки таблицы)</p>
+        <div className="bg-surface border border-line rounded-xl p-4">
+          <p className="text-[11px] font-semibold text-muted uppercase tracking-widest mb-3">Цвета (колонки таблицы)</p>
           <div className="flex flex-wrap gap-2 mb-3">
             {colors.map(c => (
               <span key={c.id}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border text-[12px] font-medium ${
                   c.active
-                    ? 'bg-white border-[#e4e4e0] text-[#111110]'
-                    : 'bg-[#f8f8f7] border-[#f0f0ec] text-[#9a9a95] line-through'
+                    ? 'bg-surface border-line text-ink'
+                    : 'bg-canvas border-line-soft text-muted line-through'
                 }`}>
                 {c.name}
                 <button onClick={() => toggleColor(c.id, c.active)}
-                  className="text-[10px] text-[#9a9a95] hover:text-[#6b6b66]">
+                  className="text-[10px] text-muted hover:text-ink-soft">
                   {c.active ? '✕' : '+'}
                 </button>
               </span>
@@ -312,9 +312,9 @@ export function BudgetMatrix() {
             <input value={newColorName} onChange={e => setNewColorName(e.target.value)}
               onKeyDown={e => e.key === 'Enter' && addColor()}
               placeholder="Новый цвет"
-              className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110] uppercase w-48 bg-white" />
+              className="border border-line rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-ink uppercase w-48 bg-surface" />
             <button onClick={addColor}
-              className="bg-[#111110] text-white px-3 py-1.5 rounded-lg text-[13px] hover:bg-[#2a2a28]">
+              className="bg-ink text-white px-3 py-1.5 rounded-lg text-[13px] hover:bg-[#2a2a28]">
               + Добавить
             </button>
           </div>
@@ -322,26 +322,26 @@ export function BudgetMatrix() {
       )}
 
       {/* Matrix table */}
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+      <div className="bg-surface border border-line rounded-xl overflow-hidden">
         {loading ? (
-          <div className="p-8 text-center text-[#9a9a95] text-[13px]">Загрузка...</div>
+          <div className="p-8 text-center text-muted text-[13px]">Загрузка...</div>
         ) : (
           <div className="overflow-x-auto">
             <div style={{ minWidth }}>
 
               {/* Header */}
-              <div className="flex border-b-2 border-[#e4e4e0] bg-[#f5f5f3] sticky top-0 z-10">
-                <div className="flex-shrink-0 px-3 py-2.5 text-[11px] font-bold text-[#6b6b66] uppercase tracking-widest border-r border-[#e4e4e0]"
+              <div className="flex border-b-2 border-line bg-canvas sticky top-0 z-10">
+                <div className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold text-ink-soft uppercase tracking-widest border-r border-line"
                   style={{ width: COL_TYPE }}>
                   Тип / ед. изм.
                 </div>
-                <div className="flex-shrink-0 px-3 py-2.5 text-[11px] font-bold text-[#6b6b66] uppercase tracking-widest border-r border-[#e4e4e0]"
+                <div className="flex-shrink-0 px-3 py-2.5 text-[11px] font-semibold text-ink-soft uppercase tracking-widest border-r border-line"
                   style={{ width: COL_SUP }}>
                   Поставщик
                 </div>
                 {activeColors.map(c => (
                   <div key={c.id}
-                    className="flex-shrink-0 px-1 py-2.5 text-[10px] font-bold text-[#6b6b66] uppercase text-center leading-tight border-r border-[#e4e4e0] last:border-0"
+                    className="flex-shrink-0 px-1 py-2.5 text-[10px] font-semibold text-ink-soft uppercase text-center leading-tight border-r border-line last:border-0"
                     style={{ width: COL_PRICE }}>
                     {c.name}
                   </div>
@@ -350,7 +350,7 @@ export function BudgetMatrix() {
 
               {/* Body */}
               {hwTypes.length === 0 ? (
-                <div className="p-8 text-center text-[#9a9a95] text-[13px]">
+                <div className="p-8 text-center text-muted text-[13px]">
                   Добавьте тип фурнитуры через кнопку выше
                 </div>
               ) : (
@@ -363,12 +363,12 @@ export function BudgetMatrix() {
                     : type.unit
 
                   return (
-                    <div key={type.id} className="border-b border-[#e4e4e0] last:border-0">
+                    <div key={type.id} className="border-b border-line last:border-0">
 
                       {/* Section header */}
-                      <div className="flex items-center bg-[#f8f8f7] border-b border-[#ebebea] px-3 py-2 gap-3">
-                        <span className="text-[12px] font-bold text-[#111110] uppercase tracking-wide">{type.name}</span>
-                        <span className="text-[11px] text-[#9a9a95] bg-[#ededeb] px-1.5 py-0.5 rounded-full">{unitLabel}</span>
+                      <div className="flex items-center bg-canvas border-b border-[#ebebea] px-3 py-2 gap-3">
+                        <span className="text-[12px] font-semibold text-ink uppercase tracking-wide">{type.name}</span>
+                        <span className="text-[11px] text-muted bg-[#ededeb] px-1.5 py-0.5 rounded-full">{unitLabel}</span>
                         <div className="ml-auto relative" data-supplier-dropdown>
                           <button
                             onClick={() => {
@@ -381,23 +381,23 @@ export function BudgetMatrix() {
                           </button>
 
                           {addSupplierTypeId === type.id && (
-                            <div className="absolute right-0 top-full mt-1 bg-white border border-[#e4e4e0] rounded-xl shadow-xl z-20 p-1.5 min-w-[180px]">
+                            <div className="absolute right-0 top-full mt-1 bg-surface border border-line rounded-xl shadow-xl z-20 p-1.5 min-w-[180px]">
                               {available.length === 0 && !showNewSupInput && (
-                                <p className="px-3 py-1.5 text-[12px] text-[#9a9a95]">Все поставщики добавлены</p>
+                                <p className="px-3 py-1.5 text-[12px] text-muted">Все поставщики добавлены</p>
                               )}
                               {available.map(s => (
                                 <button key={s.id} onClick={() => assignSupplier(type.id, s.id)}
-                                  className="w-full text-left px-3 py-1.5 text-[13px] text-[#111110] hover:bg-[#f8f8f7] rounded-lg">
+                                  className="w-full text-left px-3 py-1.5 text-[13px] text-ink hover:bg-canvas rounded-lg">
                                   {s.name}
                                 </button>
                               ))}
                               {!showNewSupInput ? (
                                 <button onClick={() => setShowNewSupInput(true)}
-                                  className="w-full text-left px-3 py-1.5 text-[12px] text-blue-600 hover:bg-blue-50 rounded-lg border-t border-[#f0f0ec] mt-1">
+                                  className="w-full text-left px-3 py-1.5 text-[12px] text-blue-600 hover:bg-blue-50 rounded-lg border-t border-line-soft mt-1">
                                   + Новый поставщик
                                 </button>
                               ) : (
-                                <div className="mt-1 pt-1 border-t border-[#f0f0ec] px-1">
+                                <div className="mt-1 pt-1 border-t border-line-soft px-1">
                                   <input value={newSupplierName} onChange={e => setNewSupplierName(e.target.value)}
                                     onKeyDown={e => {
                                       if (e.key === 'Enter') addNewSupplier(type.id)
@@ -405,9 +405,9 @@ export function BudgetMatrix() {
                                     }}
                                     placeholder="Название поставщика"
                                     autoFocus
-                                    className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-blue-400" />
+                                    className="w-full border border-line rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-blue-400" />
                                   <button onClick={() => addNewSupplier(type.id)}
-                                    className="mt-1.5 w-full bg-[#111110] text-white px-2 py-1.5 rounded-lg text-[12px] font-medium">
+                                    className="mt-1.5 w-full bg-ink text-white px-2 py-1.5 rounded-lg text-[12px] font-medium">
                                     Добавить
                                   </button>
                                 </div>
@@ -419,7 +419,7 @@ export function BudgetMatrix() {
 
                       {/* Supplier rows */}
                       {typeRows.length === 0 && (
-                        <div className="px-4 py-3 text-[12px] text-[#b0b0ab] italic">
+                        <div className="px-4 py-3 text-[12px] text-faint italic">
                           Нажмите «+ поставщик» чтобы добавить
                         </div>
                       )}
@@ -428,15 +428,15 @@ export function BudgetMatrix() {
                         const sup = suppliers.find(s => s.id === row.supplier_id)
                         return (
                           <div key={row.id}
-                            className="flex items-stretch hover:bg-[#fafaf9] group border-b border-[#f5f5f3] last:border-0">
+                            className="flex items-stretch hover:bg-subtle group border-b border-line-soft last:border-0">
 
                             {/* Type column (empty, spacer) */}
-                            <div className="flex-shrink-0 border-r border-[#f0f0ec]" style={{ width: COL_TYPE }} />
+                            <div className="flex-shrink-0 border-r border-line-soft" style={{ width: COL_TYPE }} />
 
                             {/* Supplier column */}
-                            <div className="flex-shrink-0 px-3 py-2 border-r border-[#f0f0ec] flex items-center justify-between gap-1"
+                            <div className="flex-shrink-0 px-3 py-2 border-r border-line-soft flex items-center justify-between gap-1"
                               style={{ width: COL_SUP }}>
-                              <span className="text-[13px] font-medium text-[#111110]">{sup?.name ?? '?'}</span>
+                              <span className="text-[13px] font-medium text-ink">{sup?.name ?? '?'}</span>
                               <button onClick={() => removeRow(row.id)}
                                 className="opacity-0 group-hover:opacity-100 text-[10px] text-[#c0c0bb] hover:text-red-400 transition-opacity flex-shrink-0">
                                 ✕
@@ -449,7 +449,7 @@ export function BudgetMatrix() {
                               const isEditing = editing?.rowId === row.id && editing?.colorId === color.id
                               return (
                                 <div key={color.id}
-                                  className="flex-shrink-0 border-r border-[#f0f0ec] last:border-0"
+                                  className="flex-shrink-0 border-r border-line-soft last:border-0"
                                   style={{ width: COL_PRICE }}>
                                   {isEditing ? (
                                     <input
@@ -462,13 +462,13 @@ export function BudgetMatrix() {
                                         if (e.key === 'Enter') commitEdit()
                                         if (e.key === 'Escape') setEditing(null)
                                       }}
-                                      className="w-full h-full px-1 py-2 text-[13px] font-mono text-center outline-none bg-blue-50 border-x border-blue-300 min-h-[36px]"
+                                      className="w-full h-full px-1 py-2 text-[13px] font-mono text-center outline-none bg-blue-50 border-x border-blue-300 min-h-[36px] tabular-nums"
                                     />
                                   ) : (
                                     <button
                                       onClick={() => startEdit(row.id, color.id)}
-                                      className={`w-full min-h-[36px] px-1 py-2 text-[13px] font-mono text-center transition-colors hover:bg-blue-50 ${
-                                        cell?.price ? 'text-[#111110]' : 'text-[#d8d8d4] hover:text-[#9a9a95]'
+                                      className={`w-full min-h-[36px] px-1 py-2 text-[13px] font-mono text-center transition-colors hover:bg-blue-50 tabular-nums ${
+                                        cell?.price ? 'text-ink' : 'text-[#d8d8d4] hover:text-muted'
                                       }`}>
                                       {cell?.price ? cell.price.toLocaleString('ru-RU') : '—'}
                                     </button>
