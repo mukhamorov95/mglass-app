@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
+import { isCuttingBlocked } from '@/lib/materialGate'
 
 // Обратное зеркало: отметка этапа со «старых» экранов (orders/[id], /p/o) → production_tasks.
 // Прямое зеркало (production_tasks → notes.detail_stages) живёт в /api/production-tasks/[id].
@@ -30,9 +31,20 @@ export async function POST(
   const now = new Date().toISOString()
   let updated = 0
 
+  // Материал-гейт для резки: если среди updates есть закрытие cutting, проверяем материал (один раз).
+  const cuttingDone = updates.some(u => u?.stage_key === 'cutting' && u.action === 'done')
+  let cuttingBlocked = false
+  if (cuttingDone && body.force !== true) {
+    const { data: pos } = await svc.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', [orderId])
+    cuttingBlocked = isCuttingBlocked(orderId, (pos ?? []) as { b2b_order_ids: number[] | null; status: string }[])
+  }
+
+  const blocked: number[] = []
   for (const u of updates) {
     // 'problem' — псевдоэтап старой модели, в production_tasks реального stage нет: пропускаем.
     if (!u || u.stage_key === 'problem' || typeof u.item_index !== 'number') continue
+    // Резку не закрываем, пока материал не приехал (остальные этапы проходят).
+    if (u.stage_key === 'cutting' && u.action === 'done' && cuttingBlocked) { blocked.push(u.item_index); continue }
 
     const patch: Record<string, unknown> = u.action === 'unset'
       ? { status: 'queued', completed_at: null, started_at: null, problem_at: null, problem_resolved_at: null, problem_reason_code: null, problem_comment: null }
@@ -52,5 +64,5 @@ export async function POST(
   // Третье зеркало: закрытые этапы (все позиции) → order-level notes.stages для /b2b-orders/Сводки
   await mirrorOrderStages(svc, orderId)
 
-  return NextResponse.json({ ok: true, updated })
+  return NextResponse.json({ ok: true, updated, blocked: blocked.length ? blocked : undefined })
 }

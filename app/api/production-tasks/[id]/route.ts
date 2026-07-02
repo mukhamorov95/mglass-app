@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
+import { isCuttingBlocked } from '@/lib/materialGate'
 
 // PATCH — отметка производственной задачи рабочим (Выполнено / Проблема).
 // Двойная запись: production_tasks (новая модель очередей) И notes.detail_stages
@@ -33,6 +34,15 @@ export async function PATCH(
     .eq('id', taskId)
     .single()
   if (tErr || !task) return NextResponse.json({ error: 'Задача не найдена' }, { status: 404 })
+
+  // Материал-гейт: резку нельзя закрыть, пока материал по заказу не приехал (если есть открытая заявка).
+  // Обход — body.force:true (кнопка «резать со склада»).
+  if (action === 'done' && task.stage_key === 'cutting' && body.force !== true) {
+    const { data: pos } = await svc.from('purchase_orders').select('b2b_order_ids,status').overlaps('b2b_order_ids', [task.order_id])
+    if (isCuttingBlocked(task.order_id, (pos ?? []) as { b2b_order_ids: number[] | null; status: string }[])) {
+      return NextResponse.json({ error: 'material_not_arrived', message: 'Материал по заказу ещё не приехал' }, { status: 409 })
+    }
+  }
 
   const now = new Date().toISOString()
 

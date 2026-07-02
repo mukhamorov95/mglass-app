@@ -78,13 +78,12 @@ export default function KPPrintPage() {
 
   useEffect(() => {
     if (!id) return
-    createClient()
-      .from('b2b_orders')
-      .select('*')
-      .eq('id', id)
-      .single()
-      .then(({ data, error }) => {
-        if (error || !data) { setError('Расчёт не найден'); setLoading(false); return }
+    // Через серверный API с проверкой доступа (не прямой запрос к b2b_orders анон-ключом).
+    fetch(`/api/quotes/${id}/kp-data`)
+      .then(async r => {
+        if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этому расчёту' : 'Расчёт не найден'); setLoading(false); return }
+        const { order: data } = await r.json()
+        if (!data) { setError('Расчёт не найден'); setLoading(false); return }
         const raw = data as Record<string, unknown>
         const items: OrderItem[] = Array.isArray(raw.items) ? (raw.items as OrderItem[]) : []
         setOrder({

@@ -104,6 +104,8 @@ export default function B2BCalculatorPage() {
   const [isBuyer, setIsBuyer]           = useState(false)
   const [saving, setSaving]       = useState(false)
   const [savedOrderId, setSavedOrderId] = useState<number | null>(null)
+  const [editingOrderId, setEditingOrderId] = useState<number | null>(null)   // ?orderId= → редактируем ту же строку
+  const editOrigNotesRef = useRef<Record<string, unknown>>({})                 // исходные notes для merge (не терять status/history/оплату)
   const [savedAsPending, setSavedAsPending] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [managerEmail, setManagerEmail] = useState<string | null>(null)
@@ -289,11 +291,20 @@ export default function B2BCalculatorPage() {
       // Load an existing order into the calculator
       ;(async () => {
         const sb = createClient()
-        const { data } = await sb.from('b2b_orders').select('client_id,items').eq('id', orderIdParam).single()
+        const { data } = await sb.from('b2b_orders').select('client_id,items,custom_number,client_order_number,notes').eq('id', orderIdParam).single()
         if (data) {
+          setEditingOrderId(Number(orderIdParam))
           if (data.client_id) setClientId(data.client_id)
           const loadedItems = (Array.isArray(data.items) ? data.items : []) as B2BOrderItem[]
           setItems(loadedItems.map(i => ({ ...i, localId: (i as B2BOrderItem & { localId?: string }).localId || crypto.randomUUID() })))
+          if (data.custom_number) setOurOrderNumber(data.custom_number)
+          if (data.client_order_number) setClientOrderNumber(data.client_order_number)
+          const on = typeof data.notes === 'string'
+            ? (() => { try { return JSON.parse(data.notes) } catch { return {} } })()
+            : (data.notes ?? {})
+          editOrigNotesRef.current = on
+          if (typeof on.production_days === 'number') setFProductionDays(on.production_days)
+          if (typeof on.user_notes === 'string') setNotes(on.user_notes)
         }
       })()
       return
@@ -683,14 +694,18 @@ export default function B2BCalculatorPage() {
       ? Math.round(items.reduce((s, i) => s + i.margin, 0) / items.length)
       : 0
     const authorName = managerName ?? managerEmail ?? null
+    const editing = editingOrderId != null
+    const baseNotes = editing ? { ...editOrigNotesRef.current } : {}
     const orderNotes = JSON.stringify({
-      status: approvalRequired ? 'pending_approval' : 'quote',
-      quote_date: new Date().toISOString(),
+      ...baseNotes,   // при редактировании сохраняем status/status_history/payment_status/launched_at и т.д.
+      status: editing ? (baseNotes.status ?? (approvalRequired ? 'pending_approval' : 'quote')) : (approvalRequired ? 'pending_approval' : 'quote'),
+      quote_date: editing ? (baseNotes.quote_date ?? new Date().toISOString()) : new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
-      manager_name: authorName,
+      manager_name: editing ? (baseNotes.manager_name ?? authorName) : authorName,
     })
-    const { data: saved, error } = await sb.from('b2b_orders').insert({
+
+    const commonFields = {
       client_id: clientId,
       client_name: selectedClient.name,
       discount_percent: discount,
@@ -705,28 +720,39 @@ export default function B2BCalculatorPage() {
       notes: orderNotes,
       custom_number: ourOrderNumber.trim() || null,
       client_order_number: clientOrderNumber.trim() || null,
-      created_by: managerId ?? null,
-      // Column-level authorship — backed by 20260630_b2b_orders_authorship.sql.
-      created_by_name: authorName,
-    }).select('id').single()
-
-    if (error) {
-      console.error('B2B save error:', error)
-      setSaveError(error.message)
-      setSaving(false)
-      return
     }
 
-    if (saved) {
+    let savedId: number | null = null
+    if (editing) {
+      // Редактирование той же строки: НЕ трогаем created_by (сохраняем автора), фиксируем правку.
+      const { error } = await sb.from('b2b_orders').update({
+        ...commonFields,
+        updated_by_user_id: managerId ?? null,
+        updated_by_name: authorName,
+        updated_at: new Date().toISOString(),
+      }).eq('id', editingOrderId)
+      if (error) { console.error('B2B update error:', error); setSaveError(error.message); setSaving(false); return }
+      savedId = editingOrderId
+    } else {
+      const { data: saved, error } = await sb.from('b2b_orders').insert({
+        ...commonFields,
+        created_by: managerId ?? null,
+        created_by_name: authorName,   // авторство — 20260630_b2b_orders_authorship.sql
+      }).select('id').single()
+      if (error) { console.error('B2B save error:', error); setSaveError(error.message); setSaving(false); return }
+      savedId = saved?.id ?? null
+    }
+
+    if (savedId) {
       try { localStorage.removeItem(DRAFT_KEY) } catch {}
       if (attachFile) {
         const safeName = attachFile.name.replace(/[^a-zA-Z0-9._-]/g, '_')
-        const path = `${saved.id}/${Date.now()}_${safeName}`
+        const path = `${savedId}/${Date.now()}_${safeName}`
         const { error: uploadErr } = await sb.storage.from('b2b-attachments').upload(path, attachFile)
         if (!uploadErr) {
           const { data: urlData } = sb.storage.from('b2b-attachments').getPublicUrl(path)
           await sb.from('b2b_calculation_attachments').insert({
-            order_id: saved.id,
+            order_id: savedId,
             file_name: attachFile.name,
             file_url: urlData.publicUrl,
             file_type: attachFile.type || attachFile.name.split('.').pop() || '',
@@ -734,7 +760,7 @@ export default function B2BCalculatorPage() {
           })
         }
       }
-      setSavedOrderId(saved.id)
+      setSavedOrderId(savedId)
       setSavedAsPending(approvalRequired)
     }
     setSaving(false)
@@ -1396,9 +1422,15 @@ export default function B2BCalculatorPage() {
                     ⚠️ Скидка снижает итоговую сумму ниже минимальной стоимости позиций. После сохранения просчёт уйдёт на согласование.
                   </div>
                 )}
+                {editingOrderId != null && (
+                  <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
+                )}
                 <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
                   className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-                  {saving ? 'Сохранение...' : savedOrderId != null ? 'Сохранено ✓' : !clientId ? 'Выберите клиента' : 'Сохранить просчёт'}
+                  {saving ? 'Сохранение...'
+                    : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
+                    : !clientId ? 'Выберите клиента'
+                    : editingOrderId != null ? 'Обновить просчёт' : 'Сохранить просчёт'}
                 </button>
 
                 {saveError && (

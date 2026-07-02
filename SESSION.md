@@ -1,3 +1,21 @@
+## РОЛЕВЫЕ ПАНЕЛИ + внедрение (2026-07-02)
+4 ролевые аналитические панели (Solution Architect, Security/DBA, Product/UX, Ops) по каждому вопросу перед внедрением. Внедрено безопасное:
+- **KP-страница безопасность**: `/b2b-quotes/[id]/kp` больше не читает b2b_orders анон-ключом. Новый `GET /api/quotes/[id]/kp-data` с проверкой доступа (owner/see_all/created_by/партнёр), страница берёт данные оттуда. Закрыт горизонтальный доступ между внутренними.
+- **Калькулятор `?orderId=` → true UPDATE**: редактирование той же строки (не дубль!). Грузит custom_number/client_order_number/notes; handleSave ветвит insert/update; при update — MERGE notes (сохраняем status/history/оплату/launched_at), created_by не трогаем, пишем updated_by. Кнопка «Обновить просчёт», подпись «Редактируется №…». Иконка 🧮 → «Редактировать» (копия — соседняя ⧉).
+- **Материал-гейт единый** (lib/materialGate.ts, isCuttingBlocked): резку нельзя закрыть без материала из ОБЕИХ серверных точек (/api/production-tasks + sync-stages), не только из UI станции. Обход body.force:true. 409 material_not_arrived.
+- **Ops**: экран «Пул на сегодня» → «Пул по станциям» (в соответствие с табами; дневного планирования нет — не внедряем, за владельцем).
+- Проверка: tsc/build зелёные.
+
+### SECURITY/DBA нашёл важное (проверено на живой БД):
+- Bucket b2b-attachments УЖЕ приватный (public.sql НЕ применён) → публичного лика нет. НО код сохраняет getPublicUrl → ссылки на вложения СЕЙЧАС БИТЫЕ (400). РЕАЛЬНЫЙ БАГ — чинить: хранить path + signed URL на сервере (route + reader). Следующий шаг.
+- b2b_clients.user_id и partner-RLS НЕ применены.
+
+### КАБИНЕТ ПАРТНЁРА — архитектура+security готовы, ждём решений владельца:
+- Модель: b2b_orders.source ('internal'|'partner') + статусы partner_draft/partner_submitted; расчёт всегда серверный + whitelist sanitizeQuote (нет утечки cost/margin); партнёр к данным только через service-role API. Фазы: P0 фундамент → P1a калькулятор+история → P1b заявка с PDF → P2 realtime(polling).
+- Готовый SQL (Security/DBA): auth.is_partner(); partner-SELECT политики b2b_orders/b2b_clients по client_id/user_id=auth.uid(); storage-RLS по префиксу order_id + signed URLs. КЛЮЧ: партнёра НЕ класть в profiles org=1 (иначе org FOR ALL политика течёт) — отдельная org на партнёра.
+- ЗА ВЛАДЕЛЬЦЕМ: завести учётки партнёров + b2b_clients.user_id; отдельная org для изоляции; замена storage-политик (вместе с правкой кода); бизнес-правило partner_submitted→внутренний трек.
+- БЕЗОПАСНО В КОДЕ СЕЙЧАС (можно применить миграции через Supabase MCP): user_id колонка, partner-RLS (no-op для внутренних), весь серверный код кабинета, партнёрский калькулятор/история/заявка. Активируется после заведения партнёров.
+
 ## КОМПЛЕКСНЫЙ АУДИТ B2B + улучшения (2026-07-02)
 4 параллельных аудита (просчёт-флоу, производство, аналитика/данные, кабинет партнёра). Реализованы безопасные высокоценные правки:
 - **Prod «третье зеркало»** (lib/productionOrderMirror.ts): закрытие всех позиций этапа в цехе → проставляет order-level notes.stages (cut/edge_processed/drilled/tempering/packaged), вызывается из /api/production-tasks/[id] и sync-stages. Теперь /b2b-orders и Сводка отражают цех. Только продвигает (не затирает ручное).

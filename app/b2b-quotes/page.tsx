@@ -875,9 +875,9 @@ export default function B2BQuotesPage() {
                         className="text-[11px] text-[#c4c4be] hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors">
                         КП
                       </Link>
-                      {/* В калькулятор */}
+                      {/* Редактировать в калькуляторе (та же запись; для копии — кнопка ⧉ рядом) */}
                       <Link href={`/calculator/b2b?orderId=${quote.id}`}
-                        title="Открыть в калькуляторе"
+                        title="Редактировать в калькуляторе"
                         className="text-[11px] text-[#c4c4be] hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
                         🧮
                       </Link>
