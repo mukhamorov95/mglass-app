@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { PageHeader, IcArrowLeft } from '@/components/ds'
 
 type ServiceLine = { name: string; total: number }
 
@@ -33,11 +34,11 @@ function Bar({ label, value, total, color }: { label: string; value: number; tot
   const pct = total > 0 ? Math.round((value / total) * 100) : 0
   return (
     <div>
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-[#6b6b66]">{label}</span>
-        <span className="font-mono font-medium">{fmt(value)} <span className="text-[#9a9a95] font-normal">({pct}%)</span></span>
+      <div className="flex justify-between text-[12px] mb-1">
+        <span className="text-ink-soft">{label}</span>
+        <span className="font-mono font-medium tabular-nums">{fmt(value)} <span className="text-muted font-normal">({pct}%)</span></span>
       </div>
-      <div className="h-2 bg-[#f0f0ec] rounded-full overflow-hidden">
+      <div className="h-2 bg-line-soft rounded-full overflow-hidden">
         <div className={`h-full ${color} rounded-full`} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -78,36 +79,38 @@ export default function UnitEconomicsPage() {
   const netProfit   = c?.profit ?? 0
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
-      <div className="max-w-[1100px] mx-auto px-4 py-4 space-y-4">
+    <div className="bg-canvas min-h-screen">
+      <div className="max-w-[1100px] mx-auto px-4 py-5 space-y-4">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Unit-экономика</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">Разбивка по каждому расчёту: себестоимость → прибыль</p>
-          </div>
-          <Link href="/cfo" className="text-[10px] text-[#9a9a95] hover:text-[#111110]">← Дашборд</Link>
-        </div>
+        <PageHeader
+          title="CFO Center — Unit-экономика"
+          subtitle="Разбивка по каждому расчёту: себестоимость → прибыль"
+          actions={
+            <Link href="/cfo" className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft hover:text-ink px-3 py-1.5 border border-line rounded-lg hover:border-ink transition-colors">
+              <IcArrowLeft className="w-3.5 h-3.5" />Дашборд
+            </Link>
+          }
+        />
 
         <div className="grid grid-cols-[280px_1fr] gap-4">
           {/* List */}
-          <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-            <div className="px-3 py-2.5 border-b border-[#e4e4e0]">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Расчёты</p>
+          <div className="bg-surface rounded-xl border border-line overflow-hidden">
+            <div className="px-3 py-3 border-b border-line-soft">
+              <p className="text-[11px] font-semibold text-muted">Расчёты</p>
             </div>
             <div className="overflow-y-auto max-h-[calc(100vh-160px)]">
               {loading ? (
-                <div className="p-4 text-center text-xs text-[#9a9a95]">Загрузка…</div>
+                <div className="p-4 text-center text-[12px] text-muted">Загрузка…</div>
               ) : calcs.map(calc => {
                 const m = calc.margin ?? 0
                 const isActive = selected?.id === calc.id
                 return (
                   <button key={calc.id} onClick={() => setSelected(calc)}
-                    className={`w-full text-left px-3 py-2.5 border-b border-[#f5f5f3] last:border-0 transition-colors ${isActive ? 'bg-[#111110] text-white' : 'hover:bg-[#fafaf9]'}`}>
+                    className={`w-full text-left px-3 py-2.5 border-b border-line-soft last:border-0 transition-colors ${isActive ? 'bg-ink text-white' : 'hover:bg-subtle'}`}>
                     <div className="flex items-center justify-between">
-                      <span className={`text-[10px] font-mono ${isActive ? 'text-white/60' : 'text-[#9a9a95]'}`}>#{calc.id}</span>
-                      <span className={`text-[10px] font-bold font-mono px-1.5 py-0.5 rounded ${
+                      <span className={`text-[11px] font-mono tabular-nums ${isActive ? 'text-white/60' : 'text-muted'}`}>#{calc.id}</span>
+                      <span className={`text-[11px] font-semibold font-mono tabular-nums px-1.5 py-0.5 rounded ${
                         isActive ? 'bg-white/20 text-white' :
                         m < 25 ? 'bg-red-50 text-red-700' :
                         m < 35 ? 'bg-amber-50 text-amber-700' :
@@ -116,13 +119,13 @@ export default function UnitEconomicsPage() {
                         {m.toFixed(1)}%
                       </span>
                     </div>
-                    <div className={`text-xs font-medium mt-0.5 ${isActive ? 'text-white' : 'text-[#111110]'}`}>
+                    <div className={`text-[12px] font-medium mt-0.5 ${isActive ? 'text-white' : 'text-ink'}`}>
                       {PRODUCT_LABEL[calc.product_type ?? ''] ?? calc.product_type}
                     </div>
-                    <div className={`text-[10px] mt-0.5 ${isActive ? 'text-white/70' : 'text-[#9a9a95]'}`}>
+                    <div className={`text-[11px] mt-0.5 ${isActive ? 'text-white/70' : 'text-muted'}`}>
                       {calc.client_name || '—'} · {(calc.final_price ?? 0).toLocaleString('ru-RU')} ₽
                     </div>
-                    <div className={`text-[10px] ${isActive ? 'text-white/50' : 'text-[#c4c4be]'}`}>
+                    <div className={`text-[11px] ${isActive ? 'text-white/50' : 'text-faint'}`}>
                       {new Date(calc.created_at).toLocaleDateString('ru-RU')}
                     </div>
                   </button>
@@ -137,21 +140,21 @@ export default function UnitEconomicsPage() {
               {/* Summary cards */}
               <div className="grid grid-cols-4 gap-3">
                 {[
-                  { label: 'Цена клиенту',  value: fmt(c.final_price ?? 0),  color: 'text-[#111110]' },
+                  { label: 'Цена клиенту',  value: fmt(c.final_price ?? 0),  color: 'text-ink' },
                   { label: 'Себестоимость', value: fmt(totalCost),            color: 'text-[#2563eb]' },
                   { label: 'Чистая прибыль', value: fmt(netProfit),           color: netProfit > 0 ? 'text-emerald-700' : 'text-red-600' },
                   { label: 'Маржа',          value: `${(c.margin ?? 0).toFixed(1)}%`, color: (c.margin ?? 0) >= 35 ? 'text-emerald-700' : (c.margin ?? 0) >= 25 ? 'text-amber-600' : 'text-red-600' },
                 ].map(card => (
-                  <div key={card.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-                    <p className="text-[10px] text-[#9a9a95]">{card.label}</p>
-                    <p className={`text-base font-bold font-mono mt-0.5 ${card.color}`}>{card.value}</p>
+                  <div key={card.label} className="bg-surface rounded-xl border border-line px-4 py-3">
+                    <p className="text-[11px] text-muted">{card.label}</p>
+                    <p className={`text-[18px] font-semibold font-mono mt-0.5 tabular-nums ${card.color}`}>{card.value}</p>
                   </div>
                 ))}
               </div>
 
               {/* Visual bars */}
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-3">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Структура цены (без услуг)</p>
+              <div className="bg-surface rounded-xl border border-line p-4 space-y-3">
+                <p className="text-[11px] font-semibold text-muted">Структура цены (без услуг)</p>
                 <Bar label="Себестоимость" value={totalCost}          total={c.final_price ?? 1} color="bg-blue-400" />
                 <Bar label="Прибыль"       value={netProfit}          total={c.final_price ?? 1} color="bg-emerald-400" />
                 <Bar label={`Налог ${taxPct}%`} value={taxAmt}       total={c.final_price ?? 1} color="bg-slate-300" />
@@ -160,18 +163,18 @@ export default function UnitEconomicsPage() {
 
               <div className="grid grid-cols-2 gap-3">
                 {/* Cost breakdown */}
-                <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-                  <div className="px-3 py-2.5 border-b border-[#e4e4e0] flex justify-between">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Себестоимость</p>
-                    <p className="text-[10px] font-bold font-mono text-[#111110]">{fmt(totalCost)}</p>
+                <div className="bg-surface rounded-xl border border-line overflow-hidden">
+                  <div className="px-3 py-3 border-b border-line-soft flex justify-between">
+                    <p className="text-[11px] font-semibold text-muted">Себестоимость</p>
+                    <p className="text-[11px] font-semibold font-mono text-ink tabular-nums">{fmt(totalCost)}</p>
                   </div>
-                  <table className="w-full text-xs">
+                  <table className="w-full text-[12px]">
                     <tbody>
                       {costLines.map((l, i) => (
-                        <tr key={i} className="border-b border-[#f5f5f3] last:border-0">
-                          <td className="px-3 py-1.5 text-[#6b6b66]">{l.name}</td>
-                          <td className="px-3 py-1.5 text-[#9a9a95] text-right">{l.qty} {l.unit}</td>
-                          <td className="px-3 py-1.5 font-mono text-right font-medium">{l.total.toLocaleString('ru-RU')} ₽</td>
+                        <tr key={i} className="border-b border-line-soft last:border-0">
+                          <td className="px-3 py-1.5 text-ink-soft">{l.name}</td>
+                          <td className="px-3 py-1.5 text-muted text-right tabular-nums">{l.qty} {l.unit}</td>
+                          <td className="px-3 py-1.5 font-mono text-right font-medium tabular-nums">{l.total.toLocaleString('ru-RU')} ₽</td>
                         </tr>
                       ))}
                     </tbody>
@@ -181,17 +184,17 @@ export default function UnitEconomicsPage() {
                 {/* Services + P&L */}
                 <div className="space-y-3">
                   {svcLines.length > 0 && (
-                    <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-                      <div className="px-3 py-2.5 border-b border-[#e4e4e0] flex justify-between">
-                        <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Услуги</p>
-                        <p className="text-[10px] font-bold font-mono text-[#111110]">{fmt(svcTotal)}</p>
+                    <div className="bg-surface rounded-xl border border-line overflow-hidden">
+                      <div className="px-3 py-3 border-b border-line-soft flex justify-between">
+                        <p className="text-[11px] font-semibold text-muted">Услуги</p>
+                        <p className="text-[11px] font-semibold font-mono text-ink tabular-nums">{fmt(svcTotal)}</p>
                       </div>
-                      <table className="w-full text-xs">
+                      <table className="w-full text-[12px]">
                         <tbody>
                           {svcLines.map((s, i) => (
-                            <tr key={i} className="border-b border-[#f5f5f3] last:border-0">
-                              <td className="px-3 py-1.5 text-[#6b6b66]">{s.name}</td>
-                              <td className="px-3 py-1.5 font-mono text-right font-medium">{s.total.toLocaleString('ru-RU')} ₽</td>
+                            <tr key={i} className="border-b border-line-soft last:border-0">
+                              <td className="px-3 py-1.5 text-ink-soft">{s.name}</td>
+                              <td className="px-3 py-1.5 font-mono text-right font-medium tabular-nums">{s.total.toLocaleString('ru-RU')} ₽</td>
                             </tr>
                           ))}
                         </tbody>
@@ -200,18 +203,18 @@ export default function UnitEconomicsPage() {
                   )}
 
                   {/* P&L summary */}
-                  <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-                    <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">P&L этого расчёта</p>
-                    <div className="space-y-1.5 text-xs">
+                  <div className="bg-surface rounded-xl border border-line p-4">
+                    <p className="text-[11px] font-semibold text-muted mb-3">P&L этого расчёта</p>
+                    <div className="space-y-1.5 text-[12px]">
                       {[
                         { label: '(+) Цена клиенту',        value: c.final_price ?? 0,    plus: true },
                         { label: '(−) Себестоимость',        value: -totalCost,             plus: false },
                         { label: `(−) Налог ${taxPct}%`,     value: -taxAmt,                plus: false },
                         { label: '= Чистая прибыль',         value: netProfit,              bold: true },
                       ].map(row => (
-                        <div key={row.label} className={`flex justify-between ${row.bold ? 'border-t border-[#e4e4e0] pt-1.5 font-semibold' : ''}`}>
-                          <span className="text-[#6b6b66]">{row.label}</span>
-                          <span className={`font-mono ${row.bold ? (row.value > 0 ? 'text-emerald-700 font-bold' : 'text-red-600 font-bold') : row.value >= 0 ? 'text-[#111110]' : 'text-[#4b4b47]'}`}>
+                        <div key={row.label} className={`flex justify-between ${row.bold ? 'border-t border-line pt-1.5 font-semibold' : ''}`}>
+                          <span className="text-ink-soft">{row.label}</span>
+                          <span className={`font-mono tabular-nums ${row.bold ? (row.value > 0 ? 'text-emerald-700 font-semibold' : 'text-red-600 font-semibold') : row.value >= 0 ? 'text-ink' : 'text-[#4b4b47]'}`}>
                             {row.value >= 0 ? '' : ''}{fmt(Math.abs(row.value))}
                           </span>
                         </div>
@@ -222,7 +225,7 @@ export default function UnitEconomicsPage() {
               </div>
             </div>
           ) : (
-            <div className="flex items-center justify-center bg-white rounded-lg border border-[#e4e4e0] text-[#9a9a95] text-sm">
+            <div className="flex items-center justify-center bg-surface rounded-xl border border-line text-muted text-[13px]">
               Выбери расчёт
             </div>
           )}

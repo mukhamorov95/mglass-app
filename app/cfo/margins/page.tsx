@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { PageHeader, IcArrowLeft } from '@/components/ds'
 
 type Calc = {
   id: number
@@ -95,35 +96,37 @@ export default function MarginsPage() {
   const belowMin = filtered.filter(c => (c.margin ?? 0) < MARGIN_RED).length
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
-      <div className="max-w-[1100px] mx-auto px-4 py-4 space-y-4">
+    <div className="bg-canvas min-h-screen">
+      <div className="max-w-[1100px] mx-auto px-4 py-5 space-y-4">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Маржинальность</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">Анализ маржи по расчётам · Единственная точка правды</p>
-          </div>
-          <Link href="/cfo" className="text-[10px] text-[#9a9a95] hover:text-[#111110]">← Дашборд</Link>
-        </div>
+        <PageHeader
+          title="CFO Center — Маржинальность"
+          subtitle="Анализ маржи по расчётам · Единственная точка правды"
+          actions={
+            <Link href="/cfo" className="inline-flex items-center gap-1.5 text-[12px] text-ink-soft hover:text-ink px-3 py-1.5 border border-line rounded-lg hover:border-ink transition-colors">
+              <IcArrowLeft className="w-3.5 h-3.5" />Дашборд
+            </Link>
+          }
+        />
 
         {/* Filters */}
         <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex bg-white border border-[#e4e4e0] rounded-lg p-0.5 gap-0.5">
+          <div className="flex bg-surface border border-line rounded-xl p-0.5 gap-0.5">
             {PERIODS.map(p => (
               <button key={p.days}
                 onClick={() => setPeriod(p.days)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${period === p.days ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'}`}>
+                className={`px-2.5 py-1 rounded-lg text-[12px] font-medium transition-all ${period === p.days ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'}`}>
                 {p.label}
               </button>
             ))}
           </div>
 
-          <div className="flex bg-white border border-[#e4e4e0] rounded-lg p-0.5 gap-0.5">
+          <div className="flex bg-surface border border-line rounded-xl p-0.5 gap-0.5">
             {([['all', 'Все'], ['low', 'Ниже нормы'], ['ok', 'Норма']] as const).map(([v, l]) => (
               <button key={v}
                 onClick={() => setFilter(v)}
-                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition-all ${filter === v ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f5f5f3]'}`}>
+                className={`px-2.5 py-1 rounded-lg text-[12px] font-medium transition-all ${filter === v ? 'bg-ink text-white' : 'text-ink-soft hover:bg-canvas'}`}>
                 {l}
               </button>
             ))}
@@ -131,7 +134,7 @@ export default function MarginsPage() {
 
           <button
             onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
-            className="px-2.5 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-[11px] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
+            className="px-2.5 py-1.5 bg-surface border border-line rounded-xl text-[12px] text-ink-soft hover:bg-canvas transition-colors">
             Маржа {sortDir === 'asc' ? '↑' : '↓'}
           </button>
         </div>
@@ -144,25 +147,25 @@ export default function MarginsPage() {
             { label: 'Средняя маржа', value: `${avg.toFixed(1)}%`, hint: belowMin > 0 ? `${belowMin} ниже ${MARGIN_RED}%` : 'в норме' },
             { label: 'Критические', value: String(belowMin), hint: `маржа < ${MARGIN_RED}%` },
           ].map(c => (
-            <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-              <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
-              <p className="text-lg font-bold font-mono mt-0.5 text-[#111110] leading-tight">{c.value}</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.hint}</p>
+            <div key={c.label} className="bg-surface rounded-xl border border-line px-4 py-3">
+              <p className="text-[11px] text-muted font-medium">{c.label}</p>
+              <p className="text-[22px] font-semibold font-mono mt-0.5 text-ink leading-tight tabular-nums">{c.value}</p>
+              <p className="text-[11px] text-faint mt-0.5">{c.hint}</p>
             </div>
           ))}
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
+        <div className="bg-surface rounded-xl border border-line overflow-hidden">
           <div className="overflow-x-auto">
             {loading ? (
-              <div className="flex items-center justify-center h-32 text-[#9a9a95] text-sm">Загрузка…</div>
+              <div className="flex items-center justify-center h-32 text-muted text-[13px]">Загрузка…</div>
             ) : (
-              <table className="w-full text-xs">
+              <table className="w-full text-[12px]">
                 <thead>
-                  <tr className="bg-[#111110] text-white">
+                  <tr className="bg-ink text-white">
                     {['#', 'Дата', 'Продукт', 'Менеджер', 'Клиент', 'Цена', 'Прибыль', 'Скидка', 'Маржа', 'Статус'].map(h => (
-                      <th key={h} className="px-3 py-2 text-left text-[10px] font-medium opacity-80 whitespace-nowrap">{h}</th>
+                      <th key={h} className="px-3 py-2 text-left text-[11px] font-medium opacity-80 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -170,30 +173,30 @@ export default function MarginsPage() {
                   {filtered.map(c => {
                     const m = c.margin ?? 0
                     return (
-                      <tr key={c.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                        <td className="px-3 py-2 text-[#9a9a95] font-mono text-[10px]">{c.id}</td>
-                        <td className="px-3 py-2 text-[#6b6b66] whitespace-nowrap">
+                      <tr key={c.id} className="border-b border-line-soft last:border-0 hover:bg-subtle">
+                        <td className="px-3 py-2 text-muted font-mono text-[11px] tabular-nums">{c.id}</td>
+                        <td className="px-3 py-2 text-ink-soft whitespace-nowrap">
                           {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                         </td>
                         <td className="px-3 py-2 font-medium">{PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type ?? '—'}</td>
-                        <td className="px-3 py-2 text-[#6b6b66]">{c.creator?.name?.split(' ')[0] ?? '—'}</td>
-                        <td className="px-3 py-2 text-[#6b6b66] max-w-[120px] truncate">{c.client_name || '—'}</td>
-                        <td className="px-3 py-2 font-mono font-medium whitespace-nowrap">{fmt(c.final_price ?? 0)}</td>
-                        <td className="px-3 py-2 font-mono whitespace-nowrap">
+                        <td className="px-3 py-2 text-ink-soft">{c.creator?.name?.split(' ')[0] ?? '—'}</td>
+                        <td className="px-3 py-2 text-ink-soft max-w-[120px] truncate">{c.client_name || '—'}</td>
+                        <td className="px-3 py-2 font-mono font-medium whitespace-nowrap tabular-nums">{fmt(c.final_price ?? 0)}</td>
+                        <td className="px-3 py-2 font-mono whitespace-nowrap tabular-nums">
                           <span className={(c.profit ?? 0) > 0 ? 'text-emerald-600' : 'text-red-600'}>
                             {fmt(c.profit ?? 0)}
                           </span>
                         </td>
-                        <td className="px-3 py-2 text-[#9a9a95]">{c.discount ?? 0}%</td>
+                        <td className="px-3 py-2 text-muted tabular-nums">{c.discount ?? 0}%</td>
                         <td className="px-3 py-2">
-                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${marginBg(m)}`}>
+                          <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono tabular-nums ${marginBg(m)}`}>
                             {m.toFixed(1)}%
                           </span>
                         </td>
                         <td className="px-3 py-2">
-                          <span className={`text-[10px] font-medium ${
+                          <span className={`text-[11px] font-medium ${
                             c.status === 'approved' ? 'text-emerald-600' :
-                            c.status === 'sent'     ? 'text-blue-600'    : 'text-[#9a9a95]'
+                            c.status === 'sent'     ? 'text-blue-600'    : 'text-muted'
                           }`}>
                             {c.status === 'approved' ? 'Одобрен' : c.status === 'sent' ? 'Отправлен' : c.status ?? 'Черновик'}
                           </span>
@@ -202,7 +205,7 @@ export default function MarginsPage() {
                     )
                   })}
                   {filtered.length === 0 && (
-                    <tr><td colSpan={10} className="px-3 py-8 text-center text-[#9a9a95] text-xs">Нет данных за период</td></tr>
+                    <tr><td colSpan={10} className="px-3 py-8 text-center text-muted text-[12px]">Нет данных за период</td></tr>
                   )}
                 </tbody>
               </table>
@@ -212,13 +215,13 @@ export default function MarginsPage() {
 
         {/* Color legend */}
         <div className="flex items-center gap-4 px-1">
-          <span className="text-[10px] text-[#9a9a95]">Цвет маржи:</span>
+          <span className="text-[11px] text-muted">Цвет маржи:</span>
           {[
             { label: `< ${MARGIN_RED}% — критично`, cls: 'bg-red-50 text-red-700' },
             { label: `${MARGIN_RED}–${MARGIN_AMBER}% — ниже цели`, cls: 'bg-amber-50 text-amber-700' },
             { label: `≥ ${MARGIN_AMBER}% — норма`, cls: 'bg-emerald-50 text-emerald-700' },
           ].map(l => (
-            <span key={l.label} className={`text-[10px] font-medium px-2 py-0.5 rounded ${l.cls}`}>{l.label}</span>
+            <span key={l.label} className={`text-[11px] font-medium px-2 py-0.5 rounded ${l.cls}`}>{l.label}</span>
           ))}
         </div>
 

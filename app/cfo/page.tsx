@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import { PageHeader, SectionHeader, StatusPill } from '@/components/ds'
 
 const MARGIN_RED    = 25
 const MARGIN_AMBER  = 35
@@ -72,61 +73,59 @@ export default async function CfoDashboardPage() {
   const recent = all.slice(0, 15)
 
   const kpiCards = [
-    { label: 'Выручка (месяц, факт)', value: fmtMoney(revenue),        color: 'text-[#111110]', hint: `${approved.length} одобренных` },
+    { label: 'Выручка (месяц, факт)', value: fmtMoney(revenue),        color: 'text-ink', hint: `${approved.length} одобренных` },
     { label: 'Прибыль (месяц)',        value: fmtMoney(profit),         color: profit > 0 ? 'text-emerald-700' : 'text-red-600', hint: 'после налогов' },
     { label: 'Средняя маржа',          value: `${avgMargin.toFixed(1)}%`, color: avgMargin >= MARGIN_AMBER ? 'text-emerald-700' : avgMargin >= MARGIN_RED ? 'text-amber-600' : 'text-red-600', hint: 'одобренные расчёты' },
-    { label: 'Расчётов за месяц',      value: String(allMonth.length),  color: 'text-[#111110]', hint: `одобрено: ${approved.length}` },
+    { label: 'Расчётов за месяц',      value: String(allMonth.length),  color: 'text-ink', hint: `одобрено: ${approved.length}` },
   ]
 
   return (
-    <div className="bg-[#f5f5f3] min-h-screen">
-      <div className="max-w-[960px] mx-auto px-4 py-4 space-y-4">
+    <div className="bg-canvas min-h-screen">
+      <div className="max-w-[960px] mx-auto px-4 py-5 space-y-4">
 
         {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Дашборд</h1>
-            <p className="text-[10px] text-[#9a9a95] mt-0.5">
-              Финансовый контур MGlass · {now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Link href="/cfo/b2b" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors">
-              B2B аналитика →
-            </Link>
-            <Link href="/cfo/margins" className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-white transition-colors">
-              Маржинальность →
-            </Link>
-            <Link href="/admin/cfo" className="px-3 py-1.5 text-xs bg-[#111110] text-white rounded-lg font-medium hover:bg-[#2a2a28] transition-colors">
-              Финмодели / ДДС →
-            </Link>
-          </div>
-        </div>
+        <PageHeader
+          title="CFO Center — Дашборд"
+          subtitle={`Финансовый контур MGlass · ${now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}`}
+          actions={
+            <>
+              <Link href="/cfo/b2b" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:text-ink hover:border-ink transition-colors">
+                B2B аналитика →
+              </Link>
+              <Link href="/cfo/margins" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] border border-line rounded-lg text-ink-soft hover:text-ink hover:border-ink transition-colors">
+                Маржинальность →
+              </Link>
+              <Link href="/admin/cfo" className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[12px] bg-ink text-white rounded-lg font-medium hover:bg-[#2a2a28] transition-colors">
+                Финмодели / ДДС →
+              </Link>
+            </>
+          }
+        />
 
         {/* KPI Cards */}
         <div className="grid grid-cols-4 gap-3">
           {kpiCards.map(c => (
-            <div key={c.label} className="bg-white rounded-lg border border-[#e4e4e0] px-3 py-3">
-              <p className="text-[10px] text-[#9a9a95] font-medium">{c.label}</p>
-              <p className={`text-lg font-bold font-mono mt-0.5 leading-tight ${c.color}`}>{c.value}</p>
-              <p className="text-[10px] text-[#c4c4be] mt-0.5">{c.hint}</p>
+            <div key={c.label} className="bg-surface rounded-xl border border-line px-4 py-3">
+              <p className="text-[11px] text-muted font-medium">{c.label}</p>
+              <p className={`text-[22px] font-semibold font-mono mt-0.5 leading-tight tabular-nums ${c.color}`}>{c.value}</p>
+              <p className="text-[11px] text-faint mt-0.5">{c.hint}</p>
             </div>
           ))}
         </div>
 
         {/* Alerts */}
         {(belowMin > 0) && (
-          <div className="bg-red-50 border border-red-200 rounded-lg px-4 py-3 flex items-center gap-3">
+          <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3">
             <span className="text-red-500 text-lg">⚠️</span>
             <div>
-              <p className="text-xs font-semibold text-red-700">
+              <p className="text-[13px] font-semibold text-red-700">
                 {belowMin} расчёт(ов) с маржой ниже {MARGIN_RED}% в этом месяце
               </p>
-              <p className="text-[10px] text-red-500 mt-0.5">
+              <p className="text-[11px] text-red-500 mt-0.5">
                 Проверь скидки и себестоимость
               </p>
             </div>
-            <Link href="/cfo/margins?filter=low" className="ml-auto text-xs text-red-600 font-medium hover:underline">
+            <Link href="/cfo/margins?filter=low" className="ml-auto text-[12px] text-red-600 font-medium hover:underline">
               Смотреть →
             </Link>
           </div>
@@ -135,35 +134,37 @@ export default async function CfoDashboardPage() {
         <div className="grid grid-cols-[1fr_260px] gap-3">
 
           {/* Recent calculations */}
-          <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-            <div className="px-4 py-2.5 border-b border-[#e4e4e0] flex items-center justify-between">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Последние расчёты</p>
-              <Link href="/cfo/margins" className="text-[10px] text-[#9a9a95] hover:text-[#111110]">Все →</Link>
+          <div className="bg-surface rounded-xl border border-line overflow-hidden">
+            <div className="px-4 py-3 border-b border-line-soft">
+              <SectionHeader
+                title="Последние расчёты"
+                actions={<Link href="/cfo/margins" className="text-[11px] text-muted hover:text-ink">Все →</Link>}
+              />
             </div>
-            <table className="w-full text-xs">
+            <table className="w-full text-[12px]">
               <thead>
-                <tr className="border-b border-[#f5f5f3]">
+                <tr className="border-b border-line-soft">
                   {['#', 'Продукт', 'Клиент', 'Цена', 'Маржа', 'Статус'].map(h => (
-                    <th key={h} className="px-3 py-2 text-left text-[10px] text-[#9a9a95] font-medium">{h}</th>
+                    <th key={h} className="px-3 py-2 text-left text-[11px] text-muted font-medium">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {recent.map(c => (
-                  <tr key={c.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
-                    <td className="px-3 py-2 text-[#9a9a95] font-mono">{c.id}</td>
+                  <tr key={c.id} className="border-b border-line-soft last:border-0 hover:bg-subtle">
+                    <td className="px-3 py-2 text-muted font-mono tabular-nums">{c.id}</td>
                     <td className="px-3 py-2">{PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type}</td>
-                    <td className="px-3 py-2 text-[#6b6b66] max-w-[120px] truncate">{c.client_name || '—'}</td>
-                    <td className="px-3 py-2 font-mono font-medium">{fmtMoney(c.final_price ?? 0)}</td>
+                    <td className="px-3 py-2 text-ink-soft max-w-[120px] truncate">{c.client_name || '—'}</td>
+                    <td className="px-3 py-2 font-mono font-medium tabular-nums">{fmtMoney(c.final_price ?? 0)}</td>
                     <td className="px-3 py-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold font-mono ${marginColor(c.margin ?? 0)}`}>
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] font-semibold font-mono tabular-nums ${marginColor(c.margin ?? 0)}`}>
                         {(c.margin ?? 0).toFixed(1)}%
                       </span>
                     </td>
                     <td className="px-3 py-2">
-                      <span className={`text-[10px] font-medium ${
+                      <span className={`text-[11px] font-medium ${
                         c.status === 'approved' ? 'text-emerald-600' :
-                        c.status === 'sent' ? 'text-blue-600' : 'text-[#9a9a95]'
+                        c.status === 'sent' ? 'text-blue-600' : 'text-muted'
                       }`}>
                         {c.status === 'approved' ? 'Одобрен' : c.status === 'sent' ? 'Отправлен' : c.status ?? 'Черновик'}
                       </span>
@@ -177,8 +178,8 @@ export default async function CfoDashboardPage() {
           {/* Right column */}
           <div className="space-y-3">
             {/* Margin distribution */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Распределение маржи</p>
+            <div className="bg-surface rounded-xl border border-line p-4">
+              <p className="text-[11px] font-semibold text-muted mb-3">Распределение маржи</p>
               <div className="space-y-2">
                 {[
                   { label: `Ниже ${MARGIN_RED}%`,               count: belowMin,    color: 'bg-red-400',   text: 'text-red-600' },
@@ -189,11 +190,11 @@ export default async function CfoDashboardPage() {
                   const pct   = Math.round((item.count / total) * 100)
                   return (
                     <div key={item.label}>
-                      <div className="flex justify-between text-[10px] mb-0.5">
+                      <div className="flex justify-between text-[11px] mb-0.5">
                         <span className={`font-medium ${item.text}`}>{item.label}</span>
-                        <span className="text-[#9a9a95]">{item.count} шт · {pct}%</span>
+                        <span className="text-muted tabular-nums">{item.count} шт · {pct}%</span>
                       </div>
-                      <div className="h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
+                      <div className="h-1.5 bg-line-soft rounded-full overflow-hidden">
                         <div className={`h-full ${item.color} rounded-full transition-all`} style={{ width: `${pct}%` }} />
                       </div>
                     </div>
@@ -204,15 +205,15 @@ export default async function CfoDashboardPage() {
 
             {/* Revenue by product */}
             {Object.keys(byProduct).length > 0 && (
-              <div className="bg-white rounded-lg border border-[#e4e4e0] p-4">
-                <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-3">Выручка по продуктам</p>
+              <div className="bg-surface rounded-xl border border-line p-4">
+                <p className="text-[11px] font-semibold text-muted mb-3">Выручка по продуктам</p>
                 <div className="space-y-2">
                   {Object.entries(byProduct)
                     .sort((a, b) => b[1] - a[1])
                     .map(([name, rev]) => (
-                      <div key={name} className="flex justify-between text-xs">
-                        <span className="text-[#6b6b66]">{name}</span>
-                        <span className="font-mono font-medium text-[#111110]">{fmtMoney(rev)}</span>
+                      <div key={name} className="flex justify-between text-[12px]">
+                        <span className="text-ink-soft">{name}</span>
+                        <span className="font-mono font-medium text-ink tabular-nums">{fmtMoney(rev)}</span>
                       </div>
                     ))}
                 </div>
@@ -220,8 +221,8 @@ export default async function CfoDashboardPage() {
             )}
 
             {/* Quick links */}
-            <div className="bg-white rounded-lg border border-[#e4e4e0] p-4 space-y-1">
-              <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Быстрые ссылки</p>
+            <div className="bg-surface rounded-xl border border-line p-4 space-y-1">
+              <p className="text-[11px] font-semibold text-muted mb-2">Быстрые ссылки</p>
               {[
                 { href: '/cfo/b2b',     label: 'B2B аналитика (оборот/материал/закалка)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
@@ -231,9 +232,9 @@ export default async function CfoDashboardPage() {
                 { href: '/admin/settings', label: 'Финансовые настройки' },
               ].map(l => (
                 <Link key={l.href} href={l.href}
-                  className="flex items-center justify-between py-1 text-xs text-[#6b6b66] hover:text-[#111110] transition-colors group">
+                  className="flex items-center justify-between py-1 text-[12px] text-ink-soft hover:text-ink transition-colors group">
                   <span>{l.label}</span>
-                  <span className="opacity-0 group-hover:opacity-100 text-[#9a9a95]">→</span>
+                  <span className="opacity-0 group-hover:opacity-100 text-muted">→</span>
                 </Link>
               ))}
             </div>
