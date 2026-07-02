@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { MessageParam } from '@anthropic-ai/sdk/resources/messages/messages'
+import { PageHeader } from '@/components/ds'
 
 type Message = {
   role: 'user' | 'assistant'
@@ -108,26 +109,26 @@ export default function AIAssistantPage() {
 
   return (
     <div className="max-w-[860px] mx-auto px-6 py-8">
-      <div className="mb-6">
-        <h1 className="text-[18px] font-bold text-[#111110] tracking-tight">AI Ассистент</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Помогает отвечать клиентам, считать ориентировочные цены, работать с возражениями</p>
-      </div>
+      <PageHeader
+        title="AI Ассистент"
+        subtitle="Помогает отвечать клиентам, считать ориентировочные цены, работать с возражениями"
+      />
 
       <div className="flex flex-col" style={{ height: 'calc(100vh - 200px)', minHeight: 400 }}>
         <div className="flex-1 overflow-y-auto space-y-3 pb-4 pr-1">
           {messages.length === 0 && (
             <div className="flex flex-col items-center justify-center h-full text-center py-8">
-              <div className="w-12 h-12 rounded-2xl bg-[#f0f0ec] flex items-center justify-center mb-4">
-                <svg className="w-6 h-6 text-[#6b6b66]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <div className="w-12 h-12 rounded-2xl bg-line-soft flex items-center justify-center mb-4">
+                <svg className="w-6 h-6 text-ink-soft" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-4 4v-4z" />
                 </svg>
               </div>
-              <p className="text-[14px] font-semibold text-[#111110] mb-1">Чем могу помочь?</p>
-              <p className="text-[13px] text-[#9a9a95] mb-6">Спрашивайте о ценах, продуктах, помощи с клиентом</p>
+              <p className="text-[14px] font-semibold text-ink mb-1">Чем могу помочь?</p>
+              <p className="text-[13px] text-muted mb-6">Спрашивайте о ценах, продуктах, помощи с клиентом</p>
               <div className="flex flex-wrap gap-2 justify-center max-w-[520px]">
                 {QUICK_PROMPTS.map(p => (
                   <button key={p} onClick={() => sendMessage(p)}
-                    className="text-[12px] px-3 py-1.5 rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] transition-colors text-left">
+                    className="text-[12px] px-3 py-1.5 rounded-lg bg-line-soft text-ink-soft hover:bg-line transition-colors text-left">
                     {p}
                   </button>
                 ))}
@@ -139,15 +140,15 @@ export default function AIAssistantPage() {
             <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`max-w-[78%] rounded-2xl px-4 py-3 ${
                 msg.role === 'user'
-                  ? 'bg-[#111110] text-white rounded-tr-sm'
-                  : 'bg-white border border-[#e4e4e0] text-[#111110] rounded-tl-sm'
+                  ? 'bg-ink text-white rounded-tr-sm'
+                  : 'bg-surface border border-line text-ink rounded-tl-sm'
               }`}>
                 {msg.content || !msg.streaming ? (
                   <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
                 ) : (
                   <div className="flex gap-1 py-0.5">
                     {[0, 150, 300].map(d => (
-                      <span key={d} className="w-1.5 h-1.5 bg-[#c4c4be] rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
+                      <span key={d} className="w-1.5 h-1.5 bg-faint rounded-full animate-bounce" style={{ animationDelay: `${d}ms` }} />
                     ))}
                   </div>
                 )}
@@ -157,7 +158,7 @@ export default function AIAssistantPage() {
 
           {toolsRunning && (
             <div className="flex justify-start">
-              <span className="text-[12px] text-[#9a9a95] bg-[#f8f8f6] border border-[#e8e8e4] rounded-lg px-3 py-1.5 flex items-center gap-1.5">
+              <span className="text-[12px] text-muted bg-subtle border border-line rounded-lg px-3 py-1.5 flex items-center gap-1.5">
                 <svg className="w-3 h-3 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -170,7 +171,7 @@ export default function AIAssistantPage() {
           <div ref={messagesEndRef} />
         </div>
 
-        <div className="border-t border-[#e4e4e0] pt-4">
+        <div className="border-t border-line pt-4">
           <div className="flex gap-2 items-end">
             <textarea
               value={input}
@@ -178,11 +179,11 @@ export default function AIAssistantPage() {
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() } }}
               placeholder="Введите сообщение…"
               rows={1}
-              className="flex-1 resize-none rounded-xl border border-[#e4e4e0] px-4 py-3 text-[13px] text-[#111110] placeholder:text-[#c4c4be] focus:outline-none focus:border-[#8a8a85] transition-colors"
+              className="flex-1 resize-none rounded-xl border border-line px-4 py-3 text-[13px] text-ink placeholder:text-faint focus:outline-none focus:border-muted transition-colors"
               style={{ minHeight: 44, maxHeight: 140 }}
             />
             <button onClick={() => sendMessage()} disabled={isLoading || !input.trim()}
-              className="h-[44px] w-[44px] rounded-xl bg-[#111110] text-white disabled:opacity-30 hover:bg-[#2a2a28] transition-colors flex-shrink-0 flex items-center justify-center">
+              className="h-[44px] w-[44px] rounded-xl bg-ink text-white disabled:opacity-30 hover:bg-[#2a2a28] transition-colors flex-shrink-0 flex items-center justify-center">
               {isLoading ? (
                 <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
@@ -195,7 +196,7 @@ export default function AIAssistantPage() {
               )}
             </button>
           </div>
-          <p className="text-[11px] text-[#c4c4be] mt-1.5 ml-1">Shift+Enter — новая строка</p>
+          <p className="text-[11px] text-faint mt-1.5 ml-1">Shift+Enter — новая строка</p>
         </div>
       </div>
     </div>

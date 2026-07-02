@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { PageHeader, EmptyState } from '@/components/ds'
 
 type CallItem = {
   note_id:       number
@@ -215,14 +216,11 @@ export default function CallsPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Анализ звонков</h1>
-        <p className="text-[13px] text-[#6e6e73]">Расшифровка и AI-анализ звонков из amoCRM</p>
-      </div>
+      <PageHeader title="Анализ звонков" subtitle="Расшифровка и AI-анализ звонков из amoCRM" />
 
       {/* Lead ID input */}
-      <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5 mb-6">
-        <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">Сделка amoCRM</p>
+      <div className="bg-surface rounded-2xl border border-line p-5 mb-6 mt-4">
+        <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">Сделка amoCRM</p>
         <div className="flex gap-3">
           <input
             type="text"
@@ -230,7 +228,7 @@ export default function CallsPage() {
             onChange={e => setLeadInput(e.target.value)}
             onKeyDown={e => e.key === 'Enter' && loadCalls()}
             placeholder="ID сделки (например: 38584619 или #38584619)"
-            className="flex-1 bg-[#f9f9fb] border border-[#e8e8ed] rounded-xl px-4 py-2.5 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]"
+            className="flex-1 bg-subtle border border-line rounded-xl px-4 py-2.5 text-[14px] text-ink outline-none focus:border-[#0071e3] transition-colors placeholder:text-faint"
           />
           <button
             onClick={loadCalls}
@@ -250,7 +248,7 @@ export default function CallsPage() {
             href={`https://mglass.amocrm.ru/leads/detail/${leadId}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-white border border-[#e8e8ed] text-[12px] text-[#0071e3] font-medium hover:border-[#0071e3] hover:shadow-sm transition-all"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-surface border border-line text-[12px] text-[#0071e3] font-medium hover:border-[#0071e3] hover:shadow-sm transition-all"
           >
             <span>🔗</span>
             Открыть сделку #{leadId} в amoCRM
@@ -260,18 +258,18 @@ export default function CallsPage() {
 
       {/* Calls list */}
       {calls.length > 0 && (
-        <div className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden mb-6">
-          <div className="px-5 py-3.5 border-b border-[#f2f2f7]">
-            <p className="text-[14px] font-semibold text-[#1d1d1f]">
+        <div className="bg-surface rounded-2xl border border-line overflow-hidden mb-6">
+          <div className="px-5 py-3.5 border-b border-line-soft">
+            <p className="text-[14px] font-semibold text-ink">
               Звонки сделки #{leadId}
-              <span className="ml-2 text-[12px] font-normal text-[#aeaeb2]">{calls.length} шт.</span>
+              <span className="ml-2 text-[12px] font-normal text-muted tabular-nums">{calls.length} шт.</span>
             </p>
           </div>
-          <div className="divide-y divide-[#f2f2f7]">
+          <div className="divide-y divide-line-soft">
             {calls.map(call => (
               <div
                 key={call.note_id}
-                className={`px-5 py-3.5 flex items-center gap-4 hover:bg-[#f9f9fb] transition-colors ${
+                className={`px-5 py-3.5 flex items-center gap-4 hover:bg-subtle transition-colors ${
                   selected?.note_id === call.note_id ? 'bg-[#f0f7ff]' : ''
                 }`}
               >
@@ -284,11 +282,11 @@ export default function CallsPage() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] font-medium text-[#1d1d1f]">
+                    <span className="text-[13px] font-medium text-ink">
                       {call.direction === 'in' ? 'Входящий' : 'Исходящий'}
                     </span>
                     {call.phone && (
-                      <span className="text-[12px] text-[#6e6e73]">{call.phone}</span>
+                      <span className="text-[12px] text-ink-soft tabular-nums">{call.phone}</span>
                     )}
                     {call.is_analysed && (
                       <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
@@ -297,18 +295,18 @@ export default function CallsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-3 mt-0.5">
-                    <span className="text-[11px] text-[#aeaeb2]">{fmtDate(call.created_at)}</span>
-                    <span className="text-[11px] text-[#aeaeb2]">{fmtDur(call.duration_sec)}</span>
+                    <span className="text-[11px] text-muted">{fmtDate(call.created_at)}</span>
+                    <span className="text-[11px] text-muted tabular-nums">{fmtDur(call.duration_sec)}</span>
                     {call.probability != null && <ProbBadge prob={call.probability} />}
                     {call.manager_score != null && <ScoreBadge score={call.manager_score} />}
                     {call.recording_url ? (
                       <span className="text-[11px] text-[#0071e3]">🎵 Запись есть</span>
                     ) : (
-                      <span className="text-[11px] text-[#aeaeb2]">Без записи</span>
+                      <span className="text-[11px] text-muted">Без записи</span>
                     )}
                   </div>
                   {call.summary && (
-                    <p className="text-[12px] text-[#6e6e73] mt-0.5 truncate">{call.summary}</p>
+                    <p className="text-[12px] text-ink-soft mt-0.5 truncate">{call.summary}</p>
                   )}
                 </div>
 
@@ -316,7 +314,7 @@ export default function CallsPage() {
                   <button
                     onClick={() => analyzeCall(call)}
                     disabled={analyzing && selected?.note_id === call.note_id}
-                    className="px-3.5 py-1.5 rounded-xl text-[12px] font-semibold transition-colors bg-[#f2f2f7] text-[#1d1d1f] hover:bg-[#e8e8ed] disabled:opacity-40"
+                    className="px-3.5 py-1.5 rounded-xl text-[12px] font-semibold transition-colors bg-line-soft text-ink hover:bg-line disabled:opacity-40"
                   >
                     {analyzing && selected?.note_id === call.note_id ? '...' : call.is_analysed ? 'Повторить' : 'Анализ'}
                   </button>
@@ -377,7 +375,7 @@ export default function CallsPage() {
             onChange={e => setManualText(e.target.value)}
             placeholder="Вставьте текст расшифровки разговора..."
             rows={5}
-            className="w-full resize-none bg-white border border-amber-300 rounded-xl px-4 py-3 text-[13px] text-[#1d1d1f] outline-none focus:border-amber-500 transition-colors placeholder:text-[#c7c7cc] mb-3"
+            className="w-full resize-none bg-surface border border-amber-300 rounded-xl px-4 py-3 text-[13px] text-ink outline-none focus:border-amber-500 transition-colors placeholder:text-faint mb-3"
           />
           <div className="flex gap-2">
             <button
@@ -389,7 +387,7 @@ export default function CallsPage() {
             </button>
             <button
               onClick={() => { setAnalyzeError(null); setSelected(null) }}
-              className="px-4 py-2 rounded-xl bg-[#f2f2f7] text-[#6e6e73] text-[13px] hover:bg-[#e8e8ed] transition-colors"
+              className="px-4 py-2 rounded-xl bg-line-soft text-ink-soft text-[13px] hover:bg-line transition-colors"
             >
               Отмена
             </button>
@@ -407,49 +405,49 @@ export default function CallsPage() {
       {result && (
         <div className="space-y-4">
           {/* Summary + scores */}
-          <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+          <div className="bg-surface rounded-2xl border border-line p-5">
             <div className="flex items-start justify-between gap-4 mb-3">
-              <p className="text-[15px] font-semibold text-[#1d1d1f]">Резюме звонка</p>
+              <p className="text-[15px] font-semibold text-ink">Резюме звонка</p>
               <div className="flex items-center gap-2 shrink-0">
                 <ProbBadge prob={result.deal_probability} />
                 <ScoreBadge score={result.manager_score} />
               </div>
             </div>
-            <p className="text-[14px] text-[#3a3a3c] leading-relaxed">{result.summary}</p>
+            <p className="text-[14px] text-ink-soft leading-relaxed">{result.summary}</p>
           </div>
 
           {/* Client needs + objections */}
           <div className="grid grid-cols-2 gap-4">
             {result.client_needs?.length > 0 && (
-              <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
-                <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">Потребности клиента</p>
+              <div className="bg-surface rounded-2xl border border-line p-5">
+                <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">Потребности клиента</p>
                 <ul className="space-y-1.5">
                   {result.client_needs.map((n, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-[#1d1d1f]">
+                    <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
                       <span className="text-emerald-500 mt-0.5 shrink-0">•</span>
                       {n}
                     </li>
                   ))}
                 </ul>
                 {result.product_interest && result.product_interest !== 'не определено' && (
-                  <p className="mt-3 text-[12px] text-[#6e6e73]">
-                    Интерес: <span className="text-[#1d1d1f] font-medium">{result.product_interest}</span>
+                  <p className="mt-3 text-[12px] text-ink-soft">
+                    Интерес: <span className="text-ink font-medium">{result.product_interest}</span>
                   </p>
                 )}
                 {result.sizes && (
-                  <p className="text-[12px] text-[#6e6e73]">
-                    Размеры: <span className="text-[#1d1d1f] font-medium">{result.sizes}</span>
+                  <p className="text-[12px] text-ink-soft">
+                    Размеры: <span className="text-ink font-medium">{result.sizes}</span>
                   </p>
                 )}
               </div>
             )}
 
             {result.objections?.length > 0 && (
-              <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
-                <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">Возражения</p>
+              <div className="bg-surface rounded-2xl border border-line p-5">
+                <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">Возражения</p>
                 <ul className="space-y-1.5">
                   {result.objections.map((o, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-[#1d1d1f]">
+                    <li key={i} className="flex items-start gap-2 text-[13px] text-ink">
                       <span className="text-red-400 mt-0.5 shrink-0">•</span>
                       {o}
                     </li>
@@ -461,9 +459,9 @@ export default function CallsPage() {
 
           {/* Recommended client message */}
           {result.recommended_message && (
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
+            <div className="bg-surface rounded-2xl border border-line p-5">
               <div className="flex items-center justify-between mb-3">
-                <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider">Сообщение клиенту</p>
+                <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider">Сообщение клиенту</p>
                 <button
                   onClick={() => copyMessage(result.recommended_message)}
                   className="text-[12px] text-[#0071e3] hover:underline"
@@ -472,26 +470,26 @@ export default function CallsPage() {
                 </button>
               </div>
               <div className="bg-[#f0f7ff] rounded-xl px-4 py-3">
-                <p className="text-[13px] text-[#1d1d1f] leading-relaxed whitespace-pre-wrap">{result.recommended_message}</p>
+                <p className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap">{result.recommended_message}</p>
               </div>
             </div>
           )}
 
           {/* Tasks + next step */}
           {(result.tasks?.length > 0 || result.next_step) && (
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
-              <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">Задачи и следующий шаг</p>
+            <div className="bg-surface rounded-2xl border border-line p-5">
+              <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">Задачи и следующий шаг</p>
               {result.next_step && (
                 <div className="flex items-start gap-2 mb-3">
-                  <span className="text-[#0071e3] shrink-0 font-bold">→</span>
-                  <p className="text-[13px] text-[#1d1d1f] font-medium">{result.next_step}</p>
+                  <span className="text-[#0071e3] shrink-0 font-semibold">→</span>
+                  <p className="text-[13px] text-ink font-medium">{result.next_step}</p>
                 </div>
               )}
               {result.tasks?.length > 0 && (
                 <ul className="space-y-1.5">
                   {result.tasks.map((t, i) => (
-                    <li key={i} className="flex items-start gap-2 text-[13px] text-[#3a3a3c]">
-                      <span className="text-[#aeaeb2] mt-0.5 shrink-0">☐</span>
+                    <li key={i} className="flex items-start gap-2 text-[13px] text-ink-soft">
+                      <span className="text-muted mt-0.5 shrink-0">☐</span>
                       {t}
                     </li>
                   ))}
@@ -502,22 +500,22 @@ export default function CallsPage() {
 
           {/* Manager feedback */}
           {result.manager_feedback && (
-            <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5">
-              <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">
+            <div className="bg-surface rounded-2xl border border-line p-5">
+              <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">
                 Обратная связь менеджеру
-                <span className="ml-2 normal-case font-normal text-[#aeaeb2]">оценка {result.manager_score}/10</span>
+                <span className="ml-2 normal-case font-normal text-muted tabular-nums">оценка {result.manager_score}/10</span>
               </p>
-              <p className="text-[13px] text-[#3a3a3c] leading-relaxed">{result.manager_feedback}</p>
+              <p className="text-[13px] text-ink-soft leading-relaxed">{result.manager_feedback}</p>
             </div>
           )}
 
           {/* Transcription (collapsed) */}
-          <details className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden">
-            <summary className="px-5 py-3.5 text-[13px] font-medium text-[#6e6e73] cursor-pointer hover:bg-[#f9f9fb] transition-colors select-none">
+          <details className="bg-surface rounded-2xl border border-line overflow-hidden">
+            <summary className="px-5 py-3.5 text-[13px] font-medium text-ink-soft cursor-pointer hover:bg-subtle transition-colors select-none">
               Показать расшифровку
             </summary>
             <div className="px-5 pb-5">
-              <p className="text-[13px] text-[#3a3a3c] leading-relaxed whitespace-pre-wrap">{result.summary}</p>
+              <p className="text-[13px] text-ink-soft leading-relaxed whitespace-pre-wrap">{result.summary}</p>
             </div>
           </details>
         </div>
@@ -525,11 +523,11 @@ export default function CallsPage() {
 
       {/* Empty state before any search */}
       {!leadId && !loadingCalls && (
-        <div className="text-center py-16">
-          <div className="text-4xl mb-3">📞</div>
-          <p className="text-[15px] font-medium text-[#1d1d1f] mb-1">Анализ звонков amoCRM</p>
-          <p className="text-[13px] text-[#aeaeb2]">Введите ID сделки чтобы загрузить звонки</p>
-        </div>
+        <EmptyState
+          icon={<div className="text-4xl">📞</div>}
+          title="Анализ звонков amoCRM"
+          hint="Введите ID сделки чтобы загрузить звонки"
+        />
       )}
     </div>
   )

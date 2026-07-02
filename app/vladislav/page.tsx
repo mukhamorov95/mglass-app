@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { PageHeader } from '@/components/ds'
 
 type Chat = {
   chat_id: string
@@ -138,60 +139,60 @@ export default function VladislavPage() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Кабинет Владислава</h1>
-          <p className="text-[13px] text-[#6e6e73]">Управление AI-менеджером и клиентскими диалогами</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {botEnabled !== null && (
-            <button
-              onClick={toggleBot}
-              disabled={botToggling}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 ${
-                botEnabled
-                  ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                  : 'bg-red-100 text-red-600 hover:bg-red-200'
-              }`}
-            >
-              <span className={`w-2 h-2 rounded-full ${botEnabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
-              {botToggling ? '...' : botEnabled ? 'Бот включён' : 'Бот выключен'}
-            </button>
-          )}
-          <div className="w-10 h-10 rounded-full bg-[#0071e3] flex items-center justify-center text-white font-semibold text-[16px]">
-            В
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="Кабинет Владислава"
+        subtitle="Управление AI-менеджером и клиентскими диалогами"
+        actions={
+          <>
+            {botEnabled !== null && (
+              <button
+                onClick={toggleBot}
+                disabled={botToggling}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-semibold transition-all disabled:opacity-50 ${
+                  botEnabled
+                    ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                    : 'bg-red-100 text-red-600 hover:bg-red-200'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${botEnabled ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                {botToggling ? '...' : botEnabled ? 'Бот включён' : 'Бот выключен'}
+              </button>
+            )}
+            <div className="w-10 h-10 rounded-full bg-[#0071e3] flex items-center justify-center text-white font-semibold text-[16px]">
+              В
+            </div>
+          </>
+        }
+      />
 
       {/* Quick links */}
-      <div className="grid grid-cols-3 gap-3 mb-8">
+      <div className="grid grid-cols-3 gap-3 mb-8 mt-4">
         {QUICK.map(q => (
           <Link key={q.href} href={q.href}
-            className="bg-white rounded-2xl border border-[#e8e8ed] p-4 hover:border-[#0071e3] hover:shadow-sm transition-all">
-            <p className="text-[14px] font-medium text-[#1d1d1f] mb-0.5">{q.label}</p>
-            <p className="text-[12px] text-[#aeaeb2]">{q.sub}</p>
+            className="bg-surface rounded-2xl border border-line p-4 hover:border-[#0071e3] hover:shadow-sm transition-all">
+            <p className="text-[14px] font-medium text-ink mb-0.5">{q.label}</p>
+            <p className="text-[12px] text-muted">{q.sub}</p>
           </Link>
         ))}
       </div>
 
       {/* Messages section */}
-      <div className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden">
-        <div className="px-5 py-4 border-b border-[#f2f2f7]">
-          <p className="text-[15px] font-semibold text-[#1d1d1f] mb-3">Сообщения клиентов</p>
+      <div className="bg-surface rounded-2xl border border-line overflow-hidden">
+        <div className="px-5 py-4 border-b border-line-soft">
+          <p className="text-[15px] font-semibold text-ink mb-3">Сообщения клиентов</p>
           {/* Tabs */}
-          <div className="flex gap-1 bg-[#f2f2f7] rounded-xl p-1">
+          <div className="flex gap-1 bg-line-soft rounded-xl p-1">
             {TABS.map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-[9px] text-[12px] font-medium transition-all ${
                   tab === t.id
-                    ? 'bg-white text-[#1d1d1f] shadow-sm'
-                    : 'text-[#6e6e73] hover:text-[#1d1d1f]'
+                    ? 'bg-surface text-ink shadow-sm'
+                    : 'text-ink-soft hover:text-ink'
                 }`}>
                 {t.label}
                 {t.count > 0 && (
-                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none ${
-                    t.urgent ? 'bg-red-500 text-white' : 'bg-[#e8e8ed] text-[#6e6e73]'
+                  <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-semibold leading-none tabular-nums ${
+                    t.urgent ? 'bg-red-500 text-white' : 'bg-line text-ink-soft'
                   }`}>
                     {t.count}
                   </span>
@@ -202,43 +203,43 @@ export default function VladislavPage() {
         </div>
 
         {loading ? (
-          <div className="py-12 text-center text-[13px] text-[#aeaeb2]">Загрузка...</div>
+          <div className="py-12 text-center text-[13px] text-muted">Загрузка...</div>
         ) : visible.length === 0 ? (
           <div className="py-12 text-center">
-            <p className="text-[14px] text-[#aeaeb2]">
+            <p className="text-[14px] text-muted">
               {tab === 'attention' ? 'Все клиенты обслужены' : 'Нет диалогов в этой категории'}
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-[#f2f2f7]">
+          <div className="divide-y divide-line-soft">
             {visible.map(chat => {
               const status = statusOf(chat)
               return (
-                <div key={chat.chat_id} className="px-5 py-4 flex items-start gap-3 hover:bg-[#f9f9fb] transition-colors">
+                <div key={chat.chat_id} className="px-5 py-4 flex items-start gap-3 hover:bg-subtle transition-colors">
                   {/* Avatar */}
                   <div className={`w-10 h-10 rounded-full flex items-center justify-center text-[15px] font-semibold shrink-0 ${
                     status === 'unread' || status === 'human' ? 'bg-red-100 text-red-600' :
                     status === 'measurement' ? 'bg-emerald-100 text-emerald-700' :
-                    'bg-[#f2f2f7] text-[#6e6e73]'
+                    'bg-line-soft text-ink-soft'
                   }`}>
                     {chat.client_name ? chat.client_name[0].toUpperCase() : '?'}
                   </div>
 
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-0.5">
-                      <p className="text-[14px] font-medium text-[#1d1d1f] truncate">
+                      <p className="text-[14px] font-medium text-ink truncate">
                         {chat.client_name || fmtPhone(chat.chat_id)}
                       </p>
                       <Badge type={status} />
                     </div>
 
                     {chat.client_name && (
-                      <p className="text-[11px] text-[#aeaeb2]">{fmtPhone(chat.chat_id)}</p>
+                      <p className="text-[11px] text-muted">{fmtPhone(chat.chat_id)}</p>
                     )}
 
                     {chat.last_message && (
                       <p className={`text-[13px] truncate mt-0.5 ${
-                        status === 'unread' ? 'text-[#1d1d1f] font-medium' : 'text-[#6e6e73]'
+                        status === 'unread' ? 'text-ink font-medium' : 'text-ink-soft'
                       }`}>
                         {chat.last_role === 'user' ? '← ' : '→ '}{chat.last_message}
                       </p>
@@ -246,9 +247,9 @@ export default function VladislavPage() {
 
                     <div className="flex items-center gap-3 mt-1.5">
                       {chat.last_message_at && (
-                        <span className="text-[11px] text-[#aeaeb2]">{fmtTime(chat.last_message_at)}</span>
+                        <span className="text-[11px] text-muted">{fmtTime(chat.last_message_at)}</span>
                       )}
-                      <span className="text-[11px] text-[#aeaeb2]">{chat.message_count} сообщ.</span>
+                      <span className="text-[11px] text-muted tabular-nums">{chat.message_count} сообщ.</span>
                       {chat.amo_lead_id && (
                         <a href={`https://mglass.amocrm.ru/leads/detail/${chat.amo_lead_id}`}
                           target="_blank" rel="noopener noreferrer"

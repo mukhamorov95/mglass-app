@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { PageHeader } from '@/components/ds'
 
 type TaskStatus = 'pending' | 'in_progress' | 'done' | 'failed'
 type TaskType   = 'config' | 'code'
@@ -144,36 +145,34 @@ export default function TasksPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-1">
-        <h1 className="text-[22px] font-semibold text-[#1d1d1f]">Очередь задач</h1>
-        {autoTasks > 0 && (
+      <PageHeader
+        title="Очередь задач"
+        subtitle="Надиктуйте идею — AI превратит её в задачу и поставит в очередь"
+        actions={autoTasks > 0 ? (
           <button onClick={processNext}
-            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white text-[12px] font-semibold hover:bg-violet-700 transition-colors">
+            className="px-3 py-1.5 rounded-xl bg-violet-600 text-white text-[12px] font-semibold hover:bg-violet-700 transition-colors tabular-nums">
             ▶ Выполнить авто ({autoTasks})
           </button>
-        )}
-      </div>
-      <p className="text-[13px] text-[#6e6e73] mb-6">
-        Надиктуйте идею — AI превратит её в задачу и поставит в очередь
-      </p>
+        ) : undefined}
+      />
 
       {/* Stats row */}
-      <div className="flex gap-3 mb-6">
+      <div className="flex gap-3 mb-6 mt-4">
         {[
-          { label: 'Всего', value: tasks.length, cls: 'text-[#1d1d1f]' },
+          { label: 'Всего', value: tasks.length, cls: 'text-ink' },
           { label: 'Ожидают', value: pending, cls: 'text-amber-600' },
           { label: 'Выполнено', value: done, cls: 'text-emerald-600' },
         ].map(c => (
-          <div key={c.label} className="flex-1 bg-white rounded-2xl border border-[#e8e8ed] p-3 text-center">
-            <p className={`text-[22px] font-bold ${c.cls}`}>{c.value}</p>
-            <p className="text-[11px] text-[#aeaeb2]">{c.label}</p>
+          <div key={c.label} className="flex-1 bg-surface rounded-2xl border border-line p-3 text-center">
+            <p className={`text-[22px] font-semibold tabular-nums ${c.cls}`}>{c.value}</p>
+            <p className="text-[11px] text-muted">{c.label}</p>
           </div>
         ))}
       </div>
 
       {/* Input */}
-      <div className="bg-white rounded-2xl border border-[#e8e8ed] p-5 mb-6">
-        <p className="text-[12px] font-semibold text-[#6e6e73] uppercase tracking-wider mb-3">
+      <div className="bg-surface rounded-2xl border border-line p-5 mb-6">
+        <p className="text-[12px] font-semibold text-ink-soft uppercase tracking-wider mb-3">
           Новая идея
         </p>
         <div className="relative mb-4">
@@ -183,7 +182,7 @@ export default function TasksPage() {
             placeholder={recording ? 'Говорите — текст появится здесь...' : 'Надиктуйте или напишите идею...'}
             rows={4}
             readOnly={recording}
-            className="w-full resize-none bg-[#f9f9fb] border border-[#e8e8ed] rounded-xl px-4 py-3 text-[14px] text-[#1d1d1f] outline-none focus:border-[#0071e3] transition-colors placeholder:text-[#c7c7cc]"
+            className="w-full resize-none bg-subtle border border-line rounded-xl px-4 py-3 text-[14px] text-ink outline-none focus:border-[#0071e3] transition-colors placeholder:text-faint"
           />
           {recording && (
             <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -196,7 +195,7 @@ export default function TasksPage() {
           {speechOk && (
             <button onClick={toggleRec}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[13px] font-medium transition-all ${
-                recording ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-[#f2f2f7] text-[#1d1d1f] hover:bg-[#e8e8ed]'
+                recording ? 'bg-red-50 text-red-600 border border-red-200' : 'bg-line-soft text-ink hover:bg-line'
               }`}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
@@ -220,26 +219,26 @@ export default function TasksPage() {
             <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TYPE_MAP[newTask.type].cls}`}>
               {TYPE_MAP[newTask.type].label}
             </span>
-            <p className="text-[14px] font-semibold text-[#1d1d1f]">{newTask.title}</p>
+            <p className="text-[14px] font-semibold text-ink">{newTask.title}</p>
           </div>
-          <p className="text-[12px] text-[#3a3a3c] leading-relaxed">{newTask.prompt}</p>
+          <p className="text-[12px] text-ink-soft leading-relaxed">{newTask.prompt}</p>
         </div>
       )}
 
       {/* Tasks list */}
       <div className="space-y-2">
-        <p className="text-[12px] font-semibold text-[#aeaeb2] uppercase tracking-wider px-1">
+        <p className="text-[12px] font-semibold text-muted uppercase tracking-wider px-1">
           Все задачи
         </p>
 
         {loading ? (
-          <p className="text-center text-[13px] text-[#aeaeb2] py-8">Загрузка...</p>
+          <p className="text-center text-[13px] text-muted py-8">Загрузка...</p>
         ) : tasks.length === 0 ? (
-          <p className="text-center text-[13px] text-[#aeaeb2] py-8">Задач пока нет — надиктуйте первую идею</p>
+          <p className="text-center text-[13px] text-muted py-8">Задач пока нет — надиктуйте первую идею</p>
         ) : tasks.map(task => (
-          <div key={task.id} className="bg-white rounded-2xl border border-[#e8e8ed] overflow-hidden">
+          <div key={task.id} className="bg-surface rounded-2xl border border-line overflow-hidden">
             <button onClick={() => setExpanded(expanded === task.id ? null : task.id)}
-              className="w-full px-4 py-3.5 flex items-center gap-3 text-left hover:bg-[#f9f9fb] transition-colors">
+              className="w-full px-4 py-3.5 flex items-center gap-3 text-left hover:bg-subtle transition-colors">
               {/* Status dot */}
               <div className={`w-2 h-2 rounded-full shrink-0 ${
                 task.status === 'done' ? 'bg-emerald-500' :
@@ -249,7 +248,7 @@ export default function TasksPage() {
 
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <p className={`text-[13px] font-medium truncate ${task.status === 'done' ? 'text-[#6e6e73] line-through' : 'text-[#1d1d1f]'}`}>
+                  <p className={`text-[13px] font-medium truncate ${task.status === 'done' ? 'text-ink-soft line-through' : 'text-ink'}`}>
                     {task.title}
                   </p>
                   <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${TYPE_MAP[task.type].cls}`}>
@@ -260,32 +259,32 @@ export default function TasksPage() {
                   <span className={`text-[11px] font-medium px-1.5 py-0.5 rounded-full ${STATUS_MAP[task.status].cls}`}>
                     {STATUS_MAP[task.status].label}
                   </span>
-                  <span className="text-[11px] text-[#aeaeb2]">{fmt(task.created_at)}</span>
+                  <span className="text-[11px] text-muted">{fmt(task.created_at)}</span>
                   {task.done_at && <span className="text-[11px] text-emerald-600">✓ {fmt(task.done_at)}</span>}
                 </div>
               </div>
 
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#aeaeb2" strokeWidth="2" strokeLinecap="round"
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9a9a95" strokeWidth="2" strokeLinecap="round"
                 className={`shrink-0 transition-transform ${expanded === task.id ? 'rotate-180' : ''}`}>
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
             </button>
 
             {expanded === task.id && (
-              <div className="px-4 pb-4 border-t border-[#f2f2f7] pt-3 space-y-3">
+              <div className="px-4 pb-4 border-t border-line-soft pt-3 space-y-3">
                 {task.voice_input && (
                   <div>
-                    <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1">Исходная идея</p>
-                    <p className="text-[13px] text-[#6e6e73] italic">"{task.voice_input}"</p>
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Исходная идея</p>
+                    <p className="text-[13px] text-ink-soft italic">"{task.voice_input}"</p>
                   </div>
                 )}
                 <div>
-                  <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1">Промт для исполнения</p>
-                  <p className="text-[13px] text-[#1d1d1f] leading-relaxed whitespace-pre-wrap">{task.prompt}</p>
+                  <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Промт для исполнения</p>
+                  <p className="text-[13px] text-ink leading-relaxed whitespace-pre-wrap">{task.prompt}</p>
                 </div>
                 {task.result && (
                   <div className={`rounded-xl p-3 ${task.status === 'done' ? 'bg-emerald-50' : 'bg-red-50'}`}>
-                    <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1">Результат</p>
+                    <p className="text-[11px] font-semibold text-muted uppercase tracking-wider mb-1">Результат</p>
                     <p className="text-[13px] leading-relaxed whitespace-pre-wrap">{task.result}</p>
                   </div>
                 )}
