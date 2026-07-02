@@ -3,6 +3,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
+interface ISpeechRecognition extends EventTarget {
+  lang: string; continuous: boolean; interimResults: boolean
+  start(): void; stop(): void
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  onresult: ((e: any) => void) | null
+  onerror: (() => void) | null
+  onend: (() => void) | null
+}
+type SpeechWindow = {
+  SpeechRecognition?: new () => ISpeechRecognition
+  webkitSpeechRecognition?: new () => ISpeechRecognition
+}
+
 type Spec = { label: string; value: string; accent?: boolean }
 type Item = { name: string; desc?: string; qty?: string; price?: string; sum?: string }
 type Form = {
@@ -61,8 +74,15 @@ export default function KpPage() {
   const [saving, setSaving] = useState(false)
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  const mrRef = useRef<MediaRecorder | null>(null)
-  const chunksRef = useRef<Blob[]>([])
+  const [interimText, setInterimText] = useState('')
+  const [speechSupported, setSpeechSupported] = useState(true)
+  const recognitionRef = useRef<ISpeechRecognition | null>(null)
+  const transcriptRef = useRef('')
+
+  useEffect(() => { transcriptRef.current = transcript }, [transcript])
+  useEffect(() => {
+    setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
+  }, [])
 
   const set = (patch: Partial<Form>) => { setForm(f => ({ ...f, ...patch })); setSavedId(null) }
 
@@ -79,34 +99,33 @@ export default function KpPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab])
 
-  // ── voice ──────────────────────────────────────────────
-  async function startRec() {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const mr = new MediaRecorder(stream)
-      chunksRef.current = []
-      mr.ondataavailable = e => { if (e.data.size) chunksRef.current.push(e.data) }
-      mr.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        const blob = new Blob(chunksRef.current, { type: 'audio/webm' })
-        await processAudio(blob)
+  // ── voice (браузерное распознавание, живое) ─────────────
+  function startRec() {
+    const w = window as unknown as SpeechWindow
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
+    if (!SR) { setBusy('Голос не поддерживается в этом браузере — впишите текст ниже'); setTimeout(() => setBusy(null), 3500); return }
+    const rec = new SR()
+    rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    rec.onresult = (e: any) => {
+      let interim = '', finalChunk = ''
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript
+        if (e.results[i].isFinal) finalChunk += t; else interim += t
       }
-      mr.start(); mrRef.current = mr; setRecording(true)
-    } catch { setBusy('Нет доступа к микрофону'); setTimeout(() => setBusy(null), 2500) }
+      if (finalChunk) setTranscript(prev => (prev && !prev.endsWith(' ') ? prev + ' ' : prev) + finalChunk)
+      setInterimText(interim)
+    }
+    rec.onerror = () => { setRecording(false); setInterimText('') }
+    rec.onend = () => { setRecording(false); setInterimText('') }
+    recognitionRef.current = rec
+    rec.start(); setRecording(true); setBusy(null)
   }
-  function stopRec() { mrRef.current?.stop(); setRecording(false) }
 
-  async function processAudio(blob: Blob) {
-    setBusy('Расшифровка речи…')
-    try {
-      const fd = new FormData(); fd.append('file', blob, 'kp.webm')
-      const tr = await fetch('/api/ai/kp-transcribe', { method: 'POST', body: fd }).then(r => r.json())
-      const text = (tr.text as string) ?? ''
-      if (!text.trim()) { setBusy('Не удалось распознать речь'); setTimeout(() => setBusy(null), 2500); return }
-      const merged = transcript ? `${transcript} ${text}` : text
-      setTranscript(merged)
-      await structure(merged)
-    } catch { setBusy('Ошибка расшифровки'); setTimeout(() => setBusy(null), 2500) }
+  function stopRec() {
+    recognitionRef.current?.stop()
+    setRecording(false); setInterimText('')
+    setTimeout(() => { const t = transcriptRef.current.trim(); if (t) structure(t) }, 350)
   }
 
   async function structure(text: string) {
@@ -128,7 +147,7 @@ export default function KpPage() {
       const next = { ...f }
       const s = (k: keyof Form, v: unknown) => { if (v != null && v !== '') (next as Record<string, unknown>)[k] = String(v) }
       s('title', kp.title); s('subtitle', kp.subtitle); s('client_name', kp.client_name); s('client_phone', kp.client_phone)
-      s('production_days', kp.production_days); s('warranty', kp.warranty); s('valid_until', kp.valid_until); s('spec_note', kp.spec_note)
+      s('warranty', kp.warranty); s('valid_until', kp.valid_until); s('spec_note', kp.spec_note)
       if (Array.isArray(kp.spec) && kp.spec.length) next.spec = (kp.spec as Spec[]).map(x => ({ label: String(x.label ?? ''), value: String(x.value ?? ''), accent: x.accent }))
       if (Array.isArray(kp.items) && kp.items.length) next.items = (kp.items as Record<string, unknown>[]).map(x => ({
         name: String(x.name ?? ''), desc: x.desc ? String(x.desc) : '',
@@ -224,16 +243,19 @@ export default function KpPage() {
           <div className="space-y-4">
             {/* voice */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <button onClick={recording ? stopRec : startRec}
                   className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold ${recording ? 'bg-red-600 text-white animate-pulse' : 'bg-[#E1442E] text-white hover:bg-[#c93a26]'}`}>
-                  {recording ? '⏹ Остановить запись' : '🎤 Записать голосом'}
+                  {recording ? '⏹ Остановить и разобрать' : '🎤 Записать голосом'}
                 </button>
                 {busy && <span className="text-[12px] text-[#6b6b66]">{busy}</span>}
-                {form.title && !busy && <span className="text-[12px] text-emerald-600">✓ структура собрана — проверьте ниже</span>}
+                {recording && <span className="text-[12px] text-red-500">● идёт запись, говорите…</span>}
+                {form.title && !busy && !recording && <span className="text-[12px] text-emerald-600">✓ структура собрана — проверьте ниже</span>}
               </div>
+              {!speechSupported && <p className="text-[12px] text-amber-600 mt-2">Голосовой ввод недоступен в этом браузере — впишите текст вручную и нажмите «Разобрать».</p>}
               <textarea value={transcript} onChange={e => setTranscript(e.target.value)} placeholder="Здесь появится расшифровка. Можно править текст и нажать «Разобрать»."
                 className="w-full mt-3 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] h-20 resize-y" />
+              {interimText && <p className="text-[12px] text-[#9a9a95] mt-1 italic">…{interimText}</p>}
               <button onClick={() => transcript.trim() && structure(transcript)} disabled={!transcript.trim() || !!busy}
                 className="mt-2 px-3 py-1.5 text-[12px] font-medium rounded-lg bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4] disabled:opacity-50">Разобрать текст → структуру</button>
             </div>
@@ -302,7 +324,11 @@ export default function KpPage() {
 
             {/* conditions + photo */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 grid grid-cols-3 gap-3">
-              <div><label className={L}>Срок изготовления</label><input className={I} value={form.production_days} onChange={e => set({ production_days: e.target.value })} /></div>
+              <div><label className={L}>Срок изготовления</label>
+                <select className={I} value={form.production_days} onChange={e => set({ production_days: e.target.value })}>
+                  {['10 раб. дней', '12 раб. дней', '15 раб. дней', '20 раб. дней', '25 раб. дней'].map(o => <option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
               <div><label className={L}>Гарантия</label><input className={I} value={form.warranty} onChange={e => set({ warranty: e.target.value })} /></div>
               <div><label className={L}>НДС</label><input className={I} value={form.vat} onChange={e => set({ vat: e.target.value })} /></div>
               <div className="col-span-3">
