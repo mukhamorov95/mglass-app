@@ -72,6 +72,7 @@ export default function KpPage() {
   const [recording, setRecording] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [history, setHistory] = useState<HistoryRow[]>([])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [interimText, setInterimText] = useState('')
@@ -191,17 +192,28 @@ export default function KpPage() {
 
   // ── save ───────────────────────────────────────────────
   async function save() {
-    setSaving(true)
+    setSaving(true); setSaveError(null)
     try {
       const content = { ...form }
       if (editingId) {
         const res = await fetch('/api/kp', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: editingId, content }) })
+        const data = await res.json().catch(() => ({}))
         if (res.ok) setSavedId(editingId)
+        else setSaveError(data.error || `Ошибка ${res.status}`)
       } else {
         const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
-        const data = await res.json()
-        if (res.ok && data.id) { setSavedId(data.id); setEditingId(data.id); if (data.number && !form.number) set({ number: data.number }) }
+        const data = await res.json().catch(() => ({}))
+        if (res.ok && data.id) {
+          setEditingId(data.id)
+          // setForm напрямую (не set — тот сбрасывает savedId)
+          if (data.number && !form.number) setForm(f => ({ ...f, number: data.number }))
+          setSavedId(data.id)
+        } else {
+          setSaveError(data.error || `Ошибка ${res.status}`)
+        }
       }
+    } catch (e) {
+      setSaveError(e instanceof Error ? e.message : 'Ошибка сети')
     } finally { setSaving(false) }
   }
 
@@ -357,6 +369,7 @@ export default function KpPage() {
                 </a>
               )}
               {savedId && <span className="text-[12px] text-emerald-600">Сохранено ✓</span>}
+              {saveError && <span className="text-[12px] text-red-600">Не сохранилось: {saveError}</span>}
             </div>
           </div>
         ) : (
