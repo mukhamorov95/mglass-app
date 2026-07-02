@@ -21,7 +21,7 @@ const CSS = `
 .kp-sec .lead{flex:1;border-bottom:1.5px dotted var(--dot);height:1px;margin:0 6px}
 .kp-sec .meta{font-size:11px;letter-spacing:2px;color:var(--muted);font-weight:700;white-space:nowrap}
 .kp-metabar{display:grid;grid-template-columns:repeat(4,1fr);border:1px solid var(--line);background:var(--soft);margin-top:15px}
-.kp-metabar .cell{padding:14px 18px;border-right:1px solid var(--line)}
+.kp-metabar .cell{padding:11px 18px;border-right:1px solid var(--line)}
 .kp-metabar .cell:last-child{border-right:0}
 .kp-metabar .k{font-size:9.5px;letter-spacing:2px;color:var(--muted);font-weight:700;margin-bottom:5px}
 .kp-metabar .v{font-size:17px;font-weight:800}
@@ -34,17 +34,17 @@ const CSS = `
 .kp-totalbox .k{font-size:10px;letter-spacing:2px;font-weight:700;opacity:.9}
 .kp-totalbox .v{font-size:30px;font-weight:800;margin-top:2px}
 .kp-spec{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--line)}
-.kp-spec .row{display:flex;align-items:center;gap:8px;padding:10px 18px;border-bottom:1px solid var(--line)}
+.kp-spec .row{display:flex;align-items:center;gap:8px;padding:8px 18px;border-bottom:1px solid var(--line)}
 .kp-spec .row:nth-child(odd){border-right:1px solid var(--line)}
 .kp-spec .lbl{font-size:10.5px;letter-spacing:1.5px;color:var(--muted);font-weight:700;white-space:nowrap}
 .kp-spec .dl{flex:1;border-bottom:1.5px dotted var(--dot);height:1px}
 .kp-spec .val{font-weight:800;font-size:14px;text-align:right}
 .kp-spec .val.red{color:var(--red)}
-.kp-note{font-size:12px;color:#6a6a66;margin-top:14px;line-height:1.6}
+.kp-note{font-size:12px;color:#6a6a66;margin-top:10px;line-height:1.55}
 .kp-table{width:100%;border-collapse:collapse;margin-top:4px}
 .kp-table thead th{background:var(--ink);color:#fff;font-size:10px;letter-spacing:1.5px;font-weight:700;padding:12px 14px;text-align:left}
 .kp-table thead th.c{text-align:center}.kp-table thead th.r{text-align:right}
-.kp-table tbody td{padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+.kp-table tbody td{padding:9px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
 .kp-table tbody tr:nth-child(even){background:var(--soft)}
 .kp-table td.n{color:var(--red);font-weight:800;font-size:15px;width:44px}
 .kp-table td .nm{font-weight:800;font-size:14px}
@@ -52,7 +52,7 @@ const CSS = `
 .kp-table td.qty{text-align:center;font-size:15px;width:64px}
 .kp-table td.price{text-align:right;font-size:15px;width:120px;color:#3a3a3a}
 .kp-table td.sum{text-align:right;font-weight:800;font-size:16px;width:130px}
-.kp-subtotal{display:flex;justify-content:flex-end;gap:40px;padding:16px 14px;font-weight:800}
+.kp-subtotal{display:flex;justify-content:flex-end;gap:40px;padding:11px 14px;font-weight:800}
 .kp-subtotal .lbl{color:#4a4a4a}
 .kp-paybar{display:flex;justify-content:space-between;align-items:center;background:var(--ink);color:#fff;padding:14px 26px;margin-top:6px}
 .kp-paybar .l{font-size:15px;letter-spacing:3px;color:var(--red);font-weight:800}
