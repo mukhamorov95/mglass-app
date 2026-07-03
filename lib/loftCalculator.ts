@@ -10,7 +10,7 @@ export type LoftInputs = {
   systemType: LoftSystemType
   glassMaterial: Material | null
   glassWastePct: number   // % расхода из справочника стекла (0 = не применять)
-  glassCalcPrice?: number // продажная цена из glass_price_matrix; если задана, перекрывает glassMaterial.cost_price
+  glassCalcPrice?: number // себестоимость стекла из glass_price_matrix (cost); если задана, перекрывает glassMaterial.cost_price
   withTempering: boolean
   withMirrorFilm: boolean
   withPainting: boolean
