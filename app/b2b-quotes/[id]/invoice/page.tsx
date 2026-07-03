@@ -137,7 +137,13 @@ export default function InvoicePage() {
     const totalBase = order.total_sale_inc_vat || items.reduce((s, i) => s + (i.saleIncVat ?? 0), 0)
     const totalPay = order.total_after_discount || totalBase
     const vat = Math.round(totalPay * 22 / 122 * 100) / 100
-    return { items, discount, totalBase, totalPay, vat, discountSum: totalBase - totalPay }
+    // Построчные суммы со скидкой; разницу округления сажаем в последнюю строку, чтобы столбец = Итого.
+    const lineSums = items.map(it => Math.round((it.saleIncVat ?? 0) * (1 - discount / 100) * 100) / 100)
+    if (lineSums.length) {
+      const raw = Math.round(lineSums.reduce((a, b) => a + b, 0) * 100) / 100
+      lineSums[lineSums.length - 1] = Math.round((lineSums[lineSums.length - 1] + (totalPay - raw)) * 100) / 100
+    }
+    return { items, discount, totalBase, totalPay, vat, lineSums, discountSum: totalBase - totalPay }
   }, [order])
 
   useEffect(() => {
@@ -370,7 +376,7 @@ export default function InvoicePage() {
               const qty = it.quantity || 1
               const sumNoDisc = it.saleIncVat ?? 0
               const price = qty ? sumNoDisc / qty : sumNoDisc
-              const sum = Math.round(sumNoDisc * (1 - totals.discount / 100) * 100) / 100
+              const sum = totals.lineSums[i]
               return (
                 <tr key={i}>
                   <td className="text-center">{i + 1}</td>
