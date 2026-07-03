@@ -42,12 +42,12 @@ const CSS = `
 .inv-tot td{padding:4px 8px}.inv-tot td.r{text-align:right}
 .inv-sign{margin-top:44px;font-size:10pt;position:relative;padding-bottom:64px}
 .inv-sig-wrap{display:inline-block;width:170px;border-bottom:1px solid #333;position:relative;vertical-align:bottom;margin:0 8px;height:1px}
-.inv-signature{position:absolute;left:16px;bottom:-2px;height:56px}
-.inv-stamp{position:absolute;left:210px;top:-42px;height:120px;opacity:.92}
+.inv-signature{position:absolute;left:10px;bottom:-4px;height:60px}
+.inv-stamp{position:absolute;left:250px;top:-46px;height:116px;opacity:.9}
 /* подпись+печать в договоре (блок Исполнителя) */
-.c-sign{position:relative;margin-top:14px;height:92px}
-.c-signature{position:absolute;left:2px;top:-4px;height:50px}
-.c-stamp{position:absolute;left:74px;top:-22px;height:98px;opacity:.9}
+.c-sign{position:relative;margin-top:14px;height:96px}
+.c-signature{position:absolute;left:0;top:-6px;height:54px}
+.c-stamp{position:absolute;left:120px;top:-24px;height:100px;opacity:.88}
 .c-sign-line{position:absolute;left:0;bottom:8px;font-size:9.5pt}
 @media print{.dc-scope{background:#fff}.dc-toolbar{display:none}.doc-page{box-shadow:none;margin:0}}
 `
