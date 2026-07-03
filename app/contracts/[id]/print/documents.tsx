@@ -114,11 +114,9 @@ function specLine(s: SpecItem): string {
   const name = (s.name ?? '').trim()
   const desc = (s.desc ?? '').trim()
   const dim = (s.dimensions ?? '').trim()
-  const parts: string[] = []
-  if (name) parts.push(name)
-  if (desc) parts.push(desc)
-  if (dim && !/размер|\d+\s*[хx×/]\s*\d+/i.test(`${name} ${desc}`)) parts.push(`Размеры: ${dim}`)
-  let line = parts.join('. ')
+  let line = name
+  if (desc) line += line ? `, ${desc}` : desc            // «Изделие, стекло …»
+  if (dim && !/размер|\d+\s*[хx×/]\s*\d+/i.test(`${name} ${desc}`)) line += `${line ? '. ' : ''}Размеры: ${dim}`
   if (s.qty) line += ` — ${s.qty} шт.`
   return line
 }
