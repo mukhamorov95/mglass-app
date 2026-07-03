@@ -117,43 +117,58 @@ export default function ContractPrintPage() {
     try {
       const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
       const canvas = await h2c.default(contractRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-      const ctx = canvas.getContext('2d')!
       const W = canvas.width, H = canvas.height
       const pxPerMm = W / 210
       const pageHpx = 297 * pxPerMm
 
-      // Разрез страницы — по «пустой» (белой) строке рядом с идеальной границей,
-      // чтобы не резать текст пополам. Ищем снизу вверх в окне.
-      function findCut(ideal: number, minCut: number): number {
-        if (ideal >= H) return H
-        const top = Math.max(minCut, Math.floor(ideal - 240))
-        if (top >= ideal) return ideal
-        const band = ctx.getImageData(0, top, W, ideal - top).data
-        for (let ry = (ideal - top) - 1; ry >= 0; ry--) {
-          let blank = true
-          const base = ry * W * 4
-          for (let x = 0; x < W; x += 12) {
-            const p = base + x * 4
-            if (band[p] < 238 || band[p + 1] < 238 || band[p + 2] < 238) { blank = false; break }
-          }
-          if (blank) return top + ry
+      // Границы клаузул (абзацев/заголовков) в координатах холста. Разрез — только
+      // в промежутке между целыми пунктами; заголовок/строку с «:» не оставляем внизу.
+      const root = contractRef.current.querySelector('.contract') as HTMLElement | null
+      const items: { topC: number; botC: number; keep: boolean }[] = []
+      if (root) {
+        const rr = root.getBoundingClientRect()
+        const ratio = H / rr.height
+        for (const el of Array.from(root.children) as HTMLElement[]) {
+          const r = el.getBoundingClientRect()
+          const txt = (el.textContent || '').trim()
+          const keep = el.tagName.toLowerCase() === 'h3' || /:$/.test(txt)
+          items.push({ topC: (r.top - rr.top) * ratio, botC: (r.bottom - rr.top) * ratio, keep })
         }
-        return ideal
       }
 
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      let y = 0, first = true
-      while (y < H - 2) {
-        const ideal = Math.min(y + pageHpx, H)
-        const cut = findCut(ideal, y + Math.floor(pageHpx * 0.55))
-        const sliceH = cut - y
+      let first = true
+      const addSlice = (from: number, to: number) => {
+        const sliceH = Math.max(1, Math.round(to - from))
         const tmp = document.createElement('canvas')
-        tmp.width = W; tmp.height = Math.round(sliceH)
-        tmp.getContext('2d')!.drawImage(canvas, 0, y, W, sliceH, 0, 0, W, sliceH)
+        tmp.width = W; tmp.height = sliceH
+        tmp.getContext('2d')!.drawImage(canvas, 0, from, W, sliceH, 0, 0, W, sliceH)
         if (!first) pdf.addPage()
         pdf.addImage(tmp.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 210, sliceH / pxPerMm)
         first = false
-        y = cut
+      }
+
+      if (!items.length) {
+        let y = 0
+        while (y < H - 2) { const sh = Math.min(pageHpx, H - y); addSlice(y, y + sh); y += sh }
+      } else {
+        let y = 0, idx = 0
+        while (idx < items.length) {
+          const maxY = y + pageHpx
+          let last = -1
+          for (let i = idx; i < items.length; i++) { if (items[i].botC <= maxY + 2) last = i; else break }
+          if (last < idx) last = idx                 // даже один блок не влезает — берём целиком
+          else {                                     // не оставлять заголовок/«:» висеть внизу страницы
+            let l2 = last
+            while (l2 > idx && items[l2].keep) l2--
+            if (l2 >= idx) last = l2
+          }
+          const isLast = last >= items.length - 1
+          const cut = isLast ? H : (items[last].botC + items[last + 1].topC) / 2
+          addSlice(y, cut)
+          y = cut
+          idx = last + 1
+        }
       }
       pdf.save(`Договор-${c?.number ?? ''}.pdf`)
     } finally { setBusy(false) }
