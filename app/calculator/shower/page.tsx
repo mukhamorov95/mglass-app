@@ -119,6 +119,9 @@ export default function ShowerCalculatorPage() {
   // Фото моделей из админки (/admin/shower-images → shower_model_images). Если фото
   // загружено — показываем его, иначе единую SVG-иллюстрацию ShowerModelIcon.
   const [modelPhotos, setModelPhotos] = useState<Record<string, string>>({})
+  // Модели душевых из БД (shower_models). Фолбэк на константу SHOWER_MODELS —
+  // калькулятор работает и без применённой миграции (безопасно).
+  const [showerModels, setShowerModels] = useState<ShowerModel[]>(SHOWER_MODELS)
   // glass_price_matrix sale rows: name → { t4, t6, t8, t10, t12, … }
   const [glassMatrix, setGlassMatrix]     = useState<Record<string, Record<string, number | null>>>({})
   const [loading, setLoading]     = useState(true)
@@ -248,7 +251,7 @@ export default function ShowerCalculatorPage() {
 
   const tierCfg         = TIER_CONFIGS.find(t => t.value === tier)!
   const availableColors = HARDWARE_COLORS.filter(c => tierCfg.colors.includes(c.value))
-  const budgetModel     = SHOWER_MODELS.find(m => m.id === modelId) ?? SHOWER_MODELS[1]
+  const budgetModel     = showerModels.find(m => m.id === modelId) ?? showerModels[1] ?? SHOWER_MODELS[1]
   const colorObj        = availableColors.find(c => c.value === hwColor) ?? availableColors[0]
   const selectedPartner = partners.find(p => p.id === partnerId) ?? null
 
@@ -290,6 +293,20 @@ export default function ShowerCalculatorPage() {
         setModelPhotos(map)
       })
       .catch(() => {})
+  }, [])
+
+  // Модели душевых из БД (админ-редактируемые); при отсутствии таблицы — код-фолбэк.
+  useEffect(() => {
+    supabase.from('shower_models').select('*').eq('active', true).order('sort_order')
+      .then(({ data }) => {
+        if (data && data.length) {
+          setShowerModels(data.map(r => ({
+            id: r.code as ShowerModel['id'], label: r.title, desc: r.description,
+            glassCount: r.glass_count, dimType: r.dim_type as ShowerModel['dimType'],
+            hardwareBase: r.hardware_base, hardwareType: r.hardware_type as ShowerModel['hardwareType'],
+          })))
+        }
+      })
   }, [])
 
   const filteredCatalogItems = useMemo(() =>
@@ -638,7 +655,7 @@ export default function ShowerCalculatorPage() {
               <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
                 <Label>Модель перегородки</Label>
                 <div className="grid grid-cols-4 gap-1.5">
-                  {SHOWER_MODELS.map(m => {
+                  {showerModels.map(m => {
                     const active = modelId === m.id
                     return (
                       <button key={m.id} onClick={() => setModelId(m.id)}
