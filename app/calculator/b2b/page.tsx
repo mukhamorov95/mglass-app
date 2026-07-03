@@ -685,9 +685,6 @@ export default function B2BCalculatorPage() {
     setSaving(true)
     setSaveError(null)
     setSavedAsPending(false)
-    const discountApprovalRequired = !isAdmin && discount > maxDiscount
-    const minPriceApprovalRequired = !isAdmin && totalAfterDiscountWouldBreakMin
-    const approvalRequired = discountApprovalRequired || minPriceApprovalRequired
     const sb = createClient()
     const t = totals!
     const avgMargin = items.length > 0
@@ -698,7 +695,7 @@ export default function B2BCalculatorPage() {
     const baseNotes = editing ? { ...editOrigNotesRef.current } : {}
     const orderNotes = JSON.stringify({
       ...baseNotes,   // при редактировании сохраняем status/status_history/payment_status/launched_at и т.д.
-      status: editing ? (baseNotes.status ?? (approvalRequired ? 'pending_approval' : 'quote')) : (approvalRequired ? 'pending_approval' : 'quote'),
+      status: editing ? (baseNotes.status === 'pending_approval' ? 'quote' : (baseNotes.status ?? 'quote')) : 'quote',
       quote_date: editing ? (baseNotes.quote_date ?? new Date().toISOString()) : new Date().toISOString(),
       production_days: fProductionDays,
       user_notes: notes || null,
@@ -761,7 +758,7 @@ export default function B2BCalculatorPage() {
         }
       }
       setSavedOrderId(savedId)
-      setSavedAsPending(approvalRequired)
+      setSavedAsPending(false)
     }
     setSaving(false)
   }
@@ -1413,13 +1410,13 @@ export default function B2BCalculatorPage() {
 
                 {discount > maxDiscount && !isAdmin && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
-                    ⚠️ Скидка клиента {discount}% превышает ваш лимит {maxDiscount}%. Просчёт можно сохранить — он попадёт на согласование руководителю.
+                    ⚠️ Скидка клиента {discount}% превышает ваш ориентир {maxDiscount}%. Просчёт сохранится и сразу готов к запуску.
                   </div>
                 )}
 
                 {totalAfterDiscountWouldBreakMin && !isAdmin && (
                   <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-[12px] text-amber-700 font-medium">
-                    ⚠️ Скидка снижает итоговую сумму ниже минимальной стоимости позиций. После сохранения просчёт уйдёт на согласование.
+                    ⚠️ Скидка снижает итог ниже минимальной стоимости позиций. Просчёт сохранится и сразу готов к запуску.
                   </div>
                 )}
                 {editingOrderId != null && (

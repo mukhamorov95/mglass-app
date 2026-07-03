@@ -101,7 +101,6 @@ const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'today',            label: 'Сегодня' },
   { key: 'needs_transfer',   label: 'Требуют переноса' },
   { key: 'quote',            label: 'Черновики' },
-  { key: 'pending_approval', label: 'На согласовании' },
   { key: 'agreed',           label: 'Согласовано' },
   { key: 'rejected',         label: 'Отказ' },
 ]
@@ -120,7 +119,9 @@ function getStatus(q: Quote): QuoteStatus {
   if (s === 'agreed')           return 'agreed'
   if (s === 'sent')             return 'sent'
   if (s === 'rejected')         return 'rejected'
-  if (s === 'pending_approval') return 'pending_approval'
+  // Согласование отключено: любой «на согласовании» трактуем как обычный просчёт,
+  // готовый к запуску в работу (кнопка «Запустить в работу»).
+  if (s === 'pending_approval') return 'quote'
   return 'quote'
 }
 
