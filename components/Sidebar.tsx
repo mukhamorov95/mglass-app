@@ -97,6 +97,12 @@ const BUYER_B2B_MGLASS: NavItem[] = [
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
 ]
 
+// Production oversight for the scoped buyer (Вера надзирает за цехом).
+const BUYER_PRODUCTION: NavItem[] = [
+  { href: '/production-app',            label: 'Производство',        icon: '📱', indent: true },
+  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭', indent: true },
+]
+
 // ─── Production role ──────────────────────────────────────────────────────────
 
 const PRODUCTION_ITEMS: NavItem[] = [
@@ -349,6 +355,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
     if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')
+    if (inSection(pathname, ['/production-app'])) open.push('buyer_production')
     return open
   }
   if (role === 'manager') {
@@ -659,6 +666,14 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
             'text-emerald-400',
             BUYER_B2B_MGLASS,
             'bg-emerald-50 text-emerald-700 font-medium',
+          )}
+          {showB2BForScopedBuyer && accordion(
+            'buyer_production',
+            'Производство',
+            'text-orange-600',
+            'text-orange-400',
+            BUYER_PRODUCTION,
+            'bg-orange-50 text-orange-700 font-medium',
           )}
         </>
       )

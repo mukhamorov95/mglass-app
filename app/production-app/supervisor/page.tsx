@@ -1,7 +1,8 @@
 import { createClient } from '@/lib/supabase-server'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { getRole, isOwnerRole } from '@/lib/getRole'
+import { getUserProfile, isOwnerRole } from '@/lib/getRole'
+import { isMGlassOnlyUser } from '@/lib/b2bScope'
 import { type DetailStages, STAGE_LABELS } from '@/lib/productionStages'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -187,8 +188,11 @@ const VALID_FILTERS: Filter[] = ['all', 'overdue', 'problems', 'urgent', 'ready'
 export default async function SupervisorPage(props: {
   searchParams: Promise<{ filter?: string }>
 }) {
-  const role = await getRole()
-  if (!isOwnerRole(role)) redirect('/production-app')
+  const profile = await getUserProfile()
+  const role = profile?.role ?? null
+  // Владелец или scoped buyer (Вера) — надзор за производством.
+  const scopedBuyer = role === 'buyer' && isMGlassOnlyUser(profile?.permissions)
+  if (!isOwnerRole(role) && !scopedBuyer) redirect('/production-app')
 
   const sb = await createClient()
   const { data } = await sb

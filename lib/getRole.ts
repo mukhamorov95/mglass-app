@@ -214,14 +214,17 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 export type B2BScope = 'mglass_only' | null
 
 // Paths a scoped buyer (mglass_only) gets on top of their normal allowlist.
-// Intentionally narrow — only what's needed for the internal M GLASS quote /
-// order flow. Does NOT include /my-earnings, /manager-dashboard, /calculator/mirror,
-// etc. — that would be the full manager role and we don't want that.
+// Intentionally narrow — the internal M GLASS quote/order flow plus the shop-floor
+// production контур (Вера ведёт закупку и надзирает за производством). Does NOT
+// include /my-earnings, /manager-dashboard, /calculator/mirror, etc. — that would
+// be the full manager role and we don't want that.
 const SCOPED_BUYER_B2B_PATHS: ReadonlyArray<string> = [
   '/calculator/b2b',
   '/b2b-quotes',
   '/b2b-orders',
   '/b2b-cutting',
+  '/production-app',
+  '/p/o',
 ]
 
 // Centralised route gate. Use this everywhere instead of ad-hoc role checks.

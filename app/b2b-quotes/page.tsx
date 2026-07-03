@@ -492,7 +492,7 @@ export default function B2BQuotesPage() {
       const perms = (profile?.permissions ?? null) as UserPermissions | null
       // Owners are never scope-restricted.
       setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
-      const canSeeAll = profile?.role === 'admin' || profile?.see_all_orders === true
+      const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
 
       let ordersQuery = sb
         .from('b2b_orders')
