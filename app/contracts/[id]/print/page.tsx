@@ -117,19 +117,43 @@ export default function ContractPrintPage() {
     try {
       const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
       const canvas = await h2c.default(contractRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const pxPerMm = canvas.width / 210
+      const ctx = canvas.getContext('2d')!
+      const W = canvas.width, H = canvas.height
+      const pxPerMm = W / 210
       const pageHpx = 297 * pxPerMm
+
+      // Разрез страницы — по «пустой» (белой) строке рядом с идеальной границей,
+      // чтобы не резать текст пополам. Ищем снизу вверх в окне.
+      function findCut(ideal: number, minCut: number): number {
+        if (ideal >= H) return H
+        const top = Math.max(minCut, Math.floor(ideal - 240))
+        if (top >= ideal) return ideal
+        const band = ctx.getImageData(0, top, W, ideal - top).data
+        for (let ry = (ideal - top) - 1; ry >= 0; ry--) {
+          let blank = true
+          const base = ry * W * 4
+          for (let x = 0; x < W; x += 12) {
+            const p = base + x * 4
+            if (band[p] < 238 || band[p + 1] < 238 || band[p + 2] < 238) { blank = false; break }
+          }
+          if (blank) return top + ry
+        }
+        return ideal
+      }
+
+      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       let y = 0, first = true
-      while (y < canvas.height - 2) {
-        const sliceH = Math.min(pageHpx, canvas.height - y)
+      while (y < H - 2) {
+        const ideal = Math.min(y + pageHpx, H)
+        const cut = findCut(ideal, y + Math.floor(pageHpx * 0.55))
+        const sliceH = cut - y
         const tmp = document.createElement('canvas')
-        tmp.width = canvas.width; tmp.height = Math.round(sliceH)
-        tmp.getContext('2d')!.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH)
+        tmp.width = W; tmp.height = Math.round(sliceH)
+        tmp.getContext('2d')!.drawImage(canvas, 0, y, W, sliceH, 0, 0, W, sliceH)
         if (!first) pdf.addPage()
         pdf.addImage(tmp.toDataURL('image/jpeg', 0.94), 'JPEG', 0, 0, 210, sliceH / pxPerMm)
         first = false
-        y += sliceH
+        y = cut
       }
       pdf.save(`Договор-${c?.number ?? ''}.pdf`)
     } finally { setBusy(false) }
