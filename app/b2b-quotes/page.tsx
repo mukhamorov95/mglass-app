@@ -855,6 +855,12 @@ export default function B2BQuotesPage() {
                         className="text-[11px] text-[#c4c4be] hover:text-violet-500 px-1.5 py-1 rounded hover:bg-violet-50 transition-colors">
                         КП
                       </Link>
+                      {/* Счёт-спецификация (КП + счёт с реквизитами и QR) */}
+                      <Link href={`/b2b-quotes/${quote.id}/invoice`} target="_blank"
+                        title="Счёт-спецификация (счёт с реквизитами и QR)"
+                        className="text-[11px] text-[#c4c4be] hover:text-emerald-600 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors">
+                        Счёт
+                      </Link>
                       {/* Редактировать в калькуляторе (та же запись; для копии — кнопка ⧉ рядом) */}
                       <Link href={`/calculator/b2b?orderId=${quote.id}`}
                         title="Редактировать в калькуляторе"

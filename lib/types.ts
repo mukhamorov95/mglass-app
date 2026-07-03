@@ -123,6 +123,18 @@ export type B2BClient = {
   crm_manager?: string | null
   crm_next_contact?: string | null  // DATE in DB, arrives as ISO string
   crm_notes?: string | null
+  // Реквизиты для «Счёт-спецификации» (заполняются один раз, автоподставляются в счёт)
+  full_name?: string | null          // Полное юр. наименование покупателя
+  inn?: string | null
+  kpp?: string | null
+  ogrn?: string | null
+  legal_address?: string | null
+  bank_account?: string | null       // Р/С
+  bank_name?: string | null
+  bik?: string | null
+  corr_account?: string | null       // К/С
+  supply_contract_no?: string | null
+  supply_contract_date?: string | null
 }
 
 // Interaction row from b2b_interactions table

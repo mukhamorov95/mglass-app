@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 
@@ -75,6 +75,22 @@ export default function KPPrintPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const docRef = useRef<HTMLDivElement>(null)
+
+  async function downloadPdf() {
+    if (!docRef.current) return
+    const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
+    const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+    const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+    const pw = 210, ph = 297
+    const imgH = pw * canvas.height / canvas.width
+    const img = canvas.toDataURL('image/jpeg', 0.94)
+    let pos = 0, left = imgH
+    pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+    left -= ph
+    while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
+    pdf.save(`КП-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
+  }
 
   useEffect(() => {
     if (!id) return
@@ -148,21 +164,30 @@ export default function KPPrintPage() {
         body { background: #f5f5f0; }
       `}</style>
 
-      {/* Print button — screen only */}
-      <div id="kp-print-btn" className="fixed top-4 right-4 z-50 print:hidden">
+      {/* Toolbar — screen only */}
+      <div id="kp-print-btn" className="fixed top-4 right-4 z-50 print:hidden flex gap-2">
         <button
-          onClick={() => document.fonts.ready.then(() => window.print())}
+          onClick={downloadPdf}
           className="bg-[#1a1a18] text-white text-sm px-4 py-2 rounded-lg shadow-lg hover:bg-[#2a2a26] transition-colors"
         >
-          Печать / PDF
+          ⬇ Скачать PDF
+        </button>
+        <button
+          onClick={() => document.fonts.ready.then(() => window.print())}
+          className="bg-white text-[#1a1a18] border border-[#e0e0da] text-sm px-4 py-2 rounded-lg shadow-lg hover:bg-[#f5f5f0] transition-colors"
+        >
+          🖨 Печать
         </button>
       </div>
 
       {/* KP Document */}
-      <div id="kp-document" className="max-w-[794px] mx-auto my-8 bg-white shadow-xl print:shadow-none print:my-0 text-[#1a1a18]">
+      <div ref={docRef} id="kp-document" className="max-w-[794px] mx-auto my-8 bg-white shadow-xl print:shadow-none print:my-0 text-[#1a1a18] overflow-hidden">
+
+        {/* Accent bar */}
+        <div className="h-1.5 bg-gradient-to-r from-[#1a1a18] via-[#1a1a18] to-emerald-500" />
 
         {/* Header */}
-        <div className="px-10 pt-10 pb-6 border-b border-[#e8e8e4]">
+        <div className="px-10 pt-9 pb-6 border-b border-[#e8e8e4]">
           <div className="flex items-start justify-between">
             <div>
               <div className="text-[22px] font-bold tracking-tight text-[#1a1a18]">
@@ -281,11 +306,11 @@ export default function KPPrintPage() {
                 <span className="font-mono">−{fmt(totalBase - totalFinal)}</span>
               </div>
             )}
-            <div className="flex justify-between items-center border-t-2 border-[#1a1a18] pt-2 mt-1">
-              <span className="text-[13px] font-bold">Итого к оплате</span>
-              <span className="text-[15px] font-bold font-mono">{fmt(totalFinal)}</span>
+            <div className="flex justify-between items-center bg-[#1a1a18] text-white rounded-lg px-3 py-2.5 mt-2">
+              <span className="text-[12px] font-semibold uppercase tracking-wide">Итого к оплате</span>
+              <span className="text-[17px] font-bold font-mono">{fmt(totalFinal)}</span>
             </div>
-            <div className="flex justify-between text-[10px] text-[#9b9b96] pt-0.5">
+            <div className="flex justify-between text-[10px] text-[#9b9b96] pt-1 px-1">
               <span>В том числе НДС 22%</span>
               <span className="font-mono">{fmt(Math.round(totalFinal * 22 / 122))}</span>
             </div>
@@ -328,13 +353,13 @@ export default function KPPrintPage() {
         {/* Footer */}
         <div className="px-10 py-5 bg-[#f8f8f5] border-t border-[#e8e8e4] flex items-center justify-between">
           <div>
-            <div className="text-[12px] font-semibold text-[#1a1a18]">MGlass</div>
-            <div className="text-[10px] text-[#6b6b66] mt-0.5">Производство стеклянных конструкций</div>
+            <div className="text-[12px] font-semibold text-[#1a1a18]">MGlass · Производство и монтаж стеклянных конструкций</div>
+            <div className="text-[10px] text-[#6b6b66] mt-0.5">Спасибо, что выбираете нас — сделаем качественно и в срок.</div>
           </div>
           <div className="text-right text-[10px] text-[#6b6b66] space-y-0.5">
-            <div>mglass.ru</div>
-            <div>+7 (495) 000-00-00</div>
-            <div>info@mglass.ru</div>
+            <div>mglass.pro</div>
+            <div>+7 (925) 933 50 33</div>
+            <div>mglass.ceo@gmail.com</div>
           </div>
         </div>
 

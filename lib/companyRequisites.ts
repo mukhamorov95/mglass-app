@@ -18,7 +18,33 @@ export const EXECUTOR = {
   warrantyMonths: 18,
 } as const
 
-// НДС включён в сумму: выделяем из итога (ставка 5% → total * 5/105).
+// Реквизиты Продавца для B2B (оптовое стекло листами) — отдельное юрлицо ООО, НДС 22%.
+// Розница идёт от ИП (EXECUTOR, НДС 5%), опт — от ООО. Источник: карточка предприятия + Счёт-спецификация №04872.
+export const SELLER_B2B = {
+  name: 'ООО «МЕТАЛ & ГЛАС МАНУФАКТУР»',
+  nameFull: 'ОБЩЕСТВО С ОГРАНИЧЕННОЙ ОТВЕТСТВЕННОСТЬЮ «МЕТАЛ & ГЛАС МАНУФАКТУР»',
+  director: 'Мухаморов Владислав Сергеевич',
+  directorGenitive: 'Мухаморова Владислава Сергеевича',
+  inn: '7716986980',
+  kpp: '771601001',
+  ogrn: '1237700622246',
+  phone: '+7 (925) 933 50 33',
+  email: 'mglass.ceo@gmail.com',
+  site: 'mglass.pro',
+  legalAddress: '129329, Москва, ул. Кольская, д.8, к.2, кв.204',
+  account: '40702810701300039842',
+  bankName: 'АО «АЛЬФА-БАНК»',
+  bik: '044525593',
+  corrAccount: '30101810200000000593',
+  vatRate: 22,
+} as const
+
+// Обобщённая форма продавца для платёжного QR / реквизитов.
+export type SellerRequisites = {
+  name: string; account: string; bankName: string; bik: string; corrAccount: string; inn: string
+}
+
+// НДС включён в сумму: выделяем из итога (по умолчанию 5% → total * 5/105; для B2B передавать 22).
 export function vatIncluded(total: number, rate = EXECUTOR.vatRate): number {
   return Math.round((total * rate / (100 + rate)) * 100) / 100
 }
