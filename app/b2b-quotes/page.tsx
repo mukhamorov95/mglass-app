@@ -451,26 +451,6 @@ export default function B2BQuotesPage() {
     setWorkDateId(null)
   }
 
-  async function approveQuote(id: number) {
-    const q = quotes.find(q => q.id === id)
-    if (!q) return
-    const parsed = parseNotes(q.notes)
-    const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
-    history.push({ from: 'pending_approval', to: 'agreed', date: new Date().toISOString(), comment: null })
-    const newNotes = JSON.stringify({
-      ...parsed,
-      status: 'agreed',
-      approved_at: new Date().toISOString(),
-      approved_by: currentUserId,
-      status_history: history,
-    })
-    const meta = buildUpdateMeta()
-    const { error } = await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
-    if (error) { showToast('Ошибка при согласовании'); return }
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
-    showToast('Согласовано ✓')
-  }
-
   // ── Load ───────────────────────────────────────────────────────────────────
   async function loadQuotes() {
     setLoading(true)
@@ -822,24 +802,13 @@ export default function B2BQuotesPage() {
 
                     {/* Status actions */}
                     <div className="flex items-center gap-1">
-                      {status === 'quote' && (
+                      {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
+                      {(status === 'quote' || status === 'agreed') && (
                         <button
                           onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); const dl = new Date(); dl.setDate(dl.getDate() + 14); setWorkDeadline(dl.toISOString().slice(0, 10)) }}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
-                      )}
-                      {status === 'pending_approval' && (userRole === 'admin' || userRole === 'ceo') && (
-                        <button
-                          onClick={() => approveQuote(quote.id)}
-                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 transition-colors whitespace-nowrap">
-                          Согласовать ✓
-                        </button>
-                      )}
-                      {status === 'pending_approval' && userRole !== 'admin' && userRole !== 'ceo' && (
-                        <span className="text-[11px] px-2 py-1 rounded-lg bg-amber-50 text-amber-600 border border-amber-200 whitespace-nowrap">
-                          Ожидает согласования
-                        </span>
                       )}
                       {status === 'sent' && (<>
                         <button onClick={() => requestStatusChange(quote.id, 'agreed')}
