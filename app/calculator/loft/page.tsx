@@ -213,9 +213,7 @@ export default function LoftCalculatorPage() {
   })
   const selectedGlass   = glassMaterials.find(m => m.id === glassId) ?? null
 
-  // Загружаем waste_pct и цену стекла из glass_price_matrix при смене стекла.
-  // Лофт отвязан от ПРОДАЖНОЙ цены стекла (она = цена B2B-клиенту и растёт вместе
-  // с маржой B2B). Как базу лофта берём СЕБЕСТОИМОСТЬ — свою маржу лофт накидывает сам.
+  // Load waste_pct (cost row) and sale price (sale row) from glass_price_matrix when glass changes
   useEffect(() => {
     if (!selectedGlass) { setGlassWastePct(0); setGlassCalcPrice(undefined); return }
 
@@ -225,14 +223,14 @@ export default function LoftCalculatorPage() {
     const mm        = nameMatch ? parseInt(nameMatch[2]) : 4
     const tKey      = `t${mm}` as 't4' | 't5' | 't6' | 't8' | 't10' | 't12'
 
-    supabase.from('glass_price_matrix')
-      .select('waste_pct,t4,t5,t6,t8,t10,t12')
-      .eq('price_type', 'cost').eq('category', 'glass').eq('name', typeName).maybeSingle()
-      .then(costRes => {
-        setGlassWastePct(costRes.data?.waste_pct ?? 0)
-        const costPrice = (costRes.data as Record<string, number | null> | null)?.[tKey] ?? null
-        setGlassCalcPrice(costPrice ?? undefined)
-      })
+    Promise.all([
+      supabase.from('glass_price_matrix').select('waste_pct').eq('price_type', 'cost').eq('category', 'glass').eq('name', typeName).maybeSingle(),
+      supabase.from('glass_price_matrix').select('t4,t5,t6,t8,t10,t12').eq('price_type', 'sale').eq('category', 'glass').eq('name', typeName).maybeSingle(),
+    ]).then(([costRes, saleRes]) => {
+      setGlassWastePct(costRes.data?.waste_pct ?? 0)
+      const salePrice = (saleRes.data as Record<string, number | null> | null)?.[tKey] ?? null
+      setGlassCalcPrice(salePrice ?? undefined)
+    })
   }, [selectedGlass?.id])
   const selectedPartner = partners.find(p => p.id === partnerId) ?? null
   const minMargin       = strategy.min_margin

@@ -160,7 +160,7 @@ export default function ShowerCalculatorPage() {
         supabase.from('shower_catalog_prices').select('id,item_id,supplier_id,color_id,cost_price'),
         supabase.from('shower_hw_colors').select('*').eq('active', true).order('sort_order'),
         supabase.from('shower_hw_suppliers').select('*').eq('active', true).order('name'),
-        supabase.from('glass_price_matrix').select('name,t4,t5,t6,t8,t10,t12').eq('price_type', 'cost').eq('category', 'glass'),
+        supabase.from('glass_price_matrix').select('name,t4,t5,t6,t8,t10,t12').eq('price_type', 'sale').eq('category', 'glass'),
         fetch('/api/admin/pricing-formula'),
       ])
       setMaterials(mats ?? [])
