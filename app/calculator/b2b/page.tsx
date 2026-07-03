@@ -1181,9 +1181,12 @@ export default function B2BCalculatorPage() {
                   )}
                 </div>
                 {items.length > 0 && (
-                  <button onClick={() => setItems([])} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
-                    Очистить всё
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[11px] text-[#9a9a95] hidden sm:inline">✎ нажмите на позицию, чтобы изменить</span>
+                    <button onClick={() => setItems([])} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                      Очистить всё
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -1217,7 +1220,9 @@ export default function B2BCalculatorPage() {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
                         const em = effectiveItemMargin(item, discount)
                         return (
-                          <tr key={item.localId} className="hover:bg-[#fafaf9] transition-colors">
+                          <tr key={item.localId} onClick={() => openEdit(item)}
+                            title="Нажмите, чтобы изменить позицию"
+                            className="hover:bg-[#f0f0ec] transition-colors cursor-pointer">
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
                               <div className="font-medium text-[#111110]">{item.materialName}</div>
@@ -1271,15 +1276,15 @@ export default function B2BCalculatorPage() {
                             </td>
                             <td className="px-3 py-2.5">
                               <div className="flex items-center gap-1 justify-center">
-                                <button onClick={() => openEdit(item)} title="Редактировать"
+                                <button onClick={(e) => { e.stopPropagation(); openEdit(item) }} title="Редактировать"
                                   className="text-[11px] text-[#c4c4be] hover:text-[#111110] transition-colors px-1.5 py-0.5 rounded hover:bg-[#f0f0ec] leading-none">
                                   ✎
                                 </button>
-                                <button onClick={() => copyItem(item.localId)} title="Дублировать строку"
+                                <button onClick={(e) => { e.stopPropagation(); copyItem(item.localId) }} title="Дублировать строку"
                                   className="text-[11px] text-[#c4c4be] hover:text-blue-500 transition-colors px-1.5 py-0.5 rounded hover:bg-blue-50 leading-none">
                                   ⧉
                                 </button>
-                                <button onClick={() => removeItem(item.localId)}
+                                <button onClick={(e) => { e.stopPropagation(); removeItem(item.localId) }}
                                   className="text-[#c4c4be] hover:text-red-400 transition-colors text-lg leading-none">×</button>
                               </div>
                             </td>
@@ -1553,6 +1558,14 @@ export default function B2BCalculatorPage() {
       const eThickMats     = sortByPriority(eCatMats.filter(m => m.thickness === eThickness))
       const eSelectedMat   = materials.find(m => m.id === eMatId) ?? null
       const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0
+      // Живой пересчёт: сумма позиции обновляется по мере изменения полей.
+      const ePreviewItem   = eCanSave
+        ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
+            resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
+            eFacet, eFacet ? eFacetMm : null, facetPrices), localId: '' }
+        : null
+      const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
+      const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null
 
       return (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center p-4">
@@ -1764,7 +1777,23 @@ export default function B2BCalculatorPage() {
                   placeholder="Комментарий к позиции..." />
               </div>
 
+              {/* Живой пересчёт суммы позиции */}
+              {ePreviewTotal !== null && (
+                <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#f8f8f7] border border-[#e8e8e4]">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-[#8a8a85]">Итого позиции{discount > 0 ? ` (−${discount}%)` : ''}</span>
+                  <span className="flex items-center gap-2">
+                    <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!)}`}>{ePreviewMargin}%</span>
+                    <span className="text-[16px] font-bold font-mono text-[#111110]">{ePreviewTotal.toLocaleString('ru-RU')} ₽</span>
+                  </span>
+                </div>
+              )}
+
               <div className="flex gap-2 pt-1">
+                <button onClick={() => { const id = editingLocalId; cancelEdit(); if (id) removeItem(id) }}
+                  title="Удалить позицию"
+                  className="py-2.5 px-3 rounded-lg border border-red-200 text-[13px] font-medium text-red-500 hover:bg-red-50 transition-colors">
+                  Удалить
+                </button>
                 <button onClick={cancelEdit}
                   className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66] hover:bg-[#f8f8f7] transition-colors">
                   Отмена

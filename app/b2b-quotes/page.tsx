@@ -358,10 +358,14 @@ export default function B2BQuotesPage() {
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: getStatus(q), to: newStatus, date: new Date().toISOString(), comment: null })
-    const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history })
+    // Возврат в черновик снимает признак запуска (колонку и notes), чтобы просчёт снова
+    // грузился в этот список (мы грузим только launched_at IS NULL).
+    const revertToDraft = newStatus === 'quote'
+    const newNotes = JSON.stringify({ ...parsed, status: newStatus, status_history: history, ...(revertToDraft ? { launched_at: undefined } : {}) })
     const meta = buildUpdateMeta()
-    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
-    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
+    const patch = { notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) }
+    await createClient().from('b2b_orders').update(patch).eq('id', id)
+    setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta, ...(revertToDraft ? { launched_at: null } : {}) } : x))
     showToast(`Статус → ${STATUS_META[newStatus as QuoteStatus]?.label ?? newStatus}`)
   }
 
@@ -475,10 +479,15 @@ export default function B2BQuotesPage() {
       setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
       const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
 
+      // Запущенные в производство (launched_at выставлен) живут в /b2b-orders и в этом
+      // списке не показываются ни в одной вкладке — не грузим их вовсе. Это режет выборку
+      // с тысяч строк до десятков и убирает долгую загрузку. Возврат в черновик обнуляет
+      // launched_at (см. setStatusDirect), поэтому восстановленные просчёты снова попадают сюда.
       let ordersQuery = sb
         .from('b2b_orders')
         .select('*')
         .is('archived_at', null)
+        .is('launched_at', null)
         .order('created_at', { ascending: false })
         .limit(2000)
 
