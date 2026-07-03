@@ -239,7 +239,7 @@ export function ShowerModelIcon({ modelId, active }: Props) {
   }
 
   return (
-    <div className="w-full h-16">
+    <div className="w-full h-full p-1.5 [&>svg]:w-full [&>svg]:h-full">
       {icons[modelId] ?? null}
     </div>
   )

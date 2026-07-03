@@ -99,6 +99,9 @@ export default function ShowerCalculatorPage() {
   const [hwColors, setHwColors]           = useState<HwColor[]>([])
   const [hwSuppliers, setHwSuppliers]     = useState<HwSupplier[]>([])
   const [budgetManualPrices, setBudgetManualPrices] = useState<{ model_id: string; color_id: number; price: number }[]>([])
+  // Фото моделей из админки (/admin/shower-images → shower_model_images). Если фото
+  // загружено — показываем его, иначе единую SVG-иллюстрацию ShowerModelIcon.
+  const [modelPhotos, setModelPhotos] = useState<Record<string, string>>({})
   // glass_price_matrix sale rows: name → { t4, t6, t8, t10, t12, … }
   const [glassMatrix, setGlassMatrix]     = useState<Record<string, Record<string, number | null>>>({})
   const [loading, setLoading]     = useState(true)
@@ -257,6 +260,18 @@ export default function ShowerCalculatorPage() {
       .eq('model_id', modelId)
       .then(({ data }) => setBudgetManualPrices((data ?? []) as { model_id: string; color_id: number; price: number }[]))
   }, [tier, modelId])
+
+  // Фото моделей из админки (загруженные в /admin/shower-images). GET открыт.
+  useEffect(() => {
+    fetch('/api/admin/shower-images')
+      .then(r => r.ok ? r.json() : [])
+      .then((rows: { model_id: string; image_url: string }[]) => {
+        const map: Record<string, string> = {}
+        for (const row of (rows ?? [])) if (row.image_url) map[row.model_id] = row.image_url
+        setModelPhotos(map)
+      })
+      .catch(() => {})
+  }, [])
 
   const filteredCatalogItems = useMemo(() =>
     catalogItems.filter(item => {
@@ -522,22 +537,6 @@ export default function ShowerCalculatorPage() {
           </div>
         </div>
 
-        {/* ── Quick presets ─────────────────────────────────── */}
-        <div className="flex items-center gap-2 mb-3 overflow-x-auto pb-1">
-          <span className="text-[11px] font-semibold text-[#86868b] flex-shrink-0 whitespace-nowrap">Быстрый старт:</span>
-          {([
-            { l: 'Распашная хром 90×200',  action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('900');  setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(false); setDiscount('0'); } },
-            { l: 'Распашная хром 120×200', action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('1200'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(true);  setDiscount('0'); } },
-            { l: 'Раздвижная 120×200',     action: () => { setTier('standard'); setStdShowerType('sliding');  setWidth('1200'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(true);  setDiscount('0'); } },
-            { l: 'Premium Black 120×200',  action: () => { setTier('standard'); setStdShowerType('swing');    setWidth('1200'); setHeight('2000'); setGlassType('Осветлённое CrystalVision'); setWithMounting(true); setDiscount('0'); } },
-            { l: 'Стационарная 80×200',    action: () => { setTier('standard'); setStdShowerType('stationary'); setWidth('800'); setHeight('2000'); setGlassType(GLASS_TYPES[0]); setWithMounting(false); setDiscount('0'); } },
-          ] as { l: string; action: () => void }[]).map(p => (
-            <button key={p.l} onClick={p.action}
-              className="px-3 py-1.5 text-[12px] font-medium bg-white border border-[#e8e8ed] rounded-[10px] hover:border-[#0071e3] hover:text-[#0071e3] whitespace-nowrap flex-shrink-0 transition-colors">
-              {p.l}
-            </button>
-          ))}
-        </div>
 
         {/* ── Конфигуратор ──────────────────────────────────── */}
         <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4 mb-4">
@@ -622,9 +621,9 @@ export default function ShowerCalculatorPage() {
                         className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${
                           active ? 'border-[#0071e3] bg-[#f0f7ff]' : 'border-[#e8e8ed] hover:border-[#c7c7cc]'
                         }`}>
-                        <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center ${active ? 'bg-white' : 'bg-[#f5f5f7]'} ${m.image_url ? 'h-[108px]' : 'p-1'}`}>
-                          {m.image_url ? (
-                            <img src={m.image_url} alt={m.label}
+                        <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[96px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
+                          {modelPhotos[m.id] ? (
+                            <img src={modelPhotos[m.id]} alt={m.label}
                               className="w-full h-full object-contain" />
                           ) : (
                             <ShowerModelIcon modelId={m.id as ShowerModelId} active={active} />

@@ -29,21 +29,22 @@ export type ShowerModel = {
   image_url?: string
 }
 
-const IMG = (id: string) => `/images/shower-models/budget/${id}.jpg`
-
+// Картинки моделей: по умолчанию единая SVG-иллюстрация (components/ShowerModelIcon),
+// либо загруженное в админке фото (/admin/shower-images → shower_model_images).
+// Статические image_url убраны — файлов почти не было (битые заглушки → «стрёмно»).
 export const SHOWER_MODELS: ShowerModel[] = [
-  { id: 'M1',  label: 'М1',  desc: 'Стационарная панель',             glassCount: 1, dimType: 'single', hardwareBase: 4000,  hardwareType: 'stationary', image_url: IMG('M1')  },
-  { id: 'M2',  label: 'М2',  desc: 'Неподвижное + распашная дверь',   glassCount: 2, dimType: 'single', hardwareBase: 13000, hardwareType: 'swing'                             },
-  { id: 'M3',  label: 'М3',  desc: 'Распашная дверь + неподвижное',   glassCount: 2, dimType: 'single', hardwareBase: 13000, hardwareType: 'swing',      image_url: IMG('M3')  },
-  { id: 'M4',  label: 'М4',  desc: '2 неподвижных + распашная дверь', glassCount: 3, dimType: 'corner', hardwareBase: 17000, hardwareType: 'swing'                             },
-  { id: 'M5',  label: 'М5',  desc: 'Только распашная дверь',          glassCount: 1, dimType: 'single', hardwareBase: 9000,  hardwareType: 'swing'                             },
-  { id: 'M6',  label: 'М6',  desc: 'Угловая: панель + дверь',         glassCount: 2, dimType: 'corner', hardwareBase: 15000, hardwareType: 'swing'                             },
-  { id: 'M7',  label: 'М7',  desc: 'Угловая: 2 панели + дверь',       glassCount: 3, dimType: 'corner', hardwareBase: 18000, hardwareType: 'swing',      image_url: IMG('M7')  },
-  { id: 'M8',  label: 'М8',  desc: 'Угловая: 2 раздвижных двери',     glassCount: 4, dimType: 'corner', hardwareBase: 22000, hardwareType: 'sliding',    image_url: IMG('M8')  },
-  { id: 'M9',  label: 'М9',  desc: 'Угловая: раздвижная + 2 панели',  glassCount: 3, dimType: 'corner', hardwareBase: 17000, hardwareType: 'sliding',    image_url: IMG('M9')  },
-  { id: 'M10', label: 'М10', desc: 'Раздвижная прямая',               glassCount: 2, dimType: 'single', hardwareBase: 12000, hardwareType: 'sliding',    image_url: IMG('M10') },
-  { id: 'M11', label: 'М11', desc: 'Трапециевидная с дверью',         glassCount: 2, dimType: 'single', hardwareBase: 14000, hardwareType: 'swing',      image_url: IMG('M11') },
-  { id: 'M12', label: 'М12', desc: 'Раздвижная (вариант)',             glassCount: 2, dimType: 'single', hardwareBase: 12000, hardwareType: 'sliding'                           },
+  { id: 'M1',  label: 'М1',  desc: 'Стационарная панель',             glassCount: 1, dimType: 'single', hardwareBase: 4000,  hardwareType: 'stationary' },
+  { id: 'M2',  label: 'М2',  desc: 'Неподвижное + распашная дверь',   glassCount: 2, dimType: 'single', hardwareBase: 13000, hardwareType: 'swing'      },
+  { id: 'M3',  label: 'М3',  desc: 'Распашная дверь + неподвижное',   glassCount: 2, dimType: 'single', hardwareBase: 13000, hardwareType: 'swing'      },
+  { id: 'M4',  label: 'М4',  desc: '2 неподвижных + распашная дверь', glassCount: 3, dimType: 'corner', hardwareBase: 17000, hardwareType: 'swing'      },
+  { id: 'M5',  label: 'М5',  desc: 'Только распашная дверь',          glassCount: 1, dimType: 'single', hardwareBase: 9000,  hardwareType: 'swing'      },
+  { id: 'M6',  label: 'М6',  desc: 'Угловая: панель + дверь',         glassCount: 2, dimType: 'corner', hardwareBase: 15000, hardwareType: 'swing'      },
+  { id: 'M7',  label: 'М7',  desc: 'Угловая: 2 панели + дверь',       glassCount: 3, dimType: 'corner', hardwareBase: 18000, hardwareType: 'swing'      },
+  { id: 'M8',  label: 'М8',  desc: 'Угловая: 2 раздвижных двери',     glassCount: 4, dimType: 'corner', hardwareBase: 22000, hardwareType: 'sliding'    },
+  { id: 'M9',  label: 'М9',  desc: 'Угловая: раздвижная + 2 панели',  glassCount: 3, dimType: 'corner', hardwareBase: 17000, hardwareType: 'sliding'    },
+  { id: 'M10', label: 'М10', desc: 'Раздвижная прямая',               glassCount: 2, dimType: 'single', hardwareBase: 12000, hardwareType: 'sliding'    },
+  { id: 'M11', label: 'М11', desc: 'Трапециевидная с дверью',         glassCount: 2, dimType: 'single', hardwareBase: 14000, hardwareType: 'swing'      },
+  { id: 'M12', label: 'М12', desc: 'Раздвижная (вариант)',            glassCount: 2, dimType: 'single', hardwareBase: 12000, hardwareType: 'sliding'    },
 ]
 
 export type TierConfig = {
