@@ -1,4 +1,13 @@
-## КП-ПЕЧАТЬ: ЧИСТАЯ ВЁРСТКА (2026-07-03, последнее)
+## ЗАКУПЩИК ВЕРА: +ПРОИЗВОДСТВО (2026-07-03, последнее)
+Вера (`zakupka@mglass.ru`, role=buyer, permissions.b2b_client_scope=`mglass_only`, see_all_orders=true, manager_code=6). Была: закупщик-секции + B2B M GLASS (менеджер, калькулятор заперт на клиента M GLASS). Добавлено производство (`5ca28c4`, прод):
+- `lib/getRole.ts`: scoped-buyer пути += `/production-app`, `/p/o`.
+- `app/production-app/layout.tsx`: пускает scoped-buyer (getUserProfile + isMGlassOnlyUser, защита в глубину).
+- `app/production-app/supervisor/page.tsx`: панель надзора открыта scoped-buyer, не только owner (было isOwnerRole).
+- `components/Sidebar.tsx`: раздел «Производство» (Производство + Панель производства) для scoped-buyer + авто-раскрытие на /production-app.
+- `app/b2b-quotes/page.tsx`: buyer в canSeeAll (видит ВСЕ просчёты независимо от see_all_orders; заказы buyer уже видел все).
+- Проверено: build ✓; owner-доступ к /production-app/supervisor не сломан (регрессия ок). Сайдбар Веры вживую не снимал — нужна её сессия (пароль не ввожу). На след. загрузке у неё появится «Производство».
+
+## КП-ПЕЧАТЬ: ЧИСТАЯ ВЁРСТКА (2026-07-03)
 Правки печатной формы КП (`38362ad`, на проде, проверено вживую на `/kp/10/print` — KP-0174-0):
 - Убран блок «КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ + название изделия» и красный ИТОГО-бокс справа (`.kp-titleblk`/`.kp-totalbox`).
 - Убран раздел «ОБЪЕКТ · СПЕЦИФИКАЦИЯ» (`.kp-spec`) — описание теперь только в смете (name+desc+qty+price, `.ds` поддерживает доп.описание).
