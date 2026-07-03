@@ -70,6 +70,30 @@ function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
   return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
 }
 
+// Сопоставление распознанной с чертежа детали (толщина + тип стекла словами) с
+// материалом из справочника b2b_materials. Best-effort: сначала по толщине, затем
+// по категории/названию; фолбэк — первый материал нужной толщины. Менеджер правит.
+type ParsedDrawingItem = {
+  label?: string; width_mm?: number; height_mm?: number; thickness_mm?: number
+  material?: string; quantity?: number; holes?: number; cutouts?: number
+  tempering?: boolean; notes?: string
+}
+function matchDrawingMaterial(mats: B2BMaterial[], thickness: number, matStr: string): B2BMaterial | null {
+  if (!mats.length) return null
+  const th = thickness > 0 ? thickness : 8
+  let pool = mats.filter(m => m.thickness === th)
+  if (!pool.length) pool = mats
+  const s = (matStr || '').toLowerCase()
+  const has = (...kw: string[]) => kw.some(k => s.includes(k))
+  let cat: string | null = null
+  if (has('зеркал', 'mirror'))                         cat = 'зеркал'
+  else if (has('бронз', 'тонир', 'графит', 'tint'))    cat = 'тонир'
+  else if (has('сатин', 'матов', 'matt', 'frost'))     cat = 'сатин'
+  else if (has('осветл', 'crystal', 'ультра', 'опти')) cat = 'светл'
+  const byCat = cat ? pool.find(m => (m.category + ' ' + m.name).toLowerCase().includes(cat!)) : null
+  return byCat ?? pool[0] ?? mats[0] ?? null
+}
+
 function minPriceReasonLabel(reason: MinPriceReason): string {
   if (reason === 'glass_tempering')     return 'мин. цена (стекло+закалка)'
   if (reason === 'tinted_tempering')    return 'мин. цена (тонировка+закалка)'
@@ -157,6 +181,8 @@ export default function B2BCalculatorPage() {
   const qtyRef = useRef<HTMLInputElement>(null)
   const [attachFile, setAttachFile]   = useState<File | null>(null)
   const attachInputRef = useRef<HTMLInputElement>(null)
+  const [parsingDrawing, setParsingDrawing] = useState(false)
+  const [drawingInfo, setDrawingInfo] = useState<{ added: number; skipped: number; holes: number; cutouts: number; warnings: string[] } | null>(null)
 
   // Edit modal state
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null)
@@ -425,6 +451,54 @@ export default function B2BCalculatorPage() {
     setFCurved(false)
     setSavedOrderId(null)   // изменили состав — можно снова сохранить
     widthRef.current?.focus()
+  }
+
+  // Распознать прикреплённый чертёж (PDF/фото) → позиции справа.
+  async function parseDrawing() {
+    if (!attachFile) return
+    setParsingDrawing(true)
+    setDrawingInfo(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', attachFile)
+      const res = await fetch('/api/ai/parse-drawing', { method: 'POST', body: fd })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok || !json.parsed) {
+        setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: [json.detail || json.error || 'Не удалось распознать файл'] })
+        return
+      }
+      const p = json.parsed as { is_drawing?: boolean; items?: ParsedDrawingItem[]; warnings?: string[] }
+      const warnings = [...(p.warnings ?? [])]
+      if (p.is_drawing === false || !(p.items ?? []).length) {
+        setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: warnings.length ? warnings : ['Файл не распознан как чертёж деталей с размерами.'] })
+        return
+      }
+      const newItems: B2BOrderItem[] = []
+      let holes = 0, cutouts = 0, skipped = 0
+      for (const it of (p.items ?? [])) {
+        const w = Number(it.width_mm) || 0
+        const h = Number(it.height_mm) || 0
+        if (w <= 0 || h <= 0) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: размер не распознан — добавьте вручную`); continue }
+        const mat = matchDrawingMaterial(materials, Number(it.thickness_mm) || 0, it.material ?? '')
+        if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
+        const q = Math.max(1, Number(it.quantity) || 1)
+        const temp = !!it.tempering
+        const waste = mat.passthrough ? 10 : mat.waste_percent
+        const calc = calcItem(mat, w, h, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
+        const hh = Number(it.holes) || 0
+        const cc = Number(it.cutouts) || 0
+        holes += hh * q
+        cutouts += cc * q
+        const cparts = [it.label, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
+        newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
+      }
+      if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
+      setDrawingInfo({ added: newItems.length, skipped, holes, cutouts, warnings })
+    } catch (e) {
+      setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: ['Ошибка: ' + (e instanceof Error ? e.message : String(e))] })
+    } finally {
+      setParsingDrawing(false)
+    }
   }
 
   function handleWidthKeyDown(e: React.KeyboardEvent) {
@@ -1125,15 +1199,21 @@ export default function B2BCalculatorPage() {
                 Чертёж / файл клиента
               </label>
               {attachFile ? (
-                <div className="flex items-center gap-2 px-3 py-2 border border-[#e4e4e0] rounded-lg bg-[#f8f8f7]">
-                  <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
-                  <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
-                    {attachFile.size < 1024 * 1024
-                      ? `${(attachFile.size / 1024).toFixed(0)} КБ`
-                      : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
-                  </span>
-                  <button onClick={() => setAttachFile(null)}
-                    className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 px-3 py-2 border border-[#e4e4e0] rounded-lg bg-[#f8f8f7]">
+                    <span className="text-[11px] text-[#111110] flex-1 truncate font-medium">{attachFile.name}</span>
+                    <span className="text-[10px] text-[#9a9a95] flex-shrink-0">
+                      {attachFile.size < 1024 * 1024
+                        ? `${(attachFile.size / 1024).toFixed(0)} КБ`
+                        : `${(attachFile.size / (1024 * 1024)).toFixed(1)} МБ`}
+                    </span>
+                    <button onClick={() => { setAttachFile(null); setDrawingInfo(null) }}
+                      className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
+                  </div>
+                  <button onClick={parseDrawing} disabled={parsingDrawing}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-[#2a2a28] disabled:opacity-50 transition-colors">
+                    {parsingDrawing ? 'Распознаю чертёж…' : '🔍 Распознать чертёж → позиции'}
+                  </button>
                 </div>
               ) : (
                 <button onClick={() => attachInputRef.current?.click()}
@@ -1145,6 +1225,26 @@ export default function B2BCalculatorPage() {
                 accept=".pdf,.jpg,.jpeg,.png,.heic,.heif,.doc,.docx,.xls,.xlsx"
                 className="hidden"
                 onChange={e => setAttachFile(e.target.files?.[0] ?? null)} />
+
+              {drawingInfo && (
+                <div className={`mt-2 rounded-lg border px-3 py-2 text-[11px] ${drawingInfo.added > 0 ? 'border-emerald-200 bg-emerald-50' : 'border-amber-200 bg-amber-50'}`}>
+                  {drawingInfo.added > 0
+                    ? <p className="font-semibold text-emerald-800">✓ Добавлено позиций: {drawingInfo.added}{drawingInfo.skipped > 0 ? ` · пропущено: ${drawingInfo.skipped}` : ''}</p>
+                    : <p className="font-semibold text-amber-800">Позиции не добавлены</p>}
+                  {(drawingInfo.holes > 0 || drawingInfo.cutouts > 0) && (
+                    <p className="mt-1 text-[#6b6b66]">
+                      Сложность: {drawingInfo.holes > 0 && `${drawingInfo.holes} отв.`} {drawingInfo.cutouts > 0 && `· ${drawingInfo.cutouts} слож. вырез(ов)`}
+                      {drawingInfo.cutouts > 0 && <span className="text-amber-700"> — трудоёмко, заложите наценку</span>}
+                      <span className="text-[#9a9a95]"> (точный тариф по операциям — с прайс-листом)</span>
+                    </p>
+                  )}
+                  {drawingInfo.warnings.length > 0 && (
+                    <ul className="mt-1 space-y-0.5 text-[#8a6d3b] list-disc list-inside">
+                      {drawingInfo.warnings.slice(0, 6).map((w, i) => <li key={i}>{w}</li>)}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Примечание к заказу */}
