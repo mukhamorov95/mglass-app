@@ -103,8 +103,14 @@ export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
         <tr><td><b>Всего к оплате:</b></td><td className="r"><b>{RUB(prepay)}</b></td></tr>
       </tbody></table>
       <div className="inv-sign">
-        Руководитель предприятия ______________________ / {EXECUTOR.fio} /
-        <div className="stamp-slot">М.П.</div>
+        Руководитель предприятия
+        <span className="inv-sig-wrap">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img className="inv-signature" src="/signature.png" alt="" />
+        </span>
+        / {EXECUTOR.fio} /
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img className="inv-stamp" src="/stamp.png" alt="" />
       </div>
     </div>
   )
@@ -226,7 +232,15 @@ export function ContractDocument({ c }: { c: ContractContent }) {
 
       <h3>11. ЮРИДИЧЕСКИЕ АДРЕСА И РЕКВИЗИТЫ СТОРОН</h3>
       <div className="c-req">
-        <div><b>Исполнитель:</b><br />{EXECUTOR.name}<br />ИНН {EXECUTOR.inn}, ОГРНИП {EXECUTOR.ogrnip}<br />{EXECUTOR.legalAddress}<br />Счёт: {EXECUTOR.account}<br />{EXECUTOR.bankName}, БИК {EXECUTOR.bik}, К/С {EXECUTOR.corrAccount}<br /><br />__________________ / {EXECUTOR.fioShort} /</div>
+        <div><b>Исполнитель:</b><br />{EXECUTOR.name}<br />ИНН {EXECUTOR.inn}, ОГРНИП {EXECUTOR.ogrnip}<br />{EXECUTOR.legalAddress}<br />Счёт: {EXECUTOR.account}<br />{EXECUTOR.bankName}, БИК {EXECUTOR.bik}, К/С {EXECUTOR.corrAccount}
+          <div className="c-sign">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="c-signature" src="/signature.png" alt="" />
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className="c-stamp" src="/stamp.png" alt="" />
+            <span className="c-sign-line">__________________ / {EXECUTOR.fioShort} /</span>
+          </div>
+        </div>
         <div><b>Заказчик:</b><br />{cust}<br /><br />__________________ /                          /</div>
       </div>
     </div>

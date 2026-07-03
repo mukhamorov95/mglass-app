@@ -40,8 +40,15 @@ const CSS = `
 .inv-items td.r{text-align:right}
 .inv-tot{width:45%;margin-left:auto;border-collapse:collapse;font-size:10pt;margin-bottom:24px}
 .inv-tot td{padding:4px 8px}.inv-tot td.r{text-align:right}
-.inv-sign{margin-top:30px;font-size:10pt;position:relative}
-.stamp-slot{position:absolute;left:150px;top:-30px;color:#9a9a95;font-size:11pt;border:1px dashed #c9c9c4;border-radius:50%;width:90px;height:90px;display:flex;align-items:center;justify-content:center}
+.inv-sign{margin-top:44px;font-size:10pt;position:relative;padding-bottom:64px}
+.inv-sig-wrap{display:inline-block;width:170px;border-bottom:1px solid #333;position:relative;vertical-align:bottom;margin:0 8px;height:1px}
+.inv-signature{position:absolute;left:16px;bottom:-2px;height:56px}
+.inv-stamp{position:absolute;left:210px;top:-42px;height:120px;opacity:.92}
+/* подпись+печать в договоре (блок Исполнителя) */
+.c-sign{position:relative;margin-top:14px;height:92px}
+.c-signature{position:absolute;left:2px;top:-4px;height:50px}
+.c-stamp{position:absolute;left:74px;top:-22px;height:98px;opacity:.9}
+.c-sign-line{position:absolute;left:0;bottom:8px;font-size:9.5pt}
 @media print{.dc-scope{background:#fff}.dc-toolbar{display:none}.doc-page{box-shadow:none;margin:0}}
 `
 
