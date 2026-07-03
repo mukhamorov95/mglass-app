@@ -1,245 +1,113 @@
-import type { ReactElement } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import type { ShowerModelId } from '@/lib/showerCalculator'
 
 type Props = { modelId: ShowerModelId; active: boolean }
 
-export function ShowerModelIcon({ modelId, active }: Props) {
-  const fr  = active ? '#1e293b' : '#475569'  // профиль
-  const bg  = active ? '#dbeafe' : '#f1f5f9'  // фон (стена)
-  const gf  = active ? '#e0f2fe' : '#f8fafc'  // стекло
-  const gs  = active ? '#0369a1' : '#94a3b8'  // обводка стекла
-  const ac  = active ? '#2563eb' : '#94a3b8'  // дуга / стрелки
-  const wl  = active ? '#bfdbfe' : '#e2e8f0'  // цвет стены (план)
+// Единый иллюстрированный набор моделей душевых. Структура конфигураций взята с
+// berusteklo (M1–M12), но отрисовка — своя: фронтальный вид, стекло с бликом,
+// рамка/профиль, индикаторы двери (дуга распашной / стрелки раздвижной), для угловых —
+// боковая возвратная панель в перспективе. Дизайн единый для всех 12.
+export function ShowerModelIcon({ modelId, active }: Props): ReactElement {
+  const glass  = active ? '#cfe6fb' : '#e9f1f8'   // стекло
+  const gs     = active ? '#4a90d9' : '#aebfce'   // обводка стекла
+  const fr      = active ? '#2b4a6b' : '#7b8a99'  // профиль/рамка
+  const ac     = active ? '#2f6fd0' : '#a2b3c3'   // дуги/стрелки
+  const hdl    = active ? '#3b6aa0' : '#9fadbb'   // ручка
+  const wall   = active ? '#eef5fc' : '#f5f8fb'   // фон-стена
+  const floor  = active ? '#dbe7f2' : '#e7edf3'   // пол
 
-  // ── стекло с тонким бликом ────────────────────────────────────────────
-  const G = (x: number, y: number, w: number, h: number, op = 0.85) => (
-    <>
-      <rect x={x} y={y} width={w} height={h}
-        fill={gf} fillOpacity={op} stroke={gs} strokeWidth="1"/>
-      <line x1={x+3} y1={y+3} x2={x+3} y2={y+h-3}
-        stroke="white" strokeWidth="2" strokeOpacity="0.7"/>
-    </>
+  // Стеклянная панель со стеклянным бликом.
+  const Panel = (x: number, y: number, w: number, h: number, op = 1) => (
+    <g key={`p${x}-${y}`}>
+      <rect x={x} y={y} width={w} height={h} rx="1.5" fill={glass} fillOpacity={op} stroke={gs} strokeWidth="0.9" />
+      <polygon points={`${x + 3},${y + 2} ${x + 7},${y + 2} ${x + 4.5},${y + h - 2} ${x + 0.5},${y + h - 2}`}
+        fill="#ffffff" fillOpacity="0.5" />
+    </g>
+  )
+  // Вертикальный профиль-разделитель.
+  const Post = (x: number, y = 10, h = 50) => <rect key={`v${x}`} x={x} y={y} width="2.4" height={h} rx="1" fill={fr} />
+  // Ручка.
+  const Handle = (x: number, y = 32) => <rect key={`h${x}`} x={x} y={y} width="2.2" height="9" rx="1.1" fill={hdl} />
+  // Дуга открывания распашной двери.
+  const Arc = (d: string) => <path key={d} d={d} stroke={ac} strokeWidth="1.1" strokeDasharray="2.6,2" fill="none" strokeLinecap="round" />
+  // Стрелка раздвижения.
+  const Arrow = (cx: number, y: number, dir: 1 | -1) => (
+    <g key={`a${cx}-${y}-${dir}`}>
+      <line x1={cx - 6 * dir} y1={y} x2={cx + 5 * dir} y2={y} stroke={ac} strokeWidth="1.3" strokeLinecap="round" />
+      <polygon points={`${cx + 5 * dir},${y - 2.4} ${cx + 8.5 * dir},${y} ${cx + 5 * dir},${y + 2.4}`} fill={ac} />
+    </g>
+  )
+  // Верхняя штанга + нижний П-профиль прямой перегородки (x0..x1).
+  const Rails = (x0: number, x1: number) => (
+    <g key={`r${x0}`}>
+      <rect x={x0} y="9.5" width={x1 - x0} height="2.6" rx="1" fill={fr} />
+      <rect x={x0} y="60" width={x1 - x0} height="2.6" rx="1" fill={fr} />
+      {Post(x0)}{Post(x1 - 2.4)}
+    </g>
+  )
+  // Боковая возвратная панель для угловых (перспектива влево).
+  const ReturnPanel = () => (
+    <g key="ret">
+      <polygon points="9,16 33,12 33,62 9,58" fill={glass} fillOpacity="0.72" stroke={gs} strokeWidth="0.9" />
+      <polygon points="12,18 16,17.4 14,58 10,58.5" fill="#ffffff" fillOpacity="0.45" />
+      <rect x="8" y="14" width="2.4" height="46" rx="1" fill={fr} />
+      <rect x="31.4" y="11.5" width="2.6" height="51" rx="1.2" fill={fr} />
+    </g>
   )
 
-  // профиль-разделитель (вертикальный)
-  const Div = (x: number) =>
-    <rect x={x} y={0} width={3} height={60} fill={fr}/>
-
-  // ручка на двери
-  const Hdl = (x: number, y = 28) =>
-    <rect x={x} y={y} width={2} height={10} fill={fr} rx="1"/>
-
-  // дуга открывания (от точки петли)
-  const Arc = (d: string) =>
-    <path d={d} stroke={ac} strokeWidth="1.2" strokeDasharray="3,2" fill="none" strokeOpacity="0.8"/>
-
-  // стрелка раздвижения
-  const Arr = (x1: number, y: number, dir: 'l' | 'r') => (
-    dir === 'r'
-      ? <><line x1={x1} y1={y} x2={x1+7} y2={y} stroke={ac} strokeWidth="1.5"/>
-          <polygon points={`${x1+7},${y-2} ${x1+11},${y} ${x1+7},${y+2}`} fill={ac}/></>
-      : <><line x1={x1} y1={y} x2={x1-7} y2={y} stroke={ac} strokeWidth="1.5"/>
-          <polygon points={`${x1-7},${y-2} ${x1-11},${y} ${x1-7},${y+2}`} fill={ac}/></>
+  const wrap = (children: ReactNode) => (
+    <svg viewBox="0 0 100 74" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100" height="74" rx="3" fill={wall} />
+      <rect x="0" y="61" width="100" height="13" fill={floor} />
+      {children}
+    </svg>
   )
+
+  // ─── Прямые модели: фронтальный вид, штора x=14..86 ───────────────────────
+  const straight = (inner: ReactNode) => wrap(<>{Rails(14, 86)}{inner}</>)
+  // ─── Угловые: возвратная панель слева + фронт x=34..86 ────────────────────
+  const corner = (inner: ReactNode) => wrap(<>
+    {ReturnPanel()}
+    <rect x="34" y="9.5" width="52" height="2.6" rx="1" fill={fr} />
+    <rect x="34" y="60" width="52" height="2.6" rx="1" fill={fr} />
+    {Post(83.6)}
+    {inner}
+  </>)
 
   const icons: Record<ShowerModelId, ReactElement> = {
-
-    // ═══ ПРЯМЫЕ — фасадный вид, viewBox 0 0 80 60 ════════════════════
-    // фон-стена: x=0..80 y=0..60; профиль: 3px; стекло: y=3..57
-
-    M1: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>     {/* штанга сверху */}
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>   {/* лев. профиль */}
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>   {/* прав. профиль */}
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>   {/* П-профиль снизу */}
-        {G(3, 3, 74, 54)}
-      </svg>
-    ),
-
-    M2: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {Div(39)}
-        {G(3, 3, 36, 54, 0.75)}   {/* неподвижное */}
-        {G(42, 3, 35, 54)}         {/* распашная дверь */}
-        {Hdl(74, 27)}
-        {Arc('M42,57 A35,35 0 0,0 77,22')}
-      </svg>
-    ),
-
-    M3: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {Div(38)}
-        {G(3, 3, 35, 54)}           {/* распашная дверь */}
-        {Hdl(5, 27)}
-        {Arc('M38,57 A35,35 0 0,1 3,22')}
-        {G(41, 3, 36, 54, 0.75)}   {/* неподвижное */}
-      </svg>
-    ),
-
-    M5: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {G(3, 3, 74, 54)}
-        {Hdl(5, 27)}
-        {Arc('M77,57 A74,54 0 0,1 3,3')}
-      </svg>
-    ),
-
-    M10: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {G(30, 6, 47, 48, 0.7)}   {/* заднее */}
-        {G(3, 3, 47, 54)}          {/* переднее */}
-        {Arr(18, 30, 'l')}
-        {Arr(62, 30, 'r')}
-      </svg>
-    ),
-
-    M11: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {/* неподвижная трапеция */}
-        <polygon points="3,3 40,3 50,57 3,57"
-          fill={gf} fillOpacity="0.8" stroke={gs} strokeWidth="1"/>
-        <line x1="6" y1="5" x2="6" y2="55" stroke="white" strokeWidth="2" strokeOpacity="0.6"/>
-        {/* диагональный профиль */}
-        <line x1="40" y1="3" x2="50" y2="57" stroke={fr} strokeWidth="3.5"/>
-        {/* дверь */}
-        <polygon points="44,3 77,3 77,57 54,57"
-          fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1"/>
-        <line x1="47" y1="5" x2="47" y2="55" stroke="white" strokeWidth="2" strokeOpacity="0.6"/>
-        {Hdl(74, 27)}
-        {Arc('M44,57 A36,44 0 0,0 77,13')}
-      </svg>
-    ),
-
-    M12: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={bg}/>
-        <rect x="0" y="0" width="80" height="3" fill={fr}/>
-        <rect x="0" y="0" width="3"  height="60" fill={fr}/>
-        <rect x="77" y="0" width="3" height="60" fill={fr}/>
-        <rect x="0" y="57" width="80" height="3" fill={fr}/>
-        {Div(26)}
-        {G(3, 3, 23, 54, 0.75)}   {/* неподвижное */}
-        {G(47, 6, 30, 48, 0.7)}   {/* заднее раздвижное */}
-        {G(29, 3, 32, 54)}         {/* переднее раздвижное */}
-        {Arr(52, 30, 'r')}
-      </svg>
-    ),
-
-    // ═══ УГЛОВЫЕ — план сверху, viewBox 0 0 80 60 ════════════════════
-    // стены: верхняя полоса y=0..8 и левая x=0..8
-
-    M4: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={wl}/>
-        {/* стены */}
-        <rect x="0" y="0" width="80" height="8" fill={fr}/>
-        <rect x="0" y="0" width="8"  height="60" fill={fr}/>
-        {/* неподвижное на верхней стене */}
-        <rect x="8" y="8" width="5" height="26" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {/* дверь */}
-        <rect x="22" y="8" width="5" height="26" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {Arc('M22,34 A26,26 0 0,0 48,8')}
-        {/* неподвижное на левой стене */}
-        <rect x="8" y="8" width="26" height="5" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {/* неподвижное 2 на верхней стене */}
-        <rect x="50" y="8" width="5" height="20" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-      </svg>
-    ),
-
-    M6: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={wl}/>
-        <rect x="0" y="0" width="80" height="8" fill={fr}/>
-        <rect x="0" y="0" width="8"  height="60" fill={fr}/>
-        {/* панель на левой стене */}
-        <rect x="8" y="10" width="30" height="5" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {/* дверь на верхней стене */}
-        <rect x="16" y="8" width="5" height="28" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {Arc('M16,36 A28,28 0 0,0 44,8')}
-      </svg>
-    ),
-
-    M7: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={wl}/>
-        <rect x="0" y="0" width="80" height="8" fill={fr}/>
-        <rect x="0" y="0" width="8"  height="60" fill={fr}/>
-        {/* панель 1 на левой стене */}
-        <rect x="8" y="10" width="34" height="5" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {/* дверь */}
-        <rect x="18" y="8" width="5" height="30" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {Arc('M18,38 A30,30 0 0,0 48,8')}
-        {/* панель 2 на верхней стене */}
-        <rect x="52" y="8" width="5" height="22" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-      </svg>
-    ),
-
-    M8: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={wl}/>
-        <rect x="0" y="0" width="80" height="8" fill={fr}/>
-        <rect x="0" y="0" width="8"  height="60" fill={fr}/>
-        {/* раздвижная 1 на верхней стене */}
-        <rect x="8"  y="8"  width="5" height="30" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        <rect x="14" y="8"  width="5" height="26" fill={gf} fillOpacity="0.6" stroke={gs} strokeWidth="1"/>
-        <line x1="10.5" y1="22" x2="10.5" y2="14" stroke={ac} strokeWidth="1.3"/>
-        <polygon points="9,14 10.5,10 12,14" fill={ac}/>
-        {/* раздвижная 2 на левой стене */}
-        <rect x="8"  y="10" width="30" height="5" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        <rect x="8"  y="16" width="26" height="5" fill={gf} fillOpacity="0.6" stroke={gs} strokeWidth="1"/>
-        <line x1="22" y1="12.5" x2="14" y2="12.5" stroke={ac} strokeWidth="1.3"/>
-        <polygon points="14,11 10,12.5 14,14" fill={ac}/>
-      </svg>
-    ),
-
-    M9: (
-      <svg viewBox="0 0 80 60" fill="none">
-        <rect width="80" height="60" fill={wl}/>
-        <rect x="0" y="0" width="80" height="8" fill={fr}/>
-        <rect x="0" y="0" width="8"  height="60" fill={fr}/>
-        {/* панель 1 на верхней стене */}
-        <rect x="8" y="8" width="5" height="20" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        {/* раздвижная на верхней стене */}
-        <rect x="18" y="8" width="5" height="28" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-        <rect x="24" y="8" width="5" height="24" fill={gf} fillOpacity="0.6" stroke={gs} strokeWidth="1"/>
-        <line x1="20.5" y1="22" x2="20.5" y2="14" stroke={ac} strokeWidth="1.3"/>
-        <polygon points="19,14 20.5,10 22,14" fill={ac}/>
-        {/* панель 2 на левой стене */}
-        <rect x="8" y="10" width="24" height="5" fill={gf} fillOpacity="0.9" stroke={gs} strokeWidth="1.2"/>
-      </svg>
-    ),
-
+    // Стационарная панель
+    M1: straight(<>{Panel(15, 12, 70, 48)}</>),
+    // Неподвижное + распашная дверь (дверь справа)
+    M2: straight(<>{Panel(15, 12, 33, 48, 0.82)}{Post(48)}{Panel(51, 12, 34, 48)}{Handle(81)}{Arc('M51,60 A34,48 0 0,0 84,14')}</>),
+    // Распашная дверь + неподвижное (дверь слева)
+    M3: straight(<>{Panel(15, 12, 34, 48)}{Handle(17)}{Arc('M49,60 A34,48 0 0,1 16,14')}{Post(49)}{Panel(52, 12, 33, 48, 0.82)}</>),
+    // Угловая: 2 неподвижных + распашная дверь
+    M4: corner(<>{Panel(35, 12, 22, 48, 0.82)}{Post(57)}{Panel(60, 12, 23, 48)}{Handle(79)}{Arc('M60,60 A23,48 0 0,0 82,14')}</>),
+    // Только распашная дверь
+    M5: straight(<>{Panel(15, 12, 70, 48)}{Handle(18)}{Arc('M85,60 A70,48 0 0,1 15,12')}</>),
+    // Угловая: панель + дверь
+    M6: corner(<>{Panel(35, 12, 26, 48, 0.82)}{Post(61)}{Panel(64, 12, 19, 48)}{Handle(79)}{Arc('M64,60 A19,48 0 0,0 82,14')}</>),
+    // Угловая: 2 панели + дверь
+    M7: corner(<>{Panel(35, 12, 18, 48, 0.82)}{Post(53)}{Panel(56, 12, 15, 48, 0.82)}{Post(71)}{Panel(73, 12, 10, 48)}{Handle(80)}{Arc('M73,60 A10,48 0 0,0 83,16')}</>),
+    // Угловая: 2 раздвижных двери
+    M8: corner(<>{Panel(35, 12, 26, 46, 0.7)}{Panel(48, 14, 26, 44)}{Arrow(60, 34, 1)}</>),
+    // Угловая: раздвижная + 2 панели
+    M9: corner(<>{Panel(35, 12, 16, 48, 0.82)}{Post(51)}{Panel(53, 12, 18, 46, 0.7)}{Panel(64, 14, 19, 44)}{Arrow(74, 34, 1)}</>),
+    // Раздвижная прямая
+    M10: straight(<>{Panel(15, 12, 40, 46, 0.68)}{Panel(45, 14, 40, 44)}{Arrow(32, 35, -1)}{Arrow(68, 35, 1)}</>),
+    // Трапециевидная с дверью
+    M11: straight(<>
+      <polygon points="15,12 44,12 52,60 15,60" fill={glass} fillOpacity="0.82" stroke={gs} strokeWidth="0.9" />
+      <polygon points="18,14 22,14 19,58 15.5,58" fill="#ffffff" fillOpacity="0.45" />
+      <line x1="44" y1="12" x2="52" y2="60" stroke={fr} strokeWidth="2.6" />
+      {Panel(55, 12, 30, 48)}{Handle(81)}{Arc('M55,60 A30,48 0 0,0 85,13')}
+    </>),
+    // Раздвижная (вариант): неподвижное + раздвижное
+    M12: straight(<>{Panel(15, 12, 26, 48, 0.82)}{Post(41)}{Panel(44, 12, 22, 46, 0.68)}{Panel(60, 14, 25, 44)}{Arrow(72, 35, 1)}</>),
   }
 
   return (
-    <div className="w-full h-full p-1.5 [&>svg]:w-full [&>svg]:h-full">
+    <div className="w-full h-full p-1 [&>svg]:w-full [&>svg]:h-full">
       {icons[modelId] ?? null}
     </div>
   )
