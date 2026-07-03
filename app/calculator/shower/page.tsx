@@ -27,6 +27,23 @@ const GLASS_MATRIX_NAME: Record<string, string> = {
   'М1 прозрачное': 'Прозрачное М1',
 }
 
+// Визуальные свотчи (CSS) — единый стиль, без фото-ассетов. Матовые — светлее/размытее.
+const GLASS_SWATCH: Record<string, { bg: string; matte?: boolean }> = {
+  'М1 прозрачное':                { bg: 'linear-gradient(135deg,#eef6fc 0%,#cfe4f3 55%,#b6d3e9 100%)' },
+  'Осветлённое CrystalVision':    { bg: 'linear-gradient(135deg,#eef8f4 0%,#d2ede3 100%)' },
+  'CrystalVision Matelux':        { bg: 'linear-gradient(135deg,#eef3f2 0%,#d8e0dd 100%)', matte: true },
+  'Тонированное (бронза/графит)': { bg: 'linear-gradient(135deg,#e7dccb 0%,#a68d6f 100%)' },
+  'Сатинированное бесцветное':    { bg: 'linear-gradient(135deg,#f3f4f6 0%,#dfe3e7 100%)', matte: true },
+  'Сатин тонированный':           { bg: 'linear-gradient(135deg,#e9e2d6 0%,#c6bba9 100%)', matte: true },
+}
+const HW_SWATCH: Record<string, string> = {
+  chrome: 'linear-gradient(135deg,#f6f8fa 0%,#c3ccd4 42%,#f0f3f6 52%,#a9b4bd 100%)',
+  black:  'linear-gradient(135deg,#4a4a4c 0%,#1a1a1c 100%)',
+  bronze: 'linear-gradient(135deg,#b98f57 0%,#7a5b34 100%)',
+  gold:   'linear-gradient(135deg,#f3d778 0%,#b8942f 100%)',
+  white:  'linear-gradient(135deg,#ffffff 0%,#e4e6e8 100%)',
+}
+
 type StdShowerType = 'stationary' | 'swing' | 'sliding'
 const STD_SHOWER_TYPES: { v: StdShowerType; l: string }[] = [
   { v: 'stationary', l: 'Стационарная' },
@@ -144,6 +161,8 @@ export default function ShowerCalculatorPage() {
   const [floors, setFloors]     = useState('0')
   const [discount, setDiscount] = useState('0')
   const [margin, setMargin]     = useState('40')
+  // Клиентский вид: прячем себестоимость/маржу, показываем чистую карточку для клиента.
+  const [clientView, setClientView] = useState(false)
   const [partnerId, setPartnerId] = useState<number | null>(null)
 
   useEffect(() => {
@@ -515,6 +534,11 @@ export default function ShowerCalculatorPage() {
             <h1 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">Душевая перегородка</h1>
           </div>
           <div className="flex items-center gap-2">
+            <button onClick={() => setClientView(v => !v)}
+              title="Скрыть себестоимость и маржу — показать клиенту"
+              className={`px-3 py-1.5 text-[13px] rounded-[10px] border transition-colors ${clientView ? 'bg-[#0071e3] text-white border-[#0071e3]' : 'bg-white text-[#1d1d1f] border-[#e8e8ed] hover:bg-[#f5f5f7]'}`}>
+              {clientView ? '✓ Клиентский вид' : 'Клиентский вид'}
+            </button>
             <button onClick={handleCopy} disabled={showerBlocked}
               className="px-3 py-1.5 text-[13px] text-[#1d1d1f] bg-white border border-[#e8e8ed] rounded-[10px] hover:bg-[#f5f5f7] disabled:opacity-40 transition-colors">
               {copied ? '✓ Скопировано' : 'Копировать КП'}
@@ -693,27 +717,44 @@ export default function ShowerCalculatorPage() {
                   )}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-4">
                   <div>
-                    <Label>Стекло</Label>
-                    <select value={glassType} onChange={e => setGlassType(e.target.value)} className={inp}>
-                      {GLASS_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                    </select>
+                    <Label>Тип стекла</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {GLASS_TYPES.map(t => {
+                        const on = glassType === t
+                        const sw = GLASS_SWATCH[t]
+                        return (
+                          <button key={t} type="button" onClick={() => setGlassType(t)}
+                            className={`rounded-xl border p-1.5 text-left transition-all ${on ? 'border-[#0071e3] ring-2 ring-[#0071e3]/20' : 'border-[#e8e8ed] hover:border-[#c7c7cc]'}`}>
+                            <div className="h-11 rounded-lg mb-1 border border-black/5 relative overflow-hidden" style={{ background: sw?.bg ?? '#e8eef4' }}>
+                              {sw?.matte && <div className="absolute inset-0 bg-white/30 backdrop-blur-[1px]" />}
+                            </div>
+                            <span className={`text-[10.5px] leading-tight block ${on ? 'text-[#0071e3] font-semibold' : 'text-[#1d1d1f]'}`}>{t}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
                     {glassCostPerM2 > 0 && (
-                      <p className="mt-1.5 text-[11px] text-[#86868b]">
-                        Закалённое {thickness} мм · {glassCostPerM2.toLocaleString('ru-RU')} ₽/м²
-                      </p>
+                      <p className="mt-1.5 text-[11px] text-[#86868b]">Закалённое {thickness} мм · {glassCostPerM2.toLocaleString('ru-RU')} ₽/м²</p>
                     )}
                   </div>
                   <div>
                     <Label>Цвет фурнитуры</Label>
-                    <select value={hwColor} onChange={e => setHwColor(e.target.value)} className={inp}>
-                      {availableColors.map(c => (
-                        <option key={c.value} value={c.value}>
-                          {c.label}{c.multiplier > 1 ? ` (+${Math.round((c.multiplier - 1) * 100)}%)` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="grid grid-cols-4 gap-2">
+                      {availableColors.map(c => {
+                        const on = hwColor === c.value
+                        return (
+                          <button key={c.value} type="button" onClick={() => setHwColor(c.value)}
+                            className={`rounded-xl border p-1.5 transition-all ${on ? 'border-[#0071e3] ring-2 ring-[#0071e3]/20' : 'border-[#e8e8ed] hover:border-[#c7c7cc]'}`}>
+                            <div className="h-9 rounded-lg mb-1 border border-black/10" style={{ background: HW_SWATCH[c.value] ?? '#ccc' }} />
+                            <span className={`text-[10px] leading-tight block text-center ${on ? 'text-[#0071e3] font-semibold' : 'text-[#1d1d1f]'}`}>
+                              {c.label}{c.multiplier > 1 ? ` +${Math.round((c.multiplier - 1) * 100)}%` : ''}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -919,6 +960,41 @@ export default function ShowerCalculatorPage() {
               </div>
             )}
 
+            {/* Клиентская карточка — чистая презентация для клиента (по мотивам berusteklo) */}
+            {(() => {
+              const dimStr = model.dimType === 'corner'
+                ? `${width || '—'}×${width2 || '—'}×${height || '—'}`
+                : `${width || '—'}×${height || '—'}`
+              const hwLabel = HARDWARE_COLORS.find(c => c.value === hwColor)?.label ?? ''
+              const priceNoDisc = result.finalPrice + result.discountAmount
+              return (
+                <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
+                  <p className="text-[15px] font-semibold text-[#1d1d1f] leading-tight">{model.desc}</p>
+                  <p className="text-[12px] text-[#86868b] mt-0.5">{dimStr} мм · модель {model.label}</p>
+                  <div className="flex flex-wrap gap-1.5 mt-2.5">
+                    <span className="text-[10px] font-medium px-2 py-1 rounded-lg bg-[#eef4ff] text-[#0071e3]">Стекло {thickness} мм закалённое</span>
+                    {hwLabel && <span className="text-[10px] font-medium px-2 py-1 rounded-lg bg-[#f2f2f7] text-[#1d1d1f]">Фурнитура {hwLabel}</span>}
+                    <span className="text-[10px] font-medium px-2 py-1 rounded-lg bg-[#f0fdf4] text-[#1a7f37]">Гарантия 2 года</span>
+                  </div>
+                  <div className="mt-3 pt-3 border-t border-[#f2f2f7] space-y-1 text-[13px]">
+                    {result.discountAmount > 0 && (<>
+                      <div className="flex justify-between text-[#86868b]"><span>Без скидки</span><span className="font-mono line-through">{fmt(priceNoDisc)}</span></div>
+                      <div className="flex justify-between text-[#1a7f37]"><span>Скидка {discount}%</span><span className="font-mono">−{fmt(result.discountAmount)}</span></div>
+                    </>)}
+                    <div className="flex justify-between text-[#1d1d1f]"><span>Изделие</span><span className="font-mono">{fmt(result.finalPrice)}</span></div>
+                    {result.serviceLines.map((s, i) => (
+                      <div key={i} className="flex justify-between text-[#6e6e73]"><span>{s.name}</span><span className="font-mono">{fmt(s.total)}</span></div>
+                    ))}
+                  </div>
+                  <div className="mt-2.5 flex items-baseline justify-between rounded-xl bg-[#eef4ff] px-3 py-2.5">
+                    <span className="text-[12px] font-semibold text-[#1d1d1f]">Итого к оплате</span>
+                    <span className="text-[22px] font-bold font-mono text-[#0071e3]">{fmt(result.grandTotal)}</span>
+                  </div>
+                </section>
+              )
+            })()}
+
+            {!clientView && (<>
             {/* Cost breakdown */}
             <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
               <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Себестоимость</p>
@@ -1041,6 +1117,7 @@ export default function ShowerCalculatorPage() {
                 <span className="text-[24px] font-bold font-mono text-[#1d1d1f]">{fmt(result.grandTotal)}</span>
               </div>
             </section>
+            </>)}
 
             {/* Client info */}
             <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
