@@ -12,12 +12,7 @@ interface ISpeechRecognition extends EventTarget {
   onerror: (() => void) | null
   onend: (() => void) | null
 }
-declare global {
-  interface Window {
-    SpeechRecognition: new () => ISpeechRecognition
-    webkitSpeechRecognition: new () => ISpeechRecognition
-  }
-}
+type SRWindow = { SpeechRecognition?: new () => ISpeechRecognition; webkitSpeechRecognition?: new () => ISpeechRecognition }
 
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -67,7 +62,8 @@ export default function QuickCalcPage() {
 
   // ── voice ──────────────────────────────────────────────
   function startRec() {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition
+    const w = window as unknown as SRWindow
+    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
     if (!SR) { setBusy('Голос не поддерживается — впишите вручную'); setTimeout(() => setBusy(null), 3000); return }
     const rec = new SR()
     rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true
