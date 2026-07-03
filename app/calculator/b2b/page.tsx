@@ -75,6 +75,7 @@ function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
 // по категории/названию; фолбэк — первый материал нужной толщины. Менеджер правит.
 type ParsedDrawingItem = {
   label?: string; width_mm?: number; height_mm?: number; thickness_mm?: number
+  shape?: string; cut_width_mm?: number; cut_height_mm?: number
   material?: string; quantity?: number; holes?: number; cutouts?: number
   tempering?: boolean; notes?: string
 }
@@ -188,7 +189,7 @@ export default function B2BCalculatorPage() {
   const [attachFile, setAttachFile]   = useState<File | null>(null)
   const attachInputRef = useRef<HTMLInputElement>(null)
   const [parsingDrawing, setParsingDrawing] = useState(false)
-  const [drawingInfo, setDrawingInfo] = useState<{ added: number; skipped: number; holes: number; cutouts: number; warnings: string[] } | null>(null)
+  const [drawingInfo, setDrawingInfo] = useState<{ added: number; skipped: number; holes: number; cutouts: number; shaped?: number; warnings: string[] } | null>(null)
 
   // Edit modal state
   const [editingLocalId, setEditingLocalId] = useState<string | null>(null)
@@ -480,26 +481,38 @@ export default function B2BCalculatorPage() {
         return
       }
       const newItems: B2BOrderItem[] = []
-      let holes = 0, cutouts = 0, skipped = 0
+      let holes = 0, cutouts = 0, skipped = 0, shaped = 0
       for (const it of (p.items ?? [])) {
         const w = Number(it.width_mm) || 0
         const h = Number(it.height_mm) || 0
         if (w <= 0 || h <= 0) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: размер не распознан — добавьте вручную`); continue }
-        const mat = matchDrawingMaterial(materials, Number(it.thickness_mm) || 0, it.material ?? '')
+        // Толщина: с чертежа, иначе выбранная в форме (fThickness).
+        const drawTh = Number(it.thickness_mm) || 0
+        const th = drawTh > 0 ? drawTh : (Number(fThickness) || 8)
+        // Материал: с чертежа, иначе выбранный в форме (тип/материал из формы).
+        const hint = (it.material && it.material.trim()) ? it.material : (selectedMaterial?.name ?? '')
+        const mat = matchDrawingMaterial(materials, th, hint) ?? selectedMaterial
         if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
+        // Раскрой: скошенную деталь режут из ГАБАРИТНОГО прямоугольника (сторона+скос) —
+        // расход больше номинала. Берём cut_width/cut_height, но не меньше номинала.
+        const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
+        const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
+        const isShaped = (!!it.shape && it.shape !== 'rectangle') || cutW > w + 1 || cutH > h + 1
+        if (isShaped) shaped++
         const q = Math.max(1, Number(it.quantity) || 1)
         const temp = !!it.tempering
         const waste = mat.passthrough ? 10 : mat.waste_percent
-        const calc = calcItem(mat, w, h, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
+        const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
         const hh = Number(it.holes) || 0
         const cc = Number(it.cutouts) || 0
         holes += hh * q
         cutouts += cc * q
-        const cparts = [it.label, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
+        const shapeNote = isShaped ? `${it.shape ?? 'скошенная'}, готовая ${w}×${h}` : ''
+        const cparts = [it.label, shapeNote, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
         newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
       }
       if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
-      setDrawingInfo({ added: newItems.length, skipped, holes, cutouts, warnings })
+      setDrawingInfo({ added: newItems.length, skipped, holes, cutouts, shaped, warnings })
     } catch (e) {
       setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: ['Ошибка: ' + (e instanceof Error ? e.message : String(e))] })
     } finally {
@@ -1242,6 +1255,11 @@ export default function B2BCalculatorPage() {
                       Сложность: {drawingInfo.holes > 0 && `${drawingInfo.holes} отв.`} {drawingInfo.cutouts > 0 && `· ${drawingInfo.cutouts} слож. вырез(ов)`}
                       {drawingInfo.cutouts > 0 && <span className="text-amber-700"> — трудоёмко, заложите наценку</span>}
                       <span className="text-[#9a9a95]"> (точный тариф по операциям — с прайс-листом)</span>
+                    </p>
+                  )}
+                  {(drawingInfo.shaped ?? 0) > 0 && (
+                    <p className="mt-1 text-[#6b6b66]">
+                      Скошенных деталей: {drawingInfo.shaped} — раскрой по габаритному прямоугольнику (расход больше номинала учтён в размерах позиции).
                     </p>
                   )}
                   {drawingInfo.warnings.length > 0 && (
