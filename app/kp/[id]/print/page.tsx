@@ -55,8 +55,8 @@ const CSS = `
 .kp-table td.sum{text-align:right;font-weight:800;font-size:16px;width:130px}
 .kp-subtotal{display:flex;justify-content:flex-end;gap:40px;padding:11px 14px;font-weight:800}
 .kp-subtotal .lbl{color:#4a4a4a}
-.kp-paybar{display:flex;justify-content:space-between;align-items:center;background:var(--ink);color:#fff;padding:14px 26px;margin-top:6px}
-.kp-paybar .l{font-size:15px;letter-spacing:3px;color:var(--red);font-weight:800}
+.kp-paybar{display:flex;justify-content:space-between;align-items:center;background:var(--red);color:#fff;padding:14px 26px;margin-top:6px}
+.kp-paybar .l{font-size:15px;letter-spacing:3px;color:#fff;font-weight:800}
 .kp-paybar .r{font-size:28px;font-weight:800}
 .kp-vat{text-align:right;font-size:12px;color:#8a8a86;margin-top:10px}
 .kp-foot{margin-top:auto;padding-top:16px;border-top:2.5px solid var(--ink);display:flex;justify-content:space-between;align-items:center;font-size:10.5px;letter-spacing:1px}

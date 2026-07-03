@@ -81,7 +81,6 @@ function Sec({ n, title, meta }: { n: string; title: string; meta?: string }) {
 }
 
 export default function KpDocument({ kp }: { kp: KpContent }) {
-  const spec = kp.spec && kp.spec.length ? kp.spec : []
   const items = kp.items && kp.items.length ? kp.items : []
   const sections = kp.sections && kp.sections.length ? kp.sections : DEFAULT_SECTIONS
 
@@ -100,27 +99,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="cell"><div className="k">АКТУАЛЬНО ДО</div><div className="v">{kp.valid_until ?? '—'}</div></div>
         </div>
 
-        <div className="kp-titleblk">
-          <div>
-            <div className="over">КОММЕРЧЕСКОЕ ПРЕДЛОЖЕНИЕ</div>
-            <h1>{kp.title ?? '—'}</h1>
-            {kp.subtitle && <div className="sub">{kp.subtitle}</div>}
-          </div>
-          <div className="kp-totalbox"><div className="k">ИТОГО, ₽</div><div className="v">{RUB(kp.total)}</div></div>
-        </div>
-
-        <Sec n="01" title="ОБЪЕКТ · СПЕЦИФИКАЦИЯ" meta={`${items.length || 1} ИЗДЕЛИЕ`} />
-        <div className="kp-spec">
-          {spec.map((s, i) => (
-            <div className="row" key={i}>
-              <span className="lbl">{s.label}</span><span className="dl" />
-              <span className={`val${s.accent ? ' red' : ''}`}>{s.value}</span>
-            </div>
-          ))}
-        </div>
-        {kp.spec_note && <div className="kp-note">{kp.spec_note}</div>}
-
-        <Sec n="02" title="СМЕТА" meta={kp.vat_label ?? 'НДС 5% ВКЛЮЧЁН'} />
+        <Sec n="01" title="СМЕТА" meta={kp.vat_label ?? 'НДС 5% ВКЛЮЧЁН'} />
         <table className="kp-table">
           <thead><tr><th>№</th><th>НАИМЕНОВАНИЕ РАБОТ И МАТЕРИАЛОВ</th><th className="c">КОЛ-ВО</th><th className="r">ЦЕНА, ₽</th><th className="r">СУММА, ₽</th></tr></thead>
           <tbody>
@@ -149,7 +128,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         <div className="kp-fit">
         <Head />
 
-        <Sec n="03" title="КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА" meta="ГЕРМЕТИЧНОСТЬ" />
+        <Sec n="02" title="КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА" meta="ГЕРМЕТИЧНОСТЬ" />
         <div className="kp-darkcard">
           <div className="left">
             <div className="big">{kp.key_stat ?? '80'}<span>{kp.key_stat_unit ?? '%'}</span></div>
@@ -162,7 +141,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           </div>
         </div>
 
-        <Sec n="04" title="ПОЛНЫЙ ЦИКЛ ПОД КЛЮЧ" meta="4 ЭТАПА" />
+        <Sec n="03" title="ПОЛНЫЙ ЦИКЛ ПОД КЛЮЧ" meta="4 ЭТАПА" />
         <div className="kp-cards4">
           <div className="card"><div className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M12 20h9M3 20l2-6 10-10 4 4L9 18l-6 2z" /></svg></div><h3>ЗАМЕР</h3><p>Выезд мастера, точные размеры проёма и геометрии на объекте.</p></div>
           <div className="card"><div className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M3 21V9l6 4V9l6 4V5l6 4v12H3z" /></svg></div><h3>ИЗГОТОВЛЕНИЕ</h3><p>Резка, закалка и обработка стекла на собственном производстве.</p></div>
@@ -170,7 +149,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="card"><div className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M14 7l-2-2-8 8 2 2M14 7l4 4-6 6-4-4M14 7l3-3 3 3-3 3" /></svg></div><h3>МОНТАЖ</h3><p>Профессиональная установка и герметизация по контуру.</p></div>
         </div>
 
-        <Sec n="05" title="ПОЧЕМУ MGLASS" meta="ГАРАНТИИ" />
+        <Sec n="04" title="ПОЧЕМУ MGLASS" meta="ГАРАНТИИ" />
         <div className="kp-why">
           <div className="item"><span className="n">01</span><div><h4>Собственное производство</h4><p>Контроль качества на каждом этапе — от раскроя до закалки стекла.</p></div></div>
           <div className="item"><span className="n">02</span><div><h4>Закалённое безопасное стекло</h4><p>Прочность и безопасность по ГОСТ, полированная кромка по контуру.</p></div></div>
@@ -178,7 +157,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="item"><span className="n">04</span><div><h4>Гарантия на изделие и монтаж</h4><p>Гарантийные обязательства на стекло, фурнитуру и монтажные работы.</p></div></div>
         </div>
 
-        <Sec n="06" title="ЭТАПЫ РАБОТЫ" meta="ПОРЯДОК" />
+        <Sec n="05" title="ЭТАПЫ РАБОТЫ" meta="ПОРЯДОК" />
         <div className="kp-stages">
           <div className="st"><div className="e">ЭТАП 01</div><h4>ЗАЯВКА И ЗАМЕР</h4><p>Согласуем визит, снимаем размеры, консультируем по стеклу и фурнитуре.</p></div>
           <div className="st"><div className="e">ЭТАП 02</div><h4>РАСЧЁТ И ДОГОВОР</h4><p>Финальная смета, спецификация изделия, договор и предоплата.</p></div>
@@ -186,7 +165,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="st"><div className="e">ЭТАП 04</div><h4>МОНТАЖ И СДАЧА</h4><p>Доставка, установка, герметизация и приёмка работ.</p></div>
         </div>
 
-        <Sec n="07" title="УСЛОВИЯ" meta="СРОКИ" />
+        <Sec n="06" title="УСЛОВИЯ" meta="СРОКИ" />
         <div className="kp-cond">
           <div className="c"><div className="k">СРОК ИЗГОТОВЛЕНИЯ</div><div className="v">{kp.production_days ?? '15 раб. дней'}</div></div>
           <div className="c"><div className="k">АКТУАЛЬНО ДО</div><div className="v">{kp.valid_until ?? '—'}</div></div>
@@ -204,7 +183,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         <div className="kp-fit">
         <Head />
 
-        <Sec n="08" title="СХЕМА КОМПЛЕКТАЦИИ" meta="ЧЕРТЁЖ" />
+        <Sec n="07" title="СХЕМА КОМПЛЕКТАЦИИ" meta="ЧЕРТЁЖ" />
         <div className="kp-schema">
           <div className="img">
             {kp.photo_url
@@ -221,7 +200,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         </div>
         <div className="kp-note">Схема носит ознакомительный характер. Итоговая конфигурация и расположение элементов уточняются по результатам замера на объекте.</div>
 
-        <Sec n="09" title="ОФОРМЛЕНИЕ ЗАКАЗА" meta="СЛЕДУЮЩИЙ ШАГ" />
+        <Sec n="08" title="ОФОРМЛЕНИЕ ЗАКАЗА" meta="СЛЕДУЮЩИЙ ШАГ" />
         <div className="kp-cta">
           <div><div className="over">ГОТОВЫ ПРИСТУПИТЬ</div><h2>СОГЛАСУЕМ ЗАМЕР<br />В УДОБНОЕ ВРЕМЯ</h2></div>
           <div className="r">8 (925) 788 58 37<br />mglass.ceo@gmail.com<br />mglass.pro</div>
