@@ -20,6 +20,7 @@ export type ContractContent = {
   customer?: Customer
   spec?: SpecItem[]
   total?: number | string; make_sum?: number | string; install_sum?: number | string
+  delivery_sum?: number | string; lift_sum?: number | string
   prepayment?: number | string
   make_days?: number; install_days?: number
 }
@@ -129,11 +130,13 @@ export function ContractDocument({ c }: { c: ContractContent }) {
   const spec = c.spec && c.spec.length ? c.spec : []
   const cust = customerLine(c.customer_type, c.customer)
   const vat = EXECUTOR.vatRate
-  const totalN = numOr(c.total), makeN = numOr(c.make_sum), installN = numOr(c.install_sum)
+  const totalN = numOr(c.total), makeN = numOr(c.make_sum)
+  const installN = numOr(c.install_sum), deliveryN = numOr(c.delivery_sum), liftN = numOr(c.lift_sum)
+  const finalPart = installN + deliveryN + liftN
   const prepay = (c.prepayment == null || c.prepayment === '') ? totalN : numOr(c.prepayment)
   const isFull = prepay >= totalN
   const remMake = Math.max(0, makeN - prepay)
-  const remInstall = Math.max(0, installN - Math.max(0, prepay - makeN))
+  const remFinal = Math.max(0, finalPart - Math.max(0, prepay - makeN))
   return (
     <div className="doc-page contract">
       <div className="c-hdr">
@@ -172,7 +175,7 @@ export function ContractDocument({ c }: { c: ContractContent }) {
       <p>5.2.3. В срок не позднее 3 (трёх) рабочих дней с даты получения уведомления от Исполнителя принять результат соответствующего этапа работ.</p>
 
       <h3>6. РАЗМЕР И ПОРЯДОК ОПЛАТЫ</h3>
-      <p>6.1. Общая стоимость Изделий и работ по настоящему Договору составляет {money(c.total)} и складывается из: стоимости изготовления и поставки Изделий — {money(c.make_sum)}; стоимости монтажных работ — {money(c.install_sum)}.</p>
+      <p>6.1. Общая стоимость Изделий и работ по настоящему Договору составляет {money(c.total)} и складывается из: стоимости изготовления и поставки Изделий — {money(c.make_sum)}; стоимости монтажных работ — {money(c.install_sum)}{deliveryN > 0 ? `; стоимости доставки — ${money(c.delivery_sum)}` : ''}{liftN > 0 ? `; стоимости подъёма — ${money(c.lift_sum)}` : ''}.</p>
       <p>6.2. Детальная стоимость Изделий и работ определяется Сторонами в Спецификации (Раздел № 2).</p>
       <p>6.3. Расчёты между Сторонами производятся в следующем порядке:</p>
       {isFull ? (
@@ -181,7 +184,7 @@ export function ContractDocument({ c }: { c: ContractContent }) {
         <>
           <p>6.3.1. Первый этап (авансирование изготовления): Заказчик вносит предоплату в размере {RUB(prepay)} руб. (в т.ч. НДС {vat}%) в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления предоплаты Исполнитель приступает к изготовлению Изделий.</p>
           <p>6.3.2. Второй этап (остаток за изготовление): остаток в размере {RUB(remMake)} руб. Заказчик оплачивает по готовности Изделий, до выезда на монтаж, в течение 3 (трёх) рабочих дней с даты уведомления Исполнителя о готовности. После оплаты Стороны согласовывают дату монтажа.</p>
-          <p>6.3.3. Третий этап (остаток за монтаж): остаток в размере {RUB(remInstall)} руб. Заказчик оплачивает после выполнения монтажных работ, в течение 1 (одного) рабочего дня с даты подписания Сторонами Акта сдачи-приёмки монтажных работ.</p>
+          <p>6.3.3. Третий этап (остаток за монтаж, доставку и подъём): остаток в размере {RUB(remFinal)} руб. Заказчик оплачивает после выполнения монтажных работ, в течение 1 (одного) рабочего дня с даты подписания Сторонами Акта сдачи-приёмки монтажных работ.</p>
         </>
       )}
       <p>6.4. В случае, если Заказчик не произвёл оплату, предусмотренную настоящим разделом, в установленный срок, общие сроки исполнения Договора подлежат автоматическому продлению на период просрочки платежа. Исполнитель вправе приостановить исполнение своих обязательств (включая доставку и монтаж) до момента поступления полной оплаты.</p>

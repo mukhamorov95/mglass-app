@@ -11,10 +11,13 @@ type Form = {
   customer_type: 'individual' | 'company'
   customer: Customer
   spec: Spec[]
-  total: string; make_sum: string; install_sum: string; prepayment: string
+  total: string; make_sum: string; install_sum: string; delivery_sum: string; lift_sum: string; prepayment: string
   product_kind: ProductKind; make_days: number; install_days: number
 }
 const SERVICE_RE = /монтаж|демонтаж|доставк|подъ[её]м|замер|выезд/i
+const INSTALL_RE = /монтаж|демонтаж/i
+const DELIVERY_RE = /доставк/i
+const LIFT_RE = /подъ[её]м/i
 type KpRow = { id: number; number: string; total: number | null; content: Record<string, unknown> }
 type HistRow = { id: number; number: string; customer_type: string; total: number | null; manager_name: string | null; created_at: string; content: Record<string, unknown> }
 
@@ -31,7 +34,7 @@ function emptyForm(): Form {
   return {
     number: '', date: fmtDate(d), date_iso: isoDate(d), kp_id: null,
     customer_type: 'individual', customer: {}, spec: [],
-    total: '', make_sum: '', install_sum: '', prepayment: '',
+    total: '', make_sum: '', install_sum: '', delivery_sum: '', lift_sum: '', prepayment: '',
     product_kind: 'mirror', make_days: 15, install_days: 5,
   }
 }
@@ -57,6 +60,9 @@ export default function ContractsPage() {
   const [savedId, setSavedId] = useState<number | null>(null)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const [parseText, setParseText] = useState('')
+  const [parsing, setParsing] = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
   const [kps, setKps] = useState<KpRow[]>([])
   const [history, setHistory] = useState<HistRow[]>([])
   const [canDelete, setCanDelete] = useState(false)
@@ -88,14 +94,18 @@ export default function ContractsPage() {
       name: String(it.name ?? ''), desc: String(it.desc ?? ''), qty: it.qty != null ? String(it.qty) : '1',
     }))
     const total = kp.total != null ? numOr(kp.total) : numOr(content.total as string)
-    // Авто-разбивка: монтаж/доставка → монтаж, остальное → изготовление.
-    const installSum = items.filter(it => SERVICE_RE.test(String(it.name ?? '')))
+    // Авто-разбивка: монтаж → монтаж, доставка → доставка, подъём → подъём, остальное → изготовление.
+    const sumOf = (re: RegExp) => items.filter(it => re.test(String(it.name ?? '')))
       .reduce((s, it) => s + numOr((it.sum ?? it.price) as number), 0)
-    const makeSum = Math.max(0, total - installSum)
+    const installSum = sumOf(INSTALL_RE), deliverySum = sumOf(DELIVERY_RE), liftSum = sumOf(LIFT_RE)
+    const services = installSum + deliverySum + liftSum
+    const makeSum = Math.max(0, total - services)
     setForm(f => ({
       ...f, kp_id: id, spec, total: String(total),
-      make_sum: installSum ? String(makeSum) : f.make_sum,
+      make_sum: services ? String(makeSum) : f.make_sum,
       install_sum: installSum ? String(installSum) : f.install_sum,
+      delivery_sum: deliverySum ? String(deliverySum) : f.delivery_sum,
+      lift_sum: liftSum ? String(liftSum) : f.lift_sum,
       prepayment: f.prepayment || String(total),
     }))
     setSavedId(null)
@@ -104,6 +114,38 @@ export default function ContractsPage() {
   function pickKind(kind: ProductKind) {
     const d = deadlineFor(kind)
     set({ product_kind: kind, make_days: d.make, install_days: d.install })
+  }
+
+  function applyParsed(p: Record<string, unknown>) {
+    if (!p) return
+    const type = p.customer_type === 'company' ? 'company' : 'individual'
+    const cust: Customer = {}
+    for (const [k, v] of Object.entries(p)) if (k !== 'customer_type' && v) cust[k] = String(v)
+    setForm(f => ({ ...f, customer_type: type, customer: { ...f.customer, ...cust } }))
+    setSavedId(null)
+  }
+
+  async function parseFromText() {
+    if (!parseText.trim()) return
+    setParsing(true); setParseError(null)
+    try {
+      const r = await fetch('/api/ai/parse-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: parseText }) }).then(x => x.json())
+      if (r.customer) applyParsed(r.customer); else setParseError(r.error || 'не распознано')
+    } catch { setParseError('ошибка сети') } finally { setParsing(false) }
+  }
+
+  async function parseFromPdf(file: File) {
+    setParsing(true); setParseError(null)
+    try {
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res(String(reader.result).split(',')[1] || '')
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      const r = await fetch('/api/ai/parse-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdf: base64 }) }).then(x => x.json())
+      if (r.customer) applyParsed(r.customer); else setParseError(r.error || 'не распознано')
+    } catch { setParseError('ошибка чтения файла') } finally { setParsing(false) }
   }
 
   const addSpec = () => set({ spec: [...form.spec, { name: '', qty: '1' }] })
@@ -152,13 +194,17 @@ export default function ContractsPage() {
 
   const custFields = form.customer_type === 'company' ? COMP_FIELDS : INDIV_FIELDS
 
-  // Предоплата/остаток: предоплата уходит на изготовление, затем на монтаж.
-  const totalN = numOr(form.total), makeN = numOr(form.make_sum), installN = numOr(form.install_sum)
+  // Предоплата/остаток: предоплата уходит на изготовление, затем на финальный этап
+  // (монтаж + доставка + подъём).
+  const totalN = numOr(form.total), makeN = numOr(form.make_sum)
+  const installN = numOr(form.install_sum), deliveryN = numOr(form.delivery_sum), liftN = numOr(form.lift_sum)
+  const finalPart = installN + deliveryN + liftN
+  const componentsSum = makeN + finalPart
   const prepay = form.prepayment === '' ? totalN : numOr(form.prepayment)
   const rem = {
     total: Math.max(0, totalN - prepay),
     make: Math.max(0, makeN - prepay),
-    install: Math.max(0, installN - Math.max(0, prepay - makeN)),
+    final: Math.max(0, finalPart - Math.max(0, prepay - makeN)),
   }
 
   return (
@@ -204,6 +250,24 @@ export default function ContractsPage() {
                   <button onClick={() => set({ customer_type: 'company' })} className={`px-3 py-1 text-[12px] rounded-md ${form.customer_type === 'company' ? 'bg-white shadow-sm font-medium' : 'text-[#9a9a95]'}`}>Юрлицо</button>
                 </div>
               </div>
+              {/* Автозаполнение: вставить текст или прикрепить карточку PDF */}
+              <div className="mb-3 border border-dashed border-[#d8d8d3] rounded-lg p-3 bg-[#fafaf9]">
+                <p className="text-[12px] text-[#6b6b66] mb-2">Заполнить автоматически: вставьте реквизиты текстом или прикрепите карточку предприятия (PDF) — распознаю и заполню поля ниже.</p>
+                <textarea value={parseText} onChange={e => setParseText(e.target.value)} placeholder="Вставьте карточку/реквизиты заказчика…"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] h-16 resize-y" />
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <button onClick={parseFromText} disabled={parsing || !parseText.trim()}
+                    className="px-3 py-1.5 bg-[#111110] text-white text-[12px] font-medium rounded-lg disabled:opacity-50">
+                    {parsing ? 'Распознаю…' : '✨ Распознать текст'}
+                  </button>
+                  <label className="px-3 py-1.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg cursor-pointer hover:bg-[#f5f5f3]">
+                    📎 Карточка PDF
+                    <input type="file" accept="application/pdf" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) parseFromPdf(f); e.target.value = '' }} />
+                  </label>
+                  {parseError && <span className="text-[12px] text-red-600">{parseError}</span>}
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
                 {custFields.map(([k, lbl]) => (
                   <div key={k} className={k === 'passport_issued_by' || k === 'address' || k === 'name' || k === 'legal_address' || k === 'actual_address' ? 'col-span-2' : ''}>
@@ -244,16 +308,22 @@ export default function ContractsPage() {
                 <div><label className={L}>Общая сумма договора, ₽</label><input className={I} value={form.total} onChange={e => set({ total: e.target.value })} /></div>
                 <div><label className={L}>Изготовление, ₽</label><input className={I} value={form.make_sum} onChange={e => set({ make_sum: e.target.value })} placeholder="вручную" /></div>
                 <div><label className={L}>Монтаж, ₽</label><input className={I} value={form.install_sum} onChange={e => set({ install_sum: e.target.value })} placeholder="вручную" /></div>
+                <div><label className={L}>Доставка, ₽</label><input className={I} value={form.delivery_sum} onChange={e => set({ delivery_sum: e.target.value })} placeholder="0 / сумма" /></div>
+                <div><label className={L}>Подъём, ₽</label><input className={I} value={form.lift_sum} onChange={e => set({ lift_sum: e.target.value })} placeholder="0 / сумма" /></div>
                 <div><label className={L}>Предоплата, ₽</label><input className={I} value={form.prepayment} onChange={e => set({ prepayment: e.target.value })} placeholder="пусто = 100%" /></div>
-                <div className="col-span-2"><label className={L}>Остаток</label>
-                  <div className="px-3 py-2 text-[13px] bg-[#f5f5f3] rounded-lg border border-[#e4e4e0] font-semibold text-[#111110]">{RUB(rem.total)} ₽</div>
-                </div>
               </div>
-              <div className="mt-2.5 text-[12px] text-[#6b6b66] leading-relaxed">
+              <div className="mt-2 flex items-center gap-3 text-[12px] flex-wrap">
+                <span className="text-[#6b6b66]">Изгот.+монтаж+дост.+подъём = <b>{RUB(componentsSum)} ₽</b></span>
+                {Math.abs(componentsSum - totalN) > 1
+                  ? <span className="text-amber-600">≠ Итого {RUB(totalN)} ₽ — проверьте разбивку</span>
+                  : <span className="text-emerald-600">= Итого ✓</span>}
+                <span className="ml-auto text-[#6b6b66]">Остаток: <b>{RUB(rem.total)} ₽</b></span>
+              </div>
+              <div className="mt-2 text-[12px] text-[#6b6b66] leading-relaxed">
                 {rem.total > 0 ? (
                   <>Предоплата <b>{RUB(prepay)} ₽</b> — для запуска изготовления.{' '}
                   Остаток за изготовление <b>{RUB(rem.make)} ₽</b> — по готовности, до монтажа.{' '}
-                  Остаток за монтаж <b>{RUB(rem.install)} ₽</b> — после монтажа. НДС 5% включён.</>
+                  Остаток за монтаж, доставку и подъём <b>{RUB(rem.final)} ₽</b> — после монтажа. НДС 5% включён.</>
                 ) : <>Оплата 100% — единый авансовый платёж. НДС 5% включён.</>}
               </div>
             </div>
