@@ -9,6 +9,7 @@ import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
+import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -146,6 +147,7 @@ export default function B2BCalculatorPage() {
   const [mglassOnly, setMglassOnly]     = useState(false)
   const [isAdmin, setIsAdmin]           = useState(false)
   const [maxDiscount, setMaxDiscount]   = useState<number>(100)
+  const { strategy } = useOwnerStrategy()
 
   // New client modal
   const [showNewClient, setShowNewClient] = useState(false)
@@ -1500,6 +1502,49 @@ export default function B2BCalculatorPage() {
                         {totals.profit > 0 ? '+' : ''}{fmt(totals.profit)}
                       </span>
                       <span className="text-[11px] text-[#9a9a95]">прибыль</span>
+                    </div>
+                  )
+                })()}
+
+                {/* Рекомендация по цене — рыночная аналитика для менеджера */}
+                {(() => {
+                  const target = strategy.target_margin || 40
+                  const minM   = strategy.min_margin || 25
+                  const avgEm  = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                  const price  = totals.totalAfterDiscount
+                  // Цена при целевой марже m (тот же расход): множитель по марже.
+                  const priceAt = (m: number) => (avgEm >= 100 || m >= 100) ? price : Math.round(price * (100 - avgEm) / (100 - m))
+                  type Rec = { tone: 'danger' | 'up' | 'room' | 'ok' | 'info'; head: string; text: string }
+                  const recs: Rec[] = []
+                  if (avgEm < minM) {
+                    recs.push({ tone: 'danger', head: 'Ниже минимума', text: `Маржа ${avgEm}% ниже вашего минимума ${minM}% — работаете почти в ноль. Поднимите до ≈ ${fmt(priceAt(target))} (маржа ${target}%).` })
+                  } else if (avgEm < target) {
+                    recs.push({ tone: 'up', head: 'Можно дороже', text: `Маржа ${avgEm}% ниже целевой ${target}%. Есть смысл поднять до ≈ ${fmt(priceAt(target))} — рынок обычно принимает это при вашем сервисе.` })
+                  } else if (avgEm > target + 12) {
+                    recs.push({ tone: 'room', head: 'Есть запас для торга', text: `Маржа ${avgEm}% выше целевой — цена уверенная. Комфортно уступить до ≈ ${fmt(priceAt(target))} (${target}%), крайний предел ≈ ${fmt(priceAt(minM))} (${minM}%). Ниже не уходите — выигрываете сервисом, не демпингом.` })
+                  } else {
+                    recs.push({ tone: 'ok', head: 'В цель', text: `Маржа ${avgEm}% — здоровая, в целевом коридоре. Цена конкурентная и прибыльная. Предел торга ≈ ${fmt(priceAt(minM))} (${minM}%).` })
+                  }
+                  if (items.length > 1) {
+                    const perPos = items.map((i, idx) => ({ idx: idx + 1, m: effectiveItemMargin(i, discount), name: i.materialName }))
+                    const worst = perPos.reduce((a, b) => b.m < a.m ? b : a)
+                    if (worst.m < avgEm - 8) recs.push({ tone: 'info', head: `Позиция ${worst.idx}`, text: `${worst.name}: маржа ${worst.m}% — заметно ниже средней. Проверьте размер/скидку по ней.` })
+                  }
+                  if (totals.totalWeight > 150) recs.push({ tone: 'info', head: 'Крупный заказ', text: `${Math.round(totals.totalWeight)} кг — заложите логистику/подъём. Ради объёма такой заказ можно взять с чуть меньшей маржой.` })
+                  const toneCls = (t: Rec['tone']) =>
+                    t === 'danger' ? 'bg-red-50 text-red-700'
+                    : t === 'up'   ? 'bg-amber-50 text-amber-800'
+                    : t === 'room' || t === 'ok' ? 'bg-emerald-50 text-emerald-800'
+                    : 'bg-[#f5f5f4] text-[#6b6b66]'
+                  return (
+                    <div className="rounded-lg border border-[#e4e4e0] bg-white p-3 space-y-1.5">
+                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#8a8a85]">💡 Рекомендация по цене</span>
+                      {recs.slice(0, 3).map((r, i) => (
+                        <div key={i} className={`text-[12px] leading-snug rounded-lg px-2.5 py-1.5 ${toneCls(r.tone)}`}>
+                          <span className="font-semibold">{r.head}. </span>{r.text}
+                        </div>
+                      ))}
+                      <p className="text-[10px] text-[#b0b0aa]">Ориентир — ваши целевые маржи; сравнение с ценами конкурентов добавим по их прайс-листу.</p>
                     </div>
                   )
                 })()}
