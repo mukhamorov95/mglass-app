@@ -4,16 +4,17 @@ import { useEffect, useState } from 'react'
 import { PRODUCT_DEADLINES, deadlineFor, type ProductKind } from '@/lib/contractDeadlines'
 
 type Customer = Record<string, string>
-type Spec = { name: string; dimensions?: string; qty?: string }
+type Spec = { name: string; desc?: string; dimensions?: string; qty?: string }
 type Form = {
   number: string; date: string; date_iso: string
   kp_id: number | null
   customer_type: 'individual' | 'company'
   customer: Customer
   spec: Spec[]
-  total: string; make_sum: string; install_sum: string
+  total: string; make_sum: string; install_sum: string; prepayment: string
   product_kind: ProductKind; make_days: number; install_days: number
 }
+const SERVICE_RE = /монтаж|демонтаж|доставк|подъ[её]м|замер|выезд/i
 type KpRow = { id: number; number: string; total: number | null; content: Record<string, unknown> }
 type HistRow = { id: number; number: string; customer_type: string; total: number | null; manager_name: string | null; created_at: string; content: Record<string, unknown> }
 
@@ -30,7 +31,7 @@ function emptyForm(): Form {
   return {
     number: '', date: fmtDate(d), date_iso: isoDate(d), kp_id: null,
     customer_type: 'individual', customer: {}, spec: [],
-    total: '', make_sum: '', install_sum: '',
+    total: '', make_sum: '', install_sum: '', prepayment: '',
     product_kind: 'mirror', make_days: 15, install_days: 5,
   }
 }
@@ -81,9 +82,22 @@ export default function ContractsPage() {
     if (!kp) { set({ kp_id: null }); return }
     const content = kp.content || {}
     const items = Array.isArray(content.items) ? content.items as Record<string, unknown>[] : []
-    const spec: Spec[] = items.map(it => ({ name: String(it.name ?? ''), qty: it.qty != null ? String(it.qty) : '1' }))
-    const total = kp.total != null ? String(kp.total) : String(numOr(content.total as string))
-    setForm(f => ({ ...f, kp_id: id, spec, total }))
+    // Спецификация договора — только изделия (без монтажа/доставки), с описанием.
+    const goods = items.filter(it => !SERVICE_RE.test(String(it.name ?? '')))
+    const spec: Spec[] = goods.map(it => ({
+      name: String(it.name ?? ''), desc: String(it.desc ?? ''), qty: it.qty != null ? String(it.qty) : '1',
+    }))
+    const total = kp.total != null ? numOr(kp.total) : numOr(content.total as string)
+    // Авто-разбивка: монтаж/доставка → монтаж, остальное → изготовление.
+    const installSum = items.filter(it => SERVICE_RE.test(String(it.name ?? '')))
+      .reduce((s, it) => s + numOr((it.sum ?? it.price) as number), 0)
+    const makeSum = Math.max(0, total - installSum)
+    setForm(f => ({
+      ...f, kp_id: id, spec, total: String(total),
+      make_sum: installSum ? String(makeSum) : f.make_sum,
+      install_sum: installSum ? String(installSum) : f.install_sum,
+      prepayment: f.prepayment || String(total),
+    }))
     setSavedId(null)
   }
 
@@ -137,6 +151,15 @@ export default function ContractsPage() {
   })()
 
   const custFields = form.customer_type === 'company' ? COMP_FIELDS : INDIV_FIELDS
+
+  // Предоплата/остаток: предоплата уходит на изготовление, затем на монтаж.
+  const totalN = numOr(form.total), makeN = numOr(form.make_sum), installN = numOr(form.install_sum)
+  const prepay = form.prepayment === '' ? totalN : numOr(form.prepayment)
+  const rem = {
+    total: Math.max(0, totalN - prepay),
+    make: Math.max(0, makeN - prepay),
+    install: Math.max(0, installN - Math.max(0, prepay - makeN)),
+  }
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
@@ -199,24 +222,40 @@ export default function ContractsPage() {
               </div>
               <div className="space-y-2">
                 {form.spec.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2">
-                    <span className="text-[12px] text-[#9a9a95] w-8">2.{i + 1}</span>
-                    <input className={`${I} flex-1`} value={s.name} onChange={e => updSpec(i, { name: e.target.value })} placeholder="Наименование изделия" />
-                    <input className={`${I} w-40`} value={s.dimensions ?? ''} onChange={e => updSpec(i, { dimensions: e.target.value })} placeholder="Размеры" />
-                    <input className={`${I} w-16`} value={s.qty ?? ''} onChange={e => updSpec(i, { qty: e.target.value })} placeholder="шт" />
-                    <button onClick={() => rmSpec(i)} className="px-2 text-[#c4c4be] hover:text-red-500">✕</button>
+                  <div key={i} className="border border-[#f0f0ec] rounded-lg p-2 space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[12px] text-[#9a9a95] w-8">2.{i + 1}</span>
+                      <input className={`${I} flex-1`} value={s.name} onChange={e => updSpec(i, { name: e.target.value })} placeholder="Изделие" />
+                      <input className={`${I} w-40`} value={s.dimensions ?? ''} onChange={e => updSpec(i, { dimensions: e.target.value })} placeholder="Размеры" />
+                      <input className={`${I} w-16`} value={s.qty ?? ''} onChange={e => updSpec(i, { qty: e.target.value })} placeholder="шт" />
+                      <button onClick={() => rmSpec(i)} className="px-2 text-[#c4c4be] hover:text-red-500">✕</button>
+                    </div>
+                    <input className={`${I} w-full`} value={s.desc ?? ''} onChange={e => updSpec(i, { desc: e.target.value })} placeholder="Описание: стекло, толщина, обработка, фурнитура…" />
                   </div>
                 ))}
                 {!form.spec.length && <p className="text-[12px] text-[#9a9a95]">Выберите КП сверху — позиции подтянутся, или добавьте вручную.</p>}
               </div>
             </div>
 
-            {/* Sums */}
-            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 grid grid-cols-3 gap-3">
-              <div><label className={L}>Итого по договору, ₽</label><input className={I} value={form.total} onChange={e => set({ total: e.target.value })} /></div>
-              <div><label className={L}>Изготовление, ₽</label><input className={I} value={form.make_sum} onChange={e => set({ make_sum: e.target.value })} placeholder="вручную" /></div>
-              <div><label className={L}>Монтаж, ₽</label><input className={I} value={form.install_sum} onChange={e => set({ install_sum: e.target.value })} placeholder="вручную" /></div>
-              <div className="col-span-3 text-[11px] text-[#9a9a95]">Изготовление + монтаж должны в сумме давать «Итого». НДС {5}% включён.</div>
+            {/* Финансы и оплата */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <p className="text-[13px] font-semibold text-[#111110] mb-3">Финансы и оплата</p>
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className={L}>Общая сумма договора, ₽</label><input className={I} value={form.total} onChange={e => set({ total: e.target.value })} /></div>
+                <div><label className={L}>Изготовление, ₽</label><input className={I} value={form.make_sum} onChange={e => set({ make_sum: e.target.value })} placeholder="вручную" /></div>
+                <div><label className={L}>Монтаж, ₽</label><input className={I} value={form.install_sum} onChange={e => set({ install_sum: e.target.value })} placeholder="вручную" /></div>
+                <div><label className={L}>Предоплата, ₽</label><input className={I} value={form.prepayment} onChange={e => set({ prepayment: e.target.value })} placeholder="пусто = 100%" /></div>
+                <div className="col-span-2"><label className={L}>Остаток</label>
+                  <div className="px-3 py-2 text-[13px] bg-[#f5f5f3] rounded-lg border border-[#e4e4e0] font-semibold text-[#111110]">{RUB(rem.total)} ₽</div>
+                </div>
+              </div>
+              <div className="mt-2.5 text-[12px] text-[#6b6b66] leading-relaxed">
+                {rem.total > 0 ? (
+                  <>Предоплата <b>{RUB(prepay)} ₽</b> — для запуска изготовления.{' '}
+                  Остаток за изготовление <b>{RUB(rem.make)} ₽</b> — по готовности, до монтажа.{' '}
+                  Остаток за монтаж <b>{RUB(rem.install)} ₽</b> — после монтажа. НДС 5% включён.</>
+                ) : <>Оплата 100% — единый авансовый платёж. НДС 5% включён.</>}
+              </div>
             </div>
 
             {/* actions */}

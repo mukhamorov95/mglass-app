@@ -13,20 +13,23 @@ export type Customer = {
   legal_address?: string; actual_address?: string; account?: string
   bank?: string; bik?: string; corr_account?: string; email?: string
 }
-export type SpecItem = { name: string; dimensions?: string; qty?: number | string }
+export type SpecItem = { name: string; desc?: string; dimensions?: string; qty?: number | string }
 export type ContractContent = {
   number?: string; date?: string
   customer_type?: 'individual' | 'company'
   customer?: Customer
   spec?: SpecItem[]
   total?: number | string; make_sum?: number | string; install_sum?: number | string
+  prepayment?: number | string
   make_days?: number; install_days?: number
 }
 
-export const RUB = (v: number | string | undefined) => {
+const numOr = (v: number | string | undefined) => {
   const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^\d.-]/g, ''))
-  return isFinite(n) ? n.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '0,00'
+  return isFinite(n) ? n : 0
 }
+export const RUB = (v: number | string | undefined) =>
+  numOr(v).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
 // Заказчик одной строкой (для преамбулы и реквизитов).
 export function customerLine(type: string | undefined, c: Customer = {}): string {
@@ -62,8 +65,11 @@ const money = (v: number | string | undefined) => `${RUB(v)} руб. (в т.ч. 
 
 // ── Счёт (1 страница) ───────────────────────────────────
 export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
-  const total = Number(String(c.total ?? '').replace(/[^\d.-]/g, '')) || 0
-  const vat = vatIncluded(total)
+  const total = numOr(c.total)
+  const prepay = (c.prepayment == null || c.prepayment === '') ? total : numOr(c.prepayment)
+  const pct = total > 0 ? Math.round(prepay / total * 100) : 100
+  const vat = vatIncluded(prepay)
+  const payLabel = pct >= 100 ? 'Авансовый платёж в размере 100%' : `Предоплата (${pct}%)`
   return (
     <div className="doc-page invoice">
       <div className="inv-hdr">
@@ -87,13 +93,13 @@ export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
       <table className="inv-items">
         <thead><tr><th>№</th><th>Наименование товара или услуги</th><th>Ед.</th><th>Кол-во</th><th>Цена</th><th>Сумма</th></tr></thead>
         <tbody>
-          <tr><td>1</td><td>Авансовый платёж в размере 100% по договору № {c.number ?? ''} от {c.date ?? ''}</td><td>шт.</td><td>1</td><td className="r">{RUB(total)}</td><td className="r">{RUB(total)}</td></tr>
+          <tr><td>1</td><td>{payLabel} по договору № {c.number ?? ''} от {c.date ?? ''}</td><td>шт.</td><td>1</td><td className="r">{RUB(prepay)}</td><td className="r">{RUB(prepay)}</td></tr>
         </tbody>
       </table>
       <table className="inv-tot"><tbody>
-        <tr><td>Итого:</td><td className="r">{RUB(total)}</td></tr>
+        <tr><td>Итого:</td><td className="r">{RUB(prepay)}</td></tr>
         <tr><td>В т. ч. НДС ({EXECUTOR.vatRate}%):</td><td className="r">{RUB(vat)}</td></tr>
-        <tr><td><b>Всего к оплате:</b></td><td className="r"><b>{RUB(total)}</b></td></tr>
+        <tr><td><b>Всего к оплате:</b></td><td className="r"><b>{RUB(prepay)}</b></td></tr>
       </tbody></table>
       <div className="inv-sign">
         Руководитель предприятия ______________________ / {EXECUTOR.fio} /
@@ -110,6 +116,11 @@ export function ContractDocument({ c }: { c: ContractContent }) {
   const totalDays = make + install
   const spec = c.spec && c.spec.length ? c.spec : []
   const cust = customerLine(c.customer_type, c.customer)
+  const totalN = numOr(c.total), makeN = numOr(c.make_sum), installN = numOr(c.install_sum)
+  const prepay = (c.prepayment == null || c.prepayment === '') ? totalN : numOr(c.prepayment)
+  const isFull = prepay >= totalN
+  const remMake = Math.max(0, makeN - prepay)
+  const remInstall = Math.max(0, installN - Math.max(0, prepay - makeN))
   return (
     <div className="doc-page contract">
       <div className="c-hdr">
@@ -126,7 +137,7 @@ export function ContractDocument({ c }: { c: ContractContent }) {
 
       <h3>2. СПЕЦИФИКАЦИЯ</h3>
       {spec.length ? spec.map((s, i) => (
-        <p key={i}>2.{i + 1}. {s.name}{s.dimensions ? `. Размеры: ${s.dimensions}` : ''}{s.qty ? ` — ${s.qty} шт.` : ''}</p>
+        <p key={i}>2.{i + 1}. {s.name}{s.desc ? `. ${s.desc}` : ''}{s.dimensions ? `. Размеры: ${s.dimensions}` : ''}{s.qty ? ` — ${s.qty} шт.` : ''}</p>
       )) : <p>2.1. Согласно приложению.</p>}
 
       <h3>3. ОСОБЫЕ УСЛОВИЯ</h3>
@@ -145,8 +156,16 @@ export function ContractDocument({ c }: { c: ContractContent }) {
       <h3>6. РАЗМЕР И ПОРЯДОК ОПЛАТЫ</h3>
       <p>6.1. Общая стоимость Изделий и работ по настоящему Договору составляет {money(c.total)} и складывается из: стоимости изготовления и поставки Изделий — {money(c.make_sum)}; стоимости монтажных работ — {money(c.install_sum)}.</p>
       <p>6.2. Детальная стоимость определяется Сторонами в Спецификации (Раздел № 2).</p>
-      <p>6.3. Заказчик осуществляет авансовый платёж в размере 100% от общей стоимости Договора в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления аванса Исполнитель приступает к исполнению обязательств.</p>
-      <p>6.5. Приёмка результата работ осуществляется путём подписания Сторонами Акта сдачи-приёмки выполненных работ. Акт должен быть подписан либо мотивированно отклонён в течение 3 (трёх) рабочих дней.</p>
+      {isFull ? (
+        <p>6.3. Заказчик осуществляет авансовый платёж в размере 100% от общей стоимости Договора в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления аванса Исполнитель приступает к изготовлению Изделий.</p>
+      ) : (
+        <>
+          <p>6.3. Заказчик вносит предоплату в размере {RUB(prepay)} руб. (в т.ч. НДС {EXECUTOR.vatRate}%) в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления предоплаты Исполнитель приступает к изготовлению Изделий.</p>
+          <p>6.4. Остаток за изготовление в размере {RUB(remMake)} руб. Заказчик оплачивает по готовности Изделий, до выезда на монтаж, в течение 3 (трёх) рабочих дней с даты уведомления Исполнителя о готовности. После оплаты Стороны согласовывают дату монтажа.</p>
+          <p>6.5. Остаток за монтаж в размере {RUB(remInstall)} руб. Заказчик оплачивает после выполнения монтажных работ, в течение 1 (одного) рабочего дня с даты подписания Акта сдачи-приёмки.</p>
+        </>
+      )}
+      <p>6.6. Приёмка результата работ осуществляется путём подписания Сторонами Акта сдачи-приёмки выполненных работ. Акт должен быть подписан либо мотивированно отклонён в течение 3 (трёх) рабочих дней.</p>
 
       <h3>7. ОТВЕТСТВЕННОСТЬ СТОРОН</h3>
       <p>7.2. Гарантийный срок на Изделия и работы составляет {EXECUTOR.warrantyMonths} месяцев с даты подписания Акта сдачи-приёмки работ.</p>
