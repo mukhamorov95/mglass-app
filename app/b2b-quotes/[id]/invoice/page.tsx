@@ -416,14 +416,10 @@ export default function InvoicePage() {
 
         <div className="mt-6 flex items-end justify-between text-[11px]">
           <div>
-            <div className="font-semibold mb-6">Поставщик</div>
-            <div className="relative inline-block">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src="/signature.png" alt="" style={{ position: 'absolute', left: 20, bottom: 2, height: 46, opacity: 0.9 }} />
-              <span className="border-b border-[#333] inline-block" style={{ width: 200 }}>&nbsp;</span>
-              <span className="absolute text-[9px] text-[#999]" style={{ left: 210, bottom: 6 }}>М.П.</span>
-            </div>
-            <div className="mt-1">/ {SELLER_B2B.director} /</div>
+            <div className="font-semibold mb-1">Поставщик</div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/seal-ooo.png" alt="Подпись и печать" style={{ height: 118, marginLeft: 6, opacity: 0.94 }} />
+            <div className="mt-0.5">/ {SELLER_B2B.director} /</div>
           </div>
           <div>
             <div className="font-semibold mb-6">Покупатель</div>
