@@ -85,13 +85,19 @@ function matchDrawingMaterial(mats: B2BMaterial[], thickness: number, matStr: st
   if (!pool.length) pool = mats
   const s = (matStr || '').toLowerCase()
   const has = (...kw: string[]) => kw.some(k => s.includes(k))
-  let cat: string | null = null
-  if (has('зеркал', 'mirror'))                         cat = 'зеркал'
-  else if (has('бронз', 'тонир', 'графит', 'tint'))    cat = 'тонир'
-  else if (has('сатин', 'матов', 'matt', 'frost'))     cat = 'сатин'
-  else if (has('осветл', 'crystal', 'ультра', 'опти')) cat = 'светл'
-  const byCat = cat ? pool.find(m => (m.category + ' ' + m.name).toLowerCase().includes(cat!)) : null
-  return byCat ?? pool[0] ?? mats[0] ?? null
+  const nm = (m: B2BMaterial) => (m.category + ' ' + m.name).toLowerCase()
+  const byName = (...kw: string[]) => pool.find(m => kw.some(k => nm(m).includes(k))) ?? null
+  if (has('зеркал', 'mirror'))                     return byName('зеркал') ?? pool[0]
+  if (has('бронз', 'графит'))                      return byName('бронз', 'графит', 'тонир') ?? pool[0]
+  if (has('сатин', 'матов', 'matt', 'frost'))      return byName('сатин', 'матов') ?? pool[0]
+  if (has('тонир', 'tint'))                        return byName('тонир', 'бронз') ?? pool[0]
+  if (has('осветл', 'crystal', 'ультра', 'опти'))  return byName('осветл', 'crystal') ?? pool[0]
+  if (has('рифл', 'узор', 'декор', 'мору'))         return byName('рифл', 'декор', 'мору') ?? pool[0]
+  // «прозрачное» или материал не указан → простое прозрачное (без рифления/декора/тонировки)
+  const plain = (m: B2BMaterial) => !/рифл|декор|сатин|матов|бронз|тонир|мору|зеркал/i.test(nm(m))
+  return pool.find(m => /прозрачн|clear|м1/i.test(nm(m)) && plain(m))
+      ?? pool.find(plain)
+      ?? pool[0] ?? mats[0] ?? null
 }
 
 function minPriceReasonLabel(reason: MinPriceReason): string {
