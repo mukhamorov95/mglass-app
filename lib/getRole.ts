@@ -121,6 +121,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/manager',
     '/kp',
     '/contracts',
+    '/calculator/quick',
     '/calculator/mirror',
     '/calculator/shower',
     '/calculator/loft',

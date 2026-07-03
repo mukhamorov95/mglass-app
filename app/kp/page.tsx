@@ -86,6 +86,29 @@ export default function KpPage() {
     setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
   }, [])
 
+  // Подтяжка из «Быстрого расчёта» (/calculator/quick)
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('mglass_kp_prefill')
+      if (!raw) return
+      sessionStorage.removeItem('mglass_kp_prefill')
+      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number }
+      setTab('new')
+      setForm(f => ({
+        ...f,
+        title: p.title ?? f.title,
+        items: Array.isArray(p.items) ? p.items.map(it => ({
+          name: String(it.name ?? ''),
+          qty: it.qty != null ? String(it.qty) : '',
+          price: it.price != null ? String(it.price) : '',
+          sum: it.sum != null ? String(it.sum) : '',
+        })) : f.items,
+        subtotal: p.subtotal != null ? String(p.subtotal) : f.subtotal,
+        total: p.total != null ? String(p.total) : f.total,
+      }))
+    } catch { /* ignore */ }
+  }, [])
+
   const set = (patch: Partial<Form>) => { setForm(f => ({ ...f, ...patch })); setSavedId(null) }
 
   async function loadHistory() {
