@@ -50,8 +50,9 @@ const PRODUCT_VARS: VarRow[] = [
   { name: 'Сдельная ЗП отдела реализации', pct: 2.5 },
   { name: 'УСН', pct: 5 },
 ]
-const FIXED_TOTAL: FixedRow[] = [
-  { name: 'Аренда помещения', amount: 750000 },
+// Юниты (вкладки «MGlass»/«производство» в файле) несут ПОЛНЫЙ список постоянных
+// компании; различается только аренда — доля от общих 750 000 (250к MGlass / 500к цех).
+const FIXED_COMMON: FixedRow[] = [
   { name: 'Коммунальные расходы', amount: 20000 },
   { name: 'ЗП оклады, отпускные, больничные, премии', amount: 1420000 },
   { name: 'Лизинг', amount: 505200 },
@@ -73,6 +74,11 @@ const FIXED_TOTAL: FixedRow[] = [
   { name: 'Уборка помещений', amount: 4000 },
   { name: 'Вывоз мусора', amount: 10000 },
 ]
+const fixedWithRent = (rent: number, note: string): FixedRow[] =>
+  [{ name: `Аренда помещения (${note})`, amount: rent }, ...FIXED_COMMON.map(f => ({ ...f }))]
+const FIXED_TOTAL = fixedWithRent(750000, 'вся')              // Σ 3 614 910
+const FIXED_MGLASS = fixedWithRent(250000, 'доля от 750 000') // Σ 3 114 910
+const FIXED_PROD = fixedWithRent(500000, 'доля от 750 000')   // Σ 3 364 910
 const DEFAULTS: Record<Unit, Model> = {
   total: {
     incomes: [
@@ -87,13 +93,13 @@ const DEFAULTS: Record<Unit, Model> = {
     incomes: [{ name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
-    fixed: [{ name: 'Постоянные расходы M-Glass (уточнить распределение)', amount: 250000 }],
+    fixed: FIXED_MGLASS,
   },
   production: {
     incomes: [{ name: 'Производство (B2B) — продажа стекла', plan: 2400000, vars: GLASS_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
-    fixed: [{ name: 'Постоянные расходы производства (уточнить распределение)', amount: 500000 }],
+    fixed: FIXED_PROD,
   },
 }
 
