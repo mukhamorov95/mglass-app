@@ -275,6 +275,7 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
+  { href: '/admin/ideas',          label: 'Идеи цеха',       icon: '💡' },
 ]
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
@@ -293,6 +294,12 @@ const PRODUCTION_NAV_SUPPLY: NavItem[] = [
   { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
   { href: '/production-app/material', label: 'Материал',         icon: '📦' },
   { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
+  { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
+]
+
+// Команда: идеи и предложения цеха.
+const PRODUCTION_NAV_TEAM: NavItem[] = [
+  { href: '/production-app/ideas',    label: 'Идеи и проблемы',  icon: '💡' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -317,7 +324,8 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
-    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs'])) open.push('prod_supply')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
+    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -327,7 +335,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones'])) open.push('operations')
+    if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
   }
   return open
 }
@@ -347,7 +355,8 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   }
   if (role === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
-    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs'])) open.push('prod_supply')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
+    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
     return open
   }
   if (role === 'manager') {
@@ -677,6 +686,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
         {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
       </>
     )
 
@@ -741,6 +751,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
         {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
       </>
     )
 
