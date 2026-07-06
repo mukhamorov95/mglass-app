@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import StatsBar from './StatsBar'
 
 const SECTIONS = [
   {
@@ -54,6 +55,8 @@ export default function MarketingCenterPage() {
           Контент-машина MGlass — лиды, партнёры, бренд и рост до 1 млрд ₽
         </p>
       </div>
+
+      <StatsBar />
 
       {/* Quick links */}
       <div className="space-y-6 mb-10">
