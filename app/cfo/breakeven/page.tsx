@@ -125,6 +125,10 @@ export default function BreakevenPage() {
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
   const [meName, setMeName] = useState('')
+  // Настройки фонда перелива компании — хранятся в строке unit='total'
+  const [ovCfg, setOvCfg] = useState({ bonusPct: 20, debtBalance: 0 })
+  const [ovSaving, setOvSaving] = useState(false)
+  const [ovSaved, setOvSaved] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -133,11 +137,17 @@ export default function BreakevenPage() {
       const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
       setMeName(p?.name ?? user.email ?? '')
     }
-    const { data } = await sb.from('finplan_models').select('unit,data').in('unit', ['mglass', 'production'])
+    const { data } = await sb.from('finplan_models').select('unit,data')
     if (data?.length) {
       setModels(prev => {
         const next = { ...prev }
         for (const row of data) {
+          if (row.unit === 'total') {
+            if (row.data?.overflowBonusPct != null || row.data?.debtBalance != null) {
+              setOvCfg({ bonusPct: Number(row.data.overflowBonusPct) || 0, debtBalance: Number(row.data.debtBalance) || 0 })
+            }
+            continue
+          }
           const u = row.unit as EditUnit
           if (row.data && Object.keys(row.data).length) next[u] = row.data as Model
         }
@@ -185,6 +195,22 @@ export default function BreakevenPage() {
       setSavedOk(true); setTimeout(() => setSavedOk(false), 2000)
     } finally { setSaving(false) }
   }
+
+  async function saveOverflow() {
+    setOvSaving(true)
+    try {
+      await sb.from('finplan_models').upsert({
+        unit: 'total',
+        data: { overflowBonusPct: ovCfg.bonusPct, debtBalance: ovCfg.debtBalance },
+        updated_by: meName || null, updated_at: new Date().toISOString(),
+      })
+      setOvSaved(true); setTimeout(() => setOvSaved(false), 2000)
+    } finally { setOvSaving(false) }
+  }
+
+  // Плановые ежемесячные платежи по обязательствам (строки кредитов/лизинга юнитов)
+  const debtMonthly = [...models.production.fixed, ...models.mglass.fixed]
+    .filter(f => isDebtRow(f.name)).reduce((s, f) => s + (f.amount || 0), 0)
 
   // ── Расчёт ──────────────────────────────────────────────────────────────────
   const calc = useMemo(() => {
@@ -394,9 +420,6 @@ export default function BreakevenPage() {
                     <input type="number" value={m.ownerRub || ''} onChange={e => patch(x => { x.ownerRub = Number(e.target.value) || 0; return x })}
                       className={inputBlue + ' w-full mt-1 text-right'} /></label>
                 </div>
-                <label className="block text-[12px] text-[#6b6b66] mt-3">Из фонда перелива → бонусы производства, %
-                  <input type="number" step="1" value={m.overflowBonusPct || ''} onChange={e => patch(x => { x.overflowBonusPct = Number(e.target.value) || 0; return x })}
-                    className={inputBlue + ' mt-1 text-right w-32'} /></label>
               </>
             )}
           </div>
@@ -443,9 +466,46 @@ export default function BreakevenPage() {
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">Фонд перелива</p>
             <p className="text-[18px] font-bold font-mono text-emerald-800 mt-1">{fmt(calc.overflow)}</p>
-            <p className="text-[11px] text-emerald-700 mt-0.5">Всё распределено (фонды, постоянные{(m.ownerPct || m.ownerRub) ? ', собственник' : ''}) — это излишек при плановой выручке.</p>
-            {!ro && m.overflowBonusPct > 0 && (
-              <p className="text-[12px] font-semibold text-emerald-800 mt-1.5">→ бонусы производства из перелива ({m.overflowBonusPct}%): {fmt(calc.overflowBonus)}</p>
+            <p className="text-[11px] text-emerald-700 mt-0.5">
+              {calc.remainder >= 0
+                ? `Всё распределено (фонды, постоянные${(m.ownerPct || m.ownerRub) ? ', собственник' : ''}) — это излишек при плановой выручке.`
+                : 'План ниже точки — перелива нет, бонусы из него не начисляются.'}
+            </p>
+            {ro && (
+              <div className="mt-2 pt-2 border-t border-emerald-200 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[12px] text-emerald-800 flex-1">→ бонусы производства</span>
+                  <div className="flex items-center gap-1 w-20 shrink-0">
+                    <input type="number" step="1" value={ovCfg.bonusPct || ''}
+                      onChange={e => setOvCfg(c => ({ ...c, bonusPct: Number(e.target.value) || 0 }))}
+                      className={inputBlue + ' w-full text-right'} />
+                    <span className="text-[11px] text-emerald-700">%</span>
+                  </div>
+                  <span className="font-mono text-[12px] font-semibold text-emerald-800 w-24 text-right">{fmt(calc.overflow * ovCfg.bonusPct / 100)}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-[12px] text-emerald-800">{unit === 'total' ? `→ досрочное погашение обязательств (${100 - ovCfg.bonusPct}%)` : `→ свободный остаток (${100 - ovCfg.bonusPct}%)`}</span>
+                  <span className="font-mono text-[12px] font-semibold text-emerald-800">{fmt(calc.overflow * (100 - ovCfg.bonusPct) / 100)}</span>
+                </div>
+                {unit === 'total' && (
+                  <>
+                    <label className="flex items-center justify-between gap-2 text-[12px] text-emerald-800">Тело долга (кредиты+лизинг), ₽
+                      <input type="number" value={ovCfg.debtBalance || ''}
+                        onChange={e => setOvCfg(c => ({ ...c, debtBalance: Number(e.target.value) || 0 }))}
+                        className={inputBlue + ' w-32 shrink-0 text-right'} />
+                    </label>
+                    {ovCfg.debtBalance > 0 && calc.overflow * (100 - ovCfg.bonusPct) / 100 > 0 && (
+                      <p className="text-[11px] text-emerald-700">
+                        Переливом гасится ~{Math.ceil(ovCfg.debtBalance / (calc.overflow * (100 - ovCfg.bonusPct) / 100))} мес — это СВЕРХ плановых платежей {fmt(debtMonthly)}/мес.
+                      </p>
+                    )}
+                  </>
+                )}
+                <button onClick={saveOverflow} disabled={ovSaving}
+                  className="text-[11px] font-semibold text-emerald-800 border border-emerald-300 rounded-lg px-2 py-1 hover:bg-emerald-100 disabled:opacity-40">
+                  {ovSaving ? '…' : ovSaved ? '✓ Сохранено' : '💾 Сохранить настройки перелива'}
+                </button>
+              </div>
             )}
           </div>
         </div>
