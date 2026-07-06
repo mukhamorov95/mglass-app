@@ -137,6 +137,7 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/cfo',          label: 'Дашборд CFO',       icon: '📊' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
+  { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
   { href: '/admin/cfo',    label: 'Финмодели / ДДС',   icon: '💰' },
   { href: '/admin/settings', label: 'Фин. настройки', icon: '⚙️' },
 ]
