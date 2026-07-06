@@ -10,6 +10,7 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
+import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, type FactoryData } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -171,6 +172,25 @@ export default function B2BCalculatorPage() {
   const [items, setItems]           = useState<B2BOrderItem[]>([])
 
   const [fSuperCat, setFSuperCat]     = useState<SuperCat>('стекло')
+
+  // Изделия производства (зеркало с подсветкой / лофт) — цена производства из финмодели V2.
+  const [fKind, setFKind] = useState<'material' | 'fmirror' | 'floft'>('material')
+  const [factoryData, setFactoryData] = useState<FactoryData | null>(null)
+  const [factoryLoading, setFactoryLoading] = useState(false)
+  const [fmName, setFmName]       = useState('')
+  const [fmMm, setFmMm]           = useState<number>(4)
+  const [fmW, setFmW]             = useState('')
+  const [fmH, setFmH]             = useState('')
+  const [fmQty, setFmQty]         = useState('1')
+  const [fmLighting, setFmLighting] = useState(true)
+  const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
+  const [flW, setFlW]             = useState('')
+  const [flH, setFlH]             = useState('')
+  const [flQty, setFlQty]         = useState('1')
+  const [flSections, setFlSections] = useState('3')
+  const [flDivisions, setFlDivisions] = useState('2')
+  const [flSystem, setFlSystem]   = useState<'fixed' | 'sliding' | 'swing'>('fixed')
+  const [flGlassId, setFlGlassId] = useState<number | null>(null)
   const [fThickness, setFThickness]   = useState<number | null>(null)
   const [fMatId, setFMatId]           = useState<number | null>(null)
   const [fWidth, setFWidth]           = useState('')
@@ -456,6 +476,53 @@ export default function B2BCalculatorPage() {
     const s = services.find(s => s.type === 'per_m2' && /триплекс/i.test(s.name))
     return s ? { salePerM2: s.value, costPerM2: s.cost_price ?? 0 } : null
   }, [services])
+
+  // Переключение на изделие производства: лениво грузим розничные справочники + финмодель.
+  async function switchKind(kind: 'material' | 'fmirror' | 'floft') {
+    setFKind(kind)
+    if (kind === 'material' || factoryData || factoryLoading) return
+    setFactoryLoading(true)
+    try {
+      const data = await loadFactoryData(createClient())
+      setFactoryData(data)
+      if (data.mirrorNames.length) {
+        setFmName(data.mirrorNames[0])
+        const mms = mirrorMms(data, data.mirrorNames[0])
+        if (mms.length) setFmMm(mms[0])
+      }
+      if (data.loftGlasses.length) setFlGlassId(data.loftGlasses[0].id)
+    } finally { setFactoryLoading(false) }
+  }
+
+  // Живой расчёт изделия: себестоимость производства + продажная цена производства.
+  const factoryQuote = (() => {
+    if (!factoryData) return null
+    if (fKind === 'fmirror') {
+      return calcFactoryMirror({
+        widthMm: Number(fmW) || 0, heightMm: Number(fmH) || 0,
+        mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
+      }, factoryData)
+    }
+    if (fKind === 'floft') {
+      return calcFactoryLoft({
+        widthMm: Number(flW) || 0, heightMm: Number(flH) || 0,
+        sections: Number(flSections) || 1, divisions: Number(flDivisions) || 0,
+        systemType: flSystem, glassId: flGlassId,
+      }, factoryData)
+    }
+    return null
+  })()
+
+  function handleAddFactoryItem() {
+    if (!factoryQuote) return
+    const qty = Number(fKind === 'fmirror' ? fmQty : flQty) || 1
+    const item = factoryQuoteToItem(factoryQuote, qty, fComment || undefined)
+    setItems(prev => [...prev, { ...item, localId: crypto.randomUUID() }])
+    setFComment('')
+    if (fKind === 'fmirror') { setFmW(''); setFmH(''); setFmQty('1') }
+    else { setFlW(''); setFlH(''); setFlQty('1') }
+    setSavedOrderId(null)
+  }
 
   // Доп. слои пакета триплекса (слой 2, слой 3): выбранный материал или основной.
   function triplexExtras(main: B2BMaterial | null, layers: 2 | 3, mat2: number | null, mat3: number | null): B2BMaterial[] {
@@ -1016,6 +1083,136 @@ export default function B2BCalculatorPage() {
 
             <div className="h-px bg-[#f0f0ec]" />
 
+            {/* Тип позиции: сырьё (стекло/зеркало) или готовое изделие производства */}
+            <div>
+              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип позиции</label>
+              <div className="flex gap-1.5">
+                {([['material', 'Стекло / зеркало'], ['fmirror', '💡 Зеркало+свет'], ['floft', 'Лофт']] as const).map(([k, l]) => (
+                  <button key={k} onClick={() => switchKind(k)}
+                    className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {fKind !== 'material' && (
+                <p className="mt-1 text-[10px] text-[#9a9a95]">Готовое изделие по цене производства (себестоимость цеха + маржа производства)</p>
+              )}
+            </div>
+
+            {fKind !== 'material' && (
+              <div className="space-y-3">
+                {factoryLoading && <p className="text-[12px] text-[#9a9a95]">Загружаю справочники производства…</p>}
+                {!factoryLoading && factoryData && fKind === 'fmirror' && (
+                  <>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Зеркало</label>
+                        <select value={fmName} onChange={e => { setFmName(e.target.value); const mms = mirrorMms(factoryData, e.target.value); if (mms.length) setFmMm(mms[0]) }}
+                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                          {factoryData.mirrorNames.map(n => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                        <select value={fmMm} onChange={e => setFmMm(Number(e.target.value))}
+                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]">
+                          {mirrorMms(factoryData, fmName).map(m => <option key={m} value={m}>{m} мм</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <input type="number" placeholder="Ш, мм" value={fmW} onChange={e => setFmW(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                        <input type="number" placeholder="В, мм" value={fmH} onChange={e => setFmH(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                        <input type="number" placeholder="Шт" value={fmQty} onChange={e => setFmQty(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer ${fmLighting ? 'border-amber-300 bg-amber-50' : 'border-[#e4e4e0]'}`}>
+                        <input type="checkbox" checked={fmLighting} onChange={e => setFmLighting(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                        <span className={`text-[13px] font-medium ${fmLighting ? 'text-amber-700' : 'text-[#111110]'}`}>Подсветка LED</span>
+                      </label>
+                      <select value={fmButton} onChange={e => setFmButton(e.target.value as 'none' | 'sensor' | 'wave')}
+                        className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                        <option value="none">Без кнопки</option>
+                        <option value="sensor">Сенсорная кнопка</option>
+                        <option value="wave">Датчик взмаха</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+                {!factoryLoading && factoryData && fKind === 'floft' && (
+                  <>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                      <div className="grid grid-cols-3 gap-2">
+                        <input type="number" placeholder="Ш, мм" value={flW} onChange={e => setFlW(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                        <input type="number" placeholder="В, мм" value={flH} onChange={e => setFlH(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                        <input type="number" placeholder="Шт" value={flQty} onChange={e => setFlQty(e.target.value)}
+                          className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Секции</label>
+                        <input type="number" min={1} value={flSections} onChange={e => setFlSections(e.target.value)}
+                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Деления</label>
+                        <input type="number" min={0} value={flDivisions} onChange={e => setFlDivisions(e.target.value)}
+                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Система</label>
+                        <select value={flSystem} onChange={e => setFlSystem(e.target.value as 'fixed' | 'sliding' | 'swing')}
+                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                          <option value="fixed">Глухая</option>
+                          <option value="sliding">Раздвижная</option>
+                          <option value="swing">Распашная</option>
+                        </select>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стекло</label>
+                      <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
+                        className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                        {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                      </select>
+                    </div>
+                  </>
+                )}
+                {factoryQuote && (
+                  <div className="rounded-lg border border-[#e4e4e0] bg-[#f8f8f7] px-3 py-2.5 space-y-1">
+                    <div className="flex justify-between text-[12px]">
+                      <span className="text-[#6b6b66]">Себестоимость производства</span>
+                      <span className="font-mono text-[#111110]">{factoryQuote.factoryCostPiece.toLocaleString('ru-RU')} ₽/шт</span>
+                    </div>
+                    <div className="flex justify-between text-[13px] font-semibold">
+                      <span className="text-[#111110]">Цена производства <span className="text-[10px] text-[#9a9a95] font-normal">(маржа {factoryQuote.marginPercent}%)</span></span>
+                      <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
+                    </div>
+                    <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
+                  </div>
+                )}
+                <input type="text" maxLength={120}
+                  className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] placeholder:text-[#c4c4be]"
+                  value={fComment} onChange={e => setFComment(e.target.value)}
+                  placeholder="Комментарий к позиции (опционально)" />
+                <button onClick={handleAddFactoryItem} disabled={!factoryQuote}
+                  className="w-full bg-[#111110] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  + Добавить изделие
+                </button>
+              </div>
+            )}
+
+            {fKind === 'material' && (<>
             {/* Стекло / Зеркало — табы */}
             <div>
               <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
@@ -1342,6 +1539,7 @@ export default function B2BCalculatorPage() {
                 </div>
               )}
             </div>
+            </>)}
 
             {/* Примечание к заказу */}
             <details className="group">
