@@ -103,16 +103,6 @@ const BUYER_PRODUCTION: NavItem[] = [
   { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭', indent: true },
 ]
 
-// ─── Production role ──────────────────────────────────────────────────────────
-
-const PRODUCTION_ITEMS: NavItem[] = [
-  { href: '/production-app',            label: 'Производство',        icon: '📱' },
-  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭' },
-  { href: '/b2b-cutting',               label: 'Раскрой стекла',      icon: '✂️' },
-  // Старые контуры (/b2b-pipeline, /b2b-production, /production) скрыты из меню —
-  // живой контур это /production-app. Доступ по URL пока сохранён (allowlist не трогаем).
-]
-
 // ─── SEO role ─────────────────────────────────────────────────────────────────
 
 const SEO_ANALYTICS: NavItem[] = [
@@ -289,22 +279,20 @@ const ADMIN_OPERATIONS: NavItem[] = [
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
 
-const PRODUCTION_NAV_ORDERS: NavItem[] = [
-  { href: '/b2b-orders',     label: 'B2B Заказы',        icon: '📦' },
-  { href: '/b2b-production', label: 'Производство B2B',  icon: '🔧' },
-  { href: '/b2b-cutting',    label: 'Раскрой стекла',    icon: '✂️' },
+// Цех — операционный контур (живой): сводка → пул → борд → мои задачи → статус заказов.
+const PRODUCTION_NAV_SHOP: NavItem[] = [
+  { href: '/production-app',          label: 'Сводка',           icon: '📋' },
+  { href: '/production-app/today',    label: 'Пул на сегодня',   icon: '📅' },
+  { href: '/production-app/board',    label: 'Борд заказ×этап',  icon: '🔲' },
+  { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
+  { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
 ]
 
-const PRODUCTION_NAV_APP: NavItem[] = [
-  { href: '/production-app',            label: 'Production App',      icon: '📱' },
-  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭' },
-]
-
-const PRODUCTION_NAV_REF: NavItem[] = [
-  { href: '/admin/materials',     label: 'Материалы',     icon: '📦' },
-  { href: '/admin/services',      label: 'Услуги',        icon: '🔧' },
-  { href: '/admin/b2b-materials', label: 'Материалы B2B', icon: '🪟' },
-  { href: '/admin/b2b-services',  label: 'Услуги B2B',    icon: '🔧' },
+// Материал и документы.
+const PRODUCTION_NAV_SUPPLY: NavItem[] = [
+  { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
+  { href: '/production-app/material', label: 'Материал',         icon: '📦' },
+  { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -328,9 +316,8 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, MGLASS_PATHS)) open.push('mglass')
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (mode === 'production') {
-    if (inSection(pathname, ['/b2b-orders', '/b2b-production', '/b2b-cutting'])) open.push('prod_orders')
-    if (inSection(pathname, ['/production-app'])) open.push('prod_app')
-    if (inSection(pathname, ['/admin/materials', '/admin/services', '/admin/b2b-materials', '/admin/b2b-services'])) open.push('prod_ref')
+    if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs'])) open.push('prod_supply')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -356,6 +343,11 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
     if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')
     if (inSection(pathname, ['/production-app'])) open.push('buyer_production')
+    return open
+  }
+  if (role === 'production') {
+    if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
+    if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs'])) open.push('prod_supply')
     return open
   }
   if (role === 'manager') {
@@ -681,12 +673,11 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
     // Production: flat list
     if (role === 'production') return (
-      <div>
+      <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
-        <div className="space-y-px">
-          {PRODUCTION_ITEMS.map(item => navItem(item, 'bg-orange-50 text-orange-700 font-medium'))}
-        </div>
-      </div>
+        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
+      </>
     )
 
     // SEO: analytics + marketing + AI
@@ -748,9 +739,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     if (viewMode === 'production') return (
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
-        {accordion('prod_orders', 'Заказы',        'text-orange-600', 'text-orange-400', PRODUCTION_NAV_ORDERS, 'bg-orange-50 text-orange-700 font-medium')}
-        {accordion('prod_app',    'Production App', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_APP,    'bg-orange-50 text-orange-700 font-medium')}
-        {accordion('prod_ref',    'Справочники',   'text-[#6b6b66]',  'text-[#c4c4be]',  PRODUCTION_NAV_REF,    'bg-[#f5f5f3] text-[#111110] font-medium')}
+        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
       </>
     )
 

@@ -141,9 +141,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
 
   production: [
     '/',
-    '/b2b-pipeline',
     '/b2b-production',
-    '/production',
+    '/b2b-cutting',
     '/production-app',
     '/p/o',
   ],
