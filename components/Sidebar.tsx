@@ -133,6 +133,7 @@ const SEO_AI: NavItem[] = [
 const CFO_ITEMS: NavItem[] = [
   { href: '/cfo',          label: 'Дашборд CFO',       icon: '📊' },
   { href: '/cfo/receivables', label: 'Дебиторка',      icon: '💸' },
+  { href: '/cfo/cashflow', label: 'ДДС · календарь',   icon: '📅' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
   { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
