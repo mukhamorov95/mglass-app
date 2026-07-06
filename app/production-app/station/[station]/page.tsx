@@ -19,7 +19,7 @@ import {
 const STATIONS = ['cutting', 'curved', 'polishing', 'drilling', 'facet', 'tempering', 'triplex', 'packaging'] as const
 type Station = typeof STATIONS[number]
 
-type Task = { id: number; order_id: number; item_index: number; status: string; blocked_by_task_id: number | null }
+type Task = { id: number; order_id: number; item_index: number; status: string; blocked_by_task_id: number | null; layer: number | null; layer_note: string | null }
 type Item = {
   materialName?: string; thickness?: number; category?: string; width?: number; height?: number; quantity?: number
   hasTriplex?: boolean; triplexLayers?: number
@@ -54,7 +54,7 @@ export default function StationBatchesPage() {
     setLoading(true)
     const { data: taskRows } = await sb
       .from('production_tasks')
-      .select('id,order_id,item_index,status,blocked_by_task_id')
+      .select('id,order_id,item_index,status,blocked_by_task_id,layer,layer_note')
       .eq('stage_key', station)
       .in('status', ['queued', 'in_progress'])
     let tasks = (taskRows ?? []) as Task[]
@@ -97,10 +97,20 @@ export default function StationBatchesPage() {
 
     const groups = new Map<string, PieceGroup>()
     const meta = new Map<string, { orders: Batch['orders']; area: number }>()
-    // Одна «слойка» детали в раскрое: у обычной позиции 1 слой, у триплекса — все стёкла пакета.
-    const pushLayer = (t: Task, order: OrderRow, item: Item, name: string, thk: number, layerTag: string) => {
-      const key = `${name}|${thk}`
-      const mat = matLookup.get(key)
+    // Каждая задача — конкретное стекло: у триплекса задачи разложены ПО СЛОЯМ ещё при
+    // запуске в производство (layer 1..N), слой задачи определяет материал/толщину.
+    for (const t of tasks) {
+      const order = orders.get(t.order_id)
+      const item = order?.items?.[t.item_index]
+      if (!order || !item || !item.width || !item.height) continue
+      const ly = t.layer ?? 1
+      const glass = (item.hasTriplex && ly >= 2)
+        ? (item.triplexGlasses?.[ly - 2] ?? { materialName: item.materialName, thickness: item.thickness })
+        : { materialName: item.materialName, thickness: item.thickness }
+      const name = glass.materialName ?? 'Неизвестно'
+      const thk  = glass.thickness ?? 0
+      const key  = `${name}|${thk}`
+      const mat  = matLookup.get(key)
       if (!groups.has(key)) {
         groups.set(key, {
           pieces: [], materialLabel: `${name}${thk > 0 ? ' ' + thk + ' мм' : ''}`, category: item.category ?? '',
@@ -113,25 +123,10 @@ export default function StationBatchesPage() {
       const m = meta.get(key)!
       const qty = item.quantity ?? 1
       for (let i = 0; i < qty; i++) {
-        g.pieces.push({ id: `${t.id}${layerTag}-${i}`, width: item.width!, height: item.height!, label: `${item.width}×${item.height}`, orderId: order.id, orderClientName: order.client_name, materialKey: key, canRotate: true })
+        g.pieces.push({ id: `${t.id}-${i}`, width: item.width, height: item.height, label: `${item.width}×${item.height}`, orderId: order.id, orderClientName: order.client_name, materialKey: key, canRotate: true })
       }
-      m.area += (item.width! * item.height! * qty) / 1_000_000
-      m.orders.push({ orderId: order.id, number: order.custom_number?.trim() || `#${order.id}`, client: order.client_name, taskId: t.id, size: `${item.width}×${item.height}${layerTag ? ` (${layerTag.replace('-', '')})` : ''}`, qty })
-    }
-    for (const t of tasks) {
-      const order = orders.get(t.order_id)
-      const item = order?.items?.[t.item_index]
-      if (!order || !item || !item.width || !item.height) continue
-      pushLayer(t, order, item, item.materialName ?? 'Неизвестно', item.thickness ?? 0, '')
-      // Доп. слои триплекса — в свои партии (у стёкол пакета могут быть разные толщины, напр. 4+6).
-      if (isCutting && item.hasTriplex) {
-        const extras = item.triplexGlasses?.length
-          ? item.triplexGlasses
-          : Array.from({ length: (item.triplexLayers === 3 ? 3 : 2) - 1 }, () => ({ materialName: item.materialName, thickness: item.thickness }))
-        extras.forEach((g2, li) => {
-          pushLayer(t, order, item, g2.materialName ?? item.materialName ?? 'Неизвестно', g2.thickness ?? item.thickness ?? 0, `-слой${li + 2}`)
-        })
-      }
+      m.area += (item.width * item.height * qty) / 1_000_000
+      m.orders.push({ orderId: order.id, number: order.custom_number?.trim() || `#${order.id}`, client: order.client_name, taskId: t.id, size: `${item.width}×${item.height}${t.layer_note ? ` · ${t.layer_note}` : ''}`, qty })
     }
 
     const results = isCutting ? runCuttingOptimizer(groups, settings) : []

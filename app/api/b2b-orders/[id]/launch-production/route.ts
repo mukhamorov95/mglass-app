@@ -38,33 +38,54 @@ export async function POST(
 
   const { data: inserted, error: insertErr } = await svc
     .from('production_tasks')
-    .upsert(rows, { onConflict: 'order_id,item_index,stage_key', ignoreDuplicates: true })
+    .upsert(rows, { onConflict: 'order_id,item_index,stage_key,layer', ignoreDuplicates: true })
     .select('id, item_index, sequence_order')
   if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 })
 
-  // Second pass: link each task to the previous-stage task of the same item
-  // via blocked_by_task_id. Re-fetch the full set for this order (covers both
-  // newly-inserted and pre-existing rows from an earlier run).
+  // Second pass: blocked_by_task_id.
+  // Слои (layer >= 1) — независимые цепочки: этапы одного стекла идут друг за другом,
+  // а стёкла пакета режутся/обрабатываются параллельно. Задачи изделия (layer = 0:
+  // склейка триплекса, упаковка) стартуют после ПОСЛЕДНЕЙ послойной задачи и чейнятся между собой.
   const { data: allTasks, error: fetchErr } = await svc
     .from('production_tasks')
-    .select('id, item_index, sequence_order, blocked_by_task_id')
+    .select('id, item_index, sequence_order, blocked_by_task_id, layer')
     .eq('order_id', orderId)
     .order('item_index', { ascending: true })
     .order('sequence_order', { ascending: true })
   if (fetchErr) return NextResponse.json({ error: fetchErr.message }, { status: 500 })
 
-  const byItem = new Map<number, typeof allTasks>()
-  for (const t of allTasks ?? []) {
+  type T = { id: number; item_index: number; sequence_order: number; blocked_by_task_id: number | null; layer: number | null }
+  const byItem = new Map<number, T[]>()
+  for (const t of (allTasks ?? []) as T[]) {
     const list = byItem.get(t.item_index) ?? []
     list.push(t)
     byItem.set(t.item_index, list)
   }
 
   const updates: { id: number; blocked_by_task_id: number | null }[] = []
+  const want = new Map<number, number | null>()
   for (const list of byItem.values()) {
-    for (let i = 0; i < list.length; i++) {
-      const want = i === 0 ? null : list[i - 1].id
-      if (list[i].blocked_by_task_id !== want) updates.push({ id: list[i].id, blocked_by_task_id: want })
+    const layerChains = new Map<number, T[]>()   // layer >= 1
+    const itemChain: T[] = []                    // layer = 0
+    for (const t of list) {
+      const ly = t.layer ?? 1
+      if (ly === 0) itemChain.push(t)
+      else { const c = layerChains.get(ly) ?? []; c.push(t); layerChains.set(ly, c) }
+    }
+    let lastOfLayers: T | null = null
+    for (const chain of layerChains.values()) {
+      for (let i = 0; i < chain.length; i++) want.set(chain[i].id, i === 0 ? null : chain[i - 1].id)
+      const last = chain[chain.length - 1]
+      if (!lastOfLayers || last.sequence_order > lastOfLayers.sequence_order) lastOfLayers = last
+    }
+    for (let i = 0; i < itemChain.length; i++) {
+      want.set(itemChain[i].id, i === 0 ? (lastOfLayers?.id ?? null) : itemChain[i - 1].id)
+    }
+  }
+  for (const list of byItem.values()) {
+    for (const t of list) {
+      const w = want.get(t.id) ?? null
+      if (t.blocked_by_task_id !== w) updates.push({ id: t.id, blocked_by_task_id: w })
     }
   }
   for (const u of updates) {

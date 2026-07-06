@@ -19,6 +19,7 @@ type TaskRow = {
   status: 'queued' | 'in_progress' | 'done' | 'problem'
   blocked_by_task_id: number | null
   production_day: string | null
+  layer_note: string | null
 }
 
 type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
@@ -61,7 +62,7 @@ export default function MyQueuePage() {
 
     const { data: taskRows } = await sb
       .from('production_tasks')
-      .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day')
+      .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note')
       .or(orFilter)
       .in('status', ['queued', 'in_progress'])
       .order('sequence_order', { ascending: true })
@@ -178,7 +179,7 @@ export default function MyQueuePage() {
                         <p className="text-[12px] text-[#6b6b66] truncate">{orders.get(t.order_id)?.client_name}</p>
                       </div>
                       <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap flex-shrink-0">
-                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
+                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}
                       </span>
                     </div>
                     <p className="text-[12px] text-amber-700">
@@ -240,7 +241,7 @@ function TaskCard({ task, order, onStart, onDone, onAndon }: {
           <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
         </Link>
         <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-[#f0f0ec] text-[#6b6b66] whitespace-nowrap flex-shrink-0">
-          Поз. {task.item_index + 1} · {STAGE_LABELS[task.stage_key as DetailStageKey] ?? task.stage_key}
+          Поз. {task.item_index + 1} · {STAGE_LABELS[task.stage_key as DetailStageKey] ?? task.stage_key}{task.layer_note ? ` · ${task.layer_note}` : ''}
         </span>
       </div>
       {spec && <p className="text-[12px] font-mono text-[#111110] mb-2.5">{spec}</p>}

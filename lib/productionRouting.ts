@@ -32,23 +32,68 @@ export type NewProductionTaskRow = {
   station:        string
   status:         'queued'
   production_day: string | null
+  layer:          number        // 0 = изделие целиком; 1..N = слой пакета (обычные позиции — 1)
+  layer_note:     string | null // подпись слоя для рабочего, напр. «слой 2: 4 мм»
 }
+
+export type RoutingItem = {
+  hasTempering?: boolean; materialName?: string; category?: string
+  hasHoles?: boolean; shape?: string; hasFacet?: boolean
+  hasTriplex?: boolean; triplexLayers?: number; thickness?: number
+  triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
+}
+
+// Этапы, которые для триплекса выполняются НА КАЖДОМ СТЕКЛЕ пакета (до склейки).
+const PER_LAYER_STAGES = new Set(['cutting', 'curved', 'polishing', 'drilling', 'facet', 'tempering'])
 
 export function buildProductionTasks(
   orderId: number,
-  items: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string }[],
+  items: RoutingItem[],
 ): NewProductionTaskRow[] {
   const rows: NewProductionTaskRow[] = []
   items.forEach((item, itemIndex) => {
-    buildItemRoute(item).forEach(stage => {
+    const route = buildItemRoute(item)
+
+    if (!item.hasTriplex) {
+      route.forEach(stage => {
+        rows.push({
+          order_id: orderId, item_index: itemIndex,
+          stage_key: stage.stageKey, sequence_order: stage.sequenceOrder, station: stage.station,
+          status: 'queued', production_day: null, layer: 1, layer_note: null,
+        })
+      })
+      return
+    }
+
+    // Триплекс: каждое стекло пакета — своя цепочка «резка→…→закалка» (layer 1..N),
+    // затем склейка (triplex) и упаковка — на изделие целиком (layer 0).
+    const layersCount = item.triplexLayers === 3 ? 3 : 2
+    const glasses = Array.from({ length: layersCount }, (_, i) =>
+      i === 0
+        ? { materialName: item.materialName, thickness: item.thickness }
+        : (item.triplexGlasses?.[i - 1] ?? { materialName: item.materialName, thickness: item.thickness }))
+
+    const perLayer = route.filter(s => PER_LAYER_STAGES.has(s.stageKey))
+    const perItem  = route.filter(s => !PER_LAYER_STAGES.has(s.stageKey))
+
+    let seq = 0
+    glasses.forEach((glass, gi) => {
+      const note = `слой ${gi + 1}: ${glass.thickness ?? '?'} мм`
+      perLayer.forEach(stage => {
+        seq += 1
+        rows.push({
+          order_id: orderId, item_index: itemIndex,
+          stage_key: stage.stageKey, sequence_order: seq, station: stage.station,
+          status: 'queued', production_day: null, layer: gi + 1, layer_note: note,
+        })
+      })
+    })
+    perItem.forEach(stage => {
+      seq += 1
       rows.push({
-        order_id:       orderId,
-        item_index:     itemIndex,
-        stage_key:      stage.stageKey,
-        sequence_order: stage.sequenceOrder,
-        station:        stage.station,
-        status:         'queued',
-        production_day: null,
+        order_id: orderId, item_index: itemIndex,
+        stage_key: stage.stageKey, sequence_order: seq, station: stage.station,
+        status: 'queued', production_day: null, layer: 0, layer_note: null,
       })
     })
   })
