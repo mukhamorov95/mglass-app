@@ -9,7 +9,6 @@
     { "path": "/api/cron/agent-revenue",  "schedule": "0 9 * * *"   },
     { "path": "/api/cron/agent-analyst",  "schedule": "0 8 * * *"   },
     { "path": "/api/cron/agent-production","schedule": "0 7 * * *"  },
-    { "path": "/api/cron/agent-catalog",  "schedule": "0 10 * * *"  },
     { "path": "/api/cron/agent-ceo",      "schedule": "0 8 * * *"   },
     { "path": "/api/cron/sales-monitor", "schedule": "0 15 * * 1-5" },
     { "path": "/api/cron/morning-briefing", "schedule": "0 4 * * *" }

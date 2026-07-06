@@ -39,8 +39,11 @@ const MAIN_MENU: InlineKeyboard = [
   ],
   [
     { text: '💬 Написать клиенту', callback_data: 'menu:msg' },
+    { text: '📝 Задача в систему', callback_data: 'menu:task' },
   ],
 ]
+
+const TASK_PROMPT = '📝 <b>Задача в систему</b>\n\nНадиктуй голосом или напиши текстом, что нужно сделать. Я разберу, оценю и поставлю в очередь — Клод заберёт её при следующем запуске.'
 
 const AGENT_ICONS: Record<string, string> = {
   revenue: '💰', analyst: '📊', production: '🏭', catalog: '🧠',
@@ -400,6 +403,11 @@ async function handle(update: any, baseUrl: string) {
       await setSession(tid, 'calc_input')
       return
     }
+    if (cmd === '/task' || cmd === '/задача') {
+      await sendMessage(chatId, TASK_PROMPT)
+      await setSession(tid, 'task_input')
+      return
+    }
   }
 
   // ── Callbacks ──
@@ -418,6 +426,13 @@ async function handle(update: any, baseUrl: string) {
     // Дашборд
     if (data === 'menu:dashboard') {
       await handleDashboard(chatId, msgId)
+      return
+    }
+
+    // Задача в систему (очередь Клода)
+    if (data === 'menu:task') {
+      await editMessage(chatId, msgId, TASK_PROMPT)
+      await setSession(tid, 'task_input')
       return
     }
 
@@ -681,7 +696,11 @@ async function handle(update: any, baseUrl: string) {
 
   if (!inputText) return
 
-  const effectiveState = transcription ? 'calc_input' : session.state
+  // Голос уважает активный режим (задача/обучение/сообщение клиенту); иначе — калькулятор
+  const VOICE_AWARE_STATES = ['task_input', 'train_input', 'lead_send_msg']
+  const effectiveState = transcription
+    ? (VOICE_AWARE_STATES.includes(session.state) ? session.state : 'calc_input')
+    : session.state
 
   if (effectiveState === 'main_menu' || effectiveState === 'leads_list') {
     await sendMessage(chatId, '🏠 <b>Главное меню</b>', MAIN_MENU)
@@ -716,6 +735,52 @@ async function handle(update: any, baseUrl: string) {
       if (thinkMsgId) await editMessage(chatId, thinkMsgId, errText,
         [[{ text: '🔄 Попробовать', callback_data: 'menu:calc' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
       else await sendMessage(chatId, errText)
+    }
+    return
+  }
+
+  if (effectiveState === 'task_input') {
+    const waitMsg   = await sendMessage(chatId, '🧠 Разбираю задачу...') as any
+    const waitMsgId = waitMsg?.result?.message_id
+    try {
+      let title = inputText.slice(0, 100), category = 'other', priority = 'normal'
+      let structured = inputText, assessment = ''
+      try {
+        const resp = await withTimeout(
+          anthropic.messages.create({
+            model: 'claude-sonnet-4-6', max_tokens: 600,
+            system: 'Ты — техлид ERP стекольной компании M-Glass (Next.js + Supabase: продажи B2C/B2B, производство, CFO, маркетинг). Владелец диктует задачу. Верни ТОЛЬКО JSON: {"title":"короткий заголовок по-русски","structured":"чёткая формулировка задачи 1-3 предложения: что сделать и где","category":"production|sales|finance|marketing|it|other","priority":"low|normal|high","assessment":"оценка в 1-2 предложениях: насколько понятна задача, что уточнить, примерный размер (S/M/L)"}',
+            messages: [{ role: 'user', content: inputText }],
+          }), 25000, 'claude-task'
+        )
+        const raw = resp.content.find(b => b.type === 'text')?.text ?? '{}'
+        const p = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
+        title = p.title ?? title; category = p.category ?? category
+        priority = p.priority ?? priority; structured = p.structured ?? structured
+        assessment = p.assessment ?? ''
+      } catch { /* сохраняем сырую формулировку — очередь важнее разбора */ }
+      const { data: row } = await db().from('owner_tasks').insert({
+        raw_text: inputText, title, details: structured, category, priority,
+        source: transcription ? 'voice' : 'text', status: 'queued', created_by: tgUser.user_id,
+      }).select('id').single()
+      const { count } = await db().from('owner_tasks').select('id', { count: 'exact', head: true }).eq('status', 'queued')
+      const text = [
+        `✅ <b>Задача #${row?.id ?? '?'} в очереди</b> (в очереди: ${count ?? 1})`,
+        '',
+        `<b>${title}</b>`,
+        structured !== title ? structured : '',
+        `<i>Категория: ${category} · приоритет: ${priority}</i>`,
+        assessment ? `\n🧠 ${assessment}` : '',
+        '',
+        '<i>Клод заберёт задачу при следующем запуске на компьютере.</i>',
+      ].filter(Boolean).join('\n')
+      const kb: InlineKeyboard = [[{ text: '➕ Ещё задачу', callback_data: 'menu:task' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
+      if (waitMsgId) await editMessage(chatId, waitMsgId, text, kb)
+      else await sendMessage(chatId, text, kb)
+      await setSession(tid, 'task_input') // остаёмся в режиме — можно диктовать подряд
+    } catch {
+      if (waitMsgId) await editMessage(chatId, waitMsgId, '❌ Не удалось сохранить задачу.',
+        [[{ text: '🔄 Ещё раз', callback_data: 'menu:task' }, { text: '🏠 Меню', callback_data: 'menu:main' }]])
     }
     return
   }
