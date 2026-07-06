@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 // Финансовое планирование (модель Хаббарда) — точки безубыточности.
-// Структура повторяет таблицу владельца: Доходы по видам → Переменные (% от дохода)
-// → МАРЖА → Фонды от маржи (возврат инвестиций / обучение / резерв / бонусы
-// производства) → Сумма на распределение → Постоянные расходы → Остаток.
+// Редактируются ДВА юнита: «Производство» и «M-Glass» (каждый хранится в finplan_models).
+// Вкладка «Компания (всё)» — автоматическая сумма юнитов: доходы и переменные зеркалятся
+// из юнитов, маржа складывается, одноимённые фонды и постоянные суммируются.
 // ТБ-0 — выручка «в ноль» без фондов; ТБ-1 — с фондами; ТБ-цель — с доходом собственника.
 // Остаток сверх всего = Фонд перелива, из него % на бонусы производства.
 
@@ -23,14 +23,21 @@ type Model   = {
   fixed: FixedRow[]
 }
 
-type Unit = 'total' | 'mglass' | 'production'
+type EditUnit = 'mglass' | 'production'
+type Unit = 'total' | EditUnit
 const UNITS: { key: Unit; label: string }[] = [
   { key: 'total',      label: 'Компания (всё)' },
   { key: 'mglass',     label: 'M-Glass' },
   { key: 'production', label: 'Производство' },
 ]
+const FUND_KEYS: [keyof Funds, string][] = [
+  ['invest', 'Фонд возврата инвестиций'],
+  ['training', 'Фонд обучения'],
+  ['reserve', 'Резервный фонд'],
+  ['prodBonus', 'Фонд бонусов производства 🏭'],
+]
 
-// ── Сиды из таблицы владельца (Мгласс_производство_переменные, ноябрь 2025) ──
+// ── Сиды из файла владельца «Мгласс_производство_оклады_лизинг_кредит_финал» ──
 const GLASS_VARS: VarRow[] = [
   { name: 'Закуп сырья стекла + расходные материалы', pct: 31.33 },
   { name: 'Сдельная ЗП мастеров цеха', pct: 8.55 },
@@ -50,9 +57,9 @@ const PRODUCT_VARS: VarRow[] = [
   { name: 'Сдельная ЗП отдела реализации', pct: 2.5 },
   { name: 'УСН', pct: 5 },
 ]
-// Постоянные (файл «оклады_лизинг_кредит_финал»): оклады разнесены 390к MGlass +
-// 1 030к цех = 1 420к; лизинг 400 000 — у производства; кредит 290 000 — у MGlass;
-// аренда 750 000 = 250к MGlass + 500к цех. Общие статьи одинаковы в обоих юнитах.
+// Постоянные: оклады разнесены 390к MGlass + 1 030к цех = 1 420к; лизинг 400 000 —
+// у производства; кредит 290 000 — у MGlass; аренда 750 000 = 250к MGlass + 500к цех.
+// Общие статьи пока в обоих юнитах полными суммами (как в файле) — уточняются владельцем.
 const FIXED_REST: FixedRow[] = [
   { name: 'Налоги с ЗП (НДФЛ, страховые)', amount: 200000 },
   { name: 'Страховки КАСКО, ОСАГО', amount: 25000 },
@@ -72,58 +79,45 @@ const FIXED_REST: FixedRow[] = [
   { name: 'Вывоз мусора', amount: 10000 },
 ]
 const buildFixed = (head: FixedRow[]): FixedRow[] => [...head, ...FIXED_REST.map(f => ({ ...f }))]
-const FIXED_TOTAL = buildFixed([                                    // Σ 3 509 710
-  { name: 'Аренда помещения', amount: 750000 },
-  { name: 'Коммунальные расходы', amount: 20000 },
-  { name: 'ЗП оклады, отпускные, больничные, премии (390к MGlass + 1 030к цех)', amount: 1420000 },
-  { name: 'Лизинг', amount: 400000 },
-  { name: 'Кредит и проценты', amount: 290000 },
-])
-const FIXED_MGLASS = buildFixed([                                   // Σ 1 579 710
-  { name: 'Аренда помещения (доля от 750 000)', amount: 250000 },
-  { name: 'Коммунальные расходы', amount: 20000 },
-  { name: 'ЗП оклады M-Glass (офис, продажи, замерщик)', amount: 390000 },
-  { name: 'Кредит и проценты (кредит MGlass)', amount: 290000 },
-])
-const FIXED_PROD = buildFixed([                                     // Σ 2 579 710
-  { name: 'Аренда помещения (доля от 750 000)', amount: 500000 },
-  { name: 'Коммунальные расходы', amount: 20000 },
-  { name: 'ЗП оклады производства (остаток ФОТ: 1 420к − 390к)', amount: 1030000 },
-  { name: 'Лизинг (относится к производству)', amount: 400000 },
-])
-const DEFAULTS: Record<Unit, Model> = {
-  total: {
-    incomes: [
-      { name: 'Производство (B2B) — продажа стекла', plan: 2400000, vars: GLASS_VARS },
-      { name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS },
-    ],
-    funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
-    ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
-    fixed: FIXED_TOTAL,
-  },
+const DEFAULTS: Record<EditUnit, Model> = {
   mglass: {
     incomes: [{ name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
-    fixed: FIXED_MGLASS,
+    fixed: buildFixed([                                   // Σ 1 579 710
+      { name: 'Аренда помещения (доля от 750 000)', amount: 250000 },
+      { name: 'Коммунальные расходы', amount: 20000 },
+      { name: 'ЗП оклады M-Glass (офис, продажи, замерщик)', amount: 390000 },
+      { name: 'Кредит и проценты (кредит MGlass)', amount: 290000 },
+    ]),
   },
   production: {
     incomes: [{ name: 'Производство (B2B) — продажа стекла', plan: 2400000, vars: GLASS_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
-    fixed: FIXED_PROD,
+    fixed: buildFixed([                                   // Σ 2 579 710
+      { name: 'Аренда помещения (доля от 750 000)', amount: 500000 },
+      { name: 'Коммунальные расходы', amount: 20000 },
+      { name: 'ЗП оклады производства (остаток ФОТ: 1 420к − 390к)', amount: 1030000 },
+      { name: 'Лизинг (относится к производству)', amount: 400000 },
+    ]),
   },
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+const marginOf = (m: Model) => m.incomes.reduce((s, i) => {
+  const varPct = i.vars.reduce((x, v) => x + (v.pct || 0), 0) / 100
+  return s + (i.plan || 0) * (1 - varPct)
+}, 0)
+const fixedOf = (m: Model) => m.fixed.reduce((s, f) => s + (f.amount || 0), 0)
 // без w-full: числовое поле с width:100% рядом с flex-1 отжимало поле названия в ноль
-const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] min-w-0'
+const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] min-w-0 disabled:bg-[#fafaf8] disabled:border-[#eeeeea]'
 const inputBlue = inputCls.replace('text-[#111110]', 'text-blue-700 font-semibold')
 
 export default function BreakevenPage() {
   const sb = createClient()
   const [unit, setUnit] = useState<Unit>('total')
-  const [models, setModels] = useState<Record<Unit, Model>>(DEFAULTS)
+  const [models, setModels] = useState<Record<EditUnit, Model>>(DEFAULTS)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [savedOk, setSavedOk] = useState(false)
@@ -136,12 +130,12 @@ export default function BreakevenPage() {
       const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
       setMeName(p?.name ?? user.email ?? '')
     }
-    const { data } = await sb.from('finplan_models').select('unit,data')
+    const { data } = await sb.from('finplan_models').select('unit,data').in('unit', ['mglass', 'production'])
     if (data?.length) {
       setModels(prev => {
         const next = { ...prev }
         for (const row of data) {
-          const u = row.unit as Unit
+          const u = row.unit as EditUnit
           if (row.data && Object.keys(row.data).length) next[u] = row.data as Model
         }
         return next
@@ -152,10 +146,31 @@ export default function BreakevenPage() {
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
-  const m = models[unit]
-  const patch = (fn: (m: Model) => Model) => setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit])) }))
+  // «Компания» = сумма юнитов: доходы/переменные зеркалятся, фонды и постоянные суммируются.
+  // Фонды выражаем эффективным % от общей маржи, чтобы ₽-суммы точно равнялись Σ юнитов.
+  const totalModel = useMemo<Model>(() => {
+    const p = models.production, g = models.mglass
+    const mP = marginOf(p), mG = marginOf(g), mSum = mP + mG
+    const eff = (k: keyof Funds) => mSum > 0 ? (mP * (p.funds[k] || 0) + mG * (g.funds[k] || 0)) / mSum : 0
+    return {
+      incomes: [...structuredClone(p.incomes), ...structuredClone(g.incomes)],
+      funds: { invest: eff('invest'), training: eff('training'), reserve: eff('reserve'), prodBonus: eff('prodBonus') },
+      ownerPct: 0,
+      ownerRub: Math.round((p.ownerRub || 0) + (p.ownerPct || 0) / 100 * mP + (g.ownerRub || 0) + (g.ownerPct || 0) / 100 * mG),
+      overflowBonusPct: 0,
+      fixed: [...structuredClone(p.fixed), ...structuredClone(g.fixed)],
+    }
+  }, [models])
+
+  const ro = unit === 'total' // read-only: сводка, правки — в юнитах
+  const m = ro ? totalModel : models[unit]
+  const patch = (fn: (m: Model) => Model) => {
+    if (ro) return
+    setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit])) }))
+  }
 
   async function save() {
+    if (ro) return
     setSaving(true)
     try {
       await sb.from('finplan_models').upsert({ unit, data: models[unit], updated_by: meName || null, updated_at: new Date().toISOString() })
@@ -199,6 +214,12 @@ export default function BreakevenPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
+  // Постоянные на «Компании» рендерим группами по юнитам (границы — по длинам списков)
+  const fixedGroups = ro ? [
+    { title: 'Производство', rows: models.production.fixed, sum: fixedOf(models.production) },
+    { title: 'M-Glass', rows: models.mglass.fixed, sum: fixedOf(models.mglass) },
+  ] : null
+
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
@@ -207,18 +228,21 @@ export default function BreakevenPage() {
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Финмодель · Точка безубыточности</h1>
             <p className="text-[12px] text-[#9a9a95] mt-0.5">Доходы → переменные (% от дохода) → маржа → фонды от маржи → постоянные. Синие поля — редактируемые.</p>
           </div>
-          <button onClick={save} disabled={saving}
-            className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
-            {saving ? '…' : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
-          </button>
+          {!ro && (
+            <button onClick={save} disabled={saving}
+              className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
+              {saving ? '…' : savedOk ? '✓ Сохранено' : '💾 Сохранить'}
+            </button>
+          )}
         </div>
-        <div className="flex gap-1.5 mt-3">
+        <div className="flex items-center gap-1.5 mt-3 flex-wrap">
           {UNITS.map(u => (
             <button key={u.key} onClick={() => setUnit(u.key)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${unit === u.key ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
               {u.label}
             </button>
           ))}
+          {ro && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство — правки вносите там</span>}
         </div>
       </div>
 
@@ -227,12 +251,16 @@ export default function BreakevenPage() {
         <div className="space-y-4">
           {/* Доходы */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">План по доходам, ₽/мес</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
+              План по доходам, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · из вкладок юнитов</span>}
+            </p>
             {m.incomes.map((inc, ii) => (
               <div key={ii} className="flex items-center gap-2 mb-1.5">
-                <input value={inc.name} placeholder="Название дохода" onChange={e => patch(x => { x.incomes[ii].name = e.target.value; return x })}
+                <input value={inc.name} placeholder="Название дохода" disabled={ro}
+                  onChange={e => patch(x => { x.incomes[ii].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
-                <input type="number" value={inc.plan || ''} onChange={e => patch(x => { x.incomes[ii].plan = Number(e.target.value) || 0; return x })}
+                <input type="number" value={inc.plan || ''} disabled={ro}
+                  onChange={e => patch(x => { x.incomes[ii].plan = Number(e.target.value) || 0; return x })}
                   className={inputBlue + ' w-36 shrink-0 text-right'} />
               </div>
             ))}
@@ -249,20 +277,22 @@ export default function BreakevenPage() {
               </p>
               {inc.vars.map((v, vi) => (
                 <div key={vi} className="flex items-center gap-2 mb-1">
-                  <input value={v.name} onChange={e => patch(x => { x.incomes[ii].vars[vi].name = e.target.value; return x })}
+                  <input value={v.name} disabled={ro}
+                    onChange={e => patch(x => { x.incomes[ii].vars[vi].name = e.target.value; return x })}
                     className={inputCls + ' flex-1'} />
                   <div className="flex items-center gap-1 w-24 shrink-0">
-                    <input type="number" step="0.01" value={v.pct || ''} onChange={e => patch(x => { x.incomes[ii].vars[vi].pct = Number(e.target.value) || 0; return x })}
+                    <input type="number" step="0.01" value={v.pct || ''} disabled={ro}
+                      onChange={e => patch(x => { x.incomes[ii].vars[vi].pct = Number(e.target.value) || 0; return x })}
                       className={inputBlue + ' w-full text-right'} />
                     <span className="text-[11px] text-[#9a9a95]">%</span>
                   </div>
                   <span className="w-24 text-right font-mono text-[11px] text-[#6b6b66]">{fmt((inc.plan || 0) * (v.pct || 0) / 100)}</span>
-                  <button onClick={() => patch(x => { x.incomes[ii].vars.splice(vi, 1); return x })}
-                    className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>
+                  {!ro && <button onClick={() => patch(x => { x.incomes[ii].vars.splice(vi, 1); return x })}
+                    className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>}
                 </div>
               ))}
-              <button onClick={() => patch(x => { x.incomes[ii].vars.push({ name: '', pct: 0 }); return x })}
-                className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>
+              {!ro && <button onClick={() => patch(x => { x.incomes[ii].vars.push({ name: '', pct: 0 }); return x })}
+                className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
               <div className="border-t border-[#f0f0ec] pt-2 mt-2 space-y-1 text-[12px]">
                 <div className="flex justify-between"><span className="text-[#6b6b66]">Итого переменные</span>
                   <span className="font-mono">{(calc.perIncome[ii].varPct * 100).toFixed(2)}% · {fmt(calc.perIncome[ii].varRub)}</span></div>
@@ -272,19 +302,25 @@ export default function BreakevenPage() {
             </div>
           ))}
 
+          {/* Общая маржа (на сводке — сумма юнитов) */}
+          {ro && (
+            <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 flex justify-between items-center">
+              <span className="text-[13px] font-bold">МАРЖИНАЛЬНАЯ ПРИБЫЛЬ — производство + M-Glass</span>
+              <span className="font-mono text-[15px] font-bold text-emerald-700">{fmt(calc.margin)} · {(calc.weightedMarginPct * 100).toFixed(1)}%</span>
+            </div>
+          )}
+
           {/* Фонды от маржи */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Фонды от маржи, %</p>
-            {([
-              ['invest', 'Фонд возврата инвестиций'],
-              ['training', 'Фонд обучения'],
-              ['reserve', 'Резервный фонд'],
-              ['prodBonus', 'Фонд бонусов производства'],
-            ] as [keyof Funds, string][]).map(([k, label]) => (
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
+              Фонды от маржи, %{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · одноимённые фонды юнитов суммируются, % — от общей маржи</span>}
+            </p>
+            {FUND_KEYS.map(([k, label]) => (
               <div key={k} className="flex items-center gap-2 mb-1">
-                <span className="flex-1 text-[12px] text-[#111110]">{label}{k === 'prodBonus' ? ' 🏭' : ''}</span>
+                <span className="flex-1 text-[12px] text-[#111110]">{label}</span>
                 <div className="flex items-center gap-1 w-24 shrink-0">
-                  <input type="number" step="0.1" value={m.funds[k] || ''} onChange={e => patch(x => { x.funds[k] = Number(e.target.value) || 0; return x })}
+                  <input type="number" step="0.1" value={ro ? (m.funds[k] ? Number(m.funds[k].toFixed(2)) : '') : (m.funds[k] || '')} disabled={ro}
+                    onChange={e => patch(x => { x.funds[k] = Number(e.target.value) || 0; return x })}
                     className={inputBlue + ' w-full text-right'} />
                   <span className="text-[11px] text-[#9a9a95]">%</span>
                 </div>
@@ -301,8 +337,23 @@ export default function BreakevenPage() {
 
           {/* Постоянные */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Постоянные расходы, ₽/мес</p>
-            {m.fixed.map((f, fi) => (
+            <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
+              Постоянные расходы, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass</span>}
+            </p>
+            {fixedGroups ? fixedGroups.map(gr => (
+              <div key={gr.title} className="mb-3">
+                <p className="text-[11px] font-semibold text-[#6b6b66] mb-1">{gr.title}</p>
+                {gr.rows.map((f, fi) => (
+                  <div key={fi} className="flex items-center gap-2 mb-1">
+                    <input value={f.name} disabled className={inputCls + ' flex-1'} />
+                    <input type="number" value={f.amount || ''} disabled className={inputBlue + ' w-32 shrink-0 text-right'} />
+                  </div>
+                ))}
+                <div className="flex justify-between text-[12px] text-[#6b6b66] pt-1">
+                  <span>Итого {gr.title}</span><span className="font-mono">{fmt(gr.sum)}</span>
+                </div>
+              </div>
+            )) : m.fixed.map((f, fi) => (
               <div key={fi} className="flex items-center gap-2 mb-1">
                 <input value={f.name} onChange={e => patch(x => { x.fixed[fi].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
@@ -312,8 +363,8 @@ export default function BreakevenPage() {
                   className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>
               </div>
             ))}
-            <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0 }); return x })}
-              className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>
+            {!ro && <button onClick={() => patch(x => { x.fixed.push({ name: '', amount: 0 }); return x })}
+              className="text-[11px] text-[#9a9a95] hover:text-[#111110] mt-1">+ строка</button>}
             <div className="flex justify-between text-[13px] font-bold border-t border-[#f0f0ec] pt-2 mt-2">
               <span>Итого постоянных</span><span className="font-mono">{fmt(calc.fixed)}</span>
             </div>
@@ -322,17 +373,23 @@ export default function BreakevenPage() {
           {/* Цель собственника */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Доход собственника (для ТБ-цель)</p>
-            <div className="grid grid-cols-2 gap-3">
-              <label className="text-[12px] text-[#6b6b66]">% от маржи
-                <input type="number" step="0.5" value={m.ownerPct || ''} onChange={e => patch(x => { x.ownerPct = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-full mt-1 text-right'} /></label>
-              <label className="text-[12px] text-[#6b6b66]">или фикс, ₽/мес
-                <input type="number" value={m.ownerRub || ''} onChange={e => patch(x => { x.ownerRub = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-full mt-1 text-right'} /></label>
-            </div>
-            <label className="block text-[12px] text-[#6b6b66] mt-3">Из фонда перелива → бонусы производства, %
-              <input type="number" step="1" value={m.overflowBonusPct || ''} onChange={e => patch(x => { x.overflowBonusPct = Number(e.target.value) || 0; return x })}
-                className={inputBlue + ' mt-1 text-right w-32'} /></label>
+            {ro ? (
+              <p className="text-[12px] text-[#6b6b66]">Σ по юнитам: <span className="font-mono font-semibold text-[#111110]">{fmt(m.ownerRub)}</span> /мес — задаётся во вкладках M-Glass и Производство.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="text-[12px] text-[#6b6b66]">% от маржи
+                    <input type="number" step="0.5" value={m.ownerPct || ''} onChange={e => patch(x => { x.ownerPct = Number(e.target.value) || 0; return x })}
+                      className={inputBlue + ' w-full mt-1 text-right'} /></label>
+                  <label className="text-[12px] text-[#6b6b66]">или фикс, ₽/мес
+                    <input type="number" value={m.ownerRub || ''} onChange={e => patch(x => { x.ownerRub = Number(e.target.value) || 0; return x })}
+                      className={inputBlue + ' w-full mt-1 text-right'} /></label>
+                </div>
+                <label className="block text-[12px] text-[#6b6b66] mt-3">Из фонда перелива → бонусы производства, %
+                  <input type="number" step="1" value={m.overflowBonusPct || ''} onChange={e => patch(x => { x.overflowBonusPct = Number(e.target.value) || 0; return x })}
+                    className={inputBlue + ' mt-1 text-right w-32'} /></label>
+              </>
+            )}
           </div>
         </div>
 
@@ -378,7 +435,7 @@ export default function BreakevenPage() {
             <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-700">Фонд перелива</p>
             <p className="text-[18px] font-bold font-mono text-emerald-800 mt-1">{fmt(calc.overflow)}</p>
             <p className="text-[11px] text-emerald-700 mt-0.5">Всё распределено (фонды, постоянные{(m.ownerPct || m.ownerRub) ? ', собственник' : ''}) — это излишек при плановой выручке.</p>
-            {m.overflowBonusPct > 0 && (
+            {!ro && m.overflowBonusPct > 0 && (
               <p className="text-[12px] font-semibold text-emerald-800 mt-1.5">→ бонусы производства из перелива ({m.overflowBonusPct}%): {fmt(calc.overflowBonus)}</p>
             )}
           </div>
