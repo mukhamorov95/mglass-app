@@ -3,7 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import type { Tool } from '@anthropic-ai/sdk/resources/messages'
 import {
-  sendMessage, editMessage, answerCallback, transcribeVoice,
+  sendMessage, sendMessageWithReplyKeyboard, editMessage, answerCallback, transcribeVoice,
   type InlineKeyboard, type InlineButton,
 } from '@/lib/telegram'
 import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
@@ -43,7 +43,28 @@ const MAIN_MENU: InlineKeyboard = [
   ],
 ]
 
-const TASK_PROMPT = '📝 <b>Задача в систему</b>\n\nНадиктуй голосом или напиши текстом, что нужно сделать. Я разберу, оценю и поставлю в очередь — Клод заберёт её при следующем запуске.'
+const TASK_PROMPT = '📝 <b>Задача в систему</b>\n\nНадиктуй голосом или напиши текстом, что нужно сделать. Я разберу, оценю и поставлю в очередь — Клод заберёт её при следующем запуске.\n\n<i>Выход: кнопка «🏠 Меню» или слово «меню»</i>'
+
+// Постоянные кнопки под полем ввода (этап 2 UX, docs/TG_BOT_UX_TZ.md)
+const REPLY_KB: string[][] = [
+  ['📊 Дашборд', '🧮 Расчёт'],
+  ['📝 Задача', '📋 Лиды'],
+  ['🏠 Меню', '❓ Помощь'],
+]
+
+const HELP_TEXT = [
+  '❓ <b>Команды бота</b>',
+  '',
+  '/menu — главное меню (сбрасывает любой режим)',
+  '/dashboard — цифры дня',
+  '/calc — расчёт цены (текстом или голосом)',
+  '/task — задача в систему (Клод заберёт при запуске)',
+  '/agents — AI-агенты: вкл/выкл, запуск',
+  '/health — статус интеграций',
+  '',
+  'В любом режиме слова <b>«меню», «выход», «отмена»</b> возвращают в главное меню.',
+  'Режимы сбрасываются сами через 30 минут тишины.',
+].join('\n')
 
 const AGENT_ICONS: Record<string, string> = {
   revenue: '💰', analyst: '📊', production: '🏭', catalog: '🧠',
@@ -394,9 +415,31 @@ async function handle(update: any, baseUrl: string) {
   // ── Команды ──
   if (msg?.text) {
     const cmd = msg.text.trim().split(/[\s@]/)[0].toLowerCase()
-    if (cmd === '/start' || cmd === '/menu') {
-      await sendMessage(chatId, '🏠 <b>Главное меню</b>', MAIN_MENU)
+    const plain = msg.text.trim().toLowerCase()
+    if (cmd === '/start' || cmd === '/menu' || ['меню', 'выход', 'отмена', 'стоп', 'stop', '🏠 меню'].includes(plain)) {
+      await sendMessageWithReplyKeyboard(chatId, '🏠 <b>Главное меню</b>\nКнопки — снизу, под полем ввода.', REPLY_KB)
+      await sendMessage(chatId, 'Быстрые действия:', MAIN_MENU)
       await setSession(tid, 'main_menu')
+      return
+    }
+    if (cmd === '/help' || plain === '❓ помощь' || plain === 'помощь') {
+      await sendMessage(chatId, HELP_TEXT, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      return
+    }
+    // Кнопки постоянной клавиатуры — синонимы команд
+    if (plain === '📊 дашборд') { await handleDashboard(chatId); return }
+    if (plain === '🧮 расчёт') {
+      await sendMessage(chatId, '🧮 <b>Расчёт цены</b>\n\nОпиши изделие и размеры текстом или голосом.\n<i>Пример: Зеркало 800×600. Выход: слово «меню»</i>')
+      await setSession(tid, 'calc_input')
+      return
+    }
+    if (plain === '📝 задача') {
+      await sendMessage(chatId, TASK_PROMPT, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
+      await setSession(tid, 'task_input')
+      return
+    }
+    if (plain === '📋 лиды') {
+      await sendMessage(chatId, '📋 Лиды:', [[{ text: '📋 Открыть список', callback_data: 'menu:leads' }]])
       return
     }
     if (cmd === '/d' || cmd === '/dashboard') {

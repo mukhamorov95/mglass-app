@@ -165,3 +165,17 @@ export const MAIN_MENU: InlineKeyboard = [
     { text: '🧠 Задача AI',        callback_data: 'menu:train' },
   ],
 ]
+
+// Постоянная reply-клавиатура (кнопки под полем ввода, не уезжают с историей)
+export function sendMessageWithReplyKeyboard(chatId: number, text: string, rows: string[][]) {
+  return call('sendMessage', {
+    chat_id: chatId,
+    text,
+    parse_mode: 'HTML',
+    reply_markup: {
+      keyboard: rows.map(r => r.map(t => ({ text: t }))),
+      resize_keyboard: true,
+      is_persistent: true,
+    },
+  })
+}
