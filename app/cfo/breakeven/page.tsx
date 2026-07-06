@@ -76,21 +76,21 @@ const FIXED_TOTAL: FixedRow[] = [
 const DEFAULTS: Record<Unit, Model> = {
   total: {
     incomes: [
-      { name: 'Продажа стекла (производство, B2B)', plan: 2400000, vars: GLASS_VARS },
-      { name: 'Готовые изделия с монтажом (M-Glass)', plan: 6300000, vars: PRODUCT_VARS },
+      { name: 'Производство (B2B) — продажа стекла', plan: 2400000, vars: GLASS_VARS },
+      { name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS },
     ],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
     fixed: FIXED_TOTAL,
   },
   mglass: {
-    incomes: [{ name: 'Готовые изделия с монтажом (M-Glass)', plan: 6300000, vars: PRODUCT_VARS }],
+    incomes: [{ name: 'M-Glass (B2C) — изделия с монтажом', plan: 6300000, vars: PRODUCT_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
     fixed: [{ name: 'Постоянные расходы M-Glass (уточнить распределение)', amount: 250000 }],
   },
   production: {
-    incomes: [{ name: 'Продажа стекла (производство, B2B)', plan: 2400000, vars: GLASS_VARS }],
+    incomes: [{ name: 'Производство (B2B) — продажа стекла', plan: 2400000, vars: GLASS_VARS }],
     funds: { invest: 0, training: 0, reserve: 0, prodBonus: 0 },
     ownerPct: 0, ownerRub: 0, overflowBonusPct: 0,
     fixed: [{ name: 'Постоянные расходы производства (уточнить распределение)', amount: 500000 }],
@@ -98,7 +98,8 @@ const DEFAULTS: Record<Unit, Model> = {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] w-full'
+// без w-full: числовое поле с width:100% рядом с flex-1 отжимало поле названия в ноль
+const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none focus:border-[#111110] min-w-0'
 const inputBlue = inputCls.replace('text-[#111110]', 'text-blue-700 font-semibold')
 
 export default function BreakevenPage() {
@@ -211,10 +212,10 @@ export default function BreakevenPage() {
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">План по доходам, ₽/мес</p>
             {m.incomes.map((inc, ii) => (
               <div key={ii} className="flex items-center gap-2 mb-1.5">
-                <input value={inc.name} onChange={e => patch(x => { x.incomes[ii].name = e.target.value; return x })}
+                <input value={inc.name} placeholder="Название дохода" onChange={e => patch(x => { x.incomes[ii].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
                 <input type="number" value={inc.plan || ''} onChange={e => patch(x => { x.incomes[ii].plan = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-36 text-right'} />
+                  className={inputBlue + ' w-36 shrink-0 text-right'} />
               </div>
             ))}
             <div className="flex justify-between text-[13px] font-bold border-t border-[#f0f0ec] pt-2 mt-2">
@@ -232,9 +233,9 @@ export default function BreakevenPage() {
                 <div key={vi} className="flex items-center gap-2 mb-1">
                   <input value={v.name} onChange={e => patch(x => { x.incomes[ii].vars[vi].name = e.target.value; return x })}
                     className={inputCls + ' flex-1'} />
-                  <div className="flex items-center gap-1 w-24">
+                  <div className="flex items-center gap-1 w-24 shrink-0">
                     <input type="number" step="0.01" value={v.pct || ''} onChange={e => patch(x => { x.incomes[ii].vars[vi].pct = Number(e.target.value) || 0; return x })}
-                      className={inputBlue + ' text-right'} />
+                      className={inputBlue + ' w-full text-right'} />
                     <span className="text-[11px] text-[#9a9a95]">%</span>
                   </div>
                   <span className="w-24 text-right font-mono text-[11px] text-[#6b6b66]">{fmt((inc.plan || 0) * (v.pct || 0) / 100)}</span>
@@ -264,9 +265,9 @@ export default function BreakevenPage() {
             ] as [keyof Funds, string][]).map(([k, label]) => (
               <div key={k} className="flex items-center gap-2 mb-1">
                 <span className="flex-1 text-[12px] text-[#111110]">{label}{k === 'prodBonus' ? ' 🏭' : ''}</span>
-                <div className="flex items-center gap-1 w-24">
+                <div className="flex items-center gap-1 w-24 shrink-0">
                   <input type="number" step="0.1" value={m.funds[k] || ''} onChange={e => patch(x => { x.funds[k] = Number(e.target.value) || 0; return x })}
-                    className={inputBlue + ' text-right'} />
+                    className={inputBlue + ' w-full text-right'} />
                   <span className="text-[11px] text-[#9a9a95]">%</span>
                 </div>
                 <span className="w-24 text-right font-mono text-[11px] text-[#6b6b66]">{fmt(calc.fundRub(m.funds[k]))}</span>
@@ -288,7 +289,7 @@ export default function BreakevenPage() {
                 <input value={f.name} onChange={e => patch(x => { x.fixed[fi].name = e.target.value; return x })}
                   className={inputCls + ' flex-1'} />
                 <input type="number" value={f.amount || ''} onChange={e => patch(x => { x.fixed[fi].amount = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' w-32 text-right'} />
+                  className={inputBlue + ' w-32 shrink-0 text-right'} />
                 <button onClick={() => patch(x => { x.fixed.splice(fi, 1); return x })}
                   className="text-[#c4c4be] hover:text-red-500 text-[12px]">×</button>
               </div>
@@ -306,10 +307,10 @@ export default function BreakevenPage() {
             <div className="grid grid-cols-2 gap-3">
               <label className="text-[12px] text-[#6b6b66]">% от маржи
                 <input type="number" step="0.5" value={m.ownerPct || ''} onChange={e => patch(x => { x.ownerPct = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' mt-1 text-right'} /></label>
+                  className={inputBlue + ' w-full mt-1 text-right'} /></label>
               <label className="text-[12px] text-[#6b6b66]">или фикс, ₽/мес
                 <input type="number" value={m.ownerRub || ''} onChange={e => patch(x => { x.ownerRub = Number(e.target.value) || 0; return x })}
-                  className={inputBlue + ' mt-1 text-right'} /></label>
+                  className={inputBlue + ' w-full mt-1 text-right'} /></label>
             </div>
             <label className="block text-[12px] text-[#6b6b66] mt-3">Из фонда перелива → бонусы производства, %
               <input type="number" step="1" value={m.overflowBonusPct || ''} onChange={e => patch(x => { x.overflowBonusPct = Number(e.target.value) || 0; return x })}
