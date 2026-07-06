@@ -98,8 +98,11 @@ export type B2BOrderItem = {
   hasFacet: boolean
   facetTypeMm: number | null
   hasHoles?: boolean        // нужна сверловка — влияет на маршрут производства (lib/productionRouting.ts)
-  shape?: 'rect' | 'curved' // криволинейный рез — зарезервировано, пока не влияет на маршрут (нет отдельной станции)
-  hasTriplex?: boolean      // триплекс/склейка — зарезервировано, пока не влияет на маршрут (нет отдельной станции)
+  shape?: 'rect' | 'curved' // криволинейный рез — станция curved
+  hasTriplex?: boolean      // триплекс/склейка — станция triplex; стекло считается ×triplexLayers
+  triplexLayers?: number    // 2 или 3 стекла в пакете (по умолчанию 2)
+  costTriplex?: number      // себестоимость триплексации (за м² изделия)
+  saleTriplex?: number      // продажа триплексации (за м² изделия)
   services: ItemService[]
   // площадь
   areaPiece: number
@@ -162,23 +165,32 @@ export function calcItem(
   hasFacet: boolean = false,
   facetTypeMm: number | null = null,
   facetPrices: FacetPrice[] = [],
+  hasTriplex: boolean = false,
+  triplexLayers: number = 2,
+  triplexPrice: { salePerM2: number; costPerM2: number } | null = null,
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
   const totalAreaBilled = r4(totalAreaNet * (1 + wastePercent / 100))
   const perimeterM      = r3(2 * (width + height) / 1000)
 
-  const weightPerM2 = mat.thickness * 2.5
+  // Триплекс: пакет из N стёкол (обычно 2) — материал, закалка, кромка и вес × N.
+  // Триплексация (склейка) считается за м² ИЗДЕЛИЯ (×1), из справочника услуг.
+  const layers = hasTriplex ? (triplexLayers === 3 ? 3 : 2) : 1
+
+  const weightPerM2 = mat.thickness * 2.5 * layers
   const totalWeight = r2(totalAreaNet * weightPerM2)
 
   // Себестоимость — все цены С НДС 22%
-  const costMaterial  = Math.round(totalAreaBilled * mat.cost_price)
+  const costMaterial  = Math.round(totalAreaBilled * mat.cost_price * layers)
   const costTempering = hasTempering
-    ? Math.round(totalAreaNet * (TEMPERING_COST[mat.thickness] ?? 0))
+    ? Math.round(totalAreaNet * (TEMPERING_COST[mat.thickness] ?? 0) * layers)
     : 0
-  const costEdge      = Math.round(perimeterM * quantity * EDGE_COST_PER_M)
+  const costEdge      = Math.round(perimeterM * quantity * EDGE_COST_PER_M * layers)
   const costTransport = Math.round(quantity * TRANSPORT_PER_PIECE)
   const costPackaging = Math.round(totalAreaNet * PACKAGING_PER_M2)
+  const costTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.costPerM2 ?? 0)) : 0
+  const saleTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.salePerM2 ?? 0)) : 0
 
   const facetPrice = hasFacet && facetTypeMm
     ? facetPrices.find(f => f.type_mm === facetTypeMm)
@@ -190,11 +202,11 @@ export function calcItem(
     ? Math.round(perimeterM * quantity * facetPrice.sale_price)
     : 0
 
-  const costWithVatBase = costMaterial + costTempering + costFacet + costEdge + costTransport + costPackaging
+  const costWithVatBase = costMaterial + costTempering + costFacet + costEdge + costTransport + costPackaging + costTriplex
 
-  // Продажа — цена из прайса (финальная цена клиента, вкл. НДС)
+  // Продажа — цена из прайса (финальная цена клиента, вкл. НДС); стекло × N слоёв
   const pricePerM2     = mat.sale_price ?? 0
-  const baseSaleIncVat = Math.round(pricePerM2 * totalAreaNet)
+  const baseSaleIncVat = Math.round(pricePerM2 * totalAreaNet * layers)
   const baseSaleExVat  = Math.round(baseSaleIncVat * 100 / (100 + VAT))
 
   // Доп. услуги: цена продажи + закупочная себестоимость
@@ -220,7 +232,7 @@ export function calcItem(
   const inputVatFull    = Math.round(costWithVatFull * VAT / (100 + VAT))
   const costExVatFull   = costWithVatFull - inputVatFull
 
-  let saleIncVat = baseSaleIncVat + servicesCost + saleFacet
+  let saleIncVat = baseSaleIncVat + servicesCost + saleFacet + saleTriplex
 
   // Применяем минимальную стоимость строки (per-piece × quantity)
   const minResolved = resolveMinLinePrice(mat.category, width, height, hasTempering)
@@ -252,6 +264,7 @@ export function calcItem(
     materialId: mat.id, materialName: mat.name, category: mat.category,
     thickness: mat.thickness, width, height, quantity, wastePercent, hasTempering,
     hasFacet, facetTypeMm: hasFacet ? (facetTypeMm ?? null) : null, services,
+    ...(hasTriplex ? { hasTriplex: true, triplexLayers: layers, costTriplex, saleTriplex } : {}),
     areaPiece, totalAreaNet, totalAreaBilled, perimeterM,
     weightPerM2, totalWeight,
     costMaterial, costTempering, costFacet, costEdge, costTransport, costPackaging, saleFacet,

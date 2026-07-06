@@ -182,6 +182,8 @@ export default function B2BCalculatorPage() {
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fCurved, setFCurved]         = useState(false)
+  const [fTriplex, setFTriplex]       = useState(false)
+  const [fTriplexLayers, setFTriplexLayers] = useState<2 | 3>(2)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
@@ -207,6 +209,8 @@ export default function B2BCalculatorPage() {
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eCurved, setECurved]         = useState(false)
+  const [eTriplex, setETriplex]       = useState(false)
+  const [eTriplexLayers, setETriplexLayers] = useState<2 | 3>(2)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
@@ -443,6 +447,12 @@ export default function B2BCalculatorPage() {
     setFServiceIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id])
   }
 
+  // Цена триплексации из справочника услуг (per_m2 «Триплекс»): продажа = value, себестоимость = cost_price.
+  const triplexPrice = useMemo(() => {
+    const s = services.find(s => s.type === 'per_m2' && /триплекс/i.test(s.name))
+    return s ? { salePerM2: s.value, costPerM2: s.cost_price ?? 0 } : null
+  }, [services])
+
   function handleAddItem() {
     if (!selectedMaterial) return
     const w = Number(fWidth) || 0
@@ -450,7 +460,8 @@ export default function B2BCalculatorPage() {
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
 
-    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices)
+    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices,
+      fTriplex, fTriplexLayers, triplexPrice)
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
     setFWidth('')
     setFHeight('')
@@ -458,6 +469,7 @@ export default function B2BCalculatorPage() {
     setFComment('')
     setFHoles(false)
     setFCurved(false)
+    setFTriplex(false)
     setSavedOrderId(null)   // изменили состав — можно снова сохранить
     widthRef.current?.focus()
   }
@@ -565,6 +577,8 @@ export default function B2BCalculatorPage() {
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
     setECurved(item.shape === 'curved')
+    setETriplex(item.hasTriplex ?? false)
+    setETriplexLayers(item.triplexLayers === 3 ? 3 : 2)
     setEServiceIds(item.services.map(s => s.id))
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -581,7 +595,8 @@ export default function B2BCalculatorPage() {
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
-    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices)
+    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices,
+      eTriplex, eTriplexLayers, triplexPrice)
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
       : i))
@@ -1118,6 +1133,27 @@ export default function B2BCalculatorPage() {
                   </span>
                 </label>
               </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Триплекс</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fTriplex} onChange={e => setFTriplex(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fTriplex ? 'text-indigo-700' : 'text-[#111110]'}`}>
+                    {fTriplex ? `Триплекс` : 'Без триплекса'}
+                  </span>
+                </label>
+                {fTriplex && (
+                  <select
+                    className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
+                    value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                    <option value={2}>2 стекла</option>
+                    <option value={3}>3 стекла</option>
+                  </select>
+                )}
+                {fTriplex && !triplexPrice && (
+                  <p className="mt-1 text-[10px] text-amber-600">⚠ В справочнике услуг нет «Триплекс» (₽/м²) — склейка посчитается по 0 ₽</p>
+                )}
+              </div>
             </div>
 
             {/* Комментарий к позиции */}
@@ -1352,10 +1388,13 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
                               <div className="font-medium text-[#111110]">{item.materialName}</div>
-                              {(item.hasTempering || item.hasFacet || item.services.length > 0 || item.minPriceApplied) && (
+                              {(item.hasTempering || item.hasFacet || item.hasTriplex || item.services.length > 0 || item.minPriceApplied) && (
                                 <div className="flex gap-1 mt-0.5 flex-wrap">
                                   {item.hasTempering && (
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-orange-50 text-orange-600">закалка</span>
+                                  )}
+                                  {item.hasTriplex && (
+                                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-indigo-50 text-indigo-600">триплекс {item.triplexLayers ?? 2} ст.</span>
                                   )}
                                   {item.hasFacet && (
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-purple-50 text-purple-600">фацет {item.facetTypeMm}мм</span>
@@ -1731,7 +1770,7 @@ export default function B2BCalculatorPage() {
       const ePreviewItem   = eCanSave
         ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
             resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
-            eFacet, eFacet ? eFacetMm : null, facetPrices), localId: '' }
+            eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null
@@ -1864,6 +1903,21 @@ export default function B2BCalculatorPage() {
                       <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
                     </label>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 mt-2">
+                  <label className={`flex items-center gap-2 flex-1 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0]'}`}>
+                    <input type="checkbox" checked={eTriplex} onChange={e => setETriplex(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                    <span className={`text-[13px] ${eTriplex ? 'text-indigo-700 font-medium' : 'text-[#111110]'}`}>Триплекс</span>
+                  </label>
+                  {eTriplex && (
+                    <select
+                      className="h-[34px] bg-white border border-indigo-200 rounded-lg px-2 text-[12px] outline-none focus:border-indigo-400"
+                      value={eTriplexLayers} onChange={e => setETriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                      <option value={2}>2 стекла</option>
+                      <option value={3}>3 стекла</option>
+                    </select>
+                  )}
                 </div>
               </div>
 

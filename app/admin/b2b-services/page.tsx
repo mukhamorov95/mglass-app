@@ -396,20 +396,22 @@ export default function B2BServicesPage() {
             </div>
           )}
 
-          {/* Поля для типов не-calculated и не-film */}
-          {form.type !== 'calculated' && form.type !== 'film' && (
+          {/* Поля для типов не-calculated и не-film.
+              Для ₽-услуг: себестоимость (слева) + маржа % → продажная (справа) считается сама.
+              Маржа = доля в цене: продажа = себестоимость / (1 − маржа/100). Продажную можно поправить руками. */}
+          {form.type === 'percent' && (
+            <div>
+              <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Процент (%)</label>
+              <input type="number" min="0"
+                className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                value={form.value}
+                onChange={e => setForm({ ...form, value: Number(e.target.value) })}
+                placeholder="30"
+              />
+            </div>
+          )}
+          {form.type !== 'percent' && form.type !== 'calculated' && form.type !== 'film' && (
             <>
-              <div>
-                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">
-                  {form.type === 'percent' ? 'Процент (%)' : 'Сумма (₽)'}
-                </label>
-                <input type="number" min="0"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
-                  value={form.value}
-                  onChange={e => setForm({ ...form, value: Number(e.target.value) })}
-                  placeholder={form.type === 'percent' ? '30' : '1200'}
-                />
-              </div>
               <div>
                 <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">
                   Себестоимость (₽{form.type === 'per_m2' ? '/м²' : '/шт'})
@@ -417,9 +419,44 @@ export default function B2BServicesPage() {
                 <input type="number" min="0"
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
                   value={form.cost_price}
-                  onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
-                  placeholder="0"
+                  onChange={e => {
+                    const cost = Number(e.target.value)
+                    const m = form.margin_override_pct !== '' ? Number(form.margin_override_pct) : NaN
+                    const auto = isFinite(m) && m > 0 && m < 100 && cost > 0 ? Math.round(cost / (1 - m / 100)) : form.value
+                    setForm({ ...form, cost_price: cost, value: auto })
+                  }}
+                  placeholder="2500"
                 />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Маржа %</label>
+                <input type="number" min="0" max="99"
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110]"
+                  value={form.margin_override_pct}
+                  onChange={e => {
+                    const raw = e.target.value
+                    const m = Number(raw)
+                    const auto = raw !== '' && isFinite(m) && m > 0 && m < 100 && form.cost_price > 0
+                      ? Math.round(form.cost_price / (1 - m / 100)) : form.value
+                    setForm({ ...form, margin_override_pct: raw, value: auto })
+                  }}
+                  placeholder="40"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-semibold text-[#166534] uppercase tracking-widest mb-1">
+                  Продажная (₽{form.type === 'per_m2' ? '/м²' : '/шт'})
+                  {form.margin_override_pct !== '' && form.cost_price > 0 && <span className="ml-1 normal-case text-[#8a8a85]">авто</span>}
+                </label>
+                <input type="number" min="0"
+                  className="w-full bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 text-[14px] font-mono font-semibold text-[#111110] outline-none focus:border-emerald-400"
+                  value={form.value}
+                  onChange={e => setForm({ ...form, value: Number(e.target.value), margin_override_pct: '' })}
+                  placeholder="4500"
+                />
+                {form.cost_price > 0 && form.value > 0 && (
+                  <p className="mt-1 text-[10px] text-[#8a8a85]">маржа {Math.round((1 - form.cost_price / form.value) * 100)}% от цены</p>
+                )}
               </div>
             </>
           )}
