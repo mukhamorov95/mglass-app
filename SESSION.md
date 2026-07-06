@@ -1,4 +1,11 @@
-## MGLASS КАЛЬКУЛЯТОР ЗЕРКАЛ: ЕДИНАЯ ЦЕНА (ФИКС ОТ МЕНЕДЖЕРА) (2026-07-06, последнее)
+## B2B: ИЗДЕЛИЯ ПРОИЗВОДСТВА В КАЛЬКУЛЯТОРЕ (2026-07-06, последнее)
+`3a34eee`, запушено; локальный build чистый; ⚠️ деплой Vercel на момент записи не докатился (~10 мин) — проверить вкладку позже: /calculator/b2b → «Тип позиции».
+- Стратегия владельца: производство — внутренний поставщик; M-Glass покупает готовые изделия и монтирует. B2B-калькулятор считает изделия по ЦЕНЕ ПРОИЗВОДСТВА: production stage финмодели V2 = factoryCost / (1 − production_margin − production_tax), конфиг pricing_model_config_v2 (mirror/loft; fallback 40/12).
+- lib/b2bFactoryProducts.ts: loadFactoryData (лениво: retail materials/services, glass_price_matrix COST-строки, mirror_lighting_components, financial_settings, pricing-конфиг), calcFactoryMirror (calculateMirrorUnified + factory overhead/scrap/packaging; стандартная комплектация: первый профиль, лента 12V, БП по мощности, рассеиватель), calcFactoryLoft (calculateLoft: металл+стекло+закалка+покраска), factoryQuoteToItem → B2BOrderItem (category «изделие», width/height=0 → не попадает в раскрой партий, НДС 22).
+- UI: сегмент «Тип позиции»: Стекло/зеркало | 💡 Зеркало+свет | Лофт; формы изделий; карточка «Себестоимость производства → Цена производства (маржа N%)» + spec; «+ Добавить изделие» → обычный поток (просчёт→КП/Счёт→производство).
+- ПРОВЕРИТЬ после докатки деплоя: переключить тип, ввести размеры, сверить цену с /calculator/mirror v2 b2bPrice; добавить позицию в просчёт.
+
+## MGLASS КАЛЬКУЛЯТОР ЗЕРКАЛ: ЕДИНАЯ ЦЕНА (ФИКС ОТ МЕНЕДЖЕРА) (2026-07-06)
 `c6d486b`, прод, проверено Chrome на параметрах менеджера (1100×1960, Серебро 4мм).
 - Баг: «Цена клиенту» = финмодель V2 (36 248 с услугами / изделие 29 748), а «Текст КП» и заголовок «Расчёт цены» = legacy live из mirrorCalculator.clientText (25 958 / 19 458). Менеджер копировал клиенту старую цену.
 - Фикс (только page.tsx, mirrorCalculator не тронут): displayClientText — при доступной V2 в тексте КП строки «Стоимость изделия/Итого с услугами/Стоимость» подменяются на productQuotePrice/quotePrice. Применён в рендере, копировании и сохранении client_text (handleSave + addToCart). Заголовок «Расчёт цены» = quotePrice.
