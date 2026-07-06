@@ -3,9 +3,11 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Pagination from '@/components/Pagination'
+import { getApplicableStages, type DetailStages } from '@/lib/productionStages'
 
-const PAGE_SIZE = 20
+const PAGE_SIZE = 30
 
+type Service = { id?: number; name?: string; cost?: number }
 type Item = {
   materialName?: string
   category?: string
@@ -16,11 +18,20 @@ type Item = {
   totalAreaNet?: number
   totalWeight?: number
   hasTempering?: boolean
+  hasFacet?: boolean
+  facetTypeMm?: number
+  hasTriplex?: boolean
+  hasHoles?: boolean
+  shape?: string
+  services?: Service[]
   comment?: string
 }
 
+type Stages = Partial<Record<string, string | null>>
+
 type Order = {
   id: number
+  custom_number: string | null
   client_name: string
   total_after_discount: number
   total_sale_inc_vat: number
@@ -31,21 +42,23 @@ type Order = {
   // derived from notes JSON
   production_status: string | null
   deadline_date: string | null
+  stages: Stages
+  detail_stages: DetailStages
 }
 
 const PROD_STATUSES = [
-  { key: 'pending',    label: 'Ожидает',       color: 'bg-[#f0f0ec] text-[#6b6b66]' },
-  { key: 'cutting',    label: 'Раскрой',        color: 'bg-blue-50 text-blue-700' },
-  { key: 'tempering',  label: 'Закалка',        color: 'bg-orange-50 text-orange-700' },
-  { key: 'ready',      label: 'Готово',         color: 'bg-emerald-50 text-emerald-700' },
-  { key: 'shipped',    label: 'Отгружено',      color: 'bg-purple-50 text-purple-700' },
+  { key: 'pending',    label: 'Ожидает',   color: 'bg-[#f0f0ec] text-[#6b6b66]' },
+  { key: 'cutting',    label: 'Раскрой',   color: 'bg-blue-50 text-blue-700' },
+  { key: 'tempering',  label: 'Закалка',   color: 'bg-orange-50 text-orange-700' },
+  { key: 'ready',      label: 'Готово',    color: 'bg-emerald-50 text-emerald-700' },
+  { key: 'shipped',    label: 'Отгружено', color: 'bg-purple-50 text-purple-700' },
 ] as const
 
 type ProdStatus = typeof PROD_STATUSES[number]['key']
 
 function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}
-  try { const p = JSON.parse(n); if (typeof p === 'object') return p } catch {}
+  try { const p = JSON.parse(n); if (typeof p === 'object' && p) return p as Record<string, unknown> } catch {}
   return {}
 }
 
@@ -55,6 +68,69 @@ function daysUntil(d: string | null) {
 }
 
 function fmtN(n: number, d = 2) { return n.toLocaleString('ru-RU', { maximumFractionDigits: d }) }
+
+function orderNumber(o: Order): string {
+  return o.custom_number?.trim() || String(o.id).padStart(5, '0')
+}
+
+// Единый статус заказа выводим из stages (тот же источник правды, что и B2B Заказы).
+function effectiveStatus(s: Stages): ProdStatus {
+  if (s?.shipped) return 'shipped'
+  if (s?.packaged) return 'ready'
+  if (s?.tempering) return 'tempering'
+  if (s?.cut || s?.material_ordered) return 'cutting'
+  return 'pending'
+}
+
+// Текущий этап конкретной детали (по detail_stages, иначе по order-level stages).
+function itemStage(o: Order, item: Item, idx: number): { label: string; tone: 'shipped'|'ready'|'active'|'pending'|'problem' } {
+  const s = o.stages || {}
+  if (s.shipped)  return { label: 'Отгружено', tone: 'shipped' }
+  if (s.packaged) return { label: 'Готово', tone: 'ready' }
+  const applic = getApplicableStages(item)
+  const ds = o.detail_stages?.[String(idx)] ?? {}
+  if (ds.problem?.status === 'problem') return { label: 'Проблема', tone: 'problem' }
+  const anyDone = applic.some(st => ds[st.key]?.status === 'done')
+  const nextUndone = applic.find(st => ds[st.key]?.status !== 'done')
+  if (!nextUndone) return { label: 'Готово', tone: 'ready' }
+  if (anyDone) return { label: nextUndone.label, tone: 'active' }
+  if (s.tempering)        return { label: 'Закалка', tone: 'active' }
+  if (s.cut)              return { label: 'Полировка', tone: 'active' }
+  if (s.material_ordered) return { label: 'Резка', tone: 'active' }
+  return { label: 'Ожидает', tone: 'pending' }
+}
+
+const STAGE_TONE: Record<string, string> = {
+  shipped: 'bg-purple-50 text-purple-700',
+  ready:   'bg-emerald-50 text-emerald-700',
+  active:  'bg-blue-50 text-blue-700',
+  pending: 'bg-[#f0f0ec] text-[#6b6b66]',
+  problem: 'bg-red-50 text-red-700',
+}
+
+// Спецработы детали: подрядные (не мы) и наши доп. работы.
+function specialOps(item: Item): { outsourced: string[]; ours: string[] } {
+  const outsourced: string[] = []
+  if (item.hasTempering) outsourced.push('Закалка')
+  if (item.hasTriplex)   outsourced.push('Триплекс')
+  if (item.hasFacet)     outsourced.push(item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
+  const ours: string[] = []
+  if (item.shape === 'curved') ours.push('Криволинейка')
+  for (const s of item.services ?? []) if (s?.name) ours.push(s.name)
+  return { outsourced, ours }
+}
+
+// Сводка спецработ по всему заказу (уникальные, с количеством деталей).
+function orderSpecials(items: Item[]): { label: string; n: number; tone: 'out'|'our' }[] {
+  const map = new Map<string, { n: number; tone: 'out'|'our' }>()
+  for (const item of items) {
+    const q = item.quantity ?? 1
+    const { outsourced, ours } = specialOps(item)
+    for (const l of outsourced) map.set(l, { n: (map.get(l)?.n ?? 0) + q, tone: 'out' })
+    for (const l of ours)       map.set(l, { n: (map.get(l)?.n ?? 0) + q, tone: 'our' })
+  }
+  return [...map.entries()].map(([label, v]) => ({ label, ...v }))
+}
 
 export default function B2BProductionPage() {
   const [orders, setOrders] = useState<Order[]>([])
@@ -71,19 +147,21 @@ export default function B2BProductionPage() {
     const sb = createClient()
     const { data } = await sb
       .from('b2b_orders')
-      .select('id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,items,notes,created_at')
+      .select('id,custom_number,client_name,total_after_discount,total_sale_inc_vat,discount_percent,items,notes,created_at,launched_at')
+      .not('launched_at', 'is', null)   // только запущенные в производство
       .order('created_at', { ascending: false })
-      .limit(1000)
+      .limit(1200)
     const filtered = (data ?? [])
-      .filter((o: { notes: string | null }) => {
-        const s = parseNotes(o.notes).status
-        return s === 'confirmed' || s === 'agreed'
+      .map((o: Record<string, unknown>) => {
+        const pn = parseNotes(o.notes as string | null)
+        return {
+          ...o,
+          production_status: (pn.production_status as string | null) ?? null,
+          deadline_date:     (pn.deadline_date as string | null) ?? null,
+          stages:            (pn.stages as Stages) ?? {},
+          detail_stages:     (pn.detail_stages as DetailStages) ?? {},
+        }
       })
-      .map((o: Record<string, unknown>) => ({
-        ...o,
-        production_status: (parseNotes(o.notes as string | null).production_status as string | null) ?? null,
-        deadline_date:     (parseNotes(o.notes as string | null).deadline_date as string | null) ?? null,
-      }))
     setOrders(filtered as Order[])
     setLoading(false)
   }
@@ -94,9 +172,17 @@ export default function B2BProductionPage() {
     const order = orders.find(o => o.id === id)
     if (order) {
       const parsed = parseNotes(order.notes)
-      const newNotes = JSON.stringify({ ...parsed, production_status: status })
+      const s: Stages = { ...(order.stages || {}) }
+      const d = new Date().toISOString().slice(0, 10)
+      const clear = (keys: string[]) => keys.forEach(k => { delete s[k] })
+      if (status === 'shipped')        { s.packaged = s.packaged || d; s.shipped = d }
+      else if (status === 'ready')     { s.packaged = s.packaged || d; clear(['shipped']) }
+      else if (status === 'tempering') { s.tempering = s.tempering || d; clear(['packaged','shipped']) }
+      else if (status === 'cutting')   { s.material_ordered = s.material_ordered || d; s.cut = s.cut || d; clear(['tempering','packaged','shipped']) }
+      else                             { clear(['cut','tempering','packaged','shipped']) }
+      const newNotes = JSON.stringify({ ...parsed, stages: s, production_status: status })
       await sb.from('b2b_orders').update({ notes: newNotes }).eq('id', id)
-      setOrders(prev => prev.map(o => o.id === id ? { ...o, production_status: status, notes: newNotes } : o))
+      setOrders(prev => prev.map(o => o.id === id ? { ...o, production_status: status, stages: s, notes: newNotes } : o))
     }
     setUpdating(null)
   }
@@ -114,8 +200,8 @@ export default function B2BProductionPage() {
 
   const visible = useMemo(() => {
     setPage(1)
-    if (filter === 'all') return orders.filter(o => o.production_status !== 'shipped')
-    return orders.filter(o => (o.production_status ?? 'pending') === filter)
+    if (filter === 'all') return orders.filter(o => effectiveStatus(o.stages) !== 'shipped')
+    return orders.filter(o => effectiveStatus(o.stages) === filter)
   }, [orders, filter])
 
   const printOrder = orders.find(o => o.id === printId)
@@ -130,22 +216,22 @@ export default function B2BProductionPage() {
 
         <div className="flex items-center justify-between mb-5">
           <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">B2B Производство</h1>
-          <div className="text-[12px] text-[#8a8a85]">{visible.length} заказов</div>
+          <div className="text-[12px] text-[#8a8a85]">{visible.length} заказов в работе</div>
         </div>
-
 
         {/* Фильтр по статусу */}
         <div className="flex gap-1.5 flex-wrap mb-4">
           <button onClick={() => setFilter('all')}
             className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filter === 'all' ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]'}`}>
             Все активные
+            <span className="ml-1.5 text-[10px] opacity-70">{orders.filter(o => effectiveStatus(o.stages) !== 'shipped').length}</span>
           </button>
           {PROD_STATUSES.map(s => (
             <button key={s.key} onClick={() => setFilter(s.key)}
               className={`px-3 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${filter === s.key ? 'bg-[#111110] text-white' : `bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f8f8f7]`}`}>
               {s.label}
               <span className="ml-1.5 text-[10px] opacity-70">
-                {orders.filter(o => (o.production_status ?? 'pending') === s.key).length}
+                {orders.filter(o => effectiveStatus(o.stages) === s.key).length}
               </span>
             </button>
           ))}
@@ -156,33 +242,47 @@ export default function B2BProductionPage() {
           <div className="py-16 text-center text-[13px] text-[#c4c4be]">Нет заказов в этом статусе</div>
         ) : (
           <>
-            <Pagination
-              page={page} total={visible.length} pageSize={PAGE_SIZE}
-              onPageChange={setPage} className="mb-3"
-            />
+            <Pagination page={page} total={visible.length} pageSize={PAGE_SIZE} onPageChange={setPage} className="mb-3" />
           <div className="space-y-3">
             {visible.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map(o => {
-              const status = (o.production_status ?? 'pending') as ProdStatus
+              const status = effectiveStatus(o.stages)
               const sm = PROD_STATUSES.find(s => s.key === status) ?? PROD_STATUSES[0]
               const dl = daysUntil(o.deadline_date)
               const items: Item[] = Array.isArray(o.items) ? o.items : []
               const totalArea = items.reduce((s, i) => s + (i.totalAreaNet ?? 0), 0)
               const totalWeight = items.reduce((s, i) => s + (i.totalWeight ?? 0), 0)
+              const specials = orderSpecials(items)
 
               return (
                 <div key={o.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
 
                   {/* Шапка заказа */}
-                  <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between flex-wrap gap-2">
-                    <div className="flex items-center gap-3">
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${sm.color}`}>{sm.label}</span>
-                      <span className="text-[14px] font-semibold text-[#111110]">{o.client_name}</span>
-                      <span className="text-[12px] text-[#9a9a95]">
-                        {new Date(o.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                      </span>
+                  <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-start justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3.5">
+                      <span className="text-[22px] font-bold font-mono text-[#111110] leading-none tracking-tight">№{orderNumber(o)}</span>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${sm.color}`}>{sm.label}</span>
+                          <span className="text-[14px] font-semibold text-[#111110]">{o.client_name}</span>
+                          <span className="text-[12px] text-[#9a9a95]">
+                            {new Date(o.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          </span>
+                        </div>
+                        {specials.length > 0 && (
+                          <div className="flex items-center gap-1 flex-wrap">
+                            <span className="text-[10px] text-[#9a9a95] uppercase tracking-wide mr-0.5">Спецработы:</span>
+                            {specials.map((sp, i) => (
+                              <span key={i}
+                                className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${sp.tone === 'out' ? 'bg-amber-50 text-amber-800 border border-amber-200' : 'bg-blue-50 text-blue-700 border border-blue-100'}`}
+                                title={sp.tone === 'out' ? 'Подряд (не мы)' : 'Наша работа'}>
+                                {sp.tone === 'out' ? '⚙ ' : ''}{sp.label}{sp.n > 1 ? ` ×${sp.n}` : ''}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                     <div className="flex items-center gap-2 flex-wrap">
-                      {/* Дедлайн */}
                       <div className="flex items-center gap-1.5">
                         <span className="text-[10px] text-[#9a9a95]">Дедлайн:</span>
                         <input type="date"
@@ -196,7 +296,6 @@ export default function B2BProductionPage() {
                           </span>
                         )}
                       </div>
-                      {/* Кнопка печати */}
                       <button onClick={() => { setPrintId(o.id); setTimeout(() => window.print(), 100) }}
                         className="text-[11px] text-[#6b6b66] border border-[#e4e4e0] px-2.5 py-1 rounded-lg hover:bg-[#f8f8f7] transition-colors">
                         🖨 Лист
@@ -218,32 +317,46 @@ export default function B2BProductionPage() {
                             <th className="px-4 py-2 text-right">Кол.</th>
                             <th className="px-4 py-2 text-right">м²</th>
                             <th className="px-4 py-2 text-right">Вес</th>
-                            <th className="px-4 py-2 text-center">Закалка</th>
+                            <th className="px-4 py-2 text-center">Этап</th>
                             <th className="px-4 py-2 text-left">Примечание</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-[#f8f8f7]">
-                          {items.map((item, idx) => (
-                            <tr key={idx} className="hover:bg-[#fafaf9]">
-                              <td className="px-4 py-2 text-[#c4c4be] font-bold">{idx + 1}</td>
-                              <td className="px-4 py-2 font-medium text-[#111110]">
-                                {item.materialName ?? '—'}
-                                <span className="ml-1 text-[10px] text-[#9a9a95]">{item.category}</span>
-                              </td>
-                              <td className="px-4 py-2 text-right font-mono">{item.thickness ?? '—'}</td>
-                              <td className="px-4 py-2 text-right font-mono font-semibold">{item.width ?? '—'}</td>
-                              <td className="px-4 py-2 text-right font-mono font-semibold">{item.height ?? '—'}</td>
-                              <td className="px-4 py-2 text-right font-mono">{item.quantity ?? 1}</td>
-                              <td className="px-4 py-2 text-right font-mono">{fmtN(item.totalAreaNet ?? 0)}</td>
-                              <td className="px-4 py-2 text-right font-mono text-[#6b6b66]">{fmtN(item.totalWeight ?? 0, 1)}</td>
-                              <td className="px-4 py-2 text-center">
-                                {item.hasTempering
-                                  ? <span className="text-[10px] font-bold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded">Да</span>
-                                  : <span className="text-[10px] text-[#c4c4be]">—</span>}
-                              </td>
-                              <td className="px-4 py-2 text-[#9a9a95] max-w-[120px] truncate">{item.comment ?? ''}</td>
-                            </tr>
-                          ))}
+                          {items.map((item, idx) => {
+                            const st = itemStage(o, item, idx)
+                            const { outsourced, ours } = specialOps(item)
+                            return (
+                              <tr key={idx} className="hover:bg-[#fafaf9] align-top">
+                                <td className="px-4 py-2 text-[#c4c4be] font-bold">{idx + 1}</td>
+                                <td className="px-4 py-2 font-medium text-[#111110]">
+                                  {item.materialName ?? '—'}
+                                  <span className="ml-1 text-[10px] text-[#9a9a95]">{item.category}</span>
+                                </td>
+                                <td className="px-4 py-2 text-right font-mono">{item.thickness ?? '—'}</td>
+                                <td className="px-4 py-2 text-right font-mono font-semibold">{item.width ?? '—'}</td>
+                                <td className="px-4 py-2 text-right font-mono font-semibold">{item.height ?? '—'}</td>
+                                <td className="px-4 py-2 text-right font-mono">{item.quantity ?? 1}</td>
+                                <td className="px-4 py-2 text-right font-mono">{fmtN(item.totalAreaNet ?? 0)}</td>
+                                <td className="px-4 py-2 text-right font-mono text-[#6b6b66]">{fmtN(item.totalWeight ?? 0, 1)}</td>
+                                <td className="px-4 py-2 text-center">
+                                  <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${STAGE_TONE[st.tone]}`}>{st.label}</span>
+                                </td>
+                                <td className="px-4 py-2 text-[#6b6b66]">
+                                  {(outsourced.length > 0 || ours.length > 0) && (
+                                    <div className="flex flex-wrap gap-1 mb-0.5">
+                                      {outsourced.map((l, i) => (
+                                        <span key={`o${i}`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200" title="Подряд (не мы)">⚙ {l}</span>
+                                      ))}
+                                      {ours.map((l, i) => (
+                                        <span key={`u${i}`} className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100" title="Наша работа">{l}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {item.comment && <span className="text-[11px] text-[#9a9a95]">{item.comment}</span>}
+                                </td>
+                              </tr>
+                            )
+                          })}
                         </tbody>
                         <tfoot>
                           <tr className="border-t border-[#e4e4e0] bg-[#fafaf9] font-semibold">
@@ -264,9 +377,7 @@ export default function B2BProductionPage() {
                         disabled={updating === o.id || status === s.key}
                         onClick={() => setStatus(o.id, s.key)}
                         className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg transition-colors ${
-                          status === s.key
-                            ? s.color + ' cursor-default'
-                            : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'
+                          status === s.key ? s.color + ' cursor-default' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'
                         }`}>
                         {status === s.key ? '✓ ' : ''}{s.label}
                       </button>
@@ -276,10 +387,7 @@ export default function B2BProductionPage() {
               )
             })}
           </div>
-            <Pagination
-              page={page} total={visible.length} pageSize={PAGE_SIZE}
-              onPageChange={setPage} className="mt-4"
-            />
+            <Pagination page={page} total={visible.length} pageSize={PAGE_SIZE} onPageChange={setPage} className="mt-4" />
           </>
         )}
       </div>
@@ -288,11 +396,14 @@ export default function B2BProductionPage() {
       {printOrder && (
         <div className="hidden print:block p-8 text-black">
           <div className="mb-6">
-            <h1 className="text-xl font-bold">Производственный лист</h1>
+            <h1 className="text-xl font-bold">Производственный лист · №{orderNumber(printOrder)}</h1>
             <p className="text-sm mt-1">Клиент: <strong>{printOrder.client_name}</strong></p>
             <p className="text-sm">Дата: {new Date(printOrder.created_at).toLocaleDateString('ru-RU')}</p>
             {printOrder.deadline_date && (
               <p className="text-sm">Дедлайн: <strong>{new Date(printOrder.deadline_date).toLocaleDateString('ru-RU')}</strong></p>
+            )}
+            {orderSpecials(Array.isArray(printOrder.items) ? printOrder.items : []).length > 0 && (
+              <p className="text-sm mt-1">Спецработы: <strong>{orderSpecials(printOrder.items).map(s => `${s.tone === 'out' ? '⚙ ' : ''}${s.label}${s.n > 1 ? ` ×${s.n}` : ''}`).join(', ')}</strong></p>
             )}
           </div>
           <table className="w-full border-collapse text-sm">
@@ -306,25 +417,30 @@ export default function B2BProductionPage() {
                 <th className="py-1 text-right">Кол.</th>
                 <th className="py-1 text-right">м²</th>
                 <th className="py-1 text-right">Вес</th>
-                <th className="py-1 text-center">Закалка</th>
-                <th className="py-1 text-left">Примечание</th>
+                <th className="py-1 text-center">Этап</th>
+                <th className="py-1 text-left">Спецработы / примечание</th>
               </tr>
             </thead>
             <tbody>
-              {(Array.isArray(printOrder.items) ? printOrder.items : []).map((item: Item, idx: number) => (
-                <tr key={idx} className="border-b border-gray-200">
-                  <td className="py-1">{idx + 1}</td>
-                  <td className="py-1 font-medium">{item.materialName} {item.thickness}мм</td>
-                  <td className="py-1 text-right">{item.thickness}</td>
-                  <td className="py-1 text-right font-bold">{item.width}</td>
-                  <td className="py-1 text-right font-bold">{item.height}</td>
-                  <td className="py-1 text-right">{item.quantity}</td>
-                  <td className="py-1 text-right">{(item.totalAreaNet ?? 0).toFixed(3)}</td>
-                  <td className="py-1 text-right">{(item.totalWeight ?? 0).toFixed(1)}</td>
-                  <td className="py-1 text-center">{item.hasTempering ? 'ДА' : '—'}</td>
-                  <td className="py-1">{item.comment ?? ''}</td>
-                </tr>
-              ))}
+              {(Array.isArray(printOrder.items) ? printOrder.items : []).map((item: Item, idx: number) => {
+                const st = itemStage(printOrder, item, idx)
+                const { outsourced, ours } = specialOps(item)
+                const note = [...outsourced, ...ours].join(', ') + (item.comment ? (outsourced.length + ours.length ? ' · ' : '') + item.comment : '')
+                return (
+                  <tr key={idx} className="border-b border-gray-200">
+                    <td className="py-1">{idx + 1}</td>
+                    <td className="py-1 font-medium">{item.materialName} {item.thickness}мм</td>
+                    <td className="py-1 text-right">{item.thickness}</td>
+                    <td className="py-1 text-right font-bold">{item.width}</td>
+                    <td className="py-1 text-right font-bold">{item.height}</td>
+                    <td className="py-1 text-right">{item.quantity}</td>
+                    <td className="py-1 text-right">{(item.totalAreaNet ?? 0).toFixed(3)}</td>
+                    <td className="py-1 text-right">{(item.totalWeight ?? 0).toFixed(1)}</td>
+                    <td className="py-1 text-center">{st.label}</td>
+                    <td className="py-1">{note}</td>
+                  </tr>
+                )
+              })}
             </tbody>
           </table>
           <div className="mt-4 text-sm">
