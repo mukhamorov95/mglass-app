@@ -51,9 +51,18 @@ const AGENT_ICONS: Record<string, string> = {
 
 // ─── Session ─────────────────────────────────────────────────────────────────
 
+// Режимы (калькулятор/задача/сообщение клиенту) протухают через 30 минут —
+// вернувшись в бота позже, пользователь всегда начинает с главного меню.
+const SESSION_TTL_MS = 30 * 60 * 1000
+
 async function getSession(tid: number) {
-  const { data } = await db().from('telegram_sessions').select('state, context').eq('telegram_id', tid).single()
-  return data ?? { state: 'main_menu', context: {} as Record<string, unknown> }
+  const { data } = await db().from('telegram_sessions').select('state, context, updated_at').eq('telegram_id', tid).single()
+  if (!data) return { state: 'main_menu', context: {} as Record<string, unknown> }
+  const age = Date.now() - new Date(data.updated_at ?? 0).getTime()
+  if (data.state !== 'main_menu' && age > SESSION_TTL_MS) {
+    return { state: 'main_menu', context: {} as Record<string, unknown> }
+  }
+  return data
 }
 
 async function setSession(tid: number, state: string, context: Record<string, unknown> = {}) {
@@ -404,7 +413,7 @@ async function handle(update: any, baseUrl: string) {
       return
     }
     if (cmd === '/task' || cmd === '/задача') {
-      await sendMessage(chatId, TASK_PROMPT)
+      await sendMessage(chatId, TASK_PROMPT, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       await setSession(tid, 'task_input')
       return
     }
@@ -431,7 +440,7 @@ async function handle(update: any, baseUrl: string) {
 
     // Задача в систему (очередь Клода)
     if (data === 'menu:task') {
-      await editMessage(chatId, msgId, TASK_PROMPT)
+      await editMessage(chatId, msgId, TASK_PROMPT, [[{ text: '🏠 Меню', callback_data: 'menu:main' }]])
       await setSession(tid, 'task_input')
       return
     }
