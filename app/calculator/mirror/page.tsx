@@ -651,6 +651,21 @@ export default function MirrorCalculatorPage() {
     : (result?.grandTotal ?? 0)
   const quoteIsV2             = v2Commercial.available
 
+  // Текст КП для клиента с ЕДИНОЙ ценой: суммы в тексте = quotePrice (V2), а не live.
+  // mirrorCalculator генерирует clientText по live-цене — здесь подменяем только строки цен,
+  // чтобы «Цена клиенту», сохранённое КП и копируемый текст всегда совпадали.
+  const displayClientText = (() => {
+    if (!result) return ''
+    if (!quoteIsV2) return result.clientText
+    return result.clientText
+      .replace(`Стоимость изделия:\n${result.finalPrice.toLocaleString('ru-RU')} ₽`,
+               `Стоимость изделия:\n${productQuotePrice.toLocaleString('ru-RU')} ₽`)
+      .replace(`Итого с услугами:\n${result.grandTotal.toLocaleString('ru-RU')} ₽`,
+               `Итого с услугами:\n${quotePrice.toLocaleString('ru-RU')} ₽`)
+      .replace(`Стоимость:\n${result.finalPrice.toLocaleString('ru-RU')} ₽`,
+               `Стоимость:\n${quotePrice.toLocaleString('ru-RU')} ₽`)
+  })()
+
   const sensorBtn     = materials.find(m => m.name.toLowerCase().includes('сенсорная кнопка') && m.active)
   const waveBtn       = materials.find(m => m.name.toLowerCase().includes('датчик взмаха')    && m.active)
   const installSvc    = services.find(s => s.name.toLowerCase().includes('монтаж зеркала'))
@@ -707,7 +722,7 @@ export default function MirrorCalculatorPage() {
       // Менеджеру в КП попадает именно эта цена.
       final_price: quotePrice, grand_total: quotePrice,
       margin: result.margin, profit: result.profit,
-      manager_bonus: result.managerBonus, client_text: result.clientText,
+      manager_bonus: result.managerBonus, client_text: displayClientText,
     })
     setMargin('40')
     setAddedToCart(true)
@@ -742,7 +757,7 @@ export default function MirrorCalculatorPage() {
       // saveCalculation схема принимает только final_price (grand_total нет).
       final_price: quotePrice, margin: result.margin,
       profit: result.profit, manager_bonus: result.managerBonus,
-      client_text: result.clientText,
+      client_text: displayClientText,
       client_name: clientName.trim() || undefined,
       client_phone: clientPhone.trim() || undefined,
     }
@@ -766,7 +781,7 @@ export default function MirrorCalculatorPage() {
 
   async function handleCopy() {
     if (!result) return
-    await navigator.clipboard.writeText(result.clientText)
+    await navigator.clipboard.writeText(displayClientText)
     setCopied(true)
     setTimeout(() => setCopied(false), 2500)
   }
@@ -1356,7 +1371,7 @@ export default function MirrorCalculatorPage() {
                     className="w-full flex items-center justify-between px-4 py-3 hover:bg-[#fafaf9] transition-colors">
                     <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em]">Расчёт цены</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(result.grandTotal)}</span>
+                      <span className="text-[11px] font-mono text-[#9a9a95]">{fmt(quotePrice)}</span>
                       <svg className={`w-3 h-3 text-[#c4c4be] transition-transform ${isPriceBreakdownOpen ? 'rotate-180' : ''}`}
                         fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -1662,7 +1677,7 @@ export default function MirrorCalculatorPage() {
                 <div className="bg-white rounded-xl border border-[#e8e8e5] p-4">
                   <p className="text-[10px] font-semibold text-[#a8a8a3] uppercase tracking-[0.08em] mb-2.5">Текст КП</p>
                   <pre className="text-[11px] text-[#4b4b47] whitespace-pre-wrap font-sans leading-relaxed bg-[#f9f9f8] rounded-lg p-3 mb-3 border border-[#f0f0ee]">
-                    {result.clientText}
+                    {displayClientText}
                   </pre>
                   <button onClick={handleCopy}
                     className={`w-full h-8 rounded-lg text-[11px] font-medium border transition-colors ${
