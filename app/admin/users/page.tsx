@@ -29,7 +29,9 @@ const STATIONS: { value: string; label: string }[] = [
   { value: 'curved',    label: 'Криволинейка' },
   { value: 'polishing', label: 'Полировка' },
   { value: 'drilling',  label: 'Сверловка' },
+  { value: 'facet',     label: 'Фацет' },
   { value: 'tempering', label: 'Закалка' },
+  { value: 'triplex',   label: 'Триплекс' },
   { value: 'packaging', label: 'Упаковка' },
 ]
 

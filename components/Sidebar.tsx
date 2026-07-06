@@ -283,6 +283,7 @@ const ADMIN_OPERATIONS: NavItem[] = [
 const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app',          label: 'Обзор',            icon: '📋' },
   { href: '/production-app/today',    label: 'Пул на сегодня',   icon: '📅' },
+  { href: '/production-app/station',  label: 'Станции',          icon: '🏭' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
 ]

@@ -7,7 +7,9 @@ export type DetailStageKey =
   | 'curved'
   | 'polishing'
   | 'drilling'
+  | 'facet'
   | 'tempering'
+  | 'triplex'
   | 'packaging'
   | 'problem'
 
@@ -50,13 +52,17 @@ export function itemNeedsTempering(item: { hasTempering?: boolean; materialName?
 
 // ─── Stage definitions (single source of truth, no UI icons) ──────────────────
 
+// Порядок этапов = физика стекла: вся обработка кромки/отверстий/фацета ДО закалки
+// (после закалки стекло не режут/сверлят), триплекс (склейка) — ПОСЛЕ закалки.
 export const PRODUCTION_STAGES = [
-  { key: 'cutting'   as const, label: 'Резка'       },
+  { key: 'cutting'   as const, label: 'Резка'        },
   { key: 'curved'    as const, label: 'Криволинейка' },
-  { key: 'polishing' as const, label: 'Полировка'   },
-  { key: 'drilling'  as const, label: 'Сверление'   },
-  { key: 'tempering' as const, label: 'Закалка'     },
-  { key: 'packaging' as const, label: 'Упаковка'    },
+  { key: 'polishing' as const, label: 'Полировка'    },
+  { key: 'drilling'  as const, label: 'Сверление'    },
+  { key: 'facet'     as const, label: 'Фацет'        },
+  { key: 'tempering' as const, label: 'Закалка'      },
+  { key: 'triplex'   as const, label: 'Триплекс'     },
+  { key: 'packaging' as const, label: 'Упаковка'     },
 ] satisfies { key: Exclude<DetailStageKey, 'problem'>; label: string }[]
 
 export const STAGE_LABELS: Record<DetailStageKey, string> = {
@@ -64,7 +70,9 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
   curved:    'Криволинейка',
   polishing: 'Полировка',
   drilling:  'Сверление',
+  facet:     'Фацет',
   tempering: 'Закалка',
+  triplex:   'Триплекс',
   packaging: 'Упаковка',
   problem:   'Проблема',
 }
@@ -73,13 +81,17 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
 // - tempering: только каленое и не зеркало.
 // - drilling: `!== false` (старые записи без поля hasHoles сохраняют сверловку — без регрессии).
 // - curved: только явно криволинейные изделия (shape === 'curved'); по умолчанию НЕ применяется.
+// - facet: только если у детали есть фацет (hasFacet === true).
+// - triplex: только если деталь триплексная (hasTriplex === true).
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean },
 ) {
   return PRODUCTION_STAGES.filter(s => {
     if (s.key === 'tempering') return itemNeedsTempering(item)
     if (s.key === 'drilling')  return item.hasHoles !== false
     if (s.key === 'curved')    return item.shape === 'curved'
+    if (s.key === 'facet')     return item.hasFacet === true
+    if (s.key === 'triplex')   return item.hasTriplex === true
     return true
   })
 }

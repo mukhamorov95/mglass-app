@@ -32,9 +32,14 @@ const COLS = [
   { key: 'cut',              label: 'Резка',     stage: 'cutting'   as DetailStageKey,   alt: null },
   { key: 'edge',             label: 'Полировка', stage: 'polishing' as DetailStageKey,   alt: 'edge_processed' },
   { key: 'drilled',          label: 'Сверление', stage: 'drilling'  as DetailStageKey,   alt: null },
+  { key: 'facet',            label: 'Фацет',     stage: 'facet'     as DetailStageKey,   alt: null },
   { key: 'tempering',        label: 'Закалка',   stage: 'tempering' as DetailStageKey,   alt: null },
+  { key: 'triplex',          label: 'Триплекс',  stage: 'triplex'   as DetailStageKey,   alt: null },
   { key: 'packed',           label: 'Упаковка',  stage: 'packaging' as DetailStageKey,   alt: 'packaged' },
 ] as const
+
+// Фацет/Триплекс — редкие этапы: колонку показываем, только если есть применимый заказ.
+const OPTIONAL_COLS = new Set(['facet', 'triplex'])
 
 function parseNotes(n: string | null): NotesData {
   if (!n) return {}
@@ -146,6 +151,10 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const doneCount = rows.filter(r => r.allDone).length
   const problemCount = rows.filter(r => r.anyProblem).length
 
+  const usedStages = new Set<string>()
+  for (const o of active) for (const it of o.items) for (const s of getApplicableStages(it)) usedStages.add(s.key)
+  const visibleCols = COLS.filter(c => !OPTIONAL_COLS.has(c.key) || (c.stage != null && usedStages.has(c.stage)))
+
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
@@ -173,7 +182,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                 <tr className="border-b border-[#e4e4e0]">
                   <th className="text-left px-3 py-2 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide sticky left-0 bg-white z-10">Заказ</th>
                   <th className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95]">Срок</th>
-                  {COLS.map(c => <th key={c.key} className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95] whitespace-nowrap">{c.label}</th>)}
+                  {visibleCols.map(c => <th key={c.key} className="px-2 py-2 text-[10px] font-semibold text-[#9a9a95] whitespace-nowrap">{c.label}</th>)}
                 </tr>
               </thead>
               <tbody>
@@ -189,7 +198,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                     <td className="px-2 py-2 text-center">
                       <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded border whitespace-nowrap ${dColor(days, allDone)}`}>{allDone ? 'готов' : dLabel(days)}</span>
                     </td>
-                    {COLS.map(c => <td key={c.key} className="px-2 py-2 text-center"><StageCell cell={cells[c.key]} /></td>)}
+                    {visibleCols.map(c => <td key={c.key} className="px-2 py-2 text-center"><StageCell cell={cells[c.key]} /></td>)}
                   </tr>
                 ))}
               </tbody>

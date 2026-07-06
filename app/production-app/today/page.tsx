@@ -27,7 +27,7 @@ type TaskRow = {
 type OrderLite = { id: number; client_name: string; custom_number: string | null }
 type WorkerLite = { id: string; name: string | null; email: string | null; production_stations: string[] | null }
 
-const STATIONS: DetailStageKey[] = ['cutting', 'curved', 'polishing', 'drilling', 'tempering', 'packaging']
+const STATIONS: DetailStageKey[] = ['cutting', 'curved', 'polishing', 'drilling', 'facet', 'tempering', 'triplex', 'packaging']
 
 export default async function ProductionTodayPage() {
   const sb = await createClient()
@@ -61,8 +61,8 @@ export default async function ProductionTodayPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Пул по станциям</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">{tasks.length} задач цеха · {problems.length} проблем</p>
+        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Пул на сегодня</h1>
+        <p className="text-[13px] text-[#9a9a95] mt-0.5">{new Set(tasks.map(t => t.order_id)).size} заказов · {tasks.length} задач · {problems.length} проблем</p>
         <ProductionTabs />
       </div>
 
@@ -98,21 +98,27 @@ export default async function ProductionTodayPage() {
         {STATIONS.map(station => {
           const list = byStation.get(station) ?? []
           if (list.length === 0) return null
+          // Группируем задачи станции по заказу: один заказ = одна карточка с N позициями.
+          const byOrder = new Map<number, TaskRow[]>()
+          for (const t of list) { const g = byOrder.get(t.order_id) ?? []; g.push(t); byOrder.set(t.order_id, g) }
           return (
             <div key={station} className="mb-6">
               <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
-                {STAGE_LABELS[station]} · {list.length}
+                {STAGE_LABELS[station]} · {byOrder.size} зак. · {list.length} поз.
               </p>
               <div className="space-y-2">
-                {list.map(t => {
-                  const o = orders.get(t.order_id)
+                {[...byOrder.entries()].map(([orderId, ts]) => {
+                  const o = orders.get(orderId)
+                  const taskIds = ts.map(t => t.id)
+                  const assignees = new Set(ts.map(t => t.assigned_to))
+                  const groupAssigned = assignees.size === 1 ? [...assignees][0] : null
                   return (
-                    <div key={t.id} className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex items-center justify-between gap-2">
+                    <div key={orderId} className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
-                        <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name} · поз. {t.item_index + 1}</p>
+                        <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${orderId}`}</p>
+                        <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name} · {ts.length} поз.</p>
                       </div>
-                      <AssignWorker taskId={t.id} station={t.station} assignedTo={t.assigned_to} workers={allWorkers} />
+                      <AssignWorker taskIds={taskIds} station={station} assignedTo={groupAssigned} workers={allWorkers} />
                     </div>
                   )
                 })}

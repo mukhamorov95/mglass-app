@@ -6,10 +6,10 @@ import { createClient } from '@/lib/supabase-browser'
 
 type Worker = { id: string; name: string | null; email: string | null; production_stations: string[] | null }
 
-// Назначение задачи рабочему прямо из «Пула на сегодня».
-// Пишет production_tasks.assigned_to (RLS разрешает authenticated update).
-export default function AssignWorker({ taskId, station, assignedTo, workers }: {
-  taskId: number
+// Назначение рабочему прямо из «Пула на сегодня». Один заказ на станции = все его
+// позиции назначаются одному рабочему (taskIds). RLS разрешает authenticated update.
+export default function AssignWorker({ taskIds, station, assignedTo, workers }: {
+  taskIds: number[]
   station: string
   assignedTo: string | null
   workers: Worker[]
@@ -24,7 +24,7 @@ export default function AssignWorker({ taskId, station, assignedTo, workers }: {
 
   async function assign(workerId: string) {
     setSaving(true)
-    await sb.from('production_tasks').update({ assigned_to: workerId || null }).eq('id', taskId)
+    await sb.from('production_tasks').update({ assigned_to: workerId || null }).in('id', taskIds)
     setSaving(false)
     router.refresh()
   }

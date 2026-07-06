@@ -68,7 +68,9 @@ const GROUP_ACTIONS: { key: DetailStageKey; label: string; danger?: boolean }[] 
   { key: 'curved',    label: 'Криволинейка выполнена' },
   { key: 'polishing', label: 'Полировка выполнена' },
   { key: 'drilling',  label: 'Сверление выполнено' },
+  { key: 'facet',     label: 'Фацет выполнен'      },
   { key: 'tempering', label: 'Закалка выполнена'   },
+  { key: 'triplex',   label: 'Триплекс выполнен'   },
   { key: 'packaging', label: 'Упаковано'           },
   { key: 'problem',   label: 'Проблема',  danger: true },
 ]

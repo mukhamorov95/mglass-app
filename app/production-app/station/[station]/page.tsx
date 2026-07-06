@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import ProductionTabs from '@/components/ProductionTabs'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import {
   runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS,
@@ -15,7 +16,7 @@ import {
 // Показываются только готовые к работе (предыдущий этап выполнен).
 // Отметка — всей партией или построчно.
 
-const STATIONS = ['cutting', 'curved', 'polishing', 'drilling', 'tempering', 'packaging'] as const
+const STATIONS = ['cutting', 'curved', 'polishing', 'drilling', 'facet', 'tempering', 'triplex', 'packaging'] as const
 type Station = typeof STATIONS[number]
 
 type Task = { id: number; order_id: number; item_index: number; status: string; blocked_by_task_id: number | null }
@@ -153,16 +154,12 @@ export default function StationBatchesPage() {
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">{STAGE_LABELS[station as DetailStageKey]} — партии</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">
-              {batches.length} материалов · {isCutting ? `${totalSheets} листов` : `${totalPieces} деталей`}
-            </p>
-          </div>
-          <Link href="/production-app/my-queue" className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">Мои задачи →</Link>
-        </div>
-        <div className="flex flex-wrap gap-1.5 mt-3">
+        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Станции — {STAGE_LABELS[station as DetailStageKey]}</h1>
+        <p className="text-[13px] text-[#9a9a95] mt-0.5">
+          {batches.length} материалов · {isCutting ? `${totalSheets} листов` : `${totalPieces} деталей`} · партии по материалу и толщине
+        </p>
+        <ProductionTabs />
+        <div className="flex flex-wrap gap-1.5 mt-2 pt-2 border-t border-[#f0f0ec]">
           {STATIONS.map(s => (
             <Link key={s} href={`/production-app/station/${s}`}
               className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${s === station ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>

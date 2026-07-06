@@ -15,7 +15,7 @@ export type RoutingStage = {
 // Reuses getApplicableStages (already handles tempering-for-mirrors and the
 // hasHoles drilling filter) — does not reimplement those business rules.
 export function buildItemRoute(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean },
 ): RoutingStage[] {
   return getApplicableStages(item).map((stage, i) => ({
     stageKey:      stage.key,

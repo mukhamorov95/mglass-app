@@ -47,11 +47,14 @@ type Order = {
 
 // Used for the batch-stage checklist — excludes 'problem' (separate action)
 const BATCH_STAGES: { key: Exclude<DetailStageKey, 'problem'>; label: string; icon: string }[] = [
-  { key: 'cutting',   label: 'Резка',     icon: '✂️' },
-  { key: 'polishing', label: 'Полировка', icon: '🔲' },
-  { key: 'drilling',  label: 'Сверление', icon: '🔩' },
-  { key: 'tempering', label: 'Закалка',   icon: '🔥' },
-  { key: 'packaging', label: 'Упаковка',  icon: '📦' },
+  { key: 'cutting',   label: 'Резка',        icon: '✂️' },
+  { key: 'curved',    label: 'Криволинейка', icon: '〰️' },
+  { key: 'polishing', label: 'Полировка',    icon: '🔲' },
+  { key: 'drilling',  label: 'Сверление',    icon: '🔩' },
+  { key: 'facet',     label: 'Фацет',        icon: '🔷' },
+  { key: 'tempering', label: 'Закалка',      icon: '🔥' },
+  { key: 'triplex',   label: 'Триплекс',     icon: '📚' },
+  { key: 'packaging', label: 'Упаковка',     icon: '📦' },
 ]
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────

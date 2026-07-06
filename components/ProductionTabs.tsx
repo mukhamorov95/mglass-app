@@ -6,11 +6,12 @@ import { usePathname } from 'next/navigation'
 // Единая навигация цеха (production-app). «Обзор» = два вида: по срокам (/production-app)
 // и матрица заказ×этап (/production-app/board). Остальное — операционные экраны.
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
-  { href: '/production-app',          label: 'Обзор',           match: p => p === '/production-app' || p.startsWith('/production-app/board') },
-  { href: '/production-app/today',    label: 'Пул по станциям', match: p => p.startsWith('/production-app/today') },
-  { href: '/production-app/my-queue', label: 'Мои задачи',      match: p => p.startsWith('/production-app/my-queue') },
-  { href: '/production-app/material', label: 'Материал',        match: p => p.startsWith('/production-app/material') },
-  { href: '/production-app/docs',     label: 'Документы',       match: p => p.startsWith('/production-app/docs') },
+  { href: '/production-app',          label: 'Обзор',          match: p => p === '/production-app' || p.startsWith('/production-app/board') },
+  { href: '/production-app/today',    label: 'Пул на сегодня', match: p => p.startsWith('/production-app/today') },
+  { href: '/production-app/station',  label: 'Станции',        match: p => p.startsWith('/production-app/station') },
+  { href: '/production-app/my-queue', label: 'Мои задачи',     match: p => p.startsWith('/production-app/my-queue') },
+  { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
+  { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
 ]
 
 const pill = (active: boolean) =>
