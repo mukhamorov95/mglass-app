@@ -50,13 +50,10 @@ const PRODUCT_VARS: VarRow[] = [
   { name: 'Сдельная ЗП отдела реализации', pct: 2.5 },
   { name: 'УСН', pct: 5 },
 ]
-// Юниты (вкладки «MGlass»/«производство» в файле) несут ПОЛНЫЙ список постоянных
-// компании; различается только аренда — доля от общих 750 000 (250к MGlass / 500к цех).
-const FIXED_COMMON: FixedRow[] = [
-  { name: 'Коммунальные расходы', amount: 20000 },
-  { name: 'ЗП оклады, отпускные, больничные, премии', amount: 1420000 },
-  { name: 'Лизинг', amount: 505200 },
-  { name: 'Кредит и проценты', amount: 290000 },
+// Постоянные (файл «оклады_лизинг_кредит_финал»): оклады разнесены 390к MGlass +
+// 1 030к цех = 1 420к; лизинг 400 000 — у производства; кредит 290 000 — у MGlass;
+// аренда 750 000 = 250к MGlass + 500к цех. Общие статьи одинаковы в обоих юнитах.
+const FIXED_REST: FixedRow[] = [
   { name: 'Налоги с ЗП (НДФЛ, страховые)', amount: 200000 },
   { name: 'Страховки КАСКО, ОСАГО', amount: 25000 },
   { name: 'Связь, интернет', amount: 7000 },
@@ -74,11 +71,26 @@ const FIXED_COMMON: FixedRow[] = [
   { name: 'Уборка помещений', amount: 4000 },
   { name: 'Вывоз мусора', amount: 10000 },
 ]
-const fixedWithRent = (rent: number, note: string): FixedRow[] =>
-  [{ name: `Аренда помещения (${note})`, amount: rent }, ...FIXED_COMMON.map(f => ({ ...f }))]
-const FIXED_TOTAL = fixedWithRent(750000, 'вся')              // Σ 3 614 910
-const FIXED_MGLASS = fixedWithRent(250000, 'доля от 750 000') // Σ 3 114 910
-const FIXED_PROD = fixedWithRent(500000, 'доля от 750 000')   // Σ 3 364 910
+const buildFixed = (head: FixedRow[]): FixedRow[] => [...head, ...FIXED_REST.map(f => ({ ...f }))]
+const FIXED_TOTAL = buildFixed([                                    // Σ 3 509 710
+  { name: 'Аренда помещения', amount: 750000 },
+  { name: 'Коммунальные расходы', amount: 20000 },
+  { name: 'ЗП оклады, отпускные, больничные, премии (390к MGlass + 1 030к цех)', amount: 1420000 },
+  { name: 'Лизинг', amount: 400000 },
+  { name: 'Кредит и проценты', amount: 290000 },
+])
+const FIXED_MGLASS = buildFixed([                                   // Σ 1 579 710
+  { name: 'Аренда помещения (доля от 750 000)', amount: 250000 },
+  { name: 'Коммунальные расходы', amount: 20000 },
+  { name: 'ЗП оклады M-Glass (офис, продажи, замерщик)', amount: 390000 },
+  { name: 'Кредит и проценты (кредит MGlass)', amount: 290000 },
+])
+const FIXED_PROD = buildFixed([                                     // Σ 2 579 710
+  { name: 'Аренда помещения (доля от 750 000)', amount: 500000 },
+  { name: 'Коммунальные расходы', amount: 20000 },
+  { name: 'ЗП оклады производства (остаток ФОТ: 1 420к − 390к)', amount: 1030000 },
+  { name: 'Лизинг (относится к производству)', amount: 400000 },
+])
 const DEFAULTS: Record<Unit, Model> = {
   total: {
     incomes: [
