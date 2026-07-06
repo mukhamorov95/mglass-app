@@ -24,12 +24,15 @@ type Model   = {
 }
 
 type EditUnit = 'mglass' | 'production'
-type Unit = 'total' | EditUnit
+type Unit = 'total' | 'total1' | EditUnit
 const UNITS: { key: Unit; label: string }[] = [
-  { key: 'total',      label: 'Компания (всё)' },
+  { key: 'total',      label: 'Компания 0' },
+  { key: 'total1',     label: 'Компания 1 · без кредитов и лизинга' },
   { key: 'mglass',     label: 'M-Glass' },
   { key: 'production', label: 'Производство' },
 ]
+// «Компания 1» — та же автосумма юнитов, но из постоянных исключены долговые платежи
+const isDebtRow = (name: string) => /кредит|лизинг/i.test(name)
 const FUND_KEYS: [keyof Funds, string][] = [
   ['invest', 'Фонд возврата инвестиций'],
   ['training', 'Фонд обучения'],
@@ -162,8 +165,13 @@ export default function BreakevenPage() {
     }
   }, [models])
 
-  const ro = unit === 'total' // read-only: сводка, правки — в юнитах
-  const m = ro ? totalModel : models[unit]
+  const total1Model = useMemo<Model>(() => ({
+    ...totalModel,
+    fixed: totalModel.fixed.filter(f => !isDebtRow(f.name)),
+  }), [totalModel])
+
+  const ro = unit === 'total' || unit === 'total1' // read-only: сводки, правки — в юнитах
+  const m = unit === 'total' ? totalModel : unit === 'total1' ? total1Model : models[unit]
   const patch = (fn: (m: Model) => Model) => {
     if (ro) return
     setModels(prev => ({ ...prev, [unit]: fn(structuredClone(prev[unit])) }))
@@ -214,11 +222,12 @@ export default function BreakevenPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
-  // Постоянные на «Компании» рендерим группами по юнитам (границы — по длинам списков)
+  // Постоянные на сводках рендерим группами по юнитам; на «Компании 1» — без кредитов/лизинга
+  const groupRows = (rows: FixedRow[]) => unit === 'total1' ? rows.filter(f => !isDebtRow(f.name)) : rows
   const fixedGroups = ro ? [
-    { title: 'Производство', rows: models.production.fixed, sum: fixedOf(models.production) },
-    { title: 'M-Glass', rows: models.mglass.fixed, sum: fixedOf(models.mglass) },
-  ] : null
+    { title: 'Производство', rows: groupRows(models.production.fixed) },
+    { title: 'M-Glass', rows: groupRows(models.mglass.fixed) },
+  ].map(gr => ({ ...gr, sum: gr.rows.reduce((s, f) => s + (f.amount || 0), 0) })) : null
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -242,7 +251,7 @@ export default function BreakevenPage() {
               {u.label}
             </button>
           ))}
-          {ro && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство — правки вносите там</span>}
+          {ro && <span className="text-[11px] text-[#9a9a95] ml-1">Σ автоматическая сумма вкладок M-Glass и Производство{unit === 'total1' ? ' БЕЗ кредитов и лизинга' : ''} — правки вносите там</span>}
         </div>
       </div>
 
@@ -338,7 +347,7 @@ export default function BreakevenPage() {
           {/* Постоянные */}
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">
-              Постоянные расходы, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass</span>}
+              Постоянные расходы, ₽/мес{ro && <span className="normal-case tracking-normal text-[#c4c4be]"> · производство + M-Glass{unit === 'total1' ? ' · без кредитов и лизинга' : ''}</span>}
             </p>
             {fixedGroups ? fixedGroups.map(gr => (
               <div key={gr.title} className="mb-3">
