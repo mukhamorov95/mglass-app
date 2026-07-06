@@ -65,11 +65,34 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     sb.from('glass_price_matrix').select('*'),
     sb.from('pricing_model_config_v2').select('*').in('product_category', ['mirror', 'loft']),
   ])
-  const retailMaterials = (mats.data ?? []) as Material[]
+  let retailMaterials = (mats.data ?? []) as Material[]
   const finRows = (fins.data ?? []) as FinancialSettings[]
   const matrix = (mx.data ?? []) as GlassMatrixRow[]
   const cfgRows = (cfgs.data ?? []) as Record<string, unknown>[]
   const cfgFor = (cat: string) => rowToCfg(cfgRows.find(r => r.product_category === cat && r.active !== false) ?? null)
+
+  // Стекло для лофта: в розничном справочнике materials стекла нет — синтезируем из
+  // glass_price_matrix (COST-строки, 4 мм), как это делает /calculator/loft.
+  if (!retailMaterials.some(m => m.category === 'стекло')) {
+    const costRows = matrix.filter(r => r.price_type === 'cost' && r.category === 'glass')
+    const saleRows = matrix.filter(r => r.price_type === 'sale' && r.category === 'glass')
+    const synth: Material[] = []
+    costRows.forEach((row, ri) => {
+      const c4 = Number((row as unknown as Record<string, unknown>).t4) || 0
+      if (c4 > 0) {
+        const saleRow = saleRows.find(r => r.name === row.name) as unknown as Record<string, unknown> | undefined
+        synth.push({
+          id: -(ri * 100 + 4), name: `Стекло ${row.name} 4 мм`, short_name: null,
+          category: 'стекло', unit: 'м²', cost_price: c4,
+          sale_price: saleRow ? (Number(saleRow.t4) || 0) : 0,
+          has_vat: false, vat_rate: 0, active: true, in_stock: true,
+          comment: null, image_url: null, created_at: '', updated_at: '',
+        } as Material)
+      }
+    })
+    retailMaterials = [...retailMaterials, ...synth]
+  }
+
   return {
     retailMaterials,
     retailServices: (svcs.data ?? []) as Service[],
