@@ -14,6 +14,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
   { href: '/production-app/ideas',    label: '💡 Идеи',        match: p => p.startsWith('/production-app/ideas') },
   { href: '/production-app/buy',      label: '🛒 Купить',      match: p => p.startsWith('/production-app/buy') },
+  { href: '/production-app/guide',    label: '📘 Регламент',   match: p => p.startsWith('/production-app/guide') },
 ]
 
 const pill = (active: boolean) =>

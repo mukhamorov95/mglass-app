@@ -297,9 +297,10 @@ const PRODUCTION_NAV_SUPPLY: NavItem[] = [
   { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
 ]
 
-// Команда: идеи и предложения цеха.
+// Команда: идеи и предложения цеха + регламент.
 const PRODUCTION_NAV_TEAM: NavItem[] = [
   { href: '/production-app/ideas',    label: 'Идеи и проблемы',  icon: '💡' },
+  { href: '/production-app/guide',    label: 'Регламент работы', icon: '📘' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -325,7 +326,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
-    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/ideas', '/production-app/guide'])) open.push('prod_team')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -356,7 +357,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   if (role === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
-    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/ideas', '/production-app/guide'])) open.push('prod_team')
     return open
   }
   if (role === 'manager') {
