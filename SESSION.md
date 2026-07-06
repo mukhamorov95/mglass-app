@@ -1,9 +1,9 @@
-## ⚠️ PROD: ТРИПЛЕКС ПО СЛОЯМ — КОД ГОТОВ, ЖДЁТ МИГРАЦИЮ (2026-07-06, ПОСЛЕДНЕЕ, НЕ ЗАВЕРШЕНО)
-Коммит `7c1542e` — ЛОКАЛЬНЫЙ, **НЕ ПУШИТЬ до применения миграции** `supabase/migrations/20260706_production_tasks_layers.sql` (station/my-queue делают select layer,layer_note — упадут без колонок). Supabase Dashboard лежал (инцидент), SQL применить было нечем (MCP unauthorized, БД-пароля нет).
-- Модель: production_tasks += layer (0=изделие: склейка/упаковка; 1..N=стекло пакета; обычные позиции=1), layer_note («слой 2: 4 мм»), UNIQUE +layer.
-- buildProductionTasks: триплекс → отдельная цепочка резка→…→закалка на КАЖДОЕ стекло (layer k), склейка+упаковка layer 0. launch-production: onConflict +layer; блокеры: слои независимы (режутся параллельно), склейка ← последняя послойная задача, упаковка ← склейка.
-- Станция: материал/толщина задачи по её layer (triplexGlasses[k-2]); «Готово» закрывает только свой слой. Мои задачи: бейдж с layer_note.
-- **ПЛАН ЗАВЕРШЕНИЯ**: 1) Supabase SQL Editor → применить 20260706_production_tasks_layers.sql; 2) `git push`; 3) тест: `node scratchpad/test_triplex_tasks.mjs create` (создаёт тест-заказ ТЕСТ-ТРИПЛЕКС-СЛОИ) → из Chrome POST /api/b2b-orders/{id}/launch-production → `check {id}` (ожидание: cutting/polishing/drilling/tempering ×2 слоя с layer_note 8мм/4мм, triplex+packaging layer 0, блокеры по слоям) → `cleanup {id}`. Скрипт: /private/tmp/claude-501/.../scratchpad/test_triplex_tasks.mjs (лежит в scratchpad сессии).
+## PROD: ТРИПЛЕКС ПО СЛОЯМ — ЗАВЕРШЕНО И ПРОВЕРЕНО (2026-07-06, последнее)
+`7c1542e`+`7f1f1b8`, прод. Миграция 20260706_production_tasks_layers.sql применена владельцем вручную (Success), код запушен, сквозной тест пройден.
+- Модель: production_tasks += layer (0=изделие: склейка/упаковка; 1..N=стекло пакета; обычные позиции=1), layer_note, UNIQUE +layer.
+- buildProductionTasks: триплекс → отдельная цепочка резка→…→закалка на КАЖДОЕ стекло; склейка+упаковка layer 0. launch-production: onConflict +layer; слои НЕЗАВИСИМЫ (обе резки без блокера — параллельно), склейка ← последняя послойная, упаковка ← склейка.
+- Станция: материал/толщина по layer задачи; «Готово» закрывает только свой слой. Мои задачи: бейдж «Поз. 1 · Резка · слой 2: 4 мм».
+- **ТЕСТ (заказ #4896, 8+4, удалён)**: created=10 = 4 этапа×2 слоя + triplex + packaging; L1 8мм chain #237→240, L2 4мм chain #241→244 (обе резки blockedBy=null), triplex←#244, packaging←triplex. UI станции: партия «Прозрачное М1 4 мм · 1 деталь» появилась. Cleanup: tasks=0, orders=0.
 
 ## B2B: ТРИПЛЕКС ИЗ РАЗНЫХ ТОЛЩИН (4+6) + РАСКРОЙ ОБОИХ СТЁКОЛ (2026-07-06)
 `4bfc4a3`, прод, проверено Chrome end-to-end.
