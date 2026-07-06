@@ -1,4 +1,13 @@
-## PROD: /b2b-production СИНХРОНИЗИРОВАН + КАРТОЧКА ПЕРЕРАБОТАНА (2026-07-06, последнее)
+## PROD: РАЗДЕЛ «ПРОИЗВОДСТВО» — ЧИСТАЯ СТРУКТУРА (2026-07-06, последнее)
+`8fa49bf`, прод, проверено Chrome. Убрано лишнее из раздела «Производство».
+- Было: 3 группы (Заказы: /b2b-orders+/b2b-production+/b2b-cutting; Production App: /production-app+supervisor; Справочники /admin/*). Половина пунктов роль `production` не могла открыть (нет в allowlist), живые экраны /production-app/* были скрыты.
+- Стало (Sidebar.tsx, оба рендера — роль production и админ-режим «Произв.»): **ЦЕХ** (Сводка /production-app, Пул на сегодня /today, Борд заказ×этап /board, Мои задачи /my-queue, Заказы в работе /b2b-production) + **МАТЕРИАЛ И ДОКУМЕНТЫ** (Раскрой /b2b-cutting, Материал /production-app/material, Документы /production-app/docs).
+- Убрано (по решению владельца): реестр /b2b-orders (остаётся в «Админ») и справочники /admin/* (настройка владельца).
+- allowlist роли production (getRole.ts) синхронизирован: убраны мёртвые /b2b-pipeline (воронка продаж) и /production; добавлен /b2b-cutting. Осталось: /, /b2b-production, /b2b-cutting, /production-app, /p/o.
+- /production → редирект на /production-app (была дубль /b2b-orders). Header.tsx мёртв (нигде не импортится).
+- Внутренняя навигация /production-app (Сводка/Борд/Пул/Мои задачи/Материал/Документы) — своя, работает; sidebar теперь ей соответствует.
+
+## PROD: /b2b-production СИНХРОНИЗИРОВАН + КАРТОЧКА ПЕРЕРАБОТАНА (2026-07-06)
 `2493cba`, прод, проверено Chrome.
 - Раньше страница читала свой `notes.production_status` (у всех null) → показывала «Ожидает 700». Теперь статус выводится из `notes.stages` (единый источник правды с /b2b-orders): грузим только `launched_at != null`, активные = stages.shipped отсутствует. Результат: **Ожидает 23 (июль) · Отгружено 977**.
 - Кнопки статуса пишут в `stages` (cutting→cut, tempering→tempering, ready→packaged, shipped→packaged+shipped, pending→clear) — обе страницы остаются согласованы. `effectiveStatus(stages)` + `itemStage()` (по detail_stages, иначе order-level).
