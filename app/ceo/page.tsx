@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import MoneyPulse from './MoneyPulse'
 
 type ManagerStat = {
   id: number; name: string
@@ -54,6 +55,8 @@ export default function CeoPage() {
             Детальная аналитика →
           </Link>
         </div>
+
+        <MoneyPulse />
 
         {loading ? (
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
