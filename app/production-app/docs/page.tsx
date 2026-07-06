@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import Link from 'next/link'
+import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 
 // Экран Валерии (документы): запущенные заказы — печать чертежа + отметка
@@ -20,13 +20,6 @@ function deadline(pn: NotesData, createdAt: string): number {
   return Math.round((d.getTime() - t.getTime()) / 86_400_000)
 }
 const dLabel = (days: number) => days < 0 ? `просрочен ${Math.abs(days)}д` : days === 0 ? 'сегодня' : days === 1 ? 'завтра' : days === 2 ? 'послезавтра' : `${days}д`
-
-const NAV = [
-  { href: '/production-app',          label: 'Сводка' },
-  { href: '/production-app/today',    label: 'Пул по станциям' },
-  { href: '/production-app/material', label: 'Материал' },
-  { href: '/production-app/docs',     label: 'Документы' },
-]
 
 export default function DocsPage() {
   const sb = createClient()
@@ -78,14 +71,7 @@ export default function DocsPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Документы</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{toPrint} без чертежей · {orders.length} в работе</p>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {NAV.map(n => (
-            <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/docs' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
-              {n.label}
-            </Link>
-          ))}
-        </div>
+        <ProductionTabs />
       </div>
 
       <div className="px-4 pt-4 space-y-2">

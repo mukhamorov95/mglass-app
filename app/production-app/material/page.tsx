@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
-import Link from 'next/link'
+import ProductionTabs from '@/components/ProductionTabs'
 
 // Экран Сергея (материал) — ТОЛЬКО ПРОСМОТР: какой материал по каким заявкам
 // ещё не приехал. Ничего не меняет. Заявки, у которых нет даты получения.
@@ -17,13 +17,6 @@ type PO = {
   b2b_order_ids: number[] | null
   comment: string | null
 }
-
-const NAV = [
-  { href: '/production-app',          label: 'Сводка' },
-  { href: '/production-app/today',    label: 'Пул по станциям' },
-  { href: '/production-app/material', label: 'Материал' },
-  { href: '/production-app/docs',     label: 'Документы' },
-]
 
 function fmtDate(d: string | null): string {
   if (!d) return '—'
@@ -45,14 +38,7 @@ export default async function MaterialPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Материал</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{pos.length} заявок ждут прихода</p>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {NAV.map(n => (
-            <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/material' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
-              {n.label}
-            </Link>
-          ))}
-        </div>
+        <ProductionTabs />
       </div>
 
       <div className="px-4 pt-4 space-y-2">

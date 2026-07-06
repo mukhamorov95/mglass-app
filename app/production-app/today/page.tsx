@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase-server'
+import ProductionTabs from '@/components/ProductionTabs'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASON_LABELS } from '@/lib/productionRouting'
 import AssignWorker from './AssignWorker'
@@ -62,6 +63,7 @@ export default async function ProductionTodayPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-4 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Пул по станциям</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{tasks.length} задач цеха · {problems.length} проблем</p>
+        <ProductionTabs />
       </div>
 
       {problems.length > 0 && (

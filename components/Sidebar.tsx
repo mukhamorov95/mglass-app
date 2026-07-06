@@ -279,11 +279,10 @@ const ADMIN_OPERATIONS: NavItem[] = [
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
 
-// Цех — операционный контур (живой): сводка → пул → борд → мои задачи → статус заказов.
+// Цех — операционный контур (живой): обзор (по срокам/матрица) → пул → мои задачи → статус заказов.
 const PRODUCTION_NAV_SHOP: NavItem[] = [
-  { href: '/production-app',          label: 'Сводка',           icon: '📋' },
+  { href: '/production-app',          label: 'Обзор',            icon: '📋' },
   { href: '/production-app/today',    label: 'Пул на сегодня',   icon: '📅' },
-  { href: '/production-app/board',    label: 'Борд заказ×этап',  icon: '🔲' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
 ]

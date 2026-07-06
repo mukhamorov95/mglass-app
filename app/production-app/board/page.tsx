@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
+import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
 
 // Борд начальника производства «заказ × этапы» — единый обзор цеха.
@@ -56,13 +57,6 @@ function dColor(d: number, ready: boolean) {
 
 type CellStatus = 'done' | 'inprogress' | 'partial' | 'problem' | 'none'
 type Cell = { status: CellStatus; doneN?: number; total?: number; worker?: string; frontier?: boolean }
-
-const NAV = [
-  { href: '/production-app',          label: 'Сводка' },
-  { href: '/production-app/board',    label: 'Борд' },
-  { href: '/production-app/today',    label: 'Пул по станциям' },
-  { href: '/production-app/my-queue', label: 'Мои задачи' },
-]
 
 export default async function BoardPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
   const sp = await searchParams
@@ -159,18 +153,12 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         <p className="text-[13px] text-[#9a9a95] mt-0.5">
           {rows.length - doneCount} в работе · {doneCount} готовы к отгрузке{problemCount > 0 ? ` · ${problemCount} с проблемой` : ''}
         </p>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {NAV.map(n => (
-            <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app/board' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
-              {n.label}
-            </Link>
-          ))}
+        <ProductionTabs extra={
           <Link href={showAll ? '/production-app/board' : '/production-app/board?all=1'}
             className="text-[11px] font-medium px-2.5 py-1 rounded-full border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f0f0ec] transition-colors ml-auto">
             {showAll ? 'Скрыть готовые' : `Показать готовые (${doneCount})`}
           </Link>
-        </div>
+        } />
       </div>
 
       <div className="px-4 pt-4">

@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import Link from 'next/link'
+import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, calcOrderProgress, STAGE_LABELS, type DetailStageKey, PRODUCTION_STAGES } from '@/lib/productionStages'
 
 // Сводка производства — главный экран цеха: заказы сгруппированы по СРОКУ ВЫДАЧИ
@@ -64,15 +65,6 @@ const BUCKETS: { key: BucketKey; label: string; hdr: string; badge: string }[] =
   { key: 'later',    label: '⚪ Позже',           hdr: 'text-[#6b6b66]',   badge: 'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]' },
 ]
 
-const NAV = [
-  { href: '/production-app',            label: 'Сводка' },
-  { href: '/production-app/board',      label: 'Борд' },
-  { href: '/production-app/today',      label: 'Пул по станциям' },
-  { href: '/production-app/my-queue',   label: 'Мои задачи' },
-  { href: '/production-app/material',   label: 'Материал' },
-  { href: '/production-app/docs',       label: 'Документы' },
-]
-
 export default async function ProductionAppPage() {
   const sb = await createClient()
   const { data } = await sb
@@ -117,14 +109,7 @@ export default async function ProductionAppPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Сводка производства</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">{active.length} в работе · {urgent} горят · {grouped.ready.length} готовы к выдаче</p>
-        <div className="flex flex-wrap gap-1.5 mt-3">
-          {NAV.map(n => (
-            <Link key={n.href} href={n.href}
-              className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${n.href === '/production-app' ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
-              {n.label}
-            </Link>
-          ))}
-        </div>
+        <ProductionTabs />
       </div>
 
       <div className="px-4 pt-4 space-y-5">

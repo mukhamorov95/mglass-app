@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
+import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
@@ -142,6 +143,7 @@ export default function MyQueuePage() {
             Партиями →
           </Link>
         </div>
+        <ProductionTabs />
       </div>
 
       <div className="px-4 pt-4">
