@@ -51,7 +51,6 @@ const MANAGER_B2B: NavItem[] = [
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
-  { href: '/admin/archive',  label: 'Архив расчётов',  icon: '📁' },
   { href: '/production-app', label: 'Production App',  icon: '📱' },
 ]
 
@@ -69,7 +68,6 @@ const BUYER_ZAKUPKI: NavItem[] = [
 ]
 
 const BUYER_LOGISTIKA: NavItem[] = [
-  { href: '/admin/procurement-routes', label: 'Маршруты к поставщикам', icon: '🚚', indent: true },
   { href: '/admin/route-sheet',        label: 'Доставки клиентам',      icon: '📍', indent: true },
   { href: '/orders',                   label: 'Заказы MGlass',          icon: '📦', indent: true },
   { href: '/b2b-orders',               label: 'Заказы B2B',             icon: '🏢', indent: true },
@@ -128,7 +126,6 @@ const SEO_AI: NavItem[] = [
   { href: '/ai-assistant',  label: 'AI Ассистент', icon: '🤖' },
   { href: '/kp-generator',  label: 'КП Генератор', icon: '📄' },
   { href: '/vladislav',     label: 'Vladislav AI', icon: '💬' },
-  { href: '/admin/agents',  label: 'AI-агенты',    icon: '⚡' },
 ]
 
 // ─── CFO role ─────────────────────────────────────────────────────────────────
@@ -150,7 +147,6 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
   { href: '/cfo',                     label: 'CFO Center',        icon: '💎' },
   { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/cfo',              label: 'Финмодели / ДДС',  icon: '💰' },
   { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
   { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
   { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
@@ -159,9 +155,7 @@ const CEO_OWNER: NavItem[] = [
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
   { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
-  { href: '/admin/procurement',            label: 'Закупки',             icon: '🗂️' },
   { href: '/production-app',               label: 'Production App',      icon: '📱' },
-  { href: '/production-app/supervisor',    label: 'Панель производства',  icon: '🔭' },
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
@@ -272,7 +266,7 @@ const ADMIN_B2B: NavEntry[] = [
 ]
 
 const ADMIN_OPERATIONS: NavItem[] = [
-  { href: '/admin/warehouse',      label: 'Склад',           icon: '📦' },
+  { href: '/admin/stock-control',  label: 'Остатки склада',  icon: '📦' },
   { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
@@ -343,7 +337,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/admin/warehouse', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
+    if (inSection(pathname, ['/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
   }
   return open
 }
@@ -354,7 +348,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   if (role === 'buyer') {
     if (inSection(pathname, ['/admin/stock-control'])) open.push('buyer_sklad')
     if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
-    if (inSection(pathname, ['/admin/procurement-routes', '/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
+    if (inSection(pathname, ['/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
     if (inSection(pathname, ['/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-cutting'])) open.push('buyer_b2b_mglass')
@@ -376,7 +370,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
-    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/admin/procurement', '/production-app'])) open.push('owner')
+    if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/b2b-analytics', '/vladislav', '/marketing', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap'])) open.push('system')
   }
@@ -602,10 +596,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   }
 
   function buildB2bNav(): NavItem[] {
-    return MANAGER_B2B.filter(e => {
-      if (e.href === '/b2b-crm') return false
-      return true
-    })
+    return MANAGER_B2B
   }
 
   function renderNav() {

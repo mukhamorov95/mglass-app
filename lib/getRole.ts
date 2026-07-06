@@ -135,6 +135,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/calculator/b2b',
     '/b2b-quotes',
     '/b2b-orders',
+    '/b2b-crm',
     '/b2b-cutting',
     '/production-app',
   ],
@@ -176,7 +177,6 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/route-sheet',
     '/admin/stock-control',
     '/admin/procurement',
-    '/admin/procurement-routes',
     '/admin/cutting-settings',
   ],
 
