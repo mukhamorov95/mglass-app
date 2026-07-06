@@ -184,6 +184,8 @@ export default function B2BCalculatorPage() {
   const [fCurved, setFCurved]         = useState(false)
   const [fTriplex, setFTriplex]       = useState(false)
   const [fTriplexLayers, setFTriplexLayers] = useState<2 | 3>(2)
+  const [fTriplexMat2, setFTriplexMat2] = useState<number | null>(null)  // null = как основное
+  const [fTriplexMat3, setFTriplexMat3] = useState<number | null>(null)
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
@@ -211,6 +213,8 @@ export default function B2BCalculatorPage() {
   const [eCurved, setECurved]         = useState(false)
   const [eTriplex, setETriplex]       = useState(false)
   const [eTriplexLayers, setETriplexLayers] = useState<2 | 3>(2)
+  const [eTriplexMat2, setETriplexMat2] = useState<number | null>(null)
+  const [eTriplexMat3, setETriplexMat3] = useState<number | null>(null)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
   useEffect(() => {
@@ -453,6 +457,15 @@ export default function B2BCalculatorPage() {
     return s ? { salePerM2: s.value, costPerM2: s.cost_price ?? 0 } : null
   }, [services])
 
+  // Доп. слои пакета триплекса (слой 2, слой 3): выбранный материал или основной.
+  function triplexExtras(main: B2BMaterial | null, layers: 2 | 3, mat2: number | null, mat3: number | null): B2BMaterial[] {
+    if (!main) return []
+    const g2 = materials.find(m => m.id === mat2) ?? main
+    if (layers === 2) return [g2]
+    const g3 = materials.find(m => m.id === mat3) ?? main
+    return [g2, g3]
+  }
+
   function handleAddItem() {
     if (!selectedMaterial) return
     const w = Number(fWidth) || 0
@@ -461,7 +474,7 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
 
     const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices,
-      fTriplex, fTriplexLayers, triplexPrice)
+      fTriplex, fTriplexLayers, triplexPrice, fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [])
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
     setFWidth('')
     setFHeight('')
@@ -470,6 +483,8 @@ export default function B2BCalculatorPage() {
     setFHoles(false)
     setFCurved(false)
     setFTriplex(false)
+    setFTriplexMat2(null)
+    setFTriplexMat3(null)
     setSavedOrderId(null)   // изменили состав — можно снова сохранить
     widthRef.current?.focus()
   }
@@ -579,6 +594,8 @@ export default function B2BCalculatorPage() {
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
     setETriplexLayers(item.triplexLayers === 3 ? 3 : 2)
+    setETriplexMat2(item.triplexGlasses?.[0]?.materialId ?? null)
+    setETriplexMat3(item.triplexGlasses?.[1]?.materialId ?? null)
     setEServiceIds(item.services.map(s => s.id))
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
@@ -596,7 +613,7 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
     const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices,
-      eTriplex, eTriplexLayers, triplexPrice)
+      eTriplex, eTriplexLayers, triplexPrice, eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [])
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
       : i))
@@ -1142,17 +1159,34 @@ export default function B2BCalculatorPage() {
                     {fTriplex ? `Триплекс` : 'Без триплекса'}
                   </span>
                 </label>
-                {fTriplex && (
-                  <select
-                    className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
-                    value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
-                    <option value={2}>2 стекла</option>
-                    <option value={3}>3 стекла</option>
-                  </select>
-                )}
-                {fTriplex && !triplexPrice && (
-                  <p className="mt-1 text-[10px] text-amber-600">⚠ В справочнике услуг нет «Триплекс» (₽/м²) — склейка посчитается по 0 ₽</p>
-                )}
+                {fTriplex && (() => {
+                  const glassCats = SUPER_CATS[0].cats as readonly string[]
+                  const glassOpts = materials.filter(m => glassCats.includes(m.category) && (m.sale_price ?? 0) > 0)
+                    .sort((a, b) => a.thickness - b.thickness || a.name.localeCompare(b.name))
+                  const layerSelect = (val: number | null, set: (v: number | null) => void, label: string) => (
+                    <select
+                      className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
+                      value={val ?? ''} onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}>
+                      <option value="">{label}: как основное</option>
+                      {glassOpts.map(m => <option key={m.id} value={m.id}>{label}: {m.name} {m.thickness} мм</option>)}
+                    </select>
+                  )
+                  return (
+                    <>
+                      <select
+                        className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
+                        value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                        <option value={2}>2 стекла</option>
+                        <option value={3}>3 стекла</option>
+                      </select>
+                      {layerSelect(fTriplexMat2, setFTriplexMat2, 'Стекло 2')}
+                      {fTriplexLayers === 3 && layerSelect(fTriplexMat3, setFTriplexMat3, 'Стекло 3')}
+                      {!triplexPrice && (
+                        <p className="mt-1 text-[10px] text-amber-600">⚠ В справочнике услуг нет «Триплекс» (₽/м²) — склейка посчитается по 0 ₽</p>
+                      )}
+                    </>
+                  )
+                })()}
               </div>
             </div>
 
@@ -1394,7 +1428,11 @@ export default function B2BCalculatorPage() {
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-orange-50 text-orange-600">закалка</span>
                                   )}
                                   {item.hasTriplex && (
-                                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-indigo-50 text-indigo-600">триплекс {item.triplexLayers ?? 2} ст.</span>
+                                    <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-indigo-50 text-indigo-600">
+                                      триплекс {item.triplexGlasses?.length
+                                        ? [item.thickness, ...item.triplexGlasses.map(g => g.thickness)].join('+')
+                                        : `${item.triplexLayers ?? 2} ст.`}
+                                    </span>
                                   )}
                                   {item.hasFacet && (
                                     <span className="text-[9px] font-medium px-1 py-0.5 rounded bg-purple-50 text-purple-600">фацет {item.facetTypeMm}мм</span>
@@ -1770,7 +1808,8 @@ export default function B2BCalculatorPage() {
       const ePreviewItem   = eCanSave
         ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
             resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
-            eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice), localId: '' }
+            eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice,
+            eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : []), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null
@@ -1904,20 +1943,41 @@ export default function B2BCalculatorPage() {
                     </label>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-2">
-                  <label className={`flex items-center gap-2 flex-1 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0]'}`}>
-                    <input type="checkbox" checked={eTriplex} onChange={e => setETriplex(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className={`text-[13px] ${eTriplex ? 'text-indigo-700 font-medium' : 'text-[#111110]'}`}>Триплекс</span>
-                  </label>
-                  {eTriplex && (
-                    <select
-                      className="h-[34px] bg-white border border-indigo-200 rounded-lg px-2 text-[12px] outline-none focus:border-indigo-400"
-                      value={eTriplexLayers} onChange={e => setETriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
-                      <option value={2}>2 стекла</option>
-                      <option value={3}>3 стекла</option>
-                    </select>
-                  )}
+                <div className="mt-2">
+                  <div className="flex items-center gap-2">
+                    <label className={`flex items-center gap-2 flex-1 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0]'}`}>
+                      <input type="checkbox" checked={eTriplex} onChange={e => setETriplex(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eTriplex ? 'text-indigo-700 font-medium' : 'text-[#111110]'}`}>Триплекс</span>
+                    </label>
+                    {eTriplex && (
+                      <select
+                        className="h-[34px] bg-white border border-indigo-200 rounded-lg px-2 text-[12px] outline-none focus:border-indigo-400"
+                        value={eTriplexLayers} onChange={e => setETriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                        <option value={2}>2 стекла</option>
+                        <option value={3}>3 стекла</option>
+                      </select>
+                    )}
+                  </div>
+                  {eTriplex && (() => {
+                    const glassCats = SUPER_CATS[0].cats as readonly string[]
+                    const glassOpts = materials.filter(m => glassCats.includes(m.category) && (m.sale_price ?? 0) > 0)
+                      .sort((a, b) => a.thickness - b.thickness || a.name.localeCompare(b.name))
+                    const layerSelect = (val: number | null, set: (v: number | null) => void, label: string) => (
+                      <select
+                        className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
+                        value={val ?? ''} onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}>
+                        <option value="">{label}: как основное</option>
+                        {glassOpts.map(m => <option key={m.id} value={m.id}>{label}: {m.name} {m.thickness} мм</option>)}
+                      </select>
+                    )
+                    return (
+                      <>
+                        {layerSelect(eTriplexMat2, setETriplexMat2, 'Стекло 2')}
+                        {eTriplexLayers === 3 && layerSelect(eTriplexMat3, setETriplexMat3, 'Стекло 3')}
+                      </>
+                    )
+                  })()}
                 </div>
               </div>
 

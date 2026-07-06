@@ -27,6 +27,9 @@ type Item = {
   totalAreaNet?: number
   hasTempering?: boolean
   comment?: string
+  hasTriplex?: boolean
+  triplexLayers?: number
+  triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
 }
 
 type Order = {
@@ -653,36 +656,49 @@ export default function B2BCuttingPage() {
     for (const order of orders.filter(o => selectedIds.has(o.id))) {
       for (const item of order.items) {
         if (!item.width || !item.height) continue
-        const mName = item.materialName ?? 'Неизвестно'
-        const mThk  = item.thickness ?? 0
-        const mCat  = item.category ?? ''
-        const matKey = `${mName}|${mThk}|${mCat}`
-        const mat = matLookup.get(`${mName}|${mThk}`) as (B2BMaterial & { sheet_width?: number; sheet_height?: number; pattern_direction?: string }) | undefined
-
-        if (!groups.has(matKey)) {
-          groups.set(matKey, {
-            pieces: [],
-            materialLabel: `${mName} ${mThk > 0 ? mThk + ' мм' : ''}`.trim(),
-            category: mCat,
-            sheetWidth:  mat?.sheet_width  ?? 3210,
-            sheetHeight: mat?.sheet_height ?? 2250,
-            patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
-          })
+        // Слои детали: обычная позиция = 1 слой; триплекс = все стёкла пакета (толщины могут отличаться).
+        const layers: { name: string; thk: number }[] = [
+          { name: item.materialName ?? 'Неизвестно', thk: item.thickness ?? 0 },
+        ]
+        if (item.hasTriplex) {
+          const extras = item.triplexGlasses?.length
+            ? item.triplexGlasses
+            : Array.from({ length: (item.triplexLayers === 3 ? 3 : 2) - 1 }, () => ({ materialName: item.materialName, thickness: item.thickness }))
+          for (const g of extras) layers.push({ name: g.materialName ?? item.materialName ?? 'Неизвестно', thk: g.thickness ?? item.thickness ?? 0 })
         }
 
-        const group = groups.get(matKey)!
-        const qty = item.quantity ?? 1
-        for (let i = 0; i < qty; i++) {
-          group.pieces.push({
-            id: `${order.id}-${mName}-${mThk}-${group.pieces.length}`,
-            width: item.width,
-            height: item.height,
-            label: `${item.width}×${item.height}`,
-            orderId: order.id,
-            orderClientName: order.client_name,
-            materialKey: matKey,
-            canRotate: true,
-          })
+        for (const layer of layers) {
+          const mName = layer.name
+          const mThk  = layer.thk
+          const mCat  = item.category ?? ''
+          const matKey = `${mName}|${mThk}|${mCat}`
+          const mat = matLookup.get(`${mName}|${mThk}`) as (B2BMaterial & { sheet_width?: number; sheet_height?: number; pattern_direction?: string }) | undefined
+
+          if (!groups.has(matKey)) {
+            groups.set(matKey, {
+              pieces: [],
+              materialLabel: `${mName} ${mThk > 0 ? mThk + ' мм' : ''}`.trim(),
+              category: mCat,
+              sheetWidth:  mat?.sheet_width  ?? 3210,
+              sheetHeight: mat?.sheet_height ?? 2250,
+              patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
+            })
+          }
+
+          const group = groups.get(matKey)!
+          const qty = item.quantity ?? 1
+          for (let i = 0; i < qty; i++) {
+            group.pieces.push({
+              id: `${order.id}-${mName}-${mThk}-${group.pieces.length}`,
+              width: item.width,
+              height: item.height,
+              label: `${item.width}×${item.height}`,
+              orderId: order.id,
+              orderClientName: order.client_name,
+              materialKey: matKey,
+              canRotate: true,
+            })
+          }
         }
       }
     }

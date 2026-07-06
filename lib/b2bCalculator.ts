@@ -99,10 +99,12 @@ export type B2BOrderItem = {
   facetTypeMm: number | null
   hasHoles?: boolean        // нужна сверловка — влияет на маршрут производства (lib/productionRouting.ts)
   shape?: 'rect' | 'curved' // криволинейный рез — станция curved
-  hasTriplex?: boolean      // триплекс/склейка — станция triplex; стекло считается ×triplexLayers
+  hasTriplex?: boolean      // триплекс/склейка — станция triplex; стекло считается по каждому слою
   triplexLayers?: number    // 2 или 3 стекла в пакете (по умолчанию 2)
-  costTriplex?: number      // себестоимость триплексации (за м² изделия)
-  saleTriplex?: number      // продажа триплексации (за м² изделия)
+  // Доп. слои пакета (слой 1 = основной материал позиции). Толщины могут отличаться (напр. 4+6).
+  triplexGlasses?: { materialId: number; materialName: string; thickness: number }[]
+  costTriplex?: number      // себестоимость триплексации (за м² изделия, ×1)
+  saleTriplex?: number      // продажа триплексации (за м² изделия, ×1)
   services: ItemService[]
   // площадь
   areaPiece: number
@@ -168,23 +170,34 @@ export function calcItem(
   hasTriplex: boolean = false,
   triplexLayers: number = 2,
   triplexPrice: { salePerM2: number; costPerM2: number } | null = null,
+  triplexExtraGlasses: B2BMaterial[] = [],   // слои 2..N; пусто → те же стёкла, что основной
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
   const totalAreaBilled = r4(totalAreaNet * (1 + wastePercent / 100))
   const perimeterM      = r3(2 * (width + height) / 1000)
 
-  // Триплекс: пакет из N стёкол (обычно 2) — материал, закалка, кромка и вес × N.
-  // Триплексация (склейка) считается за м² ИЗДЕЛИЯ (×1), из справочника услуг.
+  // Триплекс: пакет из N стёкол (обычно 2), толщины могут отличаться (напр. 4+6).
+  // Каждый слой считается по своей цене/толщине: материал, закалка, кромка, вес.
+  // Триплексация (склейка) — за м² ИЗДЕЛИЯ (×1), из справочника услуг.
   const layers = hasTriplex ? (triplexLayers === 3 ? 3 : 2) : 1
+  const extraGlasses: B2BMaterial[] = hasTriplex
+    ? Array.from({ length: layers - 1 }, (_, i) => triplexExtraGlasses[i] ?? mat)
+    : []
+  const allGlasses = [mat, ...extraGlasses]
 
-  const weightPerM2 = mat.thickness * 2.5 * layers
+  const thicknessSum  = allGlasses.reduce((s, g) => s + g.thickness, 0)
+  const costPerM2Sum  = allGlasses.reduce((s, g) => s + g.cost_price, 0)
+  const salePerM2Sum  = allGlasses.reduce((s, g) => s + (g.sale_price ?? 0), 0)
+  const temperPerM2   = allGlasses.reduce((s, g) => s + (TEMPERING_COST[g.thickness] ?? 0), 0)
+
+  const weightPerM2 = thicknessSum * 2.5
   const totalWeight = r2(totalAreaNet * weightPerM2)
 
   // Себестоимость — все цены С НДС 22%
-  const costMaterial  = Math.round(totalAreaBilled * mat.cost_price * layers)
+  const costMaterial  = Math.round(totalAreaBilled * costPerM2Sum)
   const costTempering = hasTempering
-    ? Math.round(totalAreaNet * (TEMPERING_COST[mat.thickness] ?? 0) * layers)
+    ? Math.round(totalAreaNet * temperPerM2)
     : 0
   const costEdge      = Math.round(perimeterM * quantity * EDGE_COST_PER_M * layers)
   const costTransport = Math.round(quantity * TRANSPORT_PER_PIECE)
@@ -204,9 +217,9 @@ export function calcItem(
 
   const costWithVatBase = costMaterial + costTempering + costFacet + costEdge + costTransport + costPackaging + costTriplex
 
-  // Продажа — цена из прайса (финальная цена клиента, вкл. НДС); стекло × N слоёв
+  // Продажа — цена из прайса (финальная цена клиента, вкл. НДС); сумма по слоям пакета
   const pricePerM2     = mat.sale_price ?? 0
-  const baseSaleIncVat = Math.round(pricePerM2 * totalAreaNet * layers)
+  const baseSaleIncVat = Math.round(salePerM2Sum * totalAreaNet)
   const baseSaleExVat  = Math.round(baseSaleIncVat * 100 / (100 + VAT))
 
   // Доп. услуги: цена продажи + закупочная себестоимость
@@ -264,7 +277,10 @@ export function calcItem(
     materialId: mat.id, materialName: mat.name, category: mat.category,
     thickness: mat.thickness, width, height, quantity, wastePercent, hasTempering,
     hasFacet, facetTypeMm: hasFacet ? (facetTypeMm ?? null) : null, services,
-    ...(hasTriplex ? { hasTriplex: true, triplexLayers: layers, costTriplex, saleTriplex } : {}),
+    ...(hasTriplex ? {
+      hasTriplex: true, triplexLayers: layers, costTriplex, saleTriplex,
+      triplexGlasses: extraGlasses.map(g => ({ materialId: g.id, materialName: g.name, thickness: g.thickness })),
+    } : {}),
     areaPiece, totalAreaNet, totalAreaBilled, perimeterM,
     weightPerM2, totalWeight,
     costMaterial, costTempering, costFacet, costEdge, costTransport, costPackaging, saleFacet,
