@@ -77,7 +77,14 @@ export default function BuyPage() {
         title: nTitle.trim(), qty: nQty.trim() || null, link_url: nLink.trim() || null,
         details: nDetails.trim() || null, author_id: me.id, author_name: me.name,
       })
-      if (!error) { setNTitle(''); setNQty(''); setNLink(''); setNDetails(''); setTab('work'); load() }
+      if (!error) {
+        // уведомление закупщику в Telegram — не блокирует создание заявки
+        fetch('/api/shop-purchases/notify', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: nTitle.trim(), qty: nQty.trim(), author: me.name, link: nLink.trim() }),
+        }).catch(() => {})
+        setNTitle(''); setNQty(''); setNLink(''); setNDetails(''); setTab('work'); load()
+      }
     } finally { setBusy(false) }
   }
 

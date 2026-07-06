@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import ShopRequestsBar from './ShopRequestsBar'
 
 const STATUSES = [
   { key: 'invoice_received', label: 'Счёт получен',        color: 'border-t-gray-400',   bg: 'bg-gray-50'   },
@@ -700,9 +701,13 @@ export default function ProcurementPage() {
         </div>
       )}
 
+      <div className="px-6 pt-4">
+        <ShopRequestsBar />
+      </div>
+
       {/* Kanban board */}
       <div className="overflow-x-auto pb-6">
-        <div className="flex gap-3 px-6 pt-5" style={{ minWidth: STATUSES.length * 248 + 48 }}>
+        <div className="flex gap-3 px-6 pt-1" style={{ minWidth: STATUSES.length * 248 + 48 }}>
           {STATUSES.map(col => {
             const cards = orders.filter(o => o.status === col.key)
             return (
