@@ -98,10 +98,12 @@ export default function ReceivablesPage() {
     }).sort((a, b) => b.days - a.days)
   }, [orders])
 
-  // Запущено в работу, а счёт так и не выставлен — упущенные деньги
+  // Запущено в работу, а счёт так и не выставлен — упущенные деньги.
+  // Только свежие заказы (60 дней): исторический массив без stages.invoice_sent — не сигнал.
   const noInvoice = useMemo(() =>
     orders.filter(o => o.notes.status === 'confirmed' && !(o.notes.stages?.invoice_sent)
-      && !(o.notes.stages?.invoice_paid) && o.notes.payment_status !== 'paid'),
+      && !(o.notes.stages?.invoice_paid) && o.notes.payment_status !== 'paid'
+      && (daysSince(o.launched_at ?? o.created_at) ?? 999) <= 60),
   [orders])
 
   const totals = useMemo(() => {
@@ -217,7 +219,7 @@ export default function ReceivablesPage() {
               ))}
             </div>
           )}
-          <p className="text-[10px] text-amber-600 mt-2">Счёт выставляется в B2B Просчётах/Заказах — там же отмечается этап «Счёт выставлен».</p>
+          <p className="text-[10px] text-amber-600 mt-2">Счёт выставляется в B2B Просчётах/Заказах — там же отмечается этап «Счёт выставлен». Заказы старше 60 дней здесь не показываются.</p>
         </div>
 
         {/* B2C: выставленные договоры/счета */}
