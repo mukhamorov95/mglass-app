@@ -1,4 +1,12 @@
-## PROD: БАЗОВАЯ ОТМЕТКА «ГОТОВО/ОТГРУЖЕНО» ДЛЯ ЗАКАЗОВ ≤ ИЮНЯ 2026 (2026-07-06, последнее)
+## PROD: /b2b-production СИНХРОНИЗИРОВАН + КАРТОЧКА ПЕРЕРАБОТАНА (2026-07-06, последнее)
+`2493cba`, прод, проверено Chrome.
+- Раньше страница читала свой `notes.production_status` (у всех null) → показывала «Ожидает 700». Теперь статус выводится из `notes.stages` (единый источник правды с /b2b-orders): грузим только `launched_at != null`, активные = stages.shipped отсутствует. Результат: **Ожидает 23 (июль) · Отгружено 977**.
+- Кнопки статуса пишут в `stages` (cutting→cut, tempering→tempering, ready→packaged, shipped→packaged+shipped, pending→clear) — обе страницы остаются согласованы. `effectiveStatus(stages)` + `itemStage()` (по detail_stages, иначе order-level).
+- Пагинация 30/стр (было 20). Крупный №заказа (custom_number||id) в шапке.
+- Колонка «Закалка» → «Этап» (текущий этап каждой детали). Примечание = спецработы чипами: подряд/«не мы» (закалка/триплекс/фацет, ⚙ амбер) vs наши (криволинейка/услуги вроде подсветки/пескоструя, синие) + текст comment. Сводка спецработ в шапке заказа. Печатный лист тоже.
+- Файл: app/b2b-production/page.tsx (переписан). ⚠️ Если владелец скажет, что закалка у нас своя (не подряд) — переключить её из outsourced в ours.
+
+## PROD: БАЗОВАЯ ОТМЕТКА «ГОТОВО/ОТГРУЖЕНО» ДЛЯ ЗАКАЗОВ ≤ ИЮНЯ 2026 (2026-07-06)
 Разовый baseline перед налаживанием цеха: все запущенные заказы ≤ июня помечены готов/упакован/отгружен, июльские оставлены «в работе».
 - Скрипт (service-role, scratchpad/baseline_ship.mjs): цель — launched_at ≤ 2026-06-30 и без stages.shipped = **129 заказов**. Заполнена цепочка order-level stages (added_to_group…tempering,packaged,shipped) датой launched_at + записан bulk_action{previous_stages, scope:'baseline_pre_july_2026'} для отката. Также закрыто 8 production_tasks (queued/in_progress/problem → done).
 - Реверсивно: бэкап notes 129 строк → scratchpad/backup_baseline_ship_2026-07-06T07-04-*.json + previous_stages в каждом заказе.
