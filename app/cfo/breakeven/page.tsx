@@ -471,7 +471,7 @@ export default function BreakevenPage() {
                 ? `Всё распределено (фонды, постоянные${(m.ownerPct || m.ownerRub) ? ', собственник' : ''}) — это излишек при плановой выручке.`
                 : 'План ниже точки — перелива нет, бонусы из него не начисляются.'}
             </p>
-            {ro && (
+            {(
               <div className="mt-2 pt-2 border-t border-emerald-200 space-y-2">
                 <div className="flex items-center justify-between gap-2">
                   <span className="text-[12px] text-emerald-800 flex-1">→ бонусы производства</span>
@@ -484,9 +484,10 @@ export default function BreakevenPage() {
                   <span className="font-mono text-[12px] font-semibold text-emerald-800 w-24 text-right">{fmt(calc.overflow * ovCfg.bonusPct / 100)}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] text-emerald-800">{unit === 'total' ? `→ досрочное погашение обязательств (${100 - ovCfg.bonusPct}%)` : `→ свободный остаток (${100 - ovCfg.bonusPct}%)`}</span>
+                  <span className="text-[12px] text-emerald-800">{unit === 'total1' ? `→ свободный остаток (${100 - ovCfg.bonusPct}%)` : `→ досрочное погашение обязательств (${100 - ovCfg.bonusPct}%)`}</span>
                   <span className="font-mono text-[12px] font-semibold text-emerald-800">{fmt(calc.overflow * (100 - ovCfg.bonusPct) / 100)}</span>
                 </div>
+                {!ro && <p className="text-[10px] text-emerald-600">% единый для компании и юнитов — здесь применён к переливу этого юнита.</p>}
                 {unit === 'total' && (
                   <>
                     <label className="flex items-center justify-between gap-2 text-[12px] text-emerald-800">Тело долга (кредиты+лизинг), ₽
