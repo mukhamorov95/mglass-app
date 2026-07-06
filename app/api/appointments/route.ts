@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const body = await req.json()
-  const { type, scheduled_at, address, assignee_name, notes, order_id } = body
+  const { type, scheduled_at, address, assignee_name, notes, order_id, brigade_id, client_name } = body
 
   if (!type || !scheduled_at) {
     return NextResponse.json({ error: 'Нужны type и scheduled_at' }, { status: 400 })
@@ -48,6 +48,8 @@ export async function POST(req: NextRequest) {
     assignee_name: assignee_name?.trim() || null,
     notes: notes?.trim() || null,
     order_id: order_id || null,
+    brigade_id: brigade_id || null,
+    client_name: client_name?.trim() || null,
     created_by: user.id,
   }).select().single()
 
