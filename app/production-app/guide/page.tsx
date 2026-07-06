@@ -1,3 +1,4 @@
+import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 
 // Регламент работы с программой — простая пошаговая инструкция для цеха.
@@ -48,6 +49,10 @@ export default function GuidePage() {
         <div className="bg-amber-50 border-2 border-amber-300 rounded-xl px-4 py-3 text-[14px]">
           🎓 <b>В программе лежит учебный заказ «ДЕМО-1»</b> (клиент «УЧЕБНЫЙ»). На нём всё видно живьём:
           резка отмечена ✓, полировка «в работе» 🔧, остальное ждёт. Тренируйтесь на нём — его не жалко.
+          <Link href="/production-app/demo"
+            className="block mt-2.5 text-center bg-[#111110] text-white text-[14px] font-semibold py-2 rounded-lg hover:bg-[#2a2a28]">
+            🎓 Открыть учебный заказ →
+          </Link>
         </div>
 
         {/* Распределение работ */}
@@ -122,7 +127,7 @@ export default function GuidePage() {
         <p className="text-[12px] text-[#9a9a95] pb-4">
           Где что лежит: меню слева → <b>Цех</b> (Обзор · Пул на сегодня · Станции · Мои задачи · Заказы в работе)
           · <b>Материал и документы</b> (Раскрой · Материал · Документы · Необходимо купить)
-          · <b>Команда</b> (Идеи и проблемы · Регламент).
+          · <b>Команда</b> (Идеи и проблемы) · <b>Обучение</b> (Регламент · Учебный заказ).
         </p>
       </div>
     </div>

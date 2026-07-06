@@ -297,10 +297,15 @@ const PRODUCTION_NAV_SUPPLY: NavItem[] = [
   { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
 ]
 
-// Команда: идеи и предложения цеха + регламент.
+// Команда: идеи и предложения цеха.
 const PRODUCTION_NAV_TEAM: NavItem[] = [
   { href: '/production-app/ideas',    label: 'Идеи и проблемы',  icon: '💡' },
-  { href: '/production-app/guide',    label: 'Регламент работы', icon: '📘' },
+]
+
+// Обучение: регламент + учебный заказ для тренировки.
+const PRODUCTION_NAV_LEARN: NavItem[] = [
+  { href: '/production-app/guide',    label: 'Регламент работы',      icon: '📘' },
+  { href: '/production-app/demo',     label: 'Учебный заказ ДЕМО-1',  icon: '🎓' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -326,7 +331,8 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else if (mode === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
-    if (inSection(pathname, ['/production-app/ideas', '/production-app/guide'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/guide', '/production-app/demo'])) open.push('prod_learn')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -357,7 +363,8 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   if (role === 'production') {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
-    if (inSection(pathname, ['/production-app/ideas', '/production-app/guide'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
+    if (inSection(pathname, ['/production-app/guide', '/production-app/demo'])) open.push('prod_learn')
     return open
   }
   if (role === 'manager') {
@@ -688,6 +695,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
       </>
     )
 
@@ -753,6 +761,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
       </>
     )
 
