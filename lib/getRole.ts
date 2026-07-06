@@ -5,7 +5,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer'
 
 export type UserProfile = {
   role:        Role
@@ -27,7 +27,7 @@ const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
          r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
-         r === 'commercial' || r === 'cfo' || r === 'partner'
+         r === 'commercial' || r === 'cfo' || r === 'partner' || r === 'measurer'
 }
 
 // Case-insensitive normalisation. Accepts a few common UI aliases.
@@ -130,6 +130,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/clients',
     '/calendar',
     '/measurer',
+    '/measure-requests',
     '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
@@ -204,6 +205,12 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   partner: [
     '/',
     '/partner',
+  ],
+
+  // Замерщик: пул заявок, свой календарь, свои деньги.
+  measurer: [
+    '/',
+    '/measurer-cabinet',
   ],
 }
 
