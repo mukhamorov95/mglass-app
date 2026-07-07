@@ -28,7 +28,7 @@ const KIND_META: Record<FoundItem['kind'], { label: string; cls: string }> = {
   glass_other: { label: '◻️ Стекло прочее',      cls: 'bg-[#f0f0ec] text-[#6b6b66]' },
 }
 
-const BATCH = 4          // страниц на запрос
+const BATCH = 2          // страниц на запрос (на больших пачках модель теряет изделия)
 const SCAN_WIDTH = 1500  // ширина JPEG для модели
 const CROP_SCALE = 2.2   // рендер страницы с изделием для вырезки
 

@@ -12,6 +12,20 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 const SCAN_SCHEMA: Anthropic.Tool.InputSchema = {
   type: 'object' as const,
   properties: {
+    // Отчёт по каждой странице ПЕРВЫМ — заставляет модель рассмотреть каждую страницу отдельно.
+    page_report: {
+      type: 'array',
+      description: 'ОБЯЗАТЕЛЬНО: по одному элементу на КАЖДУЮ переданную страницу, в порядке страниц',
+      items: {
+        type: 'object',
+        properties: {
+          page:        { type: 'number', description: 'Номер страницы' },
+          sheet_type:  { type: 'string', description: 'Что это за лист: титул / план / развертка / ведомость / 3D-визуализация / прочее' },
+          items_found: { type: 'number', description: 'Сколько изделий из стекла/зеркал найдено на этой странице' },
+        },
+        required: ['page', 'items_found'],
+      },
+    },
     items: {
       type: 'array',
       description: 'Все найденные на этих страницах изделия из стекла и зеркал',
@@ -39,7 +53,7 @@ const SCAN_SCHEMA: Anthropic.Tool.InputSchema = {
       },
     },
   },
-  required: ['items'],
+  required: ['page_report', 'items'],
 }
 
 const SYSTEM = `Ты — инженер стекольной компании M-Glass (зеркала, душевые ограждения, стеклянные и лофт-перегородки, стекло на заказ).
@@ -48,7 +62,8 @@ const SYSTEM = `Ты — инженер стекольной компании M-
 Размеры бери ТОЛЬКО из размерных цепочек и подписей на чертеже — ничего не вычисляй и не выдумывай; если размер не читается, не пиши его.
 Одно и то же изделие на одной странице учитывай один раз. Мебель, окна, двери из дерева, картины — НЕ изделия.
 Если страница — ведомость/спецификация с зеркалами или стеклом, тоже извлеки позиции.
-bbox указывай аккуратно по той странице, где изделие видно.`
+bbox указывай аккуратно по той странице, где изделие видно.
+Рассматривай КАЖДУЮ страницу отдельно и внимательно: сначала заполни page_report по каждой странице, потом перечисли изделия в items.`
 
 export async function POST(req: Request) {
   const sb = await createClient()
