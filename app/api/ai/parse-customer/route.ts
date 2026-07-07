@@ -33,6 +33,9 @@ const CUSTOMER_SCHEMA = {
     address:       { type: 'string', description: 'Адрес (регистрации — для физлица)' },
     phone:         { type: 'string', description: 'Телефон' },
     email:         { type: 'string', description: 'Email' },
+    // качество распознавания
+    recognition_quality: { type: 'string', enum: ['full', 'partial'], description: 'full — всё читаемо и извлечено уверенно; partial — часть данных нечитаема/отсутствует или есть сомнения' },
+    recognition_issues:  { type: 'array', items: { type: 'string' }, description: 'Что не удалось прочитать или в чём сомнения, кратко по-русски (пусто если full)' },
   },
 } as const
 
@@ -41,16 +44,19 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { text, pdf } = await req.json() as { text?: string; pdf?: string }
-  if (!text?.trim() && !pdf) return NextResponse.json({ error: 'no input' }, { status: 400 })
+  const { text, pdf, image, image_type } = await req.json() as { text?: string; pdf?: string; image?: string; image_type?: string }
+  if (!text?.trim() && !pdf && !image) return NextResponse.json({ error: 'no input' }, { status: 400 })
 
-  const sys = 'Ты извлекаешь реквизиты Заказчика из карточки предприятия или произвольного текста для договора. ' +
+  const sys = 'Ты извлекаешь реквизиты Заказчика из карточки предприятия (PDF/фото/скан) или произвольного текста для договора. ' +
     'Определи тип: физлицо (паспорт) или юрлицо/ИП (ИНН, ОГРН). Заполняй только реально присутствующие поля, ничего не выдумывай. ' +
-    'Директора для «в лице» приводи в родительном падеже (напр. «Иванова Ивана Ивановича»).'
+    'Директора для «в лице» приводи в родительном падеже (напр. «Иванова Ивана Ивановича»). ' +
+    'Честно оцени качество: recognition_quality=full только если всё читаемо и извлечено уверенно; иначе partial + перечисли проблемы в recognition_issues.'
 
+  const IMG_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const content: any[] = []
   if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } })
+  else if (image) content.push({ type: 'image', source: { type: 'base64', media_type: IMG_TYPES.has(image_type ?? '') ? image_type : 'image/jpeg', data: image } })
   content.push({ type: 'text', text: (text?.trim() ? `Текст с реквизитами:\n${text}\n\n` : '') + 'Извлеки реквизиты Заказчика в структуру.' })
 
   try {
@@ -64,7 +70,8 @@ export async function POST(req: Request) {
     })
     const tool = msg.content.find(c => c.type === 'tool_use')
     if (!tool || tool.type !== 'tool_use') return NextResponse.json({ error: 'no_structure' }, { status: 502 })
-    return NextResponse.json({ customer: tool.input })
+    const { recognition_quality, recognition_issues, ...customer } = tool.input as Record<string, unknown>
+    return NextResponse.json({ customer, quality: { level: recognition_quality ?? 'full', issues: Array.isArray(recognition_issues) ? recognition_issues : [] } })
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'parse_failed', detail: detail.slice(0, 200) }, { status: 502 })

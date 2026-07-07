@@ -28,6 +28,8 @@ const KP_SCHEMA: Anthropic.Tool.InputSchema = {
       },
     },
     total: { type: 'number', description: 'Итоговая сумма КП в ₽' },
+    recognition_quality: { type: 'string', enum: ['full', 'partial'], description: 'full — все позиции и суммы читаемы и извлечены уверенно; partial — часть нечитаема/отсутствует или есть сомнения' },
+    recognition_issues:  { type: 'array', items: { type: 'string' }, description: 'Что не удалось прочитать или в чём сомнения, кратко по-русски (пусто если full)' },
   },
   required: ['items', 'total'],
 }
@@ -37,16 +39,19 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { text, pdf } = await req.json() as { text?: string; pdf?: string }
-  if (!text?.trim() && !pdf) return NextResponse.json({ error: 'no input' }, { status: 400 })
+  const { text, pdf, image, image_type } = await req.json() as { text?: string; pdf?: string; image?: string; image_type?: string }
+  if (!text?.trim() && !pdf && !image) return NextResponse.json({ error: 'no input' }, { status: 400 })
 
-  const sys = 'Ты разбираешь коммерческое предложение стекольной компании (зеркала, душевые, лофт-перегородки). ' +
+  const sys = 'Ты разбираешь коммерческое предложение стекольной компании (зеркала, душевые, лофт-перегородки) из PDF, фото или скриншота. ' +
     'Извлеки все позиции с описаниями и суммами ровно как в документе, ничего не выдумывай и не пересчитывай. ' +
-    'Монтаж, демонтаж, доставку и подъём оставляй отдельными строками. Суммы — числа в рублях без знаков валюты.'
+    'Монтаж, демонтаж, доставку и подъём оставляй отдельными строками. Суммы — числа в рублях без знаков валюты. ' +
+    'Честно оцени качество: recognition_quality=full только если все позиции и суммы читаемы; иначе partial + перечисли проблемы в recognition_issues.'
 
+  const IMG_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const content: any[] = []
   if (pdf) content.push({ type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: pdf } })
+  else if (image) content.push({ type: 'image', source: { type: 'base64', media_type: IMG_TYPES.has(image_type ?? '') ? image_type : 'image/jpeg', data: image } })
   content.push({ type: 'text', text: (text?.trim() ? `Текст КП:\n${text}\n\n` : '') + 'Извлеки состав КП в структуру.' })
 
   try {
@@ -60,7 +65,8 @@ export async function POST(req: Request) {
     })
     const tool = msg.content.find(c => c.type === 'tool_use')
     if (!tool || tool.type !== 'tool_use') return NextResponse.json({ error: 'no_structure' }, { status: 502 })
-    return NextResponse.json({ kp: tool.input })
+    const { recognition_quality, recognition_issues, ...kp } = tool.input as Record<string, unknown>
+    return NextResponse.json({ kp, quality: { level: recognition_quality ?? 'full', issues: Array.isArray(recognition_issues) ? recognition_issues : [] } })
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'parse_failed', detail: detail.slice(0, 200) }, { status: 502 })

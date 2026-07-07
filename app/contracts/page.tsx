@@ -19,6 +19,45 @@ const INSTALL_RE = /монтаж|демонтаж/i
 const DELIVERY_RE = /доставк/i
 const LIFT_RE = /подъ[её]м/i
 type KpRow = { id: number; number: string; total: number | null; content: Record<string, unknown> }
+type Quality = { level: 'full' | 'partial'; issues: string[] }
+
+const FILE_ACCEPT = 'application/pdf,image/jpeg,image/png,image/webp,image/gif'
+
+// PDF уходит как есть; фото/скриншоты ужимаются до 2000px JPEG (лимиты API и Vercel).
+async function fileToPayload(file: File): Promise<{ pdf?: string; image?: string; image_type?: string }> {
+  const readB64 = (f: Blob) => new Promise<string>((res, rej) => {
+    const r = new FileReader()
+    r.onload = () => res(String(r.result).split(',')[1] || '')
+    r.onerror = rej
+    r.readAsDataURL(f)
+  })
+  if (file.type === 'application/pdf') return { pdf: await readB64(file) }
+  const url = URL.createObjectURL(file)
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image()
+      i.onload = () => res(i); i.onerror = rej; i.src = url
+    })
+    const MAX = 2000
+    const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+    if (scale >= 1 && file.size < 2_500_000 && (file.type === 'image/jpeg' || file.type === 'image/png' || file.type === 'image/webp' || file.type === 'image/gif')) {
+      return { image: await readB64(file), image_type: file.type }
+    }
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(img.width * scale); canvas.height = Math.round(img.height * scale)
+    canvas.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return { image: canvas.toDataURL('image/jpeg', 0.85).split(',')[1] || '', image_type: 'image/jpeg' }
+  } finally { URL.revokeObjectURL(url) }
+}
+
+function QualityBadge({ q }: { q: Quality }) {
+  if (q.level === 'full') return <span className="text-[12px] text-emerald-600 font-medium">✓ Распознано полностью</span>
+  return (
+    <span className="text-[12px] text-amber-600 font-medium">
+      ⚠️ Распознано частично — проверь и добей вручную{q.issues.length ? `: ${q.issues.join('; ')}` : ''}
+    </span>
+  )
+}
 type HistRow = { id: number; number: string; customer_type: string; total: number | null; manager_name: string | null; created_at: string; content: Record<string, unknown> }
 
 const MONTHS = ['Январь','Февраль','Март','Апрель','Май','Июнь','Июль','Август','Сентябрь','Октябрь','Ноябрь','Декабрь']
@@ -63,8 +102,10 @@ export default function ContractsPage() {
   const [parseText, setParseText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [parseQuality, setParseQuality] = useState<Quality | null>(null)
   const [kpImporting, setKpImporting] = useState(false)
   const [kpImportError, setKpImportError] = useState<string | null>(null)
+  const [kpQuality, setKpQuality] = useState<Quality | null>(null)
   const [kps, setKps] = useState<KpRow[]>([])
   const [history, setHistory] = useState<HistRow[]>([])
   const [canDelete, setCanDelete] = useState(false)
@@ -118,17 +159,12 @@ export default function ContractsPage() {
     applyKp(id, kp.total, kp.content || {})
   }
 
-  // Старое КП (PDF): AI-разбор состава → сохранение в историю КП → подстановка в договор.
-  async function importKpPdf(file: File) {
-    setKpImporting(true); setKpImportError(null)
+  // Старое КП (PDF/фото): AI-разбор состава → сохранение в историю КП → подстановка в договор.
+  async function importKpFile(file: File) {
+    setKpImporting(true); setKpImportError(null); setKpQuality(null)
     try {
-      const base64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader()
-        reader.onload = () => res(String(reader.result).split(',')[1] || '')
-        reader.onerror = rej
-        reader.readAsDataURL(file)
-      })
-      const r = await fetch('/api/ai/parse-kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdf: base64 }) }).then(x => x.json())
+      const payload = await fileToPayload(file)
+      const r = await fetch('/api/ai/parse-kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(x => x.json())
       const p = r.kp as { number?: string; client_name?: string; items?: unknown[]; total?: number } | undefined
       if (!p || !Array.isArray(p.items) || !p.items.length) { setKpImportError(r.error || 'не распознано'); return }
       const content: Record<string, unknown> = {
@@ -136,7 +172,7 @@ export default function ContractsPage() {
         client_name: p.client_name ?? null,
         items: p.items,
         total: p.total ?? 0,
-        imported_from: 'pdf',
+        imported_from: file.type === 'application/pdf' ? 'pdf' : 'image',
       }
       const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
       const d = await res.json().catch(() => ({}))
@@ -144,6 +180,7 @@ export default function ContractsPage() {
       const row: KpRow = { id: d.id, number: d.number, total: p.total ?? null, content }
       setKps(prev => [row, ...prev])
       applyKp(row.id, row.total, content)
+      setKpQuality(r.quality?.level ? r.quality as Quality : { level: 'full', issues: [] })
     } catch { setKpImportError('ошибка чтения файла') } finally { setKpImporting(false) }
   }
 
@@ -163,24 +200,21 @@ export default function ContractsPage() {
 
   async function parseFromText() {
     if (!parseText.trim()) return
-    setParsing(true); setParseError(null)
+    setParsing(true); setParseError(null); setParseQuality(null)
     try {
       const r = await fetch('/api/ai/parse-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: parseText }) }).then(x => x.json())
-      if (r.customer) applyParsed(r.customer); else setParseError(r.error || 'не распознано')
+      if (r.customer) { applyParsed(r.customer); setParseQuality(r.quality?.level ? r.quality as Quality : { level: 'full', issues: [] }) }
+      else setParseError(r.error || 'не распознано')
     } catch { setParseError('ошибка сети') } finally { setParsing(false) }
   }
 
-  async function parseFromPdf(file: File) {
-    setParsing(true); setParseError(null)
+  async function parseFromFile(file: File) {
+    setParsing(true); setParseError(null); setParseQuality(null)
     try {
-      const base64 = await new Promise<string>((res, rej) => {
-        const reader = new FileReader()
-        reader.onload = () => res(String(reader.result).split(',')[1] || '')
-        reader.onerror = rej
-        reader.readAsDataURL(file)
-      })
-      const r = await fetch('/api/ai/parse-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdf: base64 }) }).then(x => x.json())
-      if (r.customer) applyParsed(r.customer); else setParseError(r.error || 'не распознано')
+      const payload = await fileToPayload(file)
+      const r = await fetch('/api/ai/parse-customer', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) }).then(x => x.json())
+      if (r.customer) { applyParsed(r.customer); setParseQuality(r.quality?.level ? r.quality as Quality : { level: 'full', issues: [] }) }
+      else setParseError(r.error || 'не распознано')
     } catch { setParseError('ошибка чтения файла') } finally { setParsing(false) }
   }
 
@@ -268,12 +302,13 @@ export default function ContractsPage() {
                 </select>
               </div>
               <div className="col-span-3 flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg p-2.5 bg-[#fafaf9]">
-                <span className="text-[12px] text-[#6b6b66]">Нет в списке? Прикрепите старое КП (PDF) — распознаю состав, сохраню его в историю КП и подставлю в договор:</span>
+                <span className="text-[12px] text-[#6b6b66]">Нет в списке? Прикрепите старое КП — PDF, фото или скриншот. Распознаю состав, сохраню его в историю КП и подставлю в договор:</span>
                 <label className={`px-3 py-1.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg hover:bg-[#f5f5f3] ${kpImporting ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
-                  {kpImporting ? '🧠 Распознаю…' : '📎 Старое КП (PDF)'}
-                  <input type="file" accept="application/pdf" className="hidden" disabled={kpImporting}
-                    onChange={e => { const f = e.target.files?.[0]; if (f) importKpPdf(f); e.target.value = '' }} />
+                  {kpImporting ? '🧠 Распознаю…' : '📎 Старое КП (PDF/фото)'}
+                  <input type="file" accept={FILE_ACCEPT} className="hidden" disabled={kpImporting}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) importKpFile(f); e.target.value = '' }} />
                 </label>
+                {kpQuality && <QualityBadge q={kpQuality} />}
                 {kpImportError && <span className="text-[12px] text-red-600">{kpImportError}</span>}
               </div>
               <div><label className={L}>Номер договора</label><input className={I} value={form.number} onChange={e => set({ number: e.target.value })} placeholder="авто" /></div>
@@ -297,7 +332,7 @@ export default function ContractsPage() {
               </div>
               {/* Автозаполнение: вставить текст или прикрепить карточку PDF */}
               <div className="mb-3 border border-dashed border-[#d8d8d3] rounded-lg p-3 bg-[#fafaf9]">
-                <p className="text-[12px] text-[#6b6b66] mb-2">Заполнить автоматически: вставьте реквизиты текстом или прикрепите карточку предприятия (PDF) — распознаю и заполню поля ниже.</p>
+                <p className="text-[12px] text-[#6b6b66] mb-2">Заполнить автоматически: вставьте реквизиты текстом или прикрепите карточку предприятия — PDF, фото или скриншот. Распознаю и заполню поля ниже.</p>
                 <textarea value={parseText} onChange={e => setParseText(e.target.value)} placeholder="Вставьте карточку/реквизиты заказчика…"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] h-16 resize-y" />
                 <div className="flex items-center gap-2 mt-2 flex-wrap">
@@ -305,11 +340,12 @@ export default function ContractsPage() {
                     className="px-3 py-1.5 bg-[#111110] text-white text-[12px] font-medium rounded-lg disabled:opacity-50">
                     {parsing ? 'Распознаю…' : '✨ Распознать текст'}
                   </button>
-                  <label className="px-3 py-1.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg cursor-pointer hover:bg-[#f5f5f3]">
-                    📎 Карточка PDF
-                    <input type="file" accept="application/pdf" className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) parseFromPdf(f); e.target.value = '' }} />
+                  <label className={`px-3 py-1.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg hover:bg-[#f5f5f3] ${parsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                    {parsing ? '🧠 Распознаю…' : '📎 Карточка (PDF/фото)'}
+                    <input type="file" accept={FILE_ACCEPT} className="hidden" disabled={parsing}
+                      onChange={e => { const f = e.target.files?.[0]; if (f) parseFromFile(f); e.target.value = '' }} />
                   </label>
+                  {parseQuality && <QualityBadge q={parseQuality} />}
                   {parseError && <span className="text-[12px] text-red-600">{parseError}</span>}
                 </div>
               </div>
