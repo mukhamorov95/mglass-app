@@ -530,15 +530,31 @@ export default function B2BCalculatorPage() {
   })()
 
   // Чертёж лофта (PDF/фото) → AI снимает проём, тип конструкции, створки, стёкла.
-  // Универсальный разбор чертежа: заполняет поля активного типа позиции.
+  // Разбор чертежа под активный тип позиции:
+  // стекло/зеркало — КАЖДАЯ деталь отдельной позицией (на чертеже их может быть много);
+  // зеркало+свет и лофт — один проём/изделие в поля формы (комплектация выбирается вручную).
   async function parseItemDrawing(file: File) {
     setFlParsing(true); setFlParseNote(null)
     try {
+      // Стекло / зеркало → многодетальный разбор, добавляем все позиции.
+      if (fKind === 'material') {
+        const r = await parseDrawingMulti(file)
+        if (r.added > 0) {
+          const extra = [r.holes ? `отв: ${r.holes}` : '', r.cutouts ? `вырезы: ${r.cutouts}` : '', r.skipped ? `пропущено: ${r.skipped}` : '']
+            .filter(Boolean).join(', ')
+          setFlParseNote(`✓ добавлено позиций: ${r.added}${extra ? ` (${extra})` : ''}`)
+        } else {
+          setFlParseNote(r.warnings[0] || 'детали не распознаны — введи вручную')
+        }
+        return
+      }
+
+      // Зеркало+свет / лофт → один разбор в поля.
       const readB64 = (f: Blob) => new Promise<string>((res, rej) => {
-        const r = new FileReader()
-        r.onload = () => res(String(r.result).split(',')[1] || '')
-        r.onerror = rej
-        r.readAsDataURL(f)
+        const rd = new FileReader()
+        rd.onload = () => res(String(rd.result).split(',')[1] || '')
+        rd.onerror = rej
+        rd.readAsDataURL(f)
       })
       const base = file.type === 'application/pdf'
         ? { pdf: await readB64(file) }
@@ -557,18 +573,11 @@ export default function B2BCalculatorPage() {
         if (d.fixed_parts != null) setFlFixed(String(d.fixed_parts))
         if (d.rows != null) setFlRows(String(d.rows))
         if (d.tempering != null) setFlTempering(!!d.tempering)
-      } else if (fKind === 'fmirror') {
+      } else {
+        // fmirror — зеркало+свет
         if (d.width_mm) setFmW(String(d.width_mm))
         if (d.height_mm) setFmH(String(d.height_mm))
         if (d.quantity) setFmQty(String(d.quantity))
-      } else {
-        // material: стекло/зеркало
-        if (d.width_mm) setFWidth(String(d.width_mm))
-        if (d.height_mm) setFHeight(String(d.height_mm))
-        if (d.quantity) setFQty(String(d.quantity))
-        if (d.thickness_mm && availableThickness.includes(d.thickness_mm)) handleThicknessChange(d.thickness_mm)
-        if (d.tempering != null) setFTempering(!!d.tempering)
-        if (d.holes != null) setFHoles(!!d.holes)
       }
       setFlParseNote(`✓ снял: ${d.width_mm}×${d.height_mm}${d.note ? ` · ${String(d.note).slice(0, 80)}` : ''}`)
     } catch { setFlParseNote('ошибка чтения файла') } finally { setFlParsing(false) }
@@ -617,59 +626,59 @@ export default function B2BCalculatorPage() {
     widthRef.current?.focus()
   }
 
-  // Распознать прикреплённый чертёж (PDF/фото) → позиции справа.
+  // Многодетальный разбор чертежа (PDF/фото) → добавляет КАЖДУЮ деталь позицией.
+  // Для стекла/зеркала: на одном чертеже может быть несколько стёкол → все в список.
+  async function parseDrawingMulti(file: File): Promise<{ added: number; skipped: number; holes: number; cutouts: number; shaped: number; warnings: string[] }> {
+    const empty = { added: 0, skipped: 0, holes: 0, cutouts: 0, shaped: 0, warnings: [] as string[] }
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/ai/parse-drawing', { method: 'POST', body: fd })
+    const json = await res.json().catch(() => ({}))
+    if (!res.ok || !json.parsed) return { ...empty, warnings: [json.detail || json.error || 'Не удалось распознать файл'] }
+    const p = json.parsed as { is_drawing?: boolean; items?: ParsedDrawingItem[]; warnings?: string[] }
+    const warnings = [...(p.warnings ?? [])]
+    if (p.is_drawing === false || !(p.items ?? []).length) {
+      return { ...empty, warnings: warnings.length ? warnings : ['Файл не распознан как чертёж деталей с размерами.'] }
+    }
+    const newItems: B2BOrderItem[] = []
+    let holes = 0, cutouts = 0, skipped = 0, shaped = 0
+    for (const it of (p.items ?? [])) {
+      const w = Number(it.width_mm) || 0
+      const h = Number(it.height_mm) || 0
+      if (w <= 0 || h <= 0) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: размер не распознан — добавьте вручную`); continue }
+      const drawTh = Number(it.thickness_mm) || 0
+      const th = drawTh > 0 ? drawTh : (Number(fThickness) || 8)
+      const hint = (it.material && it.material.trim()) ? it.material : (selectedMaterial?.name ?? '')
+      const mat = matchDrawingMaterial(materials, th, hint) ?? selectedMaterial
+      if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
+      const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
+      const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
+      const isShaped = (!!it.shape && it.shape !== 'rectangle') || cutW > w + 1 || cutH > h + 1
+      if (isShaped) shaped++
+      const q = Math.max(1, Number(it.quantity) || 1)
+      const temp = !!it.tempering
+      const waste = mat.passthrough ? 10 : mat.waste_percent
+      const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
+      const hh = Number(it.holes) || 0
+      const cc = Number(it.cutouts) || 0
+      holes += hh * q
+      cutouts += cc * q
+      const shapeNote = isShaped ? `${it.shape ?? 'скошенная'}, готовая ${w}×${h}` : ''
+      const cparts = [it.label, shapeNote, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
+      newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
+    }
+    if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
+    return { added: newItems.length, skipped, holes, cutouts, shaped, warnings }
+  }
+
+  // Нижняя кнопка «Чертёж / файл клиента» — многодетальный разбор с полным отчётом.
   async function parseDrawing() {
     if (!attachFile) return
     setParsingDrawing(true)
     setDrawingInfo(null)
     try {
-      const fd = new FormData()
-      fd.append('file', attachFile)
-      const res = await fetch('/api/ai/parse-drawing', { method: 'POST', body: fd })
-      const json = await res.json().catch(() => ({}))
-      if (!res.ok || !json.parsed) {
-        setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: [json.detail || json.error || 'Не удалось распознать файл'] })
-        return
-      }
-      const p = json.parsed as { is_drawing?: boolean; items?: ParsedDrawingItem[]; warnings?: string[] }
-      const warnings = [...(p.warnings ?? [])]
-      if (p.is_drawing === false || !(p.items ?? []).length) {
-        setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: warnings.length ? warnings : ['Файл не распознан как чертёж деталей с размерами.'] })
-        return
-      }
-      const newItems: B2BOrderItem[] = []
-      let holes = 0, cutouts = 0, skipped = 0, shaped = 0
-      for (const it of (p.items ?? [])) {
-        const w = Number(it.width_mm) || 0
-        const h = Number(it.height_mm) || 0
-        if (w <= 0 || h <= 0) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: размер не распознан — добавьте вручную`); continue }
-        // Толщина: с чертежа, иначе выбранная в форме (fThickness).
-        const drawTh = Number(it.thickness_mm) || 0
-        const th = drawTh > 0 ? drawTh : (Number(fThickness) || 8)
-        // Материал: с чертежа, иначе выбранный в форме (тип/материал из формы).
-        const hint = (it.material && it.material.trim()) ? it.material : (selectedMaterial?.name ?? '')
-        const mat = matchDrawingMaterial(materials, th, hint) ?? selectedMaterial
-        if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
-        // Раскрой: скошенную деталь режут из ГАБАРИТНОГО прямоугольника (сторона+скос) —
-        // расход больше номинала. Берём cut_width/cut_height, но не меньше номинала.
-        const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
-        const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
-        const isShaped = (!!it.shape && it.shape !== 'rectangle') || cutW > w + 1 || cutH > h + 1
-        if (isShaped) shaped++
-        const q = Math.max(1, Number(it.quantity) || 1)
-        const temp = !!it.tempering
-        const waste = mat.passthrough ? 10 : mat.waste_percent
-        const calc = calcItem(mat, cutW, cutH, q, waste, temp, resolveSvcs([], fTierSel, fFilmSel), false, null, facetPrices)
-        const hh = Number(it.holes) || 0
-        const cc = Number(it.cutouts) || 0
-        holes += hh * q
-        cutouts += cc * q
-        const shapeNote = isShaped ? `${it.shape ?? 'скошенная'}, готовая ${w}×${h}` : ''
-        const cparts = [it.label, shapeNote, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
-        newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
-      }
-      if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
-      setDrawingInfo({ added: newItems.length, skipped, holes, cutouts, shaped, warnings })
+      const r = await parseDrawingMulti(attachFile)
+      setDrawingInfo({ added: r.added, skipped: r.skipped, holes: r.holes, cutouts: r.cutouts, shaped: r.shaped, warnings: r.warnings })
     } catch (e) {
       setDrawingInfo({ added: 0, skipped: 0, holes: 0, cutouts: 0, warnings: ['Ошибка: ' + (e instanceof Error ? e.message : String(e))] })
     } finally {
@@ -1162,7 +1171,7 @@ export default function B2BCalculatorPage() {
 
             {/* Чертёж — универсально для всех типов, сразу под выбором типа */}
             <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg px-2.5 py-2 bg-[#fafaf9]">
-              <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи — сниму размеры{fKind === 'floft' ? ', тип и створки' : ' и параметры'}:</span>
+              <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи — {fKind === 'floft' ? 'сниму проём, тип и створки' : fKind === 'fmirror' ? 'сниму размеры зеркала' : 'добавлю каждое стекло отдельной позицией'}:</span>
               <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
                 {flParsing ? '🧠 Читаю…' : '📐 Чертёж (PDF/фото)'}
                 <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
