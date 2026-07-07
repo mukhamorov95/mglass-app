@@ -29,6 +29,7 @@ const MANAGER_AMO: NavItem[] = [
 const MANAGER_MGLASS: NavEntry[] = [
   { groupLabel: 'Калькуляторы' },
   { href: '/calculator/quick',  label: 'Быстрый расчёт',   icon: '⚡' },
+  { href: '/design-scan',       label: 'Скан дизайн-проекта', icon: '🔍' },
   { href: '/calculator/mirror', label: 'Зеркало',          icon: '🪞' },
   { href: '/calculator/shower', label: 'Душевая',          icon: '🚿' },
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
@@ -315,7 +316,7 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const MGLASS_PATHS = [
-  '/calculator/mirror', '/calculator/shower', '/calculator/loft',
+  '/calculator/mirror', '/calculator/shower', '/calculator/loft', '/design-scan',
   '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/measure-requests', '/measure-calendar', '/my-earnings',
 ]
 const B2B_PATHS = [
