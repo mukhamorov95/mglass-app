@@ -131,6 +131,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/calendar',
     '/measurer',
     '/measure-requests',
+    '/measure-calendar',
     '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
@@ -211,6 +212,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   measurer: [
     '/',
     '/measurer-cabinet',
+    '/measure-calendar',
   ],
 }
 

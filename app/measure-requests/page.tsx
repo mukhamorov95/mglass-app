@@ -2,9 +2,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { buildMeasureStructured } from '@/lib/measureStructured'
 
 // Заявки на замер (вкладка менеджера): диктовка/вставка → AI-структура →
-// заявка в пул замерщиков. Ниже — мои заявки и календарь занятости замерщиков.
+// редактируемая форма (или ручной ввод с нуля) → заявка в пул замерщиков.
+// Календарь занятости — отдельная страница /measure-calendar.
 
 type SpeechRec = {
   lang: string; continuous: boolean; interimResults: boolean
@@ -33,6 +35,24 @@ type MReq = {
   created_at: string
 }
 
+type Fields = {
+  deal_number: string
+  client_name: string
+  phone: string
+  amo_url: string
+  address: string
+  scope: string
+  notes: string
+  visit_price: string
+  payer: string
+  is_repeat: boolean
+}
+
+const EMPTY_FIELDS: Fields = {
+  deal_number: '', client_name: '', phone: '', amo_url: '',
+  address: '', scope: '', notes: '', visit_price: '', payer: '', is_repeat: false,
+}
+
 const STATUS_META: Record<string, { label: string; cls: string }> = {
   new:       { label: '🆕 Ждёт замерщика', cls: 'bg-amber-50 text-amber-700' },
   scheduled: { label: '📅 Назначен',       cls: 'bg-blue-50 text-blue-700' },
@@ -40,7 +60,6 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   issue:     { label: '⚠️ Сложность',      cls: 'bg-red-50 text-red-700' },
   cancelled: { label: 'Отменён',           cls: 'bg-[#f0f0ec] text-[#c4c4be]' },
 }
-const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
 export default function MeasureRequestsPage() {
   const sb = createClient()
@@ -51,7 +70,7 @@ export default function MeasureRequestsPage() {
   const [rawText, setRawText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [sending, setSending] = useState(false)
-  const [parsed, setParsed] = useState<Record<string, unknown> | null>(null)
+  const [fields, setFields] = useState<Fields | null>(null)
   const [fee, setFee] = useState('')
   const [reqs, setReqs] = useState<MReq[]>([])
   const [loading, setLoading] = useState(true)
@@ -97,52 +116,63 @@ export default function MeasureRequestsPage() {
         body: JSON.stringify({ text: rawText }),
       }).then(x => x.json())
       if (!r.error) {
-        setParsed(r)
-        if (!fee) setFee(String(r.visit_price || ''))
+        setFields({
+          deal_number: r.deal_number ?? '',
+          client_name: r.client_name ?? '',
+          phone: r.phone ?? '',
+          amo_url: r.amo_url ?? '',
+          address: r.address ?? '',
+          scope: r.scope ?? '',
+          notes: r.notes ?? '',
+          visit_price: r.visit_price ? String(r.visit_price) : '',
+          payer: r.payer ?? '',
+          is_repeat: !!r.is_repeat,
+        })
+        if (!fee && r.visit_price) setFee(String(r.visit_price))
       }
     } finally { setParsing(false) }
   }
 
+  const structured = useMemo(() => fields ? buildMeasureStructured({
+    ...fields,
+    visit_price: Number(fields.visit_price.replace(/\s/g, '')) || 0,
+  }) : '', [fields])
+
   async function createRequest() {
-    if (!me || !parsed) return
+    if (!me || !fields || !fields.client_name.trim()) return
     setSending(true)
     try {
+      const visitPrice = Number(fields.visit_price.replace(/\s/g, '')) || 0
       const { error } = await sb.from('measure_requests').insert({
-        deal_number: parsed.deal_number ?? null,
-        client_name: parsed.client_name ?? '',
-        phone: parsed.phone ?? null,
-        amo_url: parsed.amo_url ?? null,
-        address: parsed.address ?? null,
-        scope: parsed.scope ?? null,
-        notes: parsed.notes ?? null,
-        visit_price: Number(parsed.visit_price) || 0,
-        payer: parsed.payer ?? null,
-        is_repeat: !!parsed.is_repeat,
-        raw_text: rawText,
-        structured_text: parsed.structured_text ?? null,
+        deal_number: fields.deal_number.trim() || null,
+        client_name: fields.client_name.trim(),
+        phone: fields.phone.trim() || null,
+        amo_url: fields.amo_url.trim() || null,
+        address: fields.address.trim() || null,
+        scope: fields.scope.trim() || null,
+        notes: fields.notes.trim() || null,
+        visit_price: visitPrice,
+        payer: fields.payer.trim() || null,
+        is_repeat: fields.is_repeat,
+        raw_text: rawText || null,
+        structured_text: structured,
         manager_id: me.id, manager_name: me.name,
-        measurer_fee: Number(fee.replace(/\s/g, '')) || 0,
+        measurer_fee: Number(fee.replace(/\s/g, '')) || visitPrice,
       })
-      if (!error) { setRawText(''); setParsed(null); setFee(''); await load() }
+      if (!error) { setRawText(''); setFields(null); setFee(''); await load() }
     } finally { setSending(false) }
   }
 
-  // Календарь занятости: неделя вперёд, все назначенные замеры
-  const week = useMemo(() => {
-    const start = new Date(); start.setHours(0, 0, 0, 0)
-    return Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(start.getTime() + i * 86400000)
-      const next = new Date(d.getTime() + 86400000)
-      const items = reqs.filter(r => r.scheduled_at && r.status === 'scheduled')
-        .filter(r => { const t = new Date(r.scheduled_at!); return t >= d && t < next })
-        .sort((a, b) => (a.scheduled_at ?? '').localeCompare(b.scheduled_at ?? ''))
-      return { d, items }
-    })
-  }, [reqs])
+  function setF<K extends keyof Fields>(k: K, v: Fields[K]) {
+    setFields(prev => prev ? { ...prev, [k]: v } : prev)
+  }
 
   const myReqs = useMemo(() =>
     me && me.role === 'manager' ? reqs.filter(r => r.manager_id === me.id) : reqs,
   [reqs, me])
+
+  const inputCls = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]'
+  const labelCls = 'text-[11px] font-semibold text-[#6b6b66] block mb-1'
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
@@ -150,11 +180,11 @@ export default function MeasureRequestsPage() {
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Заявки на замер</h1>
-        <p className="text-[12px] text-[#9a9a95] mt-0.5">Надиктуй или вставь текст заявки — AI соберёт структуру. Замерщик увидит заявку в своём кабинете и назначит время.</p>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">Надиктуй или вставь текст — AI соберёт структуру, её можно поправить. Или заполни форму вручную. Занятость замерщиков — в «Календаре замеров».</p>
       </div>
 
       <div className="px-5 pt-4 space-y-4 max-w-[1100px]">
-        {/* Новая заявка */}
+        {/* Новая заявка: диктовка/вставка */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
           <div className="flex items-center justify-between mb-2">
             <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Новая заявка</p>
@@ -166,51 +196,89 @@ export default function MeasureRequestsPage() {
           {!speechSupported && <p className="text-[11px] text-amber-600 mb-2">Голос не поддерживается этим браузером — вставь текст.</p>}
           <textarea value={rawText} onChange={e => setRawText(e.target.value)} rows={5}
             placeholder={'Вставь или надиктуй, например:\n0008-6\nГалина +79514418341\nhttps://mglass.amocrm.ru/leads/detail/…\nАдрес: ул. Булатниковская 9к1\nЗеркало осветлённое 900×2200 от стены до зелёной зоны, думает о подсветке\nВыезд 2500, платит Галина'}
-            className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            className={inputCls} />
           <div className="flex items-center gap-2 mt-2">
             <button onClick={parse} disabled={parsing || !rawText.trim()}
               className="text-[12px] font-semibold border border-[#e4e4e0] rounded-lg px-3 py-1.5 hover:bg-[#f5f5f3] disabled:opacity-40">
               {parsing ? '🧠 Разбираю…' : '🧠 Разобрать AI'}
             </button>
-            {parsed && (
-              <>
-                <label className="text-[12px] text-[#6b6b66] ml-2">Гонорар замерщика, ₽
-                  <input value={fee} onChange={e => setFee(e.target.value)}
-                    className="ml-2 w-24 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-blue-700 text-right" />
-                </label>
-                <button onClick={createRequest} disabled={sending}
-                  className="ml-auto text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-3 py-1.5 hover:bg-emerald-700 disabled:opacity-40">
-                  {sending ? '…' : '✅ Создать заявку'}
-                </button>
-              </>
+            {!fields && (
+              <button onClick={() => setFields({ ...EMPTY_FIELDS })}
+                className="text-[12px] font-semibold border border-[#e4e4e0] rounded-lg px-3 py-1.5 hover:bg-[#f5f5f3]">
+                ✍️ Заполнить вручную
+              </button>
             )}
           </div>
-          {parsed && (
-            <pre className="mt-3 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{String(parsed.structured_text ?? '')}</pre>
-          )}
         </div>
 
-        {/* Календарь занятости */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95] mb-2">Календарь замеров · неделя</p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
-            {week.map(({ d, items }) => (
-              <div key={d.toISOString()} className="border border-[#f0f0ec] rounded-lg p-2.5">
-                <p className="text-[11px] font-bold capitalize">{d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
-                {items.length === 0 ? <p className="text-[11px] text-[#c4c4be] mt-1">свободно</p> : (
-                  <div className="mt-1 space-y-1">
-                    {items.map(r => (
-                      <p key={r.id} className="text-[11px] text-[#6b6b66]">
-                        <span className="font-mono font-semibold">{new Date(r.scheduled_at!).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
-                        {' '}{r.measurer_name || '—'} · {r.client_name}
-                      </p>
-                    ))}
-                  </div>
-                )}
+        {/* Структура заявки — редактируемая форма */}
+        {fields && (
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Структура заявки</p>
+              <button onClick={() => setFields(null)}
+                className="text-[11px] text-[#9a9a95] hover:text-[#111110]">✕ Закрыть</button>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <div>
+                <label className={labelCls}>№ заказа</label>
+                <input value={fields.deal_number} onChange={e => setF('deal_number', e.target.value)} placeholder="0008-6" className={inputCls} />
               </div>
-            ))}
+              <div>
+                <label className={labelCls}>Клиент *</label>
+                <input value={fields.client_name} onChange={e => setF('client_name', e.target.value)} placeholder="Галина" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Телефон</label>
+                <input value={fields.phone} onChange={e => setF('phone', e.target.value)} placeholder="+79514418341" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Amo-ссылка</label>
+                <input value={fields.amo_url} onChange={e => setF('amo_url', e.target.value)} placeholder="https://mglass.amocrm.ru/…" className={inputCls} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Адрес</label>
+                <input value={fields.address} onChange={e => setF('address', e.target.value)} placeholder="ул. Булатниковская, 9к1" className={inputCls} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Задача (что мерить)</label>
+                <input value={fields.scope} onChange={e => setF('scope', e.target.value)} placeholder="Зеркало осветлённое 900×2200, от стены до зелёной зоны" className={inputCls} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className={labelCls}>Примечание (доступ, этаж, время)</label>
+                <input value={fields.notes} onChange={e => setF('notes', e.target.value)} placeholder="домофон 12, после 18:00" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Выезд, ₽</label>
+                <input value={fields.visit_price} onChange={e => setF('visit_price', e.target.value)} placeholder="2500" className={`${inputCls} font-mono text-blue-700`} />
+              </div>
+              <div>
+                <label className={labelCls}>Платит</label>
+                <input value={fields.payer} onChange={e => setF('payer', e.target.value)} placeholder="Галина / включено в договор" className={inputCls} />
+              </div>
+              <div>
+                <label className={labelCls}>Гонорар замерщика, ₽</label>
+                <input value={fee} onChange={e => setFee(e.target.value)} placeholder={fields.visit_price || '= выезд'} className={`${inputCls} font-mono text-blue-700`} />
+              </div>
+              <div className="flex items-end pb-2">
+                <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                  <input type="checkbox" checked={fields.is_repeat} onChange={e => setF('is_repeat', e.target.checked)} className="accent-[#111110]" />
+                  🔁 Повторный замер
+                </label>
+              </div>
+            </div>
+
+            <pre className="mt-3 bg-[#fafaf8] border border-[#f0f0ec] rounded-lg p-3 text-[12px] whitespace-pre-wrap font-sans">{structured}</pre>
+
+            <div className="flex items-center gap-2 mt-3">
+              <button onClick={createRequest} disabled={sending || !fields.client_name.trim()}
+                className="text-[12px] font-semibold bg-emerald-600 text-white rounded-lg px-4 py-2 hover:bg-emerald-700 disabled:opacity-40">
+                {sending ? '…' : '✅ Создать заявку'}
+              </button>
+              {!fields.client_name.trim() && <span className="text-[11px] text-amber-600">Укажи имя клиента</span>}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Мои заявки */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">

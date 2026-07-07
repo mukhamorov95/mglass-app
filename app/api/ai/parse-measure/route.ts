@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { buildMeasureStructured } from '@/lib/measureStructured'
 
 // Диктовка/вставка менеджера → структурированная заявка на замер.
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -20,19 +21,6 @@ const SYSTEM = `Ты — диспетчер замеров стекольной 
  "is_repeat": true если это повторный замер (слова «повторный», «перезамер», «ещё раз»)
 }`
 
-function buildStructured(p: Record<string, unknown>): string {
-  const lines = [
-    `📐 ЗАМЕР ${p.is_repeat ? 'ПОВТОРНЫЙ' : 'НОВЫЙ'}${p.deal_number ? ` · ${p.deal_number}` : ''}`,
-    `Клиент: ${p.client_name ?? '—'}${p.phone ? ` ${p.phone}` : ''}`,
-    p.amo_url ? `Amo: ${p.amo_url}` : '',
-    `Адрес: ${p.address ?? '—'}`,
-    `Задача: ${p.scope ?? '—'}`,
-    `Выезд: ${Number(p.visit_price) > 0 ? `${Number(p.visit_price).toLocaleString('ru-RU')} ₽` : 'бесплатно'}${p.payer ? ` · платит ${p.payer}` : ''}`,
-    p.notes ? `Примечание: ${p.notes}` : '',
-  ]
-  return lines.filter(Boolean).join('\n')
-}
-
 export async function POST(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -49,7 +37,7 @@ export async function POST(req: NextRequest) {
     })
     const raw = msg.content.find(b => b.type === 'text')?.text ?? '{}'
     const parsed = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] ?? '{}')
-    return NextResponse.json({ ...parsed, structured_text: buildStructured(parsed) })
+    return NextResponse.json({ ...parsed, structured_text: buildMeasureStructured(parsed) })
   } catch {
     return NextResponse.json({ error: 'Не удалось разобрать — попробуй ещё раз или заполни вручную.' }, { status: 500 })
   }

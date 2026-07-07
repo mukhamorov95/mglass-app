@@ -40,6 +40,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/clients',       label: 'Клиенты',          icon: '👤' },
   { href: '/calendar',      label: 'Календарь',        icon: '📅' },
   { href: '/measure-requests', label: 'Заявки на замер', icon: '📐' },
+  { href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' },
   { href: '/measurer',      label: 'Форма замера',      icon: '📋' },
   { href: '/my-earnings',   label: 'Мои заработки',    icon: '💰' },
 ]
@@ -270,6 +271,7 @@ const ADMIN_B2B: NavEntry[] = [
 
 const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/measure-requests',    label: 'Заявки на замер',  icon: '📐' },
+  { href: '/measure-calendar',    label: 'Календарь замеров', icon: '🗓️' },
   { href: '/measurer-cabinet',    label: 'Замерщики (календарь/деньги)', icon: '📏' },
   { href: '/admin/installations', label: 'Монтажи',          icon: '🔧' },
   { href: '/admin/stock-control',  label: 'Остатки склада',  icon: '📦' },
@@ -314,7 +316,7 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
 
 const MGLASS_PATHS = [
   '/calculator/mirror', '/calculator/shower', '/calculator/loft',
-  '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/measure-requests', '/my-earnings',
+  '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/measure-requests', '/measure-calendar', '/my-earnings',
 ]
 const B2B_PATHS = [
   '/manager-dashboard', '/calculator/b2b', '/b2b-quotes', '/b2b-orders', '/b2b-crm',
@@ -344,7 +346,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
   }
   return open
 }
@@ -614,6 +616,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Замеры</div>
         <div className="space-y-px">
           {navItem({ href: '/measurer-cabinet', label: 'Кабинет замерщика', icon: '📏' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>
     )
@@ -771,6 +774,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="space-y-px">
           {navItem({ href: '/measurer-cabinet', label: 'Кабинет замерщика', icon: '📏' }, 'bg-cyan-50 text-cyan-700 font-medium')}
           {navItem({ href: '/measure-requests', label: 'Заявки на замер',   icon: '📐' }, 'bg-cyan-50 text-cyan-700 font-medium')}
+          {navItem({ href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' }, 'bg-cyan-50 text-cyan-700 font-medium')}
         </div>
       </>
     )
