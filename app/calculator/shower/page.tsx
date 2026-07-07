@@ -907,7 +907,7 @@ export default function ShowerCalculatorPage() {
                   <span className="text-[13px] text-[#1d1d1f]">Монтаж</span>
                   {(() => {
                     const svc = services.find(s => s.name === 'Монтаж душевой перегородки')
-                    const price = svc?.sale_price ?? svc?.cost_price ?? 3000
+                    const price = tierCfg.mountingPerElement ?? svc?.sale_price ?? svc?.cost_price ?? 3000
                     return (
                       <span className="text-[12px] text-[#86868b] ml-auto font-mono">
                         {model.glassCount} × {price.toLocaleString('ru-RU')} = {(price * model.glassCount).toLocaleString('ru-RU')} ₽

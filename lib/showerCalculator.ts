@@ -55,6 +55,7 @@ export type TierConfig = {
   hwMultiplier: number    // коэффициент к hardwareBase
   expensesPercent: number // процент расходов
   colors: string[]        // доступные цвета
+  mountingPerElement?: number // цена монтажа за элемент; если задана — вместо услуги (бюджет = 4000)
 }
 
 export const TIER_CONFIGS: TierConfig[] = [
@@ -66,6 +67,7 @@ export const TIER_CONFIGS: TierConfig[] = [
     hwMultiplier: 0.60,
     expensesPercent: 33,
     colors: ['chrome', 'black', 'white'],
+    mountingPerElement: 4000,
   },
   {
     value: 'standard',
@@ -187,7 +189,9 @@ export function calculateShower(
   const liftingSvc  = services.find(s => s.name === 'Подъём на этаж')
 
   if (withMounting && mountingSvc) {
-    const price = mountingSvc.sale_price ?? mountingSvc.cost_price
+    const tierCfg = TIER_CONFIGS.find(t => t.value === inputs.tier)
+    // Бюджетный класс — монтаж по фиксированной цене за элемент; стандарт — по услуге.
+    const price = tierCfg?.mountingPerElement ?? (mountingSvc.sale_price ?? mountingSvc.cost_price)
     serviceLines.push({
       name: 'Монтаж',
       qty: model.glassCount,
