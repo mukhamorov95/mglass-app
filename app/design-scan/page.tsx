@@ -55,12 +55,21 @@ export default function DesignScanPage() {
       setProgress({ done: 0, total })
 
       async function renderPage(n: number, targetWidth: number): Promise<{ canvas: HTMLCanvasElement }> {
+        console.log(`[design-scan] getPage ${n}`)
         const page = await doc.getPage(n)
         const base = page.getViewport({ scale: 1 })
         const viewport = page.getViewport({ scale: targetWidth / base.width })
         const canvas = document.createElement('canvas')
         canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height)
-        await page.render({ canvas, canvasContext: canvas.getContext('2d')!, viewport }).promise
+        const ctx = canvas.getContext('2d')!
+        console.log(`[design-scan] render ${n} → ${canvas.width}×${canvas.height}`)
+        const task = page.render({ canvasContext: ctx, viewport } as Parameters<typeof page.render>[0])
+        const timeout = new Promise<never>((_, rej) => setTimeout(() => {
+          try { task.cancel() } catch { /* уже завершилась */ }
+          rej(new Error(`Рендер страницы ${n} завис (60 сек)`))
+        }, 60_000))
+        await Promise.race([task.promise, timeout])
+        console.log(`[design-scan] done ${n}`)
         return { canvas }
       }
 
