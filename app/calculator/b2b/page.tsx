@@ -192,12 +192,16 @@ export default function B2BCalculatorPage() {
   const [flW, setFlW]             = useState('')
   const [flH, setFlH]             = useState('')
   const [flQty, setFlQty]         = useState('1')
-  const [flSections, setFlSections] = useState('3')
-  const [flDivisions, setFlDivisions] = useState('2')
-  const [flDoors, setFlDoors]     = useState<0 | 1 | 2>(2)
+  const [flConstruction, setFlConstruction] = useState<'fixed' | 'swing' | 'sliding'>('swing')
+  const [flDoors, setFlDoors]     = useState('2')
+  const [flFixed, setFlFixed]     = useState('0')
   const [flRows, setFlRows]       = useState('3')
+  const [flHandle, setFlHandle]   = useState<'corner' | 'push'>('corner')
+  const [flSoftClose, setFlSoftClose] = useState(false)
   const [flTempering, setFlTempering] = useState(false)
   const [flGlassId, setFlGlassId] = useState<number | null>(null)
+  const [flParsing, setFlParsing] = useState(false)
+  const [flParseNote, setFlParseNote] = useState<string | null>(null)
   const [fThickness, setFThickness]   = useState<number | null>(null)
   const [fMatId, setFMatId]           = useState<number | null>(null)
   const [fWidth, setFWidth]           = useState('')
@@ -515,13 +519,44 @@ export default function B2BCalculatorPage() {
     if (fKind === 'floft') {
       return calcFactoryLoft({
         widthMm: Number(flW) || 0, heightMm: Number(flH) || 0,
-        doors: flDoors, rowsPerLeaf: Number(flRows) || 1,
-        sections: Number(flSections) || 1, divisions: Number(flDivisions) || 0,
+        construction: flConstruction,
+        doors: Number(flDoors) || 0, fixedParts: Number(flFixed) || 0,
+        rows: Number(flRows) || 1,
+        handle: flHandle, softClose: flSoftClose,
         glassId: flGlassId, tempering: flTempering,
       }, factoryData)
     }
     return null
   })()
+
+  // Чертёж лофта (PDF/фото) → AI снимает проём, тип конструкции, створки, стёкла.
+  async function parseLoftDrawing(file: File) {
+    setFlParsing(true); setFlParseNote(null)
+    try {
+      const readB64 = (f: Blob) => new Promise<string>((res, rej) => {
+        const r = new FileReader()
+        r.onload = () => res(String(r.result).split(',')[1] || '')
+        r.onerror = rej
+        r.readAsDataURL(f)
+      })
+      const payload = file.type === 'application/pdf'
+        ? { pdf: await readB64(file) }
+        : { image: await readB64(file), image_type: file.type }
+      const r = await fetch('/api/ai/parse-loft-drawing', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(x => x.json())
+      const d = r.drawing
+      if (!d) { setFlParseNote('не распознал — введи вручную'); return }
+      if (d.width_mm) setFlW(String(d.width_mm))
+      if (d.height_mm) setFlH(String(d.height_mm))
+      if (d.construction === 'fixed' || d.construction === 'swing' || d.construction === 'sliding') setFlConstruction(d.construction)
+      if (d.doors != null) setFlDoors(String(d.doors))
+      if (d.fixed_parts != null) setFlFixed(String(d.fixed_parts))
+      if (d.rows != null) setFlRows(String(d.rows))
+      setFlParseNote(`✓ снял: ${d.width_mm}×${d.height_mm}${d.note ? ` · ${String(d.note).slice(0, 80)}` : ''}`)
+    } catch { setFlParseNote('ошибка чтения файла') } finally { setFlParsing(false) }
+  }
 
   function handleAddFactoryItem() {
     if (!factoryQuote) return
@@ -1213,37 +1248,62 @@ export default function B2BCalculatorPage() {
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                     </div>
+                    <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg p-2 bg-[#fafaf9]">
+                      <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи (PDF/фото) — сниму проём, тип и створки:</span>
+                      <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                        {flParsing ? '🧠 Читаю…' : '📐 Чертёж'}
+                        <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
+                          onChange={e => { const f = e.target.files?.[0]; if (f) parseLoftDrawing(f); e.target.value = '' }} />
+                      </label>
+                      {flParseNote && <span className="text-[11px] text-emerald-700">{flParseNote}</span>}
+                    </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Конструкция</label>
                       <div className="flex bg-[#efefec] rounded-lg p-[3px] gap-[2px]">
-                        {([[0, 'Глухая'], [1, '1 дверь'], [2, '2 двери']] as const).map(([v, l]) => (
-                          <button key={v} onClick={() => setFlDoors(v)}
-                            className={`flex-1 text-[12px] font-medium rounded-md py-1.5 ${flDoors === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
+                        {([['fixed', 'Стационарная'], ['swing', 'Распашная'], ['sliding', 'Раздвижная']] as const).map(([v, l]) => (
+                          <button key={v} onClick={() => setFlConstruction(v)}
+                            className={`flex-1 text-[12px] font-medium rounded-md py-1.5 ${flConstruction === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
                         ))}
                       </div>
                     </div>
                     <div className="grid grid-cols-3 gap-2">
-                      {flDoors > 0 ? (
+                      {flConstruction !== 'fixed' && (
                         <div>
-                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол в створке</label>
-                          <input type="number" min={1} value={flRows} onChange={e => setFlRows(e.target.value)}
+                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">{flConstruction === 'swing' ? 'Дверей' : 'Раздв. створок'}</label>
+                          <input type="number" min={1} value={flDoors} onChange={e => setFlDoors(e.target.value)}
                             className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                         </div>
-                      ) : (
-                        <>
-                          <div>
-                            <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Секции</label>
-                            <input type="number" min={1} value={flSections} onChange={e => setFlSections(e.target.value)}
-                              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
-                          </div>
-                          <div>
-                            <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Деления</label>
-                            <input type="number" min={0} value={flDivisions} onChange={e => setFlDivisions(e.target.value)}
-                              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
-                          </div>
-                        </>
                       )}
-                      <label className="flex items-end gap-2 pb-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">{flConstruction === 'fixed' ? 'Секций' : 'Глухих частей'}</label>
+                        <input type="number" min={0} value={flFixed} onChange={e => setFlFixed(e.target.value)}
+                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол по вертикали</label>
+                        <input type="number" min={1} value={flRows} onChange={e => setFlRows(e.target.value)}
+                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4 flex-wrap">
+                      {flConstruction === 'swing' && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Ручка</span>
+                          <div className="flex bg-[#efefec] rounded-lg p-[2px] gap-[2px]">
+                            {([['corner', 'Уголок'], ['push', 'Нажимная с замком']] as const).map(([v, l]) => (
+                              <button key={v} onClick={() => setFlHandle(v)}
+                                className={`text-[11px] font-medium rounded-md px-2.5 py-1 ${flHandle === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                      {flConstruction === 'sliding' && (
+                        <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                          <input type="checkbox" checked={flSoftClose} onChange={e => setFlSoftClose(e.target.checked)} className="accent-[#111110]" />
+                          Доводчик
+                        </label>
+                      )}
+                      <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
                         <input type="checkbox" checked={flTempering} onChange={e => setFlTempering(e.target.checked)} className="accent-[#111110]" />
                         Закалка
                       </label>

@@ -9,7 +9,7 @@ import type { Material, Service, FinancialSettings } from '@/lib/types'
 import type { MirrorLightingComponent } from '@/lib/mirrorCalculator'
 import { calculateMirrorUnified } from '@/lib/pricing/calculateMirrorUnified'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
-import { calcLoftFactory, type LoftRates } from '@/lib/loftFactoryCalculator'
+import { calcLoftFactory, type LoftRates, type LoftConstruction, type LoftHandle } from '@/lib/loftFactoryCalculator'
 import { getMatrixPrice, getMatrixNames, getAvailableMm, type GlassMatrixRow } from '@/lib/glassMatrix'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
 
@@ -227,7 +227,12 @@ export function calcFactoryMirror(
 // Лофт: честная модель по конструктиву цеха (loftFactoryCalculator, ставки из
 // loft_rates), продажная цена производства по production-марже конфига (loft).
 export function calcFactoryLoft(
-  p: { widthMm: number; heightMm: number; doors: 0 | 1 | 2; rowsPerLeaf: number; sections: number; divisions: number; glassId: number | null; tempering: boolean },
+  p: {
+    widthMm: number; heightMm: number; construction: LoftConstruction
+    doors: number; fixedParts: number; rows: number
+    handle: LoftHandle; softClose: boolean
+    glassId: number | null; tempering: boolean
+  },
   d: FactoryData,
 ): FactoryQuote | null {
   if (p.widthMm <= 0 || p.heightMm <= 0) return null
@@ -237,8 +242,8 @@ export function calcFactoryLoft(
 
   const res = calcLoftFactory({
     widthMm: p.widthMm, heightMm: p.heightMm,
-    doors: p.doors, rowsPerLeaf: p.rowsPerLeaf,
-    sections: p.sections, divisions: p.divisions,
+    construction: p.construction, doors: p.doors, fixedParts: p.fixedParts, rows: p.rows,
+    handle: p.handle, softClose: p.softClose,
     glassCostPerM2: glass.cost_price, glassName: glass.name,
     tempering: p.tempering, temperingCostPerM2: temperSvc?.cost_price ?? 0,
   }, d.loftRates)
@@ -251,7 +256,7 @@ export function calcFactoryLoft(
   })
   if (!fm) return null
 
-  const kind = p.doors > 0 ? 'дверь' : 'перегородка'
+  const kind = p.construction !== 'fixed' && p.doors > 0 ? 'дверь' : 'перегородка'
   return {
     label: `Лофт-${kind} ${p.widthMm}×${p.heightMm} мм`,
     spec: res.spec,
