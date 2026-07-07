@@ -905,9 +905,15 @@ export default function ShowerCalculatorPage() {
                   <input type="checkbox" checked={withMounting} onChange={e => setWithMounting(e.target.checked)}
                     className="w-4 h-4 accent-[#0071e3]"/>
                   <span className="text-[13px] text-[#1d1d1f]">Монтаж</span>
-                  <span className="text-[12px] text-[#86868b] ml-auto">
-                    {model.glassCount} эл. × {(services.find(s => s.name === 'Монтаж душевой перегородки')?.cost_price ?? 3000).toLocaleString('ru-RU')} ₽
-                  </span>
+                  {(() => {
+                    const svc = services.find(s => s.name === 'Монтаж душевой перегородки')
+                    const price = svc?.sale_price ?? svc?.cost_price ?? 3000
+                    return (
+                      <span className="text-[12px] text-[#86868b] ml-auto font-mono">
+                        {model.glassCount} × {price.toLocaleString('ru-RU')} = {(price * model.glassCount).toLocaleString('ru-RU')} ₽
+                      </span>
+                    )
+                  })()}
                 </label>
                 {withMounting && (
                   <div className="ml-7 flex items-center gap-2">
@@ -921,10 +927,10 @@ export default function ShowerCalculatorPage() {
                     <input type="checkbox" checked={withDelivery} onChange={e => setWithDelivery(e.target.checked)}
                       className="w-4 h-4 accent-[#0071e3]"/>
                     <span className="text-[13px] text-[#1d1d1f]">Доставка</span>
-                    <span className="text-[12px] text-[#86868b] ml-auto">
+                    <span className="text-[12px] text-[#86868b] ml-auto font-mono">
                       {km > 0
                         ? `${(deliveryCost!).toLocaleString('ru-RU')} ₽ (${km} км за МКАД)`
-                        : `${(services.find(s => s.name === 'Доставка Москва')?.cost_price ?? 3500).toLocaleString('ru-RU')} ₽`}
+                        : `${((services.find(s => s.name === 'Доставка Москва')?.sale_price ?? services.find(s => s.name === 'Доставка Москва')?.cost_price ?? 3500)).toLocaleString('ru-RU')} ₽`}
                     </span>
                   </label>
                   {withDelivery && (
