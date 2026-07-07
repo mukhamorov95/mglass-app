@@ -45,6 +45,6 @@ export type SellerRequisites = {
 }
 
 // НДС включён в сумму: выделяем из итога (по умолчанию 5% → total * 5/105; для B2B передавать 22).
-export function vatIncluded(total: number, rate = EXECUTOR.vatRate): number {
+export function vatIncluded(total: number, rate: number = EXECUTOR.vatRate): number {
   return Math.round((total * rate / (100 + rate)) * 100) / 100
 }

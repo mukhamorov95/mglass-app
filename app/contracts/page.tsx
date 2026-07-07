@@ -13,6 +13,7 @@ type Form = {
   spec: Spec[]
   total: string; make_sum: string; install_sum: string; delivery_sum: string; lift_sum: string; prepayment: string
   product_kind: ProductKind; make_days: number; install_days: number
+  vat_rate: number
 }
 const SERVICE_RE = /монтаж|демонтаж|доставк|подъ[её]м|замер|выезд/i
 const INSTALL_RE = /монтаж|демонтаж/i
@@ -74,7 +75,7 @@ function emptyForm(): Form {
     number: '', date: fmtDate(d), date_iso: isoDate(d), kp_id: null,
     customer_type: 'individual', customer: {}, spec: [],
     total: '', make_sum: '', install_sum: '', delivery_sum: '', lift_sum: '', prepayment: '',
-    product_kind: 'mirror', make_days: 15, install_days: 5,
+    product_kind: 'mirror', make_days: 15, install_days: 5, vat_rate: 5,
   }
 }
 
@@ -384,7 +385,20 @@ export default function ContractsPage() {
 
             {/* Финансы и оплата */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[13px] font-semibold text-[#111110] mb-3">Финансы и оплата</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-[13px] font-semibold text-[#111110]">Финансы и оплата</p>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] text-[#9a9a95] uppercase tracking-widest">Ставка НДС</span>
+                  <div className="flex gap-1 bg-[#f0f0ec] rounded-lg p-0.5">
+                    {[5, 22].map(r => (
+                      <button key={r} onClick={() => set({ vat_rate: r })}
+                        className={`px-3 py-1 text-[12px] rounded-md ${form.vat_rate === r ? 'bg-white shadow-sm font-medium text-[#111110]' : 'text-[#9a9a95]'}`}>
+                        {r}%
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
               <div className="grid grid-cols-3 gap-3">
                 <div><label className={L}>Общая сумма договора, ₽</label><input className={I} value={form.total} onChange={e => set({ total: e.target.value })} /></div>
                 <div><label className={L}>Изготовление, ₽</label><input className={I} value={form.make_sum} onChange={e => set({ make_sum: e.target.value })} placeholder="вручную" /></div>
@@ -404,8 +418,8 @@ export default function ContractsPage() {
                 {rem.total > 0 ? (
                   <>Предоплата <b>{RUB(prepay)} ₽</b> — для запуска изготовления.{' '}
                   Остаток за изготовление <b>{RUB(rem.make)} ₽</b> — по готовности, до монтажа.{' '}
-                  Остаток за монтаж, доставку и подъём <b>{RUB(rem.final)} ₽</b> — после монтажа. НДС 5% включён.</>
-                ) : <>Оплата 100% — единый авансовый платёж. НДС 5% включён.</>}
+                  Остаток за монтаж, доставку и подъём <b>{RUB(rem.final)} ₽</b> — после монтажа. НДС {form.vat_rate}% включён.</>
+                ) : <>Оплата 100% — единый авансовый платёж. НДС {form.vat_rate}% включён.</>}
               </div>
             </div>
 

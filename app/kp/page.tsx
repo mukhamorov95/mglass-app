@@ -376,7 +376,20 @@ export default function KpPage() {
                 </select>
               </div>
               <div><label className={L}>Гарантия</label><input className={I} value={form.warranty} onChange={e => set({ warranty: e.target.value })} /></div>
-              <div><label className={L}>НДС</label><input className={I} value={form.vat} onChange={e => set({ vat: e.target.value })} /></div>
+              <div><label className={L}>Ставка НДС</label>
+                <div className="flex gap-1 bg-[#f0f0ec] rounded-lg p-0.5 h-[38px] items-stretch">
+                  {[5, 22].map(r => {
+                    const active = numOr(form.vat) === r
+                    return (
+                      <button key={r} type="button"
+                        onClick={() => set({ vat: `${r}% включён`, vat_label: `НДС ${r}% ВКЛЮЧЁН` })}
+                        className={`flex-1 text-[12px] rounded-md ${active ? 'bg-white shadow-sm font-medium text-[#111110]' : 'text-[#9a9a95]'}`}>
+                        {r}%
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
               <div className="col-span-3">
                 <label className={L}>Фото / чертёж изделия (в PDF)</label>
                 <div className="flex items-center gap-3">

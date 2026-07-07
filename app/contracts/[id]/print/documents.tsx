@@ -23,6 +23,7 @@ export type ContractContent = {
   delivery_sum?: number | string; lift_sum?: number | string
   prepayment?: number | string
   make_days?: number; install_days?: number
+  vat_rate?: number
 }
 
 const numOr = (v: number | string | undefined) => {
@@ -62,14 +63,15 @@ export function customerLine(type: string | undefined, c: Customer = {}): string
   return p.join(', ') || '—'
 }
 
-const money = (v: number | string | undefined) => `${RUB(v)} руб. (в т.ч. НДС ${EXECUTOR.vatRate}%)`
+const money = (v: number | string | undefined, rate: number = EXECUTOR.vatRate) => `${RUB(v)} руб. (в т.ч. НДС ${rate}%)`
 
 // ── Счёт (1 страница) ───────────────────────────────────
 export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
+  const rate = c.vat_rate ?? EXECUTOR.vatRate
   const total = numOr(c.total)
   const prepay = (c.prepayment == null || c.prepayment === '') ? total : numOr(c.prepayment)
   const pct = total > 0 ? Math.round(prepay / total * 100) : 100
-  const vat = vatIncluded(prepay)
+  const vat = vatIncluded(prepay, rate)
   const payLabel = pct >= 100 ? 'Авансовый платёж в размере 100%' : `Предоплата (${pct}%)`
   return (
     <div className="doc-page invoice">
@@ -99,7 +101,7 @@ export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
       </table>
       <table className="inv-tot"><tbody>
         <tr><td>Итого:</td><td className="r">{RUB(prepay)}</td></tr>
-        <tr><td>В т. ч. НДС ({EXECUTOR.vatRate}%):</td><td className="r">{RUB(vat)}</td></tr>
+        <tr><td>В т. ч. НДС ({rate}%):</td><td className="r">{RUB(vat)}</td></tr>
         <tr><td><b>Всего к оплате:</b></td><td className="r"><b>{RUB(prepay)}</b></td></tr>
       </tbody></table>
       <div className="inv-sign">
@@ -135,7 +137,7 @@ export function ContractDocument({ c }: { c: ContractContent }) {
   const totalDays = make + install
   const spec = c.spec && c.spec.length ? c.spec : []
   const cust = customerLine(c.customer_type, c.customer)
-  const vat = EXECUTOR.vatRate
+  const vat = c.vat_rate ?? EXECUTOR.vatRate
   const totalN = numOr(c.total), makeN = numOr(c.make_sum)
   const installN = numOr(c.install_sum), deliveryN = numOr(c.delivery_sum), liftN = numOr(c.lift_sum)
   const finalPart = installN + deliveryN + liftN
@@ -181,11 +183,11 @@ export function ContractDocument({ c }: { c: ContractContent }) {
       <p>5.2.3. В срок не позднее 3 (трёх) рабочих дней с даты получения уведомления от Исполнителя принять результат соответствующего этапа работ.</p>
 
       <h3>6. РАЗМЕР И ПОРЯДОК ОПЛАТЫ</h3>
-      <p>6.1. Общая стоимость Изделий и работ по настоящему Договору составляет {money(c.total)} и складывается из: стоимости изготовления и поставки Изделий — {money(c.make_sum)}; стоимости монтажных работ — {money(c.install_sum)}{deliveryN > 0 ? `; стоимости доставки — ${money(c.delivery_sum)}` : ''}{liftN > 0 ? `; стоимости подъёма — ${money(c.lift_sum)}` : ''}.</p>
+      <p>6.1. Общая стоимость Изделий и работ по настоящему Договору составляет {money(c.total, vat)} и складывается из: стоимости изготовления и поставки Изделий — {money(c.make_sum, vat)}; стоимости монтажных работ — {money(c.install_sum, vat)}{deliveryN > 0 ? `; стоимости доставки — ${money(c.delivery_sum, vat)}` : ''}{liftN > 0 ? `; стоимости подъёма — ${money(c.lift_sum, vat)}` : ''}.</p>
       <p>6.2. Детальная стоимость Изделий и работ определяется Сторонами в Спецификации (Раздел № 2).</p>
       <p>6.3. Расчёты между Сторонами производятся в следующем порядке:</p>
       {isFull ? (
-        <p>6.3.1. Заказчик осуществляет авансовый платёж в размере 100% (Сто процентов) от общей стоимости Договора, что составляет {money(c.total)}, в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления указанного аванса на расчётный счёт Исполнителя последний приступает к исполнению обязательств по изготовлению Изделий.</p>
+        <p>6.3.1. Заказчик осуществляет авансовый платёж в размере 100% (Сто процентов) от общей стоимости Договора, что составляет {money(c.total, vat)}, в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления указанного аванса на расчётный счёт Исполнителя последний приступает к исполнению обязательств по изготовлению Изделий.</p>
       ) : (
         <>
           <p>6.3.1. Первый этап (авансирование изготовления): Заказчик вносит предоплату в размере {RUB(prepay)} руб. (в т.ч. НДС {vat}%) в срок не позднее 3 (трёх) рабочих дней с даты подписания Договора. После поступления предоплаты Исполнитель приступает к изготовлению Изделий.</p>
