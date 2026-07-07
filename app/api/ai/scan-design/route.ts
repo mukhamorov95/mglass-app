@@ -62,6 +62,7 @@ const SYSTEM = `Ты — инженер стекольной компании M-
 Размеры бери ТОЛЬКО из размерных цепочек и подписей на чертеже — ничего не вычисляй и не выдумывай; если размер не читается, не пиши его.
 Одно и то же изделие на одной странице учитывай один раз. Мебель, окна, двери из дерева, картины — НЕ изделия.
 Если страница — ведомость/спецификация с зеркалами или стеклом, тоже извлеки позиции.
+ЧАСТЫЕ ЛОВУШКИ (не включай): настенные бра и светильники (в т.ч. вытянутой/фигурной формы — их легко спутать с фигурным зеркалом), картины и постеры, ниши, окна, зеркальные дверцы шкафов как мебель. Если нет явной подписи или очевидных признаков зеркала/стекла — ставь confidence=maybe или не включай вовсе.
 bbox указывай аккуратно по той странице, где изделие видно.
 Рассматривай КАЖДУЮ страницу отдельно и внимательно: сначала заполни page_report по каждой странице, потом перечисли изделия в items.`
 
@@ -70,11 +71,26 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { pages, debug, hint, known } = await req.json() as {
-    pages?: { page: number; image: string }[]; debug?: boolean; hint?: string; known?: string[]
+  const { pages, debug, hint, known, save_lesson } = await req.json() as {
+    pages?: { page: number; image: string }[]; debug?: boolean; hint?: string; known?: string[]; save_lesson?: boolean
   }
   if (!Array.isArray(pages) || !pages.length) return NextResponse.json({ error: 'no pages' }, { status: 400 })
   if (pages.length > 6) return NextResponse.json({ error: 'max 6 pages per batch' }, { status: 400 })
+
+  // Память уроков: заметки менеджеров с прошлых сканов подмешиваются в промпт,
+  // новая заметка сохраняется один раз за повторный поиск (save_lesson с первой пачки).
+  let lessonsBlock = ''
+  try {
+    if (save_lesson && typeof hint === 'string' && hint.trim()) {
+      await sb.from('design_scan_lessons').insert({ lesson: hint.trim().slice(0, 1000) })
+    }
+    const { data: lessons } = await sb.from('design_scan_lessons')
+      .select('lesson').order('created_at', { ascending: false }).limit(30)
+    if (lessons?.length) {
+      lessonsBlock = '\nУРОКИ ИЗ ПРОШЛЫХ ПРОЕКТОВ (замечания менеджеров — учитывай):\n' +
+        [...new Set(lessons.map(l => l.lesson))].map(l => `— ${l}`).join('\n')
+    }
+  } catch { /* уроки не блокируют скан */ }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const content: any[] = []
@@ -94,7 +110,7 @@ export async function POST(req: Request) {
     const msg = await anthropic.messages.create({
       model: 'claude-sonnet-5',
       max_tokens: 4000,
-      system: SYSTEM,
+      system: SYSTEM + lessonsBlock,
       tools: [{ name: 'items', description: 'Найденные изделия', input_schema: SCAN_SCHEMA }],
       tool_choice: { type: 'tool', name: 'items' },
       messages: [{ role: 'user', content }],

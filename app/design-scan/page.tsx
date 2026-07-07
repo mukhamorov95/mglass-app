@@ -50,6 +50,7 @@ export default function DesignScanPage() {
   const recRef = useRef<SpeechRec | null>(null)
   const [notes, setNotes] = useState('')
   const [noteRec, setNoteRec] = useState(false)
+  const [reviewMsg, setReviewMsg] = useState<string | null>(null)
   const [fileName, setFileName] = useState('')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -61,9 +62,32 @@ export default function DesignScanPage() {
 
   function scan(file: File) { fileRef.current = file; runScan(file, false) }
 
-  // Повторный проход: по одному листу (внимательнее), с заметками менеджера и
-  // списком уже найденного — модель ищет только пропущенное.
-  function rescan() { if (fileRef.current) runScan(fileRef.current, true) }
+  function removeItem(i: number) { setItems(prev => prev.filter((_, j) => j !== i)) }
+
+  // Повторный проход: сначала ревизия списка по заметкам (AI решает, что убрать —
+  // ложные срабатывания), затем поиск пропущенного по одному листу.
+  async function rescan() {
+    if (!fileRef.current) return
+    setReviewMsg(null)
+    if (notes.trim() && items.length) {
+      try {
+        setRunning(true)
+        const r = await fetch('/api/ai/scan-review', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            notes,
+            items: items.map((it, index) => ({ index, title: it.title, page: it.page, kind: it.kind, dimensions: it.dimensions, description: it.description })),
+          }),
+        }).then(x => x.json())
+        const drop = new Set<number>(Array.isArray(r.remove_indexes) ? r.remove_indexes : [])
+        if (drop.size) {
+          setItems(prev => prev.filter((_, i) => !drop.has(i)))
+          setReviewMsg(`🗑 Убрано по заметкам: ${drop.size}${r.comment ? ` — ${r.comment}` : ''}`)
+        }
+      } catch { /* ревизия не блокирует поиск */ }
+    }
+    await runScan(fileRef.current, true)
+  }
 
   async function runScan(file: File, isRescan: boolean) {
     const known = isRescan ? items.map(it => `${it.title} (стр. ${it.page}${it.dimensions ? `, ${it.dimensions}` : ''})`) : []
@@ -117,7 +141,12 @@ export default function DesignScanPage() {
           try {
             const r = await fetch('/api/ai/scan-design', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pages: rendered, ...(hint ? { hint } : {}), ...(known.length ? { known } : {}) }),
+              body: JSON.stringify({
+                pages: rendered,
+                ...(hint ? { hint } : {}),
+                ...(known.length ? { known } : {}),
+                ...(isRescan && hint && start === 1 ? { save_lesson: true } : {}),
+              }),
             })
             const d = await r.json()
             if (r.ok && Array.isArray(d.items)) { batchItems = d.items as FoundItem[]; ok = true }
@@ -273,11 +302,13 @@ export default function DesignScanPage() {
                         onClick={() => setViewer(it.pageShot || it.crop || null)}
                         className="w-full sm:w-56 max-h-44 object-contain bg-[#fafaf8] border border-[#f0f0ec] rounded-lg cursor-zoom-in flex-shrink-0" />
                     )}
-                    <div className="min-w-0">
+                    <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-[13px] font-bold">{i + 1}. {it.title}</span>
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>{meta.label}</span>
                         {it.confidence === 'maybe' && <span className="text-[11px] px-2 py-0.5 rounded-full font-medium bg-amber-50 text-amber-700">⚠️ проверить</span>}
+                        <button onClick={() => removeItem(i)} title="Удалить — это не изделие"
+                          className="ml-auto text-[13px] text-[#c4c4be] hover:text-red-500 px-1.5">✕</button>
                       </div>
                       {it.dimensions && <p className="text-[13px] mt-1">📏 <b>{it.dimensions}</b></p>}
                       {it.description && <p className="text-[12px] text-[#6b6b66] mt-0.5">{it.description}</p>}
@@ -309,8 +340,9 @@ export default function DesignScanPage() {
                 className="text-[12px] font-semibold bg-[#111110] text-white rounded-lg px-4 py-2 hover:bg-[#2a2a28] disabled:opacity-40">
                 🔁 Искать ещё раз{notes.trim() ? ' с учётом заметок' : ''}
               </button>
-              <span className="text-[11px] text-[#9a9a95]">Повторный проход идёт по одному листу — медленнее, но внимательнее. Уже найденные изделия не дублируются, заметки уходят в AI и попадают в список для расчёта.</span>
+              <span className="text-[11px] text-[#9a9a95]">По заметкам AI сначала уберёт ошибочные позиции, потом пройдёт листы по одному в поисках пропущенного. Заметка запоминается — следующие сканы будут её учитывать. Лишнее можно удалить и вручную — крестиком на карточке.</span>
             </div>
+            {reviewMsg && <p className="text-[12px] text-emerald-700 mt-2">{reviewMsg}</p>}
           </div>
         </div>
       )}
