@@ -63,6 +63,8 @@ export default function ContractsPage() {
   const [parseText, setParseText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [parseError, setParseError] = useState<string | null>(null)
+  const [kpImporting, setKpImporting] = useState(false)
+  const [kpImportError, setKpImportError] = useState<string | null>(null)
   const [kps, setKps] = useState<KpRow[]>([])
   const [history, setHistory] = useState<HistRow[]>([])
   const [canDelete, setCanDelete] = useState(false)
@@ -83,17 +85,16 @@ export default function ContractsPage() {
     } catch { setHistory([]) }
   }
 
-  function pickKp(id: number) {
-    const kp = kps.find(k => k.id === id)
-    if (!kp) { set({ kp_id: null }); return }
-    const content = kp.content || {}
+  function applyKp(id: number, kpTotal: number | null, content: Record<string, unknown>) {
     const items = Array.isArray(content.items) ? content.items as Record<string, unknown>[] : []
     // Спецификация договора — только изделия (без монтажа/доставки), с описанием.
     const goods = items.filter(it => !SERVICE_RE.test(String(it.name ?? '')))
     const spec: Spec[] = goods.map(it => ({
-      name: String(it.name ?? ''), desc: String(it.desc ?? ''), qty: it.qty != null ? String(it.qty) : '1',
+      name: String(it.name ?? ''), desc: String(it.desc ?? ''),
+      dimensions: it.dimensions != null ? String(it.dimensions) : undefined,
+      qty: it.qty != null ? String(it.qty) : '1',
     }))
-    const total = kp.total != null ? numOr(kp.total) : numOr(content.total as string)
+    const total = kpTotal != null ? numOr(kpTotal) : numOr(content.total as string)
     // Авто-разбивка: монтаж → монтаж, доставка → доставка, подъём → подъём, остальное → изготовление.
     const sumOf = (re: RegExp) => items.filter(it => re.test(String(it.name ?? '')))
       .reduce((s, it) => s + numOr((it.sum ?? it.price) as number), 0)
@@ -109,6 +110,41 @@ export default function ContractsPage() {
       prepayment: f.prepayment || String(total),
     }))
     setSavedId(null)
+  }
+
+  function pickKp(id: number) {
+    const kp = kps.find(k => k.id === id)
+    if (!kp) { set({ kp_id: null }); return }
+    applyKp(id, kp.total, kp.content || {})
+  }
+
+  // Старое КП (PDF): AI-разбор состава → сохранение в историю КП → подстановка в договор.
+  async function importKpPdf(file: File) {
+    setKpImporting(true); setKpImportError(null)
+    try {
+      const base64 = await new Promise<string>((res, rej) => {
+        const reader = new FileReader()
+        reader.onload = () => res(String(reader.result).split(',')[1] || '')
+        reader.onerror = rej
+        reader.readAsDataURL(file)
+      })
+      const r = await fetch('/api/ai/parse-kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ pdf: base64 }) }).then(x => x.json())
+      const p = r.kp as { number?: string; client_name?: string; items?: unknown[]; total?: number } | undefined
+      if (!p || !Array.isArray(p.items) || !p.items.length) { setKpImportError(r.error || 'не распознано'); return }
+      const content: Record<string, unknown> = {
+        number: p.number || undefined,
+        client_name: p.client_name ?? null,
+        items: p.items,
+        total: p.total ?? 0,
+        imported_from: 'pdf',
+      }
+      const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok) { setKpImportError(d.error || `ошибка ${res.status}`); return }
+      const row: KpRow = { id: d.id, number: d.number, total: p.total ?? null, content }
+      setKps(prev => [row, ...prev])
+      applyKp(row.id, row.total, content)
+    } catch { setKpImportError('ошибка чтения файла') } finally { setKpImporting(false) }
   }
 
   function pickKind(kind: ProductKind) {
@@ -213,7 +249,7 @@ export default function ContractsPage() {
         <div className="flex items-center justify-between mb-5">
           <div>
             <h1 className="text-[18px] font-semibold text-[#111110]">Договор и счёт</h1>
-            <p className="text-[12px] text-[#9a9a95] mt-0.5">Выберите КП, заполните заказчика — договор и счёт соберутся автоматически</p>
+            <p className="text-[12px] text-[#9a9a95] mt-0.5">Выберите КП из истории или прикрепите старое КП (PDF), заполните заказчика — договор и счёт соберутся автоматически</p>
           </div>
           <div className="flex gap-1 bg-white border border-[#e4e4e0] rounded-lg p-1">
             <button onClick={newDoc} className={`px-3 py-1.5 text-[13px] font-medium rounded-md ${tab === 'new' ? 'bg-[#111110] text-white' : 'text-[#6b6b66]'}`}>Новый</button>
@@ -230,6 +266,15 @@ export default function ContractsPage() {
                   <option value="">— выберите КП —</option>
                   {kps.map(k => <option key={k.id} value={k.id}>№ {k.number} · {RUB(k.total ?? 0)} ₽</option>)}
                 </select>
+              </div>
+              <div className="col-span-3 flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg p-2.5 bg-[#fafaf9]">
+                <span className="text-[12px] text-[#6b6b66]">Нет в списке? Прикрепите старое КП (PDF) — распознаю состав, сохраню его в историю КП и подставлю в договор:</span>
+                <label className={`px-3 py-1.5 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg hover:bg-[#f5f5f3] ${kpImporting ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                  {kpImporting ? '🧠 Распознаю…' : '📎 Старое КП (PDF)'}
+                  <input type="file" accept="application/pdf" className="hidden" disabled={kpImporting}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) importKpPdf(f); e.target.value = '' }} />
+                </label>
+                {kpImportError && <span className="text-[12px] text-red-600">{kpImportError}</span>}
               </div>
               <div><label className={L}>Номер договора</label><input className={I} value={form.number} onChange={e => set({ number: e.target.value })} placeholder="авто" /></div>
               <div><label className={L}>Дата</label><input className={I} value={form.date} onChange={e => set({ date: e.target.value })} /></div>
