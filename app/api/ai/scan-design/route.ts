@@ -88,6 +88,8 @@ export async function POST(req: Request) {
           usage: msg.usage,
           content_types: msg.content.map(c => c.type),
           raw_input_keys: tool && tool.type === 'tool_use' ? Object.keys(tool.input as object) : null,
+          raw_input: tool && tool.type === 'tool_use' ? JSON.stringify(tool.input).slice(0, 1500) : null,
+          raw_content: JSON.stringify(msg.content).slice(0, 1500),
         },
       })
     }
