@@ -67,7 +67,8 @@ export default function DesignScanPage() {
         canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height)
         const ctx = canvas.getContext('2d')!
         console.log(`[design-scan] render ${n} → ${canvas.width}×${canvas.height}`)
-        const task = page.render({ canvasContext: ctx, viewport } as Parameters<typeof page.render>[0])
+        // intent: 'print' — рендер на таймерах, не на rAF: не виснет в перекрытых/фоновых вкладках
+        const task = page.render({ canvasContext: ctx, viewport, intent: 'print' } as unknown as Parameters<typeof page.render>[0])
         const timeout = new Promise<never>((_, rej) => setTimeout(() => {
           try { task.cancel() } catch { /* уже завершилась */ }
           rej(new Error(`Рендер страницы ${n} завис (60 сек)`))
