@@ -530,7 +530,8 @@ export default function B2BCalculatorPage() {
   })()
 
   // Чертёж лофта (PDF/фото) → AI снимает проём, тип конструкции, створки, стёкла.
-  async function parseLoftDrawing(file: File) {
+  // Универсальный разбор чертежа: заполняет поля активного типа позиции.
+  async function parseItemDrawing(file: File) {
     setFlParsing(true); setFlParseNote(null)
     try {
       const readB64 = (f: Blob) => new Promise<string>((res, rej) => {
@@ -539,21 +540,36 @@ export default function B2BCalculatorPage() {
         r.onerror = rej
         r.readAsDataURL(f)
       })
-      const payload = file.type === 'application/pdf'
+      const base = file.type === 'application/pdf'
         ? { pdf: await readB64(file) }
         : { image: await readB64(file), image_type: file.type }
-      const r = await fetch('/api/ai/parse-loft-drawing', {
+      const r = await fetch('/api/ai/parse-item-drawing', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...base, kind: fKind }),
       }).then(x => x.json())
       const d = r.drawing
       if (!d) { setFlParseNote('не распознал — введи вручную'); return }
-      if (d.width_mm) setFlW(String(d.width_mm))
-      if (d.height_mm) setFlH(String(d.height_mm))
-      if (d.construction === 'fixed' || d.construction === 'swing' || d.construction === 'sliding') setFlConstruction(d.construction)
-      if (d.doors != null) setFlDoors(String(d.doors))
-      if (d.fixed_parts != null) setFlFixed(String(d.fixed_parts))
-      if (d.rows != null) setFlRows(String(d.rows))
+      if (fKind === 'floft') {
+        if (d.width_mm) setFlW(String(d.width_mm))
+        if (d.height_mm) setFlH(String(d.height_mm))
+        if (d.construction === 'fixed' || d.construction === 'swing' || d.construction === 'sliding') setFlConstruction(d.construction)
+        if (d.doors != null) setFlDoors(String(d.doors))
+        if (d.fixed_parts != null) setFlFixed(String(d.fixed_parts))
+        if (d.rows != null) setFlRows(String(d.rows))
+        if (d.tempering != null) setFlTempering(!!d.tempering)
+      } else if (fKind === 'fmirror') {
+        if (d.width_mm) setFmW(String(d.width_mm))
+        if (d.height_mm) setFmH(String(d.height_mm))
+        if (d.quantity) setFmQty(String(d.quantity))
+      } else {
+        // material: стекло/зеркало
+        if (d.width_mm) setFWidth(String(d.width_mm))
+        if (d.height_mm) setFHeight(String(d.height_mm))
+        if (d.quantity) setFQty(String(d.quantity))
+        if (d.thickness_mm && availableThickness.includes(d.thickness_mm)) handleThicknessChange(d.thickness_mm)
+        if (d.tempering != null) setFTempering(!!d.tempering)
+        if (d.holes != null) setFHoles(!!d.holes)
+      }
       setFlParseNote(`✓ снял: ${d.width_mm}×${d.height_mm}${d.note ? ` · ${String(d.note).slice(0, 80)}` : ''}`)
     } catch { setFlParseNote('ошибка чтения файла') } finally { setFlParsing(false) }
   }
@@ -1144,6 +1160,17 @@ export default function B2BCalculatorPage() {
               )}
             </div>
 
+            {/* Чертёж — универсально для всех типов, сразу под выбором типа */}
+            <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg px-2.5 py-2 bg-[#fafaf9]">
+              <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи — сниму размеры{fKind === 'floft' ? ', тип и створки' : ' и параметры'}:</span>
+              <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
+                {flParsing ? '🧠 Читаю…' : '📐 Чертёж (PDF/фото)'}
+                <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) parseItemDrawing(f); e.target.value = '' }} />
+              </label>
+              {flParseNote && <span className="text-[11px] text-emerald-700">{flParseNote}</span>}
+            </div>
+
             {fKind !== 'material' && (
               <div className="space-y-3">
                 {factoryLoading && <p className="text-[12px] text-[#9a9a95]">Загружаю справочники производства…</p>}
@@ -1247,15 +1274,6 @@ export default function B2BCalculatorPage() {
                         <input type="number" placeholder="Шт" value={flQty} onChange={e => setFlQty(e.target.value)}
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg p-2 bg-[#fafaf9]">
-                      <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи (PDF/фото) — сниму проём, тип и створки:</span>
-                      <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
-                        {flParsing ? '🧠 Читаю…' : '📐 Чертёж'}
-                        <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
-                          onChange={e => { const f = e.target.files?.[0]; if (f) parseLoftDrawing(f); e.target.value = '' }} />
-                      </label>
-                      {flParseNote && <span className="text-[11px] text-emerald-700">{flParseNote}</span>}
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Конструкция</label>
@@ -1914,6 +1932,14 @@ export default function B2BCalculatorPage() {
                     <p className="font-mono text-[11px]">
                       расч. {fmtN(items.reduce((s, i) => s + i.totalAreaBilled, 0))} м²
                     </p>
+                    {(() => {
+                      const billed = items.reduce((s, i) => s + i.totalAreaBilled, 0)
+                      return billed > 0 ? (
+                        <p className="font-mono text-[11px] font-semibold text-[#6b6b66] pt-0.5 border-t border-[#f0f0ec] mt-0.5">
+                          {fmt(Math.round(totals.totalAfterDiscount / billed))}/м²
+                        </p>
+                      ) : null
+                    })()}
                   </div>
                 </div>
 
