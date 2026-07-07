@@ -8,7 +8,7 @@ type User = {
   id: string
   email: string
   name: string | null
-  role: 'admin' | 'manager' | 'buyer' | 'ceo' | 'commercial' | 'production' | 'seo'
+  role: 'admin' | 'manager' | 'buyer' | 'ceo' | 'cfo' | 'commercial' | 'production' | 'seo' | 'measurer'
   active: boolean
   manager_code: number | null
   password_plain: string | null
@@ -43,6 +43,8 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   commercial: { label: 'Коммерческий',  color: 'bg-indigo-50 text-indigo-700' },
   production: { label: 'Производство',  color: 'bg-orange-50 text-orange-700' },
   seo:        { label: 'SEO',           color: 'bg-rose-50 text-rose-700' },
+  cfo:        { label: 'Финдиректор',   color: 'bg-teal-50 text-teal-700' },
+  measurer:   { label: 'Замерщик',      color: 'bg-cyan-50 text-cyan-700' },
 }
 
 const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[] = [
@@ -253,6 +255,7 @@ export default function UsersPage() {
             <option value="seo">SEO ({users.filter(u => u.role === 'seo').length})</option>
             <option value="commercial">Коммерческий ({users.filter(u => u.role === 'commercial').length})</option>
             <option value="buyer">Закупщики ({users.filter(u => u.role === 'buyer').length})</option>
+            <option value="measurer">Замерщики ({users.filter(u => u.role === 'measurer').length})</option>
             <option value="admin">Администраторы ({users.filter(u => u.role === 'admin').length})</option>
           </select>
         </div>
@@ -365,7 +368,9 @@ export default function UsersPage() {
                             className={`text-[11px] font-medium px-2 py-1 rounded-full border-0 cursor-pointer ${rl.color}`}>
                             <option value="manager">Менеджер</option>
                             <option value="buyer">Закупщик</option>
+                            <option value="measurer">Замерщик</option>
                             <option value="ceo">CEO</option>
+                            <option value="cfo">Финдиректор</option>
                             <option value="commercial">Коммерческий</option>
                             <option value="production">Производство</option>
                             <option value="seo">SEO</option>
@@ -616,6 +621,7 @@ export default function UsersPage() {
                     className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]">
                     <option value="manager">Менеджер</option>
                     <option value="buyer">Закупщик</option>
+                    <option value="measurer">Замерщик</option>
                     <option value="admin">Администратор</option>
                   </select>
                 </div>

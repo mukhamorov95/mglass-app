@@ -10,7 +10,7 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
-import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, type FactoryData } from '@/lib/b2bFactoryProducts'
+import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, type FactoryData } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -184,6 +184,10 @@ export default function B2BCalculatorPage() {
   const [fmQty, setFmQty]         = useState('1')
   const [fmLighting, setFmLighting] = useState(true)
   const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
+  const [fmLedId, setFmLedId]     = useState<number | null>(null)
+  const [fmFrameId, setFmFrameId] = useState<number | null>(null)
+  const [fmCurved, setFmCurved]   = useState(false)
+  const [showCostLines, setShowCostLines] = useState(false)
   const [flW, setFlW]             = useState('')
   const [flH, setFlH]             = useState('')
   const [flQty, setFlQty]         = useState('1')
@@ -501,6 +505,7 @@ export default function B2BCalculatorPage() {
       return calcFactoryMirror({
         widthMm: Number(fmW) || 0, heightMm: Number(fmH) || 0,
         mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
+        ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -1131,6 +1136,17 @@ export default function B2BCalculatorPage() {
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Форма</label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {([[false, 'Прямоугольное'], [true, 'Криволинейное']] as const).map(([v, label]) => (
+                          <button key={label} onClick={() => setFmCurved(v)}
+                            className={`h-[34px] rounded-lg text-[13px] font-medium border ${fmCurved === v ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`}>
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-2 gap-2">
                       <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer ${fmLighting ? 'border-amber-300 bg-amber-50' : 'border-[#e4e4e0]'}`}>
                         <input type="checkbox" checked={fmLighting} onChange={e => setFmLighting(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1143,6 +1159,32 @@ export default function B2BCalculatorPage() {
                         <option value="wave">Датчик взмаха</option>
                       </select>
                     </div>
+                    {fmLighting && (
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Лента · температура</label>
+                          <select value={fmLedId ?? ''} onChange={e => setFmLedId(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                            <option value="">Авто (стандарт)</option>
+                            {ledOptions(factoryData).map(c => (
+                              <option key={c.id} value={c.id}>
+                                {(c.short_name ?? c.name)}{c.color_temp ? ` · ${c.color_temp}K` : ''}{c.voltage ? ` · ${c.voltage}V` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Профиль (сзади)</label>
+                          <select value={fmFrameId ?? ''} onChange={e => setFmFrameId(e.target.value ? Number(e.target.value) : null)}
+                            className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                            <option value="">Авто (первый из справочника)</option>
+                            {frameOptions(factoryData).map(c => (
+                              <option key={c.id} value={c.id}>{c.short_name ?? c.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
                   </>
                 )}
                 {!factoryLoading && factoryData && fKind === 'floft' && (
@@ -1199,6 +1241,28 @@ export default function B2BCalculatorPage() {
                       <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
                     <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
+                    {isAdmin && !!factoryQuote.costLines?.length && (
+                      <div className="pt-1 border-t border-[#f0f0ec]">
+                        <button onClick={() => setShowCostLines(v => !v)}
+                          className="text-[11px] font-semibold text-[#6b6b66] hover:text-[#111110]">
+                          {showCostLines ? '▾' : '▸'} Состав себестоимости ({factoryQuote.costLines.length} строк)
+                        </button>
+                        {showCostLines && (
+                          <div className="mt-1 space-y-0.5">
+                            {factoryQuote.costLines.map((l, i) => (
+                              <div key={i} className="flex justify-between text-[11px]">
+                                <span className="text-[#6b6b66] truncate mr-2">{l.name}{l.qty > 1 ? ` × ${l.qty} ${l.unit}` : ''}</span>
+                                <span className="font-mono text-[#111110] shrink-0">{l.total.toLocaleString('ru-RU')} ₽</span>
+                              </div>
+                            ))}
+                            <div className="flex justify-between text-[11px] font-bold border-t border-[#f0f0ec] pt-0.5">
+                              <span>Итого себестоимость</span>
+                              <span className="font-mono">{factoryQuote.factoryCostPiece.toLocaleString('ru-RU')} ₽</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
                 <input type="text" maxLength={120}

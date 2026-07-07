@@ -123,12 +123,26 @@ export type FactoryQuote = {
   factoryCostPiece: number   // себестоимость производства за штуку
   prodPricePiece: number     // продажная цена производства за штуку
   marginPercent: number      // производственная маржа из конфига
+  shape?: 'rect' | 'curved'  // криволинейный рез → станция «Криволинейка»
+  costLines?: { name: string; qty: number; unit: string; total: number }[] // состав себестоимости (для владельца)
 }
+
+// Опции комплектации для UI: ленты (температура/вольтаж) и профили из справочника
+export const ledOptions = (d: FactoryData) =>
+  d.components.filter(c => c.component_type === 'led_strip')
+export const frameOptions = (d: FactoryData) =>
+  d.components.filter(c => c.component_type === 'frame')
 
 // Зеркало с подсветкой: стандартная комплектация (профиль/лента/БП/рассеиватель — первые
 // подходящие из справочника), себестоимость по COST-строке матрицы + factory overhead.
 export function calcFactoryMirror(
-  p: { widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number; hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave' },
+  p: {
+    widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number
+    hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave'
+    ledId?: number | null      // лента (температура) из справочника; null = авто
+    frameId?: number | null    // профиль; null = авто
+    curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
+  },
   d: FactoryData,
 ): FactoryQuote | null {
   if (p.widthMm <= 0 || p.heightMm <= 0 || !p.mirrorName) return null
@@ -136,9 +150,11 @@ export function calcFactoryMirror(
   if (costRow == null || costRow <= 0) return null
 
   const stub = d.retailMaterials.find(m => m.category === 'зеркало') ?? null
-  const voltage = 12 as const
-  const frame    = d.components.find(c => c.component_type === 'frame') ?? null
-  const led      = d.components.find(c => c.component_type === 'led_strip' && c.voltage === voltage) ?? null
+  const led = (p.ledId ? d.components.find(c => c.component_type === 'led_strip' && c.id === p.ledId) : null)
+    ?? d.components.find(c => c.component_type === 'led_strip' && c.voltage === 12) ?? null
+  const voltage = (led?.voltage === 24 ? 24 : 12) as 12 | 24
+  const frame = (p.frameId ? d.components.find(c => c.component_type === 'frame' && c.id === p.frameId) : null)
+    ?? d.components.find(c => c.component_type === 'frame') ?? null
   const perimeter = 2 * (p.widthMm + p.heightMm) / 1000
   const needW = (led?.power_per_meter ?? 10) * perimeter
   const psus = d.components.filter(c => c.component_type === 'power_supply' && c.voltage === voltage)
@@ -146,7 +162,7 @@ export function calcFactoryMirror(
   const diffuser = d.components.find(c => c.component_type === 'diffuser') ?? null
 
   const res = calculateMirrorUnified({
-    width: p.widthMm, height: p.heightMm, shape: 'rectangle',
+    width: p.widthMm, height: p.heightMm, shape: p.curved ? 'complex' : 'rectangle',
     mirrorMaterial: stub ? { ...stub, name: `${p.mirrorName} ${p.mirrorMm} мм` } : null,
     mirrorCostPriceCostRow: costRow,
     hasLighting: p.hasLighting, voltage,
@@ -175,8 +191,14 @@ export function calcFactoryMirror(
   })
   if (!fm) return null
 
+  const tempLabel = led?.color_temp ? `${led.color_temp}K` : ''
   const specParts = [`${p.widthMm}×${p.heightMm} мм`]
-  if (p.hasLighting) specParts.push(`подсветка: ${led?.short_name ?? led?.name ?? 'LED'} 12V, БП ${psu?.short_name ?? psu?.name ?? ''}`.trim())
+  if (p.curved) specParts.push('криволинейное')
+  if (p.hasLighting) {
+    specParts.push(`лента: ${led?.short_name ?? led?.name ?? 'LED'}${tempLabel ? ` ${tempLabel}` : ''} ${voltage}V`)
+    if (frame) specParts.push(`профиль: ${frame.short_name ?? frame.name}`)
+    specParts.push(`БП ${psu?.short_name ?? psu?.name ?? ''}`.trim())
+  }
   if (p.buttonType === 'sensor') specParts.push('сенсорная кнопка')
   if (p.buttonType === 'wave')   specParts.push('датчик взмаха')
 
@@ -188,6 +210,8 @@ export function calcFactoryMirror(
     factoryCostPiece: Math.round(res.directCost),
     prodPricePiece: Math.round(fm.basePrice),
     marginPercent: d.mirrorCfg.productionMarginPercent,
+    shape: p.curved ? 'curved' : 'rect',
+    costLines: res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: Math.round(l.total) })),
   }
 }
 
@@ -246,7 +270,7 @@ export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: 
   return {
     materialId: 0, materialName: q.label, category: 'изделие',
     thickness: 0, width: 0, height: 0, quantity: qty, wastePercent: 0,
-    hasTempering: false, hasFacet: false, facetTypeMm: null, hasHoles: false, shape: 'rect',
+    hasTempering: false, hasFacet: false, facetTypeMm: null, hasHoles: false, shape: q.shape ?? 'rect',
     services: [],
     areaPiece: q.areaPiece, totalAreaNet, totalAreaBilled: totalAreaNet,
     perimeterM: 0,
