@@ -44,7 +44,8 @@ export type LoftFactoryResult = {
 // Конструктивные константы (мм) — сверены с чертежом Л-30-05:
 // проём 1288 при двух створках → полотно 614 (суммарный зазор 60).
 const PROFILE = 40           // видимая сторона несущей трубы
-const LEAF_GAP = 30          // зазор на створку (короб/примыкания)
+const GAP_BASE = 30          // зазоры к коробке (сумма боковых)
+const GAP_PER_LEAF = 15      // зазор на створку/стык
 const DOOR_H_OFFSET = 50     // высота створки = H − (короб сверху + зазор снизу)
 const GLASS_REBATE = 15      // запуск стекла за штапик, на сторону
 const BONKA_STEP = 300       // шаг точек крепежа штапика, мм
@@ -67,7 +68,8 @@ export function calcLoftFactory(p: LoftFactoryInputs, rates: LoftRates): LoftFac
   // ── Геометрия ──────────────────────────────────────────────────────────
   // Обвязка проёма: распашная — П-образная коробка (2H + W); остальные — контур.
   const frameMm = p.construction === 'swing' ? 2 * H + W : 2 * (W + H)
-  const leafW = (W - LEAF_GAP * (leaves + 1)) / leaves
+  // Сверено с чертежом Л-30-05: проём 1288, две створки → полотно 614 (зазор 60).
+  const leafW = (W - GAP_BASE - GAP_PER_LEAF * leaves) / leaves
   const leafH = H - DOOR_H_OFFSET
   if (leafW <= PROFILE * 3 || leafH <= PROFILE * 3) return null
 
