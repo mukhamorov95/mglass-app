@@ -10,7 +10,7 @@ import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
-type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production'
+type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
 type NavGroup = { groupLabel: string }
@@ -386,6 +386,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
 
 function detectModeFromPath(pathname: string): ViewMode {
   if (pathname.startsWith('/cfo')) return 'cfo'
+  if (pathname.startsWith('/measurer-cabinet')) return 'measurer'
   if (
     pathname.startsWith('/b2b-orders') ||
     pathname.startsWith('/production-app') ||
@@ -764,6 +765,16 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       </>
     )
 
+    if (viewMode === 'measurer') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-cyan-600">Замеры</div>
+        <div className="space-y-px">
+          {navItem({ href: '/measurer-cabinet', label: 'Кабинет замерщика', icon: '📏' }, 'bg-cyan-50 text-cyan-700 font-medium')}
+          {navItem({ href: '/measure-requests', label: 'Заявки на замер',   icon: '📐' }, 'bg-cyan-50 text-cyan-700 font-medium')}
+        </div>
+      </>
+    )
+
     if (viewMode === 'production') return (
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
@@ -831,25 +842,33 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
           </Link>
 
           {isAdmin && (
-            <div className="px-3 pb-3">
-              <div className="flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px]">
-                {([
-                  { v: 'manager',    l: 'Менеджер' },
-                  { v: 'admin',      l: 'Админ'    },
+            <div className="px-3 pb-3 space-y-[4px]">
+              {/* Два ряда: сверху — владельческие режимы, снизу — операционные */}
+              {([
+                [
                   { v: 'ceo',        l: 'СЕО'      },
                   { v: 'cfo',        l: 'CFO'      },
+                  { v: 'admin',      l: 'Админ'    },
+                ],
+                [
+                  { v: 'manager',    l: 'Менеджер' },
                   { v: 'production', l: 'Произв.'  },
-                ] as { v: ViewMode; l: string }[]).map(({ v, l }) => (
-                  <button key={v} onClick={() => switchMode(v)}
-                    className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
-                      viewMode === v
-                        ? 'bg-white text-[#111110] shadow-sm'
-                        : 'text-[#9a9a95] hover:text-[#6b6b66]'
-                    }`}>
-                    {l}
-                  </button>
-                ))}
-              </div>
+                  { v: 'measurer',   l: 'Замерщик' },
+                ],
+              ] as { v: ViewMode; l: string }[][]).map((row, ri) => (
+                <div key={ri} className="flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px]">
+                  {row.map(({ v, l }) => (
+                    <button key={v} onClick={() => switchMode(v)}
+                      className={`flex-1 py-[4px] rounded-[5px] text-[10px] font-semibold transition-all ${
+                        viewMode === v
+                          ? 'bg-white text-[#111110] shadow-sm'
+                          : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                      }`}>
+                      {l}
+                    </button>
+                  ))}
+                </div>
+              ))}
             </div>
           )}
 
