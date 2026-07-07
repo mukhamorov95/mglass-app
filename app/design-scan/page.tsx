@@ -47,7 +47,11 @@ export default function DesignScanPage() {
     setFileName(file.name); setRunning(true); setFinished(false)
     setItems([]); setFailedPages([]); setError(null); abortRef.current = false
     try {
-      const pdfjs = await import('pdfjs-dist')
+      // pdf.js грузим статикой мимо бандлера — webpack/turbopack ломают его worker-мост
+      // (рендер-промис зависает). Файлы pdf.min.mjs + pdf.worker.min.mjs лежат в public/.
+      const pdfjs = (await import(
+        /* webpackIgnore: true */ /* turbopackIgnore: true */ '/pdf.min.mjs' as string
+      )) as typeof import('pdfjs-dist')
       pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
       const buf = await file.arrayBuffer()
       const doc = await pdfjs.getDocument({ data: buf }).promise
