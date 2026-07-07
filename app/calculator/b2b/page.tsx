@@ -187,6 +187,7 @@ export default function B2BCalculatorPage() {
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
   const [fmCurved, setFmCurved]   = useState(false)
+  const [fmUnderlay, setFmUnderlay] = useState('')
   const [showCostLines, setShowCostLines] = useState(false)
   const [flW, setFlW]             = useState('')
   const [flH, setFlH]             = useState('')
@@ -506,6 +507,7 @@ export default function B2BCalculatorPage() {
         widthMm: Number(fmW) || 0, heightMm: Number(fmH) || 0,
         mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
+        underlayCost: Number(fmUnderlay) || 0,
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -1174,14 +1176,22 @@ export default function B2BCalculatorPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Профиль (сзади)</label>
-                          <select value={fmFrameId ?? ''} onChange={e => setFmFrameId(e.target.value ? Number(e.target.value) : null)}
-                            className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
-                            <option value="">Авто (первый из справочника)</option>
-                            {frameOptions(factoryData).map(c => (
-                              <option key={c.id} value={c.id}>{c.short_name ?? c.name}</option>
-                            ))}
-                          </select>
+                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Каркас (сзади)</label>
+                          {fmCurved ? (
+                            <div>
+                              <input type="number" placeholder="Подложка, ₽" value={fmUnderlay} onChange={e => setFmUnderlay(e.target.value)}
+                                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                              <p className="text-[10px] text-[#9a9a95] mt-0.5">криволинейный — подложка от подрядчика (ЦНЦ), себестоимость ₽</p>
+                            </div>
+                          ) : (
+                            <select value={fmFrameId ?? ''} onChange={e => setFmFrameId(e.target.value ? Number(e.target.value) : null)}
+                              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                              <option value="">Авто (первый из справочника)</option>
+                              {frameOptions(factoryData).map(c => (
+                                <option key={c.id} value={c.id}>{c.short_name ?? c.name}</option>
+                              ))}
+                            </select>
+                          )}
                         </div>
                       </div>
                     )}

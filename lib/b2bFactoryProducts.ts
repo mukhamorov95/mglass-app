@@ -140,8 +140,9 @@ export function calcFactoryMirror(
     widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number
     hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave'
     ledId?: number | null      // лента (температура) из справочника; null = авто
-    frameId?: number | null    // профиль; null = авто
+    frameId?: number | null    // каркас (профиль сзади); null = авто; при curved не применяется
     curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
+    underlayCost?: number      // криволинейный каркас: подложка от подрядчика (ЦНЦ), ₽ себестоимость
   },
   d: FactoryData,
 ): FactoryQuote | null {
@@ -153,8 +154,12 @@ export function calcFactoryMirror(
   const led = (p.ledId ? d.components.find(c => c.component_type === 'led_strip' && c.id === p.ledId) : null)
     ?? d.components.find(c => c.component_type === 'led_strip' && c.voltage === 12) ?? null
   const voltage = (led?.voltage === 24 ? 24 : 12) as 12 | 24
-  const frame = (p.frameId ? d.components.find(c => c.component_type === 'frame' && c.id === p.frameId) : null)
-    ?? d.components.find(c => c.component_type === 'frame') ?? null
+  // Каркас: прямоугольное — алюминиевый профиль из справочника;
+  // криволинейное — деревянная/ЦНЦ подложка от подрядчика (ввод стоимости), профиль не ставим.
+  const frame = p.curved ? null
+    : (p.frameId ? d.components.find(c => c.component_type === 'frame' && c.id === p.frameId) : null)
+      ?? d.components.find(c => c.component_type === 'frame') ?? null
+  const underlay = p.curved ? Math.max(0, p.underlayCost ?? 0) : 0
   const perimeter = 2 * (p.widthMm + p.heightMm) / 1000
   const needW = (led?.power_per_meter ?? 10) * perimeter
   const psus = d.components.filter(c => c.component_type === 'power_supply' && c.voltage === voltage)
@@ -170,7 +175,8 @@ export function calcFactoryMirror(
     ledStrip:    p.hasLighting ? (led ? toLC(led) : null) : null,
     powerSupply: p.hasLighting ? (psu ? toLC(psu) : null) : null,
     diffuser:    p.hasLighting ? (diffuser ? toLC(diffuser) : null) : null,
-    buttonType: p.buttonType, hasSandblast: false, hasSubstrate: false, substratePrice: 0,
+    buttonType: p.buttonType, hasSandblast: false,
+    hasSubstrate: underlay > 0, substratePrice: underlay,
     hasFacet: false, facetTypeMm: null, facetCostPerM: 0,
     hasInstallation: false, hasDelivery: false,
     partnerPercent: 0, discount: 0,
@@ -193,10 +199,10 @@ export function calcFactoryMirror(
 
   const tempLabel = led?.color_temp ? `${led.color_temp}K` : ''
   const specParts = [`${p.widthMm}×${p.heightMm} мм`]
-  if (p.curved) specParts.push('криволинейное')
+  if (p.curved) specParts.push(`криволинейное${underlay > 0 ? ` · подложка подрядчика ${Math.round(underlay).toLocaleString('ru-RU')} ₽` : ''}`)
   if (p.hasLighting) {
     specParts.push(`лента: ${led?.short_name ?? led?.name ?? 'LED'}${tempLabel ? ` ${tempLabel}` : ''} ${voltage}V`)
-    if (frame) specParts.push(`профиль: ${frame.short_name ?? frame.name}`)
+    if (frame) specParts.push(`каркас: ${frame.short_name ?? frame.name}`)
     specParts.push(`БП ${psu?.short_name ?? psu?.name ?? ''}`.trim())
   }
   if (p.buttonType === 'sensor') specParts.push('сенсорная кнопка')
