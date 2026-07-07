@@ -48,6 +48,15 @@ export default function QuickCalcPage() {
     setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
   }, [])
 
+  // Список изделий, переданный со «Скана дизайн-проекта» — показываем справкой.
+  const [scanRef, setScanRef] = useState('')
+  useEffect(() => {
+    try {
+      const p = sessionStorage.getItem('quickcalc-prefill')
+      if (p) { setScanRef(p); sessionStorage.removeItem('quickcalc-prefill') }
+    } catch { /* ignore */ }
+  }, [])
+
   const glassCost = numOr(glass), hwCost = numOr(hw)
   const directCost = glassCost + hwCost
   const marginN = numOr(margin), taxN = numOr(tax)
@@ -148,6 +157,16 @@ export default function QuickCalcPage() {
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-4 items-start">
           <div className="space-y-4">
+            {scanRef && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <p className="text-[11px] font-bold uppercase tracking-widest text-amber-700">📐 Из скана дизайн-проекта</p>
+                  <button onClick={() => setScanRef('')} className="text-[12px] text-amber-700 hover:text-amber-900">✕ Скрыть</button>
+                </div>
+                <pre className="text-[12px] whitespace-pre-wrap font-sans text-[#6b6b66] max-h-52 overflow-y-auto">{scanRef}</pre>
+                <p className="text-[11px] text-amber-700 mt-1.5">Считай изделия по одному: надиктуй или впиши себестоимость — список останется здесь для сверки.</p>
+              </div>
+            )}
             {/* Голос */}
             <div className="bg-white border border-dashed border-[#d8d8d3] rounded-xl p-4">
               <div className="flex items-center gap-3 flex-wrap">

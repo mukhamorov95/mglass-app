@@ -70,7 +70,9 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { pages, debug } = await req.json() as { pages?: { page: number; image: string }[]; debug?: boolean }
+  const { pages, debug, hint, known } = await req.json() as {
+    pages?: { page: number; image: string }[]; debug?: boolean; hint?: string; known?: string[]
+  }
   if (!Array.isArray(pages) || !pages.length) return NextResponse.json({ error: 'no pages' }, { status: 400 })
   if (pages.length > 6) return NextResponse.json({ error: 'max 6 pages per batch' }, { status: 400 })
 
@@ -79,6 +81,12 @@ export async function POST(req: Request) {
   for (const p of pages) {
     content.push({ type: 'text', text: `Страница ${p.page}:` })
     content.push({ type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: p.image } })
+  }
+  if (Array.isArray(known) && known.length) {
+    content.push({ type: 'text', text: 'Эти изделия УЖЕ найдены при первом проходе — НЕ включай их снова, ищи только ПРОПУЩЕННЫЕ:\n' + known.slice(0, 60).map(k => `— ${String(k).slice(0, 200)}`).join('\n') })
+  }
+  if (typeof hint === 'string' && hint.trim()) {
+    content.push({ type: 'text', text: 'Замечания менеджера — учти обязательно: ' + hint.trim().slice(0, 2000) })
   }
   content.push({ type: 'text', text: 'Найди все изделия из стекла и зеркал на этих страницах.' })
 

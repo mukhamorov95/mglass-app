@@ -6,6 +6,13 @@ import { useRef, useState } from 'react'
 // /api/ai/scan-design → список изделий из стекла/зеркал со страницей, размерами
 // и скриншотом-вырезкой изделия по bbox от модели.
 
+type SpeechRec = {
+  lang: string; continuous: boolean; interimResults: boolean
+  onresult: ((e: { results: { length: number; [i: number]: { isFinal: boolean; 0: { transcript: string } } } }) => void) | null
+  onend: (() => void) | null; onerror: (() => void) | null
+  start: () => void; stop: () => void
+}
+
 type Bbox = { x: number; y: number; w: number; h: number }
 type FoundItem = {
   page: number
@@ -34,6 +41,10 @@ const CROP_SCALE = 2.2   // рендер страницы с изделием д
 
 export default function DesignScanPage() {
   const abortRef = useRef(false)
+  const fileRef = useRef<File | null>(null)
+  const recRef = useRef<SpeechRec | null>(null)
+  const [notes, setNotes] = useState('')
+  const [noteRec, setNoteRec] = useState(false)
   const [fileName, setFileName] = useState('')
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
@@ -43,9 +54,19 @@ export default function DesignScanPage() {
   const [finished, setFinished] = useState(false)
   const [viewer, setViewer] = useState<string | null>(null)
 
-  async function scan(file: File) {
+  function scan(file: File) { fileRef.current = file; runScan(file, false) }
+
+  // Повторный проход: по одному листу (внимательнее), с заметками менеджера и
+  // списком уже найденного — модель ищет только пропущенное.
+  function rescan() { if (fileRef.current) runScan(fileRef.current, true) }
+
+  async function runScan(file: File, isRescan: boolean) {
+    const known = isRescan ? items.map(it => `${it.title} (стр. ${it.page}${it.dimensions ? `, ${it.dimensions}` : ''})`) : []
+    const hint = isRescan ? notes.trim() : ''
+    const step = isRescan ? 1 : BATCH
     setFileName(file.name); setRunning(true); setFinished(false)
-    setItems([]); setFailedPages([]); setError(null); abortRef.current = false
+    if (!isRescan) setItems([])
+    setFailedPages([]); setError(null); abortRef.current = false
     try {
       // pdf.js грузим статикой мимо бандлера — webpack/turbopack ломают его worker-мост
       // (рендер-промис зависает). Файлы pdf.min.mjs + pdf.worker.min.mjs лежат в public/.
@@ -78,8 +99,8 @@ export default function DesignScanPage() {
         return { canvas }
       }
 
-      for (let start = 1; start <= total && !abortRef.current; start += BATCH) {
-        const nums = Array.from({ length: Math.min(BATCH, total - start + 1) }, (_, i) => start + i)
+      for (let start = 1; start <= total && !abortRef.current; start += step) {
+        const nums = Array.from({ length: Math.min(step, total - start + 1) }, (_, i) => start + i)
         const rendered: { page: number; image: string }[] = []
         for (const n of nums) {
           const { canvas } = await renderPage(n, SCAN_WIDTH)
@@ -91,7 +112,7 @@ export default function DesignScanPage() {
           try {
             const r = await fetch('/api/ai/scan-design', {
               method: 'POST', headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ pages: rendered }),
+              body: JSON.stringify({ pages: rendered, ...(hint ? { hint } : {}), ...(known.length ? { known } : {}) }),
             })
             const d = await r.json()
             if (r.ok && Array.isArray(d.items)) { batchItems = d.items as FoundItem[]; ok = true }
@@ -137,7 +158,24 @@ export default function DesignScanPage() {
     } finally { setRunning(false) }
   }
 
-  function copyList() {
+  function toggleNoteRec() {
+    if (noteRec) { recRef.current?.stop(); return }
+    const W = window as unknown as { webkitSpeechRecognition?: new () => SpeechRec; SpeechRecognition?: new () => SpeechRec }
+    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition
+    if (!Ctor) return
+    const rec = new Ctor()
+    rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = false
+    rec.onresult = e => {
+      let t = ''
+      for (let i = 0; i < e.results.length; i++) if (e.results[i].isFinal) t += e.results[i][0].transcript + ' '
+      if (t.trim()) setNotes(prev => (prev ? prev + ' ' : '') + t.trim())
+    }
+    rec.onend = () => setNoteRec(false)
+    rec.onerror = () => setNoteRec(false)
+    recRef.current = rec; rec.start(); setNoteRec(true)
+  }
+
+  function buildListText(): string {
     const lines = items.map((it, i) => {
       const parts = [
         `${i + 1}. ${it.title}${it.confidence === 'maybe' ? ' (проверить)' : ''}`,
@@ -148,7 +186,15 @@ export default function DesignScanPage() {
       ]
       return parts.filter(Boolean).join('\n')
     })
-    navigator.clipboard.writeText(`Изделия из стекла и зеркал — ${fileName}\n\n${lines.join('\n\n')}`)
+    const base = `Изделия из стекла и зеркал — ${fileName}\n\n${lines.join('\n\n')}`
+    return notes.trim() ? `${base}\n\nЗаметки менеджера:\n${notes.trim()}` : base
+  }
+
+  function copyList() { navigator.clipboard.writeText(buildListText()) }
+
+  function toQuickCalc() {
+    try { sessionStorage.setItem('quickcalc-prefill', buildListText()) } catch { /* ignore */ }
+    window.location.href = '/calculator/quick'
   }
 
   const pct = progress.total ? Math.round(progress.done / progress.total * 100) : 0
@@ -193,10 +239,14 @@ export default function DesignScanPage() {
 
         {items.length > 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4">
-            <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
               <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Изделия ({items.length})</p>
-              <button onClick={copyList}
-                className="text-[12px] font-semibold border border-[#e4e4e0] rounded-lg px-3 py-1.5 hover:bg-[#f5f5f3]">📋 Скопировать список</button>
+              <div className="flex items-center gap-2">
+                <button onClick={copyList}
+                  className="text-[12px] font-semibold border border-[#e4e4e0] rounded-lg px-3 py-1.5 hover:bg-[#f5f5f3]">📋 Скопировать список</button>
+                <button onClick={toQuickCalc}
+                  className="text-[12px] font-semibold bg-[#E1442E] text-white rounded-lg px-3 py-1.5 hover:bg-[#c93a26]">⚡ В быстрый расчёт</button>
+              </div>
             </div>
             <div className="space-y-3">
               {items.map((it, i) => {
@@ -226,6 +276,30 @@ export default function DesignScanPage() {
           </div>
         )}
       </div>
+
+      {finished && !running && (
+        <div className="px-5 pt-4 max-w-[1100px]">
+          <div className="bg-white rounded-xl border border-dashed border-[#d8d8d3] p-4">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Нашёл не все? Заметки и повторный поиск</p>
+              <button onClick={toggleNoteRec}
+                className={`text-[12px] font-semibold px-3 py-1.5 rounded-lg ${noteRec ? 'bg-red-600 text-white animate-pulse' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                {noteRec ? '■ Стоп' : '🎤 Говорить'}
+              </button>
+            </div>
+            <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3}
+              placeholder={'Надиктуй или впиши замечания, например:\nна листе 6 в санузле есть душевая перегородка — пропущена; на кухне стеклянный фартук ~2400×600'}
+              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <div className="flex items-center gap-3 mt-2 flex-wrap">
+              <button onClick={rescan} disabled={running}
+                className="text-[12px] font-semibold bg-[#111110] text-white rounded-lg px-4 py-2 hover:bg-[#2a2a28] disabled:opacity-40">
+                🔁 Искать ещё раз{notes.trim() ? ' с учётом заметок' : ''}
+              </button>
+              <span className="text-[11px] text-[#9a9a95]">Повторный проход идёт по одному листу — медленнее, но внимательнее. Уже найденные изделия не дублируются, заметки уходят в AI и попадают в список для расчёта.</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {viewer && (
         <div onClick={() => setViewer(null)} className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-6 cursor-zoom-out">
