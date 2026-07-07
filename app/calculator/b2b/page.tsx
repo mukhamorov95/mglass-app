@@ -194,7 +194,9 @@ export default function B2BCalculatorPage() {
   const [flQty, setFlQty]         = useState('1')
   const [flSections, setFlSections] = useState('3')
   const [flDivisions, setFlDivisions] = useState('2')
-  const [flSystem, setFlSystem]   = useState<'fixed' | 'sliding' | 'swing'>('fixed')
+  const [flDoors, setFlDoors]     = useState<0 | 1 | 2>(2)
+  const [flRows, setFlRows]       = useState('3')
+  const [flTempering, setFlTempering] = useState(false)
   const [flGlassId, setFlGlassId] = useState<number | null>(null)
   const [fThickness, setFThickness]   = useState<number | null>(null)
   const [fMatId, setFMatId]           = useState<number | null>(null)
@@ -513,8 +515,9 @@ export default function B2BCalculatorPage() {
     if (fKind === 'floft') {
       return calcFactoryLoft({
         widthMm: Number(flW) || 0, heightMm: Number(flH) || 0,
+        doors: flDoors, rowsPerLeaf: Number(flRows) || 1,
         sections: Number(flSections) || 1, divisions: Number(flDivisions) || 0,
-        systemType: flSystem, glassId: flGlassId,
+        glassId: flGlassId, tempering: flTempering,
       }, factoryData)
     }
     return null
@@ -1210,26 +1213,40 @@ export default function B2BCalculatorPage() {
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                     </div>
+                    <div>
+                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Конструкция</label>
+                      <div className="flex bg-[#efefec] rounded-lg p-[3px] gap-[2px]">
+                        {([[0, 'Глухая'], [1, '1 дверь'], [2, '2 двери']] as const).map(([v, l]) => (
+                          <button key={v} onClick={() => setFlDoors(v)}
+                            className={`flex-1 text-[12px] font-medium rounded-md py-1.5 ${flDoors === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
+                        ))}
+                      </div>
+                    </div>
                     <div className="grid grid-cols-3 gap-2">
-                      <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Секции</label>
-                        <input type="number" min={1} value={flSections} onChange={e => setFlSections(e.target.value)}
-                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Деления</label>
-                        <input type="number" min={0} value={flDivisions} onChange={e => setFlDivisions(e.target.value)}
-                          className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Система</label>
-                        <select value={flSystem} onChange={e => setFlSystem(e.target.value as 'fixed' | 'sliding' | 'swing')}
-                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
-                          <option value="fixed">Глухая</option>
-                          <option value="sliding">Раздвижная</option>
-                          <option value="swing">Распашная</option>
-                        </select>
-                      </div>
+                      {flDoors > 0 ? (
+                        <div>
+                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол в створке</label>
+                          <input type="number" min={1} value={flRows} onChange={e => setFlRows(e.target.value)}
+                            className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                        </div>
+                      ) : (
+                        <>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Секции</label>
+                            <input type="number" min={1} value={flSections} onChange={e => setFlSections(e.target.value)}
+                              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Деления</label>
+                            <input type="number" min={0} value={flDivisions} onChange={e => setFlDivisions(e.target.value)}
+                              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                          </div>
+                        </>
+                      )}
+                      <label className="flex items-end gap-2 pb-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                        <input type="checkbox" checked={flTempering} onChange={e => setFlTempering(e.target.checked)} className="accent-[#111110]" />
+                        Закалка
+                      </label>
                     </div>
                     <div>
                       <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стекло</label>

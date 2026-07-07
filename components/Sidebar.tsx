@@ -250,6 +250,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { groupLabel: 'Фурнитура' },
   { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
+  { href: '/admin/loft-rates',      label: 'Лофт — ставки цеха', icon: '🏗️', indent: true },
   { groupLabel: 'Закупки' },
   { href: '/admin/procurement',       label: 'Канбан закупок', icon: '🗂️', indent: true },
   { href: '/admin/suppliers',         label: 'Поставщики',     icon: '🏭', indent: true },
@@ -345,7 +346,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
   }

@@ -9,7 +9,7 @@ import type { Material, Service, FinancialSettings } from '@/lib/types'
 import type { MirrorLightingComponent } from '@/lib/mirrorCalculator'
 import { calculateMirrorUnified } from '@/lib/pricing/calculateMirrorUnified'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
-import { calculateLoft, type LoftInputs } from '@/lib/loftCalculator'
+import { calcLoftFactory, type LoftRates } from '@/lib/loftFactoryCalculator'
 import { getMatrixPrice, getMatrixNames, getAvailableMm, type GlassMatrixRow } from '@/lib/glassMatrix'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
 
@@ -42,6 +42,7 @@ export type FactoryData = {
   loftCfg: PricingCfg
   mirrorNames: string[]
   loftGlasses: Material[]
+  loftRates: LoftRates
 }
 
 function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
@@ -57,13 +58,14 @@ function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
 
 // Ленивая загрузка розничных справочников (нужна только при выборе изделия).
 export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> {
-  const [mats, svcs, fins, comps, mx, cfgs] = await Promise.all([
+  const [mats, svcs, fins, comps, mx, cfgs, lrs] = await Promise.all([
     sb.from('materials').select('*').eq('active', true),
     sb.from('services').select('*').eq('active', true),
     sb.from('financial_settings').select('*'),
     sb.from('mirror_lighting_components').select('*').eq('active', true),
     sb.from('glass_price_matrix').select('*'),
     sb.from('pricing_model_config_v2').select('*').in('product_category', ['mirror', 'loft']),
+    sb.from('loft_rates').select('key, value'),
   ])
   let retailMaterials = (mats.data ?? []) as Material[]
   const finRows = (fins.data ?? []) as FinancialSettings[]
@@ -103,6 +105,7 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     loftCfg:   cfgFor('loft'),
     mirrorNames: getMatrixNames(matrix, 'cost', 'mirror'),
     loftGlasses: retailMaterials.filter(m => m.category === 'стекло'),
+    loftRates: Object.fromEntries(((lrs.data ?? []) as { key: string; value: number }[]).map(r => [r.key, Number(r.value)])),
   }
 }
 
@@ -221,26 +224,24 @@ export function calcFactoryMirror(
   }
 }
 
-// Лофт-перегородка: себестоимость из loftCalculator (металл, стекло, работа, сборка),
-// продажная цена производства по production-марже конфига (категория loft).
+// Лофт: честная модель по конструктиву цеха (loftFactoryCalculator, ставки из
+// loft_rates), продажная цена производства по production-марже конфига (loft).
 export function calcFactoryLoft(
-  p: { widthMm: number; heightMm: number; sections: number; divisions: number; systemType: LoftInputs['systemType']; glassId: number | null },
+  p: { widthMm: number; heightMm: number; doors: 0 | 1 | 2; rowsPerLeaf: number; sections: number; divisions: number; glassId: number | null; tempering: boolean },
   d: FactoryData,
 ): FactoryQuote | null {
-  if (p.widthMm <= 0 || p.heightMm <= 0 || !d.finSettings) return null
+  if (p.widthMm <= 0 || p.heightMm <= 0) return null
   const glass = d.loftGlasses.find(m => m.id === p.glassId) ?? d.loftGlasses[0] ?? null
   if (!glass) return null
+  const temperSvc = d.retailServices.find(s => s.name.toLowerCase().includes('закалка'))
 
-  const res = calculateLoft({
-    width: p.widthMm, height: p.heightMm,
-    sections: Math.max(1, p.sections), divisions: Math.max(0, p.divisions),
-    systemType: p.systemType,
-    glassMaterial: glass, glassWastePct: 15,
-    withTempering: true, withMirrorFilm: false, withPainting: true,
-    hasInstallation: false, hasDelivery: false,
-    hardware: [], hardwareQty: {},
-    partnerPercent: 0, discount: 0, margin: d.loftCfg.productionMarginPercent,
-  }, d.retailMaterials, d.retailServices, d.finSettings)
+  const res = calcLoftFactory({
+    widthMm: p.widthMm, heightMm: p.heightMm,
+    doors: p.doors, rowsPerLeaf: p.rowsPerLeaf,
+    sections: p.sections, divisions: p.divisions,
+    glassCostPerM2: glass.cost_price, glassName: glass.name,
+    tempering: p.tempering, temperingCostPerM2: temperSvc?.cost_price ?? 0,
+  }, d.loftRates)
   if (!res) return null
 
   const fm = calcFinancialModel({
@@ -250,15 +251,16 @@ export function calcFactoryLoft(
   })
   if (!fm) return null
 
-  const sysLabel = p.systemType === 'sliding' ? 'раздвижная' : p.systemType === 'swing' ? 'распашная' : 'глухая'
+  const kind = p.doors > 0 ? 'дверь' : 'перегородка'
   return {
-    label: `Лофт-перегородка ${p.widthMm}×${p.heightMm} мм`,
-    spec: `${sysLabel} · ${p.sections} секц. × ${p.divisions} делен. · ${glass.name} · закалка · покраска`,
-    areaPiece: res.area,
-    weightPerPiece: Math.round((res.glassAreaNet * 4 * 2.5 + res.metalLength * 1.4) * 10) / 10,
-    factoryCostPiece: Math.round(res.totalCost),
+    label: `Лофт-${kind} ${p.widthMm}×${p.heightMm} мм`,
+    spec: res.spec,
+    areaPiece: res.areaM2,
+    weightPerPiece: res.weightKg,
+    factoryCostPiece: res.totalCost,
     prodPricePiece: Math.round(fm.basePrice),
     marginPercent: d.loftCfg.productionMarginPercent,
+    costLines: res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: l.total })),
   }
 }
 
