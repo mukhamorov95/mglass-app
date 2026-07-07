@@ -35,6 +35,12 @@ export default function QuickCalcPage() {
   const [lift, setLift] = useState('')
   const [cart, setCart] = useState<CartItem[]>([])
 
+  // Бонус дизайнера (партнёрка) и скидки — на итог по всем изделиям.
+  const [designer, setDesigner] = useState<0 | 10 | 15>(0)
+  const [measureDiscount, setMeasureDiscount] = useState('')
+  const [extraMode, setExtraMode] = useState<'pct' | 'sum'>('pct')
+  const [extraVal, setExtraVal] = useState('')
+
   const [recording, setRecording] = useState(false)
   const [transcript, setTranscript] = useState('')
   const [interim, setInterim] = useState('')
@@ -68,6 +74,18 @@ export default function QuickCalcPage() {
   const denom = 1 - marginN / 100 - taxN / 100
   const curHasData = !!(title.trim() || directCost > 0 || total > 0)
   const grand = cart.reduce((s, c) => s + c.total, 0) + (curHasData ? total : 0)
+
+  // Дизайнеру закладываем его % + 5% нам: выбрали 10% → накидываем 15% (10% дизайнеру,
+  // 5% компании); 15% → 20%. Итог растёт на эту надбавку.
+  const designerMarkupPct = designer > 0 ? designer + 5 : 0
+  const designerMarkup = Math.round(grand * designerMarkupPct / 100)
+  const grandWithDesigner = grand + designerMarkup
+  const measureDisc = Math.min(grandWithDesigner, Math.max(0, numOr(measureDiscount)))
+  const afterMeasure = grandWithDesigner - measureDisc
+  const extraDisc = extraMode === 'pct'
+    ? Math.round(afterMeasure * Math.max(0, numOr(extraVal)) / 100)
+    : Math.min(afterMeasure, Math.max(0, numOr(extraVal)))
+  const finalGrand = Math.max(0, afterMeasure - extraDisc)
 
   // ── voice ──────────────────────────────────────────────
   function startRec() {
@@ -127,16 +145,19 @@ export default function QuickCalcPage() {
     if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total })
     if (!list.length) return
     const multi = list.length > 1
+    // Надбавку дизайнера закладываем в цены изделий (клиент видит уже с ней).
+    const k = 1 + designerMarkupPct / 100
     const items: { name: string; qty?: number; price?: number; sum: number }[] = []
     for (const it of list) {
       const suf = multi ? ` — ${it.title}` : ''
-      items.push({ name: it.title, qty: 1, price: Math.round(it.productPrice), sum: Math.round(it.productPrice) })
-      if (it.installTotal > 0) items.push({ name: `Монтаж${suf}`, qty: it.sections || 1, price: Math.round(it.perSection), sum: Math.round(it.installTotal) })
-      if (it.delivery > 0) items.push({ name: `Доставка${suf}`, qty: 1, sum: Math.round(it.delivery) })
-      if (it.lift > 0) items.push({ name: `Подъём${suf}`, qty: 1, sum: Math.round(it.lift) })
+      const pp = Math.round(it.productPrice * k)
+      items.push({ name: it.title, qty: 1, price: pp, sum: pp })
+      if (it.installTotal > 0) items.push({ name: `Монтаж${suf}`, qty: it.sections || 1, price: Math.round(it.perSection * k), sum: Math.round(it.installTotal * k) })
+      if (it.delivery > 0) items.push({ name: `Доставка${suf}`, qty: 1, sum: Math.round(it.delivery * k) })
+      if (it.lift > 0) items.push({ name: `Подъём${suf}`, qty: 1, sum: Math.round(it.lift * k) })
     }
-    const g = Math.round(list.reduce((s, it) => s + it.total, 0))
-    const content = { title: (list.length === 1 ? list[0].title : 'Коммерческое предложение').toUpperCase(), items, subtotal: g, total: g }
+    const subtotal = grandWithDesigner
+    const content = { title: (list.length === 1 ? list[0].title : 'Коммерческое предложение').toUpperCase(), items, subtotal, total: finalGrand }
     try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
     router.push('/kp')
   }
@@ -247,7 +268,46 @@ export default function QuickCalcPage() {
             {(cart.length > 0 || curHasData) && (
               <>
                 <div className="border-t-2 border-[#111110] mt-3 mb-1" />
-                <Row label={`Итого клиенту${cart.length ? ` (${cart.length + (curHasData ? 1 : 0)} изд.)` : ''}`} value={`${RUB(grand)} ₽`} bold accent />
+                <Row label={`Сумма${cart.length ? ` (${cart.length + (curHasData ? 1 : 0)} изд.)` : ''}`} value={`${RUB(grand)} ₽`} bold />
+
+                {/* Бонус дизайнера (партнёрка) */}
+                <div className="mt-3 pt-3 border-t border-[#e4e4e0]">
+                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Бонус дизайнера</label>
+                  <div className="flex bg-[#efefec] rounded-lg p-[3px] gap-[2px]">
+                    {([[0, 'Без дизайнера'], [10, 'Дизайнер 10%'], [15, 'Дизайнер 15%']] as const).map(([v, l]) => (
+                      <button key={v} onClick={() => setDesigner(v)}
+                        className={`flex-1 text-[12px] font-medium rounded-md py-1.5 ${designer === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
+                    ))}
+                  </div>
+                  {designer > 0 && (
+                    <Row label={`Надбавка +${designerMarkupPct}% (дизайнеру ${designer}%, нам 5%)`} value={`+${RUB(designerMarkup)} ₽`} />
+                  )}
+                </div>
+
+                {/* Скидки */}
+                <div className="mt-3 pt-3 border-t border-[#e4e4e0] space-y-2">
+                  <div className="flex items-center gap-2">
+                    <label className="text-[12px] text-[#6b6b66] flex-1">Скидка замера, ₽</label>
+                    <input value={measureDiscount} onChange={e => setMeasureDiscount(e.target.value)} placeholder="0"
+                      className="w-28 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[13px] font-mono text-right outline-none focus:border-[#111110]" />
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <label className="text-[12px] text-[#6b6b66] flex-1">Доп. скидка</label>
+                    <div className="flex bg-[#efefec] rounded-lg p-[2px] gap-[2px]">
+                      {([['pct', '%'], ['sum', '₽']] as const).map(([v, l]) => (
+                        <button key={v} onClick={() => setExtraMode(v)}
+                          className={`text-[12px] font-medium rounded-md px-2.5 py-1 ${extraMode === v ? 'bg-white shadow-sm text-[#111110]' : 'text-[#9a9a95]'}`}>{l}</button>
+                      ))}
+                    </div>
+                    <input value={extraVal} onChange={e => setExtraVal(e.target.value)} placeholder="0"
+                      className="w-24 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[13px] font-mono text-right outline-none focus:border-[#111110]" />
+                  </div>
+                  {measureDisc > 0 && <Row label="Скидка замера" value={`−${RUB(measureDisc)} ₽`} />}
+                  {extraDisc > 0 && <Row label={`Доп. скидка${extraMode === 'pct' ? ` (${numOr(extraVal)}%)` : ''}`} value={`−${RUB(extraDisc)} ₽`} />}
+                </div>
+
+                <div className="border-t-2 border-[#111110] mt-3 mb-1" />
+                <Row label={`К оплате${cart.length ? ` (${cart.length + (curHasData ? 1 : 0)} изд.)` : ''}`} value={`${RUB(finalGrand)} ₽`} bold accent />
               </>
             )}
 
