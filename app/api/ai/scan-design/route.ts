@@ -85,7 +85,8 @@ export async function POST(req: Request) {
       await sb.from('design_scan_lessons').insert({ lesson: hint.trim().slice(0, 1000) })
     }
     const { data: lessons } = await sb.from('design_scan_lessons')
-      .select('lesson').order('created_at', { ascending: false }).limit(30)
+      .select('lesson').eq('digested', false)
+      .order('created_at', { ascending: false }).limit(30)
     if (lessons?.length) {
       lessonsBlock = '\nУРОКИ ИЗ ПРОШЛЫХ ПРОЕКТОВ (замечания менеджеров — учитывай):\n' +
         [...new Set(lessons.map(l => l.lesson))].map(l => `— ${l}`).join('\n')
