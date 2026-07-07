@@ -36,6 +36,11 @@ const KIND_META: Record<FoundItem['kind'], { label: string; cls: string }> = {
 }
 
 const BATCH = 2          // страниц на запрос (на больших пачках модель теряет изделия)
+
+// Ключ дедупликации: модель на повторном проходе может вернуть уже найденное.
+function itemKey(it: FoundItem): string {
+  return `${it.kind}|${it.page}|${(it.title || '').toLowerCase().replace(/[^а-яёa-z0-9]/gi, '')}`
+}
 const SCAN_WIDTH = 1500  // ширина JPEG для модели
 const CROP_SCALE = 2.2   // рендер страницы с изделием для вырезки
 
@@ -148,7 +153,16 @@ export default function DesignScanPage() {
               }
             } catch { /* без вырезки */ }
           }
-          setItems(prev => [...prev, ...batchItems])
+          setItems(prev => {
+            const seen = new Set(prev.map(itemKey))
+            const fresh = batchItems.filter(it => {
+              const k = itemKey(it)
+              if (seen.has(k)) return false
+              seen.add(k)
+              return true
+            })
+            return [...prev, ...fresh]
+          })
         }
         setProgress({ done: Math.min(start + nums.length - 1, total), total })
       }
