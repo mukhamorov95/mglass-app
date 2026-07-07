@@ -164,6 +164,17 @@ export default function InvoicePage() {
     } finally { setSaving(false) }
   }
 
+  function applyCustomer(c: Record<string, string | undefined>) {
+    setReq(prev => ({
+      ...prev,
+      full_name: c.name || c.fio || prev.full_name,
+      inn: c.inn || prev.inn, kpp: c.kpp || prev.kpp, ogrn: c.ogrn || prev.ogrn,
+      legal_address: c.legal_address || c.address || prev.legal_address,
+      bank_account: c.account || prev.bank_account, bank_name: c.bank || prev.bank_name,
+      bik: c.bik || prev.bik, corr_account: c.corr_account || prev.corr_account,
+    }))
+  }
+
   async function aiParse() {
     if (!parseText.trim()) return
     setParsing(true)
@@ -172,34 +183,83 @@ export default function InvoicePage() {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: parseText }),
       }).then(x => x.json())
-      const c = r.customer
-      if (c) {
-        setReq(prev => ({
-          ...prev,
-          full_name: c.name || c.fio || prev.full_name,
-          inn: c.inn || prev.inn, kpp: c.kpp || prev.kpp, ogrn: c.ogrn || prev.ogrn,
-          legal_address: c.legal_address || c.address || prev.legal_address,
-          bank_account: c.account || prev.bank_account, bank_name: c.bank || prev.bank_name,
-          bik: c.bik || prev.bik, corr_account: c.corr_account || prev.corr_account,
-        }))
+      if (r.customer) applyCustomer(r.customer)
+    } finally { setParsing(false) }
+  }
+
+  // Карточка предприятия файлом (PDF/фото): разбор → поля → автосохранение к клиенту,
+  // дальше все счета по этому клиенту заполняются сами.
+  async function parseCardFile(file: File) {
+    setParsing(true)
+    try {
+      const readB64 = (f: Blob) => new Promise<string>((res, rej) => {
+        const rd = new FileReader()
+        rd.onload = () => res(String(rd.result).split(',')[1] || '')
+        rd.onerror = rej
+        rd.readAsDataURL(f)
+      })
+      let payload: Record<string, string>
+      if (file.type === 'application/pdf') payload = { pdf: await readB64(file) }
+      else {
+        const url = URL.createObjectURL(file)
+        try {
+          const img = await new Promise<HTMLImageElement>((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = url })
+          const MAX = 2000
+          const scale = Math.min(1, MAX / Math.max(img.width, img.height))
+          if (scale >= 1 && file.size < 2_500_000) payload = { image: await readB64(file), image_type: file.type }
+          else {
+            const c = document.createElement('canvas')
+            c.width = Math.round(img.width * scale); c.height = Math.round(img.height * scale)
+            c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+            payload = { image: c.toDataURL('image/jpeg', 0.85).split(',')[1] || '', image_type: 'image/jpeg' }
+          }
+        } finally { URL.revokeObjectURL(url) }
+      }
+      const r = await fetch('/api/ai/parse-customer', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      }).then(x => x.json())
+      if (r.customer) {
+        applyCustomer(r.customer)
+        // сразу привязываем к карточке клиента
+        setSaving(true)
+        const c = r.customer as Record<string, string | undefined>
+        const merged = {
+          ...req,
+          full_name: c.name || c.fio || req.full_name,
+          inn: c.inn || req.inn, kpp: c.kpp || req.kpp, ogrn: c.ogrn || req.ogrn,
+          legal_address: c.legal_address || c.address || req.legal_address,
+          bank_account: c.account || req.bank_account, bank_name: c.bank || req.bank_name,
+          bik: c.bik || req.bik, corr_account: c.corr_account || req.corr_account,
+        }
+        const sr = await fetch(`/api/quotes/${id}/invoice-data`, {
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(merged),
+        })
+        setSaving(false)
+        if (sr.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
       }
     } finally { setParsing(false) }
   }
 
   async function downloadPdf() {
     if (!docRef.current) return
-    const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
-    const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-    const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-    const pw = 210, ph = 297
-    const imgH = pw * canvas.height / canvas.width
-    let pos = 0, left = imgH
-    const img = canvas.toDataURL('image/jpeg', 0.94)
-    // многостраничность, если контент длиннее A4
-    pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-    left -= ph
-    while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-    pdf.save(`Счёт-спецификация-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
+    try {
+      // html2canvas-pro: классический html2canvas не понимает oklch-цвета Tailwind v4.
+      const [h2c, jspdf] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+      const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+      const pw = 210, ph = 297
+      const imgH = pw * canvas.height / canvas.width
+      let pos = 0, left = imgH
+      const img = canvas.toDataURL('image/jpeg', 0.94)
+      // многостраничность, если контент длиннее A4
+      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+      left -= ph
+      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
+      pdf.save(`Счёт-спецификация-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
+    } catch (e) {
+      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+    }
   }
 
   if (loading) return <div className="flex items-center justify-center min-h-screen text-[#6b6b66] text-sm">Загрузка…</div>
@@ -283,6 +343,11 @@ export default function InvoicePage() {
                   className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#333] hover:bg-[#f5f5f4] disabled:opacity-40 whitespace-nowrap">
                   {parsing ? '…' : '🤖 Распознать'}
                 </button>
+                <label className={`text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#333] hover:bg-[#f5f5f4] whitespace-nowrap text-center ${parsing ? 'opacity-40 cursor-default' : 'cursor-pointer'}`}>
+                  {parsing ? '…' : '📎 Карточка (PDF/фото)'}
+                  <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp,image/gif" className="hidden" disabled={parsing}
+                    onChange={e => { const f = e.target.files?.[0]; if (f) parseCardFile(f); e.target.value = '' }} />
+                </label>
                 <button onClick={save} disabled={saving}
                   className="text-[12px] px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">
                   {saving ? '…' : saved ? '✓ Сохранено' : '💾 Сохранить к клиенту'}

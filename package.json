@@ -23,6 +23,7 @@
     "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.105.1",
     "html2canvas": "^1.4.1",
+    "html2canvas-pro": "^2.2.3",
     "jspdf": "^4.2.1",
     "next": "16.2.4",
     "openai": "^6.37.0",

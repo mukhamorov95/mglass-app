@@ -75,21 +75,38 @@ export default function KPPrintPage() {
   const [order, setOrder] = useState<Order | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [payTerms, setPayTerms] = useState<'50_50' | '100'>('50_50')
   const docRef = useRef<HTMLDivElement>(null)
 
   async function downloadPdf() {
     if (!docRef.current) return
-    const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
-    const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
-    const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-    const pw = 210, ph = 297
-    const imgH = pw * canvas.height / canvas.width
-    const img = canvas.toDataURL('image/jpeg', 0.94)
-    let pos = 0, left = imgH
-    pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-    left -= ph
-    while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
-    pdf.save(`КП-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
+    try {
+      // html2canvas-pro: классический html2canvas не понимает oklch-цвета Tailwind v4.
+      const [h2c, jspdf] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+      const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+      const pw = 210, ph = 297
+      const imgH = pw * canvas.height / canvas.width
+      const img = canvas.toDataURL('image/jpeg', 0.94)
+      let pos = 0, left = imgH
+      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+      left -= ph
+      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
+      pdf.save(`КП-${order?.custom_number?.trim() || String(order?.id ?? '').padStart(5, '0')}.pdf`)
+    } catch (e) {
+      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+    }
+  }
+
+  // Условия оплаты в подписи КП: 50/50 или 100% предоплата. Хранится в notes просчёта.
+  async function savePayTerms(v: '50_50' | '100') {
+    setPayTerms(v)
+    try {
+      const n = parseNotes(order?.notes ?? null)
+      const newNotes = JSON.stringify({ ...n, kp_payment_terms: v })
+      await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
+      setOrder(o => o ? { ...o, notes: newNotes } : o)
+    } catch { /* не блокируем просмотр */ }
   }
 
   useEffect(() => {
@@ -117,6 +134,8 @@ export default function KPPrintPage() {
           notes: (raw.notes as string) || null,
           created_at: raw.created_at as string,
         })
+        const n0 = parseNotes((raw.notes as string) || null)
+        setPayTerms(n0.kp_payment_terms === '100' ? '100' : '50_50')
         setLoading(false)
       })
   }, [id])
@@ -166,6 +185,11 @@ export default function KPPrintPage() {
 
       {/* Toolbar — screen only */}
       <div id="kp-print-btn" className="fixed top-4 right-4 z-50 print:hidden flex gap-2">
+        <select value={payTerms} onChange={e => savePayTerms(e.target.value as '50_50' | '100')}
+          className="bg-white text-[#1a1a18] border border-[#e0e0da] text-sm px-3 py-2 rounded-lg shadow-lg cursor-pointer">
+          <option value="50_50">Оплата 50/50</option>
+          <option value="100">Оплата 100%</option>
+        </select>
         <button
           onClick={downloadPdf}
           className="bg-[#1a1a18] text-white text-sm px-4 py-2 rounded-lg shadow-lg hover:bg-[#2a2a26] transition-colors"
@@ -346,7 +370,7 @@ export default function KPPrintPage() {
         <div className="px-10 pb-6">
           <div className="text-[10px] text-[#9b9b96] space-y-1 border-t border-[#f0f0ec] pt-4">
             <p>Цены указаны с учётом НДС 22%. Данное предложение действительно в течение 7 дней.</p>
-            <p>Стоимость доставки и монтажа уточняется отдельно. Оплата: 50% предоплата, 50% по факту готовности.</p>
+            <p>Стоимость доставки и монтажа уточняется отдельно. {payTerms === '100' ? 'Оплата: 100% предоплата.' : 'Оплата: 50% предоплата, 50% по факту готовности.'}</p>
           </div>
         </div>
 
