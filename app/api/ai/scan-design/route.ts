@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { pages } = await req.json() as { pages?: { page: number; image: string }[] }
+  const { pages, debug } = await req.json() as { pages?: { page: number; image: string }[]; debug?: boolean }
   if (!Array.isArray(pages) || !pages.length) return NextResponse.json({ error: 'no pages' }, { status: 400 })
   if (pages.length > 6) return NextResponse.json({ error: 'max 6 pages per batch' }, { status: 400 })
 
@@ -77,9 +77,21 @@ export async function POST(req: Request) {
       messages: [{ role: 'user', content }],
     })
     const tool = msg.content.find(c => c.type === 'tool_use')
-    if (!tool || tool.type !== 'tool_use') return NextResponse.json({ items: [] })
-    const input = tool.input as { items?: unknown[] }
-    return NextResponse.json({ items: Array.isArray(input.items) ? input.items : [] })
+    const input = (tool && tool.type === 'tool_use' ? tool.input : {}) as { items?: unknown[] }
+    const items = Array.isArray(input.items) ? input.items : []
+    if (debug) {
+      return NextResponse.json({
+        items,
+        _debug: {
+          received: pages.map(p => ({ page: p.page, imageLen: p.image?.length ?? 0 })),
+          stop_reason: msg.stop_reason,
+          usage: msg.usage,
+          content_types: msg.content.map(c => c.type),
+          raw_input_keys: tool && tool.type === 'tool_use' ? Object.keys(tool.input as object) : null,
+        },
+      })
+    }
+    return NextResponse.json({ items })
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'scan_failed', detail: detail.slice(0, 200) }, { status: 502 })
