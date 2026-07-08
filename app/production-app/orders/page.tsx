@@ -142,7 +142,7 @@ export default function OrdersScreen() {
                   <div className="min-w-0">
                     <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
                       {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
-                      {o?.custom_number?.trim() || `#${oid}`}
+                      {o?.custom_number?.trim() || `00${oid}`}
                     </p>
                     <p className="text-[12px] text-[#6b6b66] truncate">
                       {o?.client_name}{fmtShort(deadline) ? ` · отгрузка ${fmtShort(deadline)}` : ''}{daysLbl ? ` · ${daysLbl}` : ''}

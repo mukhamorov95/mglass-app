@@ -72,7 +72,7 @@ export default async function ProductionTodayPage() {
                 <div key={t.id} className="bg-red-50 rounded-xl border border-red-200 px-4 py-3">
                   <div className="flex items-start justify-between gap-2 mb-1">
                     <div className="min-w-0">
-                      <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${t.order_id}`}</p>
+                      <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `00${t.order_id}`}</p>
                       <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name}</p>
                     </div>
                     <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-red-100 text-red-700 whitespace-nowrap flex-shrink-0">
@@ -109,7 +109,7 @@ export default async function ProductionTodayPage() {
                   return (
                     <div key={orderId} className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 flex items-center justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `#${orderId}`}</p>
+                        <p className="text-[14px] font-bold text-[#111110] truncate">{o?.custom_number?.trim() || `00${orderId}`}</p>
                         <p className="text-[12px] text-[#6b6b66] truncate">{o?.client_name} · {ts.length} поз.</p>
                       </div>
                       <span className={`text-[10px] font-medium px-2 py-1 rounded-full whitespace-nowrap flex-shrink-0 ${

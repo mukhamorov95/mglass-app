@@ -183,7 +183,7 @@ export default function MyQueuePage() {
                       <div className="min-w-0">
                         <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
                           {isUrgent(wn) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
-                          {orders.get(t.order_id)?.custom_number?.trim() || `#${t.order_id}`}
+                          {orders.get(t.order_id)?.custom_number?.trim() || `00${t.order_id}`}
                         </p>
                         <p className="text-[12px] text-[#6b6b66] truncate">{orders.get(t.order_id)?.client_name}{wDays ? ` · ${wDays}` : ''}</p>
                       </div>
@@ -257,7 +257,7 @@ function TaskCard({ task, order, onStart, onDone, onAndon }: {
         <Link href={`/p/o/${task.order_id}`} className="min-w-0">
           <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
             {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
-            {order?.custom_number?.trim() || `#${task.order_id}`}
+            {order?.custom_number?.trim() || `00${task.order_id}`}
           </p>
           <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
         </Link>

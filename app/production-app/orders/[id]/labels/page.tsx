@@ -74,7 +74,7 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
   if (error || !order) return <div className="min-h-screen flex items-center justify-center text-[13px] text-red-600">{error}</div>
 
-  const orderLabel = order.custom_number?.trim() || `#${order.id}`
+  const orderLabel = order.custom_number?.trim() || `00${order.id}`
   const deadline = fmtDate(order.deadline)
   const totalQty = order.items.reduce((s, i) => s + (i.quantity ?? 1), 0)
 

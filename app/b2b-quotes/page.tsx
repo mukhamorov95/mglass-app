@@ -231,7 +231,7 @@ function buildTelegramPositionLines(quote: Quote): string[] {
 }
 
 function buildTelegramWorkText(quote: Quote): string {
-  const quoteNumber = quote.custom_number?.trim() || `КП-${quote.id}`
+  const quoteNumber = quote.custom_number?.trim() || `00${quote.id}`
   const clientName  = formatTelegramClientName(quote.client_name ?? '')
   const finalPrice  = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
   const lines       = [quoteNumber, clientName, ...buildTelegramPositionLines(quote)]

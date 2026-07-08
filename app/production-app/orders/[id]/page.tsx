@@ -711,7 +711,7 @@ export default function ProductionOrderPage() {
   const pn             = parseNotes(order.notes)
   const detailStages   = pn.detail_stages ?? {}
   const launchDate     = fmtDate(pn.launched_at ?? pn.work_started_at)
-  const orderLabel     = order.custom_number?.trim() || `#${order.id}`
+  const orderLabel     = order.custom_number?.trim() || `00${order.id}`
   const totalQty       = order.items.reduce((s, i) => s + (i.quantity ?? 1), 0)
   const itemsArea      = order.items.reduce((s, i) => s + itemAreaM2(i), 0)
   const itemsWeight    = order.items.reduce((s, i) => s + itemWeightKg(i), 0)

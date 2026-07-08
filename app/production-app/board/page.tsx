@@ -190,7 +190,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                   <tr key={o.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
                     <td className="px-3 py-2 sticky left-0 bg-white">
                       <Link href={`/production-app/orders/${o.id}`} className="block min-w-[120px]">
-                        <span className="font-bold text-[#111110]">{o.custom_number?.trim() || `#${o.id}`}</span>
+                        <span className="font-bold text-[#111110]">{o.custom_number?.trim() || `00${o.id}`}</span>
                         {anyProblem && <span className="ml-1 text-red-600">⚠</span>}
                         <span className="block text-[11px] text-[#9a9a95] truncate max-w-[160px]">{o.client_name}</span>
                       </Link>

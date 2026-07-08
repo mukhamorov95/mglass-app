@@ -60,7 +60,7 @@ export default function ScanPage() {
         sb.from('production_tasks').select('id,stage_key,station,status,blocked_by_task_id,sequence_order').eq('order_id', orderId).eq('item_index', itemIndex).order('sequence_order'),
       ])
       const tasks = (taskRows ?? []) as Task[]
-      const label = `${(ord as { custom_number: string | null } | null)?.custom_number?.trim() || `#${orderId}`} · Поз.${itemIndex + 1}`
+      const label = `${(ord as { custom_number: string | null } | null)?.custom_number?.trim() || `00${orderId}`} · Поз.${itemIndex + 1}`
       if (!tasks.length) { beep(false); pushRecent(`⚠ ${label} — нет задач (заказ не запущен?)`, false); return }
 
       const open = tasks.filter(t => t.status !== 'done')
