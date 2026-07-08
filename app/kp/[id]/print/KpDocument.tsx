@@ -50,6 +50,26 @@ const DEFAULT_SECTIONS: KpSection[] = [
   { n: '✓', title: 'Фурнитура VETRO', desc: 'Цвет — золото брашированное: петли, держатели, заглушки.' },
 ]
 
+// Тип изделия в КП по составу — чтобы «ключевая характеристика» на стр.2 была
+// релевантна (для зеркала не показываем герметичность душевой).
+type KpKind = 'shower' | 'mirror' | 'loft' | 'railing' | 'glass'
+function detectKpKind(items: KpItem[]): KpKind {
+  const t = items.map(i => `${i.name} ${i.desc ?? ''}`).join(' ').toLowerCase()
+  const has = (...kw: string[]) => kw.some(k => t.includes(k))
+  if (has('душев')) return 'shower'
+  if (has('лофт', 'перегородк')) return 'loft'
+  if (has('огражд', 'лестни', 'перил', 'балкон')) return 'railing'
+  if (has('зеркал')) return 'mirror'
+  return 'glass'
+}
+const KP_KEY: Record<KpKind, { meta: string; stat: string; unit: string; caption: string; over: string; headline: string; text: string }> = {
+  shower:  { meta: 'ГЕРМЕТИЧНОСТЬ', stat: '80', unit: '%', caption: 'ЗАЩИТА ОТ БРЫЗГ', over: 'ЗАЩИТА ОТ БРЫЗГ · ГЕРМЕТИЧНОСТЬ КОНТУРА', headline: 'Душевое ограждение защищает от брызг и обеспечивает герметичность на 80%.', text: 'Точная геометрия по замеру, магнитный притвор 90° и уплотнители по всему контуру удерживают воду в зоне душа — сухой пол и чистый санузел.' },
+  mirror:  { meta: 'КАЧЕСТВО ЗЕРКАЛА', stat: '18', unit: 'мес', caption: 'ГАРАНТИЯ ПОКРЫТИЯ', over: 'РОВНОЕ ОТРАЖЕНИЕ · ВЛАГОСТОЙКОЕ СЕРЕБРО', headline: 'Зеркало с влагостойким серебряным покрытием и идеально ровным отражением.', text: 'Полированная кромка по контуру, скрытое крепление, по желанию — LED-подсветка и металлическая рама. Не мутнеет во влажном санузле, изготовление по вашим размерам.' },
+  loft:    { meta: 'ПРОЧНОСТЬ', stat: '100', unit: '%', caption: 'ЗАКАЛЁННОЕ СТЕКЛО', over: 'ЗОНИРОВАНИЕ · СТИЛЬ ЛОФТ', headline: 'Лофт-перегородка из закалённого стекла в сварном металлическом каркасе.', text: 'Прочный каркас по вашему чертежу, порошковая покраска в любой RAL, распашные или раздвижные двери. Зонирует пространство и пропускает свет.' },
+  railing: { meta: 'БЕЗОПАСНОСТЬ', stat: '100', unit: '%', caption: 'ЗАКАЛЁННОЕ СТЕКЛО', over: 'ПРОЧНОСТЬ · БЕЗОПАСНОЕ СТЕКЛО', headline: 'Стеклянное ограждение из закалённого стекла — безопасно и прозрачно.', text: 'Надёжное крепление, закалённое стекло по ГОСТ, полированная кромка. Ограждения для лестниц, балконов и террас без потери обзора.' },
+  glass:   { meta: 'КАЧЕСТВО', stat: '100', unit: '%', caption: 'СВОЁ ПРОИЗВОДСТВО', over: 'КАЧЕСТВО · ЗАКАЛЁННОЕ СТЕКЛО', headline: 'Изделия из стекла по вашим размерам на собственном производстве.', text: 'Резка, закалка и обработка кромки под ваш проект. Точная геометрия по замеру, безопасное стекло по ГОСТ.' },
+}
+
 function Head() {
   return (
     <div className="kp-head">
@@ -83,6 +103,15 @@ function Sec({ n, title, meta }: { n: string; title: string; meta?: string }) {
 export default function KpDocument({ kp }: { kp: KpContent }) {
   const items = kp.items && kp.items.length ? kp.items : []
   const sections = kp.sections && kp.sections.length ? kp.sections : DEFAULT_SECTIONS
+  const kind = detectKpKind(items)
+  const kc = KP_KEY[kind]
+  const CROSS = [
+    { k: 'shower',  t: 'Душевые кабины', d: 'Ограждения и перегородки из закалённого стекла по замеру.' },
+    { k: 'mirror',  t: 'Зеркала', d: 'С LED-подсветкой, в металлической раме — любой формы и размера.' },
+    { k: 'loft',    t: 'Лофт-перегородки', d: 'Стекло в сварном каркасе, распашные и раздвижные двери.' },
+    { k: 'railing', t: 'Стеклянные ограждения', d: 'Лестницы, балконы, террасы — прочно и прозрачно.' },
+    { k: 'extra',   t: 'Стеклянные изделия', d: 'Полки, столешницы, козырьки, фартуки, столы.' },
+  ].filter(c => c.k !== kind).slice(0, 4)
 
   return (
     <div className="kp-root">
@@ -128,16 +157,16 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         <div className="kp-fit">
         <Head />
 
-        <Sec n="02" title="КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА" meta="ГЕРМЕТИЧНОСТЬ" />
+        <Sec n="02" title="КЛЮЧЕВАЯ ХАРАКТЕРИСТИКА" meta={kc.meta} />
         <div className="kp-darkcard">
           <div className="left">
-            <div className="big">{kp.key_stat ?? '80'}<span>{kp.key_stat_unit ?? '%'}</span></div>
-            <div className="cap">{kp.key_stat_caption ?? 'ЗАЩИТА ОТ БРЫЗГ'}</div>
+            <div className="big">{kp.key_stat ?? kc.stat}<span>{kp.key_stat_unit ?? kc.unit}</span></div>
+            <div className="cap">{kp.key_stat_caption ?? kc.caption}</div>
           </div>
           <div className="right">
-            <div className="over">ЗАЩИТА ОТ БРЫЗГ · ГЕРМЕТИЧНОСТЬ КОНТУРА</div>
-            <h2>{kp.key_headline ?? 'Душевое ограждение защищает от брызг и обеспечивает герметичность на 80%.'}</h2>
-            <p>{kp.key_text ?? 'Точная геометрия по замеру, магнитный притвор 90° и уплотнители по всему контуру удерживают воду в зоне душа — сухой пол и чистый санузел.'}</p>
+            <div className="over">{kc.over}</div>
+            <h2>{kp.key_headline ?? kc.headline}</h2>
+            <p>{kp.key_text ?? kc.text}</p>
           </div>
         </div>
 
@@ -200,7 +229,17 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
         </div>
         <div className="kp-note">Схема носит ознакомительный характер. Итоговая конфигурация и расположение элементов уточняются по результатам замера на объекте.</div>
 
-        <Sec n="08" title="ОФОРМЛЕНИЕ ЗАКАЗА" meta="СЛЕДУЮЩИЙ ШАГ" />
+        <Sec n="08" title="ЧТО ЕЩЁ МОЖНО ЗАКАЗАТЬ" meta="НАПРАВЛЕНИЯ" />
+        <div className="kp-cards4">
+          {CROSS.map((c, i) => (
+            <div className="card" key={i}>
+              <div className="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M3 9h18M9 21V9" /></svg></div>
+              <h3>{c.t}</h3><p>{c.d}</p>
+            </div>
+          ))}
+        </div>
+
+        <Sec n="09" title="ОФОРМЛЕНИЕ ЗАКАЗА" meta="СЛЕДУЮЩИЙ ШАГ" />
         <div className="kp-cta">
           <div><div className="over">ГОТОВЫ ПРИСТУПИТЬ</div><h2>СОГЛАСУЕМ ЗАМЕР<br />В УДОБНОЕ ВРЕМЯ</h2></div>
           <div className="r">8 (925) 788 58 37<br />mglass.ceo@gmail.com<br />mglass.pro</div>
