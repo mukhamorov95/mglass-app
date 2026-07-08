@@ -12,6 +12,7 @@ type Master = { id: string; name: string | null; email: string | null; productio
 type TaskLite = { station: string; status: string; completed_at: string | null }
 
 const OWNER = new Set(['admin', 'ceo'])
+const OWNER_EMAIL = 'admin@mglass.ru'
 
 export default function LeadSummary() {
   const sb = createClient()
@@ -27,7 +28,7 @@ export default function LeadSummary() {
     const { data: me } = await sb.from('users').select('role').eq('id', user.id).single()
     let lead = false
     try { const { data: l } = await sb.from('users').select('production_lead').eq('id', user.id).maybeSingle(); lead = !!(l as { production_lead?: boolean } | null)?.production_lead } catch { /* колонка ещё не в кэше */ }
-    const isLead = lead || OWNER.has((me as { role: string | null } | null)?.role ?? '')
+    const isLead = lead || user.email === OWNER_EMAIL || OWNER.has((me as { role: string | null } | null)?.role ?? '')
     if (!isLead) return
     setShow(true)
 

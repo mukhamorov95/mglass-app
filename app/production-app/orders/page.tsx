@@ -19,6 +19,7 @@ type Order = { id: number; custom_number: string | null; client_name: string; it
 type Me = { role: string | null; production_stations: string[] | null; production_lead: boolean }
 
 const OWNER = new Set(['admin', 'ceo'])
+const OWNER_EMAIL = 'admin@mglass.ru'  // владелец опознаётся по email (см. lib/getRole)
 const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) }
 const itemsArr = (v: unknown): Item[] => Array.isArray(v) ? v as Item[] : []
 function specLine(it?: Item): string {
@@ -51,7 +52,8 @@ export default function OrdersScreen() {
       const { data: p } = await sb.from('users').select('role,production_stations').eq('id', user.id).single()
       let lead = false
       try { const { data: l } = await sb.from('users').select('production_lead').eq('id', user.id).maybeSingle(); lead = !!(l as { production_lead?: boolean } | null)?.production_lead } catch { /* колонка ещё не в кэше */ }
-      if (p) setMe({ role: (p as Me).role, production_stations: (p as Me).production_stations ?? [], production_lead: lead })
+      const role = user.email === OWNER_EMAIL ? 'admin' : (p as Me | null)?.role ?? null
+      setMe({ role, production_stations: (p as Me | null)?.production_stations ?? [], production_lead: lead })
     }
     const { data: taskRows } = await sb.from('production_tasks')
       .select('id,order_id,item_index,stage_key,station,status,sequence_order')
