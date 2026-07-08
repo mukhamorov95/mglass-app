@@ -1,8 +1,14 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
+
+type SpeechRec = {
+  start: () => void; stop: () => void; lang: string; continuous: boolean; interimResults: boolean
+  onresult: ((e: { resultIndex: number; results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null
+  onend: (() => void) | null; onerror: (() => void) | null
+}
 
 // «Необходимо купить» — канбан заявок цеха на расходники/инструмент.
 // Колонки: Необходимо купить → Заказано → Приехал на склад. Фиксируем кто и когда
@@ -47,6 +53,40 @@ export default function BuyPage() {
   const [nQty, setNQty] = useState('')
   const [nLink, setNLink] = useState('')
   const [nDetails, setNDetails] = useState('')
+
+  // Голосовой ввод заявки
+  const [recording, setRecording] = useState(false)
+  const [parsing, setParsing] = useState(false)
+  const [voiceText, setVoiceText] = useState('')
+  const recRef = useRef<SpeechRec | null>(null)
+
+  async function parseVoice(text: string) {
+    setParsing(true)
+    try {
+      const r = await fetch('/api/ai/parse-purchase', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) }).then(x => x.json())
+      if (r.title) setNTitle(r.title)
+      if (r.qty) setNQty(r.qty)
+      if (r.link) setNLink(r.link)
+      if (r.details) setNDetails(r.details)
+    } catch { /* оставим текст, заполнят вручную */ } finally { setParsing(false) }
+  }
+
+  function toggleRec() {
+    if (recording) { recRef.current?.stop(); return }
+    const W = window as unknown as { webkitSpeechRecognition?: new () => SpeechRec; SpeechRecognition?: new () => SpeechRec }
+    const Ctor = W.SpeechRecognition ?? W.webkitSpeechRecognition
+    if (!Ctor) { alert('Голосовой ввод не поддерживается этим браузером. Введите вручную.'); return }
+    const rec = new Ctor()
+    rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = false
+    let acc = ''
+    rec.onresult = e => {
+      for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) acc += e.results[i][0].transcript + ' '
+      setVoiceText(acc.trim())
+    }
+    rec.onend = () => { setRecording(false); if (acc.trim()) parseVoice(acc.trim()) }
+    rec.onerror = () => setRecording(false)
+    recRef.current = rec; rec.start(); setRecording(true)
+  }
 
   // Комментарий
   const [cText, setCText] = useState('')
@@ -196,6 +236,17 @@ export default function BuyPage() {
         {tab === 'new' && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 space-y-2.5 max-w-[560px]">
             <p className="text-[13px] font-bold text-[#111110]">Новая заявка</p>
+            <div className="border border-dashed border-[#d8d8d3] rounded-lg p-3 bg-[#fafaf9]">
+              <p className="text-[12px] text-[#6b6b66] mb-2">Наговори, что нужно купить — разложу по полям. Потом проверь и нажми «Создать заявку».</p>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={toggleRec} disabled={parsing}
+                  className={`px-3 py-1.5 text-[13px] font-semibold rounded-lg disabled:opacity-50 ${recording ? 'bg-red-600 text-white' : 'bg-[#111110] text-white hover:bg-[#2a2a28]'}`}>
+                  {recording ? '⏹ Стоп' : '🎤 Наговорить'}
+                </button>
+                {parsing && <span className="text-[12px] text-[#6b6b66]">🧠 Разбираю…</span>}
+                {voiceText && !parsing && <span className="text-[12px] text-[#9a9a95] truncate max-w-[300px]">{voiceText}</span>}
+              </div>
+            </div>
             <input value={nTitle} onChange={e => setNTitle(e.target.value)} placeholder="Что нужно купить? (напр. «Свёрла по стеклу 6 мм»)"
               className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
             <div className="flex gap-2">
