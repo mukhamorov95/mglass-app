@@ -187,6 +187,7 @@ export default function B2BCalculatorPage() {
   const [fmH, setFmH]             = useState('')
   const [fmQty, setFmQty]         = useState('1')
   const [fmLighting, setFmLighting] = useState(true)
+  const [fmFrame, setFmFrame]     = useState(false)
   const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
@@ -519,7 +520,7 @@ export default function B2BCalculatorPage() {
         widthMm: Number(fmW) || 0, heightMm: Number(fmH) || 0,
         mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
-        underlayCost: Number(fmUnderlay) || 0,
+        underlayCost: Number(fmUnderlay) || 0, metalFrame: fmFrame,
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -1165,7 +1166,7 @@ export default function B2BCalculatorPage() {
             <div>
               <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип позиции</label>
               <div className="flex gap-1.5">
-                {([['material', 'Стекло / зеркало'], ['fmirror', '💡 Зеркало+свет'], ['floft', 'Лофт']] as const).map(([k, l]) => (
+                {([['material', 'Стекло / зеркало'], ['fmirror', '💡 Зеркало+свет/рама'], ['floft', 'Лофт']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => switchKind(k)}
                     className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
                     {l}
@@ -1243,6 +1244,10 @@ export default function B2BCalculatorPage() {
                         <option value="wave">Датчик взмаха</option>
                       </select>
                     </div>
+                    <label className={`flex items-center gap-2 h-[38px] px-3 border rounded-lg cursor-pointer ${fmFrame ? 'border-slate-400 bg-slate-100' : 'border-[#e4e4e0]'}`}>
+                      <input type="checkbox" checked={fmFrame} onChange={e => setFmFrame(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] font-medium ${fmFrame ? 'text-slate-800' : 'text-[#111110]'}`}>🖼 Металлическая рама (сварной каркас, покраска)</span>
+                    </label>
                     {fmLighting && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>

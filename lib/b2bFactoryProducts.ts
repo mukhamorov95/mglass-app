@@ -43,6 +43,7 @@ export type FactoryData = {
   mirrorNames: string[]
   loftGlasses: Material[]
   loftRates: LoftRates
+  frameRates: Record<string, number>   // ставки металлической рамы зеркала (mirror_frame_rates)
 }
 
 function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
@@ -58,7 +59,7 @@ function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
 
 // Ленивая загрузка розничных справочников (нужна только при выборе изделия).
 export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> {
-  const [mats, svcs, fins, comps, mx, cfgs, lrs] = await Promise.all([
+  const [mats, svcs, fins, comps, mx, cfgs, lrs, mfr] = await Promise.all([
     sb.from('materials').select('*').eq('active', true),
     sb.from('services').select('*').eq('active', true),
     sb.from('financial_settings').select('*'),
@@ -66,6 +67,7 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     sb.from('glass_price_matrix').select('*'),
     sb.from('pricing_model_config_v2').select('*').in('product_category', ['mirror', 'loft']),
     sb.from('loft_rates').select('key, value'),
+    sb.from('mirror_frame_rates').select('key, value'),   // ставки металлической рамы (таблица может ещё не быть — тогда data=null)
   ])
   let retailMaterials = (mats.data ?? []) as Material[]
   const finRows = (fins.data ?? []) as FinancialSettings[]
@@ -106,6 +108,7 @@ export async function loadFactoryData(sb: SupabaseClient): Promise<FactoryData> 
     mirrorNames: getMatrixNames(matrix, 'cost', 'mirror'),
     loftGlasses: retailMaterials.filter(m => m.category === 'стекло'),
     loftRates: Object.fromEntries(((lrs.data ?? []) as { key: string; value: number }[]).map(r => [r.key, Number(r.value)])),
+    frameRates: Object.fromEntries(((mfr.data ?? []) as { key: string; value: number }[]).map(r => [r.key, Number(r.value)])),
   }
 }
 
@@ -146,6 +149,7 @@ export function calcFactoryMirror(
     frameId?: number | null    // каркас (профиль сзади); null = авто; при curved не применяется
     curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
     underlayCost?: number      // криволинейный каркас: подложка от подрядчика (ЦНЦ), ₽ себестоимость
+    metalFrame?: boolean       // зеркало в металлической раме (сварной каркас) — ставки mirror_frame_rates
   },
   d: FactoryData,
 ): FactoryQuote | null {
@@ -193,8 +197,22 @@ export function calcFactoryMirror(
   }, d.retailMaterials, d.retailServices)
   if (!res) return null
 
+  // Металлическая рама: сварной каркас из холоднокатанного листа. v1 — плоские
+  // ставки из mirror_frame_rates (владелец калибрует в /admin/mirror-frame-rates).
+  const FR = d.frameRates ?? {}
+  const fr = (k: string, def: number) => { const v = Number(FR[k]); return Number.isFinite(v) && v > 0 ? v : (FR[k] != null ? 0 : def) }
+  const frameLines = p.metalFrame ? [
+    { name: 'Металл на раму (холоднокатанный лист)', qty: 1, unit: '₽', total: fr('metal', 2000) },
+    { name: 'Резка / раскрой полос',                 qty: 1, unit: '₽', total: fr('cutting', 2000) },
+    { name: 'Сварка каркаса',                        qty: 1, unit: '₽', total: fr('welding', 2500) },
+    { name: 'Покраска порошковая (RAL)',             qty: 1, unit: '₽', total: fr('painting', 4000) },
+    { name: 'Сборка зеркала в раме',                 qty: 1, unit: '₽', total: fr('assembly', 1500) },
+  ] : []
+  const frameCost = frameLines.reduce((s, l) => s + l.total, 0)
+  const directCost = res.directCost + frameCost
+
   const fm = calcFinancialModel({
-    directCost: res.directCost,
+    directCost,
     marginPercent: d.mirrorCfg.productionMarginPercent,
     taxPercent: d.mirrorCfg.productionTaxPercent,
   })
@@ -210,17 +228,25 @@ export function calcFactoryMirror(
   }
   if (p.buttonType === 'sensor') specParts.push('сенсорная кнопка')
   if (p.buttonType === 'wave')   specParts.push('датчик взмаха')
+  if (p.metalFrame) specParts.push('металлическая рама (сварной каркас, порошковая покраска)')
+
+  const labelBase = p.metalFrame
+    ? (p.hasLighting ? 'Зеркало с подсветкой в металлической раме' : 'Зеркало в металлической раме')
+    : (p.hasLighting ? 'Зеркало с подсветкой' : 'Зеркало')
 
   return {
-    label: `${p.hasLighting ? 'Зеркало с подсветкой' : 'Зеркало'} ${p.mirrorName} ${p.mirrorMm} мм`,
+    label: `${labelBase} ${p.mirrorName} ${p.mirrorMm} мм`,
     spec: specParts.join(' · '),
     areaPiece: res.area,
     weightPerPiece: Math.round(res.area * p.mirrorMm * 2.5 * 10) / 10,
-    factoryCostPiece: Math.round(res.directCost),
+    factoryCostPiece: Math.round(directCost),
     prodPricePiece: Math.round(fm.basePrice),
     marginPercent: d.mirrorCfg.productionMarginPercent,
     shape: p.curved ? 'curved' : 'rect',
-    costLines: res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: Math.round(l.total) })),
+    costLines: [
+      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: Math.round(l.total) })),
+      ...frameLines,
+    ],
   }
 }
 
