@@ -78,14 +78,18 @@ function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
 type ParsedDrawingItem = {
   label?: string; width_mm?: number; height_mm?: number; thickness_mm?: number
   shape?: string; cut_width_mm?: number; cut_height_mm?: number
-  material?: string; quantity?: number; holes?: number; cutouts?: number
+  material?: string; is_mirror?: boolean; quantity?: number; holes?: number; cutouts?: number
   tempering?: boolean; notes?: string
 }
-function matchDrawingMaterial(mats: B2BMaterial[], thickness: number, matStr: string): B2BMaterial | null {
+function matchDrawingMaterial(mats: B2BMaterial[], thickness: number, matStr: string, isMirror?: boolean): B2BMaterial | null {
   if (!mats.length) return null
   const th = thickness > 0 ? thickness : 8
   let pool = mats.filter(m => m.thickness === th)
   if (!pool.length) pool = mats
+  // Тип детали: зеркало vs стекло — сначала сужаем пул, чтобы не подставить стекло вместо зеркала.
+  const isMir = (m: B2BMaterial) => /зеркал/i.test(m.category + ' ' + m.name)
+  if (isMirror === true) { const mp = pool.filter(isMir); if (mp.length) pool = mp }
+  else if (isMirror === false) { const gp = pool.filter(m => !isMir(m)); if (gp.length) pool = gp }
   const s = (matStr || '').toLowerCase()
   const has = (...kw: string[]) => kw.some(k => s.includes(k))
   const nm = (m: B2BMaterial) => (m.category + ' ' + m.name).toLowerCase()
@@ -213,6 +217,7 @@ export default function B2BCalculatorPage() {
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fCurved, setFCurved]         = useState(false)
+  const [fMinPrice, setFMinPrice]     = useState(true)
   const [fTriplex, setFTriplex]       = useState(false)
   const [fTriplexLayers, setFTriplexLayers] = useState<2 | 3>(2)
   const [fTriplexMat2, setFTriplexMat2] = useState<number | null>(null)  // null = как основное
@@ -242,6 +247,7 @@ export default function B2BCalculatorPage() {
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eCurved, setECurved]         = useState(false)
+  const [eMinPrice, setEMinPrice]     = useState(true)
   const [eTriplex, setETriplex]       = useState(false)
   const [eTriplexLayers, setETriplexLayers] = useState<2 | 3>(2)
   const [eTriplexMat2, setETriplexMat2] = useState<number | null>(null)
@@ -611,7 +617,7 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
 
     const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices,
-      fTriplex, fTriplexLayers, triplexPrice, fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [])
+      fTriplex, fTriplexLayers, triplexPrice, fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [], fMinPrice)
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
     setFWidth('')
     setFHeight('')
@@ -619,6 +625,7 @@ export default function B2BCalculatorPage() {
     setFComment('')
     setFHoles(false)
     setFCurved(false)
+    setFMinPrice(true)
     setFTriplex(false)
     setFTriplexMat2(null)
     setFTriplexMat3(null)
@@ -649,7 +656,7 @@ export default function B2BCalculatorPage() {
       const drawTh = Number(it.thickness_mm) || 0
       const th = drawTh > 0 ? drawTh : (Number(fThickness) || 8)
       const hint = (it.material && it.material.trim()) ? it.material : (selectedMaterial?.name ?? '')
-      const mat = matchDrawingMaterial(materials, th, hint) ?? selectedMaterial
+      const mat = matchDrawingMaterial(materials, th, hint, it.is_mirror) ?? selectedMaterial
       if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
       const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
       const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
@@ -725,6 +732,7 @@ export default function B2BCalculatorPage() {
     setEQty(String(item.quantity))
     setEWaste(item.wastePercent)
     setETempering(item.hasTempering)
+    setEMinPrice(item.applyMinPrice !== false)
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
@@ -750,7 +758,7 @@ export default function B2BCalculatorPage() {
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
     const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices,
-      eTriplex, eTriplexLayers, triplexPrice, eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [])
+      eTriplex, eTriplexLayers, triplexPrice, eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice)
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
       : i))
@@ -1526,6 +1534,16 @@ export default function B2BCalculatorPage() {
                 </label>
               </div>
               <div>
+                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Мин. цена</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fMinPrice} onChange={e => setFMinPrice(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fMinPrice ? 'text-emerald-700' : 'text-[#111110]'}`}>
+                    {fMinPrice ? 'Учитывать мин.' : 'Чистый расчёт'}
+                  </span>
+                </label>
+              </div>
+              <div>
                 <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Триплекс</label>
                 <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                   <input type="checkbox" checked={fTriplex} onChange={e => setFTriplex(e.target.checked)}
@@ -2193,7 +2211,7 @@ export default function B2BCalculatorPage() {
         ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
             resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
             eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice,
-            eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : []), localId: '' }
+            eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null
@@ -2324,6 +2342,11 @@ export default function B2BCalculatorPage() {
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
+                    </label>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      <input type="checkbox" checked={eMinPrice} onChange={e => setEMinPrice(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eMinPrice ? 'text-emerald-700 font-medium' : 'text-[#111110]'}`}>{eMinPrice ? 'Мин. цена' : 'Без мин.'}</span>
                     </label>
                   </div>
                 </div>

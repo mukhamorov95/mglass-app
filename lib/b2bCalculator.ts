@@ -44,7 +44,7 @@ export const MIN_LINE_PRICES = {
   glass_tempering:     2500,
   tinted_tempering:    3000,
   mirror_no_tempering: 1500,
-  narrow_detail:       3000,
+  narrow_detail:       1500,
 } as const
 
 export type MinPriceReason = keyof typeof MIN_LINE_PRICES
@@ -135,6 +135,7 @@ export type B2BOrderItem = {
   outputVat: number
   saleIncVat: number      // итого к оплате клиентом
   // минимальная стоимость строки (когда деталь слишком мала)
+  applyMinPrice?:     boolean   // false → мин. цена отключена для этой позиции (галочка снята)
   minPriceApplied?:   boolean
   minPriceReason?:    MinPriceReason
   originalLinePrice?: number
@@ -171,6 +172,7 @@ export function calcItem(
   triplexLayers: number = 2,
   triplexPrice: { salePerM2: number; costPerM2: number } | null = null,
   triplexExtraGlasses: B2BMaterial[] = [],   // слои 2..N; пусто → те же стёкла, что основной
+  applyMinPrice: boolean = true,             // false → мин. цену не применяем (чистый расчёт по м²)
 ): Omit<B2BOrderItem, 'localId'> {
   const areaPiece       = r4(width * height / 1_000_000)
   const totalAreaNet    = r4(areaPiece * quantity)
@@ -255,7 +257,7 @@ export function calcItem(
   let minLinePrice:    number | undefined
   let minPriceDelta:   number | undefined
 
-  if (minResolved) {
+  if (minResolved && applyMinPrice) {
     const minTotal = minResolved.minPricePerPiece * quantity
     if (saleIncVat < minTotal) {
       originalLinePrice = saleIncVat
@@ -287,6 +289,7 @@ export function calcItem(
     costWithVat: costWithVatFull, inputVat: inputVatFull, costExVat: costExVatFull,
     pricePerM2, margin, vatRate: VAT, servicesCost, baseSaleExVat,
     saleExVat, outputVat, saleIncVat,
+    ...(applyMinPrice ? {} : { applyMinPrice: false }),
     ...(minPriceApplied ? { minPriceApplied, minPriceReason, originalLinePrice, minLinePrice, minPriceDelta } : {}),
   }
 }
