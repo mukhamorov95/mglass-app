@@ -275,8 +275,21 @@ export function calcFactoryLoft(
   }, d.loftRates)
   if (!res) return null
 
+  // Лофт итемизирует работы цеха построчно (сварка ₽/м², покраска ₽/печку,
+  // расходники, остекление) — поэтому накладные и резерв брака из loftCfg к нему
+  // НЕ применяются: они уже сидят в явных строках, иначе двойной счёт (в отличие
+  // от зеркала, где модель грубее и overhead% — прокси незамоделированных работ).
+  // Из конфига берём только упаковку: в конструктиве её нет, а расход реальный.
+  const packagingCost = d.loftCfg.packagingCostPerM2 > 0
+    ? Math.round(res.areaM2 * d.loftCfg.packagingCostPerM2)
+    : 0
+  const packagingLine = packagingCost > 0
+    ? [{ name: `Упаковка ${d.loftCfg.packagingCostPerM2} ₽/м²`, qty: res.areaM2, unit: 'м²', total: packagingCost }]
+    : []
+  const directCost = res.totalCost + packagingCost
+
   const fm = calcFinancialModel({
-    directCost: res.totalCost,
+    directCost,
     marginPercent: d.loftCfg.productionMarginPercent,
     taxPercent: d.loftCfg.productionTaxPercent,
   })
@@ -288,15 +301,21 @@ export function calcFactoryLoft(
     spec: res.spec,
     areaPiece: res.areaM2,
     weightPerPiece: res.weightKg,
-    factoryCostPiece: res.totalCost,
+    factoryCostPiece: directCost,
     prodPricePiece: Math.round(fm.basePrice),
     marginPercent: d.loftCfg.productionMarginPercent,
-    costLines: res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: l.total })),
+    costLines: [
+      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: l.total })),
+      ...packagingLine,
+    ],
   }
 }
 
 // Позиция просчёта из изделия производства. Цена позиции = продажная цена производства.
 // НДС считаем как в остальном B2B (22% в цене). Себестоимость = factory cost.
+// Про два «налога»: 12% в prodPrice (canonical Цена=Себест/(1−маржа−налог)) — это
+// налог на прибыль производства, зашитый в цену; 22% ниже — сквозной НДС, вычленяемый
+// из той же цены. Это РАЗНЫЕ налоги, не двойной счёт: показанная B2B-маржа ≈ 52%.
 export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: string): Omit<B2BOrderItem, 'localId'> {
   const qty = Math.max(1, quantity)
   const VAT = 22

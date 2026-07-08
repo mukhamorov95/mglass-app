@@ -202,7 +202,8 @@ export function calcItem(
     ? Math.round(totalAreaNet * temperPerM2)
     : 0
   const costEdge      = Math.round(perimeterM * quantity * EDGE_COST_PER_M * layers)
-  const costTransport = Math.round(quantity * TRANSPORT_PER_PIECE)
+  // Доставка на закалку — только если деталь реально едет в печь; без закалки нет и рейса.
+  const costTransport = hasTempering ? Math.round(quantity * TRANSPORT_PER_PIECE) : 0
   const costPackaging = Math.round(totalAreaNet * PACKAGING_PER_M2)
   const costTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.costPerM2 ?? 0)) : 0
   const saleTriplex   = hasTriplex ? Math.round(totalAreaNet * (triplexPrice?.salePerM2 ?? 0)) : 0
@@ -220,7 +221,7 @@ export function calcItem(
   const costWithVatBase = costMaterial + costTempering + costFacet + costEdge + costTransport + costPackaging + costTriplex
 
   // Продажа — цена из прайса (финальная цена клиента, вкл. НДС); сумма по слоям пакета
-  const pricePerM2     = mat.sale_price ?? 0
+  const pricePerM2     = salePerM2Sum   // ₽/м² по прайсу; для триплекса — сумма слоёв пакета
   const baseSaleIncVat = Math.round(salePerM2Sum * totalAreaNet)
   const baseSaleExVat  = Math.round(baseSaleIncVat * 100 / (100 + VAT))
 
