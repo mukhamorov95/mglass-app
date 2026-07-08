@@ -281,6 +281,7 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
   { href: '/admin/ideas',          label: 'Идеи цеха',       icon: '💡' },
+  { href: '/admin/referrals',      label: 'Реферальная программа', icon: '🤝' },
 ]
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
@@ -348,7 +349,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/settings', '/admin/suppliers', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/referrals'])) open.push('operations')
   }
   return open
 }

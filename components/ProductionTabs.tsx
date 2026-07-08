@@ -2,6 +2,8 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase-browser'
 
 // Единая навигация цеха (production-app). «Обзор» = два вида: по срокам (/production-app)
 // и матрица заказ×этап (/production-app/board). Остальное — операционные экраны.
@@ -25,11 +27,25 @@ const subPill = (active: boolean) =>
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
   const onObzor = path === '/production-app' || path.startsWith('/production-app/board')
+  // «Заработок» — только реферерам (users.referral_rate_pct задан).
+  const [isReferrer, setIsReferrer] = useState(false)
+  useEffect(() => {
+    const sb = createClient()
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('users').select('referral_rate_pct').eq('id', user.id).single()
+        .then(({ data }) => { if ((data as { referral_rate_pct: number | null } | null)?.referral_rate_pct != null) setIsReferrer(true) })
+    })
+  }, [])
+
+  const tabs = isReferrer
+    ? [...TABS, { href: '/production-app/earnings', label: '💰 Заработок', match: (p: string) => p.startsWith('/production-app/earnings') }]
+    : TABS
 
   return (
     <div className="mt-3 space-y-2">
       <div className="flex flex-wrap gap-1.5">
-        {TABS.map(t => <Link key={t.href} href={t.href} className={pill(t.match(path))}>{t.label}</Link>)}
+        {tabs.map(t => <Link key={t.href} href={t.href} className={pill(t.match(path))}>{t.label}</Link>)}
       </div>
       {onObzor && (
         <div className="flex flex-wrap items-center gap-1.5">

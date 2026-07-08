@@ -55,15 +55,15 @@ export default function GuidePage() {
           </Link>
         </div>
 
-        {/* Распределение работ */}
+        {/* Общий пул */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-4">
           <div className="flex items-center gap-2.5 flex-wrap">
-            <h2 className="text-[17px] font-bold text-[#111110]">Утро: как раздаётся работа</h2>
-            <Who color="bg-amber-600">распределение</Who>
+            <h2 className="text-[17px] font-bold text-[#111110]">Заказы: общий пул на всех</h2>
+            <Who color="bg-amber-600">общий пул</Who>
           </div>
           <Steps items={[
-            <>Открой <Tab>Пул на сегодня</Tab>. Там все заказы по станциям: «ДЕМО-1 · УЧЕБНЫЙ · 2 поз.» — одна карточка на заказ.</>,
-            <>Справа у карточки нажми <Tab>свободно ▾</Tab> и выбери рабочего — все позиции заказа на этой станции упадут ему в «Мои задачи».</>,
+            <>Никто ничего не раздаёт вручную. Все заказы автоматически видны всем мастерам своей станции — бери любой.</>,
+            <>Открой <Tab>Пул на сегодня</Tab>. Там все заказы цеха по станциям: «ДЕМО-1 · УЧЕБНЫЙ · 2 поз.» — одна карточка на заказ. Видно, что где стоит.</>,
             <>Открой <Tab>Обзор</Tab>: вид «По срокам» — что горит; вид «Матрица» — весь цех одной таблицей (заказ → этапы).
               <span className="flex gap-3 flex-wrap mt-2 text-[13px]">
                 {LEGEND.map(x => <span key={x.l} className="flex items-center gap-1.5"><span className={`inline-block w-4 h-4 rounded ${x.c}`} />{x.l}</span>)}
@@ -72,14 +72,14 @@ export default function GuidePage() {
           ]} />
         </div>
 
-        {/* Рабочий */}
+        {/* Мастер */}
         <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-4">
           <div className="flex items-center gap-2.5 flex-wrap">
             <h2 className="text-[17px] font-bold text-[#111110]">День: сделал — отметь</h2>
-            <Who color="bg-emerald-700">рабочий</Who>
+            <Who color="bg-emerald-700">мастер</Who>
           </div>
           <Steps items={[
-            <>Открой <Tab>Мои задачи</Tab>. Видишь только своё: «ДЕМО-1 · Поз. 1 · Полировка» с размерами детали.
+            <>Открой <Tab>Мои задачи</Tab>. Видишь заказы своей станции: «ДЕМО-1 · Поз. 1 · Полировка» с размерами детали — бери любой.
               <b> Готово к работе</b> — можно брать. <b>Ожидаю</b> — предыдущий этап ещё не сделан.</>,
             <>Взял деталь — нажми <Btn>Взял в работу</Btn>. Система сразу отметит на борде, что деталь у тебя.</>,
             <>Сделал — нажми <Btn tone="green">Готово</Btn>. Деталь сама уйдёт на следующий этап следующему человеку.</>,
