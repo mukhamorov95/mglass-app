@@ -45,6 +45,8 @@ type NotesData = {
   user_notes?:          string
   detail_stages?:       DetailStages
   detail_stage_audit?:  AuditEntry[]
+  deadline_date?:       string
+  urgent?:              boolean
 }
 
 type Order = {
@@ -545,6 +547,20 @@ export default function ProductionOrderPage() {
     return updatedNotes
   }
 
+  // Флаг «Срочно» (notes.urgent) — поднимает заказ в самый верх очередей мастеров.
+  async function toggleUrgent() {
+    if (!order) return
+    let notesObj: Record<string, unknown> = {}
+    if (order.notes) { try { const p = JSON.parse(order.notes); if (typeof p === 'object' && p !== null) notesObj = { ...p } } catch {} }
+    const nextUrgent = !notesObj.urgent
+    const updatedNotes = { ...notesObj, urgent: nextUrgent }
+    const sb = createClient()
+    const { error } = await sb.from('b2b_orders').update({ notes: JSON.stringify(updatedNotes) }).eq('id', order.id)
+    if (error) { setToast({ msg: 'Ошибка сохранения', ok: false }); setTimeout(() => setToast(null), 3000); return }
+    setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
+    setToast({ msg: nextUrgent ? '🔥 Заказ отмечен срочным' : 'Срочность снята', ok: true }); setTimeout(() => setToast(null), 2500)
+  }
+
   // ─── Mark stage ───────────────────────────────────────────────────────────
 
   async function markStage(stageKey: DetailStageKey) {
@@ -778,6 +794,14 @@ export default function ProductionOrderPage() {
                 <p className="text-[11px] font-bold text-[#111110]">{selectedItems.size} выбрано</p>
               )}
             </div>
+            <button
+              onClick={toggleUrgent}
+              className={`inline-flex min-h-10 items-center justify-center rounded-full border px-4 py-2 text-xs font-semibold transition-colors ${
+                pn.urgent ? 'border-red-300 bg-red-600 text-white hover:bg-red-700' : 'border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3]'
+              }`}
+            >
+              {pn.urgent ? '🔥 Срочный' : '🔥 Срочно'}
+            </button>
             <Link
               href={`/production-app/orders/${order.id}/labels`}
               className="inline-flex min-h-10 items-center justify-center rounded-full border border-[#e4e4e0] px-4 py-2 text-xs font-semibold text-[#6b6b66] hover:bg-[#f5f5f3]"

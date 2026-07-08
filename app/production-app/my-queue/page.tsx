@@ -6,6 +6,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
+import { urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -23,7 +24,7 @@ type TaskRow = {
 }
 
 type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
-type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[] }
+type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 function specLine(item?: ItemSpec): string {
@@ -75,7 +76,7 @@ export default function MyQueuePage() {
 
     const [{ data: orderRows }, { data: blockerRows }] = await Promise.all([
       orderIds.length
-        ? sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds)
+        ? sb.from('b2b_orders').select('id,client_name,custom_number,items,notes').in('id', orderIds)
         : Promise.resolve({ data: [] as OrderLite[] }),
       blockerIds.length
         ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
@@ -124,8 +125,11 @@ export default function MyQueuePage() {
     return b?.status === 'done'
   }
 
-  const ready   = tasks.filter(isReady)
-  const waiting = tasks.filter(t => !isReady(t))
+  // Сортировка по срочности: срочные и с ближайшей отгрузкой — выше.
+  const rankOf = (t: TaskRow) => urgencyRank(orders.get(t.order_id)?.notes)
+  const byUrgency = (a: TaskRow, b: TaskRow) => rankOf(a) - rankOf(b)
+  const ready   = tasks.filter(isReady).sort(byUrgency)
+  const waiting = tasks.filter(t => !isReady(t)).sort(byUrgency)
 
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -169,14 +173,17 @@ export default function MyQueuePage() {
             <div className="space-y-2">
               {waiting.map(t => {
                 const blocker = t.blocked_by_task_id ? blockers.get(t.blocked_by_task_id) : null
+                const wn = orders.get(t.order_id)?.notes
+                const wDays = daysLeftLabel(deadlineOf(wn))
                 return (
-                  <div key={t.id} className="bg-amber-50/50 rounded-xl border border-amber-200 px-4 py-3">
+                  <div key={t.id} className={`rounded-xl border px-4 py-3 ${isUrgent(wn) ? 'bg-red-50 border-red-300' : 'bg-amber-50/50 border-amber-200'}`}>
                     <div className="flex items-start justify-between gap-2 mb-1">
                       <div className="min-w-0">
-                        <p className="text-[14px] font-bold text-[#111110] truncate">
+                        <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
+                          {isUrgent(wn) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
                           {orders.get(t.order_id)?.custom_number?.trim() || `#${t.order_id}`}
                         </p>
-                        <p className="text-[12px] text-[#6b6b66] truncate">{orders.get(t.order_id)?.client_name}</p>
+                        <p className="text-[12px] text-[#6b6b66] truncate">{orders.get(t.order_id)?.client_name}{wDays ? ` · ${wDays}` : ''}</p>
                       </div>
                       <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-amber-100 text-amber-700 whitespace-nowrap flex-shrink-0">
                         Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}
@@ -224,6 +231,8 @@ export default function MyQueuePage() {
   )
 }
 
+const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) }
+
 function TaskCard({ task, order, onStart, onDone, onAndon }: {
   task: TaskRow
   order: OrderLite | undefined
@@ -233,17 +242,34 @@ function TaskCard({ task, order, onStart, onDone, onAndon }: {
 }) {
   const spec = specLine(order?.items?.[task.item_index])
   const active = task.status === 'in_progress'
+  const tone = urgencyTone(order?.notes)
+  const urgent = isUrgent(order?.notes)
+  const deadline = deadlineOf(order?.notes)
+  const launched = launchedOf(order?.notes)
+  const daysLbl = daysLeftLabel(deadline)
+  const cardBorder = tone === 'red' ? 'border-red-300 bg-red-50' : tone === 'amber' ? 'border-amber-300 bg-amber-50/40' : active ? 'border-emerald-300 bg-white' : 'border-[#e4e4e0] bg-white'
+  const dLeftCls = tone === 'red' ? 'text-red-700 font-semibold' : tone === 'amber' ? 'text-amber-700 font-medium' : 'text-[#6b6b66]'
   return (
-    <div className={`bg-white rounded-xl border px-4 py-3 ${active ? 'border-emerald-300' : 'border-[#e4e4e0]'}`}>
+    <div className={`rounded-xl border px-4 py-3 ${cardBorder}`}>
       <div className="flex items-start justify-between gap-2 mb-1.5">
         <Link href={`/p/o/${task.order_id}`} className="min-w-0">
-          <p className="text-[14px] font-bold text-[#111110] truncate">{order?.custom_number?.trim() || `#${task.order_id}`}</p>
+          <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
+            {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
+            {order?.custom_number?.trim() || `#${task.order_id}`}
+          </p>
           <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
         </Link>
         <span className="text-[10px] font-medium px-2 py-1 rounded-full bg-[#f0f0ec] text-[#6b6b66] whitespace-nowrap flex-shrink-0">
           Поз. {task.item_index + 1} · {STAGE_LABELS[task.stage_key as DetailStageKey] ?? task.stage_key}{task.layer_note ? ` · ${task.layer_note}` : ''}
         </span>
       </div>
+      {(launched || deadline) && (
+        <p className="text-[11px] mb-1.5 flex flex-wrap gap-x-2.5 gap-y-0.5">
+          {fmtShort(launched) && <span className="text-[#9a9a95]">запуск {fmtShort(launched)}</span>}
+          {fmtShort(deadline) && <span className="text-[#9a9a95]">отгрузка {fmtShort(deadline)}</span>}
+          {daysLbl && <span className={dLeftCls}>{daysLbl}</span>}
+        </p>
+      )}
       {spec && <p className="text-[12px] font-mono text-[#111110] mb-2.5">{spec}</p>}
       {active && <p className="text-[11px] font-medium text-emerald-700 mb-2">🔧 в работе</p>}
       <div className="flex gap-2">

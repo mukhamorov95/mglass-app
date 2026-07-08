@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase-server'
 import ProductionTabs from '@/components/ProductionTabs'
+import MaterialCheck from './MaterialCheck'
 
 // Экран Сергея (материал) — ТОЛЬКО ПРОСМОТР: какой материал по каким заявкам
 // ещё не приехал. Ничего не меняет. Заявки, у которых нет даты получения.
@@ -41,7 +42,10 @@ export default async function MaterialPage() {
         <ProductionTabs />
       </div>
 
+      <MaterialCheck />
+
       <div className="px-4 pt-4 space-y-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Заявки в пути · {pos.length}</p>
         {pos.length === 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
             <p className="text-[14px] text-[#9a9a95]">Нет заявок на материал в пути</p>
