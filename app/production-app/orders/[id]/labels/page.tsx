@@ -18,7 +18,15 @@ type OrderItem = {
 }
 type Order = {
   id: number; custom_number: string | null; client_name: string
-  client_order_number: string | null; items: OrderItem[]; deadline_date: string | null
+  client_order_number: string | null; items: OrderItem[]; deadline: string | null
+}
+
+function parseDeadline(notes: unknown): string | null {
+  try {
+    const n = typeof notes === 'string' ? JSON.parse(notes) : notes
+    const d = (n as { deadline_date?: string } | null)?.deadline_date
+    return d || null
+  } catch { return null }
 }
 
 const PRINT_CSS = `
@@ -50,10 +58,15 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    sb.from('b2b_orders').select('id,custom_number,client_name,client_order_number,items,deadline_date').eq('id', Number(id)).single()
+    sb.from('b2b_orders').select('id,custom_number,client_name,client_order_number,items,notes').eq('id', Number(id)).single()
       .then(({ data, error }) => {
         if (error || !data) { setError('Заказ не найден'); setLoading(false); return }
-        setOrder({ ...data, items: Array.isArray(data.items) ? data.items as OrderItem[] : [] } as Order)
+        setOrder({
+          id: data.id, custom_number: data.custom_number, client_name: data.client_name,
+          client_order_number: data.client_order_number,
+          items: Array.isArray(data.items) ? data.items as OrderItem[] : [],
+          deadline: parseDeadline(data.notes),
+        })
         setLoading(false)
       })
   }, [id, sb])
@@ -62,7 +75,7 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
   if (error || !order) return <div className="min-h-screen flex items-center justify-center text-[13px] text-red-600">{error}</div>
 
   const orderLabel = order.custom_number?.trim() || `#${order.id}`
-  const deadline = fmtDate(order.deadline_date)
+  const deadline = fmtDate(order.deadline)
   const totalQty = order.items.reduce((s, i) => s + (i.quantity ?? 1), 0)
 
   // Разворачиваем позиции в физические листы (quantity копий), сохраняя item_index.
