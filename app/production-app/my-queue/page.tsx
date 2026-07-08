@@ -7,6 +7,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
 import { urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
+import LeadSummary from './LeadSummary'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -152,6 +153,7 @@ export default function MyQueuePage() {
       </div>
 
       <div className="px-4 pt-4">
+        <LeadSummary />
         <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Готово к работе</p>
         {ready.length === 0 ? (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center mb-6">

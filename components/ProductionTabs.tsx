@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase-browser'
 // Единая навигация цеха (production-app). «Обзор» = два вида: по срокам (/production-app)
 // и матрица заказ×этап (/production-app/board). Остальное — операционные экраны.
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
+  { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
   { href: '/production-app',          label: 'Обзор',          match: p => p === '/production-app' || p.startsWith('/production-app/board') },
   { href: '/production-app/today',    label: 'Пул на сегодня', match: p => p.startsWith('/production-app/today') },
   { href: '/production-app/station',  label: 'Станции',        match: p => p.startsWith('/production-app/station') },
