@@ -12,6 +12,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/today',    label: 'Пул на сегодня', match: p => p.startsWith('/production-app/today') },
   { href: '/production-app/station',  label: 'Станции',        match: p => p.startsWith('/production-app/station') },
   { href: '/production-app/my-queue', label: 'Мои задачи',     match: p => p.startsWith('/production-app/my-queue') },
+  { href: '/production-app/scan',     label: '📷 Скан',        match: p => p.startsWith('/production-app/scan') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
   { href: '/production-app/ideas',    label: '💡 Идеи',        match: p => p.startsWith('/production-app/ideas') },
