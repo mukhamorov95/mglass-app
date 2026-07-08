@@ -46,8 +46,12 @@ export default function OrdersScreen() {
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser()
     if (user) {
-      const { data: p } = await sb.from('users').select('role,production_stations,production_lead').eq('id', user.id).single()
-      if (p) setMe({ role: (p as Me).role, production_stations: (p as Me).production_stations ?? [], production_lead: !!(p as Me).production_lead })
+      // role + stations — давно есть; production_lead отдельно (новая колонка может
+      // ещё не попасть в кэш схемы PostgREST — тогда не роняем owner-детекцию).
+      const { data: p } = await sb.from('users').select('role,production_stations').eq('id', user.id).single()
+      let lead = false
+      try { const { data: l } = await sb.from('users').select('production_lead').eq('id', user.id).maybeSingle(); lead = !!(l as { production_lead?: boolean } | null)?.production_lead } catch { /* колонка ещё не в кэше */ }
+      if (p) setMe({ role: (p as Me).role, production_stations: (p as Me).production_stations ?? [], production_lead: lead })
     }
     const { data: taskRows } = await sb.from('production_tasks')
       .select('id,order_id,item_index,stage_key,station,status,sequence_order')

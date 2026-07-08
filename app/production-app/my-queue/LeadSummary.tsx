@@ -24,8 +24,10 @@ export default function LeadSummary() {
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser()
     if (!user) return
-    const { data: me } = await sb.from('users').select('role,production_lead').eq('id', user.id).single()
-    const isLead = !!(me as { role: string | null; production_lead: boolean } | null)?.production_lead || OWNER.has((me as { role: string | null } | null)?.role ?? '')
+    const { data: me } = await sb.from('users').select('role').eq('id', user.id).single()
+    let lead = false
+    try { const { data: l } = await sb.from('users').select('production_lead').eq('id', user.id).maybeSingle(); lead = !!(l as { production_lead?: boolean } | null)?.production_lead } catch { /* колонка ещё не в кэше */ }
+    const isLead = lead || OWNER.has((me as { role: string | null } | null)?.role ?? '')
     if (!isLead) return
     setShow(true)
 
