@@ -22,7 +22,7 @@ export async function GET() {
     events: evs.data ?? [],
     users: users.data ?? [],
     activity: act.data ?? [],
-    errors: [devs.error?.message, evs.error?.message].filter(Boolean),
+    errors: [devs.error?.message, evs.error?.message, act.error?.message].filter(Boolean),
   })
 }
 
