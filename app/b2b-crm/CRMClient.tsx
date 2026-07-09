@@ -115,9 +115,13 @@ export default function B2BCRMClient() {
 
     const [{ data: cls }, { data: orders }, { data: lastInts }] = await Promise.all([
       fromOrg('b2b_clients', CRM_COLS).order('name'),
-      // 2025 + 2026: сортировка по общему обороту и счётчики дашборда по годам
-      fromOrg('b2b_orders', 'client_id,total_after_discount,created_at')
+      // 2025 + 2026: сортировка по обороту и счётчики дашборда. Фильтры и цена —
+      // те же, что в /b2b-orders: без просчётов/истории/архива, цена после скидки.
+      fromOrg('b2b_orders', 'client_id,total_after_discount,total_sale_inc_vat,created_at')
         .gte('created_at', '2025-01-01')
+        .not('notes', 'ilike', '%"status":"quote"%')
+        .not('notes', 'ilike', '%"historical":true%')
+        .is('archived_at', null)
         .limit(10000),
       fromOrg('b2b_interactions', 'id,client_id,type,note,outcome,next_action,next_action_date,created_by,created_at')
         .order('created_at', { ascending: false })
@@ -129,7 +133,8 @@ export default function B2BCRMClient() {
     const count25ByClient = new Map<number, number>()
     const count26ByClient = new Map<number, number>()
     for (const o of orders ?? []) {
-      totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + (o.total_after_discount ?? 0))
+      const amt = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+      totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + amt)
       countByClient.set(o.client_id, (countByClient.get(o.client_id) ?? 0) + 1)
       const y = String(o.created_at ?? '').slice(0, 4)
       if (y === '2025') count25ByClient.set(o.client_id, (count25ByClient.get(o.client_id) ?? 0) + 1)

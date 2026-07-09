@@ -14,10 +14,16 @@ export async function buildAutoTurnover(
   const linked = clients.filter(c => c.b2b_client_id != null)
   if (!linked.length) return {}
   const b2bIds = [...new Set(linked.map(c => c.b2b_client_id!))]
+  // Те же фильтры, что в /b2b-orders (истина заказов): без просчётов (quote),
+  // без импортированной истории (historical) и без архива. Иначе оборот
+  // партнёрки раздувается просчётами, которые так и не стали заказами.
   const { data: orders } = await sb.from('b2b_orders')
     .select('client_id,total_after_discount,total_sale_inc_vat,created_at')
     .in('client_id', b2bIds)
     .gte('created_at', '2026-01-01')
+    .not('notes', 'ilike', '%"status":"quote"%')
+    .not('notes', 'ilike', '%"historical":true%')
+    .is('archived_at', null)
     .limit(20000)
 
   const byClientMonth = new Map<number, Map<string, number>>()
