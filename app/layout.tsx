@@ -18,8 +18,10 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'MGlass',
+    title: 'M-Glass',
   },
+  // app/icon.png и app/favicon.ico Next раздаёт сам; apple-touch — явно (iOS не читает манифест)
+  icons: { apple: '/apple-touch-icon.png' },
   formatDetection: { telephone: false },
 }
 

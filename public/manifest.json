@@ -1,19 +1,17 @@
 {
-  "name": "MGlass CRM",
-  "short_name": "MGlass",
-  "description": "Система управления заказами и CRM для MGlass",
-  "start_url": "/b2b-crm",
+  "name": "M-Glass — CRM",
+  "short_name": "M-Glass",
+  "description": "Система управления заказами и CRM для M-Glass",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f8f8f7",
   "theme_color": "#111110",
   "orientation": "portrait-primary",
   "icons": [
-    {
-      "src": "/next.svg",
-      "sizes": "192x192",
-      "type": "image/svg+xml",
-      "purpose": "any maskable"
-    }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ],
   "categories": ["business", "productivity"]
 }

@@ -8,6 +8,7 @@ import RegisterSW from './RegisterSW'
 export const metadata: Metadata = {
   manifest: '/production-app.webmanifest',
   appleWebApp: { capable: true, statusBarStyle: 'default', title: 'MGlass Цех' },
+  icons: { apple: '/icons/cex-512.png' },
 }
 
 const ALLOWED_ROLES = ['admin', 'ceo', 'manager', 'production'] as const
