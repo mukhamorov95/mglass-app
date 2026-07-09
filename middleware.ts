@@ -110,5 +110,7 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // manifest/webmanifest обязаны быть публичными: браузер запрашивает манифест
+  // БЕЗ кук (credentials omit по спеке) — редирект на /login ломает установку PWA.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|manifest.json|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|webmanifest)$).*)'],
 }
