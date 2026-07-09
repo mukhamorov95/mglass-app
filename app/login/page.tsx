@@ -21,6 +21,8 @@ export default function LoginPage() {
       setError('Неверный email или пароль')
       setLoading(false)
     } else {
+      // Регистрация устройства (лимит 1 телефон + 1 ПК); сбой не блокирует вход
+      try { await fetch('/api/security/register-device', { method: 'POST' }) } catch { /* noop */ }
       setLoading(false)
       router.push('/')
       router.refresh()

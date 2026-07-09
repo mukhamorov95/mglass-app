@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessRoute, normalizeRole, type Role, type B2BScope } from './lib/getRole'
+import { classifyDevice } from './lib/deviceClass'
 
 const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 
@@ -43,6 +44,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
   const isLoginPage   = pathname === '/login'
   const isAccessDenied = pathname === '/access-denied'
+  const isDeviceLimit  = pathname === '/device-limit'
   const isWebhook = pathname.startsWith('/api/wazzup/') ||
                     pathname.startsWith('/api/amo/webhook') ||
                     pathname.startsWith('/api/cron/') ||
@@ -60,8 +62,40 @@ export async function middleware(request: NextRequest) {
     return redirect(url)
   }
 
+  // Лимит устройств: 1 телефон + 1 ПК на аккаунт. Если для класса устройства
+  // зарегистрировано ДРУГОЕ активное устройство — этот вход вытеснен (kick-old
+  // при новом логине) → страница /device-limit. Проверка кэшируется кукой
+  // device-ok на 5 минут; ошибки БД (нет таблицы и т.п.) — fail-open.
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !pathname.startsWith('/api/')) {
+    const deviceId = request.cookies.get('device-id')?.value
+    const okFor    = request.cookies.get('device-ok')?.value
+    if (!deviceId) {
+      // первое посещение: выдать идентификатор; регистрация произойдёт при логине
+      supabaseResponse.cookies.set('device-id', crypto.randomUUID(), {
+        maxAge: 60 * 60 * 24 * 400, path: '/', httpOnly: true, sameSite: 'lax',
+      })
+    } else if (okFor !== deviceId) {
+      try {
+        const cls = classifyDevice(request.headers.get('user-agent'))
+        const { data: reg } = await supabase.from('user_devices')
+          .select('device_id')
+          .eq('user_id', user.id).eq('device_class', cls).is('revoked_at', null)
+          .maybeSingle()
+        if (reg && reg.device_id !== deviceId) {
+          const url = request.nextUrl.clone()
+          url.pathname = '/device-limit'
+          return redirect(url)
+        }
+        // устройство совпадает или ещё не зарегистрировано (legacy-сессия) — пропускаем
+        supabaseResponse.cookies.set('device-ok', deviceId, {
+          maxAge: 300, path: '/', httpOnly: true, sameSite: 'lax',
+        })
+      } catch { /* fail-open: проверка безопасности не должна ронять приложение */ }
+    }
+  }
+
   // Role-based route protection
-  if (user && !isLoginPage && !isAccessDenied && !isWebhook) {
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook) {
     const cached      = request.cookies.get('user-role')?.value
     const cachedScope = request.cookies.get('user-b2b-scope')?.value
     let role: Role | null = normalizeRole(cached)
