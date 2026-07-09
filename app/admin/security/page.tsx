@@ -17,6 +17,7 @@ type SecEvent = {
   device_class: DeviceClass | null; user_agent: string | null; ip: string | null; created_at: string
 }
 type UserLite = { id: string; name: string | null; email: string | null }
+type ActivityDay = { user_id: string; day: string; first_seen: string; last_seen: string }
 
 const EVENT_LABELS: Record<string, { label: string; cls: string }> = {
   login:             { label: 'Вход',                    cls: 'bg-emerald-50 text-emerald-700' },
@@ -33,11 +34,13 @@ function shortUA(ua: string | null): string {
   return `${os} · ${br}`
 }
 const fmtDT = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const fmtT  = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
 
 export default function SecurityPage() {
   const [devices, setDevices] = useState<Device[]>([])
   const [events, setEvents] = useState<SecEvent[]>([])
   const [users, setUsers] = useState<UserLite[]>([])
+  const [activity, setActivity] = useState<ActivityDay[]>([])
   const [errors, setErrors] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [revoking, setRevoking] = useState<string | null>(null)
@@ -47,7 +50,7 @@ export default function SecurityPage() {
     try {
       const r = await fetch('/api/security/devices')
       const j = await r.json()
-      setDevices(j.devices ?? []); setEvents(j.events ?? []); setUsers(j.users ?? []); setErrors(j.errors ?? [])
+      setDevices(j.devices ?? []); setEvents(j.events ?? []); setUsers(j.users ?? []); setActivity(j.activity ?? []); setErrors(j.errors ?? [])
       // сигнал шаринга: вытеснения за последние 7 дней по пользователю
       const weekAgo = Date.now() - 7 * 86400_000
       const kicks = new Map<string, number>()
@@ -73,7 +76,7 @@ export default function SecurityPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
-      <div className="max-w-[900px]">
+      <div className="max-w-[1100px]">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Безопасность</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5 mb-5">Устройства сотрудников и журнал входов · правило: 1 телефон + 1 ПК на аккаунт</p>
 
@@ -125,22 +128,49 @@ export default function SecurityPage() {
           )}
         </div>
 
-        {/* Журнал */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] px-4 pt-3.5 pb-2">Журнал событий · последние {events.length}</p>
-          <div className="divide-y divide-[#f8f8f7] max-h-[480px] overflow-y-auto">
-            {events.map(e => {
-              const ev = EVENT_LABELS[e.event] ?? { label: e.event, cls: 'bg-[#f0f0ec] text-[#6b6b66]' }
-              return (
-                <div key={e.id} className="px-4 py-2 flex items-center gap-2 flex-wrap">
-                  <span className="text-[11px] text-[#b0b0aa] font-mono w-[86px] flex-shrink-0">{fmtDT(e.created_at)}</span>
-                  <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${ev.cls}`}>{ev.label}</span>
-                  <span className="text-[12px] font-medium text-[#111110]">{nameOf(e.user_id, e.email)}</span>
-                  <span className="text-[11px] text-[#9a9a95]">{e.device_class ? (e.device_class === 'mobile' ? '📱' : '💻') : ''} {shortUA(e.user_agent)}{e.ip ? ` · ${e.ip}` : ''}</span>
-                </div>
-              )
-            })}
-            {!loading && events.length === 0 && <p className="text-[13px] text-[#9a9a95] px-4 py-3">Событий пока нет</p>}
+        {/* Слева журнал · справа кто заходил сегодня */}
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-4 items-start">
+          {/* Журнал */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] px-4 pt-3.5 pb-2">Журнал событий · последние {events.length}</p>
+            <div className="divide-y divide-[#f8f8f7] max-h-[520px] overflow-y-auto">
+              {events.map(e => {
+                const ev = EVENT_LABELS[e.event] ?? { label: e.event, cls: 'bg-[#f0f0ec] text-[#6b6b66]' }
+                return (
+                  <div key={e.id} className="px-4 py-2 flex items-center gap-2 flex-wrap">
+                    <span className="text-[11px] text-[#b0b0aa] font-mono w-[86px] flex-shrink-0">{fmtDT(e.created_at)}</span>
+                    <span className={`text-[10px] font-medium px-1.5 py-px rounded-full ${ev.cls}`}>{ev.label}</span>
+                    <span className="text-[12px] font-medium text-[#111110]">{nameOf(e.user_id, e.email)}</span>
+                    <span className="text-[11px] text-[#9a9a95]">{e.device_class ? (e.device_class === 'mobile' ? '📱' : '💻') : ''} {shortUA(e.user_agent)}{e.ip ? ` · ${e.ip}` : ''}</span>
+                  </div>
+                )
+              })}
+              {!loading && events.length === 0 && <p className="text-[13px] text-[#9a9a95] px-4 py-3">Событий пока нет</p>}
+            </div>
+          </div>
+
+          {/* Сегодня в системе: первый и последний заход */}
+          <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] px-4 pt-3.5 pb-2">
+              Сегодня в системе · {activity.length}
+            </p>
+            {loading ? <p className="text-[13px] text-[#9a9a95] px-4 pb-4">Загрузка…</p> :
+              activity.length === 0 ? (
+              <p className="text-[13px] text-[#9a9a95] px-4 pb-4">Пока никого — активность копится с момента включения (раз в ~5 минут работы)</p>
+            ) : (
+              <div className="divide-y divide-[#f0f0ec]">
+                {[...activity].sort((a, b) => a.first_seen.localeCompare(b.first_seen)).map(a => (
+                  <div key={a.user_id} className="px-4 py-2.5">
+                    <p className="text-[13px] font-semibold text-[#111110]">{nameOf(a.user_id)}</p>
+                    <p className="text-[12px] text-[#6b6b66] mt-0.5">
+                      первый заход <span className="font-mono font-medium text-[#111110]">{fmtT(a.first_seen)}</span>
+                      {' · '}последний <span className="font-mono font-medium text-[#111110]">{fmtT(a.last_seen)}</span>
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[10px] text-[#b0b0aa] px-4 py-2 border-t border-[#f8f8f7]">точность ~5 минут · «последний» = последняя активность, не выход</p>
           </div>
         </div>
       </div>

@@ -90,6 +90,13 @@ export async function middleware(request: NextRequest) {
         supabaseResponse.cookies.set('device-ok', deviceId, {
           maxAge: 300, path: '/', httpOnly: true, sameSite: 'lax',
         })
+        // Тик активности (раз в ~5 мин на пользователя): «кто заходил сегодня»
+        // в /admin/security. first_seen фиксируется INSERT'ом, last_seen обновляется.
+        const nowIso = new Date().toISOString()
+        await supabase.from('user_activity_days').upsert(
+          { user_id: user.id, day: nowIso.slice(0, 10), last_seen: nowIso },
+          { onConflict: 'user_id,day' },
+        )
       } catch { /* fail-open: проверка безопасности не должна ронять приложение */ }
     }
   }

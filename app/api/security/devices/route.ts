@@ -10,15 +10,18 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard
 
   const svc = createServiceClient()
-  const [devs, evs, users] = await Promise.all([
+  const today = new Date().toISOString().slice(0, 10)
+  const [devs, evs, users, act] = await Promise.all([
     svc.from('user_devices').select('*').order('last_seen_at', { ascending: false }).limit(500),
     svc.from('security_events').select('*').order('created_at', { ascending: false }).limit(200),
     svc.from('users').select('id, name, email'),
+    svc.from('user_activity_days').select('*').eq('day', today).order('first_seen'),
   ])
   return NextResponse.json({
     devices: devs.data ?? [],
     events: evs.data ?? [],
     users: users.data ?? [],
+    activity: act.data ?? [],
     errors: [devs.error?.message, evs.error?.message].filter(Boolean),
   })
 }
