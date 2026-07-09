@@ -11,6 +11,16 @@ function normalizeB2BScope(v: unknown): B2BScope {
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
+  // Редирект ОБЯЗАН уносить с собой куки, которые @supabase/ssr записал в
+  // supabaseResponse при рефреше токена: refresh token ротируется (старый
+  // гасится), и потерять новые куки = убить сессию пользователя. Симптом:
+  // «утром работает, днём выкидывает на логин».
+  const redirect = (url: URL) => {
+    const res = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
+    return res
+  }
+
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -41,13 +51,13 @@ export async function middleware(request: NextRequest) {
   if (!user && !isLoginPage && !isWebhook) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    return redirect(url)
   }
 
   if (user && isLoginPage) {
     const url = request.nextUrl.clone()
     url.pathname = '/'
-    return NextResponse.redirect(url)
+    return redirect(url)
   }
 
   // Role-based route protection
@@ -86,13 +96,13 @@ export async function middleware(request: NextRequest) {
     if (role === 'production' && pathname === '/') {
       const url = request.nextUrl.clone()
       url.pathname = '/production-app'
-      return NextResponse.redirect(url)
+      return redirect(url)
     }
 
     if (role && !canAccessRoute(role, pathname, { b2bScope: b2bScope ?? null })) {
       const url = request.nextUrl.clone()
       url.pathname = '/access-denied'
-      return NextResponse.redirect(url)
+      return redirect(url)
     }
   }
 
