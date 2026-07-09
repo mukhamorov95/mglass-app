@@ -2,6 +2,9 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
 
+// 5-страничный PDF + большой tool-JSON на десятки деталей — дефолтного времени не хватает.
+export const maxDuration = 120
+
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 // Разбор чертежа (PDF или фото от руки) в позиции для B2B-калькулятора.
@@ -54,6 +57,10 @@ const SYS =
   'На чертеже такие детали обычно подписаны двумя числами по горизонтали (напр. 1180 и 615): сторона + скос. Тогда cut_width_mm = сторона + скос (1180+615=1795), а width_mm = сторона (1180). ' +
   'Для прямоугольника shape=rectangle и cut_width_mm=width_mm, cut_height_mm=height_mm.\n' +
   '— Толщину и материал бери только если явно есть; иначе thickness_mm=0 и material="".\n' +
+  '— МНОГОСТРАНИЧНЫЙ PDF (CAD-деталировка со штампом): обработай ВСЕ страницы, на каждой может быть НЕСКОЛЬКО деталей. ' +
+  'Материал и толщина из штампа листа (напр. «Стекло бесцветное М1 8 мм») относятся ко всем деталям этого листа. ' +
+  'Номера позиций в штампе (1, 2, 3…) — это отдельные детали; количество каждой смотри в таблице штампа. ' +
+  'Такая деталировка — ВСЕГДА чертёж (is_drawing=true), даже если выглядит формально.\n' +
   '— На чертеже от руки распознавай по-максимуму, а сомнительное вынеси в warnings.\n' +
   '— Если файл вообще не чертёж деталей — is_drawing=false и items пустой.'
 
@@ -84,12 +91,17 @@ export async function POST(req: Request) {
   try {
     const msg = await anthropic.messages.create({
       model: 'claude-opus-4-8',
-      max_tokens: 2000,
+      // 2000 обрезало tool-JSON на многодетальных деталировках (14+ позиций) —
+      // API возвращал пустой input, UI видел «не распознан». Запас на ~50 деталей.
+      max_tokens: 16000,
       system: SYS,
       tools: [{ name: 'drawing', description: 'Извлечённые с чертежа детали', input_schema: SCHEMA }],
       tool_choice: { type: 'tool', name: 'drawing' },
-      messages: [{ role: 'user', content: [media, { type: 'text', text: 'Разбери этот чертёж/эскиз в детали для просчёта.' }] }],
+      messages: [{ role: 'user', content: [media, { type: 'text', text: 'Разбери этот чертёж/эскиз в детали для просчёта. Обработай все страницы.' }] }],
     })
+    if (msg.stop_reason === 'max_tokens') {
+      return NextResponse.json({ error: 'truncated', detail: 'Слишком много деталей в файле — разбейте PDF на части и загрузите по отдельности.' }, { status: 502 })
+    }
     const tool = msg.content.find(c => c.type === 'tool_use')
     if (!tool || tool.type !== 'tool_use') return NextResponse.json({ error: 'no_structure' }, { status: 502 })
     return NextResponse.json({ parsed: tool.input })
