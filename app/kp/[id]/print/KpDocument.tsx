@@ -171,6 +171,27 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           </tbody>
         </table>
         <div className="kp-subtotal"><span className="lbl">Промежуточный итог</span><span>{RUB(kp.subtotal ?? kp.total)} ₽</span></div>
+        {(() => {
+          // Скидка = разница между промежуточным итогом и итогом к оплате.
+          // Показываем процент (целый, если ровный) и сумму — клиент видит выгоду.
+          const toNum = (v?: number | string) => {
+            if (v === undefined || v === null || v === '') return null
+            const n = typeof v === 'number' ? v : Number(String(v).replace(/[^\d.-]/g, ''))
+            return isFinite(n) ? n : null
+          }
+          const sub = toNum(kp.subtotal ?? kp.total)
+          const pay = toNum(kp.total_pay ?? kp.total)
+          if (sub == null || pay == null || sub - pay < 1) return null
+          const disc = sub - pay
+          const pct = (disc / sub) * 100
+          const pctLabel = Math.abs(pct - Math.round(pct)) < 0.05 ? String(Math.round(pct)) : pct.toFixed(1)
+          return (
+            <div className="kp-subtotal kp-discount">
+              <span className="lbl">Ваша скидка {pctLabel}%</span>
+              <span>− {RUB(disc)} ₽</span>
+            </div>
+          )
+        })()}
         <div className="kp-paybar"><span className="l">ИТОГО К ОПЛАТЕ</span><span className="r">{RUB(kp.total_pay ?? kp.total)} ₽</span></div>
         {kp.vat_note && <div className="kp-vat">{kp.vat_note}</div>}
 
