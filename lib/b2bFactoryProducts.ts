@@ -130,7 +130,7 @@ export type FactoryQuote = {
   prodPricePiece: number     // продажная цена производства за штуку
   marginPercent: number      // производственная маржа из конфига
   shape?: 'rect' | 'curved'  // криволинейный рез → станция «Криволинейка»
-  costLines?: { name: string; qty: number; unit: string; total: number }[] // состав себестоимости (для владельца)
+  costLines?: { name: string; qty: number; unit: string; price?: number; total: number }[] // состав себестоимости (для владельца)
 }
 
 // Опции комплектации для UI: ленты (температура/вольтаж) и профили из справочника
@@ -244,7 +244,7 @@ export function calcFactoryMirror(
     marginPercent: d.mirrorCfg.productionMarginPercent,
     shape: p.curved ? 'curved' : 'rect',
     costLines: [
-      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: Math.round(l.total) })),
+      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, price: l.price, total: Math.round(l.total) })),
       ...frameLines,
     ],
   }
@@ -305,7 +305,7 @@ export function calcFactoryLoft(
     prodPricePiece: Math.round(fm.basePrice),
     marginPercent: d.loftCfg.productionMarginPercent,
     costLines: [
-      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, total: l.total })),
+      ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, price: l.price, total: l.total })),
       ...packagingLine,
     ],
   }

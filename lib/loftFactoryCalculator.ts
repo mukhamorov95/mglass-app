@@ -163,7 +163,10 @@ export function calcLoftFactory(p: LoftFactoryInputs, rates: LoftRates): LoftFac
     lines.push({ name: 'Работа сварщика', qty: r2(areaM2), unit: 'м²', price: rate('weld_m2'), total: Math.round(areaM2 * rate('weld_m2')) })
   if (rate('paint_oven') > 0)
     lines.push({ name: 'Покраска порошковая (RAL)', qty: 1, unit: 'печка', price: rate('paint_oven'), total: Math.round(rate('paint_oven')) })
-  if (rate('glazing_glass') > 0)
+  // Сборка — ₽/м² изделия (ставка glazing_m2); старая ставка ₽/стекло — фолбэк
+  if (rate('glazing_m2') > 0)
+    lines.push({ name: 'Остекление и сборка', qty: r2(areaM2), unit: 'м²', price: rate('glazing_m2'), total: Math.round(areaM2 * rate('glazing_m2')) })
+  else if (rate('glazing_glass') > 0)
     lines.push({ name: 'Остекление и сборка', qty: glassCount, unit: 'стекло', price: rate('glazing_glass'), total: Math.round(glassCount * rate('glazing_glass')) })
 
   const totalCost = lines.reduce((s, l) => s + l.total, 0)
