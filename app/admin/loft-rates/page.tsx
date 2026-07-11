@@ -8,6 +8,12 @@ import { createClient } from '@/lib/supabase-browser'
 
 type Rate = { key: string; label: string; unit: string; value: number; sort: number }
 
+// Ставки, добавленные после первичной миграции: досеваются при открытии
+// страницы, если их ещё нет в БД (calcLoftFactory берёт их по ключу).
+const REQUIRED_RATES: Rate[] = [
+  { key: 'glazing_m2', label: 'Остекление и сборка', unit: '₽/м² изделия', value: 500, sort: 100 },
+]
+
 export default function LoftRatesPage() {
   const sb = createClient()
   const [rates, setRates] = useState<Rate[]>([])
@@ -15,8 +21,17 @@ export default function LoftRatesPage() {
   const [savedKey, setSavedKey] = useState<string | null>(null)
 
   useEffect(() => {
-    sb.from('loft_rates').select('*').order('sort')
-      .then(({ data }) => { setRates((data ?? []) as Rate[]); setLoading(false) })
+    ;(async () => {
+      const { data } = await sb.from('loft_rates').select('*').order('sort')
+      let list = (data ?? []) as Rate[]
+      const missing = REQUIRED_RATES.filter(req => !list.some(r => r.key === req.key))
+      if (missing.length) {
+        const { error } = await sb.from('loft_rates').insert(missing)
+        if (!error) list = [...list, ...missing].sort((a, b) => a.sort - b.sort)
+      }
+      setRates(list)
+      setLoading(false)
+    })()
   }, [sb])
 
   async function save(key: string, value: number) {
