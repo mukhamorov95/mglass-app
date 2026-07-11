@@ -1377,6 +1377,30 @@ export default function B2BCalculatorPage() {
                       <span className="text-blue-700">Для M-Glass <span className="text-[10px] text-[#9a9a95] font-normal">(внутренняя — в быстрый расчёт)</span></span>
                       <span className="font-mono text-blue-700">{factoryQuote.transferPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
+                    {/* Каналы: дилерская цена строится ОТ розницы (RRP − скидка канала),
+                        а не от себестоимости — партнёру-перепродавцу остаётся заработок */}
+                    {(() => {
+                      const cfg = fKind === 'floft' ? factoryData?.loftCfg : factoryData?.mirrorCfg
+                      const denom = cfg ? 1 - (cfg.productionMarginPercent + cfg.productionTaxPercent) / 100 : 0.48
+                      if (denom <= 0) return null
+                      const rrp = Math.round(factoryQuote.transferPricePiece / denom)
+                      const dealerDisc = discount > 0 ? discount : 30
+                      const dealer = Math.round(rrp * (1 - dealerDisc / 100))
+                      const ourPct = dealer > 0 ? Math.round((1 - factoryQuote.factoryCostPiece / dealer) * 100) : 0
+                      return (
+                        <div className="text-[11px] border-t border-[#f0f0ec] pt-1 space-y-0.5">
+                          <div className="flex justify-between text-[#6b6b66]">
+                            <span>Розница M-Glass (RRP)</span>
+                            <span className="font-mono">≈ {rrp.toLocaleString('ru-RU')} ₽/шт</span>
+                          </div>
+                          <div className="flex justify-between font-semibold text-[#111110]">
+                            <span>Партнёру-перепродавцу <span className="text-[10px] text-[#9a9a95] font-normal">(RRP −{dealerDisc}%{discount > 0 && selectedClient ? ` · ${selectedClient.name}` : ''})</span></span>
+                            <span className="font-mono">{dealer.toLocaleString('ru-RU')} ₽/шт</span>
+                          </div>
+                          <p className="text-[10px] text-[#9a9a95]">наша маржа на дилерской ≈ {ourPct}% · заработок партнёра — до {dealerDisc}% от розницы</p>
+                        </div>
+                      )
+                    })()}
                     <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
                     {isAdmin && !!factoryQuote.costLines?.length && (
                       <div className="pt-1 border-t border-[#f0f0ec]">
