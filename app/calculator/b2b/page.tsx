@@ -1368,8 +1368,14 @@ export default function B2BCalculatorPage() {
                       <span className="font-mono text-[#111110]">{factoryQuote.factoryCostPiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
                     <div className="flex justify-between text-[13px] font-semibold">
-                      <span className="text-[#111110]">Цена производства <span className="text-[10px] text-[#9a9a95] font-normal">(маржа {factoryQuote.marginPercent}%)</span></span>
+                      <span className="text-[#111110]">Цена производства <span className="text-[10px] text-[#9a9a95] font-normal">(внешним B2B, маржа {factoryQuote.marginPercent}%)</span></span>
                       <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
+                    </div>
+                    {/* Внутренняя передаточная цена: розничная маржа M-Glass добавится в быстром
+                        расчёте — полную производственную маржу внутрь группы не задваиваем */}
+                    <div className="flex justify-between text-[13px] font-semibold border-t border-[#f0f0ec] pt-1">
+                      <span className="text-blue-700">Для M-Glass <span className="text-[10px] text-[#9a9a95] font-normal">(внутренняя — в быстрый расчёт)</span></span>
+                      <span className="font-mono text-blue-700">{factoryQuote.transferPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
                     <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
                     {isAdmin && !!factoryQuote.costLines?.length && (

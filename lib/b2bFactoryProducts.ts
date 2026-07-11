@@ -19,11 +19,16 @@ export type PricingCfg = {
   factoryOverheadPercent: number
   scrapReservePercent: number
   packagingCostPerM2: number
+  // Внутренняя (передаточная) надбавка цеха для продаж САМОМУ M-Glass:
+  // себестоимость + uplift%. Полная производственная маржа — только внешним
+  // B2B-клиентам, иначе розница задваивает маржу (double marginalization).
+  transferUpliftPercent: number
 }
 
 const CFG_FALLBACK: PricingCfg = {
   productionTaxPercent: 12, productionMarginPercent: 40,
   factoryOverheadPercent: 20, scrapReservePercent: 5, packagingCostPerM2: 120,
+  transferUpliftPercent: 10,
 }
 
 type RawComponent = {
@@ -54,6 +59,7 @@ function rowToCfg(r: Record<string, unknown> | null): PricingCfg {
     factoryOverheadPercent:  Number(r.factory_overhead_percent  ?? CFG_FALLBACK.factoryOverheadPercent),
     scrapReservePercent:     Number(r.scrap_reserve_percent     ?? CFG_FALLBACK.scrapReservePercent),
     packagingCostPerM2:      Number(r.packaging_cost_per_m2     ?? CFG_FALLBACK.packagingCostPerM2),
+    transferUpliftPercent:   Number(r.transfer_uplift_percent   ?? CFG_FALLBACK.transferUpliftPercent),
   }
 }
 
@@ -127,7 +133,8 @@ export type FactoryQuote = {
   areaPiece: number      // м² за штуку
   weightPerPiece: number // кг за штуку
   factoryCostPiece: number   // себестоимость производства за штуку
-  prodPricePiece: number     // продажная цена производства за штуку
+  prodPricePiece: number     // продажная цена производства за штуку (внешним B2B)
+  transferPricePiece: number // внутренняя цена для M-Glass (cost + uplift), для быстрого расчёта
   marginPercent: number      // производственная маржа из конфига
   shape?: 'rect' | 'curved'  // криволинейный рез → станция «Криволинейка»
   costLines?: { name: string; qty: number; unit: string; price?: number; total: number }[] // состав себестоимости (для владельца)
@@ -241,6 +248,7 @@ export function calcFactoryMirror(
     weightPerPiece: Math.round(res.area * p.mirrorMm * 2.5 * 10) / 10,
     factoryCostPiece: Math.round(directCost),
     prodPricePiece: Math.round(fm.basePrice),
+    transferPricePiece: Math.round(directCost * (1 + d.mirrorCfg.transferUpliftPercent / 100)),
     marginPercent: d.mirrorCfg.productionMarginPercent,
     shape: p.curved ? 'curved' : 'rect',
     costLines: [
@@ -303,6 +311,7 @@ export function calcFactoryLoft(
     weightPerPiece: res.weightKg,
     factoryCostPiece: directCost,
     prodPricePiece: Math.round(fm.basePrice),
+    transferPricePiece: Math.round(directCost * (1 + d.loftCfg.transferUpliftPercent / 100)),
     marginPercent: d.loftCfg.productionMarginPercent,
     costLines: [
       ...res.costLines.map(l => ({ name: l.name, qty: l.qty, unit: l.unit, price: l.price, total: l.total })),
