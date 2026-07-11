@@ -1320,11 +1320,15 @@ export default function B2BCalculatorPage() {
                           className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол по вертикали</label>
+                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол в створке (по высоте)</label>
                         <input type="number" min={1} value={flRows} onChange={e => setFlRows(e.target.value)}
                           className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                     </div>
+                    <p className="text-[11px] text-[#9a9a95] leading-snug">
+                      Лофт-сетка: горизонтальные перемычки делят каждую створку на N стёкол по высоте
+                      (напр. 4 стекла = 3 перемычки). «Глухая часть» — секция, которая не открывается.
+                    </p>
                     <div className="flex items-center gap-4 flex-wrap">
                       {flConstruction === 'swing' && (
                         <div className="flex items-center gap-2">
