@@ -68,16 +68,21 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
   const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
+  // Разбивка по заказчикам: владелец должен видеть, кому что везём и сколько это весит
+  const byClient = new Map<string, Order[]>()
+  for (const o of os) {
+    const name = o.client_name ?? '—'
+    byClient.set(name, [...(byClient.get(name) ?? []), o])
+  }
   return (
     <div className="border border-[#e4e4e0] rounded-lg bg-white p-4">
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div>
           <span className="font-medium text-[#111110]">{s.title ?? `Партия ${s.id}`}</span>
-          {s.ship_date && <span className="ml-2 text-[13px] text-[#9a9a95]">отправка {new Date(s.ship_date).toLocaleDateString('ru-RU')}</span>}
           {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
         </div>
         <div className="flex items-center gap-3 text-[13px]">
-          <span className="font-mono">{os.length} зак. · {KG(weight)} кг · {RUB(amount)} ₽</span>
+          <span className="font-mono font-medium">{os.length} зак. · {KG(weight)} кг · {RUB(amount)} ₽</span>
           {s.status === 'draft' && (
             <>
               <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">✓ Отправлена</button>
@@ -86,17 +91,34 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
           )}
         </div>
       </div>
-      <div className="mt-2 space-y-1">
-        {os.map(o => (
-          <div key={o.id} className="flex items-center gap-2 text-[13px] text-[#4b4b47]">
-            <span className="font-mono">{orderNo(o)}</span>
-            <span>{o.client_name}</span>
-            <span className="text-[#9a9a95] ml-auto font-mono">{KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
-            {s.status === 'draft' && (
-              <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из партии">✕</button>
-            )}
-          </div>
-        ))}
+      {os.length === 0 && (
+        <div className="mt-2 text-[13px] text-[#9a9a95]">Рейс пустой — отметьте заказы ниже и добавьте их сюда.</div>
+      )}
+      <div className="mt-2 space-y-3">
+        {[...byClient.entries()].map(([name, cos]) => {
+          const cw = cos.reduce((sum, o) => sum + orderWeight(o), 0)
+          const ca = cos.reduce((sum, o) => sum + orderSum(o), 0)
+          return (
+            <div key={name}>
+              <div className="flex items-center gap-2 text-[13px]">
+                <span className="font-medium text-[#111110]">{name}</span>
+                <span className="text-[#9a9a95] font-mono">{cos.length} зак. · {KG(cw)} кг · {RUB(ca)} ₽</span>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {cos.map(o => (
+                  <div key={o.id} className="flex items-center gap-2 text-[13px] text-[#4b4b47] pl-3">
+                    <span className="font-mono">{orderNo(o)}</span>
+                    <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${o.ready.cls}`}>{o.ready.label}</span>
+                    <span className="text-[#9a9a95] ml-auto font-mono">{KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
+                    {s.status === 'draft' && (
+                      <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из рейса">✕</button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -125,11 +147,14 @@ export default function VoronezhPage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [shipments, setShipments] = useState<Shipment[]>([])
   const [picked, setPicked] = useState<Set<number>>(new Set())
-  const [shipDate, setShipDate] = useState('')
   const [saving, setSaving] = useState(false)
   const [addingClient, setAddingClient] = useState(false)
   const [showShipped, setShowShipped] = useState(false)
   const [err, setErr] = useState<string | null>(null)
+  const [search, setSearch] = useState('')
+  const [newTripDate, setNewTripDate] = useState('')
+  // Целевой рейс: отмеченные заказы добавляются в него
+  const [targetShip, setTargetShip] = useState<number | null>(null)
 
   async function load() {
     const sb = createClient()
@@ -185,15 +210,18 @@ export default function VoronezhPage() {
     )
   }, [orders, vClients, inShipment])
 
-  const poolByClient = useMemo(() => {
-    const m = new Map<number, Order[]>()
-    for (const o of pool) {
-      const arr = m.get(o.client_id!) ?? []
-      arr.push(o)
-      m.set(o.client_id!, arr)
-    }
-    return m
-  }, [pool])
+  // Поиск по номеру заказа (свой номер или 00id) и имени клиента
+  const q = search.trim().toLowerCase()
+  const filteredPool = q
+    ? pool.filter(o => orderNo(o).toLowerCase().includes(q) || (o.client_name ?? '').toLowerCase().includes(q))
+    : pool
+
+  const poolByClient = new Map<number, Order[]>()
+  for (const o of filteredPool) {
+    const arr = poolByClient.get(o.client_id!) ?? []
+    arr.push(o)
+    poolByClient.set(o.client_id!, arr)
+  }
 
   const pickedOrders = pool.filter(o => picked.has(o.id))
   const pickedWeight = pickedOrders.reduce((s, o) => s + orderWeight(o), 0)
@@ -221,22 +249,32 @@ export default function VoronezhPage() {
     })
   }
 
-  async function createShipment() {
+  // Рейс создаётся заранее «к числу», заказы добираются в него по мере готовности
+  async function createTrip() {
+    if (!newTripDate) return
+    setSaving(true)
+    const sb = createClient()
+    const title = `Воронеж к ${new Date(newTripDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+    const { data: ship, error } = await sb.from('delivery_shipments')
+      .insert({ region: REGION, title, ship_date: newTripDate })
+      .select('id')
+      .single()
+    setSaving(false)
+    if (error || !ship) { setErr(error?.message ?? 'Не удалось создать рейс'); return }
+    setNewTripDate('')
+    setTargetShip(ship.id)
+    load()
+  }
+
+  async function addPickedToTrip(shipmentId: number) {
     if (pickedOrders.length === 0) return
     setSaving(true)
     const sb = createClient()
-    const title = `Воронеж ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
-    const { data: ship, error } = await sb.from('delivery_shipments')
-      .insert({ region: REGION, title, ship_date: shipDate || null, total_weight_kg: Math.round(pickedWeight * 10) / 10, total_amount: Math.round(pickedAmount) })
-      .select('id')
-      .single()
-    if (error || !ship) { setErr(error?.message ?? 'Не удалось создать отгрузку'); setSaving(false); return }
-    const { error: linkErr } = await sb.from('delivery_shipment_orders')
-      .insert(pickedOrders.map(o => ({ shipment_id: ship.id, order_id: o.id })))
-    if (linkErr) { setErr(linkErr.message); setSaving(false); return }
-    setPicked(new Set())
-    setShipDate('')
+    const { error } = await sb.from('delivery_shipment_orders')
+      .insert(pickedOrders.map(o => ({ shipment_id: shipmentId, order_id: o.id })))
     setSaving(false)
+    if (error) { setErr(error.message); return }
+    setPicked(new Set())
     load()
   }
 
@@ -267,6 +305,10 @@ export default function VoronezhPage() {
 
   const drafts = shipments.filter(s => s.status === 'draft')
   const done = shipments.filter(s => s.status === 'shipped')
+  // Куда добавлять отмеченные заказы: выбранный черновик, иначе первый по дате отправки
+  const effectiveTarget = targetShip != null && drafts.some(d => d.id === targetShip)
+    ? targetShip
+    : (drafts[0]?.id ?? null)
 
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
@@ -311,21 +353,29 @@ export default function VoronezhPage() {
               )}
             </div>
 
-            {/* Формируемая отгрузка */}
+            {/* Панель отмеченных заказов: добавление в рейс */}
             {picked.size > 0 && (
               <div className="border-2 border-[#111110] rounded-lg bg-white p-4 sticky top-2 z-10 shadow-sm">
                 <div className="flex flex-wrap items-center gap-3 justify-between">
                   <div className="text-[14px] font-medium text-[#111110]">
-                    В отгрузку: {pickedOrders.length} зак. · <span className="font-mono">{KG(pickedWeight)} кг</span> · <span className="font-mono">{RUB(pickedAmount)} ₽</span>
+                    Отмечено: {pickedOrders.length} зак. · <span className="font-mono">{KG(pickedWeight)} кг</span> · <span className="font-mono">{RUB(pickedAmount)} ₽</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input type="date" value={shipDate} onChange={e => setShipDate(e.target.value)}
-                      className="border border-[#e4e4e0] rounded-md px-2 py-1.5 text-[13px] bg-white" />
-                    <button onClick={createShipment} disabled={saving}
-                      className="px-4 py-2 rounded-md bg-[#111110] text-white text-[13px] hover:opacity-85 disabled:opacity-50">
-                      {saving ? 'Сохраняю…' : 'Сформировать отгрузку'}
-                    </button>
-                  </div>
+                  {effectiveTarget != null ? (
+                    <div className="flex items-center gap-2">
+                      {drafts.length > 1 && (
+                        <select value={effectiveTarget} onChange={e => setTargetShip(Number(e.target.value))}
+                          className="border border-[#e4e4e0] rounded-md px-2 py-1.5 text-[13px] bg-white">
+                          {drafts.map(d => <option key={d.id} value={d.id}>{d.title ?? `Рейс ${d.id}`}</option>)}
+                        </select>
+                      )}
+                      <button onClick={() => addPickedToTrip(effectiveTarget)} disabled={saving}
+                        className="px-4 py-2 rounded-md bg-[#111110] text-white text-[13px] hover:opacity-85 disabled:opacity-50">
+                        {saving ? 'Сохраняю…' : `＋ В рейс${drafts.length === 1 ? ` «${drafts[0].title}»` : ''}`}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-[13px] text-[#9a9a95]">Сначала создайте рейс к дате ↓</span>
+                  )}
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#4b4b47]">
                   {[...pickedByClient.entries()].map(([name, v]) => (
@@ -335,19 +385,39 @@ export default function VoronezhPage() {
               </div>
             )}
 
-            {/* Черновики партий */}
-            {drafts.length > 0 && (
-              <div className="space-y-3">
-                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Формируемые партии</h2>
-                {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+            {/* Рейсы: создаются к дате, заказы добираются по мере готовности */}
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3 justify-between">
+                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Рейсы в Воронеж</h2>
+                <div className="flex items-center gap-2">
+                  <input type="date" value={newTripDate} onChange={e => setNewTripDate(e.target.value)}
+                    className="border border-[#e4e4e0] rounded-md px-2 py-1.5 text-[13px] bg-white" />
+                  <button onClick={createTrip} disabled={saving || !newTripDate}
+                    className="px-3 py-2 rounded-md border border-[#111110] text-[13px] text-[#111110] hover:bg-[#111110] hover:text-white disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[#111110]">
+                    ＋ Рейс к дате
+                  </button>
+                </div>
               </div>
-            )}
+              {drafts.length === 0 && (
+                <div className="text-[13px] text-[#9a9a95] border border-dashed border-[#e4e4e0] rounded-lg bg-white p-4">
+                  Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
+                </div>
+              )}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+            </div>
 
             {/* Пул заказов по клиентам */}
             <div className="space-y-3">
-              <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Заказы к отправке — {pool.length} шт · {KG(pool.reduce((s, o) => s + orderWeight(o), 0))} кг</h2>
+              <div className="flex flex-wrap items-center gap-3 justify-between">
+                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Заказы к отправке — {filteredPool.length}{q ? ` из ${pool.length}` : ''} шт · {KG(filteredPool.reduce((s, o) => s + orderWeight(o), 0))} кг</h2>
+                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: номер заказа или клиент"
+                  className="border border-[#e4e4e0] rounded-md px-3 py-1.5 text-[13px] bg-white w-64" />
+              </div>
               {vClients.length > 0 && pool.length === 0 && (
                 <div className="text-[13px] text-[#9a9a95] border border-[#e4e4e0] rounded-lg bg-white p-4">Активных заказов у клиентов Воронежа нет.</div>
+              )}
+              {pool.length > 0 && filteredPool.length === 0 && (
+                <div className="text-[13px] text-[#9a9a95] border border-[#e4e4e0] rounded-lg bg-white p-4">По запросу «{search}» ничего не найдено.</div>
               )}
               {[...poolByClient.entries()].map(([clientId, os]) => {
                 const client = vClients.find(c => c.id === clientId)
