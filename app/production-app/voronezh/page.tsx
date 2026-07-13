@@ -206,11 +206,22 @@ export default function VoronezhPage() {
     if (sh.error) setErr(`Партии недоступны: ${sh.error.message}`)
     setClients((cl.data ?? []) as Client[])
     const nowMs = Date.now()
-    setOrders(((ord.data ?? []) as Omit<Order, 'parsed' | 'ready'>[]).map(o => {
+    const links = (shOrd.data ?? []) as { shipment_id: number; order_id: number }[]
+    // Заказы, уже добавленные в рейсы, докачиваем БЕЗ фильтров пула — в рейсе
+    // может лежать и просчёт, и заказ из архива, карточка обязана их показать
+    const rawOrders = (ord.data ?? []) as Omit<Order, 'parsed' | 'ready'>[]
+    const haveIds = new Set(rawOrders.map(o => o.id))
+    const missingIds = [...new Set(links.map(l => l.order_id))].filter(oid => !haveIds.has(oid))
+    if (missingIds.length > 0) {
+      const { data: extra } = await sb.from('b2b_orders')
+        .select('id, custom_number, client_id, client_name, items, notes, total_after_discount, total_sale_inc_vat, created_at')
+        .in('id', missingIds)
+      rawOrders.push(...((extra ?? []) as Omit<Order, 'parsed' | 'ready'>[]))
+    }
+    setOrders(rawOrders.map(o => {
       const parsed = parseNotes(o.notes)
       return { ...o, parsed, ready: readinessOf(parsed, nowMs) }
     }))
-    const links = (shOrd.data ?? []) as { shipment_id: number; order_id: number }[]
     setShipments(((sh.data ?? []) as Omit<Shipment, 'orderIds'>[]).map(s => ({
       ...s,
       orderIds: links.filter(l => l.shipment_id === s.id).map(l => l.order_id),
