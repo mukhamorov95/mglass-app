@@ -7,6 +7,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
+import { itemsWeight } from '@/lib/deliveryWeight'
 
 const REGION = 'voronezh'
 const CITY = 'Воронеж'
@@ -35,6 +36,7 @@ type Shipment = {
   status: 'draft' | 'shipped'
   total_weight_kg: number | null
   total_amount: number | null
+  max_weight_kg: number | null
   shipped_at: string | null
   created_at: string
   orderIds: number[]
@@ -45,25 +47,19 @@ const KG = (n: number) => (Math.round(n * 10) / 10).toLocaleString('ru-RU')
 const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
 const orderSum = (o: Order) => o.total_after_discount ?? o.total_sale_inc_vat ?? 0
 
-function orderWeight(o: Order): number {
-  const items = Array.isArray(o.items) ? o.items : []
-  return items.reduce((s, it) => {
-    if (typeof it.totalWeight === 'number' && it.totalWeight > 0) return s + it.totalWeight
-    const area = (it.areaPiece ?? 0) * (it.quantity ?? 1)
-    return s + area * (it.thickness ?? 0) * 2.5
-  }, 0)
-}
+const orderWeight = (o: Order) => itemsWeight(o.items)
 
 function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
 }
 
-function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
+function ShipmentCard({ s, orders, onShipped, onDelete, onRemove, onLimit }: {
   s: Shipment
   orders: Order[]
   onShipped: (s: Shipment) => void
   onDelete: (s: Shipment) => void
   onRemove: (shipmentId: number, orderId: number) => void
+  onLimit: (shipmentId: number, kg: number | null) => void
 }) {
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
@@ -74,6 +70,10 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
     const name = o.client_name ?? '—'
     byClient.set(name, [...(byClient.get(name) ?? []), o])
   }
+  // Загрузка машины: <90% зелёная, 90–100% жёлтая, сверх лимита — красная с перегрузом
+  const limit = s.max_weight_kg ?? null
+  const loadPct = limit ? weight / limit * 100 : null
+  const loadTone = loadPct == null ? '' : loadPct > 100 ? 'bg-red-500' : loadPct >= 90 ? 'bg-amber-400' : 'bg-emerald-500'
   return (
     <div className="border border-[#e4e4e0] rounded-lg bg-white p-4">
       <div className="flex flex-wrap items-center gap-2 justify-between">
@@ -83,6 +83,8 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
         </div>
         <div className="flex items-center gap-3 text-[13px]">
           <span className="font-mono font-medium">{os.length} зак. · {KG(weight)} кг · {RUB(amount)} ₽</span>
+          <a href={`/production-app/voronezh/${s.id}/print`} target="_blank" rel="noreferrer"
+            className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">🖨 Лист рейса</a>
           {s.status === 'draft' && (
             <>
               <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">✓ Отправлена</button>
@@ -90,6 +92,26 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
             </>
           )}
         </div>
+      </div>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        {s.status === 'draft' && (
+          <label className="flex items-center gap-1.5 text-[12px] text-[#9a9a95]">
+            Лимит машины, кг:
+            <input type="number" defaultValue={limit ?? ''} placeholder="—" min={0}
+              onBlur={e => { const v = e.target.value.trim(); onLimit(s.id, v === '' ? null : Number(v)) }}
+              className="w-20 border border-[#e4e4e0] rounded-md px-2 py-1 text-[12px] font-mono bg-white" />
+          </label>
+        )}
+        {limit != null && loadPct != null && (
+          <div className="flex items-center gap-2 flex-1 min-w-[220px]">
+            <div className="flex-1 h-2 rounded-full bg-[#f0f0ee] overflow-hidden">
+              <div className={`h-full rounded-full ${loadTone}`} style={{ width: `${Math.min(loadPct, 100)}%` }} />
+            </div>
+            <span className={`text-[12px] font-mono ${loadPct > 100 ? 'text-red-600 font-semibold' : loadPct >= 90 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>
+              {loadPct > 100 ? `Перегруз +${KG(weight - limit)} кг` : `${Math.round(loadPct)}% из ${KG(limit)} кг`}
+            </span>
+          </div>
+        )}
       </div>
       {os.length === 0 && (
         <div className="mt-2 text-[13px] text-[#9a9a95]">Рейс пустой — отметьте заказы ниже и добавьте их сюда.</div>
@@ -278,6 +300,13 @@ export default function VoronezhPage() {
     load()
   }
 
+  async function setLimit(shipmentId: number, kg: number | null) {
+    const sb = createClient()
+    const { error } = await sb.from('delivery_shipments').update({ max_weight_kg: kg }).eq('id', shipmentId)
+    if (error) { setErr(error.message); return }
+    setShipments(prev => prev.map(s => s.id === shipmentId ? { ...s, max_weight_kg: kg } : s))
+  }
+
   async function removeFromShipment(shipmentId: number, orderId: number) {
     const sb = createClient()
     await sb.from('delivery_shipment_orders').delete().eq('shipment_id', shipmentId).eq('order_id', orderId)
@@ -403,7 +432,7 @@ export default function VoronezhPage() {
                   Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
                 </div>
               )}
-              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
             </div>
 
             {/* Пул заказов по клиентам */}
@@ -454,7 +483,7 @@ export default function VoronezhPage() {
                 <button onClick={() => setShowShipped(v => !v)} className="text-[13px] uppercase tracking-wide text-[#9a9a95]">
                   {showShipped ? '▾' : '▸'} Отправленные партии — {done.length}
                 </button>
-                {showShipped && done.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+                {showShipped && done.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
               </div>
             )}
           </>
