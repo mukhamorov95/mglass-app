@@ -150,6 +150,7 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove, onLimit }: {
 // Считается в load() (не в рендере — правило purity), nowMs фиксируется там же.
 function readinessOf(parsed: NotesData, nowMs: number): Readiness {
   const stages = parsed.stages ?? {}
+  if (stages.shipped) return { label: 'Отгружен (цех)', cls: 'bg-purple-50 text-purple-700 border-purple-200' }
   if (stages.packaged) return { label: 'Готов / упакован', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
   const deadline = parsed.deadline_date
     ? new Date(parsed.deadline_date)
@@ -177,6 +178,9 @@ export default function VoronezhPage() {
   const [newTripDate, setNewTripDate] = useState('')
   // Целевой рейс: отмеченные заказы добавляются в него
   const [targetShip, setTargetShip] = useState<number | null>(null)
+  // Июньские заказы отмечены в цехе отгруженными, но владелец хочет видеть их
+  // в пуле (реальный вывоз в Воронеж мог не состояться) — тумблер, потом уберём
+  const [showJune, setShowJune] = useState(true)
 
   async function load() {
     const sb = createClient()
@@ -225,12 +229,14 @@ export default function VoronezhPage() {
 
   const pool = useMemo(() => {
     const ids = new Set(vClients.map(c => c.id))
-    return orders.filter(o =>
-      o.client_id != null && ids.has(o.client_id) &&
-      !(o.parsed.stages ?? {})['shipped'] &&
-      !inShipment.has(o.id)
-    )
-  }, [orders, vClients, inShipment])
+    return orders.filter(o => {
+      if (o.client_id == null || !ids.has(o.client_id) || inShipment.has(o.id)) return false
+      const shipped = Boolean((o.parsed.stages ?? {})['shipped'])
+      // Июньские «отгруженные в цехе» показываем по тумблеру — вывоз мог не состояться
+      const isJune = o.created_at >= '2026-06-01' && o.created_at < '2026-07-01'
+      return !shipped || (showJune && isJune)
+    })
+  }, [orders, vClients, inShipment, showJune])
 
   // Поиск по номеру заказа (свой номер или 00id) и имени клиента
   const q = search.trim().toLowerCase()
@@ -439,8 +445,14 @@ export default function VoronezhPage() {
             <div className="space-y-3">
               <div className="flex flex-wrap items-center gap-3 justify-between">
                 <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Заказы к отправке — {filteredPool.length}{q ? ` из ${pool.length}` : ''} шт · {KG(filteredPool.reduce((s, o) => s + orderWeight(o), 0))} кг</h2>
-                <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: номер заказа или клиент"
-                  className="border border-[#e4e4e0] rounded-md px-3 py-1.5 text-[13px] bg-white w-64" />
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-[12px] text-[#4b4b47] cursor-pointer">
+                    <input type="checkbox" checked={showJune} onChange={e => setShowJune(e.target.checked)} className="w-3.5 h-3.5 accent-[#111110]" />
+                    Июньские
+                  </label>
+                  <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: номер заказа или клиент"
+                    className="border border-[#e4e4e0] rounded-md px-3 py-1.5 text-[13px] bg-white w-64" />
+                </div>
               </div>
               {vClients.length > 0 && pool.length === 0 && (
                 <div className="text-[13px] text-[#9a9a95] border border-[#e4e4e0] rounded-lg bg-white p-4">Активных заказов у клиентов Воронежа нет.</div>
