@@ -44,6 +44,10 @@ type Shipment = {
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const KG = (n: number) => (Math.round(n * 10) / 10).toLocaleString('ru-RU')
+const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
+// Текущий год/месяц для дефолтного раскрытия истории (модульный уровень — не в рендере)
+const NOW_YEAR = new Date().getFullYear().toString()
+const NOW_MONTH_KEY = new Date().toISOString().slice(0, 7)
 const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
 const orderSum = (o: Order) => o.total_after_discount ?? o.total_sale_inc_vat ?? 0
 
@@ -172,7 +176,8 @@ export default function VoronezhPage() {
   const [picked, setPicked] = useState<Set<number>>(new Set())
   const [saving, setSaving] = useState(false)
   const [addingClient, setAddingClient] = useState(false)
-  const [showShipped, setShowShipped] = useState(false)
+  // История: ключ в toggled инвертирует дефолт раскрытия (текущий год/месяц открыты)
+  const [toggled, setToggled] = useState<Set<string>>(new Set())
   const [err, setErr] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [newTripDate, setNewTripDate] = useState('')
@@ -356,6 +361,29 @@ export default function VoronezhPage() {
     ? targetShip
     : (drafts[0]?.id ?? null)
 
+  // История доставок: год → месяц (новые сверху); дата рейса = отправка || план || создание
+  const tripDate = (s: Shipment) => (s.shipped_at ?? s.ship_date ?? s.created_at).slice(0, 10)
+  const byMonth = new Map<string, Shipment[]>()
+  for (const s of [...done].sort((a, b) => tripDate(b).localeCompare(tripDate(a)))) {
+    const mKey = tripDate(s).slice(0, 7)
+    byMonth.set(mKey, [...(byMonth.get(mKey) ?? []), s])
+  }
+  const byYear = new Map<string, [string, Shipment[]][]>()
+  for (const [mKey, trips] of byMonth) {
+    const y = mKey.slice(0, 4)
+    byYear.set(y, [...(byYear.get(y) ?? []), [mKey, trips]])
+  }
+  const historyYears = [...byYear.entries()].sort((a, b) => b[0].localeCompare(a[0]))
+  const currentYear = NOW_YEAR
+  const currentMonthKey = NOW_MONTH_KEY
+  const isOpen = (key: string, def: boolean) => toggled.has(key) ? !def : def
+  const toggleGroup = (key: string) => setToggled(prev => {
+    const next = new Set(prev)
+    if (next.has(key)) next.delete(key)
+    else next.add(key)
+    return next
+  })
+
   return (
     <div className="min-h-screen bg-[#f5f5f3]">
       <ProductionTabs />
@@ -500,13 +528,48 @@ export default function VoronezhPage() {
               })}
             </div>
 
-            {/* Отправленные */}
+            {/* История доставок: год → месяц → рейсы, всё сворачивается */}
             {done.length > 0 && (
               <div className="space-y-3">
-                <button onClick={() => setShowShipped(v => !v)} className="text-[13px] uppercase tracking-wide text-[#9a9a95]">
-                  {showShipped ? '▾' : '▸'} Отправленные партии — {done.length}
-                </button>
-                {showShipped && done.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">История доставок — {done.length}</h2>
+                {historyYears.map(([year, months]) => {
+                  const yStats = months.flatMap(([, trips]) => trips)
+                  const yOpen = isOpen(`y${year}`, year === currentYear)
+                  return (
+                    <div key={year} className="border border-[#e4e4e0] rounded-lg bg-white">
+                      <button onClick={() => toggleGroup(`y${year}`)}
+                        className="w-full flex items-center justify-between px-4 py-3 text-left">
+                        <span className="font-semibold text-[15px] text-[#111110]">{yOpen ? '▾' : '▸'} {year}</span>
+                        <span className="text-[13px] text-[#9a9a95] font-mono">
+                          {yStats.length} рейс(ов) · {KG(yStats.reduce((s, t) => s + (t.total_weight_kg ?? 0), 0))} кг · {RUB(yStats.reduce((s, t) => s + (t.total_amount ?? 0), 0))} ₽
+                        </span>
+                      </button>
+                      {yOpen && (
+                        <div className="px-4 pb-4 space-y-2">
+                          {months.map(([mKey, trips]) => {
+                            const mOpen = isOpen(`m${mKey}`, mKey === currentMonthKey)
+                            return (
+                              <div key={mKey}>
+                                <button onClick={() => toggleGroup(`m${mKey}`)}
+                                  className="w-full flex items-center justify-between py-1.5 text-left border-b border-[#f0f0ee]">
+                                  <span className="text-[14px] font-medium text-[#111110]">{mOpen ? '▾' : '▸'} {MONTHS_RU[Number(mKey.slice(5, 7)) - 1]}</span>
+                                  <span className="text-[12px] text-[#9a9a95] font-mono">
+                                    {trips.length} рейс(ов) · {KG(trips.reduce((s, t) => s + (t.total_weight_kg ?? 0), 0))} кг · {RUB(trips.reduce((s, t) => s + (t.total_amount ?? 0), 0))} ₽
+                                  </span>
+                                </button>
+                                {mOpen && (
+                                  <div className="mt-2 space-y-2">
+                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             )}
           </>
