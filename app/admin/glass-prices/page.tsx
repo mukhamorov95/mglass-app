@@ -382,7 +382,8 @@ export default function GlassPricesPage() {
 
     setDirty({})
     setSavingAll(false)
-    showToast('✅ Изменения сохранены')
+    const syncMsg = await autoSyncB2B()
+    showToast(`✅ Изменения сохранены${syncMsg}`)
     load()
   }
 
@@ -413,7 +414,8 @@ export default function GlassPricesPage() {
     })
     await fetch('/api/admin/glass-prices', { method: 'DELETE',
       headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, category: curCat }) })
-    showToast(`🗑 Удалено: ${name}`)
+    const syncMsg = await autoSyncB2B()
+    showToast(`🗑 Удалено: ${name}${syncMsg}`)
     load()
   }
 
@@ -431,6 +433,7 @@ export default function GlassPricesPage() {
     setUndoRows(snapshot)
     if (undoTimer.current) clearTimeout(undoTimer.current)
     undoTimer.current = setTimeout(() => setUndoRows(null), 6000)
+    autoSyncB2B()
     load()
   }
 
@@ -446,18 +449,36 @@ export default function GlassPricesPage() {
           t4: row.t4, t5: row.t5, t6: row.t6, t8: row.t8, t10: row.t10, t12: row.t12, waste_pct: row.waste_pct }),
       })
     ))
-    showToast('Восстановлено')
+    const syncMsg = await autoSyncB2B()
+    showToast(`Восстановлено${syncMsg}`)
     load()
   }
 
+  // Тихий автосинк в B2B после любого изменения справочника —
+  // калькулятор всегда показывает ровно пересечения название×толщина с ценой
+  async function autoSyncB2B(): Promise<string> {
+    try {
+      const res = await fetch('/api/admin/sync-b2b-materials', { method: 'POST' })
+      const data = await res.json()
+      if (!res.ok) return ` · B2B: ошибка ${data.error}`
+      loadB2BData()
+      const parts: string[] = []
+      if (data.inserted) parts.push(`+${data.inserted}`)
+      if (data.deactivated) parts.push(`−${data.deactivated}`)
+      return ` · B2B синхронизирован${parts.length ? ` (${parts.join(', ')})` : ''}`
+    } catch {
+      return ' · B2B: синк не удался'
+    }
+  }
+
   async function syncToB2B() {
-    if (!confirm('Синхронизировать цены в B2B калькулятор?\nНовые материалы будут добавлены, существующие — обновлены.')) return
+    if (!confirm('Синхронизировать цены в B2B калькулятор?\nНовые материалы будут добавлены, существующие — обновлены, лишние — скрыты.')) return
     setSyncingB2B(true)
     const res = await fetch('/api/admin/sync-b2b-materials', { method: 'POST' })
     const data = await res.json()
     setSyncingB2B(false)
     if (!res.ok) { showToast(`Ошибка: ${data.error}`); return }
-    showToast(`✅ B2B обновлён: +${data.inserted} новых, ${data.updated} обновлено`)
+    showToast(`✅ B2B обновлён: +${data.inserted} новых, ${data.updated} обновлено, ${data.deactivated ?? 0} скрыто`)
     await loadB2BData()
   }
 

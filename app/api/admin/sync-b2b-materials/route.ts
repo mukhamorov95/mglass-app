@@ -21,6 +21,10 @@ const WASTE_DEFAULTS: Record<string, number> = {
   стекло: 15, зеркало: 18, тонированное: 20, сатин: 22, рифленое: 30, декоративное: 25,
 }
 
+// Категории листовых материалов, которыми управляет справочник «Стекло».
+// Только их синк смеет деактивировать — фурнитуру и прочее не трогаем.
+const SHEET_CATEGORIES = new Set(Object.keys(WASTE_DEFAULTS))
+
 function buildNotes(salePrice: number): string | null {
   if (salePrice > 0) return JSON.stringify({ sale_price: salePrice })
   return null
@@ -50,17 +54,20 @@ export async function POST() {
 
   const { data: existing, error: exErr } = await supabase
     .from('b2b_materials')
-    .select('id, name, thickness, notes')
+    .select('id, name, category, thickness, notes, active')
 
   if (exErr) return NextResponse.json({ error: exErr.message }, { status: 500 })
 
+  // Ключ обязан включать категорию: одно имя живёт в матрице и как стекло,
+  // и как зеркало («Тонированное (бронза/графит)») — без категории строки коллидируют
   const lookup = new Map<string, { id: number; notes: string | null }>()
   for (const m of existing ?? []) {
-    lookup.set(`${m.name}::${m.thickness}`, { id: m.id, notes: m.notes })
+    lookup.set(`${m.name}::${m.category}::${m.thickness}`, { id: m.id, notes: m.notes })
   }
 
   const toInsert: object[] = []
-  const toUpdate: { id: number; category: string; cost_price: number; waste_percent: number; notes: string | null }[] = []
+  const toUpdate: { id: number; category: string; cost_price: number; waste_percent: number; notes: string | null; active: boolean }[] = []
+  const validKeys = new Set<string>()
 
   const keys = [...new Set((matrix ?? []).map(r => `${r.name}::${r.category}`))]
 
@@ -79,12 +86,13 @@ export async function POST() {
       const costPrice = costRow[field] as number | null
       if (!costPrice) continue
 
+      validKeys.add(`${name}::${b2bCategory}::${t}`)
       const salePrice = (saleRow?.[field as keyof typeof saleRow] as number | null) ?? 0
-      const existingEntry = lookup.get(`${name}::${t}`)
+      const existingEntry = lookup.get(`${name}::${b2bCategory}::${t}`)
 
       if (existingEntry) {
         const notes = mergeNotes(existingEntry.notes, salePrice)
-        toUpdate.push({ id: existingEntry.id, category: b2bCategory, cost_price: costPrice, waste_percent: wastePct, notes })
+        toUpdate.push({ id: existingEntry.id, category: b2bCategory, cost_price: costPrice, waste_percent: wastePct, notes, active: true })
       } else {
         toInsert.push({
           name,
@@ -135,5 +143,16 @@ export async function POST() {
     }
   }
 
-  return NextResponse.json({ ok: !insertError, updated, inserted, total: updated + inserted, error: insertError })
+  // Деактивация призраков: активный листовой материал, у которого в справочнике
+  // больше нет цены на эту толщину, гаснет (не удаляется — на id ссылаются заказы)
+  let deactivated = 0
+  const ghosts = (existing ?? []).filter(m =>
+    m.active && SHEET_CATEGORIES.has(m.category) && !validKeys.has(`${m.name}::${m.category}::${m.thickness}`)
+  )
+  for (const g of ghosts) {
+    const { error } = await supabase.from('b2b_materials').update({ active: false }).eq('id', g.id)
+    if (!error) deactivated++
+  }
+
+  return NextResponse.json({ ok: !insertError, updated, inserted, deactivated, total: updated + inserted, error: insertError })
 }
