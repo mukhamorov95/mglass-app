@@ -145,11 +145,14 @@ export default function VoronezhPage() {
       sb.from('delivery_shipments').select('*').eq('region', REGION).order('id', { ascending: false }),
       sb.from('delivery_shipment_orders').select('shipment_id, order_id'),
     ])
-    if (cl.error || ord.error || sh.error) {
-      setErr(cl.error?.message ?? ord.error?.message ?? sh.error?.message ?? 'Ошибка загрузки')
+    if (cl.error || ord.error) {
+      setErr(cl.error?.message ?? ord.error?.message ?? 'Ошибка загрузки')
       setLoading(false)
       return
     }
+    // Таблицы партий могут ещё не существовать (миграция не применена) —
+    // клиенты и пул заказов работают, формирование партий деградирует с подсказкой
+    if (sh.error) setErr(`Партии недоступны: ${sh.error.message}`)
     setClients((cl.data ?? []) as Client[])
     const nowMs = Date.now()
     setOrders(((ord.data ?? []) as Omit<Order, 'parsed' | 'ready'>[]).map(o => {
