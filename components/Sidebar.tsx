@@ -296,6 +296,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/station',  label: 'Станции',          icon: '🏭' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
+  { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/metrics',  label: 'Метрики цеха',     icon: '📈' },
 ]
 

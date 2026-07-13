@@ -1,0 +1,392 @@
+'use client'
+
+// Доставка в Воронеж: клиенты направления (b2b_clients.crm_city='Воронеж'),
+// пул их неотгруженных заказов с весом и суммой, формирование партии (рейса)
+// с итогами по клиентам. Вес: Σ item.totalWeight (фолбэк 2.5 кг/м²·мм стекла).
+
+import { useEffect, useMemo, useState } from 'react'
+import ProductionTabs from '@/components/ProductionTabs'
+import { createClient } from '@/lib/supabase-browser'
+
+const REGION = 'voronezh'
+const CITY = 'Воронеж'
+
+type Client = { id: number; name: string; crm_city: string | null; active: boolean }
+type OrderItem = { totalWeight?: number; areaPiece?: number; quantity?: number; thickness?: number }
+type NotesData = { status?: string; stages?: Record<string, unknown>; deadline_date?: string; launched_at?: string; production_days?: number }
+type Readiness = { label: string; cls: string }
+type Order = {
+  id: number
+  custom_number: string | null
+  client_id: number | null
+  client_name: string | null
+  items: OrderItem[] | null
+  notes: string | null
+  total_after_discount: number | null
+  total_sale_inc_vat: number | null
+  created_at: string
+  parsed: NotesData
+  ready: Readiness
+}
+type Shipment = {
+  id: number
+  title: string | null
+  ship_date: string | null
+  status: 'draft' | 'shipped'
+  total_weight_kg: number | null
+  total_amount: number | null
+  shipped_at: string | null
+  created_at: string
+  orderIds: number[]
+}
+
+const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const KG = (n: number) => (Math.round(n * 10) / 10).toLocaleString('ru-RU')
+const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_number?.trim() || `00${o.id}`
+const orderSum = (o: Order) => o.total_after_discount ?? o.total_sale_inc_vat ?? 0
+
+function orderWeight(o: Order): number {
+  const items = Array.isArray(o.items) ? o.items : []
+  return items.reduce((s, it) => {
+    if (typeof it.totalWeight === 'number' && it.totalWeight > 0) return s + it.totalWeight
+    const area = (it.areaPiece ?? 0) * (it.quantity ?? 1)
+    return s + area * (it.thickness ?? 0) * 2.5
+  }, 0)
+}
+
+function parseNotes(raw: string | null): NotesData {
+  try { return raw ? JSON.parse(raw) : {} } catch { return {} }
+}
+
+function ShipmentCard({ s, orders, onShipped, onDelete, onRemove }: {
+  s: Shipment
+  orders: Order[]
+  onShipped: (s: Shipment) => void
+  onDelete: (s: Shipment) => void
+  onRemove: (shipmentId: number, orderId: number) => void
+}) {
+  const os = orders.filter(o => s.orderIds.includes(o.id))
+  const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
+  const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
+  return (
+    <div className="border border-[#e4e4e0] rounded-lg bg-white p-4">
+      <div className="flex flex-wrap items-center gap-2 justify-between">
+        <div>
+          <span className="font-medium text-[#111110]">{s.title ?? `Партия ${s.id}`}</span>
+          {s.ship_date && <span className="ml-2 text-[13px] text-[#9a9a95]">отправка {new Date(s.ship_date).toLocaleDateString('ru-RU')}</span>}
+          {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
+        </div>
+        <div className="flex items-center gap-3 text-[13px]">
+          <span className="font-mono">{os.length} зак. · {KG(weight)} кг · {RUB(amount)} ₽</span>
+          {s.status === 'draft' && (
+            <>
+              <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">✓ Отправлена</button>
+              <button onClick={() => onDelete(s)} className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#9a9a95] hover:text-red-600 hover:border-red-200">Расформировать</button>
+            </>
+          )}
+        </div>
+      </div>
+      <div className="mt-2 space-y-1">
+        {os.map(o => (
+          <div key={o.id} className="flex items-center gap-2 text-[13px] text-[#4b4b47]">
+            <span className="font-mono">{orderNo(o)}</span>
+            <span>{o.client_name}</span>
+            <span className="text-[#9a9a95] ml-auto font-mono">{KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
+            {s.status === 'draft' && (
+              <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из партии">✕</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Готовность как в /b2b-orders: упакован → готов к отгрузке; иначе по сроку.
+// Считается в load() (не в рендере — правило purity), nowMs фиксируется там же.
+function readinessOf(parsed: NotesData, nowMs: number): Readiness {
+  const stages = parsed.stages ?? {}
+  if (stages.packaged) return { label: 'Готов / упакован', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' }
+  const deadline = parsed.deadline_date
+    ? new Date(parsed.deadline_date)
+    : parsed.launched_at
+      ? new Date(new Date(parsed.launched_at).getTime() + (parsed.production_days ?? 7) * 86400000)
+      : null
+  if (!deadline) return { label: 'В работе', cls: 'bg-[#f5f5f3] text-[#4b4b47] border-[#e4e4e0]' }
+  const days = Math.round((new Date(deadline).setHours(0, 0, 0, 0) - new Date(nowMs).setHours(0, 0, 0, 0)) / 86400000)
+  if (days < 0) return { label: `Просрочен ${Math.abs(days)} дн.`, cls: 'bg-red-50 text-red-600 border-red-200' }
+  if (days <= 1) return { label: days === 0 ? 'Срок сегодня' : 'Срок завтра', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
+  return { label: `Готов ~${deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`, cls: 'bg-[#f5f5f3] text-[#4b4b47] border-[#e4e4e0]' }
+}
+
+export default function VoronezhPage() {
+  const [loading, setLoading] = useState(true)
+  const [clients, setClients] = useState<Client[]>([])
+  const [orders, setOrders] = useState<Order[]>([])
+  const [shipments, setShipments] = useState<Shipment[]>([])
+  const [picked, setPicked] = useState<Set<number>>(new Set())
+  const [shipDate, setShipDate] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [addingClient, setAddingClient] = useState(false)
+  const [showShipped, setShowShipped] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function load() {
+    const sb = createClient()
+    setErr(null)
+    const [cl, ord, sh, shOrd] = await Promise.all([
+      sb.from('b2b_clients').select('id, name, crm_city, active').order('name'),
+      sb.from('b2b_orders')
+        .select('id, custom_number, client_id, client_name, items, notes, total_after_discount, total_sale_inc_vat, created_at')
+        .is('archived_at', null)
+        .not('notes', 'ilike', '%"status":"quote"%')
+        .not('notes', 'ilike', '%"historical":true%')
+        .order('id', { ascending: false }),
+      sb.from('delivery_shipments').select('*').eq('region', REGION).order('id', { ascending: false }),
+      sb.from('delivery_shipment_orders').select('shipment_id, order_id'),
+    ])
+    if (cl.error || ord.error || sh.error) {
+      setErr(cl.error?.message ?? ord.error?.message ?? sh.error?.message ?? 'Ошибка загрузки')
+      setLoading(false)
+      return
+    }
+    setClients((cl.data ?? []) as Client[])
+    const nowMs = Date.now()
+    setOrders(((ord.data ?? []) as Omit<Order, 'parsed' | 'ready'>[]).map(o => {
+      const parsed = parseNotes(o.notes)
+      return { ...o, parsed, ready: readinessOf(parsed, nowMs) }
+    }))
+    const links = (shOrd.data ?? []) as { shipment_id: number; order_id: number }[]
+    setShipments(((sh.data ?? []) as Omit<Shipment, 'orderIds'>[]).map(s => ({
+      ...s,
+      orderIds: links.filter(l => l.shipment_id === s.id).map(l => l.order_id),
+    })))
+    setLoading(false)
+  }
+
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [])
+
+  const vClients = useMemo(() => clients.filter(c => c.crm_city === CITY), [clients])
+  const otherClients = useMemo(() => clients.filter(c => c.crm_city !== CITY && c.active), [clients])
+
+  // Заказы, уже лежащие в какой-либо партии (черновик или отправленной), из пула убираем
+  const inShipment = useMemo(() => new Set(shipments.flatMap(s => s.orderIds)), [shipments])
+
+  const pool = useMemo(() => {
+    const ids = new Set(vClients.map(c => c.id))
+    return orders.filter(o =>
+      o.client_id != null && ids.has(o.client_id) &&
+      !(o.parsed.stages ?? {})['shipped'] &&
+      !inShipment.has(o.id)
+    )
+  }, [orders, vClients, inShipment])
+
+  const poolByClient = useMemo(() => {
+    const m = new Map<number, Order[]>()
+    for (const o of pool) {
+      const arr = m.get(o.client_id!) ?? []
+      arr.push(o)
+      m.set(o.client_id!, arr)
+    }
+    return m
+  }, [pool])
+
+  const pickedOrders = pool.filter(o => picked.has(o.id))
+  const pickedWeight = pickedOrders.reduce((s, o) => s + orderWeight(o), 0)
+  const pickedAmount = pickedOrders.reduce((s, o) => s + orderSum(o), 0)
+  const pickedByClient = new Map<string, { count: number; weight: number; amount: number }>()
+  for (const o of pickedOrders) {
+    const name = o.client_name ?? '—'
+    const cur = pickedByClient.get(name) ?? { count: 0, weight: 0, amount: 0 }
+    pickedByClient.set(name, { count: cur.count + 1, weight: cur.weight + orderWeight(o), amount: cur.amount + orderSum(o) })
+  }
+
+  async function setClientCity(id: number, toVoronezh: boolean) {
+    const sb = createClient()
+    const { error } = await sb.from('b2b_clients').update({ crm_city: toVoronezh ? CITY : null }).eq('id', id)
+    if (error) { setErr(error.message); return }
+    setClients(prev => prev.map(c => c.id === id ? { ...c, crm_city: toVoronezh ? CITY : null } : c))
+  }
+
+  function togglePick(id: number) {
+    setPicked(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  async function createShipment() {
+    if (pickedOrders.length === 0) return
+    setSaving(true)
+    const sb = createClient()
+    const title = `Воронеж ${new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+    const { data: ship, error } = await sb.from('delivery_shipments')
+      .insert({ region: REGION, title, ship_date: shipDate || null, total_weight_kg: Math.round(pickedWeight * 10) / 10, total_amount: Math.round(pickedAmount) })
+      .select('id')
+      .single()
+    if (error || !ship) { setErr(error?.message ?? 'Не удалось создать отгрузку'); setSaving(false); return }
+    const { error: linkErr } = await sb.from('delivery_shipment_orders')
+      .insert(pickedOrders.map(o => ({ shipment_id: ship.id, order_id: o.id })))
+    if (linkErr) { setErr(linkErr.message); setSaving(false); return }
+    setPicked(new Set())
+    setShipDate('')
+    setSaving(false)
+    load()
+  }
+
+  async function removeFromShipment(shipmentId: number, orderId: number) {
+    const sb = createClient()
+    await sb.from('delivery_shipment_orders').delete().eq('shipment_id', shipmentId).eq('order_id', orderId)
+    load()
+  }
+
+  async function deleteShipment(s: Shipment) {
+    if (!confirm(`Расформировать партию «${s.title ?? s.id}»? Заказы вернутся в пул.`)) return
+    const sb = createClient()
+    await sb.from('delivery_shipments').delete().eq('id', s.id)
+    load()
+  }
+
+  async function markShipped(s: Shipment) {
+    if (!confirm(`Отметить партию «${s.title ?? s.id}» отправленной?`)) return
+    const sb = createClient()
+    const os = orders.filter(o => s.orderIds.includes(o.id))
+    const weight = os.reduce((sum, o) => sum + orderWeight(o), 0)
+    const amount = os.reduce((sum, o) => sum + orderSum(o), 0)
+    await sb.from('delivery_shipments')
+      .update({ status: 'shipped', shipped_at: new Date().toISOString(), total_weight_kg: Math.round(weight * 10) / 10, total_amount: Math.round(amount) })
+      .eq('id', s.id)
+    load()
+  }
+
+  const drafts = shipments.filter(s => s.status === 'draft')
+  const done = shipments.filter(s => s.status === 'shipped')
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f3]">
+      <ProductionTabs />
+      <div className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+        <div>
+          <h1 className="text-xl font-semibold text-[#111110]">🚚 Доставка в Воронеж</h1>
+          <p className="text-[13px] text-[#9a9a95] mt-1">Заказы клиентов Воронежа: что готовить к отгрузке и что едет в ближайшую машину. Вес расчётный, по стеклу.</p>
+        </div>
+
+        {err && <div className="border border-red-200 bg-red-50 text-red-700 text-[13px] rounded-lg px-4 py-3">{err}</div>}
+        {loading && <div className="text-[#9a9a95] text-[14px]">Загрузка…</div>}
+
+        {!loading && (
+          <>
+            {/* Клиенты направления */}
+            <div className="border border-[#e4e4e0] rounded-lg bg-white p-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Клиенты Воронежа</h2>
+                <button onClick={() => setAddingClient(v => !v)} className="text-[13px] text-[#111110] underline underline-offset-2">
+                  {addingClient ? 'Скрыть' : '+ Добавить клиента'}
+                </button>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {vClients.length === 0 && <span className="text-[13px] text-[#9a9a95]">Пока никто не отмечен — добавьте клиентов, которых возим в Воронеж.</span>}
+                {vClients.map(c => (
+                  <span key={c.id} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#f5f5f3] border border-[#e4e4e0] text-[13px] text-[#111110]">
+                    {c.name}
+                    <button onClick={() => setClientCity(c.id, false)} className="text-[#9a9a95] hover:text-red-600" title="Убрать из Воронежа">✕</button>
+                  </span>
+                ))}
+              </div>
+              {addingClient && (
+                <div className="mt-3 flex flex-wrap gap-1.5 border-t border-[#e4e4e0] pt-3">
+                  {otherClients.map(c => (
+                    <button key={c.id} onClick={() => setClientCity(c.id, true)}
+                      className="px-2.5 py-1 rounded-full border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">
+                      + {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Формируемая отгрузка */}
+            {picked.size > 0 && (
+              <div className="border-2 border-[#111110] rounded-lg bg-white p-4 sticky top-2 z-10 shadow-sm">
+                <div className="flex flex-wrap items-center gap-3 justify-between">
+                  <div className="text-[14px] font-medium text-[#111110]">
+                    В отгрузку: {pickedOrders.length} зак. · <span className="font-mono">{KG(pickedWeight)} кг</span> · <span className="font-mono">{RUB(pickedAmount)} ₽</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input type="date" value={shipDate} onChange={e => setShipDate(e.target.value)}
+                      className="border border-[#e4e4e0] rounded-md px-2 py-1.5 text-[13px] bg-white" />
+                    <button onClick={createShipment} disabled={saving}
+                      className="px-4 py-2 rounded-md bg-[#111110] text-white text-[13px] hover:opacity-85 disabled:opacity-50">
+                      {saving ? 'Сохраняю…' : 'Сформировать отгрузку'}
+                    </button>
+                  </div>
+                </div>
+                <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#4b4b47]">
+                  {[...pickedByClient.entries()].map(([name, v]) => (
+                    <span key={name}>{name}: {v.count} зак. · {KG(v.weight)} кг · {RUB(v.amount)} ₽</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Черновики партий */}
+            {drafts.length > 0 && (
+              <div className="space-y-3">
+                <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Формируемые партии</h2>
+                {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+              </div>
+            )}
+
+            {/* Пул заказов по клиентам */}
+            <div className="space-y-3">
+              <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Заказы к отправке — {pool.length} шт · {KG(pool.reduce((s, o) => s + orderWeight(o), 0))} кг</h2>
+              {vClients.length > 0 && pool.length === 0 && (
+                <div className="text-[13px] text-[#9a9a95] border border-[#e4e4e0] rounded-lg bg-white p-4">Активных заказов у клиентов Воронежа нет.</div>
+              )}
+              {[...poolByClient.entries()].map(([clientId, os]) => {
+                const client = vClients.find(c => c.id === clientId)
+                const w = os.reduce((s, o) => s + orderWeight(o), 0)
+                const a = os.reduce((s, o) => s + orderSum(o), 0)
+                return (
+                  <div key={clientId} className="border border-[#e4e4e0] rounded-lg bg-white">
+                    <div className="px-4 py-2.5 border-b border-[#e4e4e0] flex items-center justify-between">
+                      <span className="font-medium text-[#111110]">{client?.name ?? os[0]?.client_name}</span>
+                      <span className="text-[13px] text-[#9a9a95] font-mono">{os.length} зак. · {KG(w)} кг · {RUB(a)} ₽</span>
+                    </div>
+                    <div className="divide-y divide-[#f0f0ee]">
+                      {os.map(o => {
+                        const r = o.ready
+                        return (
+                          <label key={o.id} className="flex items-center gap-3 px-4 py-2.5 cursor-pointer hover:bg-[#fafaf9]">
+                            <input type="checkbox" checked={picked.has(o.id)} onChange={() => togglePick(o.id)} className="w-4 h-4 accent-[#111110]" />
+                            <span className="font-mono text-[14px] text-[#111110]">{orderNo(o)}</span>
+                            <span className={`text-[11px] px-2 py-0.5 rounded-full border ${r.cls}`}>{r.label}</span>
+                            <span className="ml-auto font-mono text-[13px] text-[#4b4b47]">{KG(orderWeight(o))} кг</span>
+                            <span className="font-mono text-[13px] text-[#111110] w-28 text-right">{RUB(orderSum(o))} ₽</span>
+                          </label>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Отправленные */}
+            {done.length > 0 && (
+              <div className="space-y-3">
+                <button onClick={() => setShowShipped(v => !v)} className="text-[13px] uppercase tracking-wide text-[#9a9a95]">
+                  {showShipped ? '▾' : '▸'} Отправленные партии — {done.length}
+                </button>
+                {showShipped && done.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} />)}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
