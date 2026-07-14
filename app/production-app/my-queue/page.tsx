@@ -105,6 +105,11 @@ export default function MyQueuePage() {
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
+  // Тот же мастер → тот же объект, иначе restore из LeadSummary зацикливает load
+  const handlePick = useCallback((m: { id: string; name: string; stations: string[] } | null) => {
+    setViewMaster(prev => ((prev?.id ?? null) === (m?.id ?? null) ? prev : m))
+  }, [])
+
   async function markStart(taskId: number) {
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t)) // optimistic
     await fetch(`/api/production-tasks/${taskId}`, {
@@ -178,7 +183,7 @@ export default function MyQueuePage() {
       </div>
 
       <div className="px-4 pt-4">
-        <LeadSummary onPick={setViewMaster} />
+        <LeadSummary onPick={handlePick} />
         <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
           Готово к работе{viewMaster ? ` · мастер: ${viewMaster.name}` : ''}
         </p>
