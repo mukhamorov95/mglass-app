@@ -78,6 +78,8 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
   if (err || !ship) return <div className="p-8 text-red-600">{err ?? 'Рейс не найден'}</div>
 
   const totalWeight = orders.reduce((s, o) => s + itemsWeight(o.items), 0)
+  const piecesOf = (items: OrderItem[] | null) => (items ?? []).reduce((s, it) => s + Math.max(1, Number(it.quantity ?? 1)), 0)
+  const totalPieces = orders.reduce((s, o) => s + piecesOf(o.items), 0)
   const byClient = new Map<number | string, Order[]>()
   for (const o of orders) {
     const key = o.client_id ?? (o.client_name ?? '—')
@@ -101,7 +103,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
             </div>
           </div>
           <div className="text-right text-[13px] text-[#111110]">
-            <div className="font-mono font-semibold text-[16px]">{orders.length} зак. · {KG(totalWeight)} кг</div>
+            <div className="font-mono font-semibold text-[16px]">{orders.length} зак. · {totalPieces} изд. · {KG(totalWeight)} кг</div>
             <div className="text-[#9a9a95]">{byClient.size} заказчик(ов)</div>
           </div>
         </div>
@@ -119,7 +121,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
                     <span className="ml-3 text-[13px] text-[#4b4b47]">{[info?.contact, info?.phone].filter(Boolean).join(' · ')}</span>
                   )}
                 </div>
-                <span className="font-mono text-[13px] text-[#111110]">{os.length} зак. · {KG(w)} кг</span>
+                <span className="font-mono text-[13px] text-[#111110]">{os.length} зак. · {os.reduce((sp, o) => sp + piecesOf(o.items), 0)} изд. · {KG(w)} кг</span>
               </div>
               {info?.legal_address && <div className="text-[12px] text-[#9a9a95] px-3 mt-1">{info.legal_address}</div>}
               <table className="w-full mt-2 text-[13px]">

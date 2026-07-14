@@ -52,6 +52,7 @@ const orderNo = (o: { custom_number: string | null; id: number }) => o.custom_nu
 const orderSum = (o: Order) => o.total_after_discount ?? o.total_sale_inc_vat ?? 0
 
 const orderWeight = (o: Order) => itemsWeight(o.items)
+const orderPieces = (o: Order) => (o.items ?? []).reduce((s, it) => s + Math.max(1, Number(it.quantity ?? 1)), 0)
 
 function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
@@ -69,6 +70,7 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
   const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
+  const pieces = os.reduce((sum, o) => sum + orderPieces(o), 0)
   // Разбивка по заказчикам: группируем по привязке (client_id), не по имени в
   // заказе — у объединённых клиентов (MR GLASS = ВРНГЛАЗИЕРС/МОНАРХ/ЛЮДИ)
   // исторические юр-имена в заказах сохранены, но заказчик один
@@ -89,7 +91,7 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
           {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
         </div>
         <div className="flex items-center gap-3 text-[13px]">
-          <span className="font-mono font-medium">{os.length} зак. · {KG(weight)} кг · {RUB(amount)} ₽</span>
+          <span className="font-mono font-medium">{os.length} зак. · {pieces} изд. · {KG(weight)} кг · {RUB(amount)} ₽</span>
           <a href={`/production-app/voronezh/${s.id}/print`} target="_blank" rel="noreferrer"
             className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">🖨 Лист рейса</a>
           {s.status === 'draft' && (
@@ -127,18 +129,19 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
         {[...byClient.entries()].map(([name, cos]) => {
           const cw = cos.reduce((sum, o) => sum + orderWeight(o), 0)
           const ca = cos.reduce((sum, o) => sum + orderSum(o), 0)
+          const cp = cos.reduce((sum, o) => sum + orderPieces(o), 0)
           return (
             <div key={name}>
               <div className="flex items-center gap-2 text-[13px]">
                 <span className="font-medium text-[#111110]">{name}</span>
-                <span className="text-[#9a9a95] font-mono">{cos.length} зак. · {KG(cw)} кг · {RUB(ca)} ₽</span>
+                <span className="text-[#9a9a95] font-mono">{cos.length} зак. · <span className="text-[#111110] font-semibold">{cp} изд.</span> · {KG(cw)} кг · {RUB(ca)} ₽</span>
               </div>
               <div className="mt-1 space-y-0.5">
                 {cos.map(o => (
                   <div key={o.id} className="flex items-center gap-2 text-[13px] text-[#4b4b47] pl-3">
                     <span className="font-mono">{orderNo(o)}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${o.ready.cls}`}>{o.ready.label}</span>
-                    <span className="text-[#9a9a95] ml-auto font-mono">{KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
+                    <span className="text-[#9a9a95] ml-auto font-mono">{orderPieces(o)} изд. · {KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
                     {s.status === 'draft' && (
                       <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из рейса">✕</button>
                     )}
@@ -273,11 +276,12 @@ export default function VoronezhPage() {
   const pickedOrders = pool.filter(o => picked.has(o.id))
   const pickedWeight = pickedOrders.reduce((s, o) => s + orderWeight(o), 0)
   const pickedAmount = pickedOrders.reduce((s, o) => s + orderSum(o), 0)
-  const pickedByClient = new Map<string, { count: number; weight: number; amount: number }>()
+  const pickedPieces = pickedOrders.reduce((s, o) => s + orderPieces(o), 0)
+  const pickedByClient = new Map<string, { count: number; weight: number; amount: number; pieces: number }>()
   for (const o of pickedOrders) {
     const name = o.client_name ?? '—'
-    const cur = pickedByClient.get(name) ?? { count: 0, weight: 0, amount: 0 }
-    pickedByClient.set(name, { count: cur.count + 1, weight: cur.weight + orderWeight(o), amount: cur.amount + orderSum(o) })
+    const cur = pickedByClient.get(name) ?? { count: 0, weight: 0, amount: 0, pieces: 0 }
+    pickedByClient.set(name, { count: cur.count + 1, weight: cur.weight + orderWeight(o), amount: cur.amount + orderSum(o), pieces: cur.pieces + orderPieces(o) })
   }
 
   async function setClientCity(id: number, toVoronezh: boolean) {
@@ -436,7 +440,7 @@ export default function VoronezhPage() {
               <div className="border-2 border-[#111110] rounded-lg bg-white p-4 sticky top-2 z-10 shadow-sm">
                 <div className="flex flex-wrap items-center gap-3 justify-between">
                   <div className="text-[14px] font-medium text-[#111110]">
-                    Отмечено: {pickedOrders.length} зак. · <span className="font-mono">{KG(pickedWeight)} кг</span> · <span className="font-mono">{RUB(pickedAmount)} ₽</span>
+                    Отмечено: {pickedOrders.length} зак. · <span className="font-mono">{pickedPieces} изд.</span> · <span className="font-mono">{KG(pickedWeight)} кг</span> · <span className="font-mono">{RUB(pickedAmount)} ₽</span>
                   </div>
                   {effectiveTarget != null ? (
                     <div className="flex items-center gap-2">
@@ -457,7 +461,7 @@ export default function VoronezhPage() {
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[12px] text-[#4b4b47]">
                   {[...pickedByClient.entries()].map(([name, v]) => (
-                    <span key={name}>{name}: {v.count} зак. · {KG(v.weight)} кг · {RUB(v.amount)} ₽</span>
+                    <span key={name}>{name}: {v.count} зак. · {v.pieces} изд. · {KG(v.weight)} кг · {RUB(v.amount)} ₽</span>
                   ))}
                 </div>
               </div>
