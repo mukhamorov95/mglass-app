@@ -457,7 +457,7 @@ export default function B2BQuotesPage() {
     if (drawingUrl) {
       const sb2 = createClient()
       const { data: freshRow } = await sb2.from('b2b_orders').select('notes').eq('id', workDateId).single()
-      const freshNotes = parseNotes((freshRow as { notes: unknown } | null)?.notes)
+      const freshNotes = parseNotes((freshRow as { notes: string | null } | null)?.notes ?? null)
       await sb2.from('b2b_orders').update({ notes: JSON.stringify({ ...freshNotes, drawing_url: drawingUrl }) }).eq('id', workDateId)
     }
     // Генерация задач в цех (best-effort).
