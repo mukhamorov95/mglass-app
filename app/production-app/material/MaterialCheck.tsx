@@ -53,7 +53,7 @@ export default function MaterialCheck() {
         const label = o.custom_number?.trim() || `#${o.id}`
         const title = `Материал: ${label} (${o.client_name})`
         const details = materialsText(o.items) || null
-        await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name })
+        await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name, b2b_order_id: o.id, item_index: null })
         fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name, link: '' }) }).catch(() => {})
       }
       await load()
