@@ -57,9 +57,10 @@ function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
 }
 
-function ShipmentCard({ s, orders, onShipped, onDelete, onRemove, onLimit }: {
+function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, onLimit }: {
   s: Shipment
   orders: Order[]
+  clientNames: Map<number, string>
   onShipped: (s: Shipment) => void
   onDelete: (s: Shipment) => void
   onRemove: (shipmentId: number, orderId: number) => void
@@ -68,10 +69,12 @@ function ShipmentCard({ s, orders, onShipped, onDelete, onRemove, onLimit }: {
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
   const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
-  // Разбивка по заказчикам: владелец должен видеть, кому что везём и сколько это весит
+  // Разбивка по заказчикам: группируем по привязке (client_id), не по имени в
+  // заказе — у объединённых клиентов (MR GLASS = ВРНГЛАЗИЕРС/МОНАРХ/ЛЮДИ)
+  // исторические юр-имена в заказах сохранены, но заказчик один
   const byClient = new Map<string, Order[]>()
   for (const o of os) {
-    const name = o.client_name ?? '—'
+    const name = (o.client_id != null ? clientNames.get(o.client_id) : null) ?? o.client_name ?? '—'
     byClient.set(name, [...(byClient.get(name) ?? []), o])
   }
   // Загрузка машины: <90% зелёная, 90–100% жёлтая, сверх лимита — красная с перегрузом
@@ -377,6 +380,7 @@ export default function VoronezhPage() {
   const currentYear = NOW_YEAR
   const currentMonthKey = NOW_MONTH_KEY
   const isOpen = (key: string, def: boolean) => toggled.has(key) ? !def : def
+  const clientNames = new Map(clients.map(c => [c.id, c.name]))
   const toggleGroup = (key: string) => setToggled(prev => {
     const next = new Set(prev)
     if (next.has(key)) next.delete(key)
@@ -477,7 +481,7 @@ export default function VoronezhPage() {
                   Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
                 </div>
               )}
-              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
             </div>
 
             {/* Пул заказов по клиентам */}
@@ -559,7 +563,7 @@ export default function VoronezhPage() {
                                 </button>
                                 {mOpen && (
                                   <div className="mt-2 space-y-2">
-                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
                                   </div>
                                 )}
                               </div>
