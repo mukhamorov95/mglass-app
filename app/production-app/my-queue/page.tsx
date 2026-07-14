@@ -345,10 +345,6 @@ export default function MyQueuePage() {
           <div className="flex items-center gap-2 flex-shrink-0">
             <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
               className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white w-44 outline-none focus:border-[#111110]" />
-            <Link href={`/production-app/station/${myStations[0] ?? 'cutting'}`}
-              className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
-              Партиями →
-            </Link>
           </div>
         </div>
         <ProductionTabs />

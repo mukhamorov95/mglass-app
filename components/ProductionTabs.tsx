@@ -5,15 +5,13 @@ import { usePathname } from 'next/navigation'
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
-// Единая навигация цеха (production-app). «Обзор» = два вида: по срокам (/production-app)
-// и матрица заказ×этап (/production-app/board). Остальное — операционные экраны.
-// Порядок = частота использования мастером: задачи → заказы → скан, дальше
-// экраны начальника и снабжения (тот же порядок, что в левом меню Sidebar).
+// Единая навигация цеха (production-app). Порядок = частота использования
+// мастером: задачи → заказы, дальше экраны начальника и снабжения (тот же
+// порядок, что в левом меню Sidebar). «Обзор» и «Станции» убраны (14.07):
+// их закрывают «Мои задачи» (режим по материалу и толщине) и «Заказы».
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
-  { href: '/production-app',          label: 'Обзор',          match: p => p === '/production-app' || p.startsWith('/production-app/board') },
-  { href: '/production-app/station',  label: 'Станции',        match: p => p.startsWith('/production-app/station') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
   { href: '/production-app/voronezh', label: '🚚 Воронеж',     match: p => p.startsWith('/production-app/voronezh') },
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
@@ -25,8 +23,6 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
 
 const pill = (active: boolean) =>
   `text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${active ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`
-const subPill = (active: boolean) =>
-  `text-[11px] font-medium px-2.5 py-1 rounded-full border transition-colors ${active ? 'bg-white border-[#111110] text-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f0f0ec]'}`
 
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
@@ -58,14 +54,7 @@ export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
       <div className="flex flex-wrap gap-1.5">
         {tabs.map(t => <Link key={t.href} href={t.href} className={pill(t.match(path))}>{t.label}</Link>)}
       </div>
-      {onObzor && (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-[10px] text-[#9a9a95] uppercase tracking-wide mr-0.5">Вид:</span>
-          <Link href="/production-app" className={subPill(path === '/production-app')}>📅 По срокам</Link>
-          <Link href="/production-app/board" className={subPill(path.startsWith('/production-app/board'))}>🔲 Матрица</Link>
-          {extra}
-        </div>
-      )}
+      {onObzor && extra && <div className="flex flex-wrap items-center gap-1.5">{extra}</div>}
     </div>
   )
 }

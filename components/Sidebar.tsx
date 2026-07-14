@@ -294,8 +294,6 @@ const ADMIN_OPERATIONS: NavItem[] = [
 const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
-  { href: '/production-app',          label: 'Обзор',            icon: '🗓️' },
-  { href: '/production-app/station',  label: 'Станции',          icon: '🏭' },
   { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },

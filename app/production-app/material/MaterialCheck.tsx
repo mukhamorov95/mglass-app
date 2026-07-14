@@ -6,7 +6,8 @@ import { materialStatus, parseNotes } from '@/lib/orderFlags'
 
 // Стадия «Материал» до резки (Бекмурза). Новый заказ, ушедший в резку, ждёт
 // решения: «материал есть» → режем; «материала нет» → notes.material_status=needed
-// (резка блокируется) + заявка в закупку. Когда материал пришёл — «пришёл» → ready.
+// + заявка в закупку (резка НЕ блокируется — мастер сам решает, что резать).
+// Когда материал пришёл — «пришёл» → ready.
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number }
 type Order = { id: number; custom_number: string | null; client_name: string; items: unknown; notes: unknown }
@@ -93,7 +94,7 @@ export default function MaterialCheck() {
             {waiting.map(o => (
               <div key={o.id} className="bg-red-50 rounded-xl border border-red-200 px-4 py-3">
                 <p className="text-[14px] font-bold text-[#111110]">{label(o)} <span className="font-normal text-[#6b6b66]">· {o.client_name}</span></p>
-                <p className="text-[12px] text-red-700 mt-0.5">Резка заблокирована — ждём материал. {materialsText(o.items)}</p>
+                <p className="text-[12px] text-red-700 mt-0.5">Ждём материал — заявка в закупке. {materialsText(o.items)}</p>
                 <button disabled={busy === o.id} onClick={() => setStatus(o, 'ready')} className="mt-2.5 w-full py-2 rounded-lg bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-50">✅ Материал пришёл — можно резать</button>
               </div>
             ))}
