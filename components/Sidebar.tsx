@@ -289,23 +289,26 @@ const ADMIN_OPERATIONS: NavItem[] = [
 
 // ─── Production mode (admin viewMode) ────────────────────────────────────────
 
-// Цех — операционный контур (живой): обзор (по срокам/матрица) → пул → мои задачи → статус заказов.
+// Цех — по частоте использования: сверху то, где мастер живёт каждый день
+// (задачи → заказы → скан), ниже — экраны начальника, в конце — логистика/аналитика.
 const PRODUCTION_NAV_SHOP: NavItem[] = [
-  { href: '/production-app',          label: 'Обзор',            icon: '📋' },
-  { href: '/production-app/today',    label: 'Пул на сегодня',   icon: '📅' },
-  { href: '/production-app/station',  label: 'Станции',          icon: '🏭' },
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
+  { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
+  { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
+  { href: '/production-app/today',    label: 'Пул на сегодня',   icon: '📅' },
+  { href: '/production-app',          label: 'Обзор',            icon: '🗓️' },
+  { href: '/production-app/station',  label: 'Станции',          icon: '🏭' },
   { href: '/b2b-production',          label: 'Заказы в работе',  icon: '🔧' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/metrics',  label: 'Метрики цеха',     icon: '📈' },
 ]
 
-// Материал и документы.
+// Материал и документы: ежедневная проверка материала выше, документы реже.
 const PRODUCTION_NAV_SUPPLY: NavItem[] = [
-  { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
   { href: '/production-app/material', label: 'Материал',         icon: '📦' },
-  { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
+  { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
   { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
+  { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
 ]
 
 // Команда: идеи и предложения цеха.
