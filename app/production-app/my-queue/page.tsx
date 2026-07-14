@@ -6,7 +6,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
-import { PROD_SINCE, parseNotes, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
+import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
@@ -64,6 +64,7 @@ export default function MyQueuePage() {
   const [andonReason, setAndonReason] = useState<string>(ANDON_REASONS[0].code)
   const [andonComment, setAndonComment] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
+  const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
@@ -80,13 +81,15 @@ export default function MyQueuePage() {
     if (!user) { setLoading(false); return }
 
     let queueUserId = user.id
+    const { data: profile } = await sb.from('users').select('production_stations,name').eq('id', user.id).single()
+    const prof = profile as { production_stations: string[] | null; name: string | null } | null
+    setMe({ id: user.id, name: prof?.name ?? user.email ?? 'Цех' })
     let stations: string[]
     if (viewMaster) {
       queueUserId = viewMaster.id
       stations = viewMaster.stations
     } else {
-      const { data: profile } = await sb.from('users').select('production_stations').eq('id', user.id).single()
-      stations = (profile as { production_stations: string[] | null } | null)?.production_stations ?? []
+      stations = prof?.production_stations ?? []
     }
     setMyStations(stations)
 
@@ -172,6 +175,58 @@ export default function MyQueuePage() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'done' }),
     }).catch(() => {})
+    load()
+  }
+
+  async function markDoneOrder(taskIds: number[]) {
+    setTasks(prev => prev.filter(t => !taskIds.includes(t.id)))
+    await Promise.all(taskIds.map(id =>
+      fetch(`/api/production-tasks/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'done' }),
+      }).catch(() => {})
+    ))
+    load()
+  }
+
+  // Заявка в канбан «Купить» (как делает вкладка «Материал») — снабжение видит
+  // номер заказа и что именно без материала
+  async function purchaseRequest(title: string, details: string | null) {
+    await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех' })
+    fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name ?? 'Цех', link: '' }) }).catch(() => {})
+  }
+
+  // Свежий read-merge-write notes — параллельные экраны не должны терять поля (урок #4960)
+  async function mergeNotes(orderId: number, patch: (n: Record<string, unknown>) => Record<string, unknown>) {
+    const { data: fresh } = await sb.from('b2b_orders').select('notes').eq('id', orderId).single()
+    const n = parseNotes((fresh as { notes: string | null } | null)?.notes ?? null)
+    await sb.from('b2b_orders').update({ notes: JSON.stringify(patch(n)) }).eq('id', orderId)
+  }
+
+  // «Нет материала на весь заказ» (повторное нажатие = материал пришёл)
+  async function toggleNoMaterialOrder(orderId: number) {
+    const o = orders.get(orderId)
+    const turnOn = materialStatus(o?.notes) !== 'needed'
+    await mergeNotes(orderId, n => ({ ...n, material_status: turnOn ? 'needed' : 'ready', material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }))
+    if (turnOn) {
+      const details = (o?.items ?? []).map(it => specLine(it)).filter(Boolean).join('; ')
+      await purchaseRequest(`Материал: ${orderNo(o, orderId)} — весь заказ (${o?.client_name ?? ''})`, details || null)
+    }
+    load()
+  }
+
+  // «Нет материала» на конкретную деталь: остальной заказ идёт дальше, эта позиция ждёт
+  async function toggleNoMaterialItem(orderId: number, itemIndex: number) {
+    const o = orders.get(orderId)
+    const cur = parseNotes(o?.notes).material_needed_items
+    const arr = Array.isArray(cur) ? (cur as number[]) : []
+    const turnOn = !arr.includes(itemIndex)
+    await mergeNotes(orderId, n => {
+      const prev = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
+      const next = turnOn ? [...new Set([...prev, itemIndex])] : prev.filter(i => i !== itemIndex)
+      return { ...n, material_needed_items: next }
+    })
+    if (turnOn) await purchaseRequest(`Материал: ${orderNo(o, orderId)} · поз. ${itemIndex + 1} (${o?.client_name ?? ''})`, specLine(o?.items?.[itemIndex]) || null)
     load()
   }
 
@@ -421,7 +476,10 @@ export default function MyQueuePage() {
                   onStart={markStart}
                   onStartAll={markStartOrder}
                   onDone={markDone}
+                  onDoneAll={markDoneOrder}
                   onAndon={setAndonFor}
+                  onNoMatOrder={toggleNoMaterialOrder}
+                  onNoMatItem={toggleNoMaterialItem}
                 />
               ))}
             </div>
@@ -462,7 +520,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onAndon }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onAndon, onNoMatOrder, onNoMatItem }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -473,20 +531,27 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onStart: (id: number) => void
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
+  onDoneAll: (ids: number[]) => void
   onAndon: (id: number) => void
+  onNoMatOrder: (orderId: number) => void
+  onNoMatItem: (orderId: number, itemIndex: number) => void
 }) {
   const notes = order?.notes
   const urgent = isUrgent(notes)
   const deadline = deadlineOf(notes)
   const launched = launchedOf(notes)
   const daysLbl = daysLeftLabel(deadline)
-  const drawingUrl = (parseNotes(notes).drawing_url as string | undefined) ?? null
+  const pn = parseNotes(notes)
+  const drawingUrl = (pn.drawing_url as string | undefined) ?? null
   const isImg = drawingUrl ? /\.(png|jpe?g|webp|gif)(\?|$)/i.test(drawingUrl) : false
+  const noMatOrder = materialStatus(notes) === 'needed'
+  const noMatItems = Array.isArray(pn.material_needed_items) ? (pn.material_needed_items as number[]) : []
   const ready = tasks.filter(isReady)
   const waiting = tasks.filter(t => !isReady(t))
   const inWork = tasks.filter(t => t.status === 'in_progress').length
   const pieces = tasks.reduce((s, t) => s + qtyOf(order, t.item_index), 0)
   const startable = ready.filter(t => t.status === 'queued').map(t => t.id)
+  const doneable = ready.filter(t => t.status === 'queued' || t.status === 'in_progress').map(t => t.id)
   const overdue = daysLbl?.includes('роср')
   const border = urgent || overdue ? 'border-red-300' : open ? 'border-[#111110]' : 'border-[#e4e4e0]'
 
@@ -500,6 +565,8 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
               {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
+              {noMatOrder && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>}
+              {!noMatOrder && noMatItems.length > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🛒 нет мат. на {noMatItems.length} поз.</span>}
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
           </div>
@@ -533,21 +600,40 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </button>
           )}
 
+          {/* Действия по всему заказу: готов целиком / нет материала целиком */}
+          <div className="flex gap-2">
+            {doneable.length > 1 && (
+              <button onClick={() => onDoneAll(doneable)}
+                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
+                ✅ Весь заказ готов ({doneable.length} дет.)
+              </button>
+            )}
+            <button onClick={() => onNoMatOrder(orderId)}
+              className={`flex-1 py-2 rounded-lg text-[13px] font-semibold border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
+              {noMatOrder ? '✅ Материал пришёл' : '🛒 Нет материала на весь заказ'}
+            </button>
+          </div>
+
           <div className="space-y-1.5">
             {ready.map(t => {
               const active = t.status === 'in_progress'
+              const noMat = noMatOrder || noMatItems.includes(t.item_index)
               return (
-                <div key={t.id} className={`rounded-lg border px-3 py-2 ${active ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#eceff1]'}`}>
+                <div key={t.id} className={`rounded-lg border px-3 py-2 ${noMat ? 'border-red-200 bg-red-50/50' : active ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#eceff1]'}`}>
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[t.item_index]) || `Поз. ${t.item_index + 1}`}</p>
-                      <p className="text-[11px] text-[#6b6b66]">
-                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                      <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
+                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}{noMat ? ' · 🛒 ждёт материал' : ''}
                       </p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">
                       {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
                       <button onClick={() => onDone(t.id)} className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
+                      <button onClick={() => onNoMatItem(orderId, t.item_index)} title={noMatItems.includes(t.item_index) ? 'Материал пришёл' : 'Нет материала на эту деталь'}
+                        className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium border ${noMatItems.includes(t.item_index) ? 'bg-[#111110] text-white border-[#111110]' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                        {noMatItems.includes(t.item_index) ? 'Мат. есть' : 'Нет мат.'}
+                      </button>
                       <button onClick={() => onAndon(t.id)} className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Проблема</button>
                     </div>
                   </div>
