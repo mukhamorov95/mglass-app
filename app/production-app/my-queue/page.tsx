@@ -611,8 +611,9 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
 
   return (
     <div className={`rounded-xl border bg-white ${border}`}>
-      <button onClick={onToggle} className="w-full text-left px-4 py-3">
-        <div className="flex items-start justify-between gap-2">
+      {/* Шапка — div, не button: внутри живут кнопки-действия (вложенные button невалидны) */}
+      <div onClick={onToggle} className="w-full text-left px-4 py-3 cursor-pointer">
+        <div className="flex items-center justify-between gap-x-3 gap-y-1.5 flex-wrap">
           <div className="min-w-0">
             <p className="text-[14px] font-bold text-[#111110] truncate flex items-center gap-1.5">
               <span className="text-[#9a9a95]">{open ? '▾' : '▸'}</span>
@@ -628,6 +629,27 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
           </div>
+          {/* Быстрые действия по заказу — доступны со свёрнутой карточки */}
+          {!open && (
+            <div className="flex items-center gap-1.5 flex-wrap ml-auto" onClick={e => e.stopPropagation()}>
+              {startable.length > 0 && (
+                <button onClick={() => onStartAll(startable)} title="Взял весь заказ в работу"
+                  className="px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 text-[11px] font-medium hover:bg-emerald-50">
+                  Взял весь ({startable.length})
+                </button>
+              )}
+              {doneable.length > 0 && (
+                <button onClick={() => onDoneAll(doneable)} title="Весь заказ готов"
+                  className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-medium hover:opacity-90">
+                  ✅ Готов весь ({doneable.length})
+                </button>
+              )}
+              <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
+                {noMatOrder ? '✅ Пришёл' : '🛒 Нет мат.'}
+              </button>
+            </div>
+          )}
           <div className="text-right flex-shrink-0">
             <p className="text-[12px] font-mono text-[#111110]">{tasks.length} дет. · {pieces} изд.{inWork > 0 ? ` · 🔧 ${inWork}` : ''}</p>
             <p className="text-[11px] flex gap-x-2 justify-end flex-wrap">
@@ -637,7 +659,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </p>
           </div>
         </div>
-      </button>
+      </div>
 
       {open && (
         <div className="border-t border-[#f0f0ee] px-4 py-3 space-y-3">
