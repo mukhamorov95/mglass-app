@@ -68,6 +68,9 @@ export default function MyQueuePage() {
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
   const [search, setSearch] = useState('')
+  // Режим резчика: те же заказы, но пересобранные по материалу и толщине —
+  // видно, какие заказы можно объединить в один крой и сколько изделий выйдет
+  const [groupMode, setGroupMode] = useState<'time' | 'material'>('time')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -219,6 +222,31 @@ export default function MyQueuePage() {
   const rankOrder = (id: number) => urgencyRank(orders.get(id)?.notes)
   for (const k of Object.keys(groups) as Horizon[]) groups[k].sort((a, b) => rankOrder(a) - rankOrder(b))
 
+  // ── Группировка по материалу и толщине ──
+  // Деталь считаем один раз, даже если у мастера по ней две задачи (резка+кромка)
+  type MatGroup = { key: string; label: string; perOrder: Map<number, { details: number; pieces: number }>; details: number; pieces: number }
+  const byMaterial = new Map<string, MatGroup>()
+  if (groupMode === 'material') {
+    const seenDetail = new Set<string>()
+    for (const t of tasks) {
+      if (!orderMatches(t.order_id)) continue
+      const dk = `${t.order_id}:${t.item_index}`
+      if (seenDetail.has(dk)) continue
+      seenDetail.add(dk)
+      const it = orders.get(t.order_id)?.items?.[t.item_index]
+      const mat = (it?.materialName || it?.category || '').trim() || 'Материал не указан'
+      const key = `${mat.toLowerCase()}|${it?.thickness ?? ''}`
+      const g = byMaterial.get(key) ?? { key, label: [mat, it?.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' · '), perOrder: new Map(), details: 0, pieces: 0 }
+      const qty = qtyOf(orders.get(t.order_id), t.item_index)
+      const po = g.perOrder.get(t.order_id) ?? { details: 0, pieces: 0 }
+      po.details += 1; po.pieces += qty
+      g.perOrder.set(t.order_id, po)
+      g.details += 1; g.pieces += qty
+      byMaterial.set(key, g)
+    }
+  }
+  const matGroups = [...byMaterial.values()].sort((a, b) => b.pieces - a.pieces)
+
   // ── Табло мастера: по ИЗДЕЛИЯМ (quantity), сегодня и неделя ──
   const piecesOf = (rows: { order_id: number; item_index: number }[], src: Map<number, OrderLite>) =>
     rows.reduce((s, t) => s + qtyOf(src.get(t.order_id), t.item_index), 0)
@@ -293,13 +321,63 @@ export default function MyQueuePage() {
           </div>
         )}
 
+        {/* Переключатель вида очереди: по срокам / по материалу и толщине (для резчика) */}
+        <div className="flex gap-1.5 mb-4">
+          <button onClick={() => setGroupMode('time')}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${groupMode === 'time' ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`}>
+            📅 По срокам
+          </button>
+          <button onClick={() => setGroupMode('material')}
+            className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium border transition-colors ${groupMode === 'material' ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#6b6b66] border-[#e4e4e0] hover:border-[#111110]'}`}>
+            🪟 По материалу и толщине
+          </button>
+        </div>
+
         {byOrder.size === 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center">
             <p className="text-[13px] text-[#9a9a95]">{q ? `По запросу «${search}» ничего не найдено` : 'Нет задач в очереди'}</p>
           </div>
         )}
 
-        {HORIZONS.map(h => groups[h.key].length > 0 && (
+        {groupMode === 'material' && matGroups.map(g => (
+          <div key={g.key} className="mb-5">
+            <div className="flex items-baseline justify-between gap-2 mb-2">
+              <p className="text-[13px] font-bold text-[#111110]">{g.label}</p>
+              <p className="text-[11px] text-[#9a9a95] flex-shrink-0">{g.perOrder.size} зак. · {g.details} дет. · <span className="font-semibold text-[#111110]">{g.pieces} изд.</span></p>
+            </div>
+            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+              {[...g.perOrder.entries()]
+                .sort((a, b) => rankOrder(a[0]) - rankOrder(b[0]))
+                .map(([oid, cnt]) => {
+                  const o = orders.get(oid)
+                  const launched = launchedOf(o?.notes)
+                  const deadline = deadlineOf(o?.notes)
+                  const daysLbl = daysLeftLabel(deadline)
+                  const overdue = daysLbl?.includes('роср')
+                  return (
+                    <Link key={oid} href={`/p/o/${oid}`} className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-[#f8f8f7] last:border-0 hover:bg-[#fafaf9]">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[#111110] truncate">
+                          {isUrgent(o?.notes) && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white mr-1.5">🔥 СРОЧНО</span>}
+                          {orderNo(o, oid)}
+                        </p>
+                        <p className="text-[11px] text-[#6b6b66] truncate">{o?.client_name}</p>
+                      </div>
+                      <div className="text-right flex-shrink-0">
+                        <p className="text-[12px] font-mono text-[#111110]">{cnt.details} дет. · {cnt.pieces} изд.</p>
+                        <p className="text-[11px] flex gap-x-2 justify-end">
+                          {fmtShort(launched) && <span className="text-[#9a9a95]">запуск {fmtShort(launched)}</span>}
+                          {fmtShort(deadline) && <span className={overdue ? 'text-red-700 font-semibold' : 'text-[#9a9a95]'}>отгрузка {fmtShort(deadline)}</span>}
+                        </p>
+                      </div>
+                    </Link>
+                  )
+                })}
+            </div>
+          </div>
+        ))}
+
+        {groupMode === 'time' && HORIZONS.map(h => groups[h.key].length > 0 && (
           <div key={h.key} className="mb-5">
             <p className={`text-[11px] font-semibold uppercase tracking-widest mb-2 ${h.cls}`}>
               {h.label} · {groups[h.key].length}
