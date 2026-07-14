@@ -65,6 +65,8 @@ export default function MyQueuePage() {
   const [andonComment, setAndonComment] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
+  // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived
+  const [matReq, setMatReq] = useState<Map<string, string>>(new Map())
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
@@ -137,6 +139,24 @@ export default function MyQueuePage() {
     const freshOrders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
     setTasks(list.filter(t => freshOrders.has(t.order_id)))
     setOrders(freshOrders)
+
+    // Статус закупки для заказов с пометкой «нет материала» — мастер видит,
+    // когда стекло заказано и когда пришло, не выходя из очереди
+    const marked = [...freshOrders.values()].filter(o => {
+      const n = parseNotes(o.notes)
+      return materialStatus(o.notes) === 'needed' || (Array.isArray(n.material_needed_items) && (n.material_needed_items as number[]).length > 0)
+    }).map(o => o.id)
+    if (marked.length) {
+      const { data: reqs } = await sb.from('shop_purchase_requests')
+        .select('id,b2b_order_id,item_index,status')
+        .in('b2b_order_id', marked)
+        .order('id', { ascending: true })
+      const m = new Map<string, string>()
+      for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string }[]) {
+        m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, r.status) // позднейшая заявка перезаписывает
+      }
+      setMatReq(m)
+    } else setMatReq(new Map())
     const dMap = new Map<number, OrderLite>(((doneOrderRows ?? []) as OrderLite[]).map(o => [o.id, o]))
     for (const [id, o] of freshOrders) dMap.set(id, o)
     setDoneOrders(dMap)
@@ -170,15 +190,27 @@ export default function MyQueuePage() {
   }
 
   async function markDone(taskId: number) {
+    const task = tasks.find(t => t.id === taskId)
     setTasks(prev => prev.filter(t => t.id !== taskId))
     await fetch(`/api/production-tasks/${taskId}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'done' }),
     }).catch(() => {})
+    // Деталь готова = материал на неё был: гасим её пометку «ждёт материал»
+    if (task) {
+      const marked = parseNotes(orders.get(task.order_id)?.notes).material_needed_items
+      if (Array.isArray(marked) && (marked as number[]).includes(task.item_index)) {
+        await mergeNotes(task.order_id, n => {
+          const prev = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
+          return { ...n, material_needed_items: prev.filter(i => i !== task.item_index) }
+        })
+      }
+    }
     load()
   }
 
   async function markDoneOrder(taskIds: number[]) {
+    const orderId = tasks.find(t => taskIds.includes(t.id))?.order_id
     setTasks(prev => prev.filter(t => !taskIds.includes(t.id)))
     await Promise.all(taskIds.map(id =>
       fetch(`/api/production-tasks/${id}`, {
@@ -186,13 +218,27 @@ export default function MyQueuePage() {
         body: JSON.stringify({ action: 'done' }),
       }).catch(() => {})
     ))
+    // Весь заказ готов — пометки «ждёт материал» больше не актуальны, гасим все
+    if (orderId != null) {
+      const n0 = parseNotes(orders.get(orderId)?.notes)
+      const hadMarks = materialStatus(orders.get(orderId)?.notes) === 'needed'
+        || (Array.isArray(n0.material_needed_items) && (n0.material_needed_items as number[]).length > 0)
+      if (hadMarks) {
+        await mergeNotes(orderId, n => ({
+          ...n,
+          material_needed_items: [],
+          ...(n.material_status === 'needed' ? { material_status: 'ready' } : {}),
+        }))
+      }
+    }
     load()
   }
 
   // Заявка в канбан «Купить» (как делает вкладка «Материал») — снабжение видит
-  // номер заказа и что именно без материала
-  async function purchaseRequest(title: string, details: string | null) {
-    await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех' })
+  // номер заказа и что именно без материала; связь order/item даёт мастеру
+  // видеть статус закупки (заказано/пришло) прямо в очереди
+  async function purchaseRequest(title: string, details: string | null, orderId: number, itemIndex: number | null) {
+    await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех', b2b_order_id: orderId, item_index: itemIndex })
     fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name ?? 'Цех', link: '' }) }).catch(() => {})
   }
 
@@ -210,7 +256,7 @@ export default function MyQueuePage() {
     await mergeNotes(orderId, n => ({ ...n, material_status: turnOn ? 'needed' : 'ready', material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }))
     if (turnOn) {
       const details = (o?.items ?? []).map(it => specLine(it)).filter(Boolean).join('; ')
-      await purchaseRequest(`Материал: ${orderNo(o, orderId)} — весь заказ (${o?.client_name ?? ''})`, details || null)
+      await purchaseRequest(`Материал: ${orderNo(o, orderId)} — весь заказ (${o?.client_name ?? ''})`, details || null, orderId, null)
     }
     load()
   }
@@ -226,7 +272,7 @@ export default function MyQueuePage() {
       const next = turnOn ? [...new Set([...prev, itemIndex])] : prev.filter(i => i !== itemIndex)
       return { ...n, material_needed_items: next }
     })
-    if (turnOn) await purchaseRequest(`Материал: ${orderNo(o, orderId)} · поз. ${itemIndex + 1} (${o?.client_name ?? ''})`, specLine(o?.items?.[itemIndex]) || null)
+    if (turnOn) await purchaseRequest(`Материал: ${orderNo(o, orderId)} · поз. ${itemIndex + 1} (${o?.client_name ?? ''})`, specLine(o?.items?.[itemIndex]) || null, orderId, itemIndex)
     load()
   }
 
@@ -281,7 +327,7 @@ export default function MyQueuePage() {
 
   // ── Группировка по материалу и толщине ──
   // Деталь считаем один раз, даже если у мастера по ней две задачи (резка+кромка)
-  type MatGroup = { key: string; kind: 'glass' | 'mirror'; label: string; perOrder: Map<number, { details: number; pieces: number }>; details: number; pieces: number }
+  type MatGroup = { key: string; kind: 'glass' | 'mirror'; label: string; perOrder: Map<number, { details: number; pieces: number }>; details: number; pieces: number; areaM2: number }
   const byMaterial = new Map<string, MatGroup>()
   if (groupMode === 'material') {
     const seenDetail = new Set<string>()
@@ -298,12 +344,13 @@ export default function MyQueuePage() {
       const kind: 'glass' | 'mirror' = cat === 'зеркало' || cat === 'изделие' || /зеркал/i.test(mat) ? 'mirror' : 'glass'
       const key = `${kind}|${mat.toLowerCase()}|${it?.thickness ?? ''}`
       const typed = kind === 'mirror' && !/^зеркал/i.test(mat) ? `Зеркало · ${mat}` : kind === 'glass' ? `Стекло · ${mat}` : mat
-      const g = byMaterial.get(key) ?? { key, kind, label: [typed, it?.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' · '), perOrder: new Map(), details: 0, pieces: 0 }
+      const g = byMaterial.get(key) ?? { key, kind, label: [typed, it?.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' · '), perOrder: new Map(), details: 0, pieces: 0, areaM2: 0 }
       const qty = qtyOf(orders.get(t.order_id), t.item_index)
       const po = g.perOrder.get(t.order_id) ?? { details: 0, pieces: 0 }
       po.details += 1; po.pieces += qty
       g.perOrder.set(t.order_id, po)
       g.details += 1; g.pieces += qty
+      if (it?.width && it?.height) g.areaM2 += it.width * it.height * qty / 1e6
       byMaterial.set(key, g)
     }
   }
@@ -377,6 +424,11 @@ export default function MyQueuePage() {
               <div className="mt-1.5 h-1.5 rounded-full bg-[#f0f0ee] overflow-hidden">
                 <div className={`h-full rounded-full ${pctWeek != null && pctWeek >= 100 ? 'bg-emerald-500' : 'bg-[#111110]'}`} style={{ width: `${Math.min(pctWeek ?? 0, 100)}%` }} />
               </div>
+              {leftPiecesWeek > 0 && (
+                <p className="mt-1.5 text-[11px] text-[#6b6b66]">
+                  к отгрузкам недели осталось <b>{leftPiecesWeek} изд.</b> · ≈{Math.ceil(leftPiecesWeek / Math.max(1, 7 - ((todayIso.getDay() + 6) % 7)))} в день
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -419,7 +471,11 @@ export default function MyQueuePage() {
               onClick={() => setExpandedMat(prev => { const n = new Set(prev); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })}
               className={`w-full flex items-baseline justify-between gap-2 bg-white rounded-xl border px-4 py-3 text-left ${openG ? 'border-[#111110] rounded-b-none' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
               <p className="text-[13px] font-bold text-[#111110]"><span className="text-[#9a9a95] mr-1.5">{openG ? '▾' : '▸'}</span>{g.label}</p>
-              <p className="text-[11px] text-[#9a9a95] flex-shrink-0">{g.perOrder.size} зак. · {g.details} дет. · <span className="font-semibold text-[#111110]">{g.pieces} изд.</span></p>
+              <p className="text-[11px] text-[#9a9a95] flex-shrink-0">
+                {g.perOrder.size} зак. · {g.details} дет. · <span className="font-semibold text-[#111110]">{g.pieces} изд.</span>
+                {/* прикидка листов: jumbo 3210×2250, полезный выход раскроя ~85% */}
+                {g.areaM2 > 0 && ` · ${Math.round(g.areaM2 * 10) / 10} м² · ≈${Math.max(1, Math.ceil(g.areaM2 / (3.21 * 2.25 * 0.85)))} лист.`}
+              </p>
             </button>
             {openG && (
             <div className="bg-white rounded-b-xl border border-t-0 border-[#111110] overflow-hidden">
@@ -476,6 +532,7 @@ export default function MyQueuePage() {
                   onAndon={setAndonFor}
                   onNoMatOrder={toggleNoMaterialOrder}
                   onNoMatItem={toggleNoMaterialItem}
+                  matReq={matReq}
                 />
               ))}
             </div>
@@ -516,7 +573,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onAndon, onNoMatOrder, onNoMatItem }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onAndon, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -531,6 +588,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onAndon: (id: number) => void
   onNoMatOrder: (orderId: number) => void
   onNoMatItem: (orderId: number, itemIndex: number) => void
+  matReq: Map<string, string>
 }) {
   const notes = order?.notes
   const urgent = isUrgent(notes)
@@ -561,7 +619,11 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
               {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
-              {noMatOrder && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>}
+              {noMatOrder && (matReq.get(`${orderId}:all`) === 'arrived'
+                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 материал пришёл</span>
+                : matReq.get(`${orderId}:all`) === 'ordered'
+                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 материал заказан</span>
+                : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>)}
               {!noMatOrder && noMatItems.length > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🛒 нет мат. на {noMatItems.length} поз.</span>}
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
@@ -620,7 +682,11 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                     <div className="min-w-0">
                       <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[t.item_index]) || `Поз. ${t.item_index + 1}`}</p>
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
-                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}{noMat ? ' · 🛒 ждёт материал' : ''}
+                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                        {noMat && (() => {
+                          const st = matReq.get(`${orderId}:${t.item_index}`) ?? matReq.get(`${orderId}:all`)
+                          return st === 'arrived' ? ' · 📦 материал пришёл' : st === 'ordered' ? ' · 🚚 материал заказан' : ' · 🛒 ждёт материал'
+                        })()}
                       </p>
                     </div>
                     <div className="flex gap-1.5 flex-shrink-0">

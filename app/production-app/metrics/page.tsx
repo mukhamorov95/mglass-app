@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
+import { PROD_SINCE, deadlineOf } from '@/lib/orderFlags'
 import ProductionTabs from '@/components/ProductionTabs'
 
 // Метрики цеха: выработка по станциям, скорость (цикл/ожидание), журнал проблем.
@@ -36,16 +37,28 @@ const avg = (xs: number[]) => xs.length ? xs.reduce((a, b) => a + b, 0) / xs.len
 export default function MetricsPage() {
   const sb = createClient()
   const [tasks, setTasks] = useState<Task[]>([])
+  // Срок отгрузки по заказам производственного контура (только с deadline_date)
+  const [deadlines, setDeadlines] = useState<Map<number, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<7 | 30>(7)
 
   useEffect(() => {
     (async () => {
       const since = new Date(Date.now() - 35 * 86400000).toISOString()
-      const { data } = await sb.from('production_tasks')
-        .select('id, order_id, stage_key, station, status, created_at, started_at, completed_at, problem_reason_code, problem_comment, problem_at, problem_resolved_at')
-        .gte('created_at', since).limit(5000)
+      const [{ data }, { data: ords }] = await Promise.all([
+        sb.from('production_tasks')
+          .select('id, order_id, stage_key, station, status, created_at, started_at, completed_at, problem_reason_code, problem_comment, problem_at, problem_resolved_at')
+          .gte('created_at', since).limit(5000),
+        sb.from('b2b_orders').select('id,notes')
+          .gte('created_at', PROD_SINCE)
+          .is('archived_at', null)
+          .not('notes', 'ilike', '%"status":"quote"%')
+          .not('notes', 'ilike', '%"historical":true%'),
+      ])
       setTasks((data ?? []) as Task[])
+      setDeadlines(new Map(((ords ?? []) as { id: number; notes: unknown }[])
+        .map(o => [o.id, deadlineOf(o.notes)] as [number, string | null])
+        .filter((x): x is [number, string] => x[1] != null)))
       setLoading(false)
     })().catch(() => setLoading(false))
   }, [sb])
@@ -63,8 +76,27 @@ export default function MetricsPage() {
     const problemLog = tasks.filter(t => t.problem_at)
       .sort((a, b) => (b.problem_at ?? '').localeCompare(a.problem_at ?? '')).slice(0, 20)
     const wip = tasks.filter(t => t.status === 'in_progress').length
-    return { done: done.length, byStation, activeProblems, problemLog, wip }
-  }, [tasks, period])
+
+    // Отгрузка в срок: заказ «упакован» = все его packaging-задачи done,
+    // дата факта = последняя completed_at; сравниваем день-к-дню с deadline_date
+    let onTime = 0, late = 0, overdueNow = 0
+    const day = (s: string) => s.slice(0, 10)
+    const todayStr = new Date(from + period * 86400000).toISOString().slice(0, 10)
+    for (const [orderId, deadline] of deadlines) {
+      const pack = tasks.filter(t => t.order_id === orderId && t.stage_key === 'packaging')
+      if (!pack.length) continue
+      const allDone = pack.every(t => t.status === 'done' && t.completed_at)
+      if (allDone) {
+        const packedAt = pack.map(t => t.completed_at!).sort().at(-1)!
+        if (new Date(packedAt).getTime() < from) continue // упакован раньше периода
+        if (day(packedAt) <= deadline) onTime++; else late++
+      } else if (deadline < todayStr) {
+        overdueNow++
+      }
+    }
+    const shipped = onTime + late
+    return { done: done.length, byStation, activeProblems, problemLog, wip, onTime, shipped, overdueNow }
+  }, [tasks, deadlines, period])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
@@ -85,6 +117,27 @@ export default function MetricsPage() {
             </button>
           ))}
           <span className="text-[12px] text-[#9a9a95] ml-2">выполнено задач: <b className="text-[#111110]">{stats.done}</b> · сейчас в работе: <b className="text-[#111110]">{stats.wip}</b></span>
+        </div>
+
+        {/* Отгрузка в срок — главная клиентская метрика цеха */}
+        <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Отгрузка в срок · за {period} дней</p>
+          <div className="flex items-baseline gap-3 mt-1 flex-wrap">
+            {stats.shipped > 0 ? (
+              <>
+                <span className={`text-[24px] font-bold ${stats.onTime / stats.shipped >= 0.9 ? 'text-emerald-700' : stats.onTime / stats.shipped >= 0.7 ? 'text-amber-600' : 'text-red-600'}`}>
+                  {Math.round(stats.onTime / stats.shipped * 100)}%
+                </span>
+                <span className="text-[13px] text-[#6b6b66]">{stats.onTime} из {stats.shipped} упакованы не позже срока</span>
+              </>
+            ) : (
+              <span className="text-[13px] text-[#9a9a95]">Пока нет упакованных заказов со сроком за период</span>
+            )}
+            {stats.overdueNow > 0 && (
+              <span className="text-[13px] font-semibold text-red-600">⚠️ сейчас просрочено и не упаковано: {stats.overdueNow}</span>
+            )}
+          </div>
+          <p className="mt-1 text-[10px] text-[#c4c4be]">Считаются заказы контура с датой отгрузки; факт = день, когда упакована последняя деталь.</p>
         </div>
 
         {/* По станциям */}

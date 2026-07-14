@@ -11,7 +11,7 @@ import { PROD_SINCE, parseNotes, materialStatus } from '@/lib/orderFlags'
 
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number }
 type Order = { id: number; custom_number: string | null; client_name: string; items: unknown; notes: unknown }
-type Line = { orderId: number; label: string; client: string; full: boolean; spec: string; qty: number }
+type Line = { orderId: number; itemIndex: number; label: string; client: string; full: boolean; spec: string; qty: number }
 type Group = { key: string; label: string; pieces: number; areaM2: number; lines: Line[] }
 
 const specOf = (it: Item) => {
@@ -23,6 +23,8 @@ const specOf = (it: Item) => {
 export default function NeededMaterial() {
   const sb = createClient()
   const [orders, setOrders] = useState<Order[]>([])
+  // Статус закупки: 'orderId:all' / 'orderId:idx' → need|ordered|arrived
+  const [reqStatus, setReqStatus] = useState<Map<string, string>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -34,11 +36,23 @@ export default function NeededMaterial() {
         .not('notes', 'ilike', '%"status":"quote"%')
         .not('notes', 'ilike', '%"historical":true%')
       const all = (data ?? []) as Order[]
-      setOrders(all.filter(o => {
+      const marked = all.filter(o => {
         const n = parseNotes(o.notes)
         const items = Array.isArray(n.material_needed_items) ? (n.material_needed_items as number[]) : []
         return materialStatus(o.notes) === 'needed' || items.length > 0
-      }))
+      })
+      setOrders(marked)
+      if (marked.length) {
+        const { data: reqs } = await sb.from('shop_purchase_requests')
+          .select('id,b2b_order_id,item_index,status')
+          .in('b2b_order_id', marked.map(o => o.id))
+          .order('id', { ascending: true })
+        const m = new Map<string, string>()
+        for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string }[]) {
+          m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, r.status)
+        }
+        setReqStatus(m)
+      }
     } finally {
       setLoading(false)
     }
@@ -61,7 +75,7 @@ export default function NeededMaterial() {
       const qty = Math.max(1, it.quantity ?? 1)
       g.pieces += qty
       if (it.width && it.height) g.areaM2 += it.width * it.height * qty / 1e6
-      g.lines.push({ orderId: o.id, label, client: o.client_name, full, spec: specOf(it), qty })
+      g.lines.push({ orderId: o.id, itemIndex: idx, label, client: o.client_name, full, spec: specOf(it), qty })
       groups.set(key, g)
     })
   }
@@ -82,18 +96,25 @@ export default function NeededMaterial() {
             <p className="text-[11px] text-[#9a9a95] flex-shrink-0"><span className="font-semibold text-[#111110]">{g.pieces} изд.</span>{g.areaM2 > 0 ? ` · ≈${Math.round(g.areaM2 * 10) / 10} м²` : ''}</p>
           </div>
           <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-            {g.lines.map((l, i) => (
+            {g.lines.map((l, i) => {
+              const st = reqStatus.get(`${l.orderId}:${l.full ? 'all' : l.itemIndex}`) ?? reqStatus.get(`${l.orderId}:all`)
+              return (
               <div key={i} className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[#f8f8f7] last:border-0">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#111110] truncate">
                     {l.label}
                     {l.full && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">весь заказ</span>}
+                    {st === 'arrived'
+                      ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 пришёл</span>
+                      : st === 'ordered'
+                      ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 заказано</span>
+                      : <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">в закупке</span>}
                   </p>
                   <p className="text-[11px] text-[#6b6b66] truncate">{l.client}</p>
                 </div>
                 <p className="text-[12px] font-mono text-[#111110] flex-shrink-0">{l.spec}{l.qty > 1 ? ` ×${l.qty}` : ''}</p>
               </div>
-            ))}
+            )})}
           </div>
         </div>
       ))}
