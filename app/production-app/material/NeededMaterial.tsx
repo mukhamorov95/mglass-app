@@ -66,7 +66,7 @@ export default function NeededMaterial() {
     const full = materialStatus(o.notes) === 'needed'
     const marked = Array.isArray(parseNotes(o.notes).material_needed_items) ? (parseNotes(o.notes).material_needed_items as number[]) : []
     const items = Array.isArray(o.items) ? (o.items as Item[]) : []
-    const label = o.custom_number?.trim() || `#${o.id}`
+    const label = o.custom_number?.trim() || `00${o.id}`
     items.forEach((it, idx) => {
       if (!full && !marked.includes(idx)) return
       const mat = (it.materialName || it.category || '').trim() || 'Материал не указан'
