@@ -13,12 +13,10 @@ type Money = {
     revenuePlan: number
     marginPct: number
     fixed: number
-    funds: { prodBonus: number; invest: number; training: number; reserve: number }
-    fundsRub: { prodBonus: number; invest: number; training: number; reserve: number }
+    funds: { prodBonus: number }
+    fundsRub: { prodBonus: number }
     tb0: number | null
     tb1: number | null
-    tb2: number | null
-    tbTarget: number | null
   } | null
   monthly: Record<string, { orders: number; amount: number }>
   nowKey: string
@@ -132,15 +130,11 @@ export default function MoneyPage() {
                 )}
 
                 <div className="space-y-2">
-                  <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Лесенка безубыточности — что включается на каждом уровне</h2>
+                  <h2 className="text-[13px] uppercase tracking-wide text-[#9a9a95]">Уровни безубыточности</h2>
                   <TbRow level="ТБ-0 · в ноль" sum={RUB(m.tb0)}
                     desc="Выручка, при которой покрыты все переменные и постоянные расходы. Ниже — работаем в минус." tone="bg-white border-[#e4e4e0] text-[#111110]" />
                   <TbRow level={`ТБ-1 · + фонд бонусов производства (${m.funds.prodBonus}% от маржи)`} sum={RUB(m.tb1)}
                     desc={`Та самая «пенка»: сверх этого уровня копится фонд бонусов цеха ≈ ${RUB(m.fundsRub.prodBonus)}/мес при плане — делится на команду.`} tone="bg-emerald-50 border-emerald-200 text-emerald-900" />
-                  <TbRow level={`ТБ-2 · + фонды развития (ещё ${(m.funds.invest + m.funds.training + m.funds.reserve).toFixed(1)}%)`} sum={RUB(m.tb2)}
-                    desc={`Добавляются: возврат инвестиций ≈ ${RUB(m.fundsRub.invest)}, обучение ≈ ${RUB(m.fundsRub.training)}, резерв ≈ ${RUB(m.fundsRub.reserve)} в месяц.`} tone="bg-blue-50 border-blue-200 text-blue-900" />
-                  <TbRow level="ТБ-цель · + доход собственника" sum={RUB(m.tbTarget)}
-                    desc="Полная цель: все фонды наполняются и компания платит дивиденды." tone="bg-amber-50 border-amber-300 text-amber-900" />
                 </div>
                 <p className="text-[12px] text-[#9a9a95]">Цифры из финмодели CFO (юнит «Производство»). Менять их здесь нельзя — правки в разделе CFO → Точка безубыточности.</p>
               </div>
@@ -217,8 +211,6 @@ export default function MoneyPage() {
                   <div className="mt-2 space-y-1.5 text-[14px] text-[#4b4b47]">
                     <div>🏁 <b>ТБ-0</b> — расходы покрыты, работаем в ноль.</div>
                     <div>🏭 <b>ТБ-1</b> — наполняется <b>фонд бонусов производства</b>: «пенка», которая делится на команду.</div>
-                    <div>📈 <b>ТБ-2</b> — добавляются <b>фонд возврата инвестиций</b>, <b>фонд обучения</b> и <b>резервный фонд</b>.</div>
-                    <div>🎯 <b>ТБ-цель</b> — все фонды полны + доход собственника: компания растёт устойчиво.</div>
                   </div>
                   <p className="text-[12px] text-[#9a9a95] mt-2">Конкретные суммы уровней — во вкладке «Финмодель и ТБ», они пересчитываются из модели CFO автоматически.</p>
                 </div>

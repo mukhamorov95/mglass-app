@@ -43,31 +43,20 @@ export async function GET() {
     const f = m.funds
     // ТБ-лесенка (как хочет владелец): ТБ-0 в ноль → ТБ-1 +фонд бонусов цеха →
     // ТБ-2 +остальные фонды (инвестиции, обучение, резерв) → ТБ-цель +доход собственника
-    const be = (fundsPct: number, ownerPct: number, ownerRub: number) => {
-      const denom = marginPct * (1 - fundsPct / 100 - ownerPct / 100)
-      return denom > 0 ? Math.round((fixed + ownerRub) / denom) : null
+    // Цеху показываем только ТБ-0 и ТБ-1 (решение владельца) — уровни с фондами
+    // развития и доходом собственника остаются в CFO и наружу не отдаются
+    const be = (fundsPct: number) => {
+      const denom = marginPct * (1 - fundsPct / 100)
+      return denom > 0 ? Math.round(fixed / denom) : null
     }
-    const allFundsPct = (f.invest || 0) + (f.training || 0) + (f.reserve || 0) + (f.prodBonus || 0)
     model = {
       revenuePlan,
       marginPct: Math.round(marginPct * 1000) / 10,
       fixed,
-      funds: {
-        prodBonus: f.prodBonus || 0,
-        invest: f.invest || 0,
-        training: f.training || 0,
-        reserve: f.reserve || 0,
-      },
-      fundsRub: {
-        prodBonus: Math.round(margin * (f.prodBonus || 0) / 100),
-        invest: Math.round(margin * (f.invest || 0) / 100),
-        training: Math.round(margin * (f.training || 0) / 100),
-        reserve: Math.round(margin * (f.reserve || 0) / 100),
-      },
-      tb0: be(0, 0, 0),
-      tb1: be(f.prodBonus || 0, 0, 0),
-      tb2: be(allFundsPct, 0, 0),
-      tbTarget: be(allFundsPct, m.ownerPct || 0, m.ownerRub || 0),
+      funds: { prodBonus: f.prodBonus || 0 },
+      fundsRub: { prodBonus: Math.round(margin * (f.prodBonus || 0) / 100) },
+      tb0: be(0),
+      tb1: be(f.prodBonus || 0),
     }
   }
 
