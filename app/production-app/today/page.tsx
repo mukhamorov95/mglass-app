@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server'
 import ProductionTabs from '@/components/ProductionTabs'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASON_LABELS } from '@/lib/productionRouting'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 // Full shop-floor task pool, grouped by station — for the production supervisor.
 // Открытый пул: никто ничего не распределяет вручную. Заказы автоматически видны
@@ -36,14 +37,16 @@ export default async function ProductionTodayPage() {
     .in('status', ['queued', 'in_progress', 'problem'])
     .order('station', { ascending: true })
 
-  const tasks = (taskRows ?? []) as TaskRow[]
+  let tasks = (taskRows ?? []) as TaskRow[]
   const orderIds  = [...new Set(tasks.map(t => t.order_id))]
 
+  // Производственный контур — только заказы с PROD_SINCE
   const { data: orderRows } = orderIds.length
-    ? await sb.from('b2b_orders').select('id,client_name,custom_number').in('id', orderIds)
+    ? await sb.from('b2b_orders').select('id,client_name,custom_number').in('id', orderIds).gte('created_at', PROD_SINCE)
     : { data: [] as OrderLite[] }
 
   const orders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
+  tasks = tasks.filter(t => orders.has(t.order_id))
 
   const problems = tasks.filter(t => t.status === 'problem')
   const byStation = new Map<string, TaskRow[]>()

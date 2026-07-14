@@ -12,8 +12,6 @@ import { createClient } from '@/lib/supabase-browser'
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
-  { href: '/production-app/scan',     label: '📷 Скан',        match: p => p.startsWith('/production-app/scan') },
-  { href: '/production-app/today',    label: 'Пул на сегодня', match: p => p.startsWith('/production-app/today') },
   { href: '/production-app',          label: 'Обзор',          match: p => p === '/production-app' || p.startsWith('/production-app/board') },
   { href: '/production-app/station',  label: 'Станции',        match: p => p.startsWith('/production-app/station') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
@@ -21,6 +19,7 @@ const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
   { href: '/production-app/buy',      label: '🛒 Купить',      match: p => p.startsWith('/production-app/buy') },
   { href: '/production-app/ideas',    label: '💡 Идеи',        match: p => p.startsWith('/production-app/ideas') },
+  { href: '/production-app/scan',     label: '📷 Скан',        match: p => p.startsWith('/production-app/scan') },
   { href: '/production-app/guide',    label: '📘 Регламент',   match: p => p.startsWith('/production-app/guide') },
 ]
 

@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase-server'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, calcOrderProgress, STAGE_LABELS, type DetailStageKey, PRODUCTION_STAGES } from '@/lib/productionStages'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 // Сводка производства — главный экран цеха: заказы сгруппированы по СРОКУ ВЫДАЧИ
 // (готовы / просрочено / отдать сегодня-завтра-послезавтра / позже) + готовность.
@@ -72,6 +73,7 @@ export default async function ProductionAppPage() {
     .select('id,client_name,custom_number,items,notes,created_at')
     .not('notes', 'ilike', '%"status":"quote"%')
     .is('archived_at', null)
+    .gte('created_at', PROD_SINCE)
     .order('created_at', { ascending: false })
     .limit(500)
 

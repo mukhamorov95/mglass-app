@@ -1,6 +1,10 @@
 // Флаги заказа живут в b2b_orders.notes (JSON), рядом с launched_at/deadline_date/
 // detail_stages — единый паттерн для order-level данных. Никакой отдельной колонки.
 
+// Производственный контур показывает только заказы с этой даты (решение владельца
+// 14.07.2026): по июньским и старым импортам нет данных о составе/этапах.
+export const PROD_SINCE = '2026-07-01'
+
 export type MaterialStatus = 'ready' | 'needed'
 
 export function parseNotes(notes: unknown): Record<string, unknown> {

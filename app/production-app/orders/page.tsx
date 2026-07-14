@@ -5,7 +5,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
-import { urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel, parseNotes } from '@/lib/orderFlags'
+import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel, parseNotes } from '@/lib/orderFlags'
 
 // Единый экран «Заказы»: список по срочности → клик раскрывает заказ (чертёж
 // сверху, детали × этапы кнопками, «Упаковано» = всё готово, «Проблема»).
@@ -58,13 +58,17 @@ export default function OrdersScreen() {
     const { data: taskRows } = await sb.from('production_tasks')
       .select('id,order_id,item_index,stage_key,station,status,sequence_order')
       .in('status', ['queued', 'in_progress', 'problem']).order('sequence_order')
-    const ts = (taskRows ?? []) as Task[]
-    setTasks(ts)
+    let ts = (taskRows ?? []) as Task[]
     const ids = [...new Set(ts.map(t => t.order_id))]
     if (ids.length) {
-      const { data: ords } = await sb.from('b2b_orders').select('id,custom_number,client_name,items,notes').in('id', ids)
-      setOrders(new Map((ords ?? []).map((o: Order) => [o.id, o])))
+      // Производственный контур — только заказы с PROD_SINCE; задачи старых заказов скрываем
+      const { data: ords } = await sb.from('b2b_orders').select('id,custom_number,client_name,items,notes')
+        .in('id', ids).gte('created_at', PROD_SINCE)
+      const fresh = new Map((ords ?? []).map((o: Order) => [o.id, o]))
+      ts = ts.filter(t => fresh.has(t.order_id))
+      setOrders(fresh)
     }
+    setTasks(ts)
     setLoading(false)
   }, [sb])
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])

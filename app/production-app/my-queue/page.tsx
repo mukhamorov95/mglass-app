@@ -6,7 +6,7 @@ import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
-import { urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
+import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -48,19 +48,29 @@ export default function MyQueuePage() {
   const [andonReason, setAndonReason] = useState<string>(ANDON_REASONS[0].code)
   const [andonComment, setAndonComment] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
+  // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
+  const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await sb.auth.getUser()
     if (!user) { setLoading(false); return }
 
-    const { data: profile } = await sb.from('users').select('production_stations').eq('id', user.id).single()
-    const stations = (profile as { production_stations: string[] | null } | null)?.production_stations ?? []
+    // Очередь строится либо для себя, либо для выбранного в сводке мастера
+    let queueUserId = user.id
+    let stations: string[]
+    if (viewMaster) {
+      queueUserId = viewMaster.id
+      stations = viewMaster.stations
+    } else {
+      const { data: profile } = await sb.from('users').select('production_stations').eq('id', user.id).single()
+      stations = (profile as { production_stations: string[] | null } | null)?.production_stations ?? []
+    }
     setMyStations(stations)
 
     const orFilter = stations.length
-      ? `assigned_to.eq.${user.id},and(assigned_to.is.null,station.in.(${stations.join(',')}))`
-      : `assigned_to.eq.${user.id}`
+      ? `assigned_to.eq.${queueUserId},and(assigned_to.is.null,station.in.(${stations.join(',')}))`
+      : `assigned_to.eq.${queueUserId}`
 
     const { data: taskRows } = await sb
       .from('production_tasks')
@@ -70,24 +80,26 @@ export default function MyQueuePage() {
       .order('sequence_order', { ascending: true })
 
     const list = (taskRows ?? []) as TaskRow[]
-    setTasks(list)
 
     const orderIds = [...new Set(list.map(t => t.order_id))]
     const blockerIds = [...new Set(list.map(t => t.blocked_by_task_id).filter((x): x is number => x != null))]
 
     const [{ data: orderRows }, { data: blockerRows }] = await Promise.all([
       orderIds.length
-        ? sb.from('b2b_orders').select('id,client_name,custom_number,items,notes').in('id', orderIds)
+        ? sb.from('b2b_orders').select('id,client_name,custom_number,items,notes').in('id', orderIds).gte('created_at', PROD_SINCE)
         : Promise.resolve({ data: [] as OrderLite[] }),
       blockerIds.length
         ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
         : Promise.resolve({ data: [] as BlockerLite[] }),
     ])
 
-    setOrders(new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o])))
+    // Производственный контур — только заказы с PROD_SINCE
+    const freshOrders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
+    setTasks(list.filter(t => freshOrders.has(t.order_id)))
+    setOrders(freshOrders)
     setBlockers(new Map((blockerRows ?? []).map((b: BlockerLite) => [b.id, b])))
     setLoading(false)
-  }, [sb])
+  }, [sb, viewMaster])
 
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
@@ -153,8 +165,10 @@ export default function MyQueuePage() {
       </div>
 
       <div className="px-4 pt-4">
-        <LeadSummary />
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Готово к работе</p>
+        <LeadSummary onPick={setViewMaster} />
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">
+          Готово к работе{viewMaster ? ` · мастер: ${viewMaster.name}` : ''}
+        </p>
         {ready.length === 0 ? (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center mb-6">
             <p className="text-[13px] text-[#9a9a95]">Нет задач в очереди</p>

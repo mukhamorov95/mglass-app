@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { type DetailStages, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 // Борд начальника производства «заказ × этапы» — единый обзор цеха.
 // Строки = активные заказы, колонки = этапы ленты заказа, ячейки = статус этапа.
@@ -73,6 +74,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     .select('id,client_name,custom_number,items,notes,created_at')
     .not('notes', 'ilike', '%"status":"quote"%')
     .is('archived_at', null)
+    .gte('created_at', PROD_SINCE)
     .order('created_at', { ascending: false })
     .limit(500)
 

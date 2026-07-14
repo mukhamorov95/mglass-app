@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 // Сводка по мастерам — видна только ответственному (production_lead) и owner.
 // По каждому мастеру: сегодня (сделано+осталось) / сделано сегодня / осталось,
@@ -14,7 +15,7 @@ type TaskLite = { station: string; status: string; completed_at: string | null }
 const OWNER = new Set(['admin', 'ceo'])
 const OWNER_EMAIL = 'admin@mglass.ru'
 
-export default function LeadSummary() {
+export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; name: string; stations: string[] } | null) => void }) {
   const sb = createClient()
   const [show, setShow] = useState(false)
   const [masters, setMasters] = useState<Master[]>([])
@@ -33,14 +34,18 @@ export default function LeadSummary() {
     setShow(true)
 
     const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0)
-    const [{ data: ms }, { data: act }, { data: dn }] = await Promise.all([
+    const [{ data: ms }, { data: act }, { data: dn }, { data: fresh }] = await Promise.all([
       sb.from('users').select('id,name,email,production_stations').eq('role', 'production').eq('active', true),
-      sb.from('production_tasks').select('station,status,completed_at').in('status', ['queued', 'in_progress']),
-      sb.from('production_tasks').select('station,status,completed_at').eq('status', 'done').gte('completed_at', todayStart.toISOString()),
+      sb.from('production_tasks').select('order_id,station,status,completed_at').in('status', ['queued', 'in_progress']),
+      sb.from('production_tasks').select('order_id,station,status,completed_at').eq('status', 'done').gte('completed_at', todayStart.toISOString()),
+      // Производственный контур — только заказы с PROD_SINCE, задачи старых не считаем
+      sb.from('b2b_orders').select('id').gte('created_at', PROD_SINCE).is('archived_at', null),
     ])
+    const freshIds = new Set(((fresh ?? []) as { id: number }[]).map(o => o.id))
+    const onlyFresh = (rows: unknown[] | null) => ((rows ?? []) as (TaskLite & { order_id: number })[]).filter(t => freshIds.has(t.order_id))
     setMasters((ms ?? []) as Master[])
-    setActive((act ?? []) as TaskLite[])
-    setDoneToday((dn ?? []) as TaskLite[])
+    setActive(onlyFresh(act))
+    setDoneToday(onlyFresh(dn))
   }, [sb])
   useEffect(() => { load().catch(() => {}) }, [load])
 
@@ -59,7 +64,12 @@ export default function LeadSummary() {
     <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 mb-4">
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <p className="text-[13px] font-semibold text-[#111110]">Сводка по мастерам · сегодня</p>
-        <select value={pick} onChange={e => setPick(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white">
+        <select value={pick} onChange={e => {
+          const v = e.target.value
+          setPick(v)
+          const m = masters.find(x => x.id === v)
+          onPick?.(m ? { id: m.id, name: m.name ?? m.email ?? '—', stations: m.production_stations ?? [] } : null)
+        }} className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white">
           <option value="all">Все мастера</option>
           {masters.map(m => <option key={m.id} value={m.id}>{m.name ?? m.email}</option>)}
         </select>

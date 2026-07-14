@@ -10,6 +10,7 @@ import {
   runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS,
   type CuttingSettings, type PieceGroup, type MaterialCuttingResult,
 } from '@/lib/cuttingOptimizer'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 // Агрегированный экран станции: задачи этого этапа из ВСЕХ заказов, собранные
 // в партии по «материал + толщина». Для резки — со сводным раскроем (листы).
@@ -71,7 +72,7 @@ export default function StationBatchesPage() {
 
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
     const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }] = await Promise.all([
-      sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds),
+      sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds).gte('created_at', PROD_SINCE),
       isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
       // Заявки на материал по этим заказам (для гейта резки по приходу материала)
@@ -92,6 +93,9 @@ export default function StationBatchesPage() {
     const pending = new Set<number>([...hasReq].filter(oid => !arrived.has(oid)))
     setMatPending(pending)
     const orders = new Map((orderRows ?? []).map((o: OrderRow) => [o.id, o]))
+    // Производственный контур — только заказы с PROD_SINCE
+    tasks = tasks.filter(t => orders.has(t.order_id))
+    if (tasks.length === 0) { setBatches([]); setLoading(false); return }
     const matLookup = new Map((matRows ?? []).map((m: MatRow) => [`${m.name}|${m.thickness}`, m]))
     const settings: CuttingSettings = { ...DEFAULT_CUTTING_SETTINGS, ...(cfg ?? {}) }
 
@@ -182,7 +186,7 @@ export default function StationBatchesPage() {
       <div className="px-4 pt-4 space-y-3">
         {isCutting && matPending.size > 0 && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-[12px] text-amber-800">
-            ⏳ {matPending.size} {matPending.size === 1 ? 'заказ ждёт' : 'заказов ждут'} прихода материала — резка по ним заблокирована до отметки «забран» в закупках
+            ⏳ {matPending.size} {matPending.size === 1 ? 'заказ отмечен' : 'заказов отмечено'} «нет материала» — они подсвечены ниже, резка не блокируется
           </div>
         )}
         {batches.length === 0 && (
@@ -203,8 +207,8 @@ export default function StationBatchesPage() {
                     {b.result ? <> · КПД <span className={b.result.avgEfficiency >= 70 ? 'text-emerald-600' : 'text-amber-600'}>{b.result.avgEfficiency}%</span></> : null}
                   </p>
                 </button>
-                <button onClick={() => markTasks(b.orders.filter(o => !matPending.has(o.orderId)).map(o => o.taskId))}
-                  disabled={busy || b.orders.every(o => matPending.has(o.orderId))}
+                <button onClick={() => markTasks(b.orders.map(o => o.taskId))}
+                  disabled={busy}
                   className="text-[12px] font-semibold px-3 py-2 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40 transition-colors whitespace-nowrap flex-shrink-0">
                   Готово всё
                 </button>
@@ -219,8 +223,8 @@ export default function StationBatchesPage() {
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span></p>
                         <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
                       </Link>
-                      <button onClick={() => markTasks([o.taskId])} disabled={busy || waitMat}
-                        title={waitMat ? 'Материал ещё не приехал — заявка не закрыта в закупках' : ''}
+                      <button onClick={() => markTasks([o.taskId])} disabled={busy}
+                        title={waitMat ? 'Материал отмечен «нет» — заказ подсвечен на закупку, но резать можно' : ''}
                         className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors whitespace-nowrap flex-shrink-0">
                         Готово
                       </button>
