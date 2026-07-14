@@ -22,6 +22,8 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
   const [active, setActive] = useState<TaskLite[]>([])
   const [doneToday, setDoneToday] = useState<TaskLite[]>([])
   const [pick, setPick] = useState<string>('all')
+  // Сворачивание сводки и выбранный мастер переживают перезагрузку (localStorage)
+  const [open, setOpen] = useState(false)
 
   const load = useCallback(async () => {
     const { data: { user } } = await sb.auth.getUser()
@@ -46,6 +48,15 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
     setMasters((ms ?? []) as Master[])
     setActive(onlyFresh(act))
     setDoneToday(onlyFresh(dn))
+    try {
+      setOpen(localStorage.getItem('mq_summary_open') === '1')
+      const saved = localStorage.getItem('mq_master_pick')
+      const sm = saved ? ((ms ?? []) as Master[]).find(x => x.id === saved) : null
+      if (sm) {
+        setPick(sm.id)
+        onPick?.({ id: sm.id, name: sm.name ?? sm.email ?? '—', stations: sm.production_stations ?? [] })
+      }
+    } catch { /* localStorage недоступен */ }
   }, [sb])
   useEffect(() => { load().catch(() => {}) }, [load])
 
@@ -62,11 +73,15 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
 
   return (
     <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 mb-4">
-      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
-        <p className="text-[13px] font-semibold text-[#111110]">Сводка по мастерам · сегодня</p>
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <button onClick={() => { const v = !open; setOpen(v); try { localStorage.setItem('mq_summary_open', v ? '1' : '0') } catch { /* ignore */ } }}
+          className="text-[13px] font-semibold text-[#111110]">
+          {open ? '▾' : '▸'} Сводка по мастерам · сегодня
+        </button>
         <select value={pick} onChange={e => {
           const v = e.target.value
           setPick(v)
+          try { if (v === 'all') localStorage.removeItem('mq_master_pick'); else localStorage.setItem('mq_master_pick', v) } catch { /* ignore */ }
           const m = masters.find(x => x.id === v)
           onPick?.(m ? { id: m.id, name: m.name ?? m.email ?? '—', stations: m.production_stations ?? [] } : null)
         }} className="border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white">
@@ -75,12 +90,12 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
         </select>
       </div>
 
-      <div className="flex gap-2 mb-3">
+      {open && <div className="flex gap-2 mb-3 mt-3">
         <div className="flex-1 bg-[#f5f5f3] rounded-lg px-3 py-2"><p className="text-[11px] text-[#9a9a95]">Сделано сегодня</p><p className="text-[18px] font-bold text-emerald-700">{totDone}</p></div>
         <div className="flex-1 bg-[#f5f5f3] rounded-lg px-3 py-2"><p className="text-[11px] text-[#9a9a95]">Осталось</p><p className="text-[18px] font-bold text-[#111110]">{totLeft}</p></div>
-      </div>
+      </div>}
 
-      <div className="space-y-1.5">
+      {open && <div className="space-y-1.5">
         {rows.map(({ m, st, left, done, total }) => (
           <div key={m.id} className="flex items-center justify-between gap-2 py-1.5 border-b border-[#f5f5f3] last:border-0">
             <div className="min-w-0">
@@ -95,7 +110,7 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
           </div>
         ))}
         {rows.length === 0 && <p className="text-[12px] text-[#9a9a95]">Нет мастеров.</p>}
-      </div>
+      </div>}
     </div>
   )
 }

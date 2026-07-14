@@ -50,6 +50,8 @@ export default function MyQueuePage() {
   const [myStations, setMyStations] = useState<string[]>([])
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
+  // Поиск по номеру заказа/клиенту — и для владельца, и для мастера
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -141,8 +143,15 @@ export default function MyQueuePage() {
   // Сортировка по срочности: срочные и с ближайшей отгрузкой — выше.
   const rankOf = (t: TaskRow) => urgencyRank(orders.get(t.order_id)?.notes)
   const byUrgency = (a: TaskRow, b: TaskRow) => rankOf(a) - rankOf(b)
-  const ready   = tasks.filter(isReady).sort(byUrgency)
-  const waiting = tasks.filter(t => !isReady(t)).sort(byUrgency)
+  const q = search.trim().toLowerCase()
+  const matches = (t: TaskRow) => {
+    if (!q) return true
+    const o = orders.get(t.order_id)
+    const num = (o?.custom_number?.trim() || `00${t.order_id}`).toLowerCase()
+    return num.includes(q) || (o?.client_name ?? '').toLowerCase().includes(q)
+  }
+  const ready   = tasks.filter(isReady).filter(matches).sort(byUrgency)
+  const waiting = tasks.filter(t => !isReady(t)).filter(matches).sort(byUrgency)
 
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -156,10 +165,14 @@ export default function MyQueuePage() {
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи</h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">{ready.length} готово к работе · {waiting.length} ожидаю</p>
           </div>
-          <Link href={`/production-app/station/${myStations[0] ?? 'cutting'}`}
-            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
-            Партиями →
-          </Link>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
+              className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white w-44 outline-none focus:border-[#111110]" />
+            <Link href={`/production-app/station/${myStations[0] ?? 'cutting'}`}
+              className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors whitespace-nowrap flex-shrink-0">
+              Партиями →
+            </Link>
+          </div>
         </div>
         <ProductionTabs />
       </div>
