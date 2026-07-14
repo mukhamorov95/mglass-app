@@ -32,20 +32,27 @@ const subPill = (active: boolean) =>
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
   const onObzor = path === '/production-app' || path.startsWith('/production-app/board')
-  // «Заработок» — только реферерам (users.referral_rate_pct задан).
+  // «Заработок» — только реферерам; «Деньги» — owner-ролям и can_view_money.
   const [isReferrer, setIsReferrer] = useState(false)
+  const [seesMoney, setSeesMoney] = useState(false)
   useEffect(() => {
     const sb = createClient()
     sb.auth.getUser().then(({ data: { user } }) => {
       if (!user) return
-      sb.from('users').select('referral_rate_pct').eq('id', user.id).single()
-        .then(({ data }) => { if ((data as { referral_rate_pct: number | null } | null)?.referral_rate_pct != null) setIsReferrer(true) })
+      sb.from('users').select('referral_rate_pct, role, can_view_money').eq('id', user.id).single()
+        .then(({ data }) => {
+          const d = data as { referral_rate_pct: number | null; role: string | null; can_view_money: boolean | null } | null
+          if (d?.referral_rate_pct != null) setIsReferrer(true)
+          if (d?.can_view_money || d?.role === 'admin' || d?.role === 'ceo' || d?.role === 'cfo') setSeesMoney(true)
+        })
     })
   }, [])
 
-  const tabs = isReferrer
-    ? [...TABS, { href: '/production-app/earnings', label: '💰 Заработок', match: (p: string) => p.startsWith('/production-app/earnings') }]
-    : TABS
+  const tabs = [
+    ...TABS,
+    ...(seesMoney ? [{ href: '/production-app/money', label: '💰 Деньги', match: (p: string) => p.startsWith('/production-app/money') }] : []),
+    ...(isReferrer ? [{ href: '/production-app/earnings', label: '💰 Заработок', match: (p: string) => p.startsWith('/production-app/earnings') }] : []),
+  ]
 
   return (
     <div className="mt-3 space-y-2">

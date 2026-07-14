@@ -20,6 +20,7 @@ type User = {
   can_delete: boolean
   permissions: UserPermissions
   production_stations: string[] | null
+  can_view_money: boolean
   created_at: string
 }
 
@@ -411,6 +412,17 @@ export default function UsersPage() {
                               </div>
                             )
                           })()}
+                          {/* Доступ к «Деньгам» цеха: read-only витрина финансов производства */}
+                          {!isAdmin && u.role !== 'ceo' && u.role !== 'cfo' && (
+                            <div className="mt-1.5">
+                              <button
+                                onClick={() => updateUser(u.id, { can_view_money: !u.can_view_money })}
+                                title="Видит раздел «Деньги» в производстве (финмодель, ТБ, бонусный фонд). Только просмотр."
+                                className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${u.can_view_money ? 'bg-amber-100 text-amber-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                💰 Деньги: {u.can_view_money ? 'видит' : 'нет'}
+                              </button>
+                            </div>
+                          )}
                         </td>
 
                         {/* Код менеджера */}

@@ -322,6 +322,11 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
   { href: '/production-app/demo',     label: 'Учебный заказ ДЕМО-1',  icon: '🎓' },
 ]
 
+// Деньги цеха: read-only витрина финансов производства (доступ выдаёт владелец).
+const PRODUCTION_NAV_MONEY: NavItem[] = [
+  { href: '/production-app/money',    label: 'Финансы производства',  icon: '💰' },
+]
+
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const MGLASS_PATHS = [
@@ -719,6 +724,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 
@@ -796,6 +802,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 
