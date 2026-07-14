@@ -143,6 +143,7 @@ type NotesData = {
   material_status_updated_at?: string
   material_status_updated_by?: string
   deadline_control?: DeadlineControl
+  drawing_url?: string
   bulk_actions?: BulkAction[]
   payment_status?: string
   prepayment_amount?: number
@@ -1621,88 +1622,20 @@ export default function B2BOrdersPage() {
           )}
         </div>
 
-        {/* Контроль срока */}
-        {(() => {
-          const ds = getDeadlineStatus(order)
-          const dc = pn.deadline_control
-          const isRisky = ds.status === 'overdue' || ds.status === 'today' || ds.status === 'tomorrow'
-          const setField = (field: keyof DeadlineControl, value: string) =>
-            setDcEdit(prev => ({ ...prev, [order.id]: { ...(prev[order.id] ?? dc ?? {}), [field]: value } }))
-          const fieldVal = (field: keyof Omit<DeadlineControl, 'updated_at'>): string =>
-            (dcEdit[order.id]?.[field] ?? dc?.[field] ?? '') as string
+        {/* Контроль срока убран (14.07): мешал — статус срока виден бейджем в шапке */}
 
-          return (
-            <div className={`rounded-lg border p-3 space-y-2 ${isRisky ? 'border-amber-200 bg-amber-50/30' : 'border-[#e4e4e0] bg-white'}`}>
-              <div className="flex items-center gap-2">
-                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Контроль срока</p>
-                {isRisky && (
-                  <span className="text-[9px] font-medium text-amber-700 bg-amber-100 px-1.5 py-px rounded">Требует контроля</span>
-                )}
-                {dc?.updated_at && !isRisky && (
-                  <span className="text-[10px] text-[#b0b0aa]">заполнен</span>
-                )}
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Причина риска</p>
-                  <select
-                    value={fieldVal('reason')}
-                    onChange={e => setField('reason', e.target.value)}
-                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white">
-                    <option value="">— не выбрано —</option>
-                    {DC_REASONS.map(r => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Ответственный</p>
-                  <input
-                    type="text"
-                    value={fieldVal('responsible')}
-                    onChange={e => setField('responsible', e.target.value)}
-                    placeholder="Влад / Вера / Никита / Дима"
-                    className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующее действие</p>
-                <input
-                  type="text"
-                  value={fieldVal('next_action')}
-                  onChange={e => setField('next_action', e.target.value)}
-                  placeholder="Например: уточнить у закалки готовность партии, передать в упаковку"
-                  className="w-full text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white placeholder:text-[#c4c4be]"
-                />
-              </div>
-
-              <div className="flex items-end gap-2 flex-wrap">
-                <div>
-                  <p className="text-[10px] text-[#9a9a95] mb-0.5">Следующий контроль</p>
-                  <input
-                    type="date"
-                    value={fieldVal('next_check_date')}
-                    onChange={e => setField('next_check_date', e.target.value)}
-                    className="text-[11px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[#111110] outline-none focus:border-[#111110] bg-white"
-                  />
-                </div>
-                <button
-                  onClick={() => saveDeadlineControl(order.id)}
-                  disabled={dcSaving === order.id}
-                  className="px-3 py-1.5 bg-[#111110] text-white text-[11px] font-medium rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
-                  {dcSaving === order.id ? 'Сохр...' : 'Сохранить контроль'}
-                </button>
-              </div>
-
-              {dc?.updated_at && (
-                <p className="text-[10px] text-[#b0b0aa]">
-                  Обновлено: {new Date(dc.updated_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </p>
-              )}
-            </div>
-          )
-        })()}
+        {/* Чертёж заказа (прикрепляется при запуске из просчётов или в цех-Заказах) */}
+        {typeof pn.drawing_url === 'string' && pn.drawing_url && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Чертёж</p>
+            <a href={pn.drawing_url} target="_blank" rel="noreferrer" className="block">
+              {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(pn.drawing_url)
+                ? /* eslint-disable-next-line @next/next/no-img-element */
+                  <img src={pn.drawing_url} alt="Чертёж" className="max-h-48 rounded-lg border border-[#e4e4e0] object-contain bg-white" />
+                : <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#111110] hover:border-[#111110]">📐 Открыть чертёж (PDF)</span>}
+            </a>
+          </div>
+        )}
 
         {/* Позиции */}
         <div>
@@ -1737,11 +1670,12 @@ export default function B2BOrdersPage() {
           </div>
         </div>
 
-        {/* ПРОИЗВОДСТВЕННАЯ СВОДКА */}
-        <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">
-          <div className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0]">
+        {/* ПРОИЗВОДСТВЕННАЯ СВОДКА — свёрнута по умолчанию (решение владельца 14.07) */}
+        <details className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden group">
+          <summary className="px-3 py-1.5 bg-[#f8f8f7] border-b border-[#e4e4e0] cursor-pointer list-none flex items-center gap-1.5">
+            <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform">▸</span>
             <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Производственная сводка</span>
-          </div>
+          </summary>
           <div className="px-3 py-2 space-y-1.5 text-[11px]">
             <div className="flex justify-between">
               <span className="text-[#9a9a95]">Площадь</span>
@@ -1792,7 +1726,7 @@ export default function B2BOrdersPage() {
               ))}
             </div>
           )}
-        </div>
+        </details>
 
         {/* ПРОИЗВОДСТВЕННОЕ СООБЩЕНИЕ */}
         <div className="bg-white rounded-lg border border-[#e4e4e0] overflow-hidden">

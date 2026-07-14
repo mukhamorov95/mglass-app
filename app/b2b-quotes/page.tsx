@@ -452,6 +452,14 @@ export default function B2BQuotesPage() {
     }
     const { error } = await createClient().from('b2b_orders').update(updateRow).eq('id', workDateId)
     if (error) { showToast('Ошибка: ' + error.message); return }
+    // Чертёж дописываем ВТОРЫМ свежим read-merge-write: параллельные RMW notes
+    // (этапы/материал в /b2b-orders) могут затереть общий update (случай #4960)
+    if (drawingUrl) {
+      const sb2 = createClient()
+      const { data: freshRow } = await sb2.from('b2b_orders').select('notes').eq('id', workDateId).single()
+      const freshNotes = parseNotes((freshRow as { notes: unknown } | null)?.notes)
+      await sb2.from('b2b_orders').update({ notes: JSON.stringify({ ...freshNotes, drawing_url: drawingUrl }) }).eq('id', workDateId)
+    }
     // Генерация задач в цех (best-effort).
     fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => {})
     setQuotes(prev => prev.map(x => x.id === workDateId ? {
