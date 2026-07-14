@@ -260,6 +260,7 @@ export default function B2BQuotesPage() {
   const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
   const [workNumber, setWorkNumber]   = useState('')
   const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
+  const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
   const workDateRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -413,6 +414,18 @@ export default function B2BQuotesPage() {
     const parsed = parseNotes(q.notes)
     const history = Array.isArray(parsed.status_history) ? [...(parsed.status_history as unknown[])] : []
     history.push({ from: getStatus(q), to: 'sent', date: new Date().toISOString(), comment: null })
+    // Чертёж для цеха: тот же bucket/путь, что «Прикрепить чертёж» в заказах —
+    // мастер увидит его в «Моих задачах» и в карточке заказа
+    let drawingUrl: string | null = null
+    if (workDrawing) {
+      const sbUp = createClient()
+      const ext = (workDrawing.name.split('.').pop() || 'jpg').toLowerCase()
+      const path = `order-drawings/${workDateId}.${ext}`
+      const { error: upErr } = await sbUp.storage.from('b2b-attachments').upload(path, workDrawing, { upsert: true })
+      if (upErr) { showToast('Чертёж не загрузился: ' + upErr.message); return }
+      const { data: pub } = sbUp.storage.from('b2b-attachments').getPublicUrl(path)
+      drawingUrl = `${pub.publicUrl}?t=${workDrawing.size}` // buster: новый файл — новый size
+    }
     // «В работу» с датой = запуск в производство: выбранная дата это и есть дата запуска.
     // Пишем launched_at (колонку и notes), иначе заказ висит «без даты запуска» в /b2b-orders,
     // который группирует по launched_at, а не по work_started_at.
@@ -422,6 +435,7 @@ export default function B2BQuotesPage() {
       work_started_at: workDate,
       launched_at: workDate,
       ...(workDeadline ? { deadline_date: workDeadline } : {}),
+      ...(drawingUrl ? { drawing_url: drawingUrl } : {}),
       status_history: history,
     })
     const meta = buildUpdateMeta()
@@ -453,6 +467,7 @@ export default function B2BQuotesPage() {
     } : x))
     showToast('Запущено в работу')
     setWorkDateId(null)
+    setWorkDrawing(null)
   }
 
   // ── Load ───────────────────────────────────────────────────────────────────
@@ -1003,6 +1018,17 @@ export default function B2BQuotesPage() {
                         onChange={e => setWorkNumber(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
                       />
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">Чертёж:</span>
+                      <label className="cursor-pointer bg-white border border-[#d0e0ff] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] hover:border-blue-400 max-w-[180px] truncate">
+                        {workDrawing ? `📐 ${workDrawing.name}` : '📐 Прикрепить (PDF/фото)'}
+                        <input type="file" accept="application/pdf,image/*" className="hidden"
+                          onChange={e => setWorkDrawing(e.target.files?.[0] ?? null)} />
+                      </label>
+                      {workDrawing && (
+                        <button onClick={() => setWorkDrawing(null)} className="text-[#9a9a95] hover:text-red-600 text-sm px-0.5" title="Убрать файл">✕</button>
+                      )}
                     </div>
                     <p className="text-[11px] text-blue-600/70 flex-shrink-0">
                       Заказ уйдёт в производство, задачи появятся в цеху
