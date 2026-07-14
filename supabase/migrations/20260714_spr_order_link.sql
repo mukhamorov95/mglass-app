@@ -6,3 +6,7 @@ ALTER TABLE public.shop_purchase_requests
 
 CREATE INDEX IF NOT EXISTS spr_order_idx
   ON public.shop_purchase_requests(b2b_order_id) WHERE b2b_order_id IS NOT NULL;
+
+-- Дата прибытия материала: снабжение ставит при «Заказано», мастер видит «едет к…»
+ALTER TABLE public.shop_purchase_requests
+  ADD COLUMN IF NOT EXISTS expected_date date;

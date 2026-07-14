@@ -21,6 +21,7 @@ type Req = {
   link_url: string | null
   qty: string | null
   status: 'need' | 'ordered' | 'arrived'
+  expected_date: string | null
   author_name: string
   ordered_by: string | null
   ordered_at: string | null
@@ -142,6 +143,12 @@ export default function BuyPage() {
     } finally { setBusy(false) }
   }
 
+  // Дата прибытия: мастер видит «едет к …» в своей очереди и в «Нужен материал»
+  async function setExpected(reqId: number, date: string | null) {
+    await sb.from('shop_purchase_requests').update({ expected_date: date }).eq('id', reqId)
+    load()
+  }
+
   async function addComment(reqId: number) {
     if (!me || !cText.trim()) return
     setBusy(true)
@@ -166,7 +173,12 @@ export default function BuyPage() {
             {cms.length > 0 && <span className="text-[10px] text-[#9a9a95] flex-shrink-0">💬 {cms.length}</span>}
           </div>
           <p className="text-[11px] text-[#9a9a95] mt-0.5">{r.author_name} · {fmtD(r.created_at)}</p>
-          {r.status === 'ordered' && r.ordered_by && <p className="text-[11px] text-blue-700 mt-0.5">заказал: {r.ordered_by} · {fmtD(r.ordered_at)}</p>}
+          {r.status === 'ordered' && r.ordered_by && (
+            <p className="text-[11px] text-blue-700 mt-0.5">
+              заказал: {r.ordered_by} · {fmtD(r.ordered_at)}
+              {r.expected_date && ` · 🚚 приедет к ${new Date(r.expected_date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`}
+            </p>
+          )}
           {r.status === 'arrived' && r.arrived_by && <p className="text-[11px] text-emerald-700 mt-0.5">принял: {r.arrived_by} · {fmtD(r.arrived_at)}</p>}
         </button>
         {isOpen && (
@@ -187,6 +199,12 @@ export default function BuyPage() {
                   className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-40">✓ Приехал на склад</button>
                 <button onClick={() => moveTo(r, 'need')} disabled={busy}
                   className="text-[12px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-white disabled:opacity-40">↩ Вернуть</button>
+                <label className="flex items-center gap-1.5 text-[12px] text-[#6b6b66]">
+                  приедет к:
+                  <input type="date" defaultValue={r.expected_date ?? ''}
+                    onBlur={e => { const v = e.target.value; if (v !== (r.expected_date ?? '')) setExpected(r.id, v || null) }}
+                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] bg-white" />
+                </label>
               </>)}
               {r.status === 'arrived' && (
                 <button onClick={() => moveTo(r, 'ordered')} disabled={busy}

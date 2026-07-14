@@ -23,8 +23,8 @@ const specOf = (it: Item) => {
 export default function NeededMaterial() {
   const sb = createClient()
   const [orders, setOrders] = useState<Order[]>([])
-  // Статус закупки: 'orderId:all' / 'orderId:idx' → need|ordered|arrived
-  const [reqStatus, setReqStatus] = useState<Map<string, string>>(new Map())
+  // Статус закупки: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
+  const [reqStatus, setReqStatus] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(async () => {
@@ -44,12 +44,12 @@ export default function NeededMaterial() {
       setOrders(marked)
       if (marked.length) {
         const { data: reqs } = await sb.from('shop_purchase_requests')
-          .select('id,b2b_order_id,item_index,status')
+          .select('id,b2b_order_id,item_index,status,expected_date')
           .in('b2b_order_id', marked.map(o => o.id))
           .order('id', { ascending: true })
-        const m = new Map<string, string>()
-        for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string }[]) {
-          m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, r.status)
+        const m = new Map<string, { status: string; expected: string | null }>()
+        for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }[]) {
+          m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date })
         }
         setReqStatus(m)
       }
@@ -97,17 +97,18 @@ export default function NeededMaterial() {
           </div>
           <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
             {g.lines.map((l, i) => {
-              const st = reqStatus.get(`${l.orderId}:${l.full ? 'all' : l.itemIndex}`) ?? reqStatus.get(`${l.orderId}:all`)
+              const r = reqStatus.get(`${l.orderId}:${l.full ? 'all' : l.itemIndex}`) ?? reqStatus.get(`${l.orderId}:all`)
+              const kDate = r?.expected ? ` · к ${new Date(r.expected).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}` : ''
               return (
               <div key={i} className="flex items-center justify-between gap-2 px-4 py-2 border-b border-[#f8f8f7] last:border-0">
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#111110] truncate">
                     {l.label}
                     {l.full && <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">весь заказ</span>}
-                    {st === 'arrived'
+                    {r?.status === 'arrived'
                       ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 пришёл</span>
-                      : st === 'ordered'
-                      ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 заказано</span>
+                      : r?.status === 'ordered'
+                      ? <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 заказано{kDate}</span>
                       : <span className="ml-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">в закупке</span>}
                   </p>
                   <p className="text-[11px] text-[#6b6b66] truncate">{l.client}</p>

@@ -65,8 +65,8 @@ export default function MyQueuePage() {
   const [andonComment, setAndonComment] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
-  // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived
-  const [matReq, setMatReq] = useState<Map<string, string>>(new Map())
+  // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
+  const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
@@ -148,12 +148,12 @@ export default function MyQueuePage() {
     }).map(o => o.id)
     if (marked.length) {
       const { data: reqs } = await sb.from('shop_purchase_requests')
-        .select('id,b2b_order_id,item_index,status')
+        .select('id,b2b_order_id,item_index,status,expected_date')
         .in('b2b_order_id', marked)
         .order('id', { ascending: true })
-      const m = new Map<string, string>()
-      for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string }[]) {
-        m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, r.status) // позднейшая заявка перезаписывает
+      const m = new Map<string, { status: string; expected: string | null }>()
+      for (const r of (reqs ?? []) as { b2b_order_id: number; item_index: number | null; status: string; expected_date: string | null }[]) {
+        m.set(`${r.b2b_order_id}:${r.item_index ?? 'all'}`, { status: r.status, expected: r.expected_date }) // позднейшая заявка перезаписывает
       }
       setMatReq(m)
     } else setMatReq(new Map())
@@ -588,7 +588,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onAndon: (id: number) => void
   onNoMatOrder: (orderId: number) => void
   onNoMatItem: (orderId: number, itemIndex: number) => void
-  matReq: Map<string, string>
+  matReq: Map<string, { status: string; expected: string | null }>
 }) {
   const notes = order?.notes
   const urgent = isUrgent(notes)
@@ -620,11 +620,14 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
               {urgent && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-600 text-white">🔥 СРОЧНО</span>}
               {orderNo(order, orderId)}
               {drawingUrl && <span title="Есть чертёж">📐</span>}
-              {noMatOrder && (matReq.get(`${orderId}:all`) === 'arrived'
-                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 материал пришёл</span>
-                : matReq.get(`${orderId}:all`) === 'ordered'
-                ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 материал заказан</span>
-                : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>)}
+              {noMatOrder && (() => {
+                const r = matReq.get(`${orderId}:all`)
+                return r?.status === 'arrived'
+                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700">📦 материал пришёл</span>
+                  : r?.status === 'ordered'
+                  ? <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700">🚚 материал заказан{r.expected ? ` · к ${fmtShort(r.expected)}` : ''}</span>
+                  : <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-red-100 text-red-700">🛒 ждёт материал</span>
+              })()}
               {!noMatOrder && noMatItems.length > 0 && <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">🛒 нет мат. на {noMatItems.length} поз.</span>}
             </p>
             <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
@@ -706,8 +709,10 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
                         Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
                         {noMat && (() => {
-                          const st = matReq.get(`${orderId}:${t.item_index}`) ?? matReq.get(`${orderId}:all`)
-                          return st === 'arrived' ? ' · 📦 материал пришёл' : st === 'ordered' ? ' · 🚚 материал заказан' : ' · 🛒 ждёт материал'
+                          const r = matReq.get(`${orderId}:${t.item_index}`) ?? matReq.get(`${orderId}:all`)
+                          return r?.status === 'arrived' ? ' · 📦 материал пришёл'
+                            : r?.status === 'ordered' ? ` · 🚚 материал заказан${r.expected ? ` · к ${fmtShort(r.expected)}` : ''}`
+                            : ' · 🛒 ждёт материал'
                         })()}
                       </p>
                     </div>
