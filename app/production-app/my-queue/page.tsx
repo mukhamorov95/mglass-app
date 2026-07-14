@@ -71,6 +71,8 @@ export default function MyQueuePage() {
   // Режим резчика: те же заказы, но пересобранные по материалу и толщине —
   // видно, какие заказы можно объединить в один крой и сколько изделий выйдет
   const [groupMode, setGroupMode] = useState<'time' | 'material'>('time')
+  const [matFilter, setMatFilter] = useState<'all' | 'glass' | 'mirror'>('all')
+  const [expandedMat, setExpandedMat] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -224,7 +226,7 @@ export default function MyQueuePage() {
 
   // ── Группировка по материалу и толщине ──
   // Деталь считаем один раз, даже если у мастера по ней две задачи (резка+кромка)
-  type MatGroup = { key: string; label: string; perOrder: Map<number, { details: number; pieces: number }>; details: number; pieces: number }
+  type MatGroup = { key: string; kind: 'glass' | 'mirror'; label: string; perOrder: Map<number, { details: number; pieces: number }>; details: number; pieces: number }
   const byMaterial = new Map<string, MatGroup>()
   if (groupMode === 'material') {
     const seenDetail = new Set<string>()
@@ -234,9 +236,14 @@ export default function MyQueuePage() {
       if (seenDetail.has(dk)) continue
       seenDetail.add(dk)
       const it = orders.get(t.order_id)?.items?.[t.item_index]
+      const cat = (it?.category ?? '').trim().toLowerCase()
       const mat = (it?.materialName || it?.category || '').trim() || 'Материал не указан'
-      const key = `${mat.toLowerCase()}|${it?.thickness ?? ''}`
-      const g = byMaterial.get(key) ?? { key, label: [mat, it?.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' · '), perOrder: new Map(), details: 0, pieces: 0 }
+      // Зеркало: категория «зеркало» или готовое изделие/материал с «зеркал…»;
+      // всё остальное (стекло/тонированное/сатин/рифленое…) — стекло
+      const kind: 'glass' | 'mirror' = cat === 'зеркало' || cat === 'изделие' || /зеркал/i.test(mat) ? 'mirror' : 'glass'
+      const key = `${kind}|${mat.toLowerCase()}|${it?.thickness ?? ''}`
+      const typed = kind === 'mirror' && !/^зеркал/i.test(mat) ? `Зеркало · ${mat}` : kind === 'glass' ? `Стекло · ${mat}` : mat
+      const g = byMaterial.get(key) ?? { key, kind, label: [typed, it?.thickness ? `${it.thickness} мм` : ''].filter(Boolean).join(' · '), perOrder: new Map(), details: 0, pieces: 0 }
       const qty = qtyOf(orders.get(t.order_id), t.item_index)
       const po = g.perOrder.get(t.order_id) ?? { details: 0, pieces: 0 }
       po.details += 1; po.pieces += qty
@@ -245,7 +252,9 @@ export default function MyQueuePage() {
       byMaterial.set(key, g)
     }
   }
-  const matGroups = [...byMaterial.values()].sort((a, b) => b.pieces - a.pieces)
+  const matGroups = [...byMaterial.values()]
+    .filter(g => matFilter === 'all' || g.kind === matFilter)
+    .sort((a, b) => b.pieces - a.pieces)
 
   // ── Табло мастера: по ИЗДЕЛИЯМ (quantity), сегодня и неделя ──
   const piecesOf = (rows: { order_id: number; item_index: number }[], src: Map<number, OrderLite>) =>
@@ -333,19 +342,36 @@ export default function MyQueuePage() {
           </button>
         </div>
 
+        {/* Фильтр типа материала — только в режиме резчика */}
+        {groupMode === 'material' && (
+          <div className="flex gap-1.5 mb-4 -mt-2">
+            {([['all', 'Все'], ['glass', 'Стекло'], ['mirror', 'Зеркало']] as const).map(([k, lbl]) => (
+              <button key={k} onClick={() => setMatFilter(k)}
+                className={`px-3 py-1 rounded-full text-[12px] font-medium border transition-colors ${matFilter === k ? 'bg-[#6b6b66] text-white border-[#6b6b66]' : 'bg-white text-[#9a9a95] border-[#e4e4e0] hover:border-[#6b6b66] hover:text-[#6b6b66]'}`}>
+                {lbl}
+              </button>
+            ))}
+          </div>
+        )}
+
         {byOrder.size === 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center">
             <p className="text-[13px] text-[#9a9a95]">{q ? `По запросу «${search}» ничего не найдено` : 'Нет задач в очереди'}</p>
           </div>
         )}
 
-        {groupMode === 'material' && matGroups.map(g => (
-          <div key={g.key} className="mb-5">
-            <div className="flex items-baseline justify-between gap-2 mb-2">
-              <p className="text-[13px] font-bold text-[#111110]">{g.label}</p>
+        {groupMode === 'material' && matGroups.map(g => {
+          const openG = expandedMat.has(g.key)
+          return (
+          <div key={g.key} className="mb-2">
+            <button
+              onClick={() => setExpandedMat(prev => { const n = new Set(prev); if (n.has(g.key)) n.delete(g.key); else n.add(g.key); return n })}
+              className={`w-full flex items-baseline justify-between gap-2 bg-white rounded-xl border px-4 py-3 text-left ${openG ? 'border-[#111110] rounded-b-none' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
+              <p className="text-[13px] font-bold text-[#111110]"><span className="text-[#9a9a95] mr-1.5">{openG ? '▾' : '▸'}</span>{g.label}</p>
               <p className="text-[11px] text-[#9a9a95] flex-shrink-0">{g.perOrder.size} зак. · {g.details} дет. · <span className="font-semibold text-[#111110]">{g.pieces} изд.</span></p>
-            </div>
-            <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+            </button>
+            {openG && (
+            <div className="bg-white rounded-b-xl border border-t-0 border-[#111110] overflow-hidden">
               {[...g.perOrder.entries()]
                 .sort((a, b) => rankOrder(a[0]) - rankOrder(b[0]))
                 .map(([oid, cnt]) => {
@@ -374,8 +400,9 @@ export default function MyQueuePage() {
                   )
                 })}
             </div>
+            )}
           </div>
-        ))}
+        )})}
 
         {groupMode === 'time' && HORIZONS.map(h => groups[h.key].length > 0 && (
           <div key={h.key} className="mb-5">
