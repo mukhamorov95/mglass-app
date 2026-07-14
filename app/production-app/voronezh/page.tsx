@@ -90,7 +90,7 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
           <span className="font-medium text-[#111110]">{s.title ?? `Партия ${s.id}`}</span>
           {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
         </div>
-        <div className="flex items-center gap-3 text-[13px]">
+        <div className="flex items-center gap-x-3 gap-y-1.5 text-[13px] flex-wrap">
           <span className="font-mono font-medium">{os.length} зак. · {pieces} изд. · {KG(weight)} кг · {RUB(amount)} ₽</span>
           <a href={`/production-app/voronezh/${s.id}/print`} target="_blank" rel="noreferrer"
             className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">🖨 Лист рейса</a>

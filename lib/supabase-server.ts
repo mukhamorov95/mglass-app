@@ -14,7 +14,11 @@ export async function createClient() {
             cookiesToSet.forEach(({ name, value, options }) =>
               cookieStore.set(name, value, options)
             )
-          } catch {}
+          } catch (e) {
+            // Set в RSC-рендере запрещён — рефреш кук берёт на себя middleware.
+            // Логируем, чтобы потеря токена на непокрытых путях не была немой.
+            console.warn('supabase-server: setAll отклонён (RSC render?)', e instanceof Error ? e.message : e)
+          }
         },
       },
     }

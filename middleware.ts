@@ -39,7 +39,7 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
 
   const pathname = request.nextUrl.pathname
   const isLoginPage   = pathname === '/login'
@@ -50,10 +50,20 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/cron/') ||
                     pathname.startsWith('/api/telegram/')
 
+  // Транзиентный сбой Auth (таймаут/5xx/рейт-лимит) ≠ «нет сессии»: пропускаем
+  // запрос как есть — сессия скорее всего жива, редирект на /login затёр бы её
+  const authTransient = !!authError && (authError.status == null || authError.status === 0 || authError.status === 429 || authError.status >= 500)
+  if (!user && authTransient && !isLoginPage) {
+    return supabaseResponse
+  }
+
   if (!user && !isLoginPage && !isWebhook) {
     const url = request.nextUrl.clone()
+    // Голый redirect БЕЗ переноса кук: при гонке ротации refresh-токена
+    // (параллельные запросы с планшета) проигравший нёс бы сюда ОЧИЩЕННЫЕ куки
+    // и затирал свежую сессию, которую только что записал победитель
     url.pathname = '/login'
-    return redirect(url)
+    return NextResponse.redirect(url)
   }
 
   if (user && isLoginPage) {
