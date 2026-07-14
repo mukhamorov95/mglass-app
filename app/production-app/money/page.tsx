@@ -21,6 +21,7 @@ type Money = {
   monthly: Record<string, { orders: number; amount: number }>
   nowKey: string
   factThisMonth: { orders: number; amount: number }
+  bonusTeam: { name: string; hiredAt: string | null; years: number | null; eligible: boolean }[]
 }
 
 const RUB = (n: number | null | undefined) => n == null ? '—' : Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -134,8 +135,24 @@ export default function MoneyPage() {
                   <TbRow level="ТБ-0 · в ноль" sum={RUB(m.tb0)}
                     desc="Выручка, при которой покрыты все переменные и постоянные расходы. Ниже — работаем в минус." tone="bg-white border-[#e4e4e0] text-[#111110]" />
                   <TbRow level={`ТБ-1 · + фонд бонусов производства (${m.funds.prodBonus}% от маржи)`} sum={RUB(m.tb1)}
-                    desc={`Та самая «пенка»: сверх этого уровня копится фонд бонусов цеха ≈ ${RUB(m.fundsRub.prodBonus)}/мес при плане — делится на команду.`} tone="bg-emerald-50 border-emerald-200 text-emerald-900" />
+                    desc={`Та самая «пенка»: сверх этого уровня копится фонд бонусов цеха ≈ ${RUB(m.fundsRub.prodBonus)}/мес при плане — делится между сотрудниками со стажем от 2 лет.`} tone="bg-emerald-50 border-emerald-200 text-emerald-900" />
                 </div>
+                {data.bonusTeam.length > 0 && (
+                  <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
+                    <h2 className="text-[13px] font-semibold text-[#111110]">Кто участвует в бонусном фонде <span className="text-[#9a9a95] font-normal">· стаж от 2 лет</span></h2>
+                    <div className="mt-2 space-y-1">
+                      {data.bonusTeam.map(u => (
+                        <div key={u.name} className="flex items-center justify-between text-[13px]">
+                          <span className={u.eligible ? 'text-[#111110]' : 'text-[#9a9a95]'}>{u.eligible ? '✅' : '—'} {u.name}</span>
+                          <span className={`font-mono text-[12px] ${u.eligible ? 'text-emerald-700' : 'text-[#9a9a95]'}`}>
+                            {u.years != null ? `${u.years} г.` : 'дата приёма не указана'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-[#9a9a95] mt-2">Дата приёма заполняется владельцем в «Пользователях». Без даты сотрудник в фонде не участвует.</p>
+                  </div>
+                )}
                 <p className="text-[12px] text-[#9a9a95]">Цифры из финмодели CFO (юнит «Производство»). Менять их здесь нельзя — правки в разделе CFO → Точка безубыточности.</p>
               </div>
             ) : (
@@ -210,7 +227,7 @@ export default function MoneyPage() {
                   <h2 className="text-[14px] font-bold text-[#111110]">Что включается на каждом уровне</h2>
                   <div className="mt-2 space-y-1.5 text-[14px] text-[#4b4b47]">
                     <div>🏁 <b>ТБ-0</b> — расходы покрыты, работаем в ноль.</div>
-                    <div>🏭 <b>ТБ-1</b> — наполняется <b>фонд бонусов производства</b>: «пенка», которая делится на команду.</div>
+                    <div>🏭 <b>ТБ-1</b> — наполняется <b>фонд бонусов производства</b>: «пенка», которая делится между сотрудниками со стажем от 2 лет.</div>
                   </div>
                   <p className="text-[12px] text-[#9a9a95] mt-2">Конкретные суммы уровней — во вкладке «Финмодель и ТБ», они пересчитываются из модели CFO автоматически.</p>
                 </div>

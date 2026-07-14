@@ -86,5 +86,21 @@ export async function GET() {
   const nowKey = new Date().toISOString().slice(0, 7)
   const factThisMonth = monthly[nowKey] ?? { orders: 0, amount: 0 }
 
-  return NextResponse.json({ model, monthly, nowKey, factThisMonth })
+  // Участники бонусного фонда: производственники со стажем от 2 лет (users.hired_at)
+  const { data: team } = await service.from('users')
+    .select('name, email, hired_at')
+    .eq('role', 'production').eq('active', true)
+  const nowMs = Date.now()
+  const bonusTeam = ((team ?? []) as { name: string | null; email: string | null; hired_at: string | null }[]).map(u => {
+    const hired = u.hired_at ? new Date(u.hired_at) : null
+    const years = hired ? (nowMs - hired.getTime()) / (365.25 * 86400000) : null
+    return {
+      name: u.name ?? u.email ?? '—',
+      hiredAt: u.hired_at,
+      years: years != null ? Math.round(years * 10) / 10 : null,
+      eligible: years != null && years >= 2,
+    }
+  }).sort((a, b) => (b.years ?? -1) - (a.years ?? -1))
+
+  return NextResponse.json({ model, monthly, nowKey, factThisMonth, bonusTeam })
 }
