@@ -423,8 +423,8 @@ export default function B2BQuotesPage() {
       const path = `order-drawings/${workDateId}.${ext}`
       const { error: upErr } = await sbUp.storage.from('b2b-attachments').upload(path, workDrawing, { upsert: true })
       if (upErr) { showToast('Чертёж не загрузился: ' + upErr.message); return }
-      const { data: pub } = sbUp.storage.from('b2b-attachments').getPublicUrl(path)
-      drawingUrl = `${pub.publicUrl}?t=${workDrawing.size}` // buster: новый файл — новый size
+      // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing
+      drawingUrl = path
     }
     // «В работу» с датой = запуск в производство: выбранная дата это и есть дата запуска.
     // Пишем launched_at (колонку и notes), иначе заказ висит «без даты запуска» в /b2b-orders,

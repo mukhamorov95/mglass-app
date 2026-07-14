@@ -411,11 +411,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
 
       {open && (
         <div className="border-t border-[#f0f0ee] px-4 py-3 space-y-3">
-          {/* Чертёж заказа (прикрепляется менеджером или в «Заказах») */}
+          {/* Чертёж заказа (прикрепляется менеджером или в «Заказах»);
+              bucket приватный — грузим через прокси с подписанной ссылкой */}
           {drawingUrl && (
-            <a href={drawingUrl} target="_blank" rel="noreferrer" className="block">
+            <a href={`/api/b2b/drawing/${orderId}`} target="_blank" rel="noreferrer" className="block">
               {isImg
-                ? <img src={drawingUrl} alt="Чертёж" className="max-h-56 rounded-lg border border-[#e4e4e0] object-contain" />
+                ? <img src={`/api/b2b/drawing/${orderId}`} alt="Чертёж" className="max-h-56 rounded-lg border border-[#e4e4e0] object-contain" />
                 : <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110] hover:border-[#111110]">📐 Открыть чертёж (PDF)</span>}
             </a>
           )}

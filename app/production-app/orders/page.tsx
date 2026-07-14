@@ -101,9 +101,8 @@ export default function OrdersScreen() {
     const path = `order-drawings/${order.id}.${ext}`
     const { error } = await sb.storage.from('b2b-attachments').upload(path, file, { upsert: true })
     if (error) { flash('Не удалось загрузить'); return }
-    const { data } = sb.storage.from('b2b-attachments').getPublicUrl(path)
-    const url = `${data.publicUrl}?t=${path.length}`
-    await sb.from('b2b_orders').update({ notes: JSON.stringify({ ...parseNotes(order.notes), drawing_url: url }) }).eq('id', order.id)
+    // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing
+    await sb.from('b2b_orders').update({ notes: JSON.stringify({ ...parseNotes(order.notes), drawing_url: path }) }).eq('id', order.id)
     await load()
   }
 
@@ -164,12 +163,13 @@ export default function OrdersScreen() {
                 <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3">
                   {/* Чертёж */}
                   <div>
+                    {/* bucket приватный — грузим через прокси с подписанной ссылкой */}
                     {drawingUrl ? (
                       /\.pdf(\?|$)/i.test(drawingUrl)
-                        ? <a href={drawingUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-[13px] font-medium text-blue-600">📄 Открыть чертёж (PDF)</a>
-                        : <a href={drawingUrl} target="_blank" rel="noreferrer" className="block">
+                        ? <a href={`/api/b2b/drawing/${oid}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-[13px] font-medium text-blue-600">📄 Открыть чертёж (PDF)</a>
+                        : <a href={`/api/b2b/drawing/${oid}`} target="_blank" rel="noreferrer" className="block">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
-                            <img src={drawingUrl} alt="чертёж" className="max-h-48 rounded-lg border border-[#e4e4e0]" />
+                            <img src={`/api/b2b/drawing/${oid}`} alt="чертёж" className="max-h-48 rounded-lg border border-[#e4e4e0]" />
                             <span className="text-[11px] text-blue-600">открыть чертёж →</span>
                           </a>
                     ) : (

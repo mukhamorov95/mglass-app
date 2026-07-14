@@ -1628,10 +1628,11 @@ export default function B2BOrdersPage() {
         {typeof pn.drawing_url === 'string' && pn.drawing_url && (
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Чертёж</p>
-            <a href={pn.drawing_url} target="_blank" rel="noreferrer" className="block">
+            {/* bucket приватный — грузим через прокси с подписанной ссылкой, не напрямую */}
+            <a href={`/api/b2b/drawing/${order.id}`} target="_blank" rel="noreferrer" className="block">
               {/\.(png|jpe?g|webp|gif)(\?|$)/i.test(pn.drawing_url)
                 ? /* eslint-disable-next-line @next/next/no-img-element */
-                  <img src={pn.drawing_url} alt="Чертёж" className="max-h-48 rounded-lg border border-[#e4e4e0] object-contain bg-white" />
+                  <img src={`/api/b2b/drawing/${order.id}`} alt="Чертёж" className="max-h-48 rounded-lg border border-[#e4e4e0] object-contain bg-white" />
                 : <span className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[12px] text-[#111110] hover:border-[#111110]">📐 Открыть чертёж (PDF)</span>}
             </a>
           </div>
