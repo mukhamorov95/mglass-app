@@ -42,6 +42,8 @@ type MaterialStatus =
   | 'paid'
   | 'shipped'
   | 'received'
+  | 'ready'   // ставит цех («Материал есть» во вкладке Материал / Моих задачах)
+  | 'needed'  // ставит цех («Нет материала» → заявка в закупку)
 
 const MATERIAL_STATUS_META: Record<MaterialStatus, { label: string; badge: string }> = {
   not_checked:      { label: 'Не проверен',     badge: 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]' },
@@ -51,6 +53,8 @@ const MATERIAL_STATUS_META: Record<MaterialStatus, { label: string; badge: strin
   paid:             { label: 'Оплачен',          badge: 'bg-teal-50 text-teal-700 border-teal-200' },
   shipped:          { label: 'В пути / забрать', badge: 'bg-purple-50 text-purple-700 border-purple-200' },
   received:         { label: 'Принят',           badge: 'bg-green-50 text-green-700 border-green-200' },
+  ready:            { label: 'Материал есть (цех)',        badge: 'bg-green-50 text-green-700 border-green-200' },
+  needed:           { label: 'Нет материала — в закупке (цех)', badge: 'bg-red-50 text-red-700 border-red-200' },
 }
 
 const MATERIAL_STATUS_TRIGGERS_ORDERED = new Set<MaterialStatus>([
@@ -1508,7 +1512,8 @@ export default function B2BOrdersPage() {
           <div className="flex items-center gap-2 flex-wrap">
             {(() => {
               const status = (pn.material_status ?? 'not_checked') as MaterialStatus
-              const meta = MATERIAL_STATUS_META[status]
+              // Fallback: неизвестное значение не должно ронять карточку (краш 004-1)
+              const meta = MATERIAL_STATUS_META[status] ?? MATERIAL_STATUS_META.not_checked
               return (
                 <>
                   <span className={`text-[11px] font-medium px-2.5 py-0.5 rounded-full border whitespace-nowrap ${meta.badge}`}>
