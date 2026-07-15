@@ -119,6 +119,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   manager: [
     '/',
     '/manager',
+    '/installations',
     '/kp',
     '/contracts',
     '/calculator/quick',
@@ -186,6 +187,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   commercial: [
     '/',
     '/commercial',
+    '/installations',
     '/manager',
     '/ceo',
     '/admin/users',

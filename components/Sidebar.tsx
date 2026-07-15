@@ -41,6 +41,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/clients',       label: 'Клиенты',          icon: '👤' },
   { href: '/calendar',      label: 'Календарь',        icon: '📅' },
   { href: '/measure-requests', label: 'Заявки на замер', icon: '📐' },
+  { href: '/installations', label: 'Монтажи',          icon: '🔧' },
   { href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' },
   { href: '/measurer',      label: 'Форма замера',      icon: '📋' },
   { href: '/my-earnings',   label: 'Мои заработки',    icon: '💰' },
