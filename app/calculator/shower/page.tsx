@@ -8,6 +8,9 @@ import {
   type ShowerModelId, type ShowerTier, type ShowerInputs, type ShowerHardwareLine, type ShowerModel,
 } from '@/lib/showerCalculator'
 import { ShowerModelIcon } from '@/components/ShowerModelIcon'
+import {
+  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent, resolveBudgetHardwareCost,
+} from '@/lib/pricing/showerInputs'
 import { saveCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
 import CartSection from '@/components/CartSection'
@@ -21,11 +24,6 @@ const GLASS_TYPES = [
   'Осветлённое CrystalVision',
   'CrystalVision Matelux',
 ]
-
-// Маппинг display-имени → имя в glass_price_matrix (там исторически 'Прозрачное М1')
-const GLASS_MATRIX_NAME: Record<string, string> = {
-  'М1 прозрачное': 'Прозрачное М1',
-}
 
 // Визуальные свотчи (CSS) — единый стиль, без фото-ассетов. Матовые — светлее/размытее.
 const GLASS_SWATCH: Record<string, { bg: string; matte?: boolean }> = {
@@ -371,34 +369,19 @@ export default function ShowerCalculatorPage() {
       })
   }, [filteredCatalogItems, hwSelection, getPriceForItem, hwColors, stdColorId])
 
-  // Map calculator color value → DB color name (shower_hw_colors.name)
-  const COLOR_DB_NAME: Record<string, string> = {
-    chrome: 'ХРОМ', black: 'BLACK', bronze: 'БРОНЗА', gold: 'ЗОЛОТОЙ', white: 'БЕЛЫЙ',
-  }
-  const budgetColorId = hwColors.find(c =>
-    c.name.toUpperCase() === (COLOR_DB_NAME[hwColor] ?? hwColor.toUpperCase())
-  )?.id
-  const budgetManualCost = tier === 'budget' && budgetColorId
-    ? (budgetManualPrices.find(p => p.color_id === budgetColorId)?.price ?? 0) || undefined
+  // Себестоимость фурнитуры бюджета — из shower_budget_manual_prices (единый резолвер).
+  const budgetManualCost = tier === 'budget'
+    ? resolveBudgetHardwareCost(budgetManualPrices, hwColors, modelId, hwColor)
     : undefined
 
   const customHardwareCost = tier === 'standard' && selectedHardwareLines.length > 0
     ? selectedHardwareLines.reduce((s, l) => s + l.total, 0)
     : budgetManualCost
 
-  const glassCostPerM2 = useMemo(() => {
-    // glass_price_matrix sale price already includes tempering — use as-is
-    const matrixKey   = GLASS_MATRIX_NAME[glassType] ?? glassType
-    const matrixRow   = glassMatrix[matrixKey]
-    const matrixPrice = matrixRow?.[`t${thickness}`] ?? null
-    if (matrixPrice != null) return matrixPrice
-
-    // Fallback to materials table: raw cost → add tempering separately
-    const mat  = materials.find(m => m.name === `Стекло ${glassType} ${thickness} мм` && m.category === 'стекло')
-    const rawPrice = mat?.sale_price ?? mat?.cost_price ?? 0
-    const temp = materials.find(m => m.name === `Закалка ${thickness} мм` && m.category === 'закалка')
-    return rawPrice + (temp?.cost_price ?? 0)
-  }, [glassMatrix, materials, glassType, thickness])
+  const glassCostPerM2 = useMemo(
+    () => resolveShowerGlassCostPerM2(glassMatrix, glassType, thickness, materials),
+    [glassMatrix, materials, glassType, thickness],
+  )
 
   const km = Number(kmFromMkad) || 0
   const deliveryCost = withDelivery && km > 0 ? Math.round(deliveryBase + deliveryPerKm * km) : undefined
@@ -411,11 +394,7 @@ export default function ShowerCalculatorPage() {
     withMounting, withDelivery, deliveryCost, kmFromMkad: km > 0 ? km : undefined, floors: Number(floors) || 0,
     discount: Number(discount) || 0, partnerPercent: selectedPartner?.percent ?? 0,
     margin: Number(margin) || 40,
-    expensesPercent: (() => {
-      const pt = tier === 'budget' ? 'shower_budget' : 'shower_standard'
-      const s = allSettings.find(s => s.product_type === pt) ?? allSettings.find(s => s.tier === tier)
-      return s?.tax_percent ?? 12
-    })(),
+    expensesPercent: resolveShowerExpensesPercent(allSettings, tier),
     hwTierMultiplier: tierCfg.hwMultiplier,
     customHardwareCost,
     customHardwareLines: customHardwareCost !== undefined ? selectedHardwareLines : undefined,

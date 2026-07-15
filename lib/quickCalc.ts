@@ -2,11 +2,15 @@ import { createClient } from '@supabase/supabase-js'
 import { calculateMirror, type MirrorInputs, type MirrorShape, type MirrorLightingComponent } from './mirrorCalculator'
 import {
   calculateShower, SHOWER_MODELS, TIER_CONFIGS, HARDWARE_COLORS,
-  type ShowerInputs,
+  type ShowerInputs, type ShowerModel,
 } from './showerCalculator'
 import { calculateLoft, type LoftInputs } from './loftCalculator'
 import type { Material, Service, FinancialSettings } from './types'
 import { getMatrixPrice, getWastePct, type GlassMatrixRow } from './glassMatrix'
+import {
+  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent, resolveBudgetHardwareCost,
+  DEFAULT_SHOWER_GLASS, type GlassMatrixMap, type BudgetManualPrice, type HwColorRow,
+} from './pricing/showerInputs'
 
 // Raw row from public.mirror_lighting_components (server-side read)
 type LightingRow = {
@@ -47,6 +51,7 @@ export type CalcOptions = {
   model?: string
   tier?: 'budget' | 'standard'
   hardwareColor?: string
+  glassType?: string
   width2?: number
   sections?: number
   divisions?: number
@@ -100,6 +105,52 @@ function pickSettings(settings: FinancialSettings[], productType?: string): Fina
     settings[0] ??
     null
   )
+}
+
+// glass_price_matrix rows → { name: { t8, … } } (только продажные строки стекла) —
+// та же форма, что грузит UI душевой; используется резолвером цены стекла.
+function buildGlassMatrixMap(rows: GlassMatrixRow[]): GlassMatrixMap {
+  const map: GlassMatrixMap = {}
+  for (const r of rows) {
+    if (r.price_type === 'sale' && r.category === 'glass') {
+      map[r.name] = r as unknown as Record<string, number | null>
+    }
+  }
+  return map
+}
+
+type ShowerModelRow = {
+  code: string; title: string; description: string
+  glass_count: number; dim_type: string; hardware_base: number; hardware_type: string
+}
+
+// Данные душевой из БД — те же источники, что и UI-калькулятор (детерминизм цены).
+async function loadShowerExtra() {
+  const supabase = db()
+  const [{ data: os }, { data: sm }, { data: bmp }, { data: hc }] = await Promise.all([
+    supabase.from('owner_strategy').select('key,value'),
+    supabase.from('shower_models').select('*').eq('active', true).order('sort_order'),
+    supabase.from('shower_budget_manual_prices').select('model_id,color_id,price'),
+    supabase.from('shower_hw_colors').select('id,name').eq('active', true).order('id'),
+  ])
+  const strat = (os ?? []) as { key: string; value: string }[]
+  const num = (k: string, def: number) => {
+    const v = strat.find(r => r.key === k)?.value
+    const n = v != null ? Number(v) : NaN
+    return Number.isFinite(n) ? n : def
+  }
+  const models = ((sm ?? []) as ShowerModelRow[]).map(r => ({
+    id: r.code as ShowerModel['id'], label: r.title, desc: r.description,
+    glassCount: r.glass_count, dimType: r.dim_type as ShowerModel['dimType'],
+    hardwareBase: r.hardware_base, hardwareType: r.hardware_type as ShowerModel['hardwareType'],
+  }))
+  return {
+    targetMargin: num('target_margin', 40),
+    minMargin:    num('min_margin', 25),
+    showerModels: models,
+    budgetManualPrices: (bmp ?? []) as BudgetManualPrice[],
+    hwColors: (hc ?? []) as HwColorRow[],
+  }
 }
 
 export async function quickCalc(
@@ -258,16 +309,27 @@ export async function quickCalc(
   }
 
   if (type === 'shower') {
-    const cfg = pickSettings(settings)
-    const modelId = options.model ?? 'M2'
-    const model = SHOWER_MODELS.find(m => m.id === modelId) ?? SHOWER_MODELS.find(m => m.id === 'M2')!
+    // Детерминизм: те же источники, что и UI-калькулятор душевой (см. lib/pricing/showerInputs).
+    // Иначе цена AI-менеджера (Иван) расходится с ценой живого менеджера.
+    const shower = await loadShowerExtra()
     const tier = options.tier ?? 'standard'
     const tierCfg = TIER_CONFIGS.find(t => t.value === tier)!
+    const modelId = options.model ?? 'M2'
+    const model =
+      shower.showerModels.find(m => m.id === modelId) ??
+      SHOWER_MODELS.find(m => m.id === modelId) ??
+      SHOWER_MODELS.find(m => m.id === 'M2')!
     const colorValue = options.hardwareColor ?? 'chrome'
     const colorCfg = HARDWARE_COLORS.find(c => c.value === colorValue) ?? HARDWARE_COLORS[0]
 
-    const glassMat = materials.find(m => m.category === 'стекло') ?? null
-    const glassCostPerM2 = glassMat?.cost_price ?? 3000
+    const glassType = options.glassType ?? DEFAULT_SHOWER_GLASS
+    const thickness = 8
+    const glassMatrixMap = buildGlassMatrixMap(glassMatrix)
+    const glassCostPerM2 = resolveShowerGlassCostPerM2(glassMatrixMap, glassType, thickness, materials)
+    const expensesPercent = resolveShowerExpensesPercent(settings, tier)
+    const customHardwareCost = tier === 'budget'
+      ? resolveBudgetHardwareCost(shower.budgetManualPrices, shower.hwColors, model.id, colorValue)
+      : undefined
 
     const inputs: ShowerInputs = {
       tier,
@@ -276,8 +338,8 @@ export async function quickCalc(
       width2: options.width2 ?? width,
       height,
       glassCostPerM2,
-      glassName: glassMat?.name ?? 'Стекло закалённое',
-      thickness: 8,
+      glassName: glassType,
+      thickness,
       hardwareColor: colorValue,
       hardwareColorMultiplier: colorCfg.multiplier,
       withMounting: Boolean(options.withMounting),
@@ -285,9 +347,12 @@ export async function quickCalc(
       floors: 0,
       discount: 0,
       partnerPercent: 0,
-      margin: cfg?.default_margin ?? 40,
-      expensesPercent: tierCfg.expensesPercent,
+      margin: shower.targetMargin,
+      expensesPercent,
       hwTierMultiplier: tierCfg.hwMultiplier,
+      customHardwareCost,
+      minMargin: shower.minMargin,
+      standardMargin: shower.targetMargin,
     }
     const result = calculateShower(inputs, services)
     return { price: result.grandTotal, finalPrice: result.finalPrice, description: result.clientText, margin: result.margin, serviceLines: result.serviceLines }
