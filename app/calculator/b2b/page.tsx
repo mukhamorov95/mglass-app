@@ -2104,6 +2104,57 @@ export default function B2BCalculatorPage() {
                     Аналитика (только для менеджера)
                   </summary>
                   <div className="mt-3 space-y-1.5 border-t border-[#f0f0ec] pt-3 text-[13px]">
+                    {/* Разбор себестоимости: из чего складывается (компоненты с НДС из calcItem) */}
+                    {(() => {
+                      const sum = (f: (i: B2BOrderItem) => number | undefined) => Math.round(items.reduce((s, i) => s + (f(i) ?? 0), 0))
+                      const rows: [string, number][] = [
+                        ['Материал (с отходом на раскрой)', sum(i => i.costMaterial)],
+                        ['Закалка', sum(i => i.costTempering)],
+                        ['Транспорт на закалку', sum(i => i.costTransport)],
+                        ['Кромка / обработка', sum(i => i.costEdge)],
+                        ['Фацет', sum(i => i.costFacet)],
+                        ['Триплекс', sum(i => i.costTriplex)],
+                        ['Упаковка', sum(i => i.costPackaging)],
+                      ]
+                      return (
+                        <div className="rounded-lg bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2 mb-2">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Из чего складывается себестоимость</p>
+                          {rows.filter(([, v]) => v > 0).map(([label, v]) => (
+                            <div key={label} className="flex justify-between text-[12px] py-0.5">
+                              <span className="text-[#6b6b66]">{label}</span>
+                              <span className="font-mono text-[#111110]">{fmt(v)}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-[12px] py-0.5 border-t border-[#ecece8] mt-1 pt-1 font-semibold">
+                            <span className="text-[#111110]">Итого себестоимость (с НДС)</span>
+                            <span className="font-mono text-[#111110]">{fmt(totals.totalCostWithVat)}</span>
+                          </div>
+                          <div className="flex justify-between text-[12px] py-0.5">
+                            <span className="text-[#9a9a95]">в т.ч. входной НДС (к вычету)</span>
+                            <span className="font-mono text-[#9a9a95]">−{fmt(totals.totalInputVat)}</span>
+                          </div>
+                          {items.length > 1 && (
+                            <details className="mt-1.5">
+                              <summary className="text-[11px] text-[#9a9a95] cursor-pointer select-none">по позициям ▾</summary>
+                              <div className="mt-1 space-y-1">
+                                {items.map((i, idx) => {
+                                  const parts: [string, number | undefined][] = [
+                                    ['материал', i.costMaterial], ['закалка', i.costTempering], ['трансп.', i.costTransport],
+                                    ['кромка', i.costEdge], ['фацет', i.costFacet], ['триплекс', i.costTriplex], ['упак.', i.costPackaging],
+                                  ]
+                                  const line = parts.filter(([, v]) => (v ?? 0) > 0).map(([n, v]) => `${n} ${fmt(v!)}`).join(' + ')
+                                  return (
+                                    <p key={i.localId} className="text-[11px] text-[#6b6b66]">
+                                      <span className="font-semibold text-[#111110]">Поз. {idx + 1}</span> · {i.width}×{i.height} ×{i.quantity} · отход {i.wastePercent}%: {line} = <span className="font-mono text-[#111110]">{fmt(i.costWithVat)}</span>
+                                    </p>
+                                  )
+                                })}
+                              </div>
+                            </details>
+                          )}
+                        </div>
+                      )
+                    })()}
                     <div className="flex justify-between">
                       <span className="text-[#6b6b66]">Себестоимость без НДС</span>
                       <span className="font-mono text-[#111110]">{fmt(totals.totalCostExVat)}</span>
