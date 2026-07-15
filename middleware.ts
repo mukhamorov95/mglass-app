@@ -48,7 +48,8 @@ export async function middleware(request: NextRequest) {
   const isWebhook = pathname.startsWith('/api/wazzup/') ||
                     pathname.startsWith('/api/amo/webhook') ||
                     pathname.startsWith('/api/cron/') ||
-                    pathname.startsWith('/api/telegram/')
+                    pathname.startsWith('/api/telegram/') ||
+                    pathname.startsWith('/api/avito/webhook')
 
   // Транзиентный сбой Auth (таймаут/5xx/рейт-лимит) ≠ «нет сессии»: пропускаем
   // запрос как есть — сессия скорее всего жива, редирект на /login затёр бы её
