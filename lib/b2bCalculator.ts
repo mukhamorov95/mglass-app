@@ -141,6 +141,15 @@ export type B2BOrderItem = {
   originalLinePrice?: number
   minLinePrice?:      number
   minPriceDelta?:     number
+  // Договорная цена позиции: менеджер вписал «Итого» руками (вкл. НДС, ПОСЛЕ
+  // скидки — конечная сумма клиенту). null/undefined = считаем по прайсу.
+  manualTotal?: number | null
+}
+
+// Фактическое «Итого» позиции: ручная договорная цена, иначе прайс со скидкой.
+// Единственная точка правды — все экраны и сохранение считают через неё.
+export function effectiveItemTotal(item: B2BOrderItem, discountPercent: number): number {
+  return item.manualTotal ?? Math.round(item.saleIncVat * (1 - discountPercent / 100))
 }
 
 export type B2BOrderTotals = {
@@ -304,7 +313,13 @@ export function calcTotals(items: B2BOrderItem[], discountPercent: number): B2BO
   const totalSaleExVat     = Math.round(items.reduce((s, i) => s + i.saleExVat, 0))
   const totalOutputVat     = Math.round(items.reduce((s, i) => s + i.outputVat, 0))
   const totalSaleIncVat    = totalSaleExVat + totalOutputVat
-  const totalAfterDiscount = Math.round(totalSaleIncVat * (1 - discountPercent / 100))
+  // С ручными ценами итог собирается построчно (скидка к ним не применяется
+  // повторно — договорная цена конечна); без них — прежняя формула от суммы,
+  // чтобы копейки округления в старых просчётах не поехали
+  const hasManual          = items.some(i => i.manualTotal != null)
+  const totalAfterDiscount = hasManual
+    ? items.reduce((s, i) => s + effectiveItemTotal(i, discountPercent), 0)
+    : Math.round(totalSaleIncVat * (1 - discountPercent / 100))
   const vatToState         = totalOutputVat - totalInputVat
   const profit             = totalAfterDiscount - totalCostWithVat
 

@@ -52,7 +52,7 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, WASTE_OPTIONS, TEMPERING_COST, VAT,
+  calcItem, calcTotals, effectiveItemTotal, WASTE_OPTIONS, TEMPERING_COST, VAT,
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
 
@@ -67,7 +67,8 @@ function marginBadgeClass(m: number): string {
 }
 
 function effectiveItemMargin(item: B2BOrderItem, discountPct: number): number {
-  const afterDisc = item.saleIncVat * (1 - discountPct / 100)
+  // Ручная договорная цена (manualTotal) участвует в марже как конечная сумма
+  const afterDisc = effectiveItemTotal(item, discountPct)
   const exVat = afterDisc * 100 / (100 + VAT)
   return exVat > 0 ? Math.round((1 - item.costExVat / exVat) * 100) : 0
 }
@@ -174,6 +175,8 @@ export default function B2BCalculatorPage() {
   const [notes, setNotes]           = useState('')
   const [fProductionDays, setFProductionDays] = useState(7)
   const [items, setItems]           = useState<B2BOrderItem[]>([])
+  // Инлайн-редактирование «Итого» позиции (договорная цена): localId редактируемой строки
+  const [editTotalId, setEditTotalId] = useState<string | null>(null)
 
   const [fSuperCat, setFSuperCat]     = useState<SuperCat>('стекло')
 
@@ -866,7 +869,7 @@ export default function B2BCalculatorPage() {
       const matDesc = item.hasTempering
         ? `${item.materialName} ${item.thickness}мм, закалённое${facetDesc}`
         : `${item.materialName} ${item.thickness}мм${facetDesc}`
-      const price = Math.round(item.saleIncVat * (1 - discount / 100))
+      const price = effectiveItemTotal(item, discount)
       const svcNames = item.services.filter(s => s.cost > 0).map(s => s.name)
       const parts = [
         `${i + 1}. ${matDesc}`,
@@ -1893,8 +1896,31 @@ export default function B2BCalculatorPage() {
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{fmtN(item.totalWeight, 1)}</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#111110]">{item.pricePerM2.toLocaleString('ru-RU')}</td>
                             <td className="px-3 py-2.5 text-right font-mono text-[#6b6b66]">{discount > 0 ? `${discount}%` : '—'}</td>
-                            <td className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">
-                              {item.minPriceApplied && item.originalLinePrice !== undefined
+                            <td onClick={e => { e.stopPropagation(); setEditTotalId(item.localId) }}
+                              title="Клик — вписать договорную цену позиции (пусто = вернуть расчёт)"
+                              className="px-3 py-2.5 text-right font-mono font-semibold text-[#111110] whitespace-nowrap cursor-text hover:bg-amber-50/60">
+                              {editTotalId === item.localId ? (
+                                <input type="number" autoFocus
+                                  defaultValue={item.manualTotal ?? itemAfterDiscount}
+                                  onClick={e => e.stopPropagation()}
+                                  onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditTotalId(null) }}
+                                  onBlur={e => {
+                                    const raw = e.target.value.trim()
+                                    const v = raw === '' ? null : Math.round(Number(raw))
+                                    setItems(prev => prev.map(x => x.localId === item.localId
+                                      ? { ...x, manualTotal: v != null && isFinite(v) && v > 0 ? v : null }
+                                      : x))
+                                    setEditTotalId(null)
+                                  }}
+                                  className="w-24 border border-amber-400 rounded-lg px-2 py-1 text-right font-mono text-[12px] outline-none bg-white" />
+                              ) : item.manualTotal != null ? (
+                                <>
+                                  <span className="line-through text-[10px] text-[#c4c4be] block leading-tight">
+                                    {itemAfterDiscount.toLocaleString('ru-RU')} ₽
+                                  </span>
+                                  <span className="text-amber-700">{item.manualTotal.toLocaleString('ru-RU')} ₽ ✏️</span>
+                                </>
+                              ) : item.minPriceApplied && item.originalLinePrice !== undefined
                                 ? (
                                   <>
                                     <span className="line-through text-[10px] text-[#c4c4be] block leading-tight">
