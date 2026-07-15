@@ -199,6 +199,36 @@ export default function CrmPage() {
 
       {/* Воронка: зоны → этапы → карточки */}
       <div className="px-5 pt-4 space-y-5">
+        {/* Этапы вне канона (например, «отложенный спрос» из AmoCRM после переноса) */}
+        {(() => {
+          const extra = [...byStage.keys()].filter(s => !ALL_STAGES.includes(s))
+          if (!extra.length) return null
+          return (
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-widest mb-2 text-[#9a9a95]">Прочие этапы · {extra.reduce((n, s) => n + (byStage.get(s)?.length ?? 0), 0)}</p>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {extra.map(st => {
+                  const list = byStage.get(st) ?? []
+                  return (
+                    <div key={st} className="flex-shrink-0 w-60 rounded-xl border bg-white border-[#e4e4e0]">
+                      <p className="px-3 py-2 text-[11px] font-semibold text-[#6b6b66] border-b border-[#f8f8f7]">{st} · {list.length}</p>
+                      <div className="p-2 space-y-2">
+                        {list.map(l => (
+                          <button key={l.id} onClick={() => { setOpenLead(l); loadEvents(l.id) }}
+                            className="w-full text-left rounded-lg border border-[#eceff1] p-2.5 hover:border-[#111110]">
+                            <p className="text-[12px] font-bold text-[#111110] truncate">{l.name || l.phone || `Лид #${l.id}`}</p>
+                            <p className="text-[10px] text-[#9a9a95] mt-0.5">{l.manager ?? ''}{l.est_amount != null ? ` · ${RUB(Number(l.est_amount))} ₽` : ''}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+
         {ZONES.map(z => {
           const zoneLeads = z.stages.reduce((s, st) => s + (byStage.get(st)?.length ?? 0), 0)
           return (
@@ -264,6 +294,7 @@ export default function CrmPage() {
                 <select value={openLead.stage}
                   onChange={e => patchLead(openLead.id, { stage: e.target.value }, `Этап: ${openLead.stage} → ${e.target.value}`)}
                   className="flex-1 border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white min-w-[220px]">
+                  {!ALL_STAGES.includes(openLead.stage) && <option value={openLead.stage}>{openLead.stage} (вне канона)</option>}
                   {ALL_STAGES.map(s => <option key={s} value={s}>{s}</option>)}
                 </select>
                 <button onClick={() => patchLead(openLead.id, { qualified: !openLead.qualified }, openLead.qualified ? 'Снят с ключевого этапа' : '⭐ Ключевой этап: наш клиент')}
