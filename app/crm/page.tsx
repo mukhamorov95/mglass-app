@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 
 // Собственная CRM (контур MGlass), фаза 1: воронка «Продажи» с каноническими
@@ -161,6 +162,7 @@ export default function CrmPage() {
               <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} className="accent-[#111110]" />
               закрытые
             </label>
+            <Link href="/crm/import" className="px-4 py-2.5 rounded-xl border border-[#e4e4e0] bg-white text-[#111110] text-[13px] font-semibold hover:bg-[#f5f5f3]">⬇ Импорт с Авито</Link>
             <button onClick={() => setFormOpen(true)} className="px-4 py-2.5 rounded-xl bg-[#111110] text-white text-[13px] font-semibold hover:opacity-90">＋ Лид</button>
           </div>
         </div>

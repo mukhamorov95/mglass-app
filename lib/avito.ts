@@ -37,6 +37,59 @@ export async function avitoSendMessage(userId: number | string, chatId: string, 
   if (!res.ok) throw new Error(`avito send ${res.status}: ${await res.text()}`)
 }
 
+// ── Чтение диалогов (для импорта существующих заявок в CRM) ──────────────────
+// Требует скоуп messenger:read. Если у client_credentials его нет — вернётся 403,
+// и вызывающий код покажет понятное сообщение (мягкая деградация).
+
+async function avitoGet<T>(path: string): Promise<T> {
+  const token = await getToken()
+  const res = await fetch(`https://api.avito.ru${path}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) throw new Error(`avito GET ${path} → ${res.status}: ${await res.text()}`)
+  return res.json() as Promise<T>
+}
+
+export type AvitoChat = {
+  id: string
+  users?: { id: number; name?: string }[]
+  context?: { value?: { title?: string; url?: string } }
+  last_message?: { content?: { text?: string }; created?: number; author_id?: number }
+  created?: number
+  updated?: number
+}
+export type AvitoMsg = {
+  id: string
+  author_id?: number
+  created?: number
+  direction?: 'in' | 'out'
+  type?: string
+  content?: { text?: string }
+}
+
+// id аккаунта Авито (нужен как {user_id} для путей мессенджера).
+export async function avitoGetSelfId(): Promise<number> {
+  const j = await avitoGet<{ id: number }>('/core/v1/accounts/self')
+  return j.id
+}
+
+export async function avitoListChats(userId: number | string, opts: { limit?: number; offset?: number } = {}): Promise<AvitoChat[]> {
+  const limit = opts.limit ?? 100
+  const offset = opts.offset ?? 0
+  const j = await avitoGet<{ chats?: AvitoChat[] }>(
+    `/messenger/v2/accounts/${userId}/chats?limit=${limit}&offset=${offset}&chat_types=u2i`,
+  )
+  return j.chats ?? []
+}
+
+export async function avitoListMessages(userId: number | string, chatId: string, opts: { limit?: number } = {}): Promise<AvitoMsg[]> {
+  const limit = opts.limit ?? 100
+  const j = await avitoGet<{ messages?: AvitoMsg[] }>(
+    `/messenger/v3/accounts/${userId}/chats/${chatId}/messages/?limit=${limit}`,
+  )
+  return j.messages ?? []
+}
+
 // Подписка вебхука (вызывается один раз после появления ключей):
 // node -e "import('./lib/avito.js').then(m => m.avitoSubscribeWebhook('https://mglass-app.vercel.app/api/avito/webhook?key=…'))"
 export async function avitoSubscribeWebhook(url: string): Promise<void> {
