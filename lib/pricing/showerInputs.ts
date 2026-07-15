@@ -62,6 +62,12 @@ export function resolveShowerExpensesPercent(
   return s?.tax_percent ?? 12
 }
 
+// Значение цвета калькулятора → id строки shower_hw_colors.
+export function resolveBudgetColorId(hwColors: HwColorRow[], hwColor: string): number | undefined {
+  const wanted = COLOR_DB_NAME[hwColor] ?? hwColor.toUpperCase()
+  return hwColors.find(c => c.name.toUpperCase() === wanted)?.id
+}
+
 // Себестоимость комплекта фурнитуры (бюджет) из shower_budget_manual_prices.
 // undefined → калькулятор посчитает по формуле hardware_base × коэф.тарифа × коэф.цвета.
 export function resolveBudgetHardwareCost(
@@ -70,8 +76,7 @@ export function resolveBudgetHardwareCost(
   modelId: string,
   hwColor: string,
 ): number | undefined {
-  const wanted = COLOR_DB_NAME[hwColor] ?? hwColor.toUpperCase()
-  const budgetColorId = hwColors.find(c => c.name.toUpperCase() === wanted)?.id
+  const budgetColorId = resolveBudgetColorId(hwColors, hwColor)
   if (!budgetColorId) return undefined
   const price = budgetManualPrices.find(p => p.model_id === modelId && p.color_id === budgetColorId)?.price ?? 0
   return price || undefined
