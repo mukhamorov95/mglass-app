@@ -2,7 +2,7 @@ import type { Metadata } from 'next'
 import { Geist, Geist_Mono } from 'next/font/google'
 import './globals.css'
 import { createClient } from '@/lib/supabase-server'
-import { getUserProfile, DEFAULT_PERMISSIONS } from '@/lib/getRole'
+import { getUserProfile, getSessionUser, DEFAULT_PERMISSIONS } from '@/lib/getRole'
 import { Sidebar } from '@/components/Sidebar'
 import CartProvider from '@/components/CartProvider'
 import { OrganizationProvider } from '@/lib/hooks/use-organization'
@@ -27,7 +27,9 @@ export const metadata: Metadata = {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+  // getSessionUser() кэширован — этот вызов и вызов внутри getUserProfile()
+  // разрешаются в ОДИН запрос к Supabase Auth на весь рендер.
+  const user = await getSessionUser()
   const profile = user ? await getUserProfile() : null
   const role = profile?.role ?? null
   const permissions = profile?.permissions ?? DEFAULT_PERMISSIONS

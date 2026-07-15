@@ -1,3 +1,4 @@
+import { cache } from 'react'
 import { createClient } from './supabase-server'
 import type { UserPermissions } from './permissions'
 import { DEFAULT_PERMISSIONS } from './permissions'
@@ -46,11 +47,21 @@ export function isOwnerRole(role: Role | string | null | undefined): boolean {
 
 // ─── Session role fetch ──────────────────────────────────────────────────────
 
-export async function getRole(): Promise<Role | null> {
+// supabase.auth.getUser() — сетевой вызов к GoTrue (валидирует JWT), НЕ чтение куки.
+// Раньше он повторялся 3–4 раза на КАЖДУЮ навигацию (layout + getRole + getUserProfile
+// + profiles). cache() схлопывает его в ОДИН вызов на серверный рендер/запрос —
+// главная быстрая победа против «подвисаний».
+export const getSessionUser = cache(async () => {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
+  return user
+})
+
+export const getRole = cache(async (): Promise<Role | null> => {
+  const user = await getSessionUser()
   if (!user) return null
 
+  const supabase = await createClient()
   const { data } = await supabase
     .from('users')
     .select('role')
@@ -63,12 +74,12 @@ export async function getRole(): Promise<Role | null> {
   // Emergency bootstrap — only when DB has nothing usable.
   if (user.email === OWNER_BOOTSTRAP_EMAIL) return 'admin'
   return null
-}
+})
 
-export async function getUserProfile(): Promise<UserProfile | null> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
+export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
+  const user = await getSessionUser()
   if (!user) return null
+  const supabase = await createClient()
 
   // Try full profile first (requires migrated columns); fall back to role-only
   const { data, error } = await supabase
@@ -106,7 +117,7 @@ export async function getUserProfile(): Promise<UserProfile | null> {
     canDelete:   data.can_delete ?? false,
     maxDiscount: data.max_discount_percent ?? 5,
   }
-}
+})
 
 // ─── Path access control ─────────────────────────────────────────────────────
 
