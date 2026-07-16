@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
 
 type Lead = {
   id: number
@@ -19,10 +20,7 @@ type Lead = {
 type Ev = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string }
 type ThreadMsg = { id: string; from: 'us' | 'client'; text: string; created: number }
 
-const STAGES = [
-  'Получена новая заявка', 'Замер назначен', 'Замер проведён', 'Согласование после замера',
-  'Чертежи в работу', 'Согласование после отправки чертежей', 'КП отправлено', 'Счёт выставлен — ждём оплату',
-]
+const STAGES = CRM_STAGES
 const SOURCE_LABEL: Record<string, string> = {
   avito: 'Авито', call: 'Звонок', whatsapp: 'WhatsApp', site: 'Сайт', referral: 'Рекомендация', manual: 'Вручную',
 }
@@ -196,6 +194,40 @@ export default function LeadDetailPage() {
           {flash && <span className="text-[12px] text-emerald-700">{flash}</span>}
         </div>
 
+        {/* Путь карточки по воронке: слева направо + % до «Успешно реализовано» */}
+        {(() => {
+          const prog = stageProgress(lead.stage, lead.status)
+          const curIdx = CRM_STAGES.indexOf(lead.stage)
+          return (
+            <div className="mb-4 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
+              <div className="flex items-center justify-between mb-2 gap-2">
+                <span className="text-[12px] font-semibold text-[#111110] truncate">{prog.lost ? 'Не реализовано' : lead.stage}</span>
+                <span className={`text-[12px] font-bold shrink-0 ${prog.lost ? 'text-red-500' : 'text-emerald-600'}`}>
+                  {prog.lost ? '✖ не реализовано' : <>{prog.percent}% <span className="text-[#9a9a95] font-normal">до «Успешно реализовано»</span></>}
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[#f0f0ec] overflow-hidden">
+                <div className={`h-full transition-all ${prog.lost ? 'bg-red-400' : 'bg-emerald-500'}`} style={{ width: `${prog.lost ? 100 : prog.percent}%` }} />
+              </div>
+              <div className="mt-2 overflow-x-auto pb-1">
+                <div className="flex gap-1 min-w-max">
+                  {CRM_STAGES.map((s, i) => {
+                    const cur = !prog.lost && s === lead.stage
+                    const passed = !prog.lost && curIdx >= 0 && i < curIdx
+                    return (
+                      <button key={s} onClick={() => patch({ stage: s }, `Этап: ${lead.stage} → ${s}`, 'stage')}
+                        className={`text-[10px] px-2 py-1 rounded-md whitespace-nowrap transition-colors ${
+                          cur ? 'bg-[#111110] text-white font-semibold' : passed ? 'bg-emerald-50 text-emerald-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                        {s}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          )
+        })()}
+
         <div className="grid lg:grid-cols-[360px_1fr] gap-4">
           {/* Левая колонка — поля */}
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 h-fit">
@@ -206,7 +238,14 @@ export default function LeadDetailPage() {
             <div className="py-2 border-b border-[#f0f0ec]">
               <label className="text-[11px] text-[#9a9a95] block mb-1">Ответственный</label>
               <select value={lead.manager ?? ''}
-                onChange={e => patch({ manager: e.target.value || null }, `Ответственный: ${e.target.value || 'снят'}`)}
+                onChange={e => {
+                  const m = e.target.value || null
+                  const p: Partial<Lead> = { manager: m }
+                  let ev = `Ответственный: ${m || 'снят'}`
+                  // Автоперенос «Получена новая заявка» → «Назначен ответственный»
+                  if (m && lead.stage === FIRST_STAGE) { p.stage = ASSIGNED_STAGE; ev = `Ответственный: ${m}; этап → ${ASSIGNED_STAGE}` }
+                  patch(p, ev, p.stage ? 'stage' : 'system')
+                }}
                 className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] bg-white">
                 <option value="">— не назначен</option>
                 <option value="Иван (AI)">Иван (AI) — отвечает бот</option>

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { CRM_ZONES, CRM_STAGES } from '@/lib/crmStages'
 
 // Собственная CRM (контур MGlass), фаза 1: воронка «Продажи» с каноническими
 // этапами из SYSTEM.md (те же, что в AmoCRM — менеджерам ничего не переучивать).
@@ -34,19 +35,10 @@ type Lead = {
   updated_at: string
 }
 
-// Воронка CRM = только ПРОДАЖА (решение владельца 15.07): квалификация и
-// производство убраны — производство живёт в своих экранах. «Получена новая
-// заявка» оставлена входом: сюда падают лиды Авито-бота и ручные.
-// Имена этапов — канон SYSTEM.md; лиды с другими этапами (например, после
-// переноса из amo) показываются в блоке «Прочие этапы».
-const ZONES: { zone: string; tone: string; stages: string[] }[] = [
-  { zone: 'Продажа', tone: 'text-amber-700', stages: [
-    'Получена новая заявка',
-    'Замер назначен', 'Замер проведён', 'Согласование после замера', 'Чертежи в работу',
-    'Согласование после отправки чертежей', 'КП отправлено', 'Счёт выставлен — ждём оплату',
-  ]},
-]
-const ALL_STAGES = ZONES.flatMap(z => z.stages)
+// Полная воронка CRM (3 зоны, канон SYSTEM.md) — из lib/crmStages.
+// Лиды с этапами вне списка (напр. из amo) показываются в блоке «Прочие этапы».
+const ZONES = CRM_ZONES
+const ALL_STAGES = CRM_STAGES
 
 const SOURCE_LABEL: Record<Lead['source'], string> = {
   avito: 'Авито', call: 'Звонок', whatsapp: 'WhatsApp', site: 'Сайт', referral: 'Рекомендация', manual: 'Вручную',
