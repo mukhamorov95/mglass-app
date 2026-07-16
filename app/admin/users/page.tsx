@@ -284,6 +284,7 @@ export default function UsersPage() {
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Право удалять">Удаление</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит все заказы или только свои">Заказы</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит всех клиентов или только своих">Клиенты</th>
+                  <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="Видит все лиды CRM или только свои назначенные">Лиды CRM</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest" title="AmoCRM User ID для раздела Менеджер">AMO ID</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Статус</th>
                   <th className="text-center px-3 py-3 text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Доступ</th>
@@ -502,6 +503,19 @@ export default function UsersPage() {
                               onClick={() => updateUser(u.id, { can_view_all_clients: !u.can_view_all_clients })}
                               className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${u.can_view_all_clients ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
                               {u.can_view_all_clients ? 'Все' : 'Свои'}
+                            </button>
+                          )}
+                        </td>
+
+                        {/* Видимость лидов CRM */}
+                        <td className="px-3 py-3 text-center">
+                          {isAdmin ? (
+                            <span className="text-[11px] font-semibold text-emerald-600">Все</span>
+                          ) : (
+                            <button
+                              onClick={() => updateUser(u.id, { can_view_all_deals: !u.can_view_all_deals })}
+                              className={`text-[11px] px-2.5 py-1 rounded-full font-medium transition-colors ${u.can_view_all_deals ? 'bg-blue-50 text-blue-700 hover:bg-blue-100' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                              {u.can_view_all_deals ? 'Все' : 'Свои'}
                             </button>
                           )}
                         </td>
