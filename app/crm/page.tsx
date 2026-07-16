@@ -69,6 +69,7 @@ export default function CrmPage() {
   const [threadErr, setThreadErr] = useState('')
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
+  const [calling, setCalling] = useState(false)
   const [loading, setLoading] = useState(true)
   const [me, setMe] = useState('')
   const [openLead, setOpenLead] = useState<Lead | null>(null)
@@ -131,6 +132,22 @@ export default function CrmPage() {
       if (d.tookOver) load()  // менеджер стал ответственным — обновить карточку в воронке
     } catch (e) { flash('Не отправлено: ' + (e as Error).message) }
     finally { setSending(false) }
+  }
+
+  async function callClient() {
+    if (!openLead?.phone) return
+    setCalling(true)
+    try {
+      const r = await fetch('/api/sipuni/call', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: openLead.id }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Ошибка')
+      flash('Звоним — SIPUNI сейчас наберёт вас, затем клиента')
+      loadEvents(openLead.id)
+    } catch (e) { flash('Звонок не удался: ' + (e as Error).message) }
+    finally { setCalling(false) }
   }
 
   async function addEvent(leadId: number, kind: string, text: string) {
@@ -318,7 +335,19 @@ export default function CrmPage() {
             </div>
 
             <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-[13px]">
-              {openLead.phone && <p><span className="text-[#9a9a95]">Телефон:</span> <a href={`tel:${openLead.phone}`} className="text-blue-600">{openLead.phone}</a></p>}
+              {openLead.phone && (
+                <p className="flex items-center gap-2">
+                  <span className="text-[#9a9a95]">Телефон:</span>
+                  <a href={`tel:${openLead.phone}`} className="text-blue-600">{openLead.phone}</a>
+                  <button onClick={callClient} disabled={calling}
+                    className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-50">
+                    {calling ? 'Звоню…' : '📞 Позвонить'}
+                  </button>
+                </p>
+              )}
+              {!openLead.phone && openLead.source === 'avito' && (
+                <p className="text-[11px] text-[#c4c4be]">📞 Звонок будет доступен, когда клиент оставит номер в переписке</p>
+              )}
               {openLead.city && <p><span className="text-[#9a9a95]">Город:</span> {openLead.city}</p>}
               {openLead.product && <p><span className="text-[#9a9a95]">Продукт:</span> {openLead.product}</p>}
               {openLead.sizes && <p><span className="text-[#9a9a95]">Размеры:</span> {openLead.sizes}</p>}
