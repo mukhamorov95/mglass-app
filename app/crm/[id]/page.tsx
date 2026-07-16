@@ -75,6 +75,7 @@ export default function LeadDetailPage() {
   const [sending, setSending] = useState(false)
   const [calling, setCalling] = useState(false)
   const [flash, setFlash] = useState('')
+  const [managers, setManagers] = useState<string[]>([])
 
   const loadEvents = useCallback(async () => {
     const { data } = await sb.from('crm_lead_events').select('*').eq('lead_id', id).order('id', { ascending: false }).limit(80)
@@ -104,6 +105,7 @@ export default function LeadDetailPage() {
     const l = data as Lead | null
     setLead(l)
     setLoading(false)
+    fetch('/api/crm/managers').then(r => r.ok ? r.json() : { managers: [] }).then(d => setManagers(d.managers ?? [])).catch(() => {})
     if (l) { loadEvents(); loadThread(l) }
   }, [sb, id, loadEvents, loadThread])
 
@@ -183,15 +185,34 @@ export default function LeadDetailPage() {
         <div className="grid lg:grid-cols-[360px_1fr] gap-4">
           {/* Левая колонка — поля */}
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 h-fit">
-            {/* Этап */}
-            <label className="text-[11px] text-[#9a9a95]">Этап</label>
-            <select value={lead.stage} onChange={e => patch({ stage: e.target.value }, `Этап: ${lead.stage} → ${e.target.value}`, 'stage')}
-              className="w-full mt-1 mb-3 border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] bg-white">
-              {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
-              {!STAGES.includes(lead.stage) && <option value={lead.stage}>{lead.stage}</option>}
-            </select>
-
+            {/* Номер заказа — в самом верху */}
             <Field label="Номер заказа" value={lead.order_no} onSave={v => patch({ order_no: v as string | null })} placeholder="0000-0" />
+
+            {/* Ответственный (менеджер по продажам) — ведёт и читает сделку */}
+            <div className="py-2 border-b border-[#f0f0ec]">
+              <label className="text-[11px] text-[#9a9a95] block mb-1">Ответственный</label>
+              <select value={lead.manager ?? ''}
+                onChange={e => patch({ manager: e.target.value || null }, `Ответственный: ${e.target.value || 'снят'}`)}
+                className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] bg-white">
+                <option value="">— не назначен</option>
+                <option value="Иван (AI)">Иван (AI) — отвечает бот</option>
+                {managers.map(m => <option key={m} value={m}>{m}</option>)}
+                {lead.manager && lead.manager !== 'Иван (AI)' && !managers.includes(lead.manager) && (
+                  <option value={lead.manager}>{lead.manager}</option>
+                )}
+              </select>
+            </div>
+
+            {/* Этап */}
+            <div className="py-2 border-b border-[#f0f0ec]">
+              <label className="text-[11px] text-[#9a9a95] block mb-1">Этап</label>
+              <select value={lead.stage} onChange={e => patch({ stage: e.target.value }, `Этап: ${lead.stage} → ${e.target.value}`, 'stage')}
+                className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] bg-white">
+                {STAGES.map(s => <option key={s} value={s}>{s}</option>)}
+                {!STAGES.includes(lead.stage) && <option value={lead.stage}>{lead.stage}</option>}
+              </select>
+            </div>
+
             <Field label="Имя" value={lead.name} onSave={v => patch({ name: v as string | null })} />
             <Field label="Телефон" value={lead.phone} onSave={v => patch({ phone: v as string | null })} />
             {lead.phone && (
@@ -206,7 +227,6 @@ export default function LeadDetailPage() {
             <Field label="Размеры" value={lead.sizes} onSave={v => patch({ sizes: v as string | null })} />
             <Field label="Бюджет" value={lead.budget} onSave={v => patch({ budget: v as string | null })} />
             <Field label="Предв.цена" value={lead.est_amount} onSave={v => patch({ est_amount: v as number | null })} isNum placeholder="₽" />
-            <Field label="Менеджер" value={lead.manager} onSave={v => patch({ manager: v as string | null })} />
 
             {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
 
