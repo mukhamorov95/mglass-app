@@ -17,7 +17,7 @@ type Lead = {
   status: 'active' | 'won' | 'lost'; lost_reason: string | null
   avito_chat_id: string | null; created_at: string; updated_at: string
 }
-type Ev = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string }
+type Ev = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string; meta?: { record?: string | null; direction?: string; provider?: string; duration?: number } | null }
 type ThreadMsg = { id: string; from: 'us' | 'client'; text: string; created: number }
 
 const STAGES = CRM_STAGES
@@ -153,12 +153,12 @@ export default function LeadDetailPage() {
     if (!lead?.phone) return
     setCalling(true)
     try {
-      const r = await fetch('/api/sipuni/call', {
+      const r = await fetch('/api/call', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lead_id: id }),
       })
       const d = await r.json()
       if (!r.ok) throw new Error(d.error || 'Ошибка')
-      toast('Звоним — SIPUNI сейчас наберёт вас, затем клиента'); loadEvents()
+      toast('Звоним — АТС сейчас наберёт вас, затем клиента'); loadEvents()
     } catch (e) { toast('Звонок не удался: ' + (e as Error).message) }
     finally { setCalling(false) }
   }
@@ -348,6 +348,9 @@ export default function LeadDetailPage() {
                   return (
                     <div key={ev.id} className={`text-[12px] rounded-lg px-3 py-1.5 ${tone}`}>
                       <p className="text-[#111110] whitespace-pre-wrap">{ev.text}</p>
+                      {ev.kind === 'call' && ev.meta?.record && (
+                        <audio controls preload="none" src={ev.meta.record} className="mt-1 h-8 w-full max-w-[280px]" />
+                      )}
                       <p className="text-[10px] text-[#9a9a95]">{ev.author ?? ''} · {fmtD(ev.created_at)}</p>
                     </div>
                   )
