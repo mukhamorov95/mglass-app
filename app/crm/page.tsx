@@ -35,6 +35,9 @@ type Lead = {
   updated_at: string
 }
 
+type ActEvent = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string; crm_leads?: { name: string | null; phone: string | null; manager: string | null; stage: string; source: string } | null }
+type Task = { id: number; lead_id: number; title: string; kind: string; due_at: string; done: boolean; assignee: string | null; crm_leads?: { name: string | null; phone: string | null; stage: string; status: string } | null }
+
 // Полная воронка CRM (3 зоны, канон SYSTEM.md) — из lib/crmStages.
 // Лиды с этапами вне списка (напр. из amo) показываются в блоке «Прочие этапы».
 const ZONES = CRM_ZONES
@@ -45,6 +48,13 @@ const SOURCE_LABEL: Record<Lead['source'], string> = {
 }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const fmtDT = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
+const fmtTime = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+const ACT_KIND_META: Record<string, { icon: string; label: string }> = {
+  call: { icon: '📞', label: 'Звонки' }, message: { icon: '💬', label: 'Сообщения' },
+  stage: { icon: '➡️', label: 'Этапы' }, note: { icon: '📝', label: 'Заметки' }, system: { icon: '⚙️', label: 'Система' },
+}
+const TASK_ICON: Record<string, string> = { call: '📞', meeting: '🤝', measure: '📐', followup: '🔔', other: '•' }
 
 const EMPTY = {
   source: 'manual' as Lead['source'], name: '', phone: '', city: '', product: '', sizes: '',
@@ -68,6 +78,11 @@ export default function CrmPage() {
   const [ingestMode, setIngestMode] = useState<'avito_only' | 'all'>('avito_only')
   const [syncing, setSyncing] = useState(false)
   const [syncMsg, setSyncMsg] = useState('')
+  const [activity, setActivity] = useState<ActEvent[]>([])
+  const [actFilter, setActFilter] = useState('all')
+  const [actOpen, setActOpen] = useState(true)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [now, setNow] = useState(0)   // «сейчас» из эффекта (правило чистоты рендера)
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
   const load = useCallback(async () => {
@@ -90,6 +105,8 @@ export default function CrmPage() {
       const { data } = await query
       setLeads((data ?? []) as Lead[])
       fetch('/api/crm/ingest').then(r => r.ok ? r.json() : null).then(d => { if (d?.mode) setIngestMode(d.mode) }).catch(() => {})
+      fetch('/api/crm/activity?days=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setActivity((d.events ?? []) as ActEvent[]) }).catch(() => {})
+      fetch('/api/crm/tasks').then(r => r.ok ? r.json() : null).then(d => { if (d) setTasks((d.tasks ?? []) as Task[]) }).catch(() => {})
     } finally { setLoading(false) }
   }, [sb])
 
@@ -111,9 +128,16 @@ export default function CrmPage() {
     finally { setSyncing(false) }
   }
   useEffect(() => { void load() }, [load])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(t) }, [])
 
   async function addEvent(leadId: number, kind: string, text: string) {
     await sb.from('crm_lead_events').insert({ lead_id: leadId, kind, text, author: me || null })
+  }
+
+  async function completeTask(tid: number) {
+    const r = await fetch('/api/crm/tasks', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: tid, done: true }) })
+    if (r.ok) setTasks(ts => ts.filter(t => t.id !== tid))
   }
 
   async function createLead() {
@@ -141,6 +165,14 @@ export default function CrmPage() {
   for (const l of visible) byStage.set(l.stage, [...(byStage.get(l.stage) ?? []), l])
 
   const keyLeads = visible.filter(l => l.qualified && l.status === 'active')
+
+  // Задачи (amoCRM): открытые, отсортированы по сроку; «на сегодня и просроченные»
+  // — верхняя панель; просроченные подсвечивают карточку.
+  const todayEndTs = new Date(now).setHours(23, 59, 59, 999)
+  const openTasks = [...tasks].filter(t => !t.done).sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+  const dueTasks = openTasks.filter(t => new Date(t.due_at).getTime() <= todayEndTs)
+  const overdueLeadIds = new Set(openTasks.filter(t => new Date(t.due_at).getTime() < now).map(t => t.lead_id))
+  const actFiltered = activity.filter(a => actFilter === 'all' || a.kind === actFilter)
 
   if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
 
@@ -195,6 +227,64 @@ export default function CrmPage() {
           </button>
           {syncMsg && <span className="text-[12px] text-[#6b6b66]">{syncMsg}</span>}
           <span className="text-[11px] text-[#c4c4be] ml-auto">AmoCRM — только чтение. Заливает активные сделки воронки «Продажи».</span>
+        </div>
+      )}
+
+      {/* Задачи на сегодня и просроченные (amoCRM-стиль) */}
+      {dueTasks.length > 0 && (
+        <div className="mx-5 mt-4 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
+          <p className="text-[12px] font-semibold text-[#111110] mb-2">🗓 Задачи на сегодня и просроченные · {dueTasks.length}</p>
+          <div className="space-y-1.5 max-h-56 overflow-y-auto">
+            {dueTasks.map(t => {
+              const overdue = new Date(t.due_at).getTime() < now
+              return (
+                <div key={t.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] ${overdue ? 'bg-red-50' : 'bg-[#f6f8ff]'}`}>
+                  <button onClick={() => completeTask(t.id)} title="Выполнено" className="w-5 h-5 rounded-full border border-[#c4c4be] hover:bg-emerald-500 hover:border-emerald-500 shrink-0" />
+                  <button onClick={() => router.push(`/crm/${t.lead_id}`)} className="flex-1 min-w-0 text-left">
+                    <p className="text-[#111110] truncate">{TASK_ICON[t.kind] ?? '•'} {t.title} <span className="text-[#9a9a95]">— {t.crm_leads?.name || t.crm_leads?.phone || `Лид #${t.lead_id}`}</span></p>
+                    <p className={`text-[10px] ${overdue ? 'text-red-600 font-semibold' : 'text-[#9a9a95]'}`}>{overdue ? 'просрочено · ' : 'сегодня · '}{fmtDT(t.due_at)}{t.assignee ? ` · ${t.assignee}` : ''}</p>
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Лента активности (владельцу/РОП — по всем; менеджеру — по своим лидам) */}
+      {!scoped && (
+        <div className="mx-5 mt-4 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <button onClick={() => setActOpen(o => !o)} className="text-[12px] font-semibold text-[#111110]">{actOpen ? '▾' : '▸'} 🕒 Активность сегодня · {activity.length}</button>
+            {actOpen && (
+              <div className="flex gap-1 flex-wrap">
+                {(['all', 'call', 'message', 'stage', 'note', 'system'] as const).map(k => (
+                  <button key={k} onClick={() => setActFilter(k)}
+                    className={`px-2 py-1 rounded-md text-[11px] ${actFilter === k ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66]'}`}>
+                    {k === 'all' ? 'Все' : ACT_KIND_META[k]?.icon ?? k}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+          {actOpen && (
+            <div className="space-y-0.5 max-h-72 overflow-y-auto">
+              {actFiltered.length === 0 && <p className="text-[12px] text-[#c4c4be]">Сегодня событий нет.</p>}
+              {actFiltered.map(ev => {
+                const meta = ACT_KIND_META[ev.kind] ?? { icon: '•', label: ev.kind }
+                const who = ev.crm_leads?.name || ev.crm_leads?.phone || `Лид #${ev.lead_id}`
+                return (
+                  <button key={ev.id} onClick={() => router.push(`/crm/${ev.lead_id}`)} className="w-full text-left flex items-start gap-2 rounded-lg px-2 py-1.5 hover:bg-[#f8f8f7]">
+                    <span className="text-[13px] shrink-0">{meta.icon}</span>
+                    <span className="flex-1 min-w-0">
+                      <span className="text-[12px] text-[#111110]"><b>{who}</b> <span className="text-[#6b6b66]">{ev.text.length > 90 ? ev.text.slice(0, 90) + '…' : ev.text}</span></span>
+                      <span className="block text-[10px] text-[#9a9a95]">{fmtTime(ev.created_at)}{ev.author ? ` · ${ev.author}` : ''}{ev.crm_leads?.manager ? ` · ${ev.crm_leads.manager}` : ''}</span>
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
 
@@ -277,6 +367,7 @@ export default function CrmPage() {
                             <p className="text-[12px] font-bold text-[#111110] truncate">
                               {l.qualified && '⭐ '}{l.name || l.phone || `Лид #${l.id}`}
                               {l.status === 'won' && ' ✅'}{l.status === 'lost' && ' ✖'}
+                              {overdueLeadIds.has(l.id) && <span title="Просроченная задача"> 🔴</span>}
                             </p>
                             <p className="text-[11px] text-[#6b6b66] truncate">{[l.product, l.sizes].filter(Boolean).join(' · ')}</p>
                             <p className="text-[10px] text-[#9a9a95] mt-0.5">

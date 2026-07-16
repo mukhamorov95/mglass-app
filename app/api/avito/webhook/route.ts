@@ -68,12 +68,16 @@ export async function POST(req: NextRequest) {
     .select('msg_id')
   if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
 
-  // Не-текст (фото/голос/файл) — не теряем молча: пингуем человека.
+  // Не-текст (фото/голос/файл) — не теряем молча: пингуем человека со ссылкой
+  // на карточку (если лид по этому чату уже есть).
   if (v.type !== 'text' || !rawText.trim()) {
+    const { data: exist } = await service.from('crm_leads').select('id').eq('avito_chat_id', v.chat_id).maybeSingle()
+    const leadId = (exist as { id: number } | null)?.id
+    const url = leadId ? `https://mglass-app.vercel.app/crm/${leadId}` : 'https://mglass-app.vercel.app/crm'
     await notifyAdmins([
       '📎 <b>Авито: клиент прислал вложение (не текст)</b>',
       'Иван это не обработает — нужен человек.',
-      'Карточка: https://mglass-app.vercel.app/crm',
+      `Карточка: ${url}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, non_text: true })
   }
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
       '💬 <b>Авито: новое сообщение от клиента</b>',
       `Ведёт: ${managerName}`,
       `Клиент: ${text.slice(0, 200)}`,
-      'Карточка: https://mglass-app.vercel.app/crm',
+      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, human_handling: true })
   }
@@ -181,7 +185,7 @@ export async function POST(req: NextRequest) {
       turn.est_amount != null ? `Предв. цена: ${Math.round(turn.est_amount).toLocaleString('ru-RU')} ₽` : '',
       `Скоринг: ${turn.score}/100 — ${turn.score_reason}`,
       '',
-      'Карточка: https://mglass-app.vercel.app/crm',
+      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].filter(Boolean)
     await notifyAdmins(lines.join('\n')).catch(() => {})
   }

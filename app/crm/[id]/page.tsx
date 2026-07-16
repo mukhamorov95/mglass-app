@@ -19,6 +19,7 @@ type Lead = {
 }
 type Ev = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string; meta?: { record?: string | null; direction?: string; provider?: string; duration?: number } | null }
 type ThreadMsg = { id: string; from: 'us' | 'client'; text: string; created: number }
+type Task = { id: number; lead_id: number; title: string; kind: string; due_at: string; done: boolean; done_at: string | null; assignee: string | null }
 
 const STAGES = CRM_STAGES
 const SOURCE_LABEL: Record<string, string> = {
@@ -28,6 +29,7 @@ const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 function fmtD(s: string) { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 const RUB = (n: number) => n.toLocaleString('ru-RU')
+const TASK_KIND: Record<string, string> = { call: '📞 Звонок', meeting: '🤝 Встреча', measure: '📐 Замер', followup: '🔔 Напоминание', other: '• Другое' }
 
 function Field({ label, value, onSave, isNum, placeholder }: {
   label: string; value: string | number | null; onSave: (v: string | number | null) => void; isNum?: boolean; placeholder?: string
@@ -75,11 +77,21 @@ export default function LeadDetailPage() {
   const [flash, setFlash] = useState('')
   const [managers, setManagers] = useState<string[]>([])
   const [denied, setDenied] = useState(false)
+  const [tasks, setTasks] = useState<Task[]>([])
+  const [taskTitle, setTaskTitle] = useState('')
+  const [taskDue, setTaskDue] = useState('')
+  const [taskKind, setTaskKind] = useState('followup')
+  const [now, setNow] = useState(0)   // «сейчас» из эффекта (правило чистоты рендера)
 
   const loadEvents = useCallback(async () => {
     const { data } = await sb.from('crm_lead_events').select('*').eq('lead_id', id).order('id', { ascending: false }).limit(80)
     setEvents((data ?? []) as Ev[])
   }, [sb, id])
+
+  const loadTasks = useCallback(async () => {
+    const r = await fetch(`/api/crm/tasks?lead_id=${id}`)
+    if (r.ok) { const d = await r.json(); setTasks((d.tasks ?? []) as Task[]) }
+  }, [id])
 
   const loadThread = useCallback(async (l: Lead) => {
     if (l.source !== 'avito' || !l.avito_chat_id) { setThread([]); return }
@@ -112,11 +124,13 @@ export default function LeadDetailPage() {
     setLead(l)
     setLoading(false)
     fetch('/api/crm/managers').then(r => r.ok ? r.json() : { managers: [] }).then(d => setManagers(d.managers ?? [])).catch(() => {})
-    if (l) { loadEvents(); loadThread(l) }
-  }, [sb, id, loadEvents, loadThread])
+    if (l) { loadEvents(); loadThread(l); loadTasks() }
+  }, [sb, id, loadEvents, loadThread, loadTasks])
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load() }, [load])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setNow(Date.now()); const t = setInterval(() => setNow(Date.now()), 60000); return () => clearInterval(t) }, [])
 
   function toast(t: string) { setFlash(t); setTimeout(() => setFlash(''), 2500) }
 
@@ -161,6 +175,22 @@ export default function LeadDetailPage() {
       toast('Звоним — АТС сейчас наберёт вас, затем клиента'); loadEvents()
     } catch (e) { toast('Звонок не удался: ' + (e as Error).message) }
     finally { setCalling(false) }
+  }
+
+  async function addTask() {
+    if (!taskTitle.trim() || !taskDue) return
+    const r = await fetch('/api/crm/tasks', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lead_id: id, title: taskTitle.trim(), kind: taskKind, due_at: new Date(taskDue).toISOString() }),
+    })
+    if (r.ok) { setTaskTitle(''); setTaskDue(''); loadTasks(); loadEvents() }
+    else { const d = await r.json().catch(() => ({})); toast('Не удалось: ' + (d.error || '')) }
+  }
+  async function completeTask(tid: number) {
+    const r = await fetch('/api/crm/tasks', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: tid, done: true }),
+    })
+    if (r.ok) { loadTasks(); loadEvents() }
   }
 
   if (loading) return <div className="min-h-screen bg-[#f8f8f7] p-6 text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -304,6 +334,48 @@ export default function LeadDetailPage() {
 
           {/* Правая колонка — переписка и примечания */}
           <div className="space-y-4">
+            {/* Задачи по лиду (amoCRM-стиль): следующий шаг с дедлайном */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <p className="text-[13px] font-semibold text-[#111110] mb-2">🗓 Задачи <span className="text-[11px] text-[#9a9a95] font-normal">— следующий шаг по клиенту</span></p>
+              <div className="space-y-1.5">
+                {tasks.filter(t => !t.done).length === 0 && <p className="text-[12px] text-[#c4c4be]">Открытых задач нет — поставь следующий шаг, чтобы лид не потерялся.</p>}
+                {tasks.filter(t => !t.done).map(t => {
+                  const overdue = new Date(t.due_at).getTime() < now
+                  return (
+                    <div key={t.id} className={`flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] ${overdue ? 'bg-red-50' : 'bg-[#f6f8ff]'}`}>
+                      <button onClick={() => completeTask(t.id)} title="Выполнено" className="w-5 h-5 rounded-full border border-[#c4c4be] hover:bg-emerald-500 hover:border-emerald-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[#111110] truncate">{TASK_KIND[t.kind] ?? ''} {t.title}</p>
+                        <p className={`text-[10px] ${overdue ? 'text-red-600 font-semibold' : 'text-[#9a9a95]'}`}>{overdue ? 'просрочено · ' : ''}{fmtD(t.due_at)}{t.assignee ? ` · ${t.assignee}` : ''}</p>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              <div className="mt-3 space-y-1.5">
+                <input value={taskTitle} onChange={e => setTaskTitle(e.target.value)} placeholder="Что сделать (позвонить, замер…)"
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+                <div className="flex gap-1.5">
+                  <select value={taskKind} onChange={e => setTaskKind(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-2 text-[12px] bg-white">
+                    {Object.entries(TASK_KIND).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                  </select>
+                  <input type="datetime-local" value={taskDue} onChange={e => setTaskDue(e.target.value)}
+                    className="flex-1 min-w-0 border border-[#e4e4e0] rounded-lg px-2 py-2 text-[12px] outline-none focus:border-[#111110]" />
+                  <button onClick={addTask} disabled={!taskTitle.trim() || !taskDue} className="px-3 py-2 rounded-lg bg-[#111110] text-white text-[12px] font-semibold disabled:opacity-40">＋</button>
+                </div>
+              </div>
+              {tasks.some(t => t.done) && (
+                <details className="mt-2">
+                  <summary className="text-[11px] text-[#9a9a95] cursor-pointer">Выполненные ({tasks.filter(t => t.done).length})</summary>
+                  <div className="mt-1 space-y-0.5">
+                    {tasks.filter(t => t.done).map(t => (
+                      <p key={t.id} className="text-[11px] text-[#9a9a95] line-through px-1">{TASK_KIND[t.kind] ?? ''} {t.title} · {fmtD(t.due_at)}</p>
+                    ))}
+                  </div>
+                </details>
+              )}
+            </div>
+
             {/* Переписка с клиентом (Авито) */}
             {lead.source === 'avito' && lead.avito_chat_id && (
               <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
