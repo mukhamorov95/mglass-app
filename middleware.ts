@@ -51,6 +51,8 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/telegram/') ||
                     pathname.startsWith('/api/avito/webhook') ||
                     pathname.startsWith('/api/onlinepbx/')
+  // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
+  const isPublicDemo = pathname.startsWith('/design/')
 
   // Транзиентный сбой Auth (таймаут/5xx/рейт-лимит) ≠ «нет сессии»: пропускаем
   // запрос как есть — сессия скорее всего жива, редирект на /login затёр бы её
@@ -59,7 +61,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  if (!user && !isLoginPage && !isWebhook) {
+  if (!user && !isLoginPage && !isWebhook && !isPublicDemo) {
     const url = request.nextUrl.clone()
     // Голый redirect БЕЗ переноса кук: при гонке ротации refresh-токена
     // (параллельные запросы с планшета) проигравший нёс бы сюда ОЧИЩЕННЫЕ куки
@@ -78,7 +80,7 @@ export async function middleware(request: NextRequest) {
   // зарегистрировано ДРУГОЕ активное устройство — этот вход вытеснен (kick-old
   // при новом логине) → страница /device-limit. Проверка кэшируется кукой
   // device-ok на 5 минут; ошибки БД (нет таблицы и т.п.) — fail-open.
-  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !pathname.startsWith('/api/')) {
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo && !pathname.startsWith('/api/')) {
     const deviceId = request.cookies.get('device-id')?.value
     const okFor    = request.cookies.get('device-ok')?.value
     if (!deviceId) {
@@ -114,7 +116,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Role-based route protection
-  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook) {
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo) {
     const cached      = request.cookies.get('user-role')?.value
     const cachedScope = request.cookies.get('user-b2b-scope')?.value
     let role: Role | null = normalizeRole(cached)
