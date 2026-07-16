@@ -31,8 +31,10 @@ export default function AvitoImportPage() {
       const r = await fetch('/api/avito/import')
       const d: Resp = await r.json()
       setData(d)
+      // По умолчанию отмечаем ВСЕХ, кроме явных отказников и уже импортированных
+      // (правило владельца: «всех остальных добавить»).
       const chk: Record<string, boolean> = {}
-      for (const c of (d.candidates ?? [])) chk[c.chat_id] = !c.already_imported && c.status === 'interested'
+      for (const c of (d.candidates ?? [])) chk[c.chat_id] = !c.already_imported && c.status !== 'refused'
       setChecked(chk)
     } catch { setData({ error: 'Ошибка сети' }) }
     finally { setLoading(false) }
@@ -90,10 +92,15 @@ export default function AvitoImportPage() {
           <>
             <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
               <p className="text-[12px] text-[#6b6b66]">Просканировано чатов: <b>{data.scanned ?? 0}</b> · к импорту отмечено: <b>{selectedCount}</b></p>
-              <label className="text-[12px] text-[#6b6b66] flex items-center gap-1.5 cursor-pointer">
-                <input type="checkbox" checked={showRefused} onChange={e => setShowRefused(e.target.checked)} />
-                показать отказников
-              </label>
+              <div className="flex items-center gap-3">
+                <button onClick={() => setChecked(Object.fromEntries(candidates.filter(c => !c.already_imported && c.status !== 'refused').map(c => [c.chat_id, true])))}
+                  className="text-[12px] text-[#0071e3] hover:underline">отметить все</button>
+                <button onClick={() => setChecked({})} className="text-[12px] text-[#9a9a95] hover:underline">снять</button>
+                <label className="text-[12px] text-[#6b6b66] flex items-center gap-1.5 cursor-pointer">
+                  <input type="checkbox" checked={showRefused} onChange={e => setShowRefused(e.target.checked)} />
+                  показать отказников
+                </label>
+              </div>
             </div>
 
             <div className="space-y-2">
@@ -128,9 +135,12 @@ export default function AvitoImportPage() {
             <div className="sticky bottom-0 mt-4 py-3 bg-[#f8f8f7] flex items-center gap-4">
               <button onClick={runImport} disabled={importing || selectedCount === 0}
                 className="px-5 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-medium disabled:opacity-40">
-                {importing ? 'Импорт…' : `Импортировать ${selectedCount}`}
+                {importing ? 'Импорт…' : `Импортировать ${selectedCount} → в воронку`}
               </button>
               {result && <span className="text-[12px] text-emerald-700">{result}</span>}
+              {result && result.startsWith('Импортировано') && (
+                <Link href="/crm" className="text-[12px] text-[#0071e3] font-semibold hover:underline">Открыть воронку →</Link>
+              )}
             </div>
           </>
         )}
