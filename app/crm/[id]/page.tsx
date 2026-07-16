@@ -24,7 +24,7 @@ const STAGES = CRM_STAGES
 const SOURCE_LABEL: Record<string, string> = {
   avito: 'Авито', call: 'Звонок', whatsapp: 'WhatsApp', site: 'Сайт', referral: 'Рекомендация', manual: 'Вручную',
 }
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер', 'Максим']
+const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 function fmtD(s: string) { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 const RUB = (n: number) => n.toLocaleString('ru-RU')

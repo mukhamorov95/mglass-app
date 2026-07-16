@@ -12,6 +12,11 @@ import { notifyAdmins } from '@/lib/telegram'
 // прийти к уже помеченному сообщению и был отсеян дедупом (не двойной ответ).
 export const maxDuration = 60
 
+// Имена «AI ведёт чат» — при них Иван автоотвечает. Любой другой ответственный =
+// чат забрал человек, Иван молчит. Легаси «Максим» убран: он пересекался с
+// реальным человеком по имени Максим (тот забирал чат, а бот продолжал отвечать).
+const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
+
 function db() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
@@ -43,8 +48,7 @@ export async function POST(req: NextRequest) {
 
   const body = (await req.json().catch(() => null)) as AvitoWebhook | null
   const v = body?.payload?.value
-  // Отвечаем 200 на всё, чтобы Авито не ретраил бесконечно
-  if (!v?.chat_id || body?.payload?.type !== 'message' || v.type !== 'text' || !v.content?.text) {
+  if (!v?.chat_id || body?.payload?.type !== 'message') {
     return NextResponse.json({ ok: true, skipped: true })
   }
   // Эхо наших же сообщений — пропускаем
@@ -54,35 +58,52 @@ export async function POST(req: NextRequest) {
 
   const service = db()
 
-  // Идемпотентность: каждое сообщение Авито обрабатываем РОВНО один раз. Авито
-  // ретраит вебхук (наш ответ модели небыстрый) → без дедупа Иван отвечал клиенту
-  // по 2–4 раза. Помечаем id сообщения; дубль — молча выходим 200 (не отвечаем).
-  if (v.id) {
-    const { data: fresh } = await service.from('avito_processed_messages')
-      .upsert({ msg_id: v.id }, { onConflict: 'msg_id', ignoreDuplicates: true })
-      .select('msg_id')
-    if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
+  // Идемпотентность: каждое сообщение Авито обрабатываем РОВНО один раз (Авито
+  // ретраит вебхук → без дедупа Иван отвечал по 2–4 раза). Ключ — id сообщения;
+  // если id нет — синтезируем из чата+текста, чтобы дедуп не отключался.
+  const rawText = v.content?.text ?? ''
+  const msgKey = v.id || `${v.chat_id}|${rawText.length}|${rawText.slice(0, 80)}`
+  const { data: fresh } = await service.from('avito_processed_messages')
+    .upsert({ msg_id: msgKey }, { onConflict: 'msg_id', ignoreDuplicates: true })
+    .select('msg_id')
+  if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
+
+  // Не-текст (фото/голос/файл) — не теряем молча: пингуем человека.
+  if (v.type !== 'text' || !rawText.trim()) {
+    await notifyAdmins([
+      '📎 <b>Авито: клиент прислал вложение (не текст)</b>',
+      'Иван это не обработает — нужен человек.',
+      'Карточка: https://mglass-app.vercel.app/crm',
+    ].join('\n')).catch(() => {})
+    return NextResponse.json({ ok: true, non_text: true })
   }
+  const text = rawText.slice(0, 4000)
 
-  const text = v.content.text.slice(0, 4000)
-
-  // Лид по чату: существующий или новый
-  const { data: existing } = await service.from('crm_leads').select('*').eq('avito_chat_id', v.chat_id).maybeSingle()
-  let lead = existing as Record<string, unknown> | null
+  // Лид по чату (avito_chat_id уникален) — устойчиво к гонке двух первых сообщений.
+  const { data: found } = await service.from('crm_leads').select('*')
+    .eq('avito_chat_id', v.chat_id).order('id', { ascending: true }).limit(1)
+  let lead = (found?.[0] ?? null) as Record<string, unknown> | null
   if (!lead) {
     const { data: created } = await service.from('crm_leads')
-      .insert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'Иван (AI)' })
-      .select('*').single()
-    lead = created as Record<string, unknown>
-    await service.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', text: 'Лид создан из Авито-чата', author: 'AI' })
+      .upsert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'Иван (AI)' }, { onConflict: 'avito_chat_id', ignoreDuplicates: true })
+      .select('*')
+    lead = (created?.[0] ?? null) as Record<string, unknown> | null
+    if (lead) {
+      await service.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', text: 'Лид создан из Авито-чата', author: 'AI' })
+    } else {
+      // Конкурентная вставка выиграла — перечитываем существующий лид.
+      const { data: re } = await service.from('crm_leads').select('*')
+        .eq('avito_chat_id', v.chat_id).order('id', { ascending: true }).limit(1)
+      lead = (re?.[0] ?? null) as Record<string, unknown> | null
+    }
   }
+  if (!lead) return NextResponse.json({ ok: true, no_lead: true })
   const leadId = lead.id as number
 
   await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `КЛИЕНТ: ${text}`, author: null })
 
   // Диалог ведёт ЧЕЛОВЕК (менеджер забрал у Ивана или лид импортирован) — Иван
   // не автоотвечает, чтобы клиенту не писали оба. Фиксируем сообщение и пингуем.
-  const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер', 'Максим']
   const managerName = (lead.manager as string | null) ?? null
   if (managerName && !AI_MANAGERS.includes(managerName)) {
     await notifyAdmins([
@@ -94,11 +115,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, human_handling: true })
   }
 
-  // История диалога из событий
+  // История диалога — ПОСЛЕДНИЕ 40 сообщений в хронологическом порядке.
   const { data: evs } = await service.from('crm_lead_events')
     .select('kind,text').eq('lead_id', leadId).eq('kind', 'message')
-    .order('id', { ascending: true }).limit(40)
-  const history: DialogMsg[] = ((evs ?? []) as { text: string }[]).map(e =>
+    .order('id', { ascending: false }).limit(40)
+  const history: DialogMsg[] = (((evs ?? []) as { text: string }[]).reverse()).map(e =>
     e.text.startsWith('БОТ: ')
       ? { from: 'manager', text: e.text.slice(5) }
       : { from: 'client', text: e.text.replace(/^КЛИЕНТ: /, '') })
@@ -113,8 +134,11 @@ export async function POST(req: NextRequest) {
   try {
     turn = await runAvitoManager(history, known)
   } catch (e) {
+    // Ошибка модели ДО отправки — снимаем метку дедупа, чтобы ретрай Авито
+    // переобработал сообщение (иначе ответ был бы потерян навсегда).
+    await service.from('avito_processed_messages').delete().eq('msg_id', msgKey)
     await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Ошибка AI: ${e instanceof Error ? e.message : e}`, author: 'AI' })
-    return NextResponse.json({ ok: true, ai_error: true })
+    return NextResponse.json({ ok: false, ai_error: true }, { status: 500 })
   }
 
   // Снятые данные — только заполняем пустое/обновляем непустым
@@ -129,6 +153,14 @@ export async function POST(req: NextRequest) {
   const becameQualified = turn.qualified && !lead.qualified
   if (turn.qualified) patch.qualified = true
   await service.from('crm_leads').update(patch).eq('id', leadId)
+
+  // Перепроверка перед отправкой: не забрал ли чат человек за время работы модели.
+  const { data: cur } = await service.from('crm_leads').select('manager').eq('id', leadId).maybeSingle()
+  const curMgr = (cur as { manager: string | null } | null)?.manager ?? null
+  if (curMgr && !AI_MANAGERS.includes(curMgr)) {
+    await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Автоответ Ивана отменён — чат забрал ${curMgr}`, author: 'AI' })
+    return NextResponse.json({ ok: true, taken_over: true })
+  }
 
   // Ответ клиенту
   await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `БОТ: ${turn.reply}`, author: 'AI' })

@@ -8,7 +8,7 @@ import { isAvitoConfigured, avitoGetSelfId, avitoListMessages, avitoSendMessage 
 // Переписка с клиентом Авито прямо из CRM: GET — живая история диалога,
 // POST — отправить сообщение (и «забрать» лид у Ивана: manager = менеджер).
 
-const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер', 'Максим']
+const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 async function leadChatId(sb: ReturnType<typeof createServiceClient>, leadId: number) {
   const { data } = await sb.from('crm_leads').select('id,avito_chat_id,manager').eq('id', leadId).maybeSingle()
