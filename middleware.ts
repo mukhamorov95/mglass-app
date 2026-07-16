@@ -49,7 +49,8 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/amo/webhook') ||
                     pathname.startsWith('/api/cron/') ||
                     pathname.startsWith('/api/telegram/') ||
-                    pathname.startsWith('/api/avito/webhook')
+                    pathname.startsWith('/api/avito/webhook') ||
+                    pathname.startsWith('/api/onlinepbx/')
 
   // Транзиентный сбой Auth (таймаут/5xx/рейт-лимит) ≠ «нет сессии»: пропускаем
   // запрос как есть — сессия скорее всего жива, редирект на /login затёр бы её
