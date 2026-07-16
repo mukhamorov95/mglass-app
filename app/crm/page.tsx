@@ -28,9 +28,11 @@ type Lead = {
   note: string | null
   status: 'active' | 'won' | 'lost'
   lost_reason: string | null
+  avito_chat_id: string | null
   created_at: string
   updated_at: string
 }
+type ThreadMsg = { id: string; from: 'us' | 'client'; text: string; created: number }
 type Ev = { id: number; lead_id: number; kind: string; text: string; author: string | null; created_at: string }
 
 // Воронка CRM = только ПРОДАЖА (решение владельца 15.07): квалификация и
@@ -62,6 +64,11 @@ export default function CrmPage() {
   const sb = createClient()
   const [leads, setLeads] = useState<Lead[]>([])
   const [events, setEvents] = useState<Ev[]>([])
+  const [thread, setThread] = useState<ThreadMsg[]>([])
+  const [threadLoading, setThreadLoading] = useState(false)
+  const [threadErr, setThreadErr] = useState('')
+  const [draft, setDraft] = useState('')
+  const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [me, setMe] = useState('')
   const [openLead, setOpenLead] = useState<Lead | null>(null)
@@ -90,6 +97,40 @@ export default function CrmPage() {
   async function loadEvents(leadId: number) {
     const { data } = await sb.from('crm_lead_events').select('*').eq('lead_id', leadId).order('id', { ascending: false }).limit(50)
     setEvents((data ?? []) as Ev[])
+  }
+
+  async function loadThread(lead: Lead) {
+    if (lead.source !== 'avito' || !lead.avito_chat_id) { setThread([]); setThreadErr(''); return }
+    setThreadLoading(true); setThreadErr('')
+    try {
+      const r = await fetch(`/api/avito/thread?lead_id=${lead.id}`)
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Ошибка')
+      setThread((d.messages ?? []) as ThreadMsg[])
+    } catch (e) { setThreadErr((e as Error).message); setThread([]) }
+    finally { setThreadLoading(false) }
+  }
+
+  function openCard(l: Lead) {
+    setOpenLead(l); setDraft(''); loadEvents(l.id); loadThread(l)
+  }
+
+  async function sendMsg() {
+    if (!openLead || !draft.trim()) return
+    setSending(true)
+    try {
+      const r = await fetch('/api/avito/thread', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lead_id: openLead.id, text: draft.trim() }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Ошибка')
+      setDraft('')
+      await loadThread(openLead)
+      loadEvents(openLead.id)
+      if (d.tookOver) load()  // менеджер стал ответственным — обновить карточку в воронке
+    } catch (e) { flash('Не отправлено: ' + (e as Error).message) }
+    finally { setSending(false) }
   }
 
   async function addEvent(leadId: number, kind: string, text: string) {
@@ -214,7 +255,7 @@ export default function CrmPage() {
                       <p className="px-3 py-2 text-[11px] font-semibold text-[#6b6b66] border-b border-[#f8f8f7]">{st} · {list.length}</p>
                       <div className="p-2 space-y-2">
                         {list.map(l => (
-                          <button key={l.id} onClick={() => { setOpenLead(l); loadEvents(l.id) }}
+                          <button key={l.id} onClick={() => openCard(l)}
                             className="w-full text-left rounded-lg border border-[#eceff1] p-2.5 hover:border-[#111110]">
                             <p className="text-[12px] font-bold text-[#111110] truncate">{l.name || l.phone || `Лид #${l.id}`}</p>
                             <p className="text-[10px] text-[#9a9a95] mt-0.5">{l.manager ?? ''}{l.est_amount != null ? ` · ${RUB(Number(l.est_amount))} ₽` : ''}</p>
@@ -242,7 +283,7 @@ export default function CrmPage() {
                       <p className="px-3 py-2 text-[11px] font-semibold text-[#6b6b66] border-b border-[#f8f8f7]">{st} · {list.length}</p>
                       <div className="p-2 space-y-2 min-h-[40px]">
                         {list.map(l => (
-                          <button key={l.id} onClick={() => { setOpenLead(l); loadEvents(l.id) }}
+                          <button key={l.id} onClick={() => openCard(l)}
                             className={`w-full text-left rounded-lg border p-2.5 hover:border-[#111110] transition-colors ${l.qualified ? 'border-amber-300 bg-amber-50/50' : 'border-[#eceff1]'}`}>
                             <p className="text-[12px] font-bold text-[#111110] truncate">
                               {l.qualified && '⭐ '}{l.name || l.phone || `Лид #${l.id}`}
@@ -314,6 +355,40 @@ export default function CrmPage() {
                   className="w-full py-2 rounded-lg border border-[#e4e4e0] text-[12px] text-[#6b6b66]">↩ Вернуть в работу</button>
               )}
             </div>
+
+            {/* Переписка с клиентом (Авито) */}
+            {openLead.source === 'avito' && openLead.avito_chat_id && (
+              <div className="mt-4 border-t border-[#f0f0ec] pt-3">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-[12px] font-semibold text-[#111110]">💬 Переписка · Авито</p>
+                  {openLead.manager && !['Иван (AI)', 'AI-менеджер', 'Максим'].includes(openLead.manager)
+                    ? <span className="text-[10px] text-emerald-700">диалог ведёте вы · Иван молчит</span>
+                    : <span className="text-[10px] text-[#9a9a95]">отвечает Иван (AI)</span>}
+                </div>
+                <div className="bg-[#fafaf9] rounded-lg p-2 max-h-64 overflow-y-auto space-y-1.5">
+                  {threadLoading && <p className="text-[12px] text-[#9a9a95] text-center py-3">Загрузка переписки…</p>}
+                  {threadErr && <p className="text-[12px] text-red-600 text-center py-3">{threadErr}</p>}
+                  {!threadLoading && !threadErr && thread.length === 0 && <p className="text-[12px] text-[#9a9a95] text-center py-3">Сообщений пока нет.</p>}
+                  {thread.map(m => (
+                    <div key={m.id} className={`flex ${m.from === 'us' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[80%] rounded-2xl px-3 py-1.5 text-[13px] whitespace-pre-wrap ${m.from === 'us' ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#111110]'}`}>
+                        {m.text}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-1.5 mt-2">
+                  <input value={draft} onChange={e => setDraft(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter' && draft.trim() && !sending) sendMsg() }}
+                    placeholder="Написать клиенту в Авито…" disabled={sending}
+                    className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] disabled:opacity-50" />
+                  <button onClick={sendMsg} disabled={sending || !draft.trim()}
+                    className="px-4 py-2 rounded-lg bg-[#0071e3] text-white text-[13px] font-medium disabled:opacity-40">
+                    {sending ? '…' : 'Отправить'}
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Заметка + история */}
             <div className="mt-4">

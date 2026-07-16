@@ -65,6 +65,20 @@ export async function POST(req: NextRequest) {
 
   await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `КЛИЕНТ: ${text}`, author: null })
 
+  // Диалог ведёт ЧЕЛОВЕК (менеджер забрал у Ивана или лид импортирован) — Иван
+  // не автоотвечает, чтобы клиенту не писали оба. Фиксируем сообщение и пингуем.
+  const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер', 'Максим']
+  const managerName = (lead.manager as string | null) ?? null
+  if (managerName && !AI_MANAGERS.includes(managerName)) {
+    await notifyAdmins([
+      '💬 <b>Авито: новое сообщение от клиента</b>',
+      `Ведёт: ${managerName}`,
+      `Клиент: ${text.slice(0, 200)}`,
+      'Карточка: https://mglass-app.vercel.app/crm',
+    ].join('\n')).catch(() => {})
+    return NextResponse.json({ ok: true, human_handling: true })
+  }
+
   // История диалога из событий
   const { data: evs } = await service.from('crm_lead_events')
     .select('kind,text').eq('lead_id', leadId).eq('kind', 'message')
