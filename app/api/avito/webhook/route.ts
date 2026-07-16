@@ -8,6 +8,10 @@ import { notifyAdmins } from '@/lib/telegram'
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
 // Путь в whitelist middleware; защита — секрет в query (?key=AVITO_WEBHOOK_SECRET).
 
+// Даём первому вызову время завершить ответ модели, чтобы ретрай Авито успел
+// прийти к уже помеченному сообщению и был отсеян дедупом (не двойной ответ).
+export const maxDuration = 60
+
 function db() {
   return svc(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
@@ -49,6 +53,17 @@ export async function POST(req: NextRequest) {
   }
 
   const service = db()
+
+  // Идемпотентность: каждое сообщение Авито обрабатываем РОВНО один раз. Авито
+  // ретраит вебхук (наш ответ модели небыстрый) → без дедупа Иван отвечал клиенту
+  // по 2–4 раза. Помечаем id сообщения; дубль — молча выходим 200 (не отвечаем).
+  if (v.id) {
+    const { data: fresh } = await service.from('avito_processed_messages')
+      .upsert({ msg_id: v.id }, { onConflict: 'msg_id', ignoreDuplicates: true })
+      .select('msg_id')
+    if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
+  }
+
   const text = v.content.text.slice(0, 4000)
 
   // Лид по чату: существующий или новый
