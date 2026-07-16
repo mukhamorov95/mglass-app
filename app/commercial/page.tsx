@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
+import { MoneyLeaderboard } from './MoneyLeaderboard'
 
 type Period = 'today' | 'week' | 'month' | 'year'
 
@@ -139,6 +140,9 @@ export default function CommercialPage() {
             ))}
           </div>
         </div>
+
+        {/* Продажи и маржа по менеджерам (деньги) — B2B + B2C за месяц */}
+        <MoneyLeaderboard />
 
         {/* Summary strip */}
         {totals && !loading && (

@@ -56,7 +56,7 @@ export async function POST(req: NextRequest) {
   let lead = existing as Record<string, unknown> | null
   if (!lead) {
     const { data: created } = await service.from('crm_leads')
-      .insert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'AI-менеджер' })
+      .insert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'Иван (AI)' })
       .select('*').single()
     lead = created as Record<string, unknown>
     await service.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', text: 'Лид создан из Авито-чата', author: 'AI' })

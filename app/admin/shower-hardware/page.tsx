@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { CatalogTab, type Color, type Supplier } from './CatalogTab'
 import { BudgetKitTab } from './BudgetKitTab'
 import { StandardFilterTab } from './StandardFilterTab'
+import { SelfCostTab } from './SelfCostTab'
 
 // ── Types ────────────────────────────────────────────────────────
 type BudgetModel = {
@@ -497,7 +498,7 @@ function StandardTab() {
 // Main page
 // ════════════════════════════════════════════════════════════════
 export default function ShowerHardwarePage() {
-  const [tab, setTab] = useState<'catalog' | 'budget' | 'standard'>('catalog')
+  const [tab, setTab] = useState<'catalog' | 'budget' | 'standard' | 'selfcost'>('catalog')
   const [colors,    setColors]    = useState<Color[]>([])
   const [suppliers, setSuppliers] = useState<Supplier[]>([])
 
@@ -517,6 +518,7 @@ export default function ShowerHardwarePage() {
     { key: 'catalog',  label: 'Справочник' },
     { key: 'budget',   label: 'Бюджетные душевые' },
     { key: 'standard', label: 'Стандартные душевые' },
+    { key: 'selfcost', label: '💰 Себестоимость (Иван)' },
   ] as const
 
   return (
@@ -539,6 +541,7 @@ export default function ShowerHardwarePage() {
       {tab === 'catalog'  && <CatalogTab colors={colors} suppliers={suppliers} onRefreshSuppliers={loadShared} />}
       {tab === 'budget'   && <BudgetKitTab colors={colors} suppliers={suppliers} />}
       {tab === 'standard' && <StandardFilterTab colors={colors} suppliers={suppliers} />}
+      {tab === 'selfcost' && <SelfCostTab />}
     </div>
   )
 }

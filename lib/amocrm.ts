@@ -35,6 +35,7 @@ async function getAccessToken(): Promise<string> {
 export async function amoGet<T = unknown>(
   path: string,
   params: Record<string, string> = {},
+  revalidate?: number,   // сек; задать для редко меняющихся справочников (users/pipelines)
 ): Promise<T | null> {
   const token = await getAccessToken()
   const url   = new URL(`https://${domain()}/api/v4${path}`)
@@ -43,6 +44,7 @@ export async function amoGet<T = unknown>(
   const res = await fetch(url.toString(), {
     headers: { Authorization: `Bearer ${token}` },
     signal: AbortSignal.timeout(8000),
+    ...(revalidate ? { next: { revalidate } } : {}),
   })
   if (res.status === 204 || res.status === 404) return null
   if (!res.ok) throw new Error(`AmoCRM GET ${path} → ${res.status}: ${await res.text()}`)
@@ -84,11 +86,13 @@ export type AmoEvent  = {
 export type AmoStage    = { id: number; name: string; sort: number }
 export type AmoPipeline = { id: number; name: string; _embedded: { statuses: AmoStage[] } }
 
+// Справочники меняются раз в месяцы — кэшируем на час, чтобы не бить внешний API
+// AmoCRM на каждый рендер дашбордов менеджера/коммерции (снимает синхронную задержку).
 export const getUsers = () =>
-  amoGet<{ _embedded: { users: AmoUser[] } }>('/users').then(d => d?._embedded?.users ?? [])
+  amoGet<{ _embedded: { users: AmoUser[] } }>('/users', {}, 3600).then(d => d?._embedded?.users ?? [])
 
 export const getPipelines = () =>
-  amoGet<{ _embedded: { pipelines: AmoPipeline[] } }>('/leads/pipelines').then(d => d?._embedded?.pipelines ?? [])
+  amoGet<{ _embedded: { pipelines: AmoPipeline[] } }>('/leads/pipelines', {}, 3600).then(d => d?._embedded?.pipelines ?? [])
 
 export type AmoNote = {
   id: number; entity_id: number; note_type: string | number; created_by: number; created_at: number
