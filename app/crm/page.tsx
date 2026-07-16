@@ -72,6 +72,10 @@ export default function CrmPage() {
   const [showClosed, setShowClosed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [scoped, setScoped] = useState(false)   // менеджер видит только свои лиды
+  const [isOwner, setIsOwner] = useState(false)
+  const [ingestMode, setIngestMode] = useState<'avito_only' | 'all'>('avito_only')
+  const [syncing, setSyncing] = useState(false)
+  const [syncMsg, setSyncMsg] = useState('')
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
   const load = useCallback(async () => {
@@ -86,14 +90,34 @@ export default function CrmPage() {
         setMe(myName)
         // Владелец/CEO/РОП и менеджер с флагом «видит все» — вся воронка; остальные — только свои назначенные.
         canAll = ['admin', 'ceo', 'commercial'].includes(prof?.role ?? '') || !!prof?.can_view_all_deals
+        setIsOwner(['admin', 'ceo'].includes(prof?.role ?? ''))
       }
       setScoped(!canAll)
       let query = sb.from('crm_leads').select('*').order('updated_at', { ascending: false }).limit(500)
       if (!canAll) query = query.eq('manager', myName)
       const { data } = await query
       setLeads((data ?? []) as Lead[])
+      fetch('/api/crm/ingest').then(r => r.ok ? r.json() : null).then(d => { if (d?.mode) setIngestMode(d.mode) }).catch(() => {})
     } finally { setLoading(false) }
   }, [sb])
+
+  async function setIngest(mode: 'avito_only' | 'all') {
+    const r = await fetch('/api/crm/ingest', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ mode }) })
+    if (r.ok) { setIngestMode(mode); flash(mode === 'all' ? 'Приём: все каналы (AmoCRM)' : 'Приём: только Авито') }
+    else flash('Не удалось изменить режим')
+  }
+
+  async function syncAmo() {
+    setSyncing(true); setSyncMsg('')
+    try {
+      const r = await fetch('/api/crm/sync-amo', { method: 'POST' })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'Ошибка')
+      setSyncMsg(`Синхронизировано: ${d.total} (новых ${d.new}, обновлено ${d.updated})`)
+      load()
+    } catch (e) { setSyncMsg('Ошибка: ' + (e as Error).message) }
+    finally { setSyncing(false) }
+  }
   useEffect(() => { void load() }, [load])
 
   async function addEvent(leadId: number, kind: string, text: string) {
@@ -162,6 +186,25 @@ export default function CrmPage() {
           </div>
         </div>
       </div>
+
+      {/* Приём лидов (только владельцу): режим + синхронизация с AmoCRM */}
+      {isOwner && (
+        <div className="mx-5 mt-4 bg-white border border-[#e4e4e0] rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+          <span className="text-[12px] font-semibold text-[#111110]">Приём лидов:</span>
+          <div className="inline-flex bg-[#f0f0ec] rounded-lg p-0.5">
+            <button onClick={() => setIngest('avito_only')}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${ingestMode === 'avito_only' ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>Только Авито</button>
+            <button onClick={() => setIngest('all')}
+              className={`px-3 py-1.5 rounded-md text-[12px] font-medium transition-all ${ingestMode === 'all' ? 'bg-white text-[#111110] shadow-sm' : 'text-[#6b6b66]'}`}>Все каналы (AmoCRM)</button>
+          </div>
+          <button onClick={syncAmo} disabled={syncing}
+            className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] font-medium text-[#111110] hover:bg-[#f5f5f3] disabled:opacity-50">
+            {syncing ? 'Синхронизирую…' : '↻ Синхронизировать с AmoCRM'}
+          </button>
+          {syncMsg && <span className="text-[12px] text-[#6b6b66]">{syncMsg}</span>}
+          <span className="text-[11px] text-[#c4c4be] ml-auto">AmoCRM — только чтение. Заливает активные сделки воронки «Продажи».</span>
+        </div>
+      )}
 
       {/* Форма нового лида */}
       {formOpen && (
