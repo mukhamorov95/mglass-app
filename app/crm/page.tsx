@@ -71,16 +71,26 @@ export default function CrmPage() {
   const [srcFilter, setSrcFilter] = useState<'all' | Lead['source']>('all')
   const [showClosed, setShowClosed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+  const [scoped, setScoped] = useState(false)   // менеджер видит только свои лиды
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
   const load = useCallback(async () => {
     try {
       const { data: { user } } = await sb.auth.getUser()
+      let myName = ''
+      let canAll = false
       if (user) {
-        const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
-        setMe((p as { name: string | null } | null)?.name ?? user.email ?? '')
+        const { data: p } = await sb.from('users').select('name,role,can_view_all_deals').eq('id', user.id).maybeSingle()
+        const prof = p as { name: string | null; role: string | null; can_view_all_deals: boolean | null } | null
+        myName = prof?.name ?? user.email ?? ''
+        setMe(myName)
+        // Владелец/CEO/РОП и менеджер с флагом «видит все» — вся воронка; остальные — только свои назначенные.
+        canAll = ['admin', 'ceo', 'commercial'].includes(prof?.role ?? '') || !!prof?.can_view_all_deals
       }
-      const { data } = await sb.from('crm_leads').select('*').order('updated_at', { ascending: false }).limit(500)
+      setScoped(!canAll)
+      let query = sb.from('crm_leads').select('*').order('updated_at', { ascending: false }).limit(500)
+      if (!canAll) query = query.eq('manager', myName)
+      const { data } = await query
       setLeads((data ?? []) as Lead[])
     } finally { setLoading(false) }
   }, [sb])
@@ -128,7 +138,9 @@ export default function CrmPage() {
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">📊 CRM · Продажи</h1>
+            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">📊 CRM · Продажи
+              {scoped && <span className="ml-2 text-[11px] font-medium align-middle px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
+            </h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">
               Активных: {leads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
             </p>

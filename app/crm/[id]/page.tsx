@@ -76,6 +76,7 @@ export default function LeadDetailPage() {
   const [calling, setCalling] = useState(false)
   const [flash, setFlash] = useState('')
   const [managers, setManagers] = useState<string[]>([])
+  const [denied, setDenied] = useState(false)
 
   const loadEvents = useCallback(async () => {
     const { data } = await sb.from('crm_lead_events').select('*').eq('lead_id', id).order('id', { ascending: false }).limit(80)
@@ -97,12 +98,19 @@ export default function LeadDetailPage() {
   const load = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await sb.auth.getUser()
+    let myName = ''
+    let canAll = false
     if (user) {
-      const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
-      setMe((p as { name: string | null } | null)?.name ?? user.email ?? '')
+      const { data: p } = await sb.from('users').select('name,role,can_view_all_deals').eq('id', user.id).maybeSingle()
+      const prof = p as { name: string | null; role: string | null; can_view_all_deals: boolean | null } | null
+      myName = prof?.name ?? user.email ?? ''
+      setMe(myName)
+      canAll = ['admin', 'ceo', 'commercial'].includes(prof?.role ?? '') || !!prof?.can_view_all_deals
     }
     const { data } = await sb.from('crm_leads').select('*').eq('id', id).maybeSingle()
     const l = data as Lead | null
+    // Изоляция: менеджер без «видит все» открывает только свои назначенные лиды.
+    if (l && !canAll && l.manager !== myName) { setDenied(true); setLoading(false); return }
     setLead(l)
     setLoading(false)
     fetch('/api/crm/managers').then(r => r.ok ? r.json() : { managers: [] }).then(d => setManagers(d.managers ?? [])).catch(() => {})
@@ -158,6 +166,12 @@ export default function LeadDetailPage() {
   }
 
   if (loading) return <div className="min-h-screen bg-[#f8f8f7] p-6 text-[13px] text-[#9a9a95]">Загрузка…</div>
+  if (denied) return (
+    <div className="min-h-screen bg-[#f8f8f7] p-6">
+      <Link href="/crm" className="text-[13px] text-[#0071e3]">← Воронка</Link>
+      <p className="mt-4 text-[14px] text-[#111110]">Этот лид назначен другому менеджеру — доступа нет.</p>
+    </div>
+  )
   if (!lead) return (
     <div className="min-h-screen bg-[#f8f8f7] p-6">
       <Link href="/crm" className="text-[13px] text-[#0071e3]">← Воронка</Link>
