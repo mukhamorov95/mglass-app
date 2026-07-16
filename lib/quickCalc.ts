@@ -159,6 +159,15 @@ export async function quickCalc(
   height: number,
   options: CalcOptions = {},
 ): Promise<QuickCalcResult | null> {
+  // см → мм: клиенты часто дают размеры в сантиметрах («95», «190»), а калькулятор
+  // ждёт миллиметры. Любой размер изделия < 300 почти наверняка в см — домножаем на
+  // 10 (иначе площадь получается в ~100× меньше и цена катастрофически занижается).
+  if (width  > 0 && width  < 300) width  = Math.round(width  * 10)
+  if (height > 0 && height < 300) height = Math.round(height * 10)
+  if (options.width2 != null && options.width2 > 0 && options.width2 < 300) {
+    options = { ...options, width2: Math.round(options.width2 * 10) }
+  }
+
   const { materials, services, settings, glassMatrix, lightingComponents } = await loadAll()
 
   if (type === 'mirror') {
