@@ -679,7 +679,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
             'b2b', 'B2B',
             'bg-orange-400', 'text-[#c2600a]',
             b2bNav,
-            'bg-orange-50 text-orange-700 font-medium',
+            'bg-[#fff1e8] text-[#c2410c] font-medium',
           )}
         </>
       )
@@ -711,7 +711,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
             'text-orange-600',
             'text-orange-400',
             BUYER_PRODUCTION,
-            'bg-orange-50 text-orange-700 font-medium',
+            'bg-[#fff1e8] text-[#c2410c] font-medium',
           )}
         </>
       )
@@ -721,8 +721,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     if (role === 'production') return (
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-500">Производство</div>
-        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
-        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-[#fff1e8] text-[#c2410c] font-medium')}
+        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
         {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
@@ -761,7 +761,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
           'b2b', 'B2B',
           'bg-orange-400', 'text-[#c2600a]',
           MANAGER_B2B,
-          'bg-orange-50 text-orange-700 font-medium',
+          'bg-[#fff1e8] text-[#c2410c] font-medium',
         )}
       </>
     )
@@ -799,8 +799,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     if (viewMode === 'production') return (
       <>
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-orange-600">Производство</div>
-        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-orange-50 text-orange-700 font-medium')}
-        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-orange-50 text-orange-700 font-medium')}
+        {accordion('prod_shop',   'Цех',                  'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SHOP,   'bg-[#fff1e8] text-[#c2410c] font-medium')}
+        {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
         {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
@@ -841,7 +841,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       <aside
         className={`
           fixed lg:sticky top-0 left-0 h-screen z-40 lg:z-auto
-          w-[220px] flex-shrink-0 flex flex-col bg-[#fafaf9] border-r border-[#ebebе8]
+          w-[250px] flex-shrink-0 flex flex-col bg-[#fbfbfd] border-r border-[#ececf0]
           transition-transform duration-200 ease-in-out overflow-hidden
           ${mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}
         `}
