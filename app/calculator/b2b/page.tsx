@@ -1044,7 +1044,7 @@ export default function B2BCalculatorPage() {
       <div className="text-center space-y-4">
         <p className="text-[15px] font-medium text-[#111110]">У вас нет доступа к B2B-калькулятору</p>
         <a href="/admin/procurement"
-          className="inline-block bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] transition-colors">
+          className="inline-block bg-[#1d1d1f] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-black transition-colors">
           Открыть закупки
         </a>
       </div>
@@ -1069,8 +1069,16 @@ export default function B2BCalculatorPage() {
 
   return (
     <>
-    <div className="min-h-screen bg-[#f8f8f7]">
-      <div className="max-w-[1400px] mx-auto px-4 py-4">
+    <div className="apple-calc min-h-screen">
+      <style>{`
+        .apple-calc{background:#f5f5f7;font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text",Inter,system-ui,sans-serif;-webkit-font-smoothing:antialiased;color:#1d1d1f}
+        .apple-calc input:not([type=checkbox]):not([type=file]),.apple-calc select{height:44px;border-radius:12px;border:1px solid #d9d9df!important;background:#fff!important;color:#1d1d1f;font-size:14px;transition:box-shadow .15s,border-color .15s}
+        .apple-calc input:not([type=checkbox]):not([type=file]):focus,.apple-calc select:focus{outline:none;border-color:#0071e3!important;box-shadow:0 0 0 3.5px rgba(0,113,227,.18)}
+        .apple-calc input::placeholder{color:#b0b0b8}
+        .apple-calc h1{letter-spacing:-.02em}
+        .ac-card{background:#fff;border:1px solid #ececf0;border-radius:20px;box-shadow:0 1px 3px rgba(0,0,0,.04),0 8px 24px rgba(0,0,0,.04)}
+      `}</style>
+      <div className="max-w-[1400px] mx-auto px-5 py-6">
 
         {draftToast && (
           <div className="mb-4 flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
@@ -1088,19 +1096,19 @@ export default function B2BCalculatorPage() {
           </div>
         )}
 
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">B2B Просчёт</h1>
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-[28px] font-bold text-[#1d1d1f]">Просчёт заказа</h1>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[400px_1fr] gap-6 items-start">
 
           {/* ══ ЛЕВАЯ КОЛОНКА ══ */}
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-3 lg:sticky lg:top-4">
+          <div className="ac-card p-6 space-y-4 lg:sticky lg:top-6">
 
             {/* Клиент */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Клиент</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73]">Клиент</label>
                 {!mglassOnly && (
                   <button
                     onClick={() => setShowNewClient(true)}
@@ -1112,7 +1120,7 @@ export default function B2BCalculatorPage() {
               {mglassOnly ? (
                 <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] font-semibold flex items-center justify-between">
                   <span>{selectedClient?.name ?? 'M GLASS'}</span>
-                  <span className="text-[10px] uppercase tracking-widest text-[#9a9a95]">фиксировано</span>
+                  <span className="text-[12px] text-[#86868b]">фиксировано</span>
                 </div>
               ) : (
                 <select
@@ -1132,7 +1140,7 @@ export default function B2BCalculatorPage() {
             {/* Номера заказа */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Наш номер</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Наш номер</label>
                 <input
                   type="text"
                   placeholder="МГ-001"
@@ -1142,7 +1150,7 @@ export default function B2BCalculatorPage() {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">№ клиента</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">№ клиента</label>
                 <input
                   type="text"
                   placeholder="необязательно"
@@ -1155,7 +1163,7 @@ export default function B2BCalculatorPage() {
 
             {/* Дней производства */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Срок производства, дней</label>
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Срок производства, дней</label>
               <input type="number" min="1" max="90"
                 className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
                 value={fProductionDays}
@@ -1167,11 +1175,11 @@ export default function B2BCalculatorPage() {
 
             {/* Тип позиции: сырьё (стекло/зеркало) или готовое изделие производства */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип позиции</label>
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип позиции</label>
               <div className="flex gap-1.5">
                 {([['material', 'Стекло / зеркало'], ['fmirror', '💡 Зеркало+свет/рама'], ['floft', 'Лофт']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => switchKind(k)}
-                    className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                    className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
                     {l}
                   </button>
                 ))}
@@ -1199,14 +1207,14 @@ export default function B2BCalculatorPage() {
                   <>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Зеркало</label>
+                        <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Зеркало</label>
                         <select value={fmName} onChange={e => { setFmName(e.target.value); const mms = mirrorMms(factoryData, e.target.value); if (mms.length) setFmMm(mms[0]) }}
                           className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                           {factoryData.mirrorNames.map(n => <option key={n} value={n}>{n}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                        <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Толщина</label>
                         <select value={fmMm} onChange={e => setFmMm(Number(e.target.value))}
                           className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]">
                           {mirrorMms(factoryData, fmName).map(m => <option key={m} value={m}>{m} мм</option>)}
@@ -1214,7 +1222,7 @@ export default function B2BCalculatorPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
                       <div className="grid grid-cols-3 gap-2">
                         <input type="number" placeholder="Ш, мм" value={fmW} onChange={e => setFmW(e.target.value)}
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
@@ -1225,11 +1233,11 @@ export default function B2BCalculatorPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Форма</label>
+                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Форма</label>
                       <div className="grid grid-cols-2 gap-2">
                         {([[false, 'Прямоугольное'], [true, 'Криволинейное']] as const).map(([v, label]) => (
                           <button key={label} onClick={() => setFmCurved(v)}
-                            className={`h-[34px] rounded-lg text-[13px] font-medium border ${fmCurved === v ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`}>
+                            className={`h-[34px] rounded-lg text-[13px] font-medium border ${fmCurved === v ? 'bg-[#1d1d1f] text-white border-[#111110]' : 'bg-white border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`}>
                             {label}
                           </button>
                         ))}
@@ -1254,7 +1262,7 @@ export default function B2BCalculatorPage() {
                     {fmLighting && (
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Лента · температура</label>
+                          <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Лента · температура</label>
                           <select value={fmLedId ?? ''} onChange={e => setFmLedId(e.target.value ? Number(e.target.value) : null)}
                             className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                             <option value="">Авто (стандарт)</option>
@@ -1266,7 +1274,7 @@ export default function B2BCalculatorPage() {
                           </select>
                         </div>
                         <div>
-                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Каркас (сзади)</label>
+                          <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Каркас (сзади)</label>
                           {fmCurved ? (
                             <div>
                               <input type="number" placeholder="Подложка, ₽" value={fmUnderlay} onChange={e => setFmUnderlay(e.target.value)}
@@ -1290,7 +1298,7 @@ export default function B2BCalculatorPage() {
                 {!factoryLoading && factoryData && fKind === 'floft' && (
                   <>
                     <div>
-                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
                       <div className="grid grid-cols-3 gap-2">
                         <input type="number" placeholder="Ш, мм" value={flW} onChange={e => setFlW(e.target.value)}
                           className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
@@ -1301,7 +1309,7 @@ export default function B2BCalculatorPage() {
                       </div>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Конструкция</label>
+                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Конструкция</label>
                       <div className="flex bg-[#efefec] rounded-lg p-[3px] gap-[2px]">
                         {([['fixed', 'Стационарная'], ['swing', 'Распашная'], ['sliding', 'Раздвижная']] as const).map(([v, l]) => (
                           <button key={v} onClick={() => setFlConstruction(v)}
@@ -1312,18 +1320,18 @@ export default function B2BCalculatorPage() {
                     <div className="grid grid-cols-3 gap-2">
                       {flConstruction !== 'fixed' && (
                         <div>
-                          <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">{flConstruction === 'swing' ? 'Дверей' : 'Раздв. створок'}</label>
+                          <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">{flConstruction === 'swing' ? 'Дверей' : 'Раздв. створок'}</label>
                           <input type="number" min={1} value={flDoors} onChange={e => setFlDoors(e.target.value)}
                             className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                         </div>
                       )}
                       <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">{flConstruction === 'fixed' ? 'Секций' : 'Глухих частей'}</label>
+                        <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">{flConstruction === 'fixed' ? 'Секций' : 'Глухих частей'}</label>
                         <input type="number" min={0} value={flFixed} onChange={e => setFlFixed(e.target.value)}
                           className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стёкол в створке (по высоте)</label>
+                        <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Стёкол в створке (по высоте)</label>
                         <input type="number" min={1} value={flRows} onChange={e => setFlRows(e.target.value)}
                           className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
                       </div>
@@ -1335,7 +1343,7 @@ export default function B2BCalculatorPage() {
                     <div className="flex items-center gap-4 flex-wrap">
                       {flConstruction === 'swing' && (
                         <div className="flex items-center gap-2">
-                          <span className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Ручка</span>
+                          <span className="text-[13px] font-medium text-[#6e6e73]">Ручка</span>
                           <div className="flex bg-[#efefec] rounded-lg p-[2px] gap-[2px]">
                             {([['corner', 'Уголок'], ['push', 'Нажимная с замком']] as const).map(([v, l]) => (
                               <button key={v} onClick={() => setFlHandle(v)}
@@ -1356,7 +1364,7 @@ export default function B2BCalculatorPage() {
                       </label>
                     </div>
                     <div>
-                      <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Стекло</label>
+                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Стекло</label>
                       <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
                         className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                         {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -1439,7 +1447,7 @@ export default function B2BCalculatorPage() {
                   value={fComment} onChange={e => setFComment(e.target.value)}
                   placeholder="Комментарий к позиции (опционально)" />
                 <button onClick={handleAddFactoryItem} disabled={!factoryQuote}
-                  className="w-full bg-[#111110] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
                   + Добавить изделие
                 </button>
               </div>
@@ -1448,11 +1456,11 @@ export default function B2BCalculatorPage() {
             {fKind === 'material' && (<>
             {/* Стекло / Зеркало — табы */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Материал</label>
               <div className="flex gap-1.5">
                 {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                   <button key={s.value} onClick={() => handleSuperCatChange(s.value)}
-                    className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${fSuperCat === s.value ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                    className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${fSuperCat === s.value ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -1462,7 +1470,7 @@ export default function B2BCalculatorPage() {
             {/* Толщина + Тип */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Толщина</label>
                 <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={fThickness ?? ''}
@@ -1471,7 +1479,7 @@ export default function B2BCalculatorPage() {
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип</label>
                 <select
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110] transition-all"
                   value={fMatId ?? ''}
@@ -1491,7 +1499,7 @@ export default function B2BCalculatorPage() {
 
             {/* Размеры */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
               <div className="grid grid-cols-3 gap-2">
                 <input ref={widthRef} type="number" min="1"
                   className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
@@ -1508,7 +1516,7 @@ export default function B2BCalculatorPage() {
             {/* Отход + Закалка */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
                   Отход
                   {selectedMaterial && !selectedMaterial.passthrough && fWaste === selectedMaterial.waste_percent && (
                     <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">авто</span>
@@ -1529,7 +1537,7 @@ export default function B2BCalculatorPage() {
               </div>
               {fSuperCat === 'стекло' && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Закалка</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Закалка</label>
                   <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTempering ? 'border-orange-300 bg-orange-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                     <input type="checkbox" checked={fTempering} onChange={e => setFTempering(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1541,7 +1549,7 @@ export default function B2BCalculatorPage() {
               )}
               {facetPrices.length > 0 && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Фацет</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Фацет</label>
                   <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                     <input type="checkbox" checked={fFacet} onChange={e => setFFacet(e.target.checked)}
                       className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1561,7 +1569,7 @@ export default function B2BCalculatorPage() {
                 </div>
               )}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Сверловка</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Сверловка</label>
                 <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                   <input type="checkbox" checked={fHoles} onChange={e => setFHoles(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1571,7 +1579,7 @@ export default function B2BCalculatorPage() {
                 </label>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Криволинейка</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Криволинейка</label>
                 <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                   <input type="checkbox" checked={fCurved} onChange={e => setFCurved(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1581,7 +1589,7 @@ export default function B2BCalculatorPage() {
                 </label>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Мин. цена</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Мин. цена</label>
                 <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                   <input type="checkbox" checked={fMinPrice} onChange={e => setFMinPrice(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1591,7 +1599,7 @@ export default function B2BCalculatorPage() {
                 </label>
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Триплекс</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Триплекс</label>
                 <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                   <input type="checkbox" checked={fTriplex} onChange={e => setFTriplex(e.target.checked)}
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
@@ -1642,7 +1650,7 @@ export default function B2BCalculatorPage() {
             <button
               onClick={handleAddItem}
               disabled={!selectedMaterial || !fWidth || !fHeight || (selectedMaterial?.sale_price ?? 0) === 0}
-              className="w-full bg-[#111110] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+              className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
               + Добавить позицию
             </button>
 
@@ -1650,7 +1658,7 @@ export default function B2BCalculatorPage() {
             {services.length > 0 && (
               <details className="group">
                 <summary className="flex items-center justify-between px-3 py-2 rounded-lg border border-[#e4e4e0] cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Доп. услуги</span>
+                  <span className="text-[11px] font-medium text-[#8a8a85]">Доп. услуги</span>
                   <div className="flex items-center gap-2">
                     {fServiceIds.length > 0 && (
                       <span className="text-[10px] font-semibold bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-full">{fServiceIds.length}</span>
@@ -1726,7 +1734,7 @@ export default function B2BCalculatorPage() {
 
             {/* Чертёж / файл */}
             <div>
-              <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
                 Чертёж / файл клиента
               </label>
               {attachFile ? (
@@ -1742,7 +1750,7 @@ export default function B2BCalculatorPage() {
                       className="text-[#9a9a95] hover:text-red-500 transition-colors leading-none text-sm flex-shrink-0">✕</button>
                   </div>
                   <button onClick={parseDrawing} disabled={parsingDrawing}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-[#2a2a28] disabled:opacity-50 transition-colors">
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-50 transition-colors">
                     {parsingDrawing ? 'Распознаю чертёж…' : '🔍 Распознать чертёж → позиции'}
                   </button>
                 </div>
@@ -1786,7 +1794,7 @@ export default function B2BCalculatorPage() {
 
             {/* Примечание к заказу */}
             <details className="group">
-              <summary className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none hover:text-[#6b6b66] transition-colors">
+              <summary className="flex items-center gap-1.5 text-[11px] font-medium text-[#9a9a95] cursor-pointer select-none list-none hover:text-[#6b6b66] transition-colors">
                 <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                 Примечание к заказу
               </summary>
@@ -1802,10 +1810,10 @@ export default function B2BCalculatorPage() {
           <div className="space-y-4">
 
             {/* Таблица позиций */}
-            <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+            <div className="ac-card overflow-hidden">
               <div className="px-5 py-3.5 border-b border-[#f0f0ec] flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
+                  <span className="text-[11px] font-medium text-[#8a8a85]">
                     Позиции {items.length > 0 && `— ${items.length} шт.`}
                   </span>
                   {selectedClient && (
@@ -1833,7 +1841,7 @@ export default function B2BCalculatorPage() {
                 <div className="overflow-x-auto">
                   <table className="w-full text-[12px]">
                     <thead>
-                      <tr className="border-b border-[#f0f0ec] bg-[#fafaf9] text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest whitespace-nowrap">
+                      <tr className="border-b border-[#f0f0ec] bg-[#fafaf9] text-[13px] font-medium text-[#6e6e73] whitespace-nowrap">
                         <th className="px-3 py-2.5 text-center w-8">#</th>
                         <th className="px-3 py-2.5 text-left min-w-[140px]">Материал</th>
                         <th className="px-3 py-2.5 text-left min-w-[80px]">Тип</th>
@@ -1993,10 +2001,10 @@ export default function B2BCalculatorPage() {
 
             {/* КП для клиента */}
             {kpText && (
-              <details className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden group">
+              <details className="ac-card overflow-hidden group">
                 <summary className="px-5 py-3 border-b border-[#f0f0ec] flex items-center gap-2 cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
                   <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform inline-block">▶</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Клиентский расчёт (КП)</span>
+                  <span className="text-[11px] font-medium text-[#8a8a85]">Клиентский расчёт (КП)</span>
                   <span className="text-[11px] text-[#c4c4be] ml-auto">нажмите чтобы раскрыть</span>
                 </summary>
                 <div className="p-5">
@@ -2012,13 +2020,13 @@ export default function B2BCalculatorPage() {
 
             {/* Итоговый блок + кнопка сохранить */}
             {totals && (
-              <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 space-y-4">
+              <div className="ac-card p-6 space-y-4">
                 <div className="flex items-start justify-between gap-3">
                   <div>
                     {discount > 0 && (
                       <p className="text-[12px] text-[#9a9a95] line-through mb-0.5">{fmt(totals.totalSaleIncVat)}</p>
                     )}
-                    <p className="text-[24px] font-bold text-[#111110] font-mono leading-none">{fmt(totals.totalAfterDiscount)}</p>
+                    <p className="text-[38px] font-bold text-[#1d1d1f] leading-none tracking-[-0.02em]">{fmt(totals.totalAfterDiscount)}</p>
                     {discount > 0 && (
                       <p className="text-[11px] text-emerald-600 mt-0.5">скидка {discount}%</p>
                     )}
@@ -2086,8 +2094,8 @@ export default function B2BCalculatorPage() {
                     : t === 'room' || t === 'ok' ? 'bg-emerald-50 text-emerald-800'
                     : 'bg-[#f5f5f4] text-[#6b6b66]'
                   return (
-                    <div className="rounded-lg border border-[#e4e4e0] bg-white p-3 space-y-1.5">
-                      <span className="text-[11px] font-bold uppercase tracking-widest text-[#8a8a85]">💡 Рекомендация по цене</span>
+                    <div className="rounded-2xl border border-[#f6e4c4] bg-[#fff8ee] p-4 space-y-1.5">
+                      <span className="text-[13px] font-semibold text-[#8a6d3b]">Рекомендация по цене</span>
                       {recs.slice(0, 3).map((r, i) => (
                         <div key={i} className={`text-[12px] leading-snug rounded-lg px-2.5 py-1.5 ${toneCls(r.tone)}`}>
                           <span className="font-semibold">{r.head}. </span>{r.text}
@@ -2099,7 +2107,7 @@ export default function B2BCalculatorPage() {
                 })()}
 
                 <details className="group">
-                  <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                  <summary className="text-[11px] font-medium text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
                     <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                     Аналитика (только для менеджера)
                   </summary>
@@ -2118,7 +2126,7 @@ export default function B2BCalculatorPage() {
                       ]
                       return (
                         <div className="rounded-lg bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2 mb-2">
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1.5">Из чего складывается себестоимость</p>
+                          <p className="text-[10px] font-medium text-[#9a9a95] mb-1.5">Из чего складывается себестоимость</p>
                           {rows.filter(([, v]) => v > 0).map(([label, v]) => (
                             <div key={label} className="flex justify-between text-[12px] py-0.5">
                               <span className="text-[#6b6b66]">{label}</span>
@@ -2197,7 +2205,7 @@ export default function B2BCalculatorPage() {
                   <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
                 )}
                 <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
-                  className="w-full bg-[#111110] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
                   {saving ? 'Сохранение...'
                     : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
                     : !clientId ? 'Выберите клиента'
@@ -2221,7 +2229,7 @@ export default function B2BCalculatorPage() {
                     </p>
                     <button
                       onClick={() => router.push('/b2b-quotes')}
-                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+                      className="w-full text-[12px] font-medium py-2 rounded-lg bg-[#1d1d1f] text-white hover:bg-black transition-colors">
                       Перейти к просчётам →
                     </button>
                   </div>
@@ -2244,7 +2252,7 @@ export default function B2BCalculatorPage() {
                   const fmtRub = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
                   return (
                     <details className="group border-t border-[#f0f0ec] pt-3">
-                      <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                      <summary className="text-[11px] font-medium text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
                         <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                         📦 Предварительная закупка
                       </summary>
@@ -2276,7 +2284,7 @@ export default function B2BCalculatorPage() {
                 {/* Раскрой */}
                 {cuttingResults && cuttingResults.length > 0 && (
                   <details className="group border-t border-[#f0f0ec] pt-3">
-                    <summary className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
+                    <summary className="text-[11px] font-medium text-[#9a9a95] cursor-pointer select-none list-none flex items-center gap-1.5">
                       <span className="group-open:rotate-90 transition-transform inline-block">▶</span>
                       ✂️ Раскрой листов
                     </summary>
@@ -2350,11 +2358,11 @@ export default function B2BCalculatorPage() {
 
               {/* Стекло / Зеркало */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Материал</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Материал</label>
                 <div className="flex gap-1.5">
                   {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                     <button key={s.value} onClick={() => handleEditSuperCatChange(s.value)}
-                      className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${eSuperCat === s.value ? 'bg-[#111110] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                      className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${eSuperCat === s.value ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
                       {s.label}
                     </button>
                   ))}
@@ -2364,7 +2372,7 @@ export default function B2BCalculatorPage() {
               {/* Толщина + Тип */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Толщина</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Толщина</label>
                   <select
                     className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
                     value={eThickness ?? ''}
@@ -2373,7 +2381,7 @@ export default function B2BCalculatorPage() {
                   </select>
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Тип</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип</label>
                   <select
                     className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] text-[#111110] outline-none focus:border-[#111110]"
                     value={eMatId ?? ''}
@@ -2396,7 +2404,7 @@ export default function B2BCalculatorPage() {
 
               {/* Размеры + количество */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Размеры и количество</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
                 <div className="grid grid-cols-3 gap-2">
                   <input type="number" min="1"
                     className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]"
@@ -2413,7 +2421,7 @@ export default function B2BCalculatorPage() {
               {/* Отход + Закалка */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Отход</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Отход</label>
                   {eSelectedMat?.passthrough ? (
                     <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
                       10% — проходной
@@ -2427,7 +2435,7 @@ export default function B2BCalculatorPage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Опции</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Опции</label>
                   <div className="space-y-1">
                     {eSuperCat === 'стекло' && (
                       <label className="flex items-center gap-2 h-[34px] px-3 border border-[#e4e4e0] rounded-lg cursor-pointer hover:border-[#c4c4be] transition-all">
@@ -2512,7 +2520,7 @@ export default function B2BCalculatorPage() {
               {/* Доп. услуги */}
               {services.length > 0 && (
                 <div>
-                  <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Доп. услуги</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Доп. услуги</label>
                   <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
                     {services.map(s => {
                       const checked = eServiceIds.includes(s.id)
@@ -2581,7 +2589,7 @@ export default function B2BCalculatorPage() {
 
               {/* Комментарий */}
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Комментарий</label>
                 <input type="text" maxLength={120}
                   className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
                   value={eComment} onChange={e => setEComment(e.target.value)}
@@ -2591,7 +2599,7 @@ export default function B2BCalculatorPage() {
               {/* Живой пересчёт суммы позиции */}
               {ePreviewTotal !== null && (
                 <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-[#f8f8f7] border border-[#e8e8e4]">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-[#8a8a85]">Итого позиции{discount > 0 ? ` (−${discount}%)` : ''}</span>
+                  <span className="text-[10px] font-medium text-[#8a8a85]">Итого позиции{discount > 0 ? ` (−${discount}%)` : ''}</span>
                   <span className="flex items-center gap-2">
                     <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(ePreviewMargin!)}`}>{ePreviewMargin}%</span>
                     <span className="text-[16px] font-bold font-mono text-[#111110]">{ePreviewTotal.toLocaleString('ru-RU')} ₽</span>
@@ -2610,7 +2618,7 @@ export default function B2BCalculatorPage() {
                   Отмена
                 </button>
                 <button onClick={saveEdit} disabled={!eCanSave}
-                  className="flex-1 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                  className="flex-1 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40 transition-colors">
                   Сохранить
                 </button>
               </div>
@@ -2631,35 +2639,35 @@ export default function B2BCalculatorPage() {
 
             <div className="space-y-3">
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Название компании *</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Название компании *</label>
                 <input
                   type="text" placeholder="ООО Ромашка"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
                   value={ncName} onChange={e => setNcName(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Контактное лицо</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Контактное лицо</label>
                 <input
                   type="text" placeholder="Иван Иванов"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
                   value={ncContact} onChange={e => setNcContact(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Телефон</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Телефон</label>
                 <input
                   type="text" placeholder="+7 999 000 00 00"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
                   value={ncPhone} onChange={e => setNcPhone(e.target.value)} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Скидка %</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Скидка %</label>
                 <input
                   type="number" min="0" max="50" step="1"
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]"
                   value={ncDiscount} onChange={e => setNcDiscount(Number(e.target.value))} />
               </div>
               <div>
-                <label className="block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Комментарий</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Комментарий</label>
                 <textarea
                   rows={2} placeholder="Дополнительная информация..."
                   className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] resize-none"
