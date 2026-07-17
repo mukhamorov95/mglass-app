@@ -82,6 +82,11 @@ export default function LeadDetailPage() {
   const [taskDue, setTaskDue] = useState('')
   const [taskKind, setTaskKind] = useState('followup')
   const [now, setNow] = useState(0)   // «сейчас» из эффекта (правило чистоты рендера)
+  const [saleOpen, setSaleOpen] = useState(false)
+  const [saleAmount, setSaleAmount] = useState('')
+  const [saleOrderNo, setSaleOrderNo] = useState('')
+  const [salePrepay, setSalePrepay] = useState('')
+  const [salePay, setSalePay] = useState('Счёт')
 
   const loadEvents = useCallback(async () => {
     const { data } = await sb.from('crm_lead_events').select('*').eq('lead_id', id).order('id', { ascending: false }).limit(80)
@@ -191,6 +196,24 @@ export default function LeadDetailPage() {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: tid, done: true }),
     })
     if (r.ok) { loadTasks(); loadEvents() }
+  }
+
+  async function markSold() {
+    const amount = Number(saleAmount)
+    if (!amount || amount <= 0) { toast('Укажи сумму продажи'); return }
+    const mgr = lead?.manager && !AI_MANAGERS.includes(lead.manager) ? lead.manager : (me || null)
+    const r = await fetch('/api/sales', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lead_id: id, amount, order_no: saleOrderNo || lead?.order_no || null, client: lead?.name || lead?.phone || null,
+        manager: mgr, prepayment: Number(salePrepay) || 0, payment_method: salePay,
+      }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { toast('Не удалось: ' + (d.error || '')); return }
+    setSaleOpen(false); setSaleAmount(''); setSaleOrderNo(''); setSalePrepay('')
+    await patch({ status: 'won' })   // событие «💰 Продано» пишет API продаж
+    toast('Продажа записана в Отдел продаж'); loadEvents()
   }
 
   if (loading) return <div className="min-h-screen bg-[#f8f8f7] p-6 text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -322,13 +345,30 @@ export default function LeadDetailPage() {
             <div className="flex gap-2 mt-2">
               {lead.status === 'active' ? (
                 <>
-                  <button onClick={() => patch({ status: 'won' }, '✅ Сделка выиграна')} className="flex-1 px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">✅ Сделка</button>
+                  <button onClick={() => { setSaleAmount(lead.est_amount != null ? String(Math.round(Number(lead.est_amount))) : ''); setSaleOpen(true) }} className="flex-1 px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">💰 Продано</button>
                   <button onClick={() => { const r = prompt('Причина отказа?') ?? ''; patch({ status: 'lost', lost_reason: r || null }, `✖ Отказ${r ? `: ${r}` : ''}`) }} className="flex-1 px-2 py-2 rounded-lg border border-red-200 text-red-600 text-[12px] font-semibold">✖ Отказ</button>
                 </>
               ) : (
                 <button onClick={() => patch({ status: 'active', lost_reason: null }, '↩ Возвращён в работу')} className="flex-1 px-2 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-semibold">↩ Вернуть в работу</button>
               )}
             </div>
+            {saleOpen && (
+              <div className="mt-2 rounded-lg border border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
+                <p className="text-[12px] font-semibold text-[#111110]">💰 Записать продажу</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="number" value={saleAmount} onChange={e => setSaleAmount(e.target.value)} placeholder="Сумма, ₽ *" className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                  <input type="number" value={salePrepay} onChange={e => setSalePrepay(e.target.value)} placeholder="Предоплата, ₽" className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                  <input value={saleOrderNo} onChange={e => setSaleOrderNo(e.target.value)} placeholder={lead.order_no || '№ заказа'} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                  <select value={salePay} onChange={e => setSalePay(e.target.value)} className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] bg-white">
+                    {['Счёт', 'Наличные', 'Карта', 'Перевод'].map(p => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={markSold} className="flex-1 px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold">Записать в Отдел продаж</button>
+                  <button onClick={() => setSaleOpen(false)} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
+                </div>
+              </div>
+            )}
             <p className="mt-3 text-[10px] text-[#c4c4be]">Создан {fmtD(lead.created_at)}</p>
           </div>
 
