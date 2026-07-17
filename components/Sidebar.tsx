@@ -35,6 +35,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
   { groupLabel: 'Продажи' },
   { href: '/crm',           label: 'CRM · Продажи',    icon: '📊' },
+  { href: '/sales',         label: 'Отдел продаж',     icon: '💰' },
   { href: '/kp',            label: 'КП',               icon: '📄' },
   { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
   { href: '/calculations',  label: 'История расчётов', icon: '📋' },
@@ -650,6 +651,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Коммерческий</div>
         <div className="space-y-px">
           {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/sales',      label: 'Отдел продаж',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
       </>
