@@ -1177,7 +1177,7 @@ export default function B2BCalculatorPage() {
             <div>
               <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Тип позиции</label>
               <div className="flex gap-1.5">
-                {([['material', 'Стекло / зеркало'], ['fmirror', '💡 Зеркало+свет/рама'], ['floft', 'Лофт']] as const).map(([k, l]) => (
+                {([['material', 'Стекло / зеркало'], ['fmirror', 'Зеркало+свет/рама'], ['floft', 'Лофт']] as const).map(([k, l]) => (
                   <button key={k} onClick={() => switchKind(k)}
                     className={`flex-1 py-1.5 rounded-lg text-[12px] font-medium transition-colors ${fKind === k ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
                     {l}
@@ -1193,7 +1193,7 @@ export default function B2BCalculatorPage() {
             <div className="flex items-center gap-2 flex-wrap border border-dashed border-[#d8d8d3] rounded-lg px-2.5 py-2 bg-[#fafaf9]">
               <span className="text-[11px] text-[#6b6b66]">Есть чертёж? Прикрепи — {fKind === 'floft' ? 'сниму проём, тип и створки' : fKind === 'fmirror' ? 'сниму размеры зеркала' : 'добавлю каждое стекло отдельной позицией'}:</span>
               <label className={`px-2.5 py-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[11px] font-medium rounded-lg hover:bg-[#f5f5f3] ${flParsing ? 'opacity-50 cursor-default' : 'cursor-pointer'}`}>
-                {flParsing ? '🧠 Читаю…' : '📐 Чертёж (PDF/фото)'}
+                {flParsing ? 'Читаю…' : 'Чертёж (PDF/фото)'}
                 <input type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" disabled={flParsing}
                   onChange={e => { const f = e.target.files?.[0]; if (f) parseItemDrawing(f); e.target.value = '' }} />
               </label>
@@ -1257,7 +1257,7 @@ export default function B2BCalculatorPage() {
                     </div>
                     <label className={`flex items-center gap-2 h-[38px] px-3 border rounded-lg cursor-pointer ${fmFrame ? 'border-slate-400 bg-slate-100' : 'border-[#e4e4e0]'}`}>
                       <input type="checkbox" checked={fmFrame} onChange={e => setFmFrame(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                      <span className={`text-[13px] font-medium ${fmFrame ? 'text-slate-800' : 'text-[#111110]'}`}>🖼 Металлическая рама (сварной каркас, покраска)</span>
+                      <span className={`text-[13px] font-medium ${fmFrame ? 'text-slate-800' : 'text-[#111110]'}`}>Металлическая рама (сварной каркас, покраска)</span>
                     </label>
                     {fmLighting && (
                       <div className="grid grid-cols-2 gap-2">
@@ -1456,11 +1456,11 @@ export default function B2BCalculatorPage() {
             {fKind === 'material' && (<>
             {/* Стекло / Зеркало — табы */}
             <div>
-              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Материал</label>
-              <div className="flex gap-1.5">
+              <label className="block text-[13px] font-medium text-[#6e6e73] mb-1.5">Материал</label>
+              <div className="flex bg-[#f0f0f2] rounded-[10px] p-[3px] gap-[2px]">
                 {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
                   <button key={s.value} onClick={() => handleSuperCatChange(s.value)}
-                    className={`flex-1 py-1.5 rounded-lg text-[13px] font-medium transition-colors ${fSuperCat === s.value ? 'bg-[#1d1d1f] text-white' : 'bg-[#f0f0ec] text-[#6b6b66] hover:bg-[#e8e8e4]'}`}>
+                    className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${fSuperCat === s.value ? 'bg-white shadow-sm text-[#1d1d1f]' : 'text-[#6e6e73] hover:text-[#1d1d1f]'}`}>
                     {s.label}
                   </button>
                 ))}
@@ -1501,15 +1501,24 @@ export default function B2BCalculatorPage() {
             <div>
               <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
               <div className="grid grid-cols-3 gap-2">
-                <input ref={widthRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fWidth} onChange={e => setFWidth(e.target.value)} onKeyDown={handleWidthKeyDown} placeholder="Ш, мм" />
-                <input ref={heightRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fHeight} onChange={e => setFHeight(e.target.value)} onKeyDown={handleHeightKeyDown} placeholder="В, мм" />
-                <input ref={qtyRef} type="number" min="1"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-                  value={fQty} onChange={e => setFQty(e.target.value)} onKeyDown={handleQtyKeyDown} placeholder="Шт" />
+                <div className="relative">
+                  <input ref={widthRef} type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg pl-3 pr-9 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                    value={fWidth} onChange={e => setFWidth(e.target.value)} onKeyDown={handleWidthKeyDown} placeholder="Ширина" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#86868b] pointer-events-none">мм</span>
+                </div>
+                <div className="relative">
+                  <input ref={heightRef} type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg pl-3 pr-9 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                    value={fHeight} onChange={e => setFHeight(e.target.value)} onKeyDown={handleHeightKeyDown} placeholder="Высота" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#86868b] pointer-events-none">мм</span>
+                </div>
+                <div className="relative">
+                  <input ref={qtyRef} type="number" min="1"
+                    className="w-full bg-white border border-[#e4e4e0] rounded-lg pl-3 pr-9 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                    value={fQty} onChange={e => setFQty(e.target.value)} onKeyDown={handleQtyKeyDown} placeholder="Кол-во" />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[12px] text-[#86868b] pointer-events-none">шт</span>
+                </div>
               </div>
             </div>
 
@@ -2001,7 +2010,7 @@ export default function B2BCalculatorPage() {
 
             {/* КП для клиента */}
             {kpText && (
-              <details className="ac-card overflow-hidden group">
+              <details id="b2b-kp" className="ac-card overflow-hidden group">
                 <summary className="px-5 py-3 border-b border-[#f0f0ec] flex items-center gap-2 cursor-pointer select-none list-none hover:bg-[#fafaf9] transition-colors">
                   <span className="text-[10px] text-[#9a9a95] group-open:rotate-90 transition-transform inline-block">▶</span>
                   <span className="text-[11px] font-medium text-[#8a8a85]">Клиентский расчёт (КП)</span>
@@ -2204,13 +2213,20 @@ export default function B2BCalculatorPage() {
                 {editingOrderId != null && (
                   <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
                 )}
-                <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
-                  className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
-                  {saving ? 'Сохранение...'
-                    : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
-                    : !clientId ? 'Выберите клиента'
-                    : editingOrderId != null ? 'Обновить просчёт' : 'Сохранить просчёт'}
-                </button>
+                <div className="flex gap-2">
+                  <button type="button" disabled={!kpText}
+                    onClick={() => { const el = document.getElementById('b2b-kp') as HTMLDetailsElement | null; if (el) { el.open = true; el.scrollIntoView({ behavior: 'smooth', block: 'center' }) } }}
+                    className="flex-1 bg-white border border-[#d9d9df] text-[#1d1d1f] text-[14px] font-semibold py-3 rounded-xl hover:bg-[#f5f5f4] disabled:opacity-40 transition-colors">
+                    Клиентский расчёт (КП)
+                  </button>
+                  <button onClick={handleSave} disabled={saving || !clientId || items.length === 0 || savedOrderId != null}
+                    className="flex-1 bg-[#1d1d1f] text-white text-[14px] font-semibold py-3 rounded-xl hover:bg-black disabled:opacity-40 transition-colors">
+                    {saving ? 'Сохранение...'
+                      : savedOrderId != null ? (editingOrderId != null ? 'Обновлено ✓' : 'Сохранено ✓')
+                      : !clientId ? 'Выберите клиента'
+                      : editingOrderId != null ? 'Обновить просчёт' : 'Сохранить просчёт'}
+                  </button>
+                </div>
 
                 {saveError && (
                   <div className="border border-red-200 bg-red-50 rounded-xl px-3 py-2.5 text-[12px] text-red-700">
