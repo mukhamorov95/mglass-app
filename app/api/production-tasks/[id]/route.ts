@@ -2,11 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
+import { cascadePriorStages } from '@/lib/productionCascade'
 
 // PATCH — отметка производственной задачи рабочим (Выполнено / Проблема).
 // Двойная запись: production_tasks (новая модель очередей) И notes.detail_stages
 // (старая модель прогресса на уровне заказа), чтобы прогресс в /b2b-orders
 // оставался правдивым в переходный период.
+// «Готово» на этапе закрывает и все предыдущие этапы детали (см. productionCascade).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -29,7 +31,7 @@ export async function PATCH(
 
   const { data: task, error: tErr } = await svc
     .from('production_tasks')
-    .select('id, order_id, item_index, stage_key, status, started_at')
+    .select('id, order_id, item_index, stage_key, status, started_at, sequence_order')
     .eq('id', taskId)
     .single()
   if (tErr || !task) return NextResponse.json({ error: 'Задача не найдена' }, { status: 404 })
@@ -59,6 +61,11 @@ export async function PATCH(
   const { error: uErr } = await svc.from('production_tasks').update(upd).eq('id', taskId)
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
+  // 1а) каскад: закрытый этап означает, что все предыдущие этапы детали пройдены
+  const cascaded = action === 'done'
+    ? await cascadePriorStages(svc, task.order_id, task.item_index, task.sequence_order, now)
+    : []
+
   // 2) notes.detail_stages (зеркалим для прогресса на уровне заказа). Best-effort.
   if (action === 'done' || action === 'problem') {
     const { data: order } = await svc.from('b2b_orders').select('notes').eq('id', task.order_id).single()
@@ -71,6 +78,9 @@ export async function PATCH(
       ds[key] = ds[key] ?? {}
       if (action === 'done') {
         ds[key][task.stage_key] = { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined }
+        for (const st of cascaded) {
+          ds[key][st] = { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true }
+        }
       } else {
         ds[key][task.stage_key] = { status: 'problem', updated_at: now, updated_by: user.id, reason: body.reason_code ?? 'other', note: body.comment ?? undefined }
       }
@@ -82,5 +92,5 @@ export async function PATCH(
   // 3) третье зеркало: если все позиции этапа закрыты — проставить order-level флаг (для /b2b-orders/Сводки)
   if (action === 'done') await mirrorOrderStages(svc, task.order_id)
 
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, cascaded })
 }
