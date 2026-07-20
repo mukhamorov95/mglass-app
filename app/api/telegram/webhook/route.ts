@@ -320,7 +320,7 @@ async function runCalc(p: ParsedCalcInput): Promise<{ reply: string; hasResult: 
 async function parseCalcInput(text: string): Promise<ParsedCalcInput | string> {
   const response = await withTimeout(
     anthropic.messages.create({
-      model: 'claude-sonnet-4-6', max_tokens: 300,
+      model: 'claude-sonnet-5', max_tokens: 300,
       system: PARSE_SYSTEM, tools: [PARSE_TOOL], tool_choice: { type: 'auto' },
       messages: [{ role: 'user', content: text }],
     }),
@@ -802,7 +802,7 @@ async function handle(update: any, baseUrl: string) {
       try {
         const resp = await withTimeout(
           anthropic.messages.create({
-            model: 'claude-sonnet-4-6', max_tokens: 600,
+            model: 'claude-sonnet-5', max_tokens: 600,
             system: 'Ты — техлид ERP стекольной компании M-Glass (Next.js + Supabase: продажи B2C/B2B, производство, CFO, маркетинг). Владелец диктует задачу. Верни ТОЛЬКО JSON: {"title":"короткий заголовок по-русски","structured":"чёткая формулировка задачи 1-3 предложения: что сделать и где","category":"production|sales|finance|marketing|it|other","priority":"low|normal|high","assessment":"оценка в 1-2 предложениях: насколько понятна задача, что уточнить, примерный размер (S/M/L)"}',
             messages: [{ role: 'user', content: inputText }],
           }), 25000, 'claude-task'
@@ -845,7 +845,7 @@ async function handle(update: any, baseUrl: string) {
     try {
       const resp = await withTimeout(
         anthropic.messages.create({
-          model: 'claude-sonnet-4-6', max_tokens: 200,
+          model: 'claude-sonnet-5', max_tokens: 200,
           system: 'Classify this AI improvement task. Respond with JSON only: {"title":"short title in Russian","category":"tone|closing|objections|pricing|product|other"}',
           messages: [{ role: 'user', content: inputText }],
         }), 15000, 'claude-classify'

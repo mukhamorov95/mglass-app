@@ -81,7 +81,7 @@ ${context ? `\nКонтекст: ${context}` : ''}
     }
 
     const response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 2048,
       system: 'Ты — специалист по продажам компании MGlass. Пишешь коммерческие предложения чётко и профессионально.',
       messages: [{ role: 'user', content: prompt }],

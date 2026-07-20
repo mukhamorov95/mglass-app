@@ -17,7 +17,7 @@ export async function POST(req: Request) {
     if (!voiceInput?.trim()) return NextResponse.json({ error: 'empty' }, { status: 400 })
 
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 800,
       messages: [{
         role: 'user',

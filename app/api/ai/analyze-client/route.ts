@@ -119,7 +119,7 @@ ${JSON.stringify(clientCtx, null, 2)}
 - low: активные заказы, регулярные касания, score A, статус active/contacted`
 
   const msg = await anthropic.messages.create({
-    model:      'claude-sonnet-4-6',
+    model:      'claude-sonnet-5',
     max_tokens: 1024,
     system:     'Ты — CRM-аналитик. Отвечаешь только валидным JSON без markdown-блоков.',
     messages:   [{ role: 'user', content: prompt }],

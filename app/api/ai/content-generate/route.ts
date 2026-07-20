@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         try {
           let fullText = ''
           const apiStream = anthropic.messages.stream({
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5',
             max_tokens: 8000,
             messages: [{ role: 'user', content: prompt }],
           })
@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
   // Non-streaming fallback
   try {
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 8000,
       messages: [{ role: 'user', content: prompt }],
     })

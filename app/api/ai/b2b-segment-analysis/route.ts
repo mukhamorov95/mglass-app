@@ -31,7 +31,7 @@ export async function POST(req: Request) {
 Ответь структурированно, конкретно, без воды. На русском языке.`
 
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 1500,
     system: 'Ты — B2B стратег с опытом в производственных компаниях. Даёшь практические, применимые рекомендации.',
     messages: [{ role: 'user', content: prompt }],

@@ -24,7 +24,7 @@ export async function POST(req: Request) {
     if (!content?.trim()) return NextResponse.json({ error: 'empty' }, { status: 400 })
 
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-sonnet-5',
       max_tokens: 900,
       messages: [{
         role: 'user',

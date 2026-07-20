@@ -56,7 +56,7 @@ export async function POST(req: Request) {
 - notes — конкретно: где искать эту компанию и почему они могут купить у MGlass`
 
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 4000,
     system: 'Ты генерируешь реалистичные B2B проспект-листы для московской стекольной компании. Отвечаешь только валидным JSON.',
     messages: [{ role: 'user', content: prompt }],
