@@ -40,6 +40,7 @@ type Shipment = {
   shipped_at: string | null
   created_at: string
   orderIds: number[]
+  loadedIds: number[]
 }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
@@ -58,7 +59,7 @@ function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
 }
 
-function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, onLimit }: {
+function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, onLimit, onToggleLoad }: {
   s: Shipment
   orders: Order[]
   clientNames: Map<number, string>
@@ -66,11 +67,20 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
   onDelete: (s: Shipment) => void
   onRemove: (shipmentId: number, orderId: number) => void
   onLimit: (shipmentId: number, kg: number | null) => void
+  onToggleLoad: (shipmentId: number, orderId: number, loaded: boolean) => void
 }) {
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
   const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
   const pieces = os.reduce((sum, o) => sum + orderPieces(o), 0)
+  // В черновике вес/сумма/шт «в машине» = только ЗАГРУЖЕННЫЕ (по факту у машины);
+  // в отправленной — зафиксированные при отправке.
+  const isDraft = s.status === 'draft'
+  const loadedSet = new Set(s.loadedIds)
+  const loadedOs = os.filter(o => loadedSet.has(o.id))
+  const goWeight = isDraft ? loadedOs.reduce((sum, o) => sum + orderWeight(o), 0) : weight
+  const goAmount = isDraft ? loadedOs.reduce((sum, o) => sum + orderSum(o), 0) : amount
+  const goPieces = isDraft ? loadedOs.reduce((sum, o) => sum + orderPieces(o), 0) : pieces
   // Разбивка по заказчикам: группируем по привязке (client_id), не по имени в
   // заказе — у объединённых клиентов (MR GLASS = ВРНГЛАЗИЕРС/МОНАРХ/ЛЮДИ)
   // исторические юр-имена в заказах сохранены, но заказчик один
@@ -81,7 +91,7 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
   }
   // Загрузка машины: <90% зелёная, 90–100% жёлтая, сверх лимита — красная с перегрузом
   const limit = s.max_weight_kg ?? null
-  const loadPct = limit ? weight / limit * 100 : null
+  const loadPct = limit ? goWeight / limit * 100 : null
   const loadTone = loadPct == null ? '' : loadPct > 100 ? 'bg-red-500' : loadPct >= 90 ? 'bg-amber-400' : 'bg-emerald-500'
   return (
     <div className="border border-[#e4e4e0] rounded-lg bg-white p-4">
@@ -91,12 +101,14 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
           {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
         </div>
         <div className="flex items-center gap-x-3 gap-y-1.5 text-[13px] flex-wrap">
-          <span className="font-mono font-medium">{os.length} зак. · {pieces} изд. · {KG(weight)} кг · {RUB(amount)} ₽</span>
+          <span className="font-mono font-medium">
+            {isDraft ? `Загружено ${loadedOs.length}/${os.length}` : `${os.length} зак.`} · {goPieces} изд. · {KG(goWeight)} кг · {RUB(goAmount)} ₽
+          </span>
           <a href={`/production-app/voronezh/${s.id}/print`} target="_blank" rel="noreferrer"
             className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">🖨 Лист рейса</a>
           {s.status === 'draft' && (
             <>
-              <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">✓ Отправлена</button>
+              <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">🚚 Отправить рейс</button>
               <button onClick={() => onDelete(s)} className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#9a9a95] hover:text-red-600 hover:border-red-200">Расформировать</button>
             </>
           )}
@@ -117,13 +129,16 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
               <div className={`h-full rounded-full ${loadTone}`} style={{ width: `${Math.min(loadPct, 100)}%` }} />
             </div>
             <span className={`text-[12px] font-mono ${loadPct > 100 ? 'text-red-600 font-semibold' : loadPct >= 90 ? 'text-amber-600' : 'text-[#9a9a95]'}`}>
-              {loadPct > 100 ? `Перегруз +${KG(weight - limit)} кг` : `${Math.round(loadPct)}% из ${KG(limit)} кг`}
+              {loadPct > 100 ? `Перегруз +${KG(goWeight - limit)} кг` : `${Math.round(loadPct)}% из ${KG(limit)} кг`}
             </span>
           </div>
         )}
       </div>
       {os.length === 0 && (
         <div className="mt-2 text-[13px] text-[#9a9a95]">Рейс пустой — отметьте заказы ниже и добавьте их сюда.</div>
+      )}
+      {isDraft && os.length > 0 && (
+        <div className="mt-2 text-[12px] text-[#9a9a95]">Отметьте ✓ то, что реально погрузили. При «Отправить рейс» загруженные уедут, а незагруженные вернутся в пул «заказы к отправке».</div>
       )}
       <div className="mt-2 space-y-3">
         {[...byClient.entries()].map(([name, cos]) => {
@@ -137,16 +152,23 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
                 <span className="text-[#9a9a95] font-mono">{cos.length} зак. · <span className="text-[#111110] font-semibold">{cp} изд.</span> · {KG(cw)} кг · {RUB(ca)} ₽</span>
               </div>
               <div className="mt-1 space-y-0.5">
-                {cos.map(o => (
-                  <div key={o.id} className="flex items-center gap-2 text-[13px] text-[#4b4b47] pl-3">
+                {cos.map(o => {
+                  const isLoaded = loadedSet.has(o.id)
+                  return (
+                  <div key={o.id} className={`flex items-center gap-2 text-[13px] pl-1.5 pr-1 py-0.5 rounded-md ${isDraft && isLoaded ? 'bg-emerald-50 text-[#111110]' : 'text-[#4b4b47]'}`}>
+                    {isDraft && (
+                      <input type="checkbox" checked={isLoaded} onChange={e => onToggleLoad(s.id, o.id, e.target.checked)}
+                        className="w-4 h-4 accent-emerald-600 cursor-pointer shrink-0" title="Отметить загруженным в машину" />
+                    )}
                     <span className="font-mono">{orderNo(o)}</span>
                     <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${o.ready.cls}`}>{o.ready.label}</span>
                     <span className="text-[#9a9a95] ml-auto font-mono">{orderPieces(o)} изд. · {KG(orderWeight(o))} кг · {RUB(orderSum(o))} ₽</span>
-                    {s.status === 'draft' && (
+                    {isDraft && (
                       <button onClick={() => onRemove(s.id, o.id)} className="text-[#9a9a95] hover:text-red-600 px-1" title="Убрать из рейса">✕</button>
                     )}
                   </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )
@@ -205,7 +227,7 @@ export default function VoronezhPage() {
         .not('notes', 'ilike', '%"historical":true%')
         .order('id', { ascending: false }),
       sb.from('delivery_shipments').select('*').eq('region', REGION).order('id', { ascending: false }),
-      sb.from('delivery_shipment_orders').select('shipment_id, order_id'),
+      sb.from('delivery_shipment_orders').select('*'),
     ])
     if (cl.error || ord.error) {
       setErr(cl.error?.message ?? ord.error?.message ?? 'Ошибка загрузки')
@@ -217,7 +239,7 @@ export default function VoronezhPage() {
     if (sh.error) setErr(`Партии недоступны: ${sh.error.message}`)
     setClients((cl.data ?? []) as Client[])
     const nowMs = Date.now()
-    const links = (shOrd.data ?? []) as { shipment_id: number; order_id: number }[]
+    const links = (shOrd.data ?? []) as { shipment_id: number; order_id: number; loaded?: boolean }[]
     // Заказы, уже добавленные в рейсы, докачиваем БЕЗ фильтров пула — в рейсе
     // может лежать и просчёт, и заказ из архива, карточка обязана их показать
     const rawOrders = (ord.data ?? []) as Omit<Order, 'parsed' | 'ready'>[]
@@ -233,9 +255,10 @@ export default function VoronezhPage() {
       const parsed = parseNotes(o.notes)
       return { ...o, parsed, ready: readinessOf(parsed, nowMs) }
     }))
-    setShipments(((sh.data ?? []) as Omit<Shipment, 'orderIds'>[]).map(s => ({
+    setShipments(((sh.data ?? []) as Omit<Shipment, 'orderIds' | 'loadedIds'>[]).map(s => ({
       ...s,
       orderIds: links.filter(l => l.shipment_id === s.id).map(l => l.order_id),
+      loadedIds: links.filter(l => l.shipment_id === s.id && l.loaded).map(l => l.order_id),
     })))
     setLoading(false)
   }
@@ -349,12 +372,31 @@ export default function VoronezhPage() {
     load()
   }
 
-  async function markShipped(s: Shipment) {
-    if (!confirm(`Отметить партию «${s.title ?? s.id}» отправленной?`)) return
+  // Отметить/снять «Загружен» — оптимистично, без перезагрузки (у машины быстро).
+  async function toggleLoad(shipmentId: number, orderId: number, loaded: boolean) {
+    setShipments(prev => prev.map(sh => sh.id === shipmentId
+      ? { ...sh, loadedIds: loaded ? [...new Set([...sh.loadedIds, orderId])] : sh.loadedIds.filter(x => x !== orderId) }
+      : sh))
     const sb = createClient()
-    const os = orders.filter(o => s.orderIds.includes(o.id))
-    const weight = os.reduce((sum, o) => sum + orderWeight(o), 0)
-    const amount = os.reduce((sum, o) => sum + orderSum(o), 0)
+    await sb.from('delivery_shipment_orders').update({ loaded }).eq('shipment_id', shipmentId).eq('order_id', orderId)
+  }
+
+  // Отправить рейс: уезжают только ЗАГРУЖЕННЫЕ, незагруженные возвращаются в пул.
+  async function markShipped(s: Shipment) {
+    const loadedSet = new Set(s.loadedIds)
+    const loadedOs = orders.filter(o => s.orderIds.includes(o.id) && loadedSet.has(o.id))
+    const notLoaded = s.orderIds.filter(id => !loadedSet.has(id))
+    if (loadedOs.length === 0) { alert('Отметьте хотя бы один заказ как «Загружен» — иначе рейс пустой.'); return }
+    const msg = notLoaded.length > 0
+      ? `Отправить рейс с ${loadedOs.length} загруж.? ${notLoaded.length} незагруж. вернётся в пул «заказы к отправке».`
+      : `Отправить рейс с ${loadedOs.length} заказами?`
+    if (!confirm(msg)) return
+    const sb = createClient()
+    if (notLoaded.length > 0) {
+      await sb.from('delivery_shipment_orders').delete().eq('shipment_id', s.id).in('order_id', notLoaded)
+    }
+    const weight = loadedOs.reduce((sum, o) => sum + orderWeight(o), 0)
+    const amount = loadedOs.reduce((sum, o) => sum + orderSum(o), 0)
     await sb.from('delivery_shipments')
       .update({ status: 'shipped', shipped_at: new Date().toISOString(), total_weight_kg: Math.round(weight * 10) / 10, total_amount: Math.round(amount) })
       .eq('id', s.id)
@@ -485,7 +527,7 @@ export default function VoronezhPage() {
                   Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
                 </div>
               )}
-              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
             </div>
 
             {/* Пул заказов по клиентам */}
@@ -567,7 +609,7 @@ export default function VoronezhPage() {
                                 </button>
                                 {mOpen && (
                                   <div className="mt-2 space-y-2">
-                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} />)}
+                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
                                   </div>
                                 )}
                               </div>
