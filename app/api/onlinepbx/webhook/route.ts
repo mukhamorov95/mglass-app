@@ -119,9 +119,18 @@ export async function POST(req: NextRequest) {
   // нормализацией в JS (номера в базе бывают с +7/8/скобками).
   let lead = await findLeadByPhone(sb, d10)
 
+  // Режим приёма лидов (тумблер на /crm, owner_strategy.crm_ingest_mode):
+  // 'avito_only' — звонки с неизвестных номеров НЕ создают лид (события по
+  // существующим лидам продолжают писаться). По умолчанию — 'all'.
+  let ingestAll = true
+  try {
+    const { data: mode } = await sb.from('owner_strategy').select('value').eq('key', 'crm_ingest_mode').maybeSingle()
+    ingestAll = (mode as { value?: string } | null)?.value !== 'avito_only'
+  } catch { /* нет строки/таблицы — принимаем всё */ }
+
   // Входящий на неизвестный номер — заводим лид (клиент не потеряется в воронке).
   let created = false
-  if (!lead && !outbound) {
+  if (!lead && !outbound && ingestAll) {
     const { data } = await sb.from('crm_leads')
       .insert({ source: 'call', phone: phoneNorm, manager: null })
       .select('id,manager,name').maybeSingle()
