@@ -17,17 +17,19 @@ type Pulse = {
 }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-const parseNotes = (raw: unknown): Record<string, any> => {
+const parseNotes = (raw: unknown): Record<string, unknown> => {
   if (!raw) return {}
   if (typeof raw === 'string') { try { return JSON.parse(raw) } catch { return {} } }
-  return raw as Record<string, any>
+  return raw as Record<string, unknown>
 }
-const marginOf = (m: any): number => ((m?.incomes ?? []) as any[]).reduce((s, i) => {
-  const varPct = ((i.vars ?? []) as any[]).reduce((x, v) => x + (Number(v.pct) || 0), 0) / 100
+type PnlIncome = { plan?: unknown; vars?: { pct?: unknown }[] }
+type PnlMonth = { incomes?: PnlIncome[]; fixed?: { amount?: unknown }[] } | null | undefined
+const marginOf = (m: PnlMonth): number => (m?.incomes ?? []).reduce((s, i) => {
+  const varPct = (i.vars ?? []).reduce((x, v) => x + (Number(v.pct) || 0), 0) / 100
   return s + (Number(i.plan) || 0) * (1 - varPct)
 }, 0)
-const revenueOf = (m: any): number => ((m?.incomes ?? []) as any[]).reduce((s, i) => s + (Number(i.plan) || 0), 0)
-const fixedOf = (m: any): number => ((m?.fixed ?? []) as any[]).reduce((s, f) => s + (Number(f.amount) || 0), 0)
+const revenueOf = (m: PnlMonth): number => (m?.incomes ?? []).reduce((s, i) => s + (Number(i.plan) || 0), 0)
+const fixedOf = (m: PnlMonth): number => (m?.fixed ?? []).reduce((s, f) => s + (Number(f.amount) || 0), 0)
 
 export default function MoneyPulse() {
   const [p, setP] = useState<Pulse | null>(null)
@@ -51,7 +53,7 @@ export default function MoneyPulse() {
         let topDebtor = '', topDebt = 0, topDebtorDays = 0
         for (const o of orders ?? []) {
           const n = parseNotes(o.notes); const st = (n.stages ?? {}) as Record<string, string>
-          if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) continue
+          if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
           if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
           const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
           const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))

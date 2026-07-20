@@ -73,7 +73,7 @@ export async function GET(req: Request) {
       ].join('\n')
 
       for (const a of (admins ?? [])) {
-        await sendTelegram((a as any).telegram_id, msg)
+        await sendTelegram((a as { telegram_id: number }).telegram_id, msg)
       }
     }
   }

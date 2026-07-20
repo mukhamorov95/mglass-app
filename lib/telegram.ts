@@ -47,9 +47,9 @@ export async function getFileUrl(fileId: string, signal?: AbortSignal): Promise<
     body: JSON.stringify({ file_id: fileId }),
     signal,
   })
-  const json = await res.json() as any
+  const json = await res.json() as { ok: boolean; description?: string; result?: { file_path?: string } }
   if (!json.ok) throw new Error(`tg_getFile_error: ${json.description ?? 'unknown'}`)
-  return `https://api.telegram.org/file/bot${TOKEN}/${json.result.file_path}`
+  return `https://api.telegram.org/file/bot${TOKEN}/${json.result?.file_path}`
 }
 
 export async function downloadFile(fileId: string, signal?: AbortSignal): Promise<Buffer> {
@@ -69,7 +69,7 @@ async function getAdminIds(): Promise<number[]> {
     .from('telegram_users')
     .select('telegram_id, users!inner(role)')
     .eq('users.role', 'admin')
-  return (data ?? []).map((row: any) => row.telegram_id)
+  return (data ?? []).map((row: { telegram_id: number }) => row.telegram_id)
 }
 
 export async function notifyAdmins(text: string) {
@@ -138,7 +138,7 @@ export async function transcribeVoice(fileId: string): Promise<string> {
       throw new Error(`whisper_http_${res.status}: ${errBody.slice(0, 120)}`)
     }
 
-    const json = await res.json() as any
+    const json = await res.json() as { text?: string }
     const text: string = json.text ?? ''
     voiceLog('transcription_finished', { chars: text.length, preview: text.slice(0, 60) })
 

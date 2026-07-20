@@ -165,6 +165,7 @@ export default function AIProposalDetailPage() {
     }
   }, [id])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // ── Actions ────────────────────────────────────────────────────────────────

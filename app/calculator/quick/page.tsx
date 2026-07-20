@@ -22,6 +22,13 @@ const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] outli
 
 type CartItem = { title: string; productPrice: number; installTotal: number; sections: number; perSection: number; delivery: number; lift: number; total: number }
 
+// Вынесен на уровень модуля: компоненты нельзя создавать внутри рендера (static-components)
+const Row = ({ label, value, bold, accent }: { label: string; value: string; bold?: boolean; accent?: boolean }) => (
+  <div className={`flex items-center justify-between py-1.5 ${bold ? 'text-[15px] font-bold' : 'text-[13px]'} ${accent ? 'text-[#E1442E]' : 'text-[#111110]'}`}>
+    <span className={bold ? '' : 'text-[#6b6b66]'}>{label}</span><span>{value}</span>
+  </div>
+)
+
 export default function QuickCalcPage() {
   const router = useRouter()
   const [title, setTitle] = useState('')
@@ -48,9 +55,11 @@ export default function QuickCalcPage() {
   const [speechSupported, setSpeechSupported] = useState(true)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const transcriptRef = useRef('')
+  // eslint-disable-next-line react-hooks/refs
   transcriptRef.current = transcript
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
   }, [])
 
@@ -59,6 +68,7 @@ export default function QuickCalcPage() {
   useEffect(() => {
     try {
       const p = sessionStorage.getItem('quickcalc-prefill')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (p) { setScanRef(p); sessionStorage.removeItem('quickcalc-prefill') }
     } catch { /* ignore */ }
   }, [])
@@ -161,12 +171,6 @@ export default function QuickCalcPage() {
     try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
     router.push('/kp')
   }
-
-  const Row = ({ label, value, bold, accent }: { label: string; value: string; bold?: boolean; accent?: boolean }) => (
-    <div className={`flex items-center justify-between py-1.5 ${bold ? 'text-[15px] font-bold' : 'text-[13px]'} ${accent ? 'text-[#E1442E]' : 'text-[#111110]'}`}>
-      <span className={bold ? '' : 'text-[#6b6b66]'}>{label}</span><span>{value}</span>
-    </div>
-  )
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">

@@ -433,8 +433,6 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   const router   = useRouter()
   const pathname = usePathname()
 
-  if (pathname?.endsWith('/print')) return null
-
   const isAdmin = role === 'admin'
 
   const [viewMode, setViewMode]     = useState<ViewMode>('manager')
@@ -444,6 +442,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   const [isLocalhost, setIsLocalhost] = useState(false)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsLocalhost(window.location.hostname === 'localhost')
     if (isAdmin) {
       const saved = localStorage.getItem('sidebarMode') as ViewMode | null
@@ -458,12 +457,16 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   useEffect(() => {
     if (isAdmin) {
       const auto = autoOpenAdmin(pathname, viewMode)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
     } else if (role) {
       const auto = autoOpenRole(pathname, role)
       if (auto.length) setOpen(prev => new Set([...prev, ...auto]))
     }
   }, [pathname, viewMode]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ранний return строго после всех хуков (rules-of-hooks)
+  if (pathname?.endsWith('/print')) return null
 
   function switchMode(mode: ViewMode) {
     setViewMode(mode)

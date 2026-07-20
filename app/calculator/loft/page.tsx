@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import { Material, Service, HardwareItem, FinancialSettings, PartnerType } from '@/lib/types'
 import PricingBlock from '@/components/PricingBlock'
@@ -191,6 +192,7 @@ export default function LoftCalculatorPage() {
 
   useEffect(() => {
     const s = allSettings.find(s => s.product_type === 'loft') ?? allSettings.find(s => s.tier === 'standard')
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (s) setMargin(String(s.default_margin))
   }, [allSettings])
 
@@ -215,6 +217,7 @@ export default function LoftCalculatorPage() {
 
   // Load waste_pct (cost row) and sale price (sale row) from glass_price_matrix when glass changes
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!selectedGlass) { setGlassWastePct(0); setGlassCalcPrice(undefined); return }
 
     // Parse: "Стекло М1 прозрачное 4 мм" → typeName="М1 прозрачное", mm=4
@@ -402,7 +405,7 @@ export default function LoftCalculatorPage() {
         )}
         <div className="flex items-center justify-between gap-3 mb-3">
           <div className="flex items-center gap-2">
-            <a href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</a>
+            <Link href="/" className="text-[#9a9a95] hover:text-[#6b6b66] text-xs">← Главная</Link>
             <span className="text-[#d4d4d0]">/</span>
             <h1 className="text-sm font-semibold text-[#111110]">Лофт-перегородка</h1>
           </div>
@@ -817,10 +820,10 @@ export default function LoftCalculatorPage() {
                         className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
                         ✏️ Открыть расчёт
                       </a>
-                      <a href="/calculations"
+                      <Link href="/calculations"
                         className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
                         📋 История
-                      </a>
+                      </Link>
                       <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
                         className="flex items-center justify-center gap-1 px-2 py-1.5 bg-white border border-[#e4e4e0] rounded-lg text-xs font-medium text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
                         ➕ Новый расчёт

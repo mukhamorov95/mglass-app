@@ -23,7 +23,12 @@ export default async function RouteSheetPage() {
     .order('created_at', { ascending: true })
 
   const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-  const items = (orders ?? []) as any[]
+  type RouteOrder = {
+    id: number; number: string; client_name: string | null; client_phone: string | null
+    delivery_address: string | null; total_sale_price: number; payment_status: string | null
+    prepayment_amount: number | null; notes: string | null
+  }
+  const items = (orders ?? []) as RouteOrder[]
 
   return (
     <>

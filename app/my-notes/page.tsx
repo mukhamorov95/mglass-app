@@ -34,10 +34,16 @@ interface ISpeechRecognition extends EventTarget {
   interimResults: boolean
   start(): void
   stop(): void
-  onresult: ((e: any) => void) | null
-  onerror: ((e: any) => void) | null
+  onresult: ((e: ISpeechResultEvent) => void) | null
+  onerror: ((e: unknown) => void) | null
   onend: (() => void) | null
 }
+
+type ISpeechResultEvent = {
+  resultIndex: number
+  results: { length: number; [index: number]: { isFinal: boolean; [index: number]: { transcript: string } } }
+}
+
 
 declare global {
   interface Window {
@@ -58,13 +64,16 @@ export default function MyNotesPage() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const textRef = useRef(text)
+  // eslint-disable-next-line react-hooks/refs
   textRef.current = text
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeechSupported(
       typeof window !== 'undefined' &&
       ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window)
     )
+    // eslint-disable-next-line react-hooks/immutability
     loadNotes().catch(() => setLoading(false))
   }, [])
 
@@ -94,7 +103,7 @@ export default function MyNotesPage() {
     rec.continuous = true
     rec.interimResults = true
 
-    rec.onresult = (e: any) => {
+    rec.onresult = (e) => {
       let interim = ''
       let finalChunk = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {

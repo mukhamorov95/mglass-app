@@ -336,7 +336,7 @@ async function parseCalcInput(text: string): Promise<ParsedCalcInput | string> {
 
 // ─── Leads keyboard ───────────────────────────────────────────────────────────
 
-function leadsKeyboard(chats: any[], page: number): InlineKeyboard {
+function leadsKeyboard(chats: { is_active?: boolean; client_name?: string | null; chat_id: string }[], page: number): InlineKeyboard {
   const PAGE = 5
   const slice = chats.slice(page * PAGE, (page + 1) * PAGE)
   const rows: InlineKeyboard = slice.map(c => [{
@@ -369,6 +369,8 @@ async function handleHealth(chatId: number) {
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
+// Telegram update — произвольная структура API, глубокая типизация здесь не оправдана
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function handle(update: any, baseUrl: string) {
   const msg = update.message
   const cb  = update.callback_query
@@ -587,14 +589,14 @@ async function handle(update: any, baseUrl: string) {
     }
 
     if (data === 'calc:confirm') {
-      const ctx    = session.context as any
-      const parsed = ctx?.parsedInput as ParsedCalcInput | undefined
+      const ctx    = session.context as { parsedInput?: ParsedCalcInput } | null
+      const parsed = ctx?.parsedInput
       if (!parsed) {
         await editMessage(chatId, msgId, '❌ Параметры устарели. Введи запрос заново.',
           [[{ text: '🧮 Расчёт', callback_data: 'menu:calc' }]])
         return
       }
-      const waitMsg   = await sendMessage(chatId, '⏳ Считаю...') as any
+      const waitMsg   = await sendMessage(chatId, '⏳ Считаю...') as { result?: { message_id?: number } }
       const waitMsgId = waitMsg?.result?.message_id
       try {
         const { reply, hasResult, margin } = await runCalc(parsed)
@@ -622,7 +624,7 @@ async function handle(update: any, baseUrl: string) {
     }
 
     if (data === 'calc:save') {
-      const ctx = session.context as any
+      const ctx = session.context as { calcText?: string } | null
       if (ctx?.calcText) {
         await db().from('ai_training_tasks').insert({
           title: 'Расчёт из Telegram', description: ctx.calcText,
@@ -725,7 +727,7 @@ async function handle(update: any, baseUrl: string) {
       return
     }
     const fileId   = msg.voice?.file_id ?? msg.audio?.file_id
-    const statusMsg   = await sendMessage(chatId, '🎙 Распознаю голос...') as any
+    const statusMsg   = await sendMessage(chatId, '🎙 Распознаю голос...') as { result?: { message_id?: number } }
     const statusMsgId = statusMsg?.result?.message_id
     try {
       inputText    = await withTimeout(transcribeVoice(fileId), 40_000, 'voice_pipeline')
@@ -761,7 +763,7 @@ async function handle(update: any, baseUrl: string) {
   }
 
   if (effectiveState === 'calc_input') {
-    const thinkMsg   = await sendMessage(chatId, '🔍 Распознаю параметры...') as any
+    const thinkMsg   = await sendMessage(chatId, '🔍 Распознаю параметры...') as { result?: { message_id?: number } }
     const thinkMsgId = thinkMsg?.result?.message_id
     try {
       const parseResult = await parseCalcInput(inputText)
@@ -792,7 +794,7 @@ async function handle(update: any, baseUrl: string) {
   }
 
   if (effectiveState === 'task_input') {
-    const waitMsg   = await sendMessage(chatId, '🧠 Разбираю задачу...') as any
+    const waitMsg   = await sendMessage(chatId, '🧠 Разбираю задачу...') as { result?: { message_id?: number } }
     const waitMsgId = waitMsg?.result?.message_id
     try {
       let title = inputText.slice(0, 100), category = 'other', priority = 'normal'
@@ -838,7 +840,7 @@ async function handle(update: any, baseUrl: string) {
   }
 
   if (effectiveState === 'train_input') {
-    const waitMsg   = await sendMessage(chatId, '⏳ Сохраняю...') as any
+    const waitMsg   = await sendMessage(chatId, '⏳ Сохраняю...') as { result?: { message_id?: number } }
     const waitMsgId = waitMsg?.result?.message_id
     try {
       const resp = await withTimeout(
@@ -871,7 +873,7 @@ async function handle(update: any, baseUrl: string) {
   }
 
   if (effectiveState === 'lead_send_msg') {
-    const ctx = session.context as any
+    const ctx = session.context as { chatPhoneId: string }
     const chatPhoneId: string = ctx.chatPhoneId
     try {
       const { data: chat } = await db().from('ai_managed_chats').select('channel_id, chat_type').eq('chat_id', chatPhoneId).single()
@@ -901,7 +903,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   }
 
-  let update: any
+  let update: unknown
   try { update = await req.json() } catch { return NextResponse.json({ ok: true }) }
 
   const host    = req.headers.get('host') ?? 'localhost:3000'

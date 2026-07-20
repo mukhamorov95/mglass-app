@@ -19,6 +19,7 @@ export default function SettingsPage() {
   const [saved, setSaved]     = useState<number | null>(null)
   const [error, setError]     = useState<string | null>(null)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {

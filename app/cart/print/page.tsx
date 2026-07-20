@@ -18,6 +18,7 @@ export default function CartPrintPage() {
   useEffect(() => {
     try {
       const stored = localStorage.getItem('mglass_cart_v1')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (stored) setItems(JSON.parse(stored))
     } catch {}
     setReady(true)

@@ -126,7 +126,7 @@ export default function BonusCenterPage() {
       <div className="mb-6 bg-amber-50 border border-amber-200 rounded-xl p-4">
         <p className="text-[12px] font-semibold text-amber-800 mb-1">Как AI использует бонусы</p>
         <ul className="text-[12px] text-amber-700 space-y-0.5 list-disc list-inside">
-          <li>Бонус предлагается только если клиент сомневается, говорит "дорого" или нужна доп. мотивация</li>
+          <li>Бонус предлагается только если клиент сомневается, говорит &quot;дорого&quot; или нужна доп. мотивация</li>
           <li>AI не раздаёт бонусы автоматически каждому — только при явном поводе</li>
           <li>Неактивные бонусы AI не видит и не предлагает</li>
           <li>Условия показываются менеджеру, чтобы он знал, когда предлагать</li>

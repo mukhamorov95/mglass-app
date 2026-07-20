@@ -96,7 +96,7 @@ const ANALYSIS_SCHEMA = `{
   "manager_feedback": "конкретная обратная связь менеджеру — что хорошо, что улучшить"
 }`
 
-async function analyzeTranscription(transcription: string, direction: 'in' | 'out', durationSec: number): Promise<any> {
+async function analyzeTranscription(transcription: string, direction: 'in' | 'out', durationSec: number) {
   const dirLabel = direction === 'in' ? 'входящий' : 'исходящий'
   const durLabel = `${Math.floor(durationSec / 60)} мин ${durationSec % 60} сек`
 

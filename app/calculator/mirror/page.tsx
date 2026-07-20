@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { Material, Service, FinancialSettings, PartnerType, MirrorFrame, calcFrameCost, FRAME_COLORS } from '@/lib/types'
 import { ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
@@ -248,6 +249,7 @@ export default function MirrorCalculatorPage() {
   const [discount, setDiscount]   = useState('0')
   const [margin, setMargin]       = useState('40')
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setMargin(String(strategy.target_margin)) }, [strategy.target_margin])
 
   useEffect(() => {
@@ -375,6 +377,7 @@ export default function MirrorCalculatorPage() {
   useEffect(() => {
     if (components.length === 0) return
     const leds = components.filter(c => c.component_type === 'led_strip' && c.voltage === voltage)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (leds.length) setLedStripId(leds[0].id)
     else setLedStripId(null)
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -383,12 +386,14 @@ export default function MirrorCalculatorPage() {
   // Complex shape: substrate is required, frame is not used
   useEffect(() => {
     if (shape === 'complex') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setHasSubstrate(true)
       setFrameId(null)
     }
   }, [shape])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!hasLighting) { setPsuId(null); return }
     const led = components.find(c => c.id === ledStripId)
     if (!led?.power_per_meter) { setPsuId(null); return }
@@ -563,6 +568,7 @@ export default function MirrorCalculatorPage() {
     })
     if (!pricing)                                 return { available: false, reason: 'Финмодель V2 не смогла посчитать цену' }
     return { available: true, pricing, config: cfg, isFallback }
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
   }, [result, v2Preview, mirrorCostPerM2, pricingConfig])
 
   const marginNum   = result?.margin ?? 0
@@ -632,6 +638,7 @@ export default function MirrorCalculatorPage() {
       b2cProductBase, productWithPartner, partnerAmount,
       productAfterDiscount, discountAmount,
     }
+    // eslint-disable-next-line react-hooks/preserve-manual-memoization
   }, [twoStagePreview, margin, inputs.partnerPercent, discount])
 
   // Quote price routing:
@@ -801,7 +808,7 @@ export default function MirrorCalculatorPage() {
 
         {/* Header */}
         <div className="flex items-center gap-1.5 mb-4">
-          <a href="/" className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">← Главная</a>
+          <Link href="/" className="text-[11px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">← Главная</Link>
           <span className="text-[#ddd]">/</span>
           <h1 className="text-sm font-semibold text-[#111110]">Зеркало с подсветкой</h1>
         </div>

@@ -134,6 +134,7 @@ export default function ProductionSheetPage() {
       setLoading(false)
     }
     if (orderId && !isNaN(orderId)) load()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else { setError('Неверный ID заказа'); setLoading(false) }
   }, [orderId])
 

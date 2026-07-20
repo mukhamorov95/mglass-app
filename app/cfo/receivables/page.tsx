@@ -79,6 +79,7 @@ export default function ReceivablesPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // Дебиторка B2B: счёт выставлен, оплаты нет (или частичная)

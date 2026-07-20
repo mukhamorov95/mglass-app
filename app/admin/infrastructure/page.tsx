@@ -640,7 +640,7 @@ function InstructionsTab() {
               </div>
               <p className="text-[13px] font-semibold text-[#111110] mt-3">Как откатить версию</p>
               <p className="text-[12px] text-[#6b6b66]">
-                Vercel Dashboard → Deployments → найди предыдущий "Ready" деплой → нажми три точки → "Promote to Production".
+                Vercel Dashboard → Deployments → найди предыдущий &quot;Ready&quot; деплой → нажми три точки → &quot;Promote to Production&quot;.
                 Откат занимает ~30 секунд.
               </p>
             </div>

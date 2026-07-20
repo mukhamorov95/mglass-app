@@ -54,6 +54,7 @@ export default function LaunchOrderModal({ isOpen, onClose, payload, settings }:
 
   useEffect(() => {
     if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCustomNumber(''); setClientName(''); setClientPhone(''); setAddress('')
       setAmoDealUrl(''); setDeadline(''); setNotes(''); setError('')
       setTimeout(() => nameRef.current?.focus(), 80)

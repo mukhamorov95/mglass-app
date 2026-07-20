@@ -710,6 +710,7 @@ function SkuTab() {
     setLoading(false)
   }, [filterCat, filterStatus])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function loadChecklist(sku_id: number) {

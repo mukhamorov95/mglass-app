@@ -12,11 +12,11 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-function parseNotes(raw: unknown): Record<string, any> {
+function parseNotes(raw: unknown): Record<string, unknown> {
   if (!raw) return {}
   try {
     const obj = typeof raw === 'string' ? JSON.parse(raw) : raw
-    return typeof obj === 'object' && obj !== null ? (obj as Record<string, any>) : {}
+    return typeof obj === 'object' && obj !== null ? (obj as Record<string, unknown>) : {}
   } catch { return {} }
 }
 
@@ -49,7 +49,7 @@ export async function GET(req: Request) {
   for (const o of orders ?? []) {
     const n = parseNotes(o.notes)
     const st = (n.stages ?? {}) as Record<string, string>
-    if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) continue
+    if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
     if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
     const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
     const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
@@ -74,7 +74,7 @@ export async function GET(req: Request) {
   for (const o of orders ?? []) {
     const n = parseNotes(o.notes)
     const st = (n.stages ?? {}) as Record<string, string>
-    if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) continue
+    if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
     if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
     const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
     const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))

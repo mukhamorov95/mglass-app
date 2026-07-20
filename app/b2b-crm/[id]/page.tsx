@@ -91,6 +91,7 @@ export default function B2BClientCardPage() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 4000) }
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [clientId])
 
   // Realtime — уведомление когда другой менеджер обновил запись

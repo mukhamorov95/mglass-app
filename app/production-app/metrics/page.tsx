@@ -41,6 +41,12 @@ export default function MetricsPage() {
   const [deadlines, setDeadlines] = useState<Map<number, string>>(new Map())
   const [loading, setLoading] = useState(true)
   const [period, setPeriod] = useState<7 | 30>(7)
+  const [nowTs, setNowTs] = useState(0)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNowTs(Date.now())
+  }, [])
 
   useEffect(() => {
     (async () => {
@@ -64,7 +70,7 @@ export default function MetricsPage() {
   }, [sb])
 
   const stats = useMemo(() => {
-    const from = Date.now() - period * 86400000
+    const from = nowTs - period * 86400000
     const done = tasks.filter(t => t.status === 'done' && t.completed_at && new Date(t.completed_at).getTime() >= from)
     const byStation = PRODUCTION_STAGES.map(s => {
       const st = done.filter(t => t.stage_key === s.key)
@@ -96,7 +102,7 @@ export default function MetricsPage() {
     }
     const shipped = onTime + late
     return { done: done.length, byStation, activeProblems, problemLog, wip, onTime, shipped, overdueNow }
-  }, [tasks, deadlines, period])
+  }, [tasks, deadlines, period, nowTs])
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 

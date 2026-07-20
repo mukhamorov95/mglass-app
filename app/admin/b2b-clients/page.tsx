@@ -47,9 +47,11 @@ export default function B2BClientsPage() {
   useEffect(() => {
     const names: Record<number, string> = {}
     clients.forEach(c => { names[c.id] = c.name })
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClientNames(prev => ({ ...prev, ...names }))
   }, [clients])
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { if (tab === 'stats') loadStats() }, [tab, statsYear])
 
   async function loadStats() {

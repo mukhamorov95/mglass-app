@@ -46,7 +46,7 @@ function normalizePhone(raw: string): string | null {
 }
 
 // ── AMO helpers ───────────────────────────────────────────────────────────────
-async function amoGet(path: string): Promise<any> {
+async function amoGet(path: string) {
   const res = await fetch(`${AMO_BASE}${path}`, {
     headers: { Authorization: `Bearer ${AMO_TOKEN}` },
     cache: 'no-store',
@@ -75,7 +75,7 @@ async function getDefaultChannel(): Promise<{ channelId: string; chatType: strin
   try {
     const data = await getChannels()
     const channels = data?.channels ?? []
-    const active = channels.find((c: any) => c.state === 'active')
+    const active = channels.find((c: { state?: string }) => c.state === 'active')
     if (!active) return null
     return { channelId: active.id, chatType: active.transport ?? 'whatsapp' }
   } catch {
@@ -88,7 +88,7 @@ type ContactInfo = { phones: string[]; name: string; contactIds: number[] }
 
 async function getLeadContactInfo(leadId: number): Promise<ContactInfo> {
   const data = await amoGet(`/leads/${leadId}?with=contacts`)
-  const contacts: any[] = data?._embedded?.contacts ?? []
+  const contacts: { id: number }[] = data?._embedded?.contacts ?? []
   const phones: string[] = []
   const contactIds: number[] = []
   let name = ''
@@ -99,7 +99,7 @@ async function getLeadContactInfo(leadId: number): Promise<ContactInfo> {
     if (!contactData) continue
     if (!name) name = contactData.name ?? ''
 
-    const fields: any[] = contactData.custom_fields_values ?? []
+    const fields: { field_code?: string; values?: { value?: unknown }[] }[] = contactData.custom_fields_values ?? []
     const phoneField = fields.find(f => f.field_code === 'PHONE')
     for (const pv of phoneField?.values ?? []) {
       const norm = normalizePhone(pv.value as string)
@@ -128,7 +128,7 @@ async function findOwnerInLocalDb(phones: string[]): Promise<number | null> {
 async function findOwnerInAmo(phones: string[]): Promise<number | null> {
   for (const phone of phones) {
     const data = await amoGet(`/contacts?query=${encodeURIComponent(phone)}&with=leads&limit=5`)
-    const contacts: any[] = data?._embedded?.contacts ?? []
+    const contacts: { _embedded?: { leads?: { id: number }[] } }[] = data?._embedded?.contacts ?? []
     if (!contacts.length) continue
 
     // Collect all lead IDs from contacts found by this phone
@@ -143,7 +143,7 @@ async function findOwnerInAmo(phones: string[]): Promise<number | null> {
     // Batch-fetch leads (up to 20)
     const idsParam = leadIds.slice(0, 20).map(id => `filter[id][]=${id}`).join('&')
     const leadsData = await amoGet(`/leads?${idsParam}`)
-    const leads: any[] = leadsData?._embedded?.leads ?? []
+    const leads: { status_id: number; responsible_user_id: number; created_at?: number }[] = leadsData?._embedded?.leads ?? []
     if (!leads.length) continue
 
     // Prioritize: active deal > won deal > any, then most recent
@@ -247,7 +247,7 @@ export async function POST(_req: Request) {
           existingManager = await findOwnerInAmo(phones)
         }
 
-        let managerId: number = lead.responsible_user_id
+        const managerId: number = lead.responsible_user_id
         let note: string
 
         if (existingManager) {
