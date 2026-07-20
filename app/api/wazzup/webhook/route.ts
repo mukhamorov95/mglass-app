@@ -161,6 +161,21 @@ export async function POST(req: Request) {
     }
   }
 
+  // Разгребаем очередь прямо здесь: тариф Vercel Hobby разрешает крону только
+  // один запуск в сутки, а сообщение должно попасть в CRM сразу. Крон остаётся
+  // подстраховкой на случай, если этот вызов не успел или упал.
+  const base = process.env.NEXT_PUBLIC_APP_URL
+  if (base && process.env.CRON_SECRET) {
+    try {
+      await fetch(`${base}/api/cron/process-queue`, {
+        headers: { Authorization: `Bearer ${process.env.CRON_SECRET}` },
+        signal: AbortSignal.timeout(20_000),
+      })
+    } catch (e) {
+      console.error('[wazzup-webhook] inline queue processing failed', e)
+    }
+  }
+
   // Always return 200 so Wazzup does not retry the webhook
   return NextResponse.json({ ok: true })
 }
