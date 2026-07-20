@@ -9,12 +9,23 @@ import { useEffect, useState, useMemo, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 type Row = {
-  id: number; sale_date: string; order_no: string | null; client: string
+  id: number; sale_date: string; ledger_month: string | null; order_no: string | null; client: string
   amount: number; partner_fee: number | null; manager: string | null
   department: string | null; product_type: string | null
   cost: number | null; margin_rub: number | null; margin_percent: number | null
   needs_review: boolean | null; import_batch: string | null
 }
+
+// Витрина по умолчанию показывает продажи M-Glass — это то, что владелец
+// ведёт в таблице «Продажи МГласс». Производственные B2B-заказы попадают в
+// ведомость автоматически при оплате и живут отдельной вкладкой, чтобы не
+// смешивать два контура в одной цифре.
+const DEPTS = [
+  { key: 'mglass', label: 'M-Glass' },
+  { key: 'b2b', label: 'Производство (B2B)' },
+  { key: 'all', label: 'Всё вместе' },
+] as const
+type Dept = typeof DEPTS[number]['key']
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const monthLabel = (ym: string) => {
@@ -29,63 +40,98 @@ const shiftMonth = (ym: string, d: number) => {
 const marginCls = (m: number | null) =>
   m == null ? 'text-[#9a9a95]' : m < 25 ? 'text-red-600' : m < 35 ? 'text-amber-600' : 'text-emerald-700'
 
+// В незакрытом месяце бухгалтерия успевает внести только часть затрат: заказ
+// на 400 тыс с себестоимостью 2 тыс даёт «маржу 98%». Такие строки считаем
+// недосчитанными — в итоговый процент они не идут, иначе он врёт.
+const FULL_COST_MIN_RATIO = 0.3
+const costLooksFull = (r: { amount: number; cost: number | null }) =>
+  r.cost != null && Number(r.cost) >= Number(r.amount) * FULL_COST_MIN_RATIO
+
 export default function SalesLedgerPage() {
   const sb = createClient()
   const [month, setMonth] = useState('')
   const [rows, setRows] = useState<Row[]>([])
   const [loading, setLoading] = useState(true)
   const [onlyNoCost, setOnlyNoCost] = useState(false)
+  const [dept, setDept] = useState<Dept>('mglass')
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setMonth(new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }).slice(0, 7))
   }, [])
 
+  // Месяц берём по учётному полю книги (ledger_month): продажу могли записать
+  // на вкладку следующего месяца, и владелец считает её там же. У строк,
+  // созданных системой, этого поля нет — для них месяц по дате продажи.
   const load = useCallback(async () => {
     if (!month) return
     setLoading(true)
-    const { data } = await sb.from('v_crm_sales_margin').select('*')
-      .gte('sale_date', `${month}-01`).lt('sale_date', `${shiftMonth(month, 1)}-01`)
-      .order('sale_date')
-    setRows((data ?? []) as Row[])
+    const [book, auto] = await Promise.all([
+      sb.from('v_crm_sales_margin').select('*').eq('ledger_month', month),
+      sb.from('v_crm_sales_margin').select('*').is('ledger_month', null)
+        .gte('sale_date', `${month}-01`).lt('sale_date', `${shiftMonth(month, 1)}-01`),
+    ])
+    const all = [...((book.data ?? []) as Row[]), ...((auto.data ?? []) as Row[])]
+    all.sort((a, b) => a.sale_date.localeCompare(b.sale_date))
+    setRows(all)
     setLoading(false)
   }, [sb, month])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
-  const shown = useMemo(() => onlyNoCost ? rows.filter(r => r.cost == null) : rows, [rows, onlyNoCost])
+  const inDept = useCallback((r: Row) =>
+    dept === 'all' ? true : dept === 'b2b' ? r.department === 'b2b' : r.department !== 'b2b', [dept])
+  const shown = useMemo(() => {
+    const base = rows.filter(inDept)
+    return onlyNoCost ? base.filter(r => r.cost == null) : base
+  }, [rows, onlyNoCost, inDept])
   const totals = useMemo(() => {
-    const amount = rows.reduce((s, r) => s + Number(r.amount || 0), 0)
-    const withCost = rows.filter(r => r.cost != null)
-    const cost = withCost.reduce((s, r) => s + Number(r.cost || 0), 0)
-    const partner = rows.reduce((s, r) => s + Number(r.partner_fee || 0), 0)
-    const covered = withCost.reduce((s, r) => s + Number(r.amount || 0), 0)
+    const scoped = rows.filter(inDept)
+    const amount = scoped.reduce((s, r) => s + Number(r.amount || 0), 0)
+    const full = scoped.filter(costLooksFull)
+    const cost = full.reduce((s, r) => s + Number(r.cost || 0), 0)
+    const partner = full.reduce((s, r) => s + Number(r.partner_fee || 0), 0)
+    const covered = full.reduce((s, r) => s + Number(r.amount || 0), 0)
     const marginRub = covered - partner - cost
     return {
-      amount, count: rows.length, avg: rows.length ? amount / rows.length : 0,
-      noCost: rows.length - withCost.length, covered,
-      marginRub, marginPct: covered > 0 ? marginRub / covered * 100 : null,
+      amount, count: scoped.length, avg: scoped.length ? amount / scoped.length : 0,
+      noCost: scoped.filter(r => r.cost == null).length,
+      partial: scoped.filter(r => r.cost != null && !costLooksFull(r)).length,
+      covered, marginRub, marginPct: covered > 0 ? marginRub / covered * 100 : null,
     }
-  }, [rows])
+  }, [rows, inDept])
 
   const byManager = useMemo(() => {
     const m = new Map<string, { amount: number; count: number; cost: number; covered: number; partner: number }>()
-    for (const r of rows) {
+    for (const r of rows.filter(inDept)) {
       const k = r.manager?.trim() || '—'
       const cur = m.get(k) ?? { amount: 0, count: 0, cost: 0, covered: 0, partner: 0 }
       cur.amount += Number(r.amount || 0); cur.count++
-      cur.partner += Number(r.partner_fee || 0)
-      if (r.cost != null) { cur.cost += Number(r.cost); cur.covered += Number(r.amount || 0) }
+      if (costLooksFull(r)) {
+        cur.cost += Number(r.cost)
+        cur.covered += Number(r.amount || 0)
+        cur.partner += Number(r.partner_fee || 0)
+      }
       m.set(k, cur)
     }
     return [...m.entries()].sort((a, b) => b[1].amount - a[1].amount)
-  }, [rows])
+  }, [rows, inDept])
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-16">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-4 sticky top-0 z-30">
         <div className="max-w-[1100px] mx-auto">
-          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Ведомость продаж и маржа</h1>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Ведомость продаж и маржа</h1>
+            <div className="flex bg-[#f0f0ec] rounded-[10px] p-[3px]">
+              {DEPTS.map(d => (
+                <button key={d.key} onClick={() => setDept(d.key)}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium ${dept === d.key ? 'bg-white shadow-sm text-[#111110]' : 'text-[#6b6b66]'}`}>
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
           <div className="flex items-center gap-2 mt-3">
             <button onClick={() => setMonth(shiftMonth(month, -1))} className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[13px]">←</button>
             <span className="text-[14px] font-semibold capitalize min-w-[130px] text-center">{month && monthLabel(month)}</span>
@@ -106,8 +152,9 @@ export default function SalesLedgerPage() {
             ['Продажи', RUB(totals.amount), `${totals.count} шт`],
             ['Средний чек', RUB(totals.avg), ''],
             ['Маржа', totals.marginPct != null ? RUB(totals.marginRub) : '—',
-              totals.marginPct != null ? `${totals.marginPct.toFixed(1)}% от ${RUB(totals.covered)}` : 'нет себестоимости'],
-            ['Без себестоимости', String(totals.noCost), totals.noCost ? 'маржа занижена' : 'все посчитаны'],
+              totals.marginPct != null ? `${totals.marginPct.toFixed(1)}% от ${RUB(totals.covered)}` : 'себестоимость не внесена'],
+            ['Себестоимости нет', `${totals.noCost}${totals.partial ? ` + ${totals.partial}` : ''}`,
+              totals.partial ? `${totals.partial} внесены частично — в процент не идут` : totals.noCost ? 'эти сделки в проценте не учтены' : 'все посчитаны'],
           ].map(([label, value, hint]) => (
             <div key={label} className="bg-white rounded-xl border border-[#e4e4e0] p-3">
               <p className="text-[11px] uppercase tracking-widest text-[#9a9a95]">{label}</p>
@@ -163,8 +210,10 @@ export default function SalesLedgerPage() {
                     <td className="px-3 py-2 text-[#6b6b66] whitespace-nowrap">{r.manager ?? '—'}</td>
                     <td className="px-3 py-2 text-right font-mono whitespace-nowrap">{RUB(Number(r.amount))}</td>
                     <td className="px-3 py-2 text-right font-mono text-[#6b6b66] whitespace-nowrap">{r.cost != null ? RUB(Number(r.cost)) : '—'}</td>
-                    <td className={`px-3 py-2 text-right font-mono whitespace-nowrap ${marginCls(r.margin_percent)}`}>
-                      {r.margin_percent != null ? `${r.margin_percent}%` : '—'}
+                    <td className={`px-3 py-2 text-right font-mono whitespace-nowrap ${costLooksFull(r) ? marginCls(r.margin_percent) : 'text-[#9a9a95]'}`}>
+                      {r.margin_percent == null ? '—'
+                        : costLooksFull(r) ? `${r.margin_percent}%`
+                        : <span title="Себестоимость внесена не полностью — в итог не идёт">{r.margin_percent}%&nbsp;?</span>}
                     </td>
                   </tr>
                 ))}
@@ -173,8 +222,9 @@ export default function SalesLedgerPage() {
           )}
         </div>
         <p className="text-[11px] text-[#9a9a95] mt-3">
-          Маржа = сумма − партнёрские − себестоимость. Строки без себестоимости в проценте не участвуют,
-          поэтому итоговый процент считается только по закрытой части выручки.
+          Маржа = сумма − партнёрские − себестоимость. Источник продаж — таблица «Продажи МГласс»,
+          месяц берётся по её вкладке. Строки без себестоимости и с явно неполной себестоимостью
+          (помечены «?») в итоговый процент не идут — он считается только по сделкам с полными затратами.
         </p>
       </div>
     </div>
