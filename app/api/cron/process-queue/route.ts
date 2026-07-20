@@ -5,27 +5,24 @@
  *   1. Mark as "processing"
  *   2. Sync message to AmoCRM (find/create contact+lead, add note)   ← CRITICAL
  *   3. Update external_conversations link table
- *   4. If text + AI-managed chat → generate AI reply and send via Wazzup
- *   5. Mark as "ai_processed" (or "synced_to_amocrm" if AI skipped/failed)
+ *   4. Mark as "synced_to_amocrm"
  *
  * AmoCRM sync failure → retry_scheduled (exponential backoff, max 5 attempts)
- * AI failure → message stays at "synced_to_amocrm" (already delivered to CRM)
+ *
+ * Конвейер только ДОСТАВЛЯЕТ сообщения в CRM. Отвечает клиентам исключительно
+ * Иван (контур Авито) — правило владельца.
  */
 
 import { NextResponse } from 'next/server'
-import Anthropic from '@anthropic-ai/sdk'
-import type { Tool, MessageParam } from '@anthropic-ai/sdk/resources/messages'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
-import { sendMessage } from '@/lib/wazzup'
-import { quickCalc, type CalcType, type CalcOptions } from '@/lib/quickCalc'
 
 export const maxDuration = 60
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 const AMO_BASE        = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
 const AMO_TOKEN       = process.env.AMO_ACCESS_TOKEN!
-const VLADISLAV_ID    = parseInt(process.env.AMO_VLADISLAV_USER_ID || '8352283')
 const BATCH_SIZE      = 8   // items to process per cron run
+const FRESH_DAYS      = 3   // старше — не доставляем без решения владельца
 
 // Retry delays in seconds: attempt 1 → 60s, 2 → 300s, 3 → 900s, 4 → 3600s, 5 → fail
 const RETRY_DELAYS = [60, 300, 900, 3600]
@@ -53,22 +50,6 @@ async function addAmoNote(leadId: number, text: string): Promise<void> {
     method: 'POST',
     headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([{ note_type: 'common', params: { text } }]),
-  })
-}
-
-async function createAmoTask(leadId: number, text: string): Promise<void> {
-  const due = Math.floor(Date.now() / 1000) + 3600
-  await fetch(`${AMO_BASE}/tasks`, {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify([{
-      task_type_id: 1,
-      text,
-      complete_till: due,
-      entity_type: 'leads',
-      entity_id: leadId,
-      responsible_user_id: VLADISLAV_ID,
-    }]),
   })
 }
 
@@ -149,187 +130,6 @@ async function syncToAmocrm(raw: RawMessage): Promise<number | null> {
   }, { onConflict: 'source,external_chat_id' })
 
   return leadId
-}
-
-// ── AI processing (only for text messages in AI-managed chats) ────────────────
-const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
-
-const SYSTEM = `Ты — Владислав. Пишешь клиентам в WhatsApp от своего лица — живо, уверенно, по-человечески. Не бот, не менеджер по скрипту. Просто человек который разбирается в продукте и реально хочет помочь.
-
-MGlass — своё производство в Москве: зеркала с LED, лофт-перегородки, душевые. Гарантия 2 года, монтаж включён, срок 14 дней.
-
-═══ КАК ВЕСТИ ДИАЛОГ ═══
-1. Понять задачу клиента — 1 вопрос, не анкета
-2. Уточнить размер если нет — это нужно для цены
-3. Когда есть размеры — вызвать calculate_price и назвать цену естественно
-4. Закрыть на бесплатный замер
-
-═══ КАК НАЗЫВАТЬ ЦЕНУ ═══
-ВСЕГДА показывай разбивку тремя строками — изделие, монтаж, доставка — и отдельно итого.
-Никогда не пиши звёздочки **вот так** — это WhatsApp, не документ.
-
-═══ ГОЛОС И СТИЛЬ ═══
-• Разговорный русский — как пишут друзьям
-• Максимум 2-3 коротких предложения
-• Без официоза
-
-Добавь [ЗАМЕР_ГОТОВ] ТОЛЬКО если клиент явно согласился на замер.
-Добавь [НУЖЕН_ЧЕЛОВЕК] только если клиент прямо просит живого менеджера или ты не можешь ответить.`
-
-const CALC_TOOL: Tool = {
-  name: 'calculate_price',
-  description: 'Рассчитать стоимость изделия MGlass по размерам.',
-  input_schema: {
-    type: 'object' as const,
-    properties: {
-      type:    { type: 'string', enum: ['mirror', 'loft', 'shower'] },
-      width:   { type: 'number' },
-      height:  { type: 'number' },
-      options: {
-        type: 'object',
-        properties: {
-          hasLighting:  { type: 'boolean' },
-          withMounting: { type: 'boolean' },
-          model:        { type: 'string' },
-          tier:         { type: 'string', enum: ['budget', 'standard'] },
-          sections:     { type: 'number' },
-          systemType:   { type: 'string', enum: ['fixed', 'sliding', 'swing'] },
-        },
-      },
-    },
-    required: ['type', 'width', 'height'],
-  },
-}
-
-function fmtPrice(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
-
-function buildPriceBreakdown(r: { finalPrice: number; price: number; description: string; serviceLines?: Array<{ name: string; total: number }> }): string {
-  const svcs = (r.serviceLines ?? []).map(s => `${s.name} — ${fmtPrice(s.total)}`)
-  return [
-    '=== КАЛЬКУЛЯТОР MGlass ===',
-    '', r.description, '',
-    `Изделие — ${fmtPrice(r.finalPrice)}`,
-    ...svcs,
-    ...(svcs.length ? [`Итого — ${fmtPrice(r.price)}`] : []),
-    '', 'ВАЖНО: не упоминай услуги которых нет в списке выше.',
-  ].join('\n')
-}
-
-async function generateAiReply(messages: MessageParam[]): Promise<string> {
-  const supabase = db()
-  const { data } = await supabase.from('ai_settings').select('value').eq('key', 'bot_extra_knowledge').single()
-  const extra = data?.value?.trim() || ''
-  const system = extra ? `${SYSTEM}\n\n═══ ДОПОЛНИТЕЛЬНЫЕ ЗНАНИЯ ═══\n${extra}` : SYSTEM
-
-  let response = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6', max_tokens: 500, system, tools: [CALC_TOOL], messages,
-  })
-
-  for (let round = 0; round < 2 && response.stop_reason === 'tool_use'; round++) {
-    const toolBlocks = response.content.filter(b => b.type === 'tool_use')
-    const toolResults = await Promise.all(toolBlocks.map(async block => {
-      if (block.type !== 'tool_use') return null
-      const inp = block.input as { type: string; width: number; height: number; options?: CalcOptions }
-      const result = await quickCalc(inp.type as CalcType, inp.width, inp.height, inp.options ?? {})
-      return {
-        type: 'tool_result' as const,
-        tool_use_id: block.id,
-        content: result ? buildPriceBreakdown(result) : 'Ошибка расчёта — используй приблизительную цену',
-      }
-    }))
-
-    const valid = toolResults.filter((r): r is NonNullable<typeof r> => r !== null)
-    messages = [
-      ...messages,
-      { role: 'assistant' as const, content: response.content },
-      { role: 'user' as const, content: valid },
-    ]
-    response = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6', max_tokens: 500, system, tools: [CALC_TOOL], messages,
-    })
-  }
-
-  return response.content.find(b => b.type === 'text')?.text ?? ''
-}
-
-async function runAiForMessage(raw: RawMessage, leadId: number | null): Promise<string | null> {
-  if (!raw.text) return null  // no text → skip AI (photos/audio are still in AMO via note)
-
-  const supabase = db()
-
-  // Bot is temporarily disabled
-  return null
-
-  // Is this chat AI-managed?
-  const { data: chat } = await supabase
-    .from('ai_managed_chats')
-    .select('*')
-    .eq('chat_id', raw.chat_id)
-    .maybeSingle()
-
-  if (!chat || !chat.is_active) return null
-
-  // Save incoming message to conversation history
-  await supabase.from('ai_conversations').insert({
-    chat_id: raw.chat_id, role: 'user', content: raw.text,
-  })
-  await supabase.from('ai_managed_chats')
-    .update({ last_message_at: new Date().toISOString() })
-    .eq('chat_id', raw.chat_id)
-
-  // Build conversation history (last 20, chronological, deduped)
-  const { data: history } = await supabase
-    .from('ai_conversations')
-    .select('role, content')
-    .eq('chat_id', raw.chat_id)
-    .order('created_at', { ascending: false })
-    .limit(20)
-
-  const chrono = (history ?? []).reverse()
-  const deduped: typeof chrono = []
-  for (const m of chrono) {
-    if (deduped.length && deduped[deduped.length - 1].role === m.role) continue
-    deduped.push(m)
-  }
-  while (deduped.length && deduped[0].role === 'assistant') deduped.shift()
-
-  const messages: MessageParam[] = deduped.map(m => ({
-    role: m.role as 'user' | 'assistant',
-    content: m.content,
-  }))
-
-  const rawReply = await generateAiReply(messages)
-  const isMeasure  = rawReply.includes('[ЗАМЕР_ГОТОВ]')
-  const needsHuman = rawReply.includes('[НУЖЕН_ЧЕЛОВЕК]')
-  const reply = rawReply.replace(/\[ЗАМЕР_ГОТОВ\]/g, '').replace(/\[НУЖЕН_ЧЕЛОВЕК\]/g, '').trim()
-
-  // Send reply via Wazzup; stamp last_bot_reply_at so echo detection works
-  await sendMessage(raw.channel_id, raw.chat_id, raw.chat_type, reply)
-  await supabase.from('ai_conversations').insert({ chat_id: raw.chat_id, role: 'assistant', content: reply })
-  await supabase.from('ai_managed_chats').update({ last_bot_reply_at: new Date().toISOString() }).eq('chat_id', raw.chat_id)
-
-  // Handle transfer triggers
-  if (isMeasure || needsHuman) {
-    await supabase.from('ai_managed_chats').update({
-      is_active: false,
-      close_reason: isMeasure ? 'measurement' : 'human',
-    }).eq('chat_id', raw.chat_id)
-    const effectiveLeadId = leadId ?? chat.amo_lead_id
-    if (effectiveLeadId) {
-      const taskText = isMeasure
-        ? '✅ Клиент готов к замеру! AI-диалог завершён — позвонить и согласовать время'
-        : '❓ AI не может помочь — клиент ожидает живого менеджера'
-      await createAmoTask(effectiveLeadId, taskText)
-    }
-  }
-
-  // Add full exchange to AMO note
-  const effectiveLeadId = leadId ?? chat.amo_lead_id
-  if (effectiveLeadId) {
-    await addAmoNote(effectiveLeadId, `📱 Клиент: ${raw.text}\n🤖 Владислав: ${reply}`)
-  }
-
-  return reply
 }
 
 // ── Retry scheduling ───────────────────────────────────────────────────────────
@@ -418,24 +218,19 @@ async function processItem(item: QueueItem): Promise<void> {
     return
   }
 
-  // ── Step 2: AI processing (non-blocking — CRM delivery already done) ────────
-  let aiReply: string | null = null
+  // Доставка в CRM выполнена — на этом работа конвейера закончена.
+  // AI-половина (бот «Владислав») удалена: она была отключена `return null`
+  // с мая и противоречила правилу «клиентам пишет только Иван».
   try {
-    if (raw.direction === 'incoming' && raw.message_type !== 'system') {
-      aiReply = await runAiForMessage(raw as RawMessage, leadId)
-    }
     await supabase.from('message_queue').update({
-      status: 'ai_processed',
-      ai_response: aiReply,
+      status: 'synced_to_amocrm',
       updated_at: new Date().toISOString(),
     }).eq('id', item.id)
   } catch (aiErr) {
-    // AI failure is recorded but does NOT change the final status back to retry.
-    // The message IS in AmoCRM. AI is an enhancement, not a gate.
-    console.error(`[process-queue] AI failed for item ${item.id}:`, String(aiErr))
+    console.error(`[process-queue] status update failed for item ${item.id}:`, String(aiErr))
     await supabase.from('message_queue').update({
-      status: 'synced_to_amocrm',  // already synced — keep this status
-      last_error: `AI: ${String(aiErr)}`,
+      status: 'synced_to_amocrm',
+      last_error: String(aiErr),
       updated_at: new Date().toISOString(),
     }).eq('id', item.id)
   }
@@ -460,11 +255,17 @@ export async function GET(req: Request) {
   }
   const now = new Date().toISOString()
 
+  // Берём только свежие сообщения. Крон этого конвейера не был прописан в
+  // vercel.json, поэтому в очереди накопился двухмесячный хвост — заливать его
+  // в карточки CRM задним числом нельзя, это решает владелец (см. FRESH_DAYS).
+  const freshFrom = new Date(Date.now() - FRESH_DAYS * 86_400_000).toISOString()
+
   // Pick pending items + retry_scheduled items whose retry time has passed
   const { data: items, error } = await supabase
     .from('message_queue')
     .select('id, raw_message_id, attempts, max_attempts, status')
     .or(`status.eq.pending,and(status.eq.retry_scheduled,next_retry_at.lte.${now})`)
+    .gte('created_at', freshFrom)
     .order('created_at', { ascending: true })
     .limit(BATCH_SIZE)
 
