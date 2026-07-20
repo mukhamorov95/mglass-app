@@ -3,12 +3,16 @@ import { requireRole } from '@/lib/apiAuth'
 import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
+import { salePaymentKey } from '@/lib/payments/paymentKeys'
 
 // Отдел продаж: леджер продаж. GET — продажи за месяц + итоги + по менеджерам
 // (владелец/РОП — все, менеджер — свои). POST — создать продажу (в т.ч. из лида).
 // PATCH — правки (оплата предоплаты/остатка, статус закрыт, суммы).
 
 const PAY = ['Счёт', 'Наличные', 'Карта', 'Перевод']
+const METHODS = ['Счёт', 'Наличные', 'Карта', 'Перевод', 'Другое'] as const
+type Method = typeof METHODS[number]
 
 async function whoAmI(): Promise<{ name: string; canAll: boolean } | null> {
   const user = await getSessionUser()
@@ -123,7 +127,49 @@ export async function PATCH(req: NextRequest) {
   for (const k of ['order_no', 'client', 'ready_date', 'sale_date', 'department', 'payment_method', 'manager', 'note'] as const) if (k in b) patch[k] = (b[k] as string) || null
 
   const sb = createServiceClient()
+  const { data: before } = await sb.from('crm_sales')
+    .select('id, amount, prepayment, sale_date, b2b_order_id, order_id, payment_method').eq('id', id).maybeSingle()
   const { error } = await sb.from('crm_sales').update(patch).eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+
+  // Д2: галочки оплаты в ведомости — тоже событие денег, пишем в ядро.
+  // Ключ канонизируется по документу, поэтому отметка здесь и в заказе
+  // дают одну и ту же строку payments, а не дубль.
+  const warnings: string[] = []
+  const sale = before as {
+    id: number; amount: number | null; prepayment: number | null; sale_date: string
+    b2b_order_id: number | null; order_id: string | null; payment_method: string | null
+  } | null
+  if (sale && ('prepayment_paid' in b || 'remainder_paid' in b)) {
+    const paidAt = /^\d{4}-\d{2}-\d{2}$/.test(String(patch.sale_date ?? sale.sale_date))
+      ? String(patch.sale_date ?? sale.sale_date) : new Date().toISOString().slice(0, 10)
+    const method = METHODS.includes(sale.payment_method as Method) ? sale.payment_method as Method : 'Счёт'
+    const total = Number(patch.amount ?? sale.amount ?? 0)
+    const prepay = Number(patch.prepayment ?? sale.prepayment ?? 0)
+    const link = { id: sale.id, b2b_order_id: sale.b2b_order_id, order_id: sale.order_id }
+    try {
+      if ('prepayment_paid' in b) {
+        const key = salePaymentKey(link, 'prepayment')
+        if (b.prepayment_paid && prepay > 0) {
+          await recordPayment(sb, {
+            externalKey: key, amount: prepay, paidAt, kind: 'prepayment', source: 'sales_ledger',
+            method, b2bOrderId: sale.b2b_order_id, orderId: sale.order_id, crmSaleId: sale.id, enteredByName: me.name,
+          })
+        } else await voidPayment(sb, key, me.name)
+      }
+      if ('remainder_paid' in b) {
+        const key = salePaymentKey(link, 'remainder')
+        const rest = Math.round((total - prepay) * 100) / 100
+        if (b.remainder_paid && rest > 0) {
+          await recordPayment(sb, {
+            externalKey: key, amount: rest, paidAt, kind: prepay > 0 ? 'remainder' : 'full', source: 'sales_ledger',
+            method, b2bOrderId: sale.b2b_order_id, orderId: sale.order_id, crmSaleId: sale.id, enteredByName: me.name,
+          })
+        } else await voidPayment(sb, key, me.name)
+      }
+    } catch (e) {
+      warnings.push(e instanceof Error ? e.message : 'Ошибка записи в денежное ядро')
+    }
+  }
+  return NextResponse.json({ ok: true, warnings })
 }

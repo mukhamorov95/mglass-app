@@ -942,6 +942,18 @@ export default function B2BOrdersPage() {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
     const stages = { ...(order.parsedNotes.stages ?? {}) } as Partial<Record<StageKey, string | null>>
+    // «Счёт оплачен» — событие денег, пишется единым роутом (Д2), не напрямую.
+    if (stageKey === 'invoice_paid') {
+      const willBePaid = !stages.invoice_paid
+      const r = await fetch(`/api/b2b-orders/${orderId}/payment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: willBePaid ? 'paid' : 'unpaid' }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (!r.ok) return
+      setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: (d.notes ?? o.parsedNotes) as NotesData } : o))
+      return
+    }
     stages[stageKey] = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
     const newParsed: NotesData = { ...order.parsedNotes, stages }
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
