@@ -116,26 +116,25 @@ export default function ReceivablesPage() {
     return { sum, byBucket }
   }, [rows])
 
-  async function markPaid(o: B2BOrder) {
-    setBusyId(o.id)
+  // Оплата пишется только через единый роут (Д2): notes + payments + ведомость.
+  async function postPayment(id: number, body: { status: string; amount?: number }) {
+    setBusyId(id)
     try {
-      const today = new Date().toISOString().slice(0, 10)
-      const notes: Notes = { ...o.notes, payment_status: 'paid', stages: { ...(o.notes.stages ?? {}), invoice_paid: today } }
-      await sb.from('b2b_orders').update({ notes }).eq('id', o.id)
+      const r = await fetch(`/api/b2b-orders/${id}/payment`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+      })
+      if (!r.ok) { const d = await r.json().catch(() => ({})); alert(d.error ?? 'Не удалось отметить оплату'); return }
       await load()
     } finally { setBusyId(null) }
   }
+
+  const markPaid = (o: B2BOrder) => postPayment(o.id, { status: 'paid' })
 
   async function markPartial(o: B2BOrder) {
     const raw = window.prompt('Сколько оплачено всего по заказу, ₽ (накопленная предоплата)?', String(o.notes.prepayment_amount || ''))
     if (raw == null) return
     const amount = Number(raw.replace(/\s/g, '')) || 0
-    setBusyId(o.id)
-    try {
-      const notes: Notes = { ...o.notes, payment_status: amount > 0 ? 'partial' : 'unpaid', prepayment_amount: amount }
-      await sb.from('b2b_orders').update({ notes }).eq('id', o.id)
-      await load()
-    } finally { setBusyId(null) }
+    await postPayment(o.id, { status: amount > 0 ? 'partial' : 'unpaid', amount })
   }
 
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>

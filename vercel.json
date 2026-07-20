@@ -9,6 +9,10 @@
       "schedule": "0 3 * * *"
     },
     {
+      "path": "/api/cron/payments-reconcile",
+      "schedule": "30 3 * * *"
+    },
+    {
       "path": "/api/cron/followup",
       "schedule": "0 9 * * 1-5"
     },

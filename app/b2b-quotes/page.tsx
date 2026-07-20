@@ -308,19 +308,19 @@ export default function B2BQuotesPage() {
     if (discountEditId !== null) setTimeout(() => discountInputRef.current?.focus(), 50)
   }, [discountEditId])
 
+  // Оплата пишется только через /api/b2b-orders/[id]/payment — там же
+  // наполняются денежное ядро и ведомость продаж (Д2).
   async function savePayStatus(id: number, status: PaymentStatus, amount?: number) {
     const q = quotes.find(q => q.id === id)
     if (!q) return
-    const parsed = parseNotes(q.notes)
-    const newNotes = JSON.stringify({
-      ...parsed,
-      payment_status: status,
-      ...(status === 'partial' && amount ? { prepayment_amount: amount } : {}),
-      ...(status !== 'partial' ? { prepayment_amount: undefined } : {}),
-      ...(status === 'paid' ? { paid_at: new Date().toISOString() } : {}),
+    const r = await fetch(`/api/b2b-orders/${id}/payment`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, amount }),
     })
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { showToast(d.error ?? 'Не удалось отметить оплату'); return }
+    const newNotes = JSON.stringify(d.notes ?? {})
     const meta = buildUpdateMeta()
-    await createClient().from('b2b_orders').update({ notes: newNotes, ...meta }).eq('id', id)
     setQuotes(prev => prev.map(x => x.id === id ? { ...x, notes: newNotes, ...meta } : x))
     setPayEditId(null)
     setPayAmount('')
