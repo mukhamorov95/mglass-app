@@ -142,6 +142,7 @@ const CFO_ITEMS: NavItem[] = [
   { href: '/accounting',   label: 'Бухгалтерия',       icon: '🧾' },
   { href: '/cfo/receivables', label: 'Дебиторка',      icon: '💸' },
   { href: '/cfo/cashflow', label: 'ДДС · календарь',   icon: '📅' },
+  { href: '/cfo/sales-ledger', label: 'Продажи и маржа', icon: '🧮' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
   { href: '/cfo/unit',     label: 'Unit-экономика',    icon: '🔍' },
   { href: '/cfo/breakeven', label: 'Точка безубыточности', icon: '🎯' },
