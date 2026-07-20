@@ -115,7 +115,7 @@ ${ANALYSIS_SCHEMA}
 - tasks: конкретные действия (позвонить повторно через X дней, отправить КП, уточнить размеры и т.д.)`
 
   const msg = await anthropic.messages.create({
-    model:      'claude-sonnet-4-6',
+    model:      'claude-sonnet-5',
     max_tokens: 1500,
     system:     ANALYSIS_SYSTEM,
     messages:   [{ role: 'user', content: prompt }],

@@ -38,7 +38,7 @@ export async function POST(req: Request) {
 - Только текст сообщения, без пояснений`
 
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 512,
     system: 'Ты — B2B менеджер MGlass (производство стеклянных изделий: зеркала, душевые, лофт-перегородки). Пишешь живые, не шаблонные сообщения для потенциальных партнёров. Стиль — деловой но дружелюбный.',
     messages: [{ role: 'user', content: prompt }],

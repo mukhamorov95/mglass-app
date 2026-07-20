@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   const { prompt, system } = await req.json() as { prompt: string; system?: string }
 
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 2048,
     system: system ?? 'Ты — эксперт по продажам компании MGlass (зеркала, лофт-перегородки, душевые). Отвечай кратко, по делу, на русском языке.',
     messages: [{ role: 'user', content: prompt }],

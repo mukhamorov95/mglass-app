@@ -34,7 +34,7 @@ C — Низкий потенциал: разовый заказ, мало по�
 }`
 
   const msg = await anthropic.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-sonnet-5',
     max_tokens: 256,
     system: 'Ты — B2B аналитик производственной компании MGlass. Отвечаешь только валидным JSON.',
     messages: [{ role: 'user', content: prompt }],

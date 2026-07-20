@@ -5,7 +5,7 @@ export type RoadmapStatus = 'done' | 'progress' | 'queue' | 'waiting'
 export type RoadmapItem = { title: string; status: RoadmapStatus; note?: string; date?: string }
 export type RoadmapSection = { title: string; icon: string; items: RoadmapItem[] }
 
-export const ROADMAP_UPDATED = '20.07.2026, вечер'
+export const ROADMAP_UPDATED = '20.07.2026, ночь'
 
 export const ROADMAP: RoadmapSection[] = [
   {
@@ -38,7 +38,7 @@ export const ROADMAP: RoadmapSection[] = [
       { title: 'Ф1 — «клиентам пишет только Иван» + честные метрики агентов', status: 'done', date: '20.07' },
       { title: 'Ф2 — Иван на полную мощность (страж цен, склейка сообщений, телефон всегда, фоллоу-ап)', status: 'done', date: '20.07' },
       { title: 'Ф3 — вырезать мёртвый AI Владислава + починить остановившийся конвейер', status: 'done', date: '20.07' },
-      { title: 'Ф4 — порядок в AI-инструментах (модели, дубли, мёртвое, меню)', status: 'progress' },
+      { title: 'Ф4 — порядок в AI-инструментах (единый реестр моделей, мёртвое удалено, карта AI)', status: 'done', date: '20.07' },
     ],
   },
   {
@@ -61,7 +61,8 @@ export const ROADMAP: RoadmapSection[] = [
       { title: 'Список долгов из ДДС-книги — НЕ переносить (неактуален)', status: 'done', date: '20.07' },
       { title: 'РОП-ответственный за период параллели — владелец', status: 'done', date: '20.07' },
       { title: 'Дата закрытия Google-таблиц продаж (предложение 01.09) — подтвердить при Д4', status: 'waiting' },
-      { title: 'Запись в amoCRM из анализа звонков (нарушает read-only) — решить при Ф4', status: 'waiting' },
+      { title: 'Запись в amoCRM из анализа звонков (нарушает read-only) — нужно решение', status: 'waiting' },
+      { title: 'Архив 4408 сообщений Wazzup (15.05–17.07) — заливать в amoCRM или списать?', status: 'waiting' },
     ],
   },
 ]
