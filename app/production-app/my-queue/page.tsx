@@ -105,10 +105,12 @@ export default function MyQueuePage() {
     monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7))
 
     const [{ data: taskRows }, { data: doneRows }] = await Promise.all([
+      // Берём и закрытые задачи: в обычном списке они не показываются, но
+      // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
       sb.from('production_tasks')
         .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note')
         .or(orFilter)
-        .in('status', ['queued', 'in_progress'])
+        .in('status', ['queued', 'in_progress', 'done', 'problem'])
         .order('sequence_order', { ascending: true }),
       stations.length
         ? sb.from('production_tasks').select('order_id,item_index,completed_at')
@@ -294,6 +296,9 @@ export default function MyQueuePage() {
     return b?.status === 'done'
   }
 
+  // Закрытые задачи держим в памяти только ради поиска — во всех счётчиках,
+  // табло и группировках участвуют активные.
+  const activeTasks = tasks.filter(t => t.status !== 'done' && t.status !== 'problem')
   const q = search.trim().toLowerCase()
   const orderMatches = (id: number) => {
     if (!q) return true
@@ -302,8 +307,11 @@ export default function MyQueuePage() {
   }
 
   // ── Группировка по заказам ──
+  // Без запроса — только незакрытые задачи (рабочий список). В поиске
+  // показываем и выполненные: мастеру нужно найти заказ, который он уже отметил.
   const byOrder = new Map<number, TaskRow[]>()
   for (const t of tasks) {
+    if (!q && (t.status === 'done' || t.status === 'problem')) continue
     if (!orderMatches(t.order_id)) continue
     byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
   }
@@ -332,7 +340,7 @@ export default function MyQueuePage() {
   const byMaterial = new Map<string, MatGroup>()
   if (groupMode === 'material') {
     const seenDetail = new Set<string>()
-    for (const t of tasks) {
+    for (const t of activeTasks) {
       if (!orderMatches(t.order_id)) continue
       const dk = `${t.order_id}:${t.item_index}`
       if (seenDetail.has(dk)) continue
@@ -366,8 +374,8 @@ export default function MyQueuePage() {
   const doneToday = doneWeek.filter(t => new Date(t.completed_at) >= todayIso)
   const donePiecesToday = piecesOf(doneToday, doneOrders)
   const donePiecesWeek = piecesOf(doneWeek, doneOrders)
-  const leftToday = tasks.filter(t => ['today'].includes(horizonOf(t.order_id)))
-  const leftWeek = tasks.filter(t => ['today', 'tomorrow', 'week'].includes(horizonOf(t.order_id)))
+  const leftToday = activeTasks.filter(t => ['today'].includes(horizonOf(t.order_id)))
+  const leftWeek = activeTasks.filter(t => ['today', 'tomorrow', 'week'].includes(horizonOf(t.order_id)))
   const leftPiecesToday = piecesOf(leftToday, orders)
   const leftPiecesWeek = piecesOf(leftWeek, orders)
   const planToday = donePiecesToday + leftPiecesToday
@@ -375,8 +383,8 @@ export default function MyQueuePage() {
   const pctToday = planToday > 0 ? Math.round(donePiecesToday / planToday * 100) : null
   const pctWeek = planWeek > 0 ? Math.round(donePiecesWeek / planWeek * 100) : null
 
-  const totalReady = tasks.filter(isReady).length
-  const totalWaiting = tasks.length - totalReady
+  const totalReady = activeTasks.filter(isReady).length
+  const totalWaiting = activeTasks.length - totalReady
 
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -601,10 +609,14 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   const isImg = drawingUrl ? /\.(png|jpe?g|webp|gif)(\?|$)/i.test(drawingUrl) : false
   const noMatOrder = materialStatus(notes) === 'needed'
   const noMatItems = Array.isArray(pn.material_needed_items) ? (pn.material_needed_items as number[]) : []
-  const ready = tasks.filter(isReady)
-  const waiting = tasks.filter(t => !isReady(t))
-  const inWork = tasks.filter(t => t.status === 'in_progress').length
-  const pieces = tasks.reduce((s, t) => s + qtyOf(order, t.item_index), 0)
+  // В поиске в карточку попадают и закрытые задачи — их показываем отдельной
+  // строкой «уже сделано», а в счётчиках работы они не участвуют.
+  const doneTasks = tasks.filter(t => t.status === 'done')
+  const live = tasks.filter(t => t.status !== 'done' && t.status !== 'problem')
+  const ready = live.filter(isReady)
+  const waiting = live.filter(t => !isReady(t))
+  const inWork = live.filter(t => t.status === 'in_progress').length
+  const pieces = live.reduce((s, t) => s + qtyOf(order, t.item_index), 0)
   const startable = ready.filter(t => t.status === 'queued').map(t => t.id)
   const doneable = ready.filter(t => t.status === 'queued' || t.status === 'in_progress').map(t => t.id)
   const overdue = daysLbl?.includes('роср')
@@ -655,7 +667,10 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </div>
           )}
           <div className="text-right flex-shrink-0">
-            <p className="text-[12px] font-mono text-[#111110]">{tasks.length} дет. · {pieces} изд.{inWork > 0 ? ` · 🔧 ${inWork}` : ''}</p>
+            <p className="text-[12px] font-mono text-[#111110]">
+              {live.length} дет. · {pieces} изд.{inWork > 0 ? ` · 🔧 ${inWork}` : ''}
+              {doneTasks.length > 0 && <span className="text-emerald-700"> · ✓ {doneTasks.length} сделано</span>}
+            </p>
             <p className="text-[11px] flex gap-x-2 justify-end flex-wrap">
               {fmtShort(launched) && <span className="text-[#9a9a95]">запуск {fmtShort(launched)}</span>}
               {fmtShort(deadline) && <span className="text-[#9a9a95]">отгрузка {fmtShort(deadline)}</span>}
