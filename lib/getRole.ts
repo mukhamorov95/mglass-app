@@ -6,7 +6,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer' | 'accountant'
 
 export type UserProfile = {
   role:        Role
@@ -28,7 +28,8 @@ const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
          r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
-         r === 'commercial' || r === 'cfo' || r === 'partner' || r === 'measurer'
+         r === 'commercial' || r === 'cfo' || r === 'partner' || r === 'measurer' ||
+         r === 'accountant'
 }
 
 // Case-insensitive normalisation. Accepts a few common UI aliases.
@@ -212,11 +213,18 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   cfo: [
     '/',
     '/cfo',
+    '/accounting',
     '/admin/cfo',
     '/admin/pnl',
     '/admin/settings',
     '/admin/dashboard',
     '/admin/analytics-mglass',
+  ],
+
+  // Бухгалтерия (Алёна, Екатерина): только свой раздел — ни маржи, ни CFO-дашбордов
+  accountant: [
+    '/',
+    '/accounting',
   ],
 
   // Внешний B2B-партнёр: только свой кабинет. Видит лишь свои заказы (scoped по
