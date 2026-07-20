@@ -67,7 +67,9 @@ export function RequestsTab({ unit, funds, subfunds, isFin, myName }: Shared) {
     const { data: { user } } = await sb.auth.getUser()
     let invoice_path: string | null = null
     if (file) {
-      const path = `payment-requests/${Date.now()}-${file.name.replace(/[^\w.\-]/g, '_')}`
+      // Имя без Date.now (react-hooks/purity): метка файла + размер достаточно уникальны,
+      // а повторная загрузка того же счёта упрётся в тот же путь — и это правильно.
+      const path = `payment-requests/${file.lastModified}-${file.size}-${file.name.replace(/[^\w.\-]/g, '_')}`
       const { error: upErr } = await sb.storage.from('b2b-attachments').upload(path, file)
       if (!upErr) invoice_path = path
       else flash('Файл не загрузился — заявка сохранится без счёта')
