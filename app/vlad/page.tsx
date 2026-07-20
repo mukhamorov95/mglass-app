@@ -9,9 +9,10 @@ import VoiceButton from '@/components/vlad/VoiceButton'
 import TaskCard from '@/components/vlad/TaskCard'
 import TodayTab from '@/components/vlad/TodayTab'
 import FinanceTab from '@/components/vlad/FinanceTab'
+import AdviceTab from '@/components/vlad/AdviceTab'
 import { ROLE_META, type VladTask } from '@/components/vlad/shared'
 
-type Tab = 'today' | 'inbox' | 'tasks' | 'finance'
+type Tab = 'today' | 'inbox' | 'tasks' | 'finance' | 'advice'
 
 export default function VladPage() {
   const [unlocked, setUnlocked] = useState(false)
@@ -25,6 +26,7 @@ export default function VladPage() {
   const [flash, setFlash] = useState<string | null>(null)
   const [icsSecret, setIcsSecret] = useState<string | null>(null)
   const [reload, setReload] = useState(0)
+  const [unreadAdvice, setUnreadAdvice] = useState(0)
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setNow(Date.now()) }, [])
@@ -48,6 +50,9 @@ export default function VladPage() {
   useEffect(() => {
     if (!unlocked) return
     fetch('/api/vlad/settings').then(r => r.json()).then(d => setIcsSecret(d.ics_secret ?? null)).catch(() => {})
+    fetch('/api/vlad/advice').then(r => r.json())
+      .then(d => setUnreadAdvice(((d.advice ?? []) as { read: boolean }[]).filter(a => !a.read).length))
+      .catch(() => {})
   }, [unlocked])
 
   async function submitPin() {
@@ -100,6 +105,7 @@ export default function VladPage() {
     { key: 'inbox', label: inbox.length ? `Входящее ${inbox.length}` : 'Входящее' },
     { key: 'tasks', label: 'Задачи' },
     { key: 'finance', label: 'Финансы' },
+    { key: 'advice', label: unreadAdvice ? `Предложения ${unreadAdvice}` : 'Предложения' },
   ]
 
   return (
@@ -168,10 +174,12 @@ export default function VladPage() {
         )}
 
         {tab === 'finance' && <FinanceTab now={now} />}
+
+        {tab === 'advice' && <AdviceTab />}
       </div>
 
       {/* Плавающая кнопка записи — всегда под рукой */}
-      {tab !== 'finance' && (
+      {tab !== 'finance' && tab !== 'advice' && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40">
           <VoiceButton onDone={onVoiceDone} />
         </div>

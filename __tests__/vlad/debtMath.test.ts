@@ -70,6 +70,19 @@ describe('debtMath', () => {
     expect(r.months).toBeLessThan(30)
   })
 
+  it('растущая досрочка гасит быстрее фиксированной с той же стартовой суммой', () => {
+    const mk = () => [ob({ principal: 600_000, monthly_payment: 15_000, rate_pct: 22 })]
+    const flat = simulatePayoff(mk(), 'avalanche', 10_000, '2026-07-01', 0)
+    const ramp = simulatePayoff(mk(), 'avalanche', 10_000, '2026-07-01', 5_000)
+    expect(ramp.months).toBeLessThan(flat.months)
+    expect(ramp.totalInterest).toBeLessThan(flat.totalInterest)
+  })
+
+  it('рост досрочки вытягивает даже долг, где платёж не покрывал проценты', () => {
+    const r = simulatePayoff([ob({ principal: 500_000, monthly_payment: 1_000, rate_pct: 30 })], 'avalanche', 0, '2026-07-01', 3_000)
+    expect(r.months).toBeLessThan(600)
+  })
+
   it('закрытые долги не входят в нагрузку и сумму', () => {
     const obs = [
       ob({ id: 1, principal: 100_000, monthly_payment: 5_000 }),

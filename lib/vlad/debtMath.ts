@@ -42,6 +42,9 @@ export function simulatePayoff(
   strategy: PayoffStrategy,
   extraPerMonth: number,
   startISO: string,
+  // Стратегия владельца «каждый месяц отдавать больше»: досрочка растёт на
+  // rampPerMonth каждый месяц (мес.1 = extra, мес.2 = extra + ramp, …).
+  rampPerMonth = 0,
 ): PayoffResult {
   type Live = { creditor: string; balance: number; rate: number; payment: number }
   let live: Live[] = obs
@@ -55,11 +58,11 @@ export function simulatePayoff(
   const closures: PayoffResult['closures'] = []
   let totalInterest = 0
   let month = 0
+  let freed = 0  // платежи уже закрытых долгов — автоматически усиливают досрочку
 
   while (live.length > 0 && month < MAX_MONTHS) {
     month++
-    // высвободившиеся платежи закрытых долгов автоматически усиливают extra
-    let pool = extraPerMonth
+    let pool = extraPerMonth + rampPerMonth * (month - 1) + freed
 
     for (const l of live) {
       const interest = l.balance * l.rate
@@ -87,7 +90,7 @@ export function simulatePayoff(
     for (const c of closedNow) closures.push({ creditor: c.creditor, month })
     if (closedNow.length > 0) {
       // платёж закрытого долга переходит в досрочку следующих месяцев
-      extraPerMonth += closedNow.reduce((s, c) => s + c.payment, 0)
+      freed += closedNow.reduce((s, c) => s + c.payment, 0)
       live = live.filter(l => l.balance > 0.5)
     }
   }
