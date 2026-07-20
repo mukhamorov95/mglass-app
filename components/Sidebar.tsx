@@ -184,6 +184,7 @@ const CEO_SYSTEM: NavItem[] = [
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
 const ADMIN_OWNER: NavItem[] = [
+  { href: '/vlad',                    label: 'Влад',              icon: '🔒' },
   { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
   { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
