@@ -1,0 +1,24 @@
+name: CI
+
+# Проверка каждого PR перед мерджем: тесты (29 шт, ~0.2 сек) — в первую очередь
+# калькуляторы, где регрессия стоит денег.
+# Линт сюда НЕ добавлен намеренно: сейчас по репозиторию 306 ошибок, CI был бы
+# вечно красным и его перестали бы читать. Сначала разгрести долг — потом гейт.
+# Сборку тоже не гоняем: ей нужны боевые env, фальшивый красный хуже отсутствия.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test
