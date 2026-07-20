@@ -53,6 +53,7 @@ export default function AccountingPage() {
 
   useEffect(() => {
     const d = new Date()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMonth(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`)
     setFDate(d.toISOString().slice(0, 10))
     const savedUnit = localStorage.getItem('acc_unit')
@@ -75,6 +76,7 @@ export default function AccountingPage() {
     setEntries((e.data ?? []) as Entry[])
     setLoading(false)
   }, [sb, month])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
