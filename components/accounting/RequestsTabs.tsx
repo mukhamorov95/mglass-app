@@ -6,10 +6,11 @@
 // не удаляются (правило владельца) — отменённые возвращаемы.
 // «Оплачено» рождает операцию ДДС (cashflow_entries) и связывает её с заявкой.
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { finWeeksOfMonth, fundAvailability, inWeek, type FinWeek, type CashEntryLike } from '@/lib/finweek'
 
-type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null }
+type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number }
 type Subfund = { id: number; fund_id: number; name: string }
 type Req = {
   id: number; unit: string; fund_id: number; subfund_id: number | null
@@ -200,24 +201,26 @@ export function RequestsTab({ unit, funds, subfunds, isFin, myName }: Shared) {
 export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
   const sb = createClient()
   const { reqs, reload } = useRequests(unit)
-  const [monthIncome, setMonthIncome] = useState(0)
-  const [spentByFund, setSpentByFund] = useState<Map<number, number>>(new Map())
+  // Точный остаток фондов (Б3): waterfall по финнеделям чт–ср текущего месяца.
+  const [weeks, setWeeks] = useState<FinWeek[]>([])
+  const [entries, setEntries] = useState<CashEntryLike[]>([])
 
   useEffect(() => {
-    const d = new Date()
-    const from = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`
-    sb.from('cashflow_entries').select('fund_id, kind, amount').eq('unit', unit).gte('entry_date', from)
-      .then(({ data }) => {
-        let inc = 0
-        const spent = new Map<number, number>()
-        for (const e of (data ?? []) as { fund_id: number; kind: string; amount: number }[]) {
-          if (e.kind === 'in') inc += Number(e.amount)
-          else spent.set(e.fund_id, (spent.get(e.fund_id) ?? 0) + Number(e.amount))
-        }
-        setMonthIncome(inc)
-        setSpentByFund(spent)
-      })
+    const ym = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' }).slice(0, 7)
+    const w = finWeeksOfMonth(ym)
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setWeeks(w)
+    if (!w.length) return
+    sb.from('cashflow_entries').select('entry_date, kind, fund_id, amount').eq('unit', unit)
+      .gte('entry_date', w[0].start).lte('entry_date', w[w.length - 1].end)
+      .then(({ data }) => setEntries((data ?? []) as CashEntryLike[]))
   }, [sb, unit])
+
+  const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
+  const avail = useMemo(() => fundAvailability(weeks, entries, unitFunds), [weeks, entries, unitFunds])
+  const monthIncome = useMemo(() =>
+    entries.reduce((s, e) => s + (e.kind === 'in' && weeks.some(w => inWeek(e.entry_date, w)) ? Number(e.amount) : 0), 0),
+  [entries, weeks])
 
   async function setStatus(r: Req, status: string) {
     await sb.from('payment_requests').update({ status, status_changed_at: new Date().toISOString(), status_changed_by: myName, updated_at: new Date().toISOString() }).eq('id', r.id)
@@ -248,18 +251,15 @@ export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
       {[...byFund.entries()].map(([fundId, list]) => {
         const f = funds.find(x => x.id === fundId)
         const ask = list.reduce((s, r) => s + Number(r.amount), 0)
-        // Приблизительный остаток фонда за месяц: поступления × процент − уже потрачено.
-        // Точный недельный расчёт (финнеделя чт–ср, пересчёт) — этап Б3.
-        const budget = f?.percent != null ? monthIncome * Number(f.percent) / 100 : null
-        const spent = spentByFund.get(fundId) ?? 0
-        const left = budget != null ? budget - spent : null
+        const a = f?.percent != null ? avail.get(fundId) : undefined
+        const left = a ? a.available : null
         const short = left != null && ask > left
         return (
           <div key={fundId} className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
             <div className="px-4 pt-3 pb-2 flex items-baseline justify-between">
               <p className="text-[14px] font-semibold text-[#111110]">{f?.name}</p>
               <p className="text-[12px] font-mono">
-                {left != null && <span className={short ? 'text-red-600 font-semibold' : 'text-emerald-700'}>в фонде ≈{RUB(Math.max(0, left))} · </span>}
+                {left != null && <span className={short ? 'text-red-600 font-semibold' : 'text-emerald-700'}>в фонде {RUB(Math.max(0, left))} · </span>}
                 <span className="text-[#111110]">заявок {RUB(ask)}</span>
               </p>
             </div>
@@ -284,7 +284,7 @@ export function CommitteeTab({ unit, funds, isFin, myName }: Shared) {
           </div>
         )
       })}
-      <p className="text-[11px] text-[#9a9a95] text-center">≈ остаток фонда — оценка по месяцу (поступления × процент − потрачено). Точная финнеделя чт–ср — следующий этап.</p>
+      <p className="text-[11px] text-[#9a9a95] text-center">Остаток фонда — точный расчёт по финнеделям чт–ср: waterfall-наполнение по процентам минус потрачено. Детали — вкладка «Финнеделя».</p>
     </div>
   )
 }
