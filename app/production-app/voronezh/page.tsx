@@ -104,8 +104,8 @@ function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, o
           <span className="font-mono font-medium">
             {isDraft ? `Загружено ${loadedOs.length}/${os.length}` : `${os.length} зак.`} · {goPieces} изд. · {KG(goWeight)} кг · {RUB(goAmount)} ₽
           </span>
-          <a href={`/production-app/voronezh/${s.id}/print`} target="_blank" rel="noreferrer"
-            className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">🖨 Лист рейса</a>
+          <a href={`/production-app/voronezh/${s.id}/print?download=1`} target="_blank" rel="noreferrer"
+            className="px-3 py-1.5 rounded-md border border-[#e4e4e0] text-[12px] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">⬇ Лист рейса (PDF)</a>
           {s.status === 'draft' && (
             <>
               <button onClick={() => onShipped(s)} className="px-3 py-1.5 rounded-md bg-[#111110] text-white text-[12px] hover:opacity-85">🚚 Отправить рейс</button>

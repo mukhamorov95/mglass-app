@@ -3,7 +3,7 @@
 // Печатный лист рейса для водителя: по заказчикам — контакты, заказы с составом
 // и весом, графа подписи получателя. Открывается из карточки рейса, печать A4.
 
-import { useEffect, useState, use } from 'react'
+import { useEffect, useState, use, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight, type WeighableItem } from '@/lib/deliveryWeight'
 
@@ -45,6 +45,30 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
   const [clients, setClients] = useState<Map<number, ClientInfo>>(new Map())
   const [err, setErr] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const docRef = useRef<HTMLDivElement>(null)
+
+  // Скачивание PDF прямо на компьютер — тот же паттерн, что у КП/договора
+  // (html2canvas-pro + jsPDF: рендерим готовый лист в картинку → PDF, кириллица ок).
+  async function downloadPdf() {
+    if (!docRef.current) return
+    setPdfBusy(true)
+    try {
+      const [h2c, jspdf] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
+      const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
+      const pw = 210, ph = 297
+      const imgH = pw * canvas.height / canvas.width
+      const img = canvas.toDataURL('image/jpeg', 0.94)
+      let pos = 0, left = imgH
+      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
+      left -= ph
+      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
+      pdf.save(`Рейс-Воронеж-${ship?.ship_date ?? ship?.id ?? ''}.pdf`)
+    } catch (e) {
+      alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
+    } finally { setPdfBusy(false) }
+  }
 
   async function load() {
     const sb = createClient()
@@ -74,6 +98,15 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Авто-скачивание, если открыто из карточки рейса с ?download=1 (клик → файл).
+  useEffect(() => {
+    if (loading || !ship) return
+    if (new URLSearchParams(window.location.search).get('download') !== '1') return
+    const t = setTimeout(() => { void downloadPdf() }, 500)
+    return () => clearTimeout(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, ship])
+
   if (loading) return <div className="p-8 text-[#9a9a95]">Загрузка…</div>
   if (err || !ship) return <div className="p-8 text-red-600">{err ?? 'Рейс не найден'}</div>
 
@@ -91,9 +124,11 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
       <div className="sheet max-w-[210mm] mx-auto bg-white border border-[#e4e4e0] rounded-lg p-8">
         <div className="no-print mb-4 flex justify-end gap-2">
+          <button onClick={downloadPdf} disabled={pdfBusy} className="px-4 py-2 rounded-md bg-emerald-600 text-white text-[13px] disabled:opacity-50">{pdfBusy ? 'Готовлю PDF…' : '⬇ Скачать PDF'}</button>
           <button onClick={() => window.print()} className="px-4 py-2 rounded-md bg-[#111110] text-white text-[13px]">🖨 Печать</button>
         </div>
 
+        <div ref={docRef} className="bg-white">
         <div className="flex items-start justify-between border-b-2 border-[#111110] pb-3">
           <div>
             <div className="text-[20px] font-semibold text-[#111110]">Лист рейса — {ship.title ?? `№${ship.id}`}</div>
@@ -161,6 +196,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
             <div>Отгрузку проверил: ___________________</div>
             <div className="mt-6">Дата: ________________________________</div>
           </div>
+        </div>
         </div>
       </div>
     </div>
