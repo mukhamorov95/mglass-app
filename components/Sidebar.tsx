@@ -138,6 +138,7 @@ const SEO_AI: NavItem[] = [
 
 const CFO_ITEMS: NavItem[] = [
   { href: '/cfo',          label: 'Дашборд CFO',       icon: '📊' },
+  { href: '/accounting',   label: 'Бухгалтерия',       icon: '🧾' },
   { href: '/cfo/receivables', label: 'Дебиторка',      icon: '💸' },
   { href: '/cfo/cashflow', label: 'ДДС · календарь',   icon: '📅' },
   { href: '/cfo/margins',  label: 'Маржинальность',    icon: '📈' },
@@ -628,6 +629,16 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   }
 
   function renderNav() {
+    // Бухгалтерия: только свой раздел
+    if (role === 'accountant') return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-teal-600">Бухгалтерия</div>
+        <div className="space-y-px">
+          {navItem({ href: '/accounting', label: 'ДДС и операции', icon: '🧾' }, 'bg-teal-50 text-teal-700 font-medium')}
+        </div>
+      </>
+    )
+
     // Замерщик: только свой кабинет
     if (role === 'measurer') return (
       <>
