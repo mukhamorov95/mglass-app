@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as tg from '@/lib/telegram'
 import { readMemory, writeMemory, writeLog, startRun, finishRun, failRun } from '@/lib/agentMemory'
+import { deadlineOf } from '@/lib/orderFlags'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -29,44 +30,69 @@ export async function GET(req: Request) {
     const now   = new Date()
     const since = new Date(now.getTime() - 24 * 60 * 60 * 1000)
 
-    // Заказы в производстве
-    const { data: orders } = await supabase
-      .from('orders')
-      .select('id, status, total_sale_price, created_at, updated_at')
-      .in('status', ['confirmed', 'in_production', 'ready'])
-      .order('created_at', { ascending: true })
+    // Реальный цех живёт в production_tasks (B2B, строка = деталь×этап).
+    // До 20.07 агент фильтровал orders по статусам confirmed/in_production/ready,
+    // которых в таблице не существует, — и месяцами рапортовал «нет заказов».
+    const { data: taskRows } = await supabase
+      .from('production_tasks')
+      .select('order_id, status, completed_at')
+    const tasks = (taskRows ?? []) as { order_id: number; status: string; completed_at: string | null }[]
+
+    const openByOrder = new Map<number, number>()
+    let problemCount = 0
+    const todayStart = new Date(now); todayStart.setHours(0, 0, 0, 0)
+    let doneToday = 0
+    for (const t of tasks) {
+      if (t.status !== 'done') {
+        openByOrder.set(t.order_id, (openByOrder.get(t.order_id) ?? 0) + 1)
+        if (t.status === 'problem') problemCount++
+      } else if (t.completed_at && new Date(t.completed_at) >= todayStart) doneToday++
+    }
+    const shopOrderIds = [...openByOrder.keys()]
+
+    // Дедлайны отгрузки — из notes заказа (единый getDeadline-приоритет)
+    let overdueB2b: { id: number; custom_number: string | null; client_name: string | null }[] = []
+    if (shopOrderIds.length) {
+      const { data: b2b } = await supabase
+        .from('b2b_orders')
+        .select('id, custom_number, client_name, notes')
+        .in('id', shopOrderIds)
+      const todayISO = now.toISOString().slice(0, 10)
+      overdueB2b = ((b2b ?? []) as { id: number; custom_number: string | null; client_name: string | null; notes: unknown }[])
+        .filter(o => { const d = deadlineOf(o.notes); return d != null && d.slice(0, 10) < todayISO })
+    }
+
+    // Розница (orders) — реальные статусы конечного автомата
+    const { data: retail } = await supabase
+      .from('orders').select('id, status').in('status', ['in_work', 'approved'])
+    const retailInWork  = (retail ?? []).filter(o => o.status === 'in_work').length
+    const retailWaiting = (retail ?? []).filter(o => o.status === 'approved').length
 
     // Новые заказы за 24ч
     const { data: newOrders } = await supabase
       .from('orders')
       .select('id, total_sale_price, status')
       .gte('created_at', since.toISOString())
+    const newToday   = newOrders?.length ?? 0
+    const newRevenue = newOrders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
 
-    if (!orders?.length && !newOrders?.length) {
+    if (shopOrderIds.length === 0 && !retail?.length && !newToday) {
       await writeLog('production', 'idle', 'Нет заказов в работе')
       await finishRun('production', '😴 Нет заказов в производстве')
       return NextResponse.json({ ok: true, sent: 0 })
     }
 
-    const inProduction = orders?.filter(o => o.status === 'in_production') ?? []
-    const confirmed    = orders?.filter(o => o.status === 'confirmed') ?? []
-    const ready        = orders?.filter(o => o.status === 'ready') ?? []
-    const newToday     = newOrders?.length ?? 0
-    const newRevenue   = newOrders?.reduce((s, o) => s + (o.total_sale_price ?? 0), 0) ?? 0
-
-    // Просроченные (старше 7 дней в производстве)
-    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-    const overdue = inProduction.filter(o => new Date(o.created_at) < sevenDaysAgo)
-
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
     const prompt = `Ты — директор производства MGlass (Максим). Монитори производство, выяви проблемы.
 
-ДАННЫЕ:
-- В производстве: ${inProduction.length} заказов
-- Ожидают запуска: ${confirmed.length} заказов
-- Готовы к выдаче: ${ready.length} заказов
-- Просрочено (>7 дней): ${overdue.length} заказов
-- Новых заказов сегодня: ${newToday} (${newRevenue.toLocaleString('ru-RU')} ₽)
+ДАННЫЕ (источник — реальные задачи цеха production_tasks):
+- Заказов в цехе (есть открытые этапы): ${shopOrderIds.length}
+- Открытых этапов всего: ${tasks.filter(t => t.status !== 'done').length}
+- Этапов с проблемой (андон): ${problemCount}
+- Этапов закрыто сегодня: ${doneToday}
+- Просрочена отгрузка: ${overdueB2b.length} заказов${overdueB2b.length ? ` (${overdueB2b.slice(0, 5).map(o => o.custom_number?.trim() || `#${o.id}`).join(', ')})` : ''}
+- Розница: в работе ${retailInWork}, ожидают запуска ${retailWaiting}
+- Новых заказов за 24ч: ${newToday} (${newRevenue.toLocaleString('ru-RU')} ₽)
 - Предыдущие проблемы: ${memory.known_issues?.slice(-3).join('; ') || 'нет'}
 
 Формат ответа — строго такой:
@@ -88,18 +114,20 @@ export async function GET(req: Request) {
       analysis = 'Анализ недоступен'
     }
 
-    const hasCritical = overdue.length > 0 || inProduction.length > 10
+    const hasCritical = overdueB2b.length > 0 || problemCount > 0
     const statusLine = hasCritical
-      ? `🔴 ${inProduction.length} в пр-ве, ${overdue.length} просрочено`
-      : `🟢 ${inProduction.length} в пр-ве, ${ready.length} готово`
+      ? `🔴 ${shopOrderIds.length} в цехе, просрочено ${overdueB2b.length}, андон ${problemCount}`
+      : `🟢 ${shopOrderIds.length} в цехе, закрыто сегодня ${doneToday}`
 
     const msg = [
       `🏭 <b>Максим — Производство</b>`,
       `<i>${now.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow' })}</i>`,
       ``,
-      `В производстве: <b>${inProduction.length}</b> · Ожидают: ${confirmed.length} · Готовы: <b>${ready.length}</b>`,
-      overdue.length > 0 ? `⚠️ Просрочено: <b>${overdue.length}</b>` : '',
-      newToday > 0 ? `Новых сегодня: ${newToday} (${newRevenue.toLocaleString('ru-RU')} ₽)` : '',
+      `В цехе: <b>${shopOrderIds.length}</b> заказов · этапов закрыто сегодня: <b>${doneToday}</b>`,
+      problemCount > 0 ? `🚨 Проблемных этапов (андон): <b>${problemCount}</b>` : '',
+      overdueB2b.length > 0 ? `⚠️ Просрочена отгрузка: <b>${overdueB2b.length}</b> — ${overdueB2b.slice(0, 5).map(o => o.custom_number?.trim() || `#${o.id}`).join(', ')}` : '',
+      `Розница: в работе ${retailInWork} · ожидают запуска ${retailWaiting}`,
+      newToday > 0 ? `Новых за 24ч: ${newToday} (${newRevenue.toLocaleString('ru-RU')} ₽)` : '',
       ``,
       analysis,
     ].filter(Boolean).join('\n')
@@ -108,24 +136,24 @@ export async function GET(req: Request) {
 
     // Запоминаем проблемы для следующего запуска
     const issues: string[] = []
-    if (overdue.length > 0) issues.push(`${overdue.length} просрочено на ${now.toISOString().slice(0, 10)}`)
-    if (inProduction.length > 10) issues.push(`Высокая нагрузка: ${inProduction.length} в работе`)
+    if (overdueB2b.length > 0) issues.push(`${overdueB2b.length} просрочено на ${now.toISOString().slice(0, 10)}`)
+    if (problemCount > 0) issues.push(`Андон: ${problemCount} проблемных этапов`)
 
     await writeMemory('production', {
       total_reports_sent: (memory.total_reports_sent ?? 0) + 1,
       last_report_at: now.toISOString(),
-      in_production: inProduction.length,
-      overdue_count: overdue.length,
+      in_production: shopOrderIds.length,
+      overdue_count: overdueB2b.length,
       known_issues: [...(memory.known_issues ?? []).slice(-5), ...issues],
     })
 
-    const level = overdue.length > 0 ? 'warn' : 'success'
+    const level = hasCritical ? 'warn' : 'success'
     await writeLog('production', level,
       `${statusLine} · новых ${newToday}`,
-      { inProduction: inProduction.length, overdue: overdue.length, ready: ready.length })
+      { inShop: shopOrderIds.length, overdue: overdueB2b.length, problem: problemCount, doneToday })
 
     await finishRun('production', statusLine)
-    return NextResponse.json({ ok: true, inProduction: inProduction.length, overdue: overdue.length })
+    return NextResponse.json({ ok: true, inShop: shopOrderIds.length, overdue: overdueB2b.length, problem: problemCount })
 
   } catch (err) {
     await failRun('production', String(err))
