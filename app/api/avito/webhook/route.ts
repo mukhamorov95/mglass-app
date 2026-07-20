@@ -114,6 +114,12 @@ export async function POST(req: NextRequest) {
 
   await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `КЛИЕНТ: ${text}`, author: null })
 
+  // Клиент ответил — счётчик напоминаний обнуляем, id аккаунта запоминаем:
+  // без него фоллоу-ап (крон avito-followup) не сможет написать в этот чат.
+  const followupPatch: Record<string, unknown> = { followup_count: 0 }
+  if (v.user_id != null && lead.avito_user_id !== v.user_id) followupPatch.avito_user_id = v.user_id
+  await service.from('crm_leads').update(followupPatch).eq('id', leadId)
+
   // Диалог ведёт ЧЕЛОВЕК (менеджер забрал у Ивана или лид импортирован) — Иван
   // не автоотвечает, чтобы клиенту не писали оба. Фиксируем сообщение и пингуем.
   const managerName = (lead.manager as string | null) ?? null
