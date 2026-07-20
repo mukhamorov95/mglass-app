@@ -29,6 +29,7 @@ export default function FinanceTab({ now }: { now: number }) {
   const [editId, setEditId] = useState<number | null>(null)
   const [strategy, setStrategy] = useState<PayoffStrategy>('avalanche')
   const [extra, setExtra] = useState(0)
+  const [ramp, setRamp] = useState(0)
   const [saving, setSaving] = useState(false)
 
   const load = useCallback(async () => {
@@ -78,9 +79,9 @@ export default function FinanceTab({ now }: { now: number }) {
   const load_ = monthlyLoad(obs)
   const debt = totalDebt(obs)
   const startISO = now ? new Date(now).toISOString() : '2026-01-01'
-  const sim = active.length ? simulatePayoff(obs, strategy, extra, startISO) : null
-  const simAlt = active.length ? simulatePayoff(obs, strategy === 'avalanche' ? 'snowball' : 'avalanche', extra, startISO) : null
-  const simBase = active.length && extra > 0 ? simulatePayoff(obs, strategy, 0, startISO) : null
+  const sim = active.length ? simulatePayoff(obs, strategy, extra, startISO, ramp) : null
+  const simAlt = active.length ? simulatePayoff(obs, strategy === 'avalanche' ? 'snowball' : 'avalanche', extra, startISO, ramp) : null
+  const simBase = active.length && (extra > 0 || ramp > 0) ? simulatePayoff(obs, strategy, 0, startISO, 0) : null
 
   return (
     <div className="space-y-4">
@@ -136,6 +137,18 @@ export default function FinanceTab({ now }: { now: number }) {
             </div>
             <input type="range" min={0} max={300_000} step={5_000} value={extra}
               onChange={e => setExtra(Number(e.target.value))} className="w-full mt-2 accent-[#111110]" />
+            {/* Стратегия владельца: каждый месяц отдавать всё больше */}
+            <div className="flex items-baseline justify-between mt-3">
+              <p className="text-[13px] font-medium text-[#111110]">…и каждый месяц наращивать ещё на</p>
+              <p className="text-[15px] font-bold font-mono text-[#111110]">{RUB(ramp)}/мес</p>
+            </div>
+            <input type="range" min={0} max={50_000} step={1_000} value={ramp}
+              onChange={e => setRamp(Number(e.target.value))} className="w-full mt-2 accent-[#111110]" />
+            {ramp > 0 && (
+              <p className="text-[11px] text-[#9a9a95] mt-1">
+                Мес.1: {RUB(extra)} · мес.2: {RUB(extra + ramp)} · мес.6: {RUB(extra + ramp * 5)} · растёт, пока долги не кончатся
+              </p>
+            )}
             {sim && simBase && sim.months < 600 && (
               <p className="text-[12px] text-emerald-700 mt-1">
                 Быстрее на {yearsMonths(Math.max(0, simBase.months - sim.months))} · процентов меньше на {RUB(Math.max(0, simBase.totalInterest - sim.totalInterest))}
