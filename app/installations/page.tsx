@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
 // Монтажи — одно окно отдела реализации: заявка на монтаж (один заказ = одна
@@ -98,6 +98,59 @@ export default function InstallationsPage() {
   const [newCrew, setNewCrew] = useState('')
   const [crewsOpen, setCrewsOpen] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
+
+  // Голосовой ввод заявки: зажал → надиктовал → поля заполнились сами
+  // (Whisper → Claude, /api/installations/parse-voice). Заполняются только
+  // ПУСТЫЕ поля — ручной ввод не затирается.
+  const [recState, setRecState] = useState<'idle' | 'rec' | 'busy'>('idle')
+  const recRef = useRef<MediaRecorder | null>(null)
+  const chunksRef = useRef<Blob[]>([])
+
+  async function voiceStart() {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mime = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4'
+      const rec = new MediaRecorder(stream, { mimeType: mime })
+      chunksRef.current = []
+      rec.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data) }
+      rec.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop())
+        const blob = new Blob(chunksRef.current, { type: mime })
+        if (blob.size < 2000) { setRecState('idle'); return }
+        setRecState('busy')
+        const fd = new FormData()
+        fd.append('audio', blob, mime.includes('mp4') ? 'note.mp4' : 'note.webm')
+        const r = await fetch('/api/installations/parse-voice', { method: 'POST', body: fd })
+        const d = await r.json().catch(() => ({}))
+        setRecState('idle')
+        if (!r.ok) { flash(d.error ?? 'Не разобралось — попробуй ещё раз'); return }
+        const f = (d.fields ?? {}) as Record<string, unknown>
+        const str = (v: unknown) => (v == null ? '' : String(v))
+        setForm(prev => ({
+          ...prev,
+          order_no:       prev.order_no       || str(f.order_no).replace(/^#/, ''),
+          title:          prev.title          || str(f.title),
+          client_name:    prev.client_name    || str(f.client_name),
+          phone:          prev.phone          || str(f.phone),
+          address:        prev.address        || str(f.address),
+          entry_note:     prev.entry_note     || str(f.entry_note),
+          scheduled_date: prev.scheduled_date || (/^\d{4}-\d{2}-\d{2}$/.test(str(f.scheduled_date)) ? str(f.scheduled_date) : ''),
+          time_from:      prev.time_from      || (/^\d{2}:\d{2}$/.test(str(f.time_from)) ? str(f.time_from) : ''),
+          time_to:        prev.time_to        || (/^\d{2}:\d{2}$/.test(str(f.time_to)) ? str(f.time_to) : ''),
+          contact_before: str(f.contact_before) || prev.contact_before,
+          amount:         prev.amount         || (f.amount != null ? String(f.amount) : ''),
+          order_total:    prev.order_total    || (f.order_total != null ? String(f.order_total) : ''),
+          comment:        prev.comment        || str(f.comment),
+        }))
+        const n = Object.values(f).filter(v => v != null && v !== '').length
+        flash(`Заполнено полей из голоса: ${n} — проверь и сохрани`)
+      }
+      rec.start()
+      recRef.current = rec
+      setRecState('rec')
+    } catch { flash('Нет доступа к микрофону') }
+  }
+  function voiceStop() { recRef.current?.stop() }
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
@@ -254,7 +307,13 @@ export default function InstallationsPage() {
         {/* Форма */}
         {formOpen && (
           <div className="bg-white rounded-xl border border-[#111110] p-4 space-y-3">
-            <p className="text-[13px] font-bold text-[#111110]">{editId != null ? 'Редактировать монтаж' : 'Новая заявка на монтаж'}</p>
+            <div className="flex items-center justify-between">
+              <p className="text-[13px] font-bold text-[#111110]">{editId != null ? 'Редактировать монтаж' : 'Новая заявка на монтаж'}</p>
+              <button type="button" onClick={recState === 'rec' ? voiceStop : recState === 'idle' ? voiceStart : undefined} disabled={recState === 'busy'}
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold ${recState === 'rec' ? 'bg-red-600 text-white animate-pulse' : recState === 'busy' ? 'bg-[#f0f0ec] text-[#9a9a95]' : 'bg-[#111110] text-white'}`}>
+                {recState === 'rec' ? '■ Стоп' : recState === 'busy' ? 'Разбираю…' : '🎙 Надиктовать'}
+              </button>
+            </div>
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <div><span className={lbl}>№ заказа *</span><input className={inputCls} value={form.order_no} onChange={e => setForm({ ...form, order_no: e.target.value })} placeholder="0715-2" /></div>
               <div><span className={lbl}>Дата</span><input type="date" className={inputCls} value={form.scheduled_date} onChange={e => setForm({ ...form, scheduled_date: e.target.value })} /></div>
