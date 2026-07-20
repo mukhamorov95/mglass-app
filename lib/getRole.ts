@@ -196,6 +196,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/stock-control',
     '/admin/procurement',
     '/admin/cutting-settings',
+    '/accounting',
   ],
 
   commercial: [

@@ -68,6 +68,7 @@ const BUYER_SKLAD: NavItem[] = [
 
 const BUYER_ZAKUPKI: NavItem[] = [
   { href: '/admin/procurement',     label: 'Канбан закупок',    icon: '🗂️', indent: true },
+  { href: '/accounting',            label: 'Заявки на оплату',  icon: '💸', indent: true },
   { href: '/admin/suppliers',       label: 'Поставщики',        icon: '🏭', indent: true },
   { href: '/admin/shower-hardware', label: 'Фурнитура душевых', icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Фурнитура лофт',   icon: '🔩', indent: true },

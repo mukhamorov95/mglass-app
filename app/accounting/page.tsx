@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -27,7 +28,9 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'entry'>('odds')
+  const [tab, setTab] = useState<'odds' | 'entry' | 'requests' | 'committee'>('odds')
+  const [myRole, setMyRole] = useState('')
+  const [myName, setMyName] = useState('')
   const [unit, setUnit] = useState<'ip' | 'ooo'>('ip')
   const [month, setMonth] = useState('')
   const [funds, setFunds] = useState<Fund[]>([])
@@ -58,6 +61,16 @@ export default function AccountingPage() {
     setFDate(d.toISOString().slice(0, 10))
     const savedUnit = localStorage.getItem('acc_unit')
     if (savedUnit === 'ooo') setUnit('ooo')
+    sb.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      sb.from('users').select('role,name').eq('id', user.id).maybeSingle().then(({ data }) => {
+        const u = data as { role?: string; name?: string } | null
+        setMyRole(u?.role ?? '')
+        setMyName(u?.name ?? user.email ?? '')
+        if (u?.role === 'buyer') setTab('requests')
+      })
+    })
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const load = useCallback(async () => {
@@ -79,6 +92,8 @@ export default function AccountingPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
+  const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
+  const isBuyer = myRole === 'buyer'
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
   const unitEntries = useMemo(() => entries.filter(e => e.unit === unit), [entries, unit])
   const sumFund = useCallback((fundId: number) => unitEntries.filter(e => e.fund_id === fundId).reduce((s, e) => s + Number(e.amount), 0), [unitEntries])
@@ -198,7 +213,10 @@ export default function AccountingPage() {
             </div>
           </div>
           <div className="flex gap-1 mt-3 -mb-px">
-            {([['odds', 'ОДДС'], ['entry', 'Ввод операций']] as const).map(([k, label]) => (
+            {(isBuyer
+              ? ([['requests', 'Заявки на оплату']] as const)
+              : ([['odds', 'ОДДС'], ['entry', 'Ввод операций'], ['requests', 'Заявки'], ['committee', 'Комитет']] as const)
+            ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
                 {label}
@@ -333,6 +351,9 @@ export default function AccountingPage() {
             </div>
           </div>
         )}
+
+        {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
+        {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
       </div>
     </div>
   )
