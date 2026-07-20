@@ -7,8 +7,9 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { quickCalc, type CalcType } from '@/lib/quickCalc'
+import { guardPrices, extractPhone, shouldHandOver, mergeClientBurst, type DialogMsg } from './avitoGuards'
 
-export type DialogMsg = { from: 'client' | 'manager'; text: string }
+export type { DialogMsg }
 
 export type LeadKnown = {
   name?: string | null
@@ -27,6 +28,7 @@ export type ManagerTurn = {
   score: number
   score_reason: string
   needs_human: boolean
+  price_guard_hits?: number
 }
 
 const PERSONA = `Ты — Иван, менеджер компании M-Glass (Москва): собственное производство зеркал, душевых перегородок из стекла и лофт-перегородок. Ты общаешься с клиентом в чате Авито.
@@ -114,7 +116,8 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
   const messages: Anthropic.MessageParam[] = [
     ...(knownLines ? [{ role: 'user' as const, content: `Уже известно о клиенте:\n${knownLines}` },
                       { role: 'assistant' as const, content: 'Принял, учитываю.' }] : []),
-    ...history.map(m => ({ role: m.from === 'client' ? 'user' as const : 'assistant' as const, content: m.text })),
+    // Серия сообщений клиента подряд — один ход диалога, не три
+    ...mergeClientBurst(history).map(m => ({ role: m.from === 'client' ? 'user' as const : 'assistant' as const, content: m.text })),
   ]
 
   const res = await anthropic.messages.create({
@@ -142,6 +145,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
 
   // Цены — только из детерминированного калькулятора, каждая позиция отдельно
   const calcs = (input.calcs ?? []).slice(0, 3)
+  const allowedPrices: number[] = []
   for (let i = 0; i < calcs.length; i++) {
     const c = calcs[i]
     try {
@@ -151,6 +155,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
       })
       if (r && r.finalPrice > 0) {
         estAmount = (estAmount ?? 0) + r.finalPrice
+        allowedPrices.push(r.finalPrice)
         const priceStr = `${Math.round(r.finalPrice).toLocaleString('ru-RU')} ₽`
         reply = reply.replaceAll(`{{PRICE_${i + 1}}}`, priceStr)
         // Обратная совместимость с одиночной меткой
@@ -160,13 +165,29 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
   }
   reply = reply.replace(/\{\{PRICE(_\d+)?\}\}/g, 'сейчас уточню у производства и напишу точную цифру')
 
+  // Страж: любая сумма, которую не посчитал калькулятор, до клиента не уходит.
+  if (estAmount != null && calcs.length > 1) allowedPrices.push(estAmount)
+  const guarded = guardPrices(reply, allowedPrices)
+
+  // Телефон снимаем из текста клиента сами: модель его иногда не замечает.
+  const extracted = { ...(input.extracted ?? {}) }
+  if (!extracted.phone) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].from !== 'client') continue
+      const p = extractPhone(history[i].text)
+      if (p) { extracted.phone = p; break }
+    }
+  }
+
   return {
-    reply,
-    extracted: input.extracted ?? {},
+    reply: guarded.text,
+    extracted,
     est_amount: estAmount,
     qualified: input.qualified ?? false,
     score: Math.max(0, Math.min(100, Math.round(input.score ?? 0))),
     score_reason: input.score_reason ?? '',
-    needs_human: input.needs_human ?? false,
+    // Слишком длинный диалог или вычищенная цена — повод подключить человека.
+    needs_human: (input.needs_human ?? false) || guarded.replaced > 0 || shouldHandOver(history),
+    price_guard_hits: guarded.replaced,
   }
 }
