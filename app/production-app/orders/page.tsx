@@ -13,7 +13,7 @@ import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf,
 // станции — защита от случайных нажатий. Пишет через PATCH /api/production-tasks
 // (двойная запись в production_tasks + notes.detail_stages — прогресс везде верен).
 
-type Task = { id: number; order_id: number; item_index: number; stage_key: string; station: string; status: string; sequence_order: number }
+type Task = { id: number; order_id: number; item_index: number; stage_key: string; station: string; status: string; sequence_order: number; auto_closed?: boolean }
 type Item = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; hasTempering?: boolean; hasFacet?: boolean; hasHoles?: boolean; shape?: 'rect' | 'curved'; hasTriplex?: boolean }
 type Order = { id: number; custom_number: string | null; client_name: string; items: unknown; notes: unknown }
 type Me = { role: string | null; production_stations: string[] | null; production_lead: boolean }
@@ -55,18 +55,30 @@ export default function OrdersScreen() {
       const role = user.email === OWNER_EMAIL ? 'admin' : (p as Me | null)?.role ?? null
       setMe({ role, production_stations: (p as Me | null)?.production_stations ?? [], production_lead: lead })
     }
-    const { data: taskRows } = await sb.from('production_tasks')
-      .select('id,order_id,item_index,stage_key,station,status,sequence_order')
-      .in('status', ['queued', 'in_progress', 'problem']).order('sequence_order')
-    let ts = (taskRows ?? []) as Task[]
-    const ids = [...new Set(ts.map(t => t.order_id))]
+    // Открытые задачи задают список «заказы в работе», но грузим потом ВСЕ задачи
+    // этих заказов — иначе закрытые этапы выглядят неотмеченными, а счётчик = 0/N.
+    const { data: openRows } = await sb.from('production_tasks')
+      .select('order_id').in('status', ['queued', 'in_progress', 'problem'])
+    const ids = [...new Set((openRows ?? []).map(r => (r as { order_id: number }).order_id))]
+    let ts: Task[] = []
     if (ids.length) {
       // Производственный контур — только заказы с PROD_SINCE; задачи старых заказов скрываем
       const { data: ords } = await sb.from('b2b_orders').select('id,custom_number,client_name,items,notes')
         .in('id', ids).gte('created_at', PROD_SINCE)
       const fresh = new Map((ords ?? []).map((o: Order) => [o.id, o]))
-      ts = ts.filter(t => fresh.has(t.order_id))
       setOrders(fresh)
+      const freshIds = [...fresh.keys()]
+      if (freshIds.length) {
+        const cols = 'id,order_id,item_index,stage_key,station,status,sequence_order'
+        const { data: rows, error } = await sb.from('production_tasks')
+          .select(`${cols},auto_closed`).in('order_id', freshIds).order('sequence_order')
+        if (error) {
+          // колонка auto_closed могла ещё не попасть в кэш схемы PostgREST
+          const { data: bare } = await sb.from('production_tasks')
+            .select(cols).in('order_id', freshIds).order('sequence_order')
+          ts = (bare ?? []) as Task[]
+        } else ts = (rows ?? []) as Task[]
+      }
     }
     setTasks(ts)
     setLoading(false)
@@ -78,8 +90,11 @@ export default function OrdersScreen() {
   async function markDone(taskId: number, station: string) {
     if (!canMark(station)) { flash('Этот этап отмечает мастер своей станции или ответственный'); return }
     const r = await fetch(`/api/production-tasks/${taskId}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: 'done' }) })
-    if (!r.ok) { const d = await r.json().catch(() => ({})); flash(d.message || 'Не удалось отметить'); return }
+    const d = await r.json().catch(() => ({}))
+    if (!r.ok) { flash(d.message || d.error || 'Не удалось отметить'); return }
+    const n = Array.isArray(d.cascaded) ? d.cascaded.length : 0
     await load()
+    if (n > 0) flash(`Готово · предыдущие этапы закрыты автоматически (${n})`)
   }
 
   async function packAll(orderId: number) {
@@ -184,17 +199,34 @@ export default function OrdersScreen() {
                   <div className="space-y-2">
                     {items.map((it, i) => {
                       const stages = getApplicableStages(it)
+                      // «Готово» = последний этап маршрута детали. Закрывая его, API
+                      // закроет и все предыдущие — их мастер уже сделал физически.
+                      const openOfItem = oTasks.filter(x => x.item_index === i && x.status !== 'done')
+                      const finalTask = openOfItem.length
+                        ? openOfItem.reduce((a, b) => (a.sequence_order > b.sequence_order ? a : b))
+                        : null
                       return (
                         <div key={i} className="border border-[#f0f0ec] rounded-lg p-2.5">
-                          <p className="text-[12px] font-mono text-[#111110] mb-1.5">Поз.{i + 1} · {specLine(it) || '—'}</p>
+                          <div className="flex items-center justify-between gap-2 mb-1.5">
+                            <p className="text-[12px] font-mono text-[#111110] min-w-0 truncate">Поз.{i + 1} · {specLine(it) || '—'}</p>
+                            {finalTask
+                              ? <button disabled={!canMark(finalTask.station)}
+                                  onClick={() => markDone(finalTask.id, finalTask.station)}
+                                  className={`flex-shrink-0 text-[11px] font-semibold px-3 py-1.5 rounded-lg ${canMark(finalTask.station) ? 'bg-emerald-600 text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] cursor-default'}`}>
+                                  ✓ Изделие готово
+                                </button>
+                              : <span className="flex-shrink-0 text-[11px] font-semibold text-emerald-600">✓ готово</span>}
+                          </div>
                           <div className="flex flex-wrap gap-1.5">
                             {stages.map(s => {
                               const t = oTasks.find(x => x.item_index === i && x.stage_key === s.key)
                               const status = t?.status ?? 'queued'
-                              const cls = status === 'done' ? 'bg-emerald-600 text-white' : status === 'problem' ? 'bg-red-600 text-white' : status === 'in_progress' ? 'bg-blue-600 text-white' : 'bg-[#f0f0ec] text-[#6b6b66]'
+                              const auto = status === 'done' && t?.auto_closed
+                              const cls = auto ? 'bg-emerald-100 text-emerald-700' : status === 'done' ? 'bg-emerald-600 text-white' : status === 'problem' ? 'bg-red-600 text-white' : status === 'in_progress' ? 'bg-blue-600 text-white' : 'bg-[#f0f0ec] text-[#6b6b66]'
                               const allowed = t && status !== 'done' && canMark(t.station)
                               return (
                                 <button key={s.key} disabled={!allowed}
+                                  title={auto ? 'закрыт автоматически — отмечен следующий этап' : undefined}
                                   onClick={() => t && markDone(t.id, t.station)}
                                   className={`text-[11px] font-medium px-2.5 py-1.5 rounded-lg ${cls} ${allowed ? 'ring-1 ring-inset ring-black/10 hover:opacity-90' : 'cursor-default'}`}>
                                   {status === 'done' ? '✓ ' : ''}{STAGE_LABELS[s.key as DetailStageKey]}
