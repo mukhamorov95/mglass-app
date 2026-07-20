@@ -488,6 +488,7 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
   useEffect(() => {
     try {
       const rp = localStorage.getItem('mglass_rev_plan')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (rp) setRevPlan({ ...DEFAULT_REV_PLAN, ...JSON.parse(rp) })
       const fn = localStorage.getItem('mglass_funds')
       if (fn) setFunds(JSON.parse(fn))

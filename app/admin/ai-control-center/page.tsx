@@ -286,6 +286,7 @@ export default function AIControlCenter() {
       })
       .catch(() => { try { const raw = localStorage.getItem(REC_KEY); if (raw) setRecs(JSON.parse(raw)) } catch {} })
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     try { const rawLog = localStorage.getItem(IMPL_LOG_KEY); if (rawLog) setImplLog(JSON.parse(rawLog)) } catch {}
 
     // Load quick metrics
@@ -390,6 +391,7 @@ export default function AIControlCenter() {
     setCalcLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (tab === 'calculators') loadCalcExample() }, [tab, loadCalcExample])
 
   // ── AI Analysis ─────────────────────────────────────────────────────────────

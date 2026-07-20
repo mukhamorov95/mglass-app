@@ -45,9 +45,14 @@ function getSource(tags: string[]): string {
   return 'Без источника'
 }
 
+type AmoLead = {
+  responsible_user_id: number; status_id: number; created_at: number
+  _embedded?: { tags?: { name?: unknown }[] }
+}
+
 async function fetchAllLeads(from: number, to: number) {
   let page = 1
-  const all: any[] = []
+  const all: AmoLead[] = []
   while (true) {
     const res = await fetch(
       `${AMO_BASE}/leads?filter[pipeline_id]=${SALES_PIPELINE_ID}&filter[created_at][from]=${from}&filter[created_at][to]=${to}&with=tags&limit=250&page=${page}`,
@@ -92,7 +97,7 @@ export async function GET(req: Request) {
 
   for (const lead of leads) {
     const mid: number = lead.responsible_user_id
-    const tags: string[] = (lead._embedded?.tags ?? []).map((t: any) => String(t.name))
+    const tags: string[] = (lead._embedded?.tags ?? []).map((t: { name?: unknown }) => String(t.name))
     const source = getSource(tags)
     const won  = lead.status_id === 142
     const lost = lead.status_id === 143

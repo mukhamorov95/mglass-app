@@ -45,6 +45,7 @@ export default function WasteModifiersPage() {
     if (res.ok) setRows(await res.json())
     setLoading(false)
   }
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
   useEffect(() => { if (adding) inputRef.current?.focus() }, [adding])
 

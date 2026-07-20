@@ -202,7 +202,7 @@ export default async function Home() {
                     </div>
                     <p className="text-[12px] text-[#9a9a95] mt-0.5">
                       {new Date(c.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
-                      {isAdmin && c.created_at && ' · ' + (usersMap[(c as any).created_by] ?? '')}
+                      {isAdmin && c.created_at && ' · ' + (usersMap[(c as { created_by?: string }).created_by ?? ''] ?? '')}
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">

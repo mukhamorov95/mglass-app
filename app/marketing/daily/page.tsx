@@ -68,6 +68,7 @@ export default function DailyPage() {
   }
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadCached(selectedDate)
   }, [selectedDate])
 
@@ -169,7 +170,7 @@ export default function DailyPage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1">
                       <p className="text-[13px] font-semibold text-[#111110]">{idea.topic}</p>
-                      <p className="text-[12px] text-blue-600 mt-0.5">"{idea.hook}"</p>
+                      <p className="text-[12px] text-blue-600 mt-0.5">&quot;{idea.hook}&quot;</p>
                       <p className="text-[11px] text-[#8a8a85] mt-1">{idea.why_today}</p>
                     </div>
                     <span className="w-7 h-7 rounded-full bg-[#111110] text-white flex items-center justify-center text-[12px] font-bold flex-shrink-0">
@@ -191,7 +192,7 @@ export default function DailyPage() {
                 </div>
                 <div>
                   <p className="text-[11px] text-[#8a8a85]">Хук</p>
-                  <p className="text-[13px] font-semibold text-blue-700">"{plan.top_reel_script.hook}"</p>
+                  <p className="text-[13px] font-semibold text-blue-700">&quot;{plan.top_reel_script.hook}&quot;</p>
                 </div>
                 <div>
                   <p className="text-[11px] text-[#8a8a85] mb-1">Структура</p>
@@ -253,7 +254,7 @@ export default function DailyPage() {
                   </span>
                   <p className="text-[13px] font-semibold text-[#111110]">{plan.b2b_idea.topic}</p>
                 </div>
-                <p className="text-[12px] text-blue-600">"{plan.b2b_idea.hook}"</p>
+                <p className="text-[12px] text-blue-600">&quot;{plan.b2b_idea.hook}&quot;</p>
                 <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   <span className="text-[11px] font-semibold text-amber-700">Действие: </span>
                   <span className="text-[12px] text-amber-900">{plan.b2b_idea.action}</span>

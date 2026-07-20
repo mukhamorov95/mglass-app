@@ -148,6 +148,7 @@ export default function StationBatchesPage() {
     setLoading(false)
   }, [sb, station, isCutting])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function markTasks(taskIds: number[]) {

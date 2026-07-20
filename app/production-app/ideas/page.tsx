@@ -65,6 +65,7 @@ export default function IdeasPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   function toggleRecording() {

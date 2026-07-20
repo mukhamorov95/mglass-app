@@ -115,6 +115,7 @@ export default function IntegrationsMonitor() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   function showToast(msg: string) {

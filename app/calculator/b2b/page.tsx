@@ -394,6 +394,7 @@ export default function B2BCalculatorPage() {
       return
     }
     if (clientIdParam) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setClientId(Number(clientIdParam))
     }
     if (!draftRestoredRef.current) {
@@ -417,6 +418,7 @@ export default function B2BCalculatorPage() {
     const current = clients.find(c => c.id === clientId)
     if (current && isMGlassClient(current)) return
     const mg = clients.find(c => isMGlassClient(c))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (mg) setClientId(mg.id)
   }, [mglassOnly, clientId, clients])
 

@@ -106,6 +106,7 @@ export default function AgentsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
     const interval = setInterval(load, 30_000)
     return () => clearInterval(interval)
@@ -271,7 +272,11 @@ export default function AgentsPage() {
 
                 {/* Pending approvals (только для catalog) */}
                 {agent.agent_key === 'catalog' && (() => {
-                  const pending = (agent.memory?.pending_approvals as any[]) ?? []
+                  type PendingApproval = {
+                    id?: string; name?: string; suggestion?: string; category?: string
+                    cost_price?: number; unit?: string; reason?: string; source?: string
+                  }
+                  const pending = (agent.memory?.pending_approvals as PendingApproval[]) ?? []
                   if (!pending.length) return null
                   return (
                     <div className="border-t border-[#f0f0ee] px-4 py-3">
@@ -279,7 +284,7 @@ export default function AgentsPage() {
                         Ожидают одобрения — {pending.length}
                       </p>
                       <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {pending.map((item: any, idx: number) => {
+                        {pending.map((item, idx: number) => {
                           const name = item.name ?? item.suggestion ?? null
                           if (!name) return null
                           const doAction = async (reject: boolean) => {

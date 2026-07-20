@@ -32,12 +32,13 @@ export async function POST() {
       log: logOut.trim(),
       push: pushErr.trim() || 'ok',
     })
-  } catch (err: any) {
+  } catch (err) {
+    const e = err as { stderr?: string; stdout?: string }
     return NextResponse.json({
       ok: false,
       error: err instanceof Error ? err.message : String(err),
-      stderr: err?.stderr ?? '',
-      stdout: err?.stdout ?? '',
+      stderr: e?.stderr ?? '',
+      stdout: e?.stdout ?? '',
     })
   }
 }

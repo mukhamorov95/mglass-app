@@ -242,6 +242,7 @@ export default function CatalogPage() {
     setImages(urls)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadImages() }, [loadImages])
 
   const displayedSeries = activeSeries ? SERIES.filter(s => s.id === activeSeries) : SERIES

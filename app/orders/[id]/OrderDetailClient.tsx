@@ -103,25 +103,28 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [photoUploading, setPhotoUploading] = useState(false)
   const [photos, setPhotos] = useState<string[]>(order.completion_photos ?? [])
   const [prodStages, setProdStages] = useState<Record<string, string | null>>(
-    (order as any).production_stages ?? {}
+    (order as unknown as { production_stages?: Record<string, string | null> }).production_stages ?? {}
   )
   const [togglingStage, setTogglingStage] = useState<string | null>(null)
   const [rating, setRating]               = useState(0)
   const [ratingComment, setRatingComment] = useState('')
   const [ratingSaved, setRatingSaved]     = useState(false)
   const [savingRating, setSavingRating]   = useState(false)
+  const [nowTs, setNowTs]                 = useState(0)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNowTs(Date.now())
     fetch('/api/admin/delivery-zones').then(r => r.json()).then(setZones)
     fetch('/api/admin/brigades').then(r => r.json()).then(setBrigades)
   }, [])
 
-  const daysInWork = order.launched_at
-    ? Math.ceil((Date.now() - new Date(order.launched_at).getTime()) / 86_400_000)
+  const daysInWork = order.launched_at && nowTs
+    ? Math.ceil((nowTs - new Date(order.launched_at).getTime()) / 86_400_000)
     : null
 
-  const daysToDeadline = order.deadline
-    ? Math.ceil((new Date(order.deadline).getTime() - Date.now()) / 86_400_000)
+  const daysToDeadline = order.deadline && nowTs
+    ? Math.ceil((new Date(order.deadline).getTime() - nowTs) / 86_400_000)
     : null
 
   async function handleApprove() {

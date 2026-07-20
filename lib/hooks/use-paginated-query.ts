@@ -25,9 +25,11 @@ export function usePaginatedQuery<T>(
   const [loading, setLoading] = useState(true)
 
   const buildQueryRef = useRef(buildQuery)
+  // eslint-disable-next-line react-hooks/refs
   buildQueryRef.current = buildQuery
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPage(1)
   }, [reloadKey])
 

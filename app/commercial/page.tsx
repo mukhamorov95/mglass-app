@@ -107,6 +107,7 @@ export default function CommercialPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(period) }, [period, load])
 
   const totals = data?.managers.reduce((acc, m) => ({

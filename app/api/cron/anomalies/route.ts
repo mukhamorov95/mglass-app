@@ -21,9 +21,10 @@ export async function GET(req: Request) {
     .select('min_margin, max_discount_percent, product_type')
 
   // Build threshold map by product_type (null = default)
-  const defaultSettings = (settings ?? []).find((s: any) => !s.product_type) ?? { min_margin: 25, max_discount_percent: 15 }
-  const minMargin   = (defaultSettings as any).min_margin        ?? 25
-  const maxDiscount = (defaultSettings as any).max_discount_percent ?? 15
+  type SettingsRow = { min_margin: number | null; max_discount_percent: number | null; product_type: string | null }
+  const defaultSettings = ((settings ?? []) as SettingsRow[]).find(s => !s.product_type) ?? { min_margin: 25, max_discount_percent: 15 }
+  const minMargin   = defaultSettings.min_margin        ?? 25
+  const maxDiscount = defaultSettings.max_discount_percent ?? 15
 
   // Orders in the last 24h that violate thresholds
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
@@ -42,22 +43,27 @@ export async function GET(req: Request) {
   const anomalies: string[] = []
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://mglass-app.vercel.app'
 
+  type OrderRow = { id: string; number: string; margin_percent: number; status: string }
+  type LineRow  = { order_id: string; discount_percent: number; product_name: string }
+  const orderRows = (orders ?? []) as OrderRow[]
+  const lineRows  = (lines ?? []) as LineRow[]
+
   // Check order-level margin
-  for (const o of (orders ?? [])) {
-    if ((o as any).margin_percent < minMargin && (o as any).status !== 'pending_approval') {
+  for (const o of orderRows) {
+    if (o.margin_percent < minMargin && o.status !== 'pending_approval') {
       anomalies.push(
-        `⚠ Низкая маржа <a href="${appUrl}/orders/${(o as any).id}">${(o as any).number}</a>: ${(o as any).margin_percent?.toFixed(1)}% (мин. ${minMargin}%)`,
+        `⚠ Низкая маржа <a href="${appUrl}/orders/${o.id}">${o.number}</a>: ${o.margin_percent?.toFixed(1)}% (мин. ${minMargin}%)`,
       )
     }
   }
 
   // Check line-level discounts
-  for (const l of (lines ?? [])) {
-    if ((l as any).discount_percent > maxDiscount) {
-      const order = (orders ?? []).find((o: any) => o.id === (l as any).order_id)
-      const orderRef = order ? `<a href="${appUrl}/orders/${order.id}">${(order as any).number}</a>` : 'неизв.'
+  for (const l of lineRows) {
+    if (l.discount_percent > maxDiscount) {
+      const order = orderRows.find(o => o.id === l.order_id)
+      const orderRef = order ? `<a href="${appUrl}/orders/${order.id}">${order.number}</a>` : 'неизв.'
       anomalies.push(
-        `💸 Скидка ${(l as any).discount_percent}% на «${(l as any).product_name}» (заказ ${orderRef}), макс. ${maxDiscount}%`,
+        `💸 Скидка ${l.discount_percent}% на «${l.product_name}» (заказ ${orderRef}), макс. ${maxDiscount}%`,
       )
     }
   }

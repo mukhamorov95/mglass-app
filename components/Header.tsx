@@ -46,6 +46,7 @@ export function Header({ userEmail, role }: Props) {
   const [section, setSection] = useState<'mglass' | 'production'>(() => detectSection(pathname))
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSection(detectSection(pathname))
   }, [pathname])
 

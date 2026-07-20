@@ -26,6 +26,7 @@ export default function ScanPage() {
   const lastRef = useRef(0)
   const seenRef = useRef<{ code: string; t: number }>({ code: '', t: 0 })
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setStation(localStorage.getItem('scan-station') ?? '') }, [])
   const pickStation = (s: string) => { setStation(s); localStorage.setItem('scan-station', s) }
 

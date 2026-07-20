@@ -164,6 +164,7 @@ export default function MediaLibraryPage() {
     setLoading(false)
   }, [filterType, filterTag, filterCategory])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function add() {

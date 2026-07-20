@@ -68,7 +68,7 @@ export default function AiStatsPage() {
 
       // Get message counts + last messages for all chats
       const enriched = await Promise.all(
-        chatRows.map(async (c: any) => {
+        chatRows.map(async (c: Chat) => {
           const { data: msgs, count } = await sb
             .from('ai_conversations')
             .select('role, content, created_at', { count: 'exact' })

@@ -101,12 +101,15 @@ export async function PATCH(
     .single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  type UpdatedOrder = { number: string; client_name: string; client_phone: string | null; delivery_address: string | null }
+  const uo = updatedOrder as UpdatedOrder | null
+
   // Notify client via WhatsApp
-  notifyClient((updatedOrder as any)?.client_phone, (updatedOrder as any)?.number, newStatus).catch(() => {})
+  notifyClient(uo?.client_phone ?? null, uo?.number ?? '', newStatus).catch(() => {})
 
   // Notify admins when order is completed and has a delivery address
   if (newStatus === 'completed' && updatedOrder?.delivery_address) {
-    const o = updatedOrder as any
+    const o = updatedOrder as UpdatedOrder
     notifyAdmins(
       `🚚 <b>Заказ готов к доставке</b>\n\n` +
       `Заказ: <b>${o.number}</b>\n` +

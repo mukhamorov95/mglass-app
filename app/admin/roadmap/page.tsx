@@ -238,7 +238,7 @@ function OrgCard({ person, expanded, onToggle }: {
       <button onClick={onToggle} className="w-full text-left">
         <div className={`px-4 py-3 ${person.color}`}>
           <p className="text-[13px] font-bold">{person.title}</p>
-          {'name' in person && <p className="text-[11px] opacity-70 mt-0.5">{(person as any).name}</p>}
+          {'name' in person && <p className="text-[11px] opacity-70 mt-0.5">{(person as { name?: string }).name}</p>}
         </div>
         <div className="px-4 py-2 flex items-center justify-between">
           <div className="flex gap-2">
@@ -394,6 +394,7 @@ function RoadmapTab() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setStatuses(JSON.parse(saved))
     } catch {}
   }, [])
@@ -536,6 +537,7 @@ function ProgressTab() {
   useEffect(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY)
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (saved) setStatuses(JSON.parse(saved))
     } catch {}
   }, [])

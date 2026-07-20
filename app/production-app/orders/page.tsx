@@ -83,6 +83,7 @@ export default function OrdersScreen() {
     setTasks(ts)
     setLoading(false)
   }, [sb])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const canMark = (station: string) => me.production_lead || (me.role != null && OWNER.has(me.role)) || (me.production_stations ?? []).includes(station)

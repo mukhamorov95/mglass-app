@@ -22,8 +22,9 @@ export async function GET(req: Request) {
     .limit(1)
     .single()
 
-  const slaApproved = (settings as any)?.sla_days_approved ?? 7
-  const slaInWork   = (settings as any)?.sla_days_in_work   ?? 21
+  const slaSettings = settings as { sla_days_approved?: number; sla_days_in_work?: number } | null
+  const slaApproved = slaSettings?.sla_days_approved ?? 7
+  const slaInWork   = slaSettings?.sla_days_in_work   ?? 21
 
   const now = new Date()
   const approvedCutoff = new Date(now.getTime() - slaApproved * 86_400_000).toISOString()

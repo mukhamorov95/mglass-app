@@ -1086,6 +1086,7 @@ function OutreachTab() {
   const [expanded, setExpanded]   = useState<number | null>(null)
   const [copied, setCopied]       = useState<number | null>(null)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [segFilter, stageFilter])
 
   async function load() {

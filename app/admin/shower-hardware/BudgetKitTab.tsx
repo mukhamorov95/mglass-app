@@ -58,6 +58,7 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadKit(model) }, [model, loadKit])
 
   async function addItem(itemId: number) {

@@ -58,6 +58,7 @@ export default function InstallationsPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const brigadeName = (id: string | null) => brigades.find(b => b.id === id)?.name ?? null

@@ -92,6 +92,7 @@ export function BudgetMatrix() {
     setLoading(false)
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadModelData(selectedModel) }, [selectedModel, loadModelData])
 
   // Focus input when editing starts

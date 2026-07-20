@@ -281,6 +281,7 @@ export default function MobileOrderWorkPage() {
     }
 
     if (id && !isNaN(id)) load()
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     else { setError('Неверный ID заказа'); setLoading(false) }
   }, [id])
 

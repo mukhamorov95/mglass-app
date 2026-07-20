@@ -590,6 +590,12 @@ export default function B2BOrdersPage() {
   const [canDelete, setCanDelete]     = useState(false)
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
   const [msgOpenId, setMsgOpenId]     = useState<number | null>(null)
+  const [nowTs, setNowTs]             = useState(0)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNowTs(Date.now())
+  }, [])
   const [copiedMsg, setCopiedMsg]     = useState(false)
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
   const [toastMsg, setToastMsg]       = useState<string | null>(null)
@@ -768,6 +774,7 @@ export default function B2BOrdersPage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadOrders().catch(() => setLoading(false)) }, [])
 
   const isFiltered = search.trim() !== '' || stageFilter !== 'all_active' || dateFrom !== '' || dateTo !== '' || deadlineFilter !== 'all' || boardFilter !== null
@@ -1395,7 +1402,7 @@ export default function B2BOrdersPage() {
     const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
     const deadline = getDeadline(pn.launched_at, pn.production_days)
     const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null
-    const daysLeft = deadline ? Math.ceil((deadline.getTime() - Date.now()) / 86400000) : null
+    const daysLeft = deadline && nowTs ? Math.ceil((deadline.getTime() - nowTs) / 86400000) : null
     const isShipped = !!pn.stages?.shipped
     const finalPrice = getFinalPrice(order)
     const isPlainNotes = order.notes && !order.notes.trim().startsWith('{')

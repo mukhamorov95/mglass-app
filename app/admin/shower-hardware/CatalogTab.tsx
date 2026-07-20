@@ -197,6 +197,7 @@ export function CatalogTab({
   const [supDropOpen, setSupDropOpen] = useState(false)
   const [newSupName,  setNewSupName]  = useState('')
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load() }, [])
   useEffect(() => { if (editing) editRef.current?.focus() }, [editing])
 

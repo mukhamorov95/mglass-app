@@ -58,6 +58,7 @@ export default function LeadSummary({ onPick }: { onPick?: (m: { id: string; nam
       }
     } catch { /* localStorage недоступен */ }
   }, [sb])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => {}) }, [load])
 
   if (!show) return null

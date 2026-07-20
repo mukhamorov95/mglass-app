@@ -209,6 +209,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
   const [groupClientPhone, setGroupClientPhone] = useState('')
   const [savingGroup, setSavingGroup]         = useState(false)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { fetchCalcs() }, [])
 
   async function fetchCalcs() {

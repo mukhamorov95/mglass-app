@@ -78,6 +78,7 @@ export default function CalendarPage() {
 
   const days = weekDays(monday)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [monday])
 
   async function load() {

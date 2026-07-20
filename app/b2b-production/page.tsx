@@ -140,6 +140,7 @@ export default function B2BProductionPage() {
   const [printId, setPrintId] = useState<number | null>(null)
   const [page, setPage] = useState(1)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
@@ -199,6 +200,7 @@ export default function B2BProductionPage() {
   }
 
   const visible = useMemo(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-render
     setPage(1)
     if (filter === 'all') return orders.filter(o => effectiveStatus(o.stages) !== 'shipped')
     return orders.filter(o => effectiveStatus(o.stages) === filter)

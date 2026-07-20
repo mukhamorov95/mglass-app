@@ -512,6 +512,7 @@ export default function ShowerHardwarePage() {
     setSuppliers((sups ?? []) as Supplier[])
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadShared().catch(() => {}) }, [])
 
   const TABS = [

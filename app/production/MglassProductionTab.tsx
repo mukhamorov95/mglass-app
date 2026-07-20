@@ -49,8 +49,13 @@ function fmtDate(s: string) {
 }
 
 function DeadlineBadge({ deadline }: { deadline: string | null }) {
-  if (!deadline) return null
-  const days = Math.ceil((new Date(deadline).getTime() - Date.now()) / 86_400_000)
+  const [now, setNow] = useState(0)
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNow(Date.now())
+  }, [])
+  if (!deadline || !now) return null
+  const days = Math.ceil((new Date(deadline).getTime() - now) / 86_400_000)
   if (days < 0)  return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">просрочка {Math.abs(days)} дн.</span>
   if (days <= 3) return <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-600">{days} дн. до дедлайна</span>
   return null

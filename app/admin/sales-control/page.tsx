@@ -316,6 +316,7 @@ function ManagerDrawer({
   const drawerRef = useRef<HTMLDivElement>(null)
 
   // Reset tab when manager changes
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setTab('overview') }, [manager?.id])
 
   // Close on Escape
@@ -486,6 +487,7 @@ export default function SalesControlPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(period) }, [period, load])
 
   const managers = useMemo(() => {

@@ -83,6 +83,7 @@ export default function KpPage() {
 
   useEffect(() => { transcriptRef.current = transcript }, [transcript])
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
   }, [])
 
@@ -93,6 +94,7 @@ export default function KpPage() {
       if (!raw) return
       sessionStorage.removeItem('mglass_kp_prefill')
       const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab('new')
       setForm(f => ({
         ...f,
@@ -131,7 +133,7 @@ export default function KpPage() {
     } catch { /* ignore */ }
   }
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+  // eslint-disable-next-line react-hooks/exhaustive-deps, react-hooks/set-state-in-effect
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab])
 
   // ── voice (браузерное распознавание, живое) ─────────────

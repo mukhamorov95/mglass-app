@@ -21,10 +21,16 @@ type Task = {
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
   start(): void; stop(): void
-  onresult: ((e: any) => void) | null
-  onerror: ((e: any) => void) | null
+  onresult: ((e: ISpeechResultEvent) => void) | null
+  onerror: ((e: unknown) => void) | null
   onend: (() => void) | null
 }
+
+type ISpeechResultEvent = {
+  resultIndex: number
+  results: { length: number; [index: number]: { isFinal: boolean; [index: number]: { transcript: string } } }
+}
+
 declare global {
   interface Window {
     SpeechRecognition: new () => ISpeechRecognition
@@ -62,6 +68,7 @@ export default function TasksPage() {
   const recRef = useRef<ISpeechRecognition | null>(null)
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSpeechOk(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
     load().catch(() => setLoading(false))
   }, [])
@@ -78,7 +85,7 @@ export default function TasksPage() {
     if (!SR) return
     const rec = new SR()
     rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true
-    rec.onresult = (e: any) => {
+    rec.onresult = (e) => {
       let fin = '', tmp = ''
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const t = e.results[i][0].transcript
@@ -276,7 +283,7 @@ export default function TasksPage() {
                 {task.voice_input && (
                   <div>
                     <p className="text-[11px] font-semibold text-[#aeaeb2] uppercase tracking-wider mb-1">Исходная идея</p>
-                    <p className="text-[13px] text-[#6e6e73] italic">"{task.voice_input}"</p>
+                    <p className="text-[13px] text-[#6e6e73] italic">&quot;{task.voice_input}&quot;</p>
                   </div>
                 )}
                 <div>

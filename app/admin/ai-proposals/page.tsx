@@ -132,6 +132,7 @@ export default function AIProposalsPage() {
     }
   }, [filter])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // ── Form helpers ────────────────────────────────────────────────────────────

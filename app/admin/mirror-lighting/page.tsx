@@ -53,6 +53,7 @@ export default function MirrorLightingPage() {
     setLoading(false)
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
   useEffect(() => { if (addingTab) newTabRef.current?.focus() }, [addingTab])
 

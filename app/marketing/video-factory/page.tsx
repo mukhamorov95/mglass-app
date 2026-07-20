@@ -85,7 +85,7 @@ function ScriptCard({ script, onUpdate, onDelete }: {
             <span className="text-[11px] text-[#8a8a85]">· {TOPIC_LABELS[script.topic] ?? script.topic}</span>
           </div>
           <p className="text-[14px] font-semibold text-[#111110] leading-tight">{script.title ?? '—'}</p>
-          {script.hook && <p className="text-[12px] text-[#6b6b66] mt-0.5 line-clamp-1">"{script.hook}"</p>}
+          {script.hook && <p className="text-[12px] text-[#6b6b66] mt-0.5 line-clamp-1">&quot;{script.hook}&quot;</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           {script.status !== 'published' && (
@@ -538,7 +538,7 @@ function GeneratorTab({ onSaved }: { onSaved: () => void }) {
                 {copied === 'hook' ? 'Скопировано!' : 'Копировать'}
               </button>
             </div>
-            <p className="text-[16px] font-bold text-[#111110] leading-tight">"{result.hook}"</p>
+            <p className="text-[16px] font-bold text-[#111110] leading-tight">&quot;{result.hook}&quot;</p>
           </div>
 
           {/* Structure */}
@@ -699,6 +699,7 @@ function LibraryTab() {
     setLoading(false)
   }, [filterStatus, filterType])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function update(id: number, fields: Partial<Script>) {
@@ -758,7 +759,7 @@ function LibraryTab() {
         <div className="text-center py-12 text-[13px] text-[#8a8a85]">Загрузка...</div>
       ) : scripts.length === 0 ? (
         <div className="text-center py-12 text-[13px] text-[#8a8a85]">
-          Нет контента. Сгенерируйте первый в вкладке "Генератор".
+          Нет контента. Сгенерируйте первый в вкладке &quot;Генератор&quot;.
         </div>
       ) : (
         <div className="space-y-3">
