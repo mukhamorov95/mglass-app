@@ -184,7 +184,6 @@ const CEO_SYSTEM: NavItem[] = [
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
 const ADMIN_OWNER: NavItem[] = [
-  { href: '/vlad',                    label: 'Влад',              icon: '🔒' },
   { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
   { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
   { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
@@ -913,6 +912,12 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
         {/* Navigation */}
         <nav className="flex-1 px-2 py-2 space-y-px overflow-y-auto">
+          {/* Личная вкладка владельца — всегда сверху, во всех режимах */}
+          {userEmail === 'admin@mglass.ru' && (
+            <div className="mb-2">
+              {navItem({ href: '/vlad', label: 'Влад', icon: '🔒' }, 'bg-[#111110] text-white font-medium')}
+            </div>
+          )}
           {renderNav()}
         </nav>
 
