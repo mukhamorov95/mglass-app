@@ -3,6 +3,7 @@ import { createClient as svc } from '@supabase/supabase-js'
 import { runAvitoManager, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/avitoManagerRuntime'
 import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
+import { isBotEnabled } from '@/lib/aiKillSwitch'
 
 // Вебхук Avito Messenger: входящее сообщение клиента → лид в crm_leads (по
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
@@ -73,6 +74,13 @@ export async function POST(req: NextRequest) {
   if (v.type !== 'text' || !rawText.trim()) {
     const { data: exist } = await service.from('crm_leads').select('id').eq('avito_chat_id', v.chat_id).maybeSingle()
     const leadId = (exist as { id: number } | null)?.id
+    // Факт вложения фиксируем в ленте лида — иначе он существует только в Telegram-пинге
+    if (leadId) {
+      await service.from('crm_lead_events').insert({
+        lead_id: leadId, kind: 'message', author: null,
+        text: `КЛИЕНТ: 📎 прислал вложение (${v.type || 'файл'}) — открой чат в приложении Авито`,
+      }).then(() => service.from('crm_leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId))
+    }
     const url = leadId ? `https://mglass-app.vercel.app/crm/${leadId}` : 'https://mglass-app.vercel.app/crm'
     await notifyAdmins([
       '📎 <b>Авито: клиент прислал вложение (не текст)</b>',
@@ -117,6 +125,16 @@ export async function POST(req: NextRequest) {
       `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].join('\n')).catch(() => {})
     return NextResponse.json({ ok: true, human_handling: true })
+  }
+
+  // Kill-switch с /vladislav: бот выключен — сообщение сохранено выше, отвечает человек.
+  if (!(await isBotEnabled(service))) {
+    await notifyAdmins([
+      '🔕 <b>Авито: сообщение клиента (бот ВЫКЛЮЧЕН)</b>',
+      `Клиент: ${text.slice(0, 200)}`,
+      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+    ].join('\n')).catch(() => {})
+    return NextResponse.json({ ok: true, bot_disabled: true })
   }
 
   // История диалога — ПОСЛЕДНИЕ 40 сообщений в хронологическом порядке.

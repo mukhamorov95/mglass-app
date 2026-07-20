@@ -452,6 +452,12 @@ export async function GET(req: Request) {
   }
 
   const supabase = db()
+
+  // Kill-switch с /vladislav: бот выключен — очередь не разгребаем автоматикой.
+  const { isBotEnabled } = await import('@/lib/aiKillSwitch')
+  if (!(await isBotEnabled(supabase))) {
+    return NextResponse.json({ ok: true, skipped: 'bot_disabled' })
+  }
   const now = new Date().toISOString()
 
   // Pick pending items + retry_scheduled items whose retry time has passed
