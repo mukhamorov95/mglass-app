@@ -31,10 +31,20 @@ function itemLine(it: OrderItem): string {
 const PRINT_CSS = `
 @media print {
   @page { size: A4; margin: 12mm; }
-  body { background: #fff !important; }
+  html, body { background: #fff !important; }
   .no-print { display: none !important; }
-  .sheet { box-shadow: none !important; border: none !important; padding: 0 !important; }
-  .client-block { break-inside: avoid; }
+  /* Лист — во всю печатную область A4. Жёсткие 210мм + поля страницы обрезали левый край. */
+  .print-root { padding: 0 !important; background: #fff !important; }
+  .sheet { box-shadow: none !important; border: none !important; border-radius: 0 !important;
+           padding: 0 !important; margin: 0 !important; max-width: none !important; width: auto !important; }
+  /* Заказ переносится ЦЕЛИКОМ: строка никогда не рвётся между страницами */
+  tr { break-inside: avoid; page-break-inside: avoid; }
+  /* Шапка таблицы повторяется на каждой странице */
+  thead { display: table-header-group; }
+  /* Заказчик может переноситься между заказами, но его заголовок не остаётся один внизу */
+  .client-block { break-inside: auto; }
+  .client-head { break-after: avoid; page-break-after: avoid; }
+  .signatures { break-inside: avoid; page-break-inside: avoid; }
 }
 `
 
@@ -54,16 +64,40 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
     if (!docRef.current) return
     setPdfBusy(true)
     try {
+      const el = docRef.current
       const [h2c, jspdf] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
-      const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const scale = 2
+      const canvas = await h2c.default(el, { scale, useCORS: true, backgroundColor: '#ffffff' })
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
-      const pw = 210, ph = 297
-      const imgH = pw * canvas.height / canvas.width
-      const img = canvas.toDataURL('image/jpeg', 0.94)
-      let pos = 0, left = imgH
-      pdf.addImage(img, 'JPEG', 0, pos, pw, imgH)
-      left -= ph
-      while (left > 0) { pos -= ph; pdf.addPage(); pdf.addImage(img, 'JPEG', 0, pos, pw, imgH); left -= ph }
+      const margin = 10
+      const pwMm = 210 - margin * 2
+      const phMm = 297 - margin * 2
+      const pxPerMm = canvas.width / pwMm
+      const pageHpx = phMm * pxPerMm
+
+      // Резать можно только по низу неразрывного блока — тогда заказ не разорвётся
+      const top = el.getBoundingClientRect().top
+      const stops = [...el.querySelectorAll('tr, .client-head, .signatures')]
+        .map(b => (b.getBoundingClientRect().bottom - top) * scale)
+        .filter(y => y > 0)
+        .sort((a, b) => a - b)
+
+      let y = 0, first = true
+      while (y < canvas.height - 1) {
+        const limit = y + pageHpx
+        let cut = stops.filter(s => s > y + 1 && s <= limit).pop() ?? 0
+        if (!cut) cut = limit                    // блок выше страницы — режем по границе
+        cut = Math.min(cut, canvas.height)
+        const h = Math.ceil(cut - y)
+        const part = document.createElement('canvas')
+        part.width = canvas.width
+        part.height = h
+        part.getContext('2d')?.drawImage(canvas, 0, y, canvas.width, h, 0, 0, canvas.width, h)
+        if (!first) pdf.addPage()
+        pdf.addImage(part.toDataURL('image/jpeg', 0.94), 'JPEG', margin, margin, pwMm, h / pxPerMm)
+        first = false
+        y = cut
+      }
       pdf.save(`Рейс-Воронеж-${ship?.ship_date ?? ship?.id ?? ''}.pdf`)
     } catch (e) {
       alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка') + '. Используйте «Печать» → Сохранить как PDF.')
@@ -120,7 +154,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] py-6">
+    <div className="print-root min-h-screen bg-[#f5f5f3] py-6">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
       <div className="sheet max-w-[210mm] mx-auto bg-white border border-[#e4e4e0] rounded-lg p-8">
         <div className="no-print mb-4 flex justify-end gap-2">
@@ -149,7 +183,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
           const w = os.reduce((s, o) => s + itemsWeight(o.items), 0)
           return (
             <div key={String(key)} className="client-block mt-6">
-              <div className="flex items-baseline justify-between bg-[#f5f5f3] border border-[#e4e4e0] rounded-md px-3 py-2">
+              <div className="client-head flex items-baseline justify-between bg-[#f5f5f3] border border-[#e4e4e0] rounded-md px-3 py-2">
                 <div>
                   <span className="font-semibold text-[15px] text-[#111110]">{name}</span>
                   {(info?.contact || info?.phone) && (
@@ -187,7 +221,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
           )
         })}
 
-        <div className="mt-10 grid grid-cols-2 gap-8 text-[13px] text-[#4b4b47]">
+        <div className="signatures mt-10 grid grid-cols-2 gap-8 text-[13px] text-[#4b4b47]">
           <div>
             <div>Водитель: ____________________________</div>
             <div className="mt-6">Подпись: _____________________________</div>
