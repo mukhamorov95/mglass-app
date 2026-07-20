@@ -14,7 +14,7 @@ export const ROADMAP: RoadmapSection[] = [
     items: [
       { title: 'Архитектура: docs/ERP_MONEY_ARCHITECTURE.md', status: 'done', date: '20.07' },
       { title: 'Д1 — ядро платежей (payments, маржа, модули записи)', status: 'done', date: '20.07' },
-      { title: 'Д2 — все кнопки оплат пишут в ядро + ночная сверка с бэкфиллом', status: 'queue' },
+      { title: 'Д2 — все кнопки оплат пишут в ядро + ночная сверка с бэкфиллом', status: 'progress' },
       { title: 'Д3 — импорт истории продаж (604+ строк) и маржи (662 заказа) + витрины CFO', status: 'queue' },
       { title: 'Д4 — 4 недели параллели → Google-таблицы закрываются', status: 'waiting', note: 'нужна дата закрытия (предложение: 01.09)' },
     ],
@@ -26,7 +26,7 @@ export const ROADMAP: RoadmapSection[] = [
       { title: 'Б1 — раздел /accounting: фонды из ДДС, ввод операций, учётки Алёны и Екатерины', status: 'done', date: '20.07' },
       { title: 'Б2 — заявки на расходы + четверговый комитет', status: 'done', date: '20.07' },
       { title: 'Б3 — финнеделя чт–ср: план/факт недель, waterfall фондов, точный комитет', status: 'done', date: '20.07' },
-      { title: 'Б4 — голосовые предложения бухгалтеров + импорт истории ДДС с 06.2024', status: 'progress' },
+      { title: 'Б4 — голосовые предложения бухгалтеров + импорт истории ДДС (8 281 операция)', status: 'done', date: '20.07' },
     ],
   },
   {

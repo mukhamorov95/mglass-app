@@ -9,6 +9,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 import { FinweekTab } from '@/components/accounting/FinweekTab'
+import { NotesTab } from '@/components/accounting/NotesTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -29,7 +30,7 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'requests' | 'committee'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'requests' | 'committee' | 'notes'>('odds')
   const [myRole, setMyRole] = useState('')
   const [myName, setMyName] = useState('')
   const [unit, setUnit] = useState<'ip' | 'ooo'>('ip')
@@ -216,7 +217,7 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['requests', 'Заявки'], ['committee', 'Комитет']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
@@ -356,6 +357,7 @@ export default function AccountingPage() {
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
+        {tab === 'notes' && !isBuyer && <NotesTab unit={unit} myName={myName} />}
       </div>
     </div>
   )
