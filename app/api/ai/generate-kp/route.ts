@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { createClient as createServerClient } from '@/lib/supabase-server'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -17,6 +18,12 @@ const PRODUCT_LABELS: Record<string, string> = {
 
 export async function POST(req: Request) {
   try {
+    // Единственный ai-роут без авторизации (найдено аудитом 20.07): ходил
+    // service-ключом и отдавал calculations по id кому угодно.
+    const auth = await createServerClient()
+    const { data: { user } } = await auth.auth.getUser()
+    if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+
     const { calculation_id, context } = await req.json() as {
       calculation_id?: number | null
       context?: string
