@@ -83,7 +83,7 @@ export async function GET(req: Request) {
       supabase.from('b2b_orders')
         .select('id, total_after_discount, notes')
         .is('archived_at', null),
-      supabase.from('orders').select('id, status, created_at').in('status', ['confirmed', 'in_production']),
+      supabase.from('production_tasks').select('order_id').neq('status', 'done'),
       supabase.from('agent_settings').select('agent_key, enabled, is_running, last_action_text, last_run_at, memory, total_runs'),
       supabase.from('agent_logs').select('agent_key, level, message, ran_at').gte('ran_at', today.toISOString()).order('ran_at', { ascending: false }).limit(50),
       supabase.from('calculations').select('final_price, created_at').gte('created_at', since7d.toISOString()),
@@ -149,14 +149,28 @@ export async function GET(req: Request) {
       return s + Math.max(total - prepaid, 0)
     }, 0)
 
-    const totalRevenue = orderRevenue + b2bPaidRevenue
+    // «Оплачено» = только подтверждённые оплаты (B2B paid) — единая методика с agent-analyst.
+    // Созданные розничные заказы — это создание, не оплата; показываем отдельно.
+    const totalRevenue = b2bPaidRevenue
     const convRate     = calcCount > 0 ? (orderCount / calcCount * 100).toFixed(1) : '0'
-    const inProdCount  = inProd?.length ?? 0
+    const inProdCount  = new Set((inProd ?? []).map(r => (r as { order_id: number }).order_id)).size
 
     const pendingFollowup = calcs24?.filter(c => c.client_phone && !c.followup_sent_at).length ?? 0
 
-    const weekRevenue = calcs7d?.reduce((s, c) => s + (c.final_price ?? 0), 0) ?? 0
-    const monthlyPace = Math.round(weekRevenue / 7 * 30)
+    const since7dISO      = since7d.toISOString()
+    const since7dMoscowStr = new Date(since7d.getTime() + 3 * 60 * 60 * 1000).toISOString().slice(0, 10)
+    // Темп — из ОПЛАТ за 7 дней (раньше считался из суммы КП и был системно завышен)
+    const weekPaid = (activeB2b ?? []).reduce((sum, o) => {
+      const n = parseB2bNotes(o.notes)
+      if (!['confirmed', 'agreed'].includes(n.status as string)) return sum
+      const paidAt = n.paid_at as string | undefined
+      const invoicePaid = (n.stages as Record<string, string | null | undefined> | undefined)?.invoice_paid
+      const paidThisWeek = (n.payment_status === 'paid' && paidAt && paidAt >= since7dISO)
+        || (!!invoicePaid && invoicePaid >= since7dMoscowStr)
+      return paidThisWeek ? sum + Number(o.total_after_discount ?? 0) : sum
+    }, 0)
+    const weekQuoted  = calcs7d?.reduce((s, c) => s + (c.final_price ?? 0), 0) ?? 0
+    const monthlyPace = Math.round(weekPaid / 7 * 30)
     const pctOfGoal   = Math.round(totalRevenue / GOAL_DAILY * 100)
 
     // ── Статус агентов ───────────────────────────────────────────────────────
@@ -180,15 +194,15 @@ export async function GET(req: Request) {
 
 МЕТРИКИ СЕГОДНЯ (00:00 Москвы → сейчас):
 - Расчётов (B2C, 24ч): ${calcCount} | Заказов: ${orderCount} | Конверсия: ${convRate}%
-- Выручка B2C: ${orderRevenue.toLocaleString('ru-RU')} ₽
+- B2C заказов создано на сумму: ${orderRevenue.toLocaleString('ru-RU')} ₽ (создание, не оплата)
 - B2B просчёты (pipeline): ${b2bCount} шт · ${b2bQuoteRevenue24.toLocaleString('ru-RU')} ₽
 - B2B перенесено в заказы (конверсия): ${b2bLaunchedCount} шт · ${b2bLaunchedRevenue.toLocaleString('ru-RU')} ₽
 - B2B оплачено сегодня: ${b2bPaidCount} заказов · ${b2bPaidRevenue.toLocaleString('ru-RU')} ₽
 - B2B остаток к оплате (все активные): ${unpaidOrderCount} заказов · ${unpaidAmount.toLocaleString('ru-RU')} ₽
-- ИТОГО оплачено (B2C + B2B paid): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
-- В производстве: ${inProdCount} заказов
+- ИТОГО оплачено (только подтверждённые оплаты B2B, методика = analyst): ${totalRevenue.toLocaleString('ru-RU')} ₽ (цель: ${GOAL_DAILY.toLocaleString('ru-RU')} ₽/день = ${pctOfGoal}%)
+- В цехе (заказы с открытыми этапами production_tasks): ${inProdCount}
 - Ждут followup: ${pendingFollowup} клиентов
-- Темп к месяцу (7д): ~${monthlyPace.toLocaleString('ru-RU')} ₽/мес (цель: ${GOAL_MONTHLY.toLocaleString('ru-RU')} ₽)
+- Темп к месяцу из ОПЛАТ (7д): ~${monthlyPace.toLocaleString('ru-RU')} ₽/мес (цель: ${GOAL_MONTHLY.toLocaleString('ru-RU')} ₽); выставлено КП за 7д: ${weekQuoted.toLocaleString('ru-RU')} ₽
 
 КОМАНДА:
 ${Object.entries(agents).map(([k, v]) => `- ${k}: ${v.enabled ? '🟢 активен' : '⚪ выкл'} | ${v.last_action}`).join('\n')}
@@ -277,8 +291,8 @@ ${recentLogs || 'нет активности'}
         ``,
         `🎯 <b>Фокус дня:</b> ${decision?.focus_metric ?? 'конверсия расчёт→заказ'}`,
         ``,
-        `${paceEmoji} Выручка: <b>${totalRevenue.toLocaleString('ru-RU')} ₽</b> / цель ${GOAL_DAILY.toLocaleString('ru-RU')} ₽ (${pctOfGoal}%)`,
-        `📈 Темп к месяцу: <b>~${monthlyPace.toLocaleString('ru-RU')} ₽</b> → 15М ${forecastStr}`,
+        `${paceEmoji} Оплачено: <b>${totalRevenue.toLocaleString('ru-RU')} ₽</b> / цель ${GOAL_DAILY.toLocaleString('ru-RU')} ₽ (${pctOfGoal}%) · B2C создано: ${orderRevenue.toLocaleString('ru-RU')} ₽`,
+        `📈 Темп из оплат: <b>~${monthlyPace.toLocaleString('ru-RU')} ₽/мес</b> → 15М ${forecastStr}`,
         ``,
         `✅ <b>Сделано сегодня:</b>`,
         doneList,

@@ -16,20 +16,8 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
-function cleanPhone(phone: string) {
-  return phone.replace(/\D/g, '').replace(/^8/, '7')
-}
-
-async function sendWhatsApp(phone: string, text: string) {
-  const channelId = process.env.WAZZUP_CHANNEL_ID
-  if (!channelId) throw new Error('WAZZUP_CHANNEL_ID не задан')
-  const res = await fetch('https://api.wazzup24.com/v3/message', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.WAZZUP_API_KEY!}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ channelId, chatId: cleanPhone(phone), chatType: 'whatsapp', text }),
-  })
-  if (!res.ok) throw new Error(`Wazzup ${res.status}: ${await res.text()}`)
-}
+// Прямая отправка в WhatsApp удалена 20.07 (решение владельца: клиентам пишет
+// только Иван). Агент готовит черновик — отправляет менеджер руками.
 
 async function generateMessage(calc: Record<string, unknown>): Promise<string> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
@@ -110,7 +98,8 @@ export async function GET(req: Request) {
         const message = await generateMessage(calc as Record<string, unknown>)
         if (!message) { skipped++; continue }
 
-        await sendWhatsApp(calc.client_phone!, message)
+        // Решение владельца 20.07: клиентам пишет ТОЛЬКО Иван (Авито).
+        // Агент готовит черновик и отдаёт менеджеру — отправляет человек.
         await supabase.from('calculations')
           .update({ followup_sent_at: new Date().toISOString() }).eq('id', calc.id)
 
@@ -120,15 +109,15 @@ export async function GET(req: Request) {
         const displayName = calc.client_name || calc.client_phone || `#${calc.id}`
 
         await writeLog('revenue', 'success',
-          `Написал ${displayName} — ${product} ${dims}`,
+          `Черновик фоллоу-апа для ${displayName} — ${product} ${dims}`,
           { calc_id: calc.id, phone: calc.client_phone })
 
-        // Уведомить менеджера
         const chatId = calc.created_by ? tgMap[calc.created_by] : null
         const tgMsg = [
-          `🤖 <b>Агент написал клиенту</b>`,
-          `Расчёт #${calc.id} — ${product} ${dims}`,
-          `Клиент: ${displayName}`,
+          `✍️ <b>Черновик фоллоу-апа клиенту</b> (расчёт #${calc.id})`,
+          `${product} ${dims} · ${displayName} · ${calc.client_phone}`,
+          '',
+          'Скопируй и отправь в WhatsApp, если уместно:',
           `<i>${message}</i>`,
         ].join('\n')
         if (chatId) await tg.sendMessage(chatId, tgMsg).catch(() => {})
@@ -149,7 +138,7 @@ export async function GET(req: Request) {
     })
 
     const summary = sent > 0
-      ? `💬 Написал ${sent} клиент${sent === 1 ? 'у' : 'ам'}${skipped > 0 ? `, пропустил ${skipped}` : ''}`
+      ? `✍️ Подготовил ${sent} черновик${sent === 1 ? '' : sent < 5 ? 'а' : 'ов'} менеджерам${skipped > 0 ? `, пропустил ${skipped}` : ''}`
       : `⏭ Пропустил все ${skipped} расчётов`
 
     if (skipped > 0 && sent === 0) {
