@@ -50,3 +50,12 @@ button, a, [role="button"] {
   to   { transform: translateY(0);    opacity: 1; }
 }
 .slide-up { animation: slideUp 0.22s ease-out; }
+
+/* Полосы вкладок и таблицы, прокручиваемые вбок на телефоне: скролл нужен,
+   а его полоса поверх контента мешает. Прокрутка работает, полосы не видно. */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Страница не должна ездить вбок целиком: широкое содержимое (таблицы)
+   прокручивается внутри своих контейнеров. */
+html, body { overflow-x: hidden; }
