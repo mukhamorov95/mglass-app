@@ -50,7 +50,10 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/cron/') ||
                     pathname.startsWith('/api/telegram/') ||
                     pathname.startsWith('/api/avito/webhook') ||
-                    pathname.startsWith('/api/onlinepbx/')
+                    pathname.startsWith('/api/onlinepbx/') ||
+                    // ICS-фид календаря владельца: календарь не умеет логиниться,
+                    // аутентификация — секрет в URL (проверяется в самом роуте)
+                    pathname.startsWith('/api/vlad/calendar/')
   // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
   const isPublicDemo = pathname.startsWith('/design/')
 
