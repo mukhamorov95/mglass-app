@@ -778,6 +778,7 @@ export default function B2BCuttingPage() {
       </style></head><body>
       <h1>M-GLASS · Заявка на материал</h1>
       <p class="muted">Дата: ${date} · Заказов в раскрое: ${selectedIds.size} · Просьба выставить счёт на оплату</p>
+      <div className="overflow-x-auto">
       <table>
         <thead><tr>
           <th>Материал</th><th class="c">Листов</th><th class="c">Размер листа, мм</th>
@@ -786,6 +787,7 @@ export default function B2BCuttingPage() {
         <tbody>${rows}</tbody>
         <tfoot><tr><td>Итого</td><td class="c">${totalSheets}</td><td colspan="5"></td></tr></tfoot>
       </table>
+      </div>
       <p class="sign">Заявку составил: _____________________  ·  Поставщик: _____________________</p>
       <button onclick="window.print()" style="margin-top:20px;padding:8px 16px;font-size:13px;cursor:pointer">🖨 Печать</button>
       </body></html>`
@@ -1025,6 +1027,7 @@ export default function B2BCuttingPage() {
                   </button>
                 </div>
               </div>
+              <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
                   <tr className="border-b border-[#f0f0ec]">
@@ -1073,6 +1076,7 @@ export default function B2BCuttingPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
               <div className="px-4 py-3 bg-[#fafaf9] border-t border-[#f0f0ec] flex flex-wrap gap-4 text-[12px] text-[#6b6b66]">
                 <span>Итого листов: <b className="text-[#111110]">{results.reduce((s, r) => s + r.sheetsNeeded, 0)}</b></span>
                 <span>Деталей: <b className="text-[#111110]">{results.reduce((s, r) => s + r.totalPieces, 0)}</b></span>

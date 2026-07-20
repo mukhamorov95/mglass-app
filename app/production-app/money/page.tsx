@@ -164,6 +164,7 @@ export default function MoneyPage() {
             {/* ── Сборка помесячно ── */}
             {view === 'monthly' && (
               <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <div className="overflow-x-auto">
                 <table className="w-full text-[14px]">
                   <thead>
                     <tr className="text-left text-[11px] uppercase tracking-wide text-[#9a9a95] border-b border-[#e4e4e0]">
@@ -189,6 +190,7 @@ export default function MoneyPage() {
                     </tr>
                   </tfoot>
                 </table>
+                </div>
               </div>
             )}
 

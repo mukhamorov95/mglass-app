@@ -686,7 +686,7 @@ export default function B2BQuotesPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-3">
         <div>
           <h1 className="text-[18px] font-semibold text-[#111110] tracking-tight">B2B Расчёты</h1>
           <p className="text-[12px] text-[#8a8a85] mt-0.5">{counts.all} активных · {counts.today} сегодня</p>
@@ -697,7 +697,7 @@ export default function B2BQuotesPage() {
             placeholder="Поиск: номер, клиент..."
             value={search}
             onChange={e => { setSearch(e.target.value); setPage(1) }}
-            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white w-52"
+            className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-white flex-1 sm:flex-none sm:w-52 min-w-0"
           />
           <Link href="/calculator/b2b"
             className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
@@ -767,7 +767,10 @@ export default function B2BQuotesPage() {
               <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
 
                 {/* ── Row header ─────────────────────────────────────────── */}
-                <div className="px-4 py-2.5 flex items-center gap-3">
+                {/* На телефоне строка складывается в две: сверху описание, снизу
+                    цена и кнопки. Иначе неразрывный правый блок сжимает текст
+                    до одного слова в строку. */}
+                <div className="px-4 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
 
                   {/* Expand toggle + info */}
                   <button
@@ -804,7 +807,7 @@ export default function B2BQuotesPage() {
                     </div>
                   </button>
 
-                  <div className="flex items-center gap-2 flex-shrink-0">
+                  <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:flex-shrink-0">
 
                     {/* Низкая маржа */}
                     {(quote.margin_percent ?? 0) > 0 && quote.margin_percent < 15 && (

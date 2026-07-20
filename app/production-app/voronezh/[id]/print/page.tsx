@@ -154,25 +154,27 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
   }
 
   return (
-    <div className="print-root min-h-screen bg-[#f5f5f3] py-6">
+    <div className="print-root min-h-screen bg-[#f5f5f3] py-3 sm:py-6">
       <style dangerouslySetInnerHTML={{ __html: PRINT_CSS }} />
-      <div className="sheet max-w-[210mm] mx-auto bg-white border border-[#e4e4e0] rounded-lg p-8">
-        <div className="no-print mb-4 flex justify-end gap-2">
+      {/* Лист свёрстан под A4; на телефоне поля и шрифты ужимаются, а таблица
+          состава прокручивается вбок — иначе строка рвётся по одному слову. */}
+      <div className="sheet max-w-[210mm] mx-auto bg-white border border-[#e4e4e0] rounded-lg p-4 sm:p-8">
+        <div className="no-print mb-4 flex flex-wrap justify-end gap-2">
           <button onClick={downloadPdf} disabled={pdfBusy} className="px-4 py-2 rounded-md bg-emerald-600 text-white text-[13px] disabled:opacity-50">{pdfBusy ? 'Готовлю PDF…' : '⬇ Скачать PDF'}</button>
           <button onClick={() => window.print()} className="px-4 py-2 rounded-md bg-[#111110] text-white text-[13px]">🖨 Печать</button>
         </div>
 
         <div ref={docRef} className="bg-white">
-        <div className="flex items-start justify-between border-b-2 border-[#111110] pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 border-b-2 border-[#111110] pb-3 print:flex-row">
           <div>
-            <div className="text-[20px] font-semibold text-[#111110]">Лист рейса — {ship.title ?? `№${ship.id}`}</div>
+            <div className="text-[17px] sm:text-[20px] font-semibold text-[#111110]">Лист рейса — {ship.title ?? `№${ship.id}`}</div>
             <div className="text-[13px] text-[#4b4b47] mt-1">
               {ship.ship_date && <>Дата отправки: {new Date(ship.ship_date).toLocaleDateString('ru-RU')} · </>}
               M-Glass, Мытищи → Воронеж
             </div>
           </div>
-          <div className="text-right text-[13px] text-[#111110]">
-            <div className="font-mono font-semibold text-[16px]">{orders.length} зак. · {totalPieces} изд. · {KG(totalWeight)} кг</div>
+          <div className="text-left sm:text-right text-[13px] text-[#111110] print:text-right">
+            <div className="font-mono font-semibold text-[15px] sm:text-[16px]">{orders.length} зак. · {totalPieces} изд. · {KG(totalWeight)} кг</div>
             <div className="text-[#9a9a95]">{byClient.size} заказчик(ов)</div>
           </div>
         </div>
@@ -183,17 +185,18 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
           const w = os.reduce((s, o) => s + itemsWeight(o.items), 0)
           return (
             <div key={String(key)} className="client-block mt-6">
-              <div className="client-head flex items-baseline justify-between bg-[#f5f5f3] border border-[#e4e4e0] rounded-md px-3 py-2">
+              <div className="client-head flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1 bg-[#f5f5f3] border border-[#e4e4e0] rounded-md px-3 py-2 print:flex-row">
                 <div>
                   <span className="font-semibold text-[15px] text-[#111110]">{name}</span>
                   {(info?.contact || info?.phone) && (
-                    <span className="ml-3 text-[13px] text-[#4b4b47]">{[info?.contact, info?.phone].filter(Boolean).join(' · ')}</span>
+                    <span className="block sm:inline sm:ml-3 text-[13px] text-[#4b4b47] print:inline print:ml-3">{[info?.contact, info?.phone].filter(Boolean).join(' · ')}</span>
                   )}
                 </div>
                 <span className="font-mono text-[13px] text-[#111110]">{os.length} зак. · {os.reduce((sp, o) => sp + piecesOf(o.items), 0)} изд. · {KG(w)} кг</span>
               </div>
               {info?.legal_address && <div className="text-[12px] text-[#9a9a95] px-3 mt-1">{info.legal_address}</div>}
-              <table className="w-full mt-2 text-[13px]">
+              <div className="overflow-x-auto -mx-1 px-1 print:overflow-visible">
+              <table className="w-full mt-2 text-[13px] min-w-[560px] print:min-w-0">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-[#9a9a95] border-b border-[#e4e4e0]">
                     <th className="py-1.5 pr-2 w-24">Заказ</th>
@@ -217,11 +220,12 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           )
         })}
 
-        <div className="signatures mt-10 grid grid-cols-2 gap-8 text-[13px] text-[#4b4b47]">
+        <div className="signatures mt-10 grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 text-[13px] text-[#4b4b47] print:grid-cols-2">
           <div>
             <div>Водитель: ____________________________</div>
             <div className="mt-6">Подпись: _____________________________</div>

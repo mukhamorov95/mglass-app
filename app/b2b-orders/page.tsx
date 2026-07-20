@@ -2474,6 +2474,7 @@ export default function B2BOrdersPage() {
 
                   {/* Table */}
                   <div className="overflow-auto flex-1">
+                    <div className="overflow-x-auto">
                     <table className="w-full text-[12px]">
                       <thead className="bg-[#fafaf9] border-b border-[#e4e4e0] sticky top-0 z-10">
                         <tr>
@@ -2535,6 +2536,7 @@ export default function B2BOrdersPage() {
                         ))}
                       </tbody>
                     </table>
+                    </div>
                   </div>
 
                   {/* Footer */}

@@ -140,15 +140,15 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
       </div>
 
       <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
-        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-4 py-2 text-[11px] uppercase tracking-widest text-[#9a9a95] border-b border-[#f0f0ee]">
+        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 sm:gap-x-4 px-4 py-2 text-[11px] uppercase tracking-widest text-[#9a9a95] border-b border-[#f0f0ee]">
           <span>Неделя</span><span className="text-right">План</span><span className="text-right">Факт</span><span className="text-right">Откл.</span>
         </div>
         {weekPlans.map((w, i) => {
           const dev = w.completed || w.current ? w.deviation : null
           return (
             <button key={w.week.start} onClick={() => setSelIdx(i)}
-              className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-x-4 px-4 py-2.5 text-[13px] border-b border-[#f0f0ee] last:border-b-0 text-left ${i === sel ? 'bg-[#f5f5f3]' : ''}`}>
-              <span className="text-[#111110]">
+              className={`w-full grid grid-cols-[1fr_auto_auto_auto] gap-x-2 sm:gap-x-4 px-4 py-2.5 text-[13px] border-b border-[#f0f0ee] last:border-b-0 text-left ${i === sel ? 'bg-[#f5f5f3]' : ''}`}>
+              <span className="text-[#111110] whitespace-nowrap">
                 чт {DD(w.week.start)} — ср {DD(w.week.end)}
                 {w.current && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold align-middle">текущая</span>}
                 {w.completed && <span className="ml-2 text-[10px] text-[#9a9a95] align-middle">завершена</span>}
