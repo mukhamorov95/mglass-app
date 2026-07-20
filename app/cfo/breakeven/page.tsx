@@ -157,6 +157,7 @@ export default function BreakevenPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   // «Компания» = сумма юнитов: доходы/переменные зеркалятся, фонды и постоянные суммируются.

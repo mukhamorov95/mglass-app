@@ -17,20 +17,8 @@ export default function ProductVisualization({ type, inputs, role, profileColor 
 
   const svgRef = useRef<HTMLDivElement>(null)
 
-  if (role !== 'admin' && role !== 'ceo') return null
-
-  let svgString = ''
-  try {
-    if (type === 'mirror') {
-      svgString = generateMirrorSVG(inputs as MirrorInputs)
-    } else {
-      svgString = generateLoftSVG({ inputs: inputs as LoftInputs, profileColor: profileColor ?? 'black' })
-    }
-  } catch { return null }
-
-  if (!svgString) return null
-
   // ── PNG export ──────────────────────────────────────────────────────────
+  // useCallback до ранних return — хуки должны вызываться безусловно (rules-of-hooks)
   const handleDownload = useCallback(async () => {
     setDownloading(true)
     try {
@@ -67,6 +55,19 @@ export default function ProductVisualization({ type, inputs, role, profileColor 
       setDownloading(false)
     }
   }, [type, inputs])
+
+  if (role !== 'admin' && role !== 'ceo') return null
+
+  let svgString = ''
+  try {
+    if (type === 'mirror') {
+      svgString = generateMirrorSVG(inputs as MirrorInputs)
+    } else {
+      svgString = generateLoftSVG({ inputs: inputs as LoftInputs, profileColor: profileColor ?? 'black' })
+    }
+  } catch { return null }
+
+  if (!svgString) return null
 
   // ── Inline preview ──────────────────────────────────────────────────────
   const Preview = (

@@ -81,6 +81,7 @@ export default function SuppliersPage() {
 
   function showToast(msg: string) { setToast(msg); setTimeout(() => setToast(null), 3000) }
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {

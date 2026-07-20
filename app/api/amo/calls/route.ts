@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase-server'
 const AMO_BASE  = `https://${process.env.AMO_SUBDOMAIN}.amocrm.ru/api/v4`
 const AMO_TOKEN = process.env.AMO_ACCESS_TOKEN!
 
-async function amoGet(path: string): Promise<any> {
+async function amoGet(path: string) {
   const res = await fetch(`${AMO_BASE}${path}`, {
     headers: { Authorization: `Bearer ${AMO_TOKEN}` },
     cache: 'no-store',
@@ -27,7 +27,11 @@ export async function GET(req: Request) {
     const data = await amoGet(
       `/leads/${leadId}/notes?filter[note_type][]=call_in&filter[note_type][]=call_out&limit=50&order[id]=desc`
     )
-    const notes: any[] = data?._embedded?.notes ?? []
+    type AmoCallNote = {
+      id: number; note_type: string; created_at: number
+      params?: { phone?: string; uniq_call_id?: string; duration?: number; link?: string }
+    }
+    const notes: AmoCallNote[] = data?._embedded?.notes ?? []
 
     // Fetch existing analyses from our DB
     const { data: analyses } = await supabase
@@ -35,13 +39,13 @@ export async function GET(req: Request) {
       .select('amo_note_id, summary, probability, manager_score, created_at')
       .eq('amo_lead_id', parseInt(leadId))
 
-    const analysedNoteIds = new Set((analyses ?? []).map((a: any) => a.amo_note_id))
+    const analysedNoteIds = new Set((analyses ?? []).map((a: { amo_note_id: number }) => a.amo_note_id))
 
     const calls = notes
       .filter(n => n.note_type === 'call_in' || n.note_type === 'call_out')
       .map(n => {
         const params = n.params ?? {}
-        const analysed = analyses?.find((a: any) => a.amo_note_id === n.id)
+        const analysed = analyses?.find((a: { amo_note_id: number }) => a.amo_note_id === n.id)
         return {
           note_id:       n.id as number,
           note_type:     n.note_type as string,

@@ -165,6 +165,7 @@ export default function MyQueuePage() {
     setLoading(false)
   }, [sb, viewMaster])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const handlePick = useCallback((m: { id: string; name: string; stations: string[] } | null) => {

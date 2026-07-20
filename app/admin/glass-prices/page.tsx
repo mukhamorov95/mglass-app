@@ -190,6 +190,7 @@ export default function GlassPricesPage() {
     }
   }, [])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load(); loadB2BData() }, [load, loadB2BData])
 
   useEffect(() => {
@@ -226,6 +227,7 @@ export default function GlassPricesPage() {
 
   useEffect(() => {
     if ((tab === 'formula' || tab === 'sale_glass' || tab === 'sale_mirror') && !formulaLoaded) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFormulaLoading(true)
       fetch('/api/admin/pricing-formula')
         .then(r => r.ok ? r.json() : [])
@@ -241,6 +243,7 @@ export default function GlassPricesPage() {
     const key = `sale_${cat}`
     if (autoFilledRef.current.has(key)) return
     autoFilledRef.current.add(key)
+    // eslint-disable-next-line react-hooks/immutability
     fillByFormula()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [formulaLoaded, loading, tab])
@@ -1521,6 +1524,16 @@ function SheetVariantsModal({
 
 // ─── MarginPopover ────────────────────────────────────────────────────────────
 
+// Вынесен на уровень модуля: компоненты нельзя создавать внутри рендера (static-components)
+function Row({ label, value, neg, sub }: { label: string; value: string; neg?: boolean; sub?: boolean }) {
+  return (
+    <div className={`flex justify-between items-center py-1 ${sub ? 'pl-3' : ''}`}>
+      <span className={`text-[12px] ${sub ? 'text-[#8a8a85]' : 'text-[#4b4b47]'}`}>{label}</span>
+      <span className={`font-mono text-[12px] ${neg ? 'text-red-500' : 'text-[#4b4b47]'}`}>{value}</span>
+    </div>
+  )
+}
+
 function MarginPopover({ info, name, mm, salePrice, cat, onClose }: {
   info: MarginInfo; name: string; mm: number; salePrice: number; cat: Category; onClose: () => void
 }) {
@@ -1529,15 +1542,6 @@ function MarginPopover({ info, name, mm, salePrice, cat, onClose }: {
   const primaryMargin = hasTemp ? info.marginWithTemp : info.margin
   const primaryProfit = hasTemp ? info.profitWithTemp : info.profit
   const recPrice = hasTemp ? info.recPriceWithTemp : info.recPrice
-
-  function Row({ label, value, neg, sub }: { label: string; value: string; neg?: boolean; sub?: boolean }) {
-    return (
-      <div className={`flex justify-between items-center py-1 ${sub ? 'pl-3' : ''}`}>
-        <span className={`text-[12px] ${sub ? 'text-[#8a8a85]' : 'text-[#4b4b47]'}`}>{label}</span>
-        <span className={`font-mono text-[12px] ${neg ? 'text-red-500' : 'text-[#4b4b47]'}`}>{value}</span>
-      </div>
-    )
-  }
 
   return (
     <div className="fixed z-50 inset-0 bg-black/25 flex items-center justify-center p-4" onClick={onClose}>

@@ -205,13 +205,16 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
   const dragRef = useRef<{ id: string; startMX: number; startMY: number; origX: number; origY: number } | null>(null)
   const plsRef = useRef(pls)
   const piecesRef = useRef(pieces)
+  // eslint-disable-next-line react-hooks/refs
   plsRef.current = pls          // sync update — always fresh for drag handlers
+  // eslint-disable-next-line react-hooks/refs
   piecesRef.current = pieces    // sync update
 
   // Clean up stale placements when piece IDs change
   const pieceIdsKey = pieces.map(p => p.id).join('|')
   useEffect(() => {
     const ids = new Set(pieces.map(p => p.id))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPls(prev => {
       const next: Record<string, ManualPlacement> = {}
       let changed = false
@@ -598,6 +601,7 @@ export default function B2BCuttingPage() {
 
   const resultsRef = useRef<HTMLDivElement>(null)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {

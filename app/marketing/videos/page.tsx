@@ -166,7 +166,7 @@ export default function VideoFactoryPage() {
             </div>
             {expanded === v.id && (
               <div className="border-t border-[#f0f0ec] px-4 pb-4 pt-3 space-y-4">
-                {v.hook && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Хук</p><p className="text-[14px] font-semibold text-[#111110] leading-tight">"{v.hook}"</p></div>}
+                {v.hook && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Хук</p><p className="text-[14px] font-semibold text-[#111110] leading-tight">&quot;{v.hook}&quot;</p></div>}
                 {v.problem && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Проблема</p><p className="text-[13px] text-[#6b6b66]">{v.problem}</p></div>}
                 {v.structure && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Структура</p><pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans bg-[#fafaf8] rounded-lg p-3">{v.structure}</pre></div>}
                 {v.narrator_text && <div><p className="text-[11px] font-bold text-[#8a8a85] uppercase tracking-wider mb-1">Текст диктора</p><pre className="text-[13px] text-[#111110] whitespace-pre-wrap font-sans bg-amber-50 border border-amber-100 rounded-lg p-3 italic">{v.narrator_text}</pre></div>}

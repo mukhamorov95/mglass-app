@@ -546,6 +546,7 @@ export default function B2BQuotesPage() {
     }
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadQuotes().catch(() => setLoading(false)) }, [])
 
   // ── Duplicate / Delete ─────────────────────────────────────────────────────

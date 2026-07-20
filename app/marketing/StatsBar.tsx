@@ -26,24 +26,29 @@ export default function StatsBar() {
           fetch('/api/marketing/promos').then(r => r.json()).catch(() => []),
         ])
         const today = new Date().toISOString().slice(0, 10)
-        const cArr = Array.isArray(content) ? content : []
-        const tArr = Array.isArray(tasks) ? tasks : []
-        const refs = Array.isArray(partners)
-          ? partners.flatMap((p: any) => Array.isArray(p.marketing_partner_referrals) ? p.marketing_partner_referrals : [])
+        type MkContent = { status: string }
+        type MkTask = { status: string; deadline?: string | null }
+        type MkReferral = { status?: string; commission_amount?: unknown }
+        type MkPartner = { marketing_partner_referrals?: MkReferral[] }
+        type MkPromo = { active?: boolean }
+        const cArr: MkContent[] = Array.isArray(content) ? content : []
+        const tArr: MkTask[] = Array.isArray(tasks) ? tasks : []
+        const refs: MkReferral[] = Array.isArray(partners)
+          ? (partners as MkPartner[]).flatMap(p => Array.isArray(p.marketing_partner_referrals) ? p.marketing_partner_referrals : [])
           : []
-        const pArr = Array.isArray(promos) ? promos : []
-        const open = tArr.filter((t: any) => t.status === 'todo' || t.status === 'in_progress')
+        const pArr: MkPromo[] = Array.isArray(promos) ? promos : []
+        const open = tArr.filter(t => t.status === 'todo' || t.status === 'in_progress')
         setS({
-          contentIdeas: cArr.filter((c: any) => c.status === 'idea').length,
-          contentInWork: cArr.filter((c: any) => ['in_progress', 'filmed', 'editing'].includes(c.status)).length,
-          contentPublished: cArr.filter((c: any) => c.status === 'published').length,
+          contentIdeas: cArr.filter(c => c.status === 'idea').length,
+          contentInWork: cArr.filter(c => ['in_progress', 'filmed', 'editing'].includes(c.status)).length,
+          contentPublished: cArr.filter(c => c.status === 'published').length,
           tasksOpen: open.length,
-          tasksOverdue: open.filter((t: any) => t.deadline && t.deadline < today).length,
-          refPending: refs.filter((r: any) => r.status === 'pending').length,
-          refToPay: refs.filter((r: any) => r.status === 'completed').length,
-          refToPaySum: refs.filter((r: any) => r.status === 'completed')
-            .reduce((sum: number, r: any) => sum + (Number(r.commission_amount) || 0), 0),
-          promosActive: pArr.filter((p: any) => p.active).length,
+          tasksOverdue: open.filter(t => t.deadline && t.deadline < today).length,
+          refPending: refs.filter(r => r.status === 'pending').length,
+          refToPay: refs.filter(r => r.status === 'completed').length,
+          refToPaySum: refs.filter(r => r.status === 'completed')
+            .reduce((sum: number, r) => sum + (Number(r.commission_amount) || 0), 0),
+          promosActive: pArr.filter(p => p.active).length,
         })
       } catch { /* сводка не критична */ }
     })()

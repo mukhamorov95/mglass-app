@@ -9,7 +9,7 @@ const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
 function extractJSON(text: string): string {
   // Strip markdown code fences
-  let s = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const s = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
   // Find outermost { ... }
   const first = s.indexOf('{')
   const last  = s.lastIndexOf('}')

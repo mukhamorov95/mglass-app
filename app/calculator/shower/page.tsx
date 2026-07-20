@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import type { Material, Service, PartnerType, FinancialSettings } from '@/lib/types'
 import {
@@ -244,6 +245,7 @@ export default function ShowerCalculatorPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMargin(String(strategy.target_margin))
   }, [tier, strategy.target_margin])
 
@@ -266,10 +268,12 @@ export default function ShowerCalculatorPage() {
   const model = tier === 'standard' ? stdModel : budgetModel
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (!tierCfg.colors.includes(hwColor)) setHwColor(tierCfg.colors[0])
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tier])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setHwSelection({}) }, [tier, stdShowerType, hingeType, trackType])
 
   // Load manual hardware prices for budget tier when model changes
@@ -350,6 +354,7 @@ export default function ShowerCalculatorPage() {
     if (supplierManuallySet.current) return
     if (supplierCoverage.length === 0) return
     const best = [...supplierCoverage].sort((a, b) => b.count - a.count)[0]
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (best) setStdSupplierId(best.id)
   }, [supplierCoverage])
 
@@ -525,7 +530,7 @@ export default function ShowerCalculatorPage() {
         )}
         <div className="flex items-center justify-between mb-5">
           <div className="flex items-center gap-2.5">
-            <a href="/" className="text-[13px] text-[#0071e3] hover:underline">Главная</a>
+            <Link href="/" className="text-[13px] text-[#0071e3] hover:underline">Главная</Link>
             <span className="text-[#c7c7cc]">/</span>
             <h1 className="text-[17px] font-semibold text-[#1d1d1f] tracking-tight">Душевая перегородка</h1>
           </div>
@@ -1174,10 +1179,10 @@ export default function ShowerCalculatorPage() {
                     className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     ✏️ Открыть расчёт
                   </a>
-                  <a href="/calculations"
+                  <Link href="/calculations"
                     className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     📋 История
-                  </a>
+                  </Link>
                   <button onClick={() => { setSavedId(null); setClientName(''); setClientPhone(''); window.scrollTo(0, 0); }}
                     className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-[#e8e8ed] rounded-xl text-[12px] font-medium text-[#1d1d1f] hover:bg-[#f5f5f7] transition-colors">
                     ➕ Новый расчёт

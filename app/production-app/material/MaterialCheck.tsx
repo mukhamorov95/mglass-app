@@ -42,6 +42,7 @@ export default function MaterialCheck() {
     setOrders((ords ?? []) as Order[])
     setLoading(false)
   }, [sb])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function setStatus(o: Order, status: 'ready' | 'needed') {

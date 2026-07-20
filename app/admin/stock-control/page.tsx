@@ -39,6 +39,7 @@ export default function StockControlPage() {
   const [saving,  setSaving]  = useState<number | null>(null)
   const [showAll, setShowAll] = useState(false)
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
@@ -53,7 +54,17 @@ export default function StockControlPage() {
         .order('name'),
     ])
 
-    const hwItems: StockItem[] = ((hw.data ?? []) as any[]).map(r => ({
+    type HwRow = {
+      id: number; name: string; category: string; unit: string
+      stock_qty: number | null; min_stock: number | null; recommended_stock: number | null
+      storage_unit: string | null; is_critical: boolean | null
+    }
+    type MatRow = {
+      id: number; name: string; category: string; unit: string
+      stock_qty: number | null; min_stock_qty: number | null; recommended_stock: number | null
+      storage_unit: string | null; is_critical: boolean | null
+    }
+    const hwItems: StockItem[] = ((hw.data ?? []) as HwRow[]).map(r => ({
       id: r.id, name: r.name, category: r.category, unit: r.unit,
       stock_qty: r.stock_qty ?? 0,
       min_stock: r.min_stock ?? 0,
@@ -63,7 +74,7 @@ export default function StockControlPage() {
       _source: 'hardware' as const,
     }))
 
-    const matItems: StockItem[] = ((mat.data ?? []) as any[]).map(r => ({
+    const matItems: StockItem[] = ((mat.data ?? []) as MatRow[]).map(r => ({
       id: r.id, name: r.name, category: r.category, unit: r.unit,
       stock_qty: r.stock_qty ?? 0,
       min_stock: r.min_stock_qty ?? 0,

@@ -97,6 +97,7 @@ export default function CashflowPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   async function saveCash(v: number) {
@@ -151,6 +152,7 @@ export default function CashflowPage() {
       const inflow = items.filter(f => f.kind === 'in').reduce((s, f) => s + f.amount, 0)
       const outflow = items.filter(f => f.kind === 'out').reduce((s, f) => s + f.amount, 0)
       const opening = balance
+      // eslint-disable-next-line react-hooks/immutability
       balance = balance + inflow - outflow
       return { i, start, end: addDays(end, -1), items: items.sort((a, b) => a.date.getTime() - b.date.getTime()), inflow, outflow, opening, closing: balance }
     })

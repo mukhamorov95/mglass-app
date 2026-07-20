@@ -44,49 +44,52 @@ export default async function ClientsPage() {
     avgMargin: number
   }
 
+  type OrderRow = { client_name: string; client_phone: string | null; total_sale_price: number; margin_percent: number; created_at: string }
+  type CalcRow  = { client_name: string; client_phone: string | null; margin: number; created_at: string }
+
   const clientMap = new Map<string, ClientEntry>()
 
-  for (const o of (orders ?? [])) {
-    const key = (o as any).client_phone?.trim() || (o as any).client_name?.trim()
+  for (const o of ((orders ?? []) as OrderRow[])) {
+    const key = o.client_phone?.trim() || o.client_name?.trim()
     if (!key) continue
     const existing = clientMap.get(key)
     if (existing) {
       existing.orderCount++
-      existing.totalRevenue += (o as any).total_sale_price
-      existing.avgMargin = (existing.avgMargin + (o as any).margin_percent) / 2
-      if ((o as any).created_at > existing.lastActivityAt) existing.lastActivityAt = (o as any).created_at
+      existing.totalRevenue += o.total_sale_price
+      existing.avgMargin = (existing.avgMargin + o.margin_percent) / 2
+      if (o.created_at > existing.lastActivityAt) existing.lastActivityAt = o.created_at
     } else {
       clientMap.set(key, {
-        name:        (o as any).client_name,
-        phone:       (o as any).client_phone,
+        name:        o.client_name,
+        phone:       o.client_phone,
         key,
         orderCount:  1,
         calcCount:   0,
-        totalRevenue: (o as any).total_sale_price,
-        lastActivityAt: (o as any).created_at,
-        avgMargin:   (o as any).margin_percent,
+        totalRevenue: o.total_sale_price,
+        lastActivityAt: o.created_at,
+        avgMargin:   o.margin_percent,
       })
     }
   }
 
   // Merge calculation clients (only those not already in orders map)
-  for (const c of (calcRows ?? [])) {
-    const key = (c as any).client_phone?.trim() || (c as any).client_name?.trim()
+  for (const c of ((calcRows ?? []) as CalcRow[])) {
+    const key = c.client_phone?.trim() || c.client_name?.trim()
     if (!key) continue
     const existing = clientMap.get(key)
     if (existing) {
       existing.calcCount++
-      if ((c as any).created_at > existing.lastActivityAt) existing.lastActivityAt = (c as any).created_at
+      if (c.created_at > existing.lastActivityAt) existing.lastActivityAt = c.created_at
     } else {
       clientMap.set(key, {
-        name:        (c as any).client_name,
-        phone:       (c as any).client_phone,
+        name:        c.client_name,
+        phone:       c.client_phone,
         key,
         orderCount:  0,
         calcCount:   1,
         totalRevenue: 0,
-        lastActivityAt: (c as any).created_at,
-        avgMargin:   (c as any).margin,
+        lastActivityAt: c.created_at,
+        avgMargin:   c.margin,
       })
     }
   }

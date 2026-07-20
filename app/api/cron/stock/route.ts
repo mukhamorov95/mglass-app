@@ -21,14 +21,16 @@ export async function GET(req: Request) {
     .eq('active', true)
     .gt('min_stock_qty', 0)
 
-  const low  = (materials ?? []).filter((m: any) => m.stock_qty > 0 && m.stock_qty <= m.min_stock_qty)
-  const out  = (materials ?? []).filter((m: any) => m.stock_qty <= 0 && m.min_stock_qty > 0)
+  type MaterialRow = { name: string; unit: string; stock_qty: number; min_stock_qty: number }
+  const rows = (materials ?? []) as MaterialRow[]
+  const low  = rows.filter(m => m.stock_qty > 0 && m.stock_qty <= m.min_stock_qty)
+  const out  = rows.filter(m => m.stock_qty <= 0 && m.min_stock_qty > 0)
 
   if (!low.length && !out.length) return NextResponse.json({ ok: true, alerts: 0 })
 
   const lines: string[] = []
-  for (const m of out)  lines.push(`🔴 <b>${(m as any).name}</b> — нет на складе (мин. ${(m as any).min_stock_qty} ${(m as any).unit})`)
-  for (const m of low)  lines.push(`🟡 <b>${(m as any).name}</b> — ${(m as any).stock_qty} ${(m as any).unit} (мин. ${(m as any).min_stock_qty})`)
+  for (const m of out)  lines.push(`🔴 <b>${m.name}</b> — нет на складе (мин. ${m.min_stock_qty} ${m.unit})`)
+  for (const m of low)  lines.push(`🟡 <b>${m.name}</b> — ${m.stock_qty} ${m.unit} (мин. ${m.min_stock_qty})`)
 
   await notifyAdmins([
     `📦 <b>Дефицит на складе (${out.length + low.length} позиций)</b>`,

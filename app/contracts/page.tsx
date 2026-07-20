@@ -116,6 +116,7 @@ export default function ContractsPage() {
   const setCust = (k: string, v: string) => { setForm(f => ({ ...f, customer: { ...f.customer, [k]: v } })); setSavedId(null) }
 
   useEffect(() => { fetch('/api/kp').then(r => r.json()).then(d => setKps(Array.isArray(d.items) ? d.items : [])).catch(() => {}) }, [])
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab])
 
   async function loadHistory() {

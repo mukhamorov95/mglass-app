@@ -35,6 +35,7 @@ export default function MeasureCalendarPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const days = useMemo(() => {

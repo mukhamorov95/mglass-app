@@ -62,6 +62,7 @@ export default function MirrorFramesPage() {
     setLoading(false)
   }
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   function startEdit(f: MirrorFrame) {

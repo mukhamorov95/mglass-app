@@ -57,7 +57,7 @@ export async function POST(req: Request) {
           {
             type: 'document',
             source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-          } as any,
+          },
           {
             type: 'text',
             text: `Это прайс-лист или счёт поставщика для компании MGlass (стекло, зеркала, душевые, перегородки).
@@ -86,8 +86,8 @@ export async function POST(req: Request) {
     const text     = resp.content.find(b => b.type === 'text')?.text ?? '[]'
     const jsonMatch = text.match(/\[[\s\S]*\]/)
     if (jsonMatch) {
-      const parsed = JSON.parse(jsonMatch[0])
-      extracted = parsed.filter((p: any) => ['materials', 'services'].includes(p.table) && p.name)
+      const parsed: typeof extracted = JSON.parse(jsonMatch[0])
+      extracted = parsed.filter(p => ['materials', 'services'].includes(p.table) && p.name)
     }
   } catch (err) {
     return NextResponse.json({ error: `Ошибка парсинга PDF: ${err}` }, { status: 500 })
@@ -115,7 +115,7 @@ export async function POST(req: Request) {
     created_at: new Date().toISOString(),
   }))
 
-  const allPending = [...((memory.pending_approvals as any[]) ?? []), ...newPending].slice(-50)
+  const allPending = [...((memory.pending_approvals as unknown[]) ?? []), ...newPending].slice(-50)
 
   await supabaseDb.from('agent_settings').update({
     memory: { ...memory, pending_approvals: allPending },

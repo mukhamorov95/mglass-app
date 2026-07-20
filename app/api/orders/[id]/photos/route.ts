@@ -36,7 +36,7 @@ export async function POST(
 
   // Append URL to completion_photos array
   const { data: order } = await client.from('orders').select('completion_photos').eq('id', id).single()
-  const existing: string[] = (order as any)?.completion_photos ?? []
+  const existing: string[] = (order as { completion_photos?: string[] } | null)?.completion_photos ?? []
   await client.from('orders').update({ completion_photos: [...existing, publicUrl] }).eq('id', id)
 
   return NextResponse.json({ url: publicUrl })

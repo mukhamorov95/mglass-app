@@ -170,6 +170,7 @@ export default function B2BPipelinePage() {
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
   )
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {

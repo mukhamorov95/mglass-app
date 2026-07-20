@@ -17,11 +17,15 @@ export async function POST(req: Request) {
   const { data: settings } = await db_
     .from('agent_settings').select('memory').eq('agent_key', 'catalog').single()
   const memory  = (settings?.memory ?? {}) as Record<string, unknown>
-  const pending = (memory.pending_approvals ?? []) as any[]
+  type PendingItem = {
+    id?: string; name?: string; suggestion?: string; table?: string
+    category?: string; unit?: string; cost_price?: number
+  }
+  const pending = (memory.pending_approvals ?? []) as PendingItem[]
 
   // Ищем по id или по индексу (для старых записей без id)
-  let item: any = null
-  let newPending: any[] = []
+  let item: PendingItem | null | undefined = null
+  let newPending: PendingItem[] = []
 
   if (id) {
     item       = pending.find(p => p.id === id)

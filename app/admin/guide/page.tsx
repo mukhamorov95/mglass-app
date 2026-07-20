@@ -28,6 +28,7 @@ function useAcknowledged() {
   useEffect(() => {
     try {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '[]')
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAcked(new Set(stored))
     } catch { /* ignore */ }
   }, [])

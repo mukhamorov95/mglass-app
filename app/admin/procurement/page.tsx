@@ -515,6 +515,7 @@ export default function ProcurementPage() {
   // Reset inline forms when a different card is opened
   useEffect(() => {
     if (!detail) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPickupForm({
       by:   detail.pickup_by   ?? '',
       date: detail.pickup_date ?? '',

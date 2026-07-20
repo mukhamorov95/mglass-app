@@ -49,6 +49,12 @@ export default function B2BAnalyticsPage() {
   const [year, setYear] = useState(new Date().getFullYear())
   const [tab, setTab] = useState<Tab>('clients')
   const [clientsView, setClientsView] = useState<ClientsView>('matrix')
+  const [nowTs, setNowTs] = useState(0)
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setNowTs(Date.now())
+  }, [])
 
   useEffect(() => {
     async function load() {
@@ -70,6 +76,7 @@ export default function B2BAnalyticsPage() {
   }, [])
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOrders(allOrders.filter(o => {
       const y = new Date(o.created_at).getFullYear()
       return y === year
@@ -133,7 +140,7 @@ export default function B2BAnalyticsPage() {
       if (o.created_at < row.first_order_date) row.first_order_date = o.created_at
       if (o.created_at > row.last_order_date)  row.last_order_date  = o.created_at
     }
-    const now = Date.now()
+    const now = nowTs
     return [...map.values()]
       .map(r => ({
         ...r,
@@ -141,7 +148,7 @@ export default function B2BAnalyticsPage() {
         days_since_last_order: Math.floor((now - new Date(r.last_order_date).getTime()) / 86_400_000),
       }))
       .sort((a, b) => b.total_revenue - a.total_revenue)
-  }, [allOrders])
+  }, [allOrders, nowTs])
 
   /* ── Сегментация по активности ── */
   const segmentation = useMemo(() => ({

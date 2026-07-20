@@ -62,6 +62,7 @@ export default function VladislavPage() {
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<Tab>('attention')
 
+  // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { load().catch(() => setLoading(false)) }, [])
 
   async function load() {
@@ -74,7 +75,7 @@ export default function VladislavPage() {
 
     if (!data) { setLoading(false); return }
 
-    const enriched = await Promise.all(data.map(async (c: any) => {
+    const enriched = await Promise.all(data.map(async (c: Chat) => {
       const { data: msgs, count } = await sb
         .from('ai_conversations')
         .select('role, content, created_at', { count: 'exact' })

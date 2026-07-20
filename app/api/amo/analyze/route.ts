@@ -16,6 +16,10 @@ async function amoGet(path: string) {
   return res.json()
 }
 
+type AmoLead = { name?: string; price?: number; status_id: number; responsible_user_id: number; updated_at: number }
+type AmoPipeline = { id: number; name: string; _embedded?: { statuses?: { id: number; name: string }[] } }
+type AmoUser = { id: number; name: string }
+
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -37,8 +41,8 @@ export async function GET() {
     // 142 = Won, 143 = Lost in AmoCRM
     const active = allLeads.filter(l => l.status_id !== 142 && l.status_id !== 143)
 
-    const pipelines: any[] = pipelinesData?._embedded?.pipelines ?? []
-    const users: any[] = usersData?._embedded?.users ?? []
+    const pipelines: AmoPipeline[] = pipelinesData?._embedded?.pipelines ?? []
+    const users: AmoUser[] = usersData?._embedded?.users ?? []
 
     const statusMap: Record<number, string> = {}
     const pipelineMap: Record<number, string> = {}
@@ -55,9 +59,9 @@ export async function GET() {
     const now = Math.floor(Date.now() / 1000)
     const day = 86400
 
-    const totalValue = active.reduce((s: number, l: any) => s + (l.price || 0), 0)
-    const stale7 = active.filter((l: any) => now - l.updated_at > 7 * day)
-    const stale14 = active.filter((l: any) => now - l.updated_at > 14 * day)
+    const totalValue = active.reduce((s: number, l: AmoLead) => s + (l.price || 0), 0)
+    const stale7 = active.filter((l: AmoLead) => now - l.updated_at > 7 * day)
+    const stale14 = active.filter((l: AmoLead) => now - l.updated_at > 14 * day)
 
     const byStage: Record<string, { name: string; count: number; value: number }> = {}
     const byManager: Record<string, { name: string; count: number; value: number; stale: number }> = {}
@@ -79,10 +83,10 @@ export async function GET() {
     }
 
     const critical = stale14
-      .filter((l: any) => (l.price || 0) > 30000)
-      .sort((a: any, b: any) => (b.price || 0) - (a.price || 0))
+      .filter((l: AmoLead) => (l.price || 0) > 30000)
+      .sort((a: AmoLead, b: AmoLead) => (b.price || 0) - (a.price || 0))
       .slice(0, 12)
-      .map((l: any) => ({
+      .map((l: AmoLead) => ({
         name: l.name || 'Без названия',
         value: l.price || 0,
         stage: statusMap[l.status_id] ?? 'Неизвестно',
@@ -98,7 +102,7 @@ export async function GET() {
 ОБЩАЯ КАРТИНА:
 - Активных сделок: ${active.length}
 - Общая сумма: ${(totalValue / 1000).toFixed(0)} тыс. ₽
-- Зависших (7+ дней без активности): ${stale7.length} сделок на ${(stale7.reduce((s: number, l: any) => s + (l.price || 0), 0) / 1000).toFixed(0)} тыс. ₽
+- Зависших (7+ дней без активности): ${stale7.length} сделок на ${(stale7.reduce((s: number, l: AmoLead) => s + (l.price || 0), 0) / 1000).toFixed(0)} тыс. ₽
 - Критичных (14+ дней): ${stale14.length} сделок
 
 ПО ЭТАПАМ ВОРОНКИ:
@@ -134,7 +138,7 @@ ${critical.map(d => `- «${d.name}»: ${(d.value / 1000).toFixed(0)} тыс., э
         total: active.length,
         totalValue,
         stale7Count: stale7.length,
-        stale7Value: stale7.reduce((s: number, l: any) => s + (l.price || 0), 0),
+        stale7Value: stale7.reduce((s: number, l: AmoLead) => s + (l.price || 0), 0),
         stale14Count: stale14.length,
       },
       byStage: stageList,

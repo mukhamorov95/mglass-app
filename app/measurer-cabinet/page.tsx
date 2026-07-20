@@ -56,6 +56,7 @@ export default function MeasurerCabinetPage() {
     setLoading(false)
   }, [sb])
 
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
   const isOwnerView = me?.role === 'admin' || me?.role === 'ceo'

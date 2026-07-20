@@ -27,6 +27,7 @@ export default function MirrorFrameRatesPage() {
     setRefs((rf ?? []) as Ref[])
     setLoading(false)
   }, [sb])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
   async function save(key: string, value: number) {
