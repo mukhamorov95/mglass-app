@@ -11,6 +11,20 @@ function normalizeB2BScope(v: unknown): B2BScope {
   return null
 }
 
+// Кэш роли/скоупа в куках привязан к id пользователя: `${userId}|${value}`.
+// Это (1) не даёт чужой сессии на том же браузере унаследовать чужие права и
+// (2) делает старые куки (без разделителя) недействительными на деплое —
+// значит после смены прав в БД кука-миска заставит middleware перечитать базу,
+// а не тянуть протухшее значение. Возвращаем value только если префикс = userId.
+function readScoped(cookieValue: string | undefined, userId: string): string | undefined {
+  if (cookieValue === undefined) return undefined
+  const sep = cookieValue.indexOf('|')
+  if (sep < 0) return undefined                       // старый формат → cache-miss
+  if (cookieValue.slice(0, sep) !== userId) return undefined
+  return cookieValue.slice(sep + 1)
+}
+const ROLE_COOKIES = ['user-role', 'user-b2b-scope'] as const
+
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
 
@@ -72,7 +86,16 @@ export async function middleware(request: NextRequest) {
     // (параллельные запросы с планшета) проигравший нёс бы сюда ОЧИЩЕННЫЕ куки
     // и затирал свежую сессию, которую только что записал победитель
     url.pathname = '/login'
-    return NextResponse.redirect(url)
+    const res = NextResponse.redirect(url)
+    // Разлогинились — гасим кэш роли/скоупа, чтобы следующий вход перечитал БД.
+    for (const c of ROLE_COOKIES) res.cookies.delete(c)
+    return res
+  }
+
+  // На странице логина тоже стираем кэш прав: единственный надёжный момент
+  // инвалидации после «Выйти» (signOut чистит только куки авторизации).
+  if (isLoginPage) {
+    for (const c of ROLE_COOKIES) supabaseResponse.cookies.delete(c)
   }
 
   if (user && isLoginPage) {
@@ -122,11 +145,11 @@ export async function middleware(request: NextRequest) {
 
   // Role-based route protection
   if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo) {
-    const cached      = request.cookies.get('user-role')?.value
-    const cachedScope = request.cookies.get('user-b2b-scope')?.value
+    const cached      = readScoped(request.cookies.get('user-role')?.value, user.id)
+    const cachedScope = readScoped(request.cookies.get('user-b2b-scope')?.value, user.id)
     let role: Role | null = normalizeRole(cached)
-    // Empty-string cookie means "we already checked and there is no scope" —
-    // distinct from "not checked yet" (undefined).
+    // Empty-string payload means "checked, no scope" — distinct from "not checked
+    // yet" (undefined). readScoped returns undefined for another user's / old cookie.
     let b2bScope: B2BScope | undefined =
       cachedScope === undefined ? undefined : normalizeB2BScope(cachedScope)
 
@@ -142,12 +165,12 @@ export async function middleware(request: NextRequest) {
       const perms = (data?.permissions ?? null) as { b2b_client_scope?: unknown } | null
       b2bScope = normalizeB2BScope(perms?.b2b_client_scope)
       if (role) {
-        supabaseResponse.cookies.set('user-role', role, {
+        supabaseResponse.cookies.set('user-role', `${user.id}|${role}`, {
           maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
         })
       }
       // Cache scope even when null so we don't hit the DB on every request.
-      supabaseResponse.cookies.set('user-b2b-scope', b2bScope ?? '', {
+      supabaseResponse.cookies.set('user-b2b-scope', `${user.id}|${b2bScope ?? ''}`, {
         maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
       })
     }
