@@ -1847,6 +1847,13 @@ export default function B2BOrdersPage() {
             className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             📦 Материал{selectedOrderIds.size > 0 ? ` (${selectedOrderIds.size})` : ''}
           </button>
+          <button
+            disabled={selectedOrderIds.size === 0}
+            onClick={() => window.open(`/b2b-orders/invoice?ids=${[...selectedOrderIds].join(',')}`, '_blank')}
+            className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title="Один счёт на выделенные заказы; плательщика выберете на странице счёта">
+            🧾 Единый счёт{selectedOrderIds.size > 0 ? ` (${selectedOrderIds.size})` : ''}
+          </button>
           <Link href="/calculator/b2b"
             className="bg-[#111110] text-white text-[12px] font-medium px-3 py-1.5 rounded-lg hover:bg-[#2a2a28] transition-colors">
             + Новый просчёт
