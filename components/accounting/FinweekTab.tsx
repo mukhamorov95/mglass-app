@@ -34,6 +34,7 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
   const [plan, setPlan] = useState<number | null>(null)
   const [planDraft, setPlanDraft] = useState('')
   const [editPlan, setEditPlan] = useState(false)
+  const [tbTargets, setTbTargets] = useState<{ unit: string; label: string; tb0: number | null; tb1: number | null; tbTarget: number | null }[]>([])
   const [entries, setEntries] = useState<Entry[]>([])
   const [selIdx, setSelIdx] = useState<number | null>(null)
   const [toast, setToast] = useState<string | null>(null)
@@ -116,11 +117,29 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
                 {plan != null ? RUB(plan) : <span className="text-[#9a9a95] text-[15px] font-normal">не задан</span>}
               </p>
             ) : (
-              <div className="flex items-center gap-2 mt-1">
-                <input value={planDraft} onChange={e => setPlanDraft(e.target.value)} inputMode="decimal" placeholder="10 000 000" autoFocus
-                  className="w-[160px] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[16px] font-mono outline-none focus:border-[#111110]" />
-                <button onClick={savePlan} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold">Сохранить</button>
-                <button onClick={() => setEditPlan(false)} className="px-2 py-1.5 text-[13px] text-[#9a9a95]">отмена</button>
+              <div>
+                <div className="flex items-center gap-2 mt-1">
+                  <input value={planDraft} onChange={e => setPlanDraft(e.target.value)} inputMode="decimal" placeholder="10 000 000" autoFocus
+                    className="w-[160px] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[16px] font-mono outline-none focus:border-[#111110]" />
+                  <button onClick={savePlan} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold">Сохранить</button>
+                  <button onClick={() => setEditPlan(false)} className="px-2 py-1.5 text-[13px] text-[#9a9a95]">отмена</button>
+                </div>
+                {tbTargets.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-[11px] text-[#9a9a95] mb-1">Подставить из точки безубыточности:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {tbTargets.flatMap(t => ([
+                        t.tb1 != null && { key: `${t.unit}-tb1`, label: `${t.label} · ТБ-1`, val: t.tb1 },
+                        t.tbTarget != null && { key: `${t.unit}-tbt`, label: `${t.label} · ТБ-цель`, val: t.tbTarget },
+                      ].filter(Boolean) as { key: string; label: string; val: number }[])).map(o => (
+                        <button key={o.key} onClick={() => setPlanDraft(String(Math.round(o.val)))}
+                          className="text-[11px] px-2 py-1 rounded-md border border-[#e4e4e0] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">
+                          {o.label}: {RUB(o.val)}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -129,7 +148,13 @@ export function FinweekTab({ unit, funds, isFin, myName, showBreakevenLink }: {
             <p className="text-[22px] font-bold text-emerald-700">{RUB(monthFact)}</p>
           </div>
           {isFin && !editPlan && (
-            <button onClick={() => { setPlanDraft(plan != null ? String(Math.round(plan)) : ''); setEditPlan(true) }}
+            <button onClick={() => {
+              setPlanDraft(plan != null ? String(Math.round(plan)) : ''); setEditPlan(true)
+              if (showBreakevenLink && tbTargets.length === 0) {
+                fetch('/api/cfo/breakeven-targets').then(r => r.ok ? r.json() : { targets: [] })
+                  .then(d => setTbTargets(d.targets ?? [])).catch(() => {})
+              }
+            }}
               className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] text-[#6b6b66]">✎ план</button>
           )}
         </div>
