@@ -6,7 +6,9 @@ import { classifyDevice } from './lib/deviceClass'
 const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 
 function normalizeB2BScope(v: unknown): B2BScope {
-  return v === 'mglass_only' ? 'mglass_only' : null
+  if (v === 'mglass_only') return 'mglass_only'
+  if (v === 'all_clients') return 'all_clients'
+  return null
 }
 
 export async function middleware(request: NextRequest) {
