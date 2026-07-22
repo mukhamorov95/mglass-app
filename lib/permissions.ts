@@ -1,6 +1,9 @@
 // Shared types and constants — no server dependencies, safe for client components
 
-export type B2BClientScope = 'mglass_only'
+// mglass_only — закупщик считает только для внутреннего клиента M GLASS.
+// all_clients — закупщик (напр. Вера) считает для ВСЕХ B2B-клиентов, как менеджер.
+// null — обычный режим роли (для закупщика калькулятор закрыт).
+export type B2BClientScope = 'mglass_only' | 'all_clients'
 
 export type UserPermissions = {
   see_mglass:        boolean
