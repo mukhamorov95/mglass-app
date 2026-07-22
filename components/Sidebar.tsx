@@ -7,6 +7,7 @@ import Link from 'next/link'
 import type { Role } from '@/lib/getRole'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
+import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 
 type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
@@ -93,12 +94,21 @@ const BUYER_POMOSH: NavItem[] = [
   { href: '/admin/guide', label: 'Регламент', icon: '📖', indent: true },
 ]
 
-// Scoped B2B menu shown only to a buyer with b2b_client_scope='mglass_only'.
-// Mirrors MANAGER_B2B but trimmed to the M GLASS quote→order→cutting flow.
+// Scoped B2B menu for a buyer locked to M GLASS (b2b_client_scope='mglass_only').
+// Trimmed to the internal quote→order→cutting flow (без списка клиентов).
 const BUYER_B2B_MGLASS: NavItem[] = [
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮', indent: true },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝', indent: true },
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦', indent: true },
+  { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
+]
+
+// Полный B2B для закупщика со скоупом all_clients (Вера считает всем клиентам).
+const BUYER_B2B_ALL: NavItem[] = [
+  { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮', indent: true },
+  { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝', indent: true },
+  { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦', indent: true },
+  { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢', indent: true },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
 ]
 
@@ -702,27 +712,30 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       )
     }
 
-    // Buyer: аккордеон-секции. Если у buyer есть b2b_client_scope='mglass_only',
-    // дополнительно показываем мини-группу B2B (внутренние M GLASS просчёты/заказы).
+    // Buyer: аккордеон-секции. Если у buyer есть B2B-скоуп, дополнительно
+    // показываем группу B2B: mglass_only — внутренний M GLASS-контур,
+    // all_clients (Вера) — полный B2B со списком клиентов. B2B ставим ПЕРВОЙ,
+    // чтобы это была явная отдельная вкладка, как просил владелец.
     if (role === 'buyer') {
-      const showB2BForScopedBuyer = permissions.b2b_client_scope === 'mglass_only'
+      const showB2B = hasB2BSalesScope(permissions)
+      const b2bAll = isAllClientsScope(permissions)
       return (
         <>
           <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
+          {showB2B && accordion(
+            'buyer_b2b',
+            b2bAll ? 'B2B' : 'B2B M GLASS',
+            'text-orange-600',
+            'text-orange-400',
+            b2bAll ? BUYER_B2B_ALL : BUYER_B2B_MGLASS,
+            'bg-[#fff1e8] text-[#c2410c] font-medium',
+          )}
           {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
           {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
           {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
           {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
           {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
-          {showB2BForScopedBuyer && accordion(
-            'buyer_b2b_mglass',
-            'B2B M GLASS',
-            'text-emerald-600',
-            'text-emerald-400',
-            BUYER_B2B_MGLASS,
-            'bg-emerald-50 text-emerald-700 font-medium',
-          )}
-          {showB2BForScopedBuyer && accordion(
+          {showB2B && accordion(
             'buyer_production',
             'Производство',
             'text-orange-600',
