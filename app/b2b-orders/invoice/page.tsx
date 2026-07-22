@@ -70,6 +70,8 @@ export default function BatchInvoicePage() {
   const [error, setError] = useState<string | null>(null)
   const [savingPayer, setSavingPayer] = useState(false)
   const [savedPayer, setSavedPayer] = useState(false)
+  const [savingInv, setSavingInv] = useState(false)
+  const [savedInvId, setSavedInvId] = useState<number | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -114,6 +116,22 @@ export default function BatchInvoicePage() {
     const s = paymentQrStringFor(SELLER_B2B, grandTotal, `Оплата по счёту № ${invNo}`)
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
   }, [grandTotal, invNo])
+
+  // Сохранить счёт в реестр как документ (номер, плательщик, состав, сумма).
+  async function saveInvoice() {
+    setSavingInv(true)
+    try {
+      const r = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_no: invNo, payer_client_id: payerId, payer_name: payer?.full_name || payer?.name || null,
+          order_ids: ids, amount: grandTotal, vat,
+        }),
+      })
+      const d = await r.json().catch(() => ({}))
+      if (r.ok && d.id) setSavedInvId(d.id as number)
+    } finally { setSavingInv(false) }
+  }
 
   async function savePayerToOrders() {
     setSavingPayer(true); setSavedPayer(false)
@@ -187,6 +205,11 @@ export default function BatchInvoicePage() {
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={downloadPdf} className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28]">⬇ Скачать PDF</button>
           <button onClick={() => document.fonts.ready.then(() => window.print())} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
+          <button onClick={saveInvoice} disabled={savingInv || savedInvId != null}
+            className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white disabled:opacity-50">
+            {savedInvId != null ? '✓ в реестре' : savingInv ? '…' : '💾 Сохранить счёт'}
+          </button>
+          {savedInvId != null && <a href="/cfo/invoices" className="text-[12px] text-blue-600">открыть реестр →</a>}
           <span className="text-[12px] text-[#6b6b66] ml-auto">{orders.length} заказов · {itemCount} позиций · {money2(grandTotal)} ₽</span>
         </div>
 
