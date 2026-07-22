@@ -8,7 +8,7 @@ import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
-import { isMGlassClient, isMGlassOnlyUser, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
+import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
 import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, type FactoryData } from '@/lib/b2bFactoryProducts'
 
@@ -279,16 +279,16 @@ export default function B2BCalculatorPage() {
           // owners are never scope-restricted, even if the JSON says so
           userMGlassOnly = !userIsAdmin && isMGlassOnlyUser(perms)
           // Buyers are normally blocked from the B2B calculator (procurement
-          // doesn't sell). Exception: a buyer with b2b_client_scope='mglass_only'
-          // (e.g. a procurement worker who also handles internal M GLASS quotes)
-          // gets through — they're locked to M GLASS by the scope guard.
-          if (profile?.role === 'buyer' && !userMGlassOnly) {
+          // doesn't sell). Exception: a buyer with an explicit b2b_client_scope
+          // (mglass_only — locked to M GLASS; all_clients — quotes for everyone)
+          // gets through. Без скоупа закупщик в калькулятор не пускается.
+          if (profile?.role === 'buyer' && !hasB2BSalesScope(perms)) {
             setIsBuyer(true)
             return
           }
           userManagerCode = profile?.manager_code ?? null
           if (!userIsAdmin) setMaxDiscount(profile?.max_discount_percent ?? 5)
-          userCanSeeAllClients = userIsAdmin || (profile?.can_view_all_clients === true)
+          userCanSeeAllClients = userIsAdmin || (profile?.can_view_all_clients === true) || isAllClientsScope(perms)
           setManagerName((profile?.name as string) || user.email || null)
         }
         setIsAdmin(userIsAdmin)

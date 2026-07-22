@@ -145,6 +145,18 @@ export default function UsersPage() {
     })
   }
 
+  // Доступ закупщика к B2B-калькулятору: нет / только M GLASS / все клиенты.
+  // Без скоупа калькулятор для закупщика закрыт (закупка не продаёт).
+  async function setBuyerScope(u: User, scope: 'mglass_only' | 'all_clients' | null) {
+    const updated = { ...resolvePerms(u.permissions), b2b_client_scope: scope }
+    setUsers(prev => prev.map(x => x.id === u.id ? { ...x, permissions: updated } : x))
+    await fetch('/api/admin/users', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: u.id, permissions: updated }),
+    })
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
     setSaving(true)
@@ -556,7 +568,15 @@ export default function UsersPage() {
                           {isAdmin ? (
                             <span className="text-[10px] text-[#9a9a95]">Всё</span>
                           ) : isBuyer ? (
-                            <span className="text-[10px] text-emerald-600 font-medium">Каталог</span>
+                            <select
+                              value={perms.b2b_client_scope ?? ''}
+                              onChange={e => setBuyerScope(u, (e.target.value || null) as 'mglass_only' | 'all_clients' | null)}
+                              title="Доступ закупщика к B2B-калькулятору"
+                              className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
+                              <option value="">Только каталог</option>
+                              <option value="mglass_only">Просчёт: M GLASS</option>
+                              <option value="all_clients">Просчёт: все клиенты</option>
+                            </select>
                           ) : (
                             <button
                               onClick={() => toggleExpandPerms(u.id)}

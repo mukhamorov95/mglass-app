@@ -32,6 +32,18 @@ export function isMGlassOnlyUser(permissions: UserPermissions | null | undefined
   return permissions?.b2b_client_scope === 'mglass_only'
 }
 
+// Закупщик с этим скоупом считает для всех клиентов (Вера ведёт не только M GLASS).
+export function isAllClientsScope(permissions: UserPermissions | null | undefined): boolean {
+  return permissions?.b2b_client_scope === 'all_clients'
+}
+
+// Есть ли у закупщика доступ к B2B-калькулятору вообще (любой явный скоуп).
+// Без него роль buyer в калькулятор не пускается — закупка не продаёт.
+export function hasB2BSalesScope(permissions: UserPermissions | null | undefined): boolean {
+  const s = permissions?.b2b_client_scope
+  return s === 'mglass_only' || s === 'all_clients'
+}
+
 // Human-readable error to surface in the UI when a scope-restricted manager
 // attempts to operate on a non-M-GLASS client.
 export const MGLASS_SCOPE_ERROR =
