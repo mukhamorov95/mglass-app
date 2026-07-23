@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { vladDb, requireVlad } from '@/lib/vlad/vladClient'
 import { parseNote, resummarize } from '@/lib/vlad/parseNote'
+import { transcribeRu } from '@/lib/transcribe'
 
 export const maxDuration = 120
 
@@ -12,19 +13,9 @@ export const maxDuration = 120
 // в details, выжимка пересобирается.
 
 async function transcribe(audio: Blob, filename: string): Promise<string> {
-  const form = new FormData()
-  form.append('file', audio, filename)
-  form.append('model', 'whisper-1')
-  form.append('language', 'ru')
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: form,
-    signal: AbortSignal.timeout(90_000),
-  })
-  if (!res.ok) throw new Error(`whisper_${res.status}: ${(await res.text()).slice(0, 150)}`)
-  const j = await res.json() as { text?: string }
-  return (j.text ?? '').trim()
+  const r = await transcribeRu(audio, filename)
+  if (!r.ok) throw new Error(r.message)
+  return r.text
 }
 
 export async function POST(req: NextRequest) {
