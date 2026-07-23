@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { transcribeRu } from '@/lib/transcribe'
 
 export const maxDuration = 90
 
@@ -36,19 +37,11 @@ export async function POST(req: NextRequest) {
   const audio = form?.get('audio') as File | null
   if (!audio) return NextResponse.json({ error: 'Нужно аудио' }, { status: 400 })
 
-  const wf = new FormData()
-  wf.append('file', audio, audio.name || 'note.webm')
-  wf.append('model', 'whisper-1')
-  wf.append('language', 'ru')
-  const wr = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: wf,
-    signal: AbortSignal.timeout(60_000),
-  })
-  if (!wr.ok) return NextResponse.json({ error: `Расшифровка не удалась (${wr.status})` }, { status: 502 })
-  const transcript = ((await wr.json() as { text?: string }).text ?? '').trim()
-  if (!transcript) return NextResponse.json({ error: 'Пустая запись' }, { status: 400 })
+  // Расшифровка: OpenAI Whisper с запасным Groq (см. lib/transcribe). При исчерпании
+  // квоты OpenAI отдаём понятную ошибку, а не «Расшифровка не удалась (429)».
+  const stt = await transcribeRu(audio, audio.name || 'note.webm')
+  if (!stt.ok) return NextResponse.json({ error: stt.message }, { status: stt.status })
+  const transcript = stt.text
 
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Europe/Moscow' })
   try {

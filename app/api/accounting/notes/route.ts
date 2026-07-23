@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { transcribeRu } from '@/lib/transcribe'
 
 export const maxDuration = 120
 
@@ -23,18 +24,9 @@ const SYSTEM = `Ты помощник бухгалтерии стекольно�
 явные ослышки восстанавливай по смыслу. Пиши по-русски, коротко.`
 
 async function transcribe(audio: File): Promise<string> {
-  const form = new FormData()
-  form.append('file', audio, audio.name || 'note.webm')
-  form.append('model', 'whisper-1')
-  form.append('language', 'ru')
-  const res = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
-    body: form,
-    signal: AbortSignal.timeout(90_000),
-  })
-  if (!res.ok) throw new Error(`Расшифровка не удалась (${res.status})`)
-  return ((await res.json() as { text?: string }).text ?? '').trim()
+  const r = await transcribeRu(audio, audio.name || 'note.webm')
+  if (!r.ok) throw new Error(r.message)
+  return r.text
 }
 
 export async function POST(req: NextRequest) {
