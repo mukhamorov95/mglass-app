@@ -102,6 +102,9 @@ export type QuotePDFProps = {
   productionDays: number
   quoteDate: string
   userNotes: string | null
+  // 'consolidated' (по умолчанию) — клиенту показываем только итог одной суммой,
+  // построчные цены материала и услуг скрыты. 'detailed' — полная разбивка.
+  priceMode?: 'consolidated' | 'detailed'
 }
 
 function fmt(n: number) {
@@ -116,6 +119,12 @@ export default function QuotePDF(p: QuotePDFProps) {
   const validUntil = new Date(new Date(p.quoteDate).getTime() + 14 * 86_400_000)
     .toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
   const hasDiscount = p.discountPercent > 0
+  const showPrices = p.priceMode === 'detailed'
+  // Ширины колонок: со «Суммой» (detailed) и без неё (consolidated — 20% отдаём
+  // «Материалу» и «Размеру», чтобы таблица не оставляла пустоту справа).
+  const W = showPrices
+    ? { c0: '4%', c1: '36%', c2: '20%', c3: '8%', c4: '12%', c5: '20%' }
+    : { c0: '4%', c1: '48%', c2: '28%', c3: '8%', c4: '12%', c5: '0%' }
 
   return (
     <Document>
@@ -178,12 +187,12 @@ export default function QuotePDF(p: QuotePDFProps) {
           <Text style={s.sectionLbl}>Состав заказа</Text>
           <View style={s.table}>
             <View style={s.thead}>
-              <Text style={[s.theadTxt, s.c0]}>#</Text>
-              <Text style={[s.theadTxt, s.c1]}>Материал</Text>
-              <Text style={[s.theadTxt, s.c2]}>Размер (мм)</Text>
-              <Text style={[s.theadTxt, s.c3, s.txtR]}>Кол.</Text>
-              <Text style={[s.theadTxt, s.c4, s.txtR]}>м²</Text>
-              <Text style={[s.theadTxt, s.c5, s.txtR]}>Сумма</Text>
+              <Text style={[s.theadTxt, { width: W.c0 }]}>#</Text>
+              <Text style={[s.theadTxt, { width: W.c1 }]}>Материал</Text>
+              <Text style={[s.theadTxt, { width: W.c2 }]}>Размер (мм)</Text>
+              <Text style={[s.theadTxt, { width: W.c3 }, s.txtR]}>Кол.</Text>
+              <Text style={[s.theadTxt, { width: W.c4 }, s.txtR]}>м²</Text>
+              {showPrices && <Text style={[s.theadTxt, { width: W.c5 }, s.txtR]}>Сумма</Text>}
             </View>
             {p.items.map((item, idx) => {
               const qty      = item.quantity ?? 1
@@ -203,21 +212,21 @@ export default function QuotePDF(p: QuotePDFProps) {
               return (
                 <React.Fragment key={idx}>
                   <View style={row}>
-                    <Text style={[s.c0, { color: MUTED }]}>{idx + 1}</Text>
-                    <Text style={s.c1}>{desc}{temper}{item.comment ? `\n${item.comment}` : ''}</Text>
-                    <Text style={s.c2}>{size}</Text>
-                    <Text style={[s.c3, s.txtR]}>{qty}</Text>
-                    <Text style={[s.c4, s.txtR]}>{fmtN(area)}</Text>
-                    <Text style={[s.c5, s.txtR, s.bold]}>{fmt(svcs.length > 0 ? matTotal : itemTotal)}</Text>
+                    <Text style={[{ width: W.c0 }, { color: MUTED }]}>{idx + 1}</Text>
+                    <Text style={{ width: W.c1 }}>{desc}{temper}{item.comment ? `\n${item.comment}` : ''}</Text>
+                    <Text style={{ width: W.c2 }}>{size}</Text>
+                    <Text style={[{ width: W.c3 }, s.txtR]}>{qty}</Text>
+                    <Text style={[{ width: W.c4 }, s.txtR]}>{fmtN(area)}</Text>
+                    {showPrices && <Text style={[{ width: W.c5 }, s.txtR, s.bold]}>{fmt(svcs.length > 0 ? matTotal : itemTotal)}</Text>}
                   </View>
                   {svcs.map((svc, si) => (
                     <View key={`svc-${idx}-${si}`} style={svcRow}>
-                      <Text style={s.c0} />
-                      <Text style={[s.c1, { color: MUTED, fontSize: 8 }]}>  ↳ {svc.name}</Text>
-                      <Text style={s.c2} />
-                      <Text style={s.c3} />
-                      <Text style={s.c4} />
-                      <Text style={[s.c5, s.txtR, { color: MUTED, fontSize: 8 }]}>{fmt(svc.cost ?? 0)}</Text>
+                      <Text style={{ width: W.c0 }} />
+                      <Text style={[{ width: W.c1 }, { color: MUTED, fontSize: 8 }]}>  ↳ {svc.name}</Text>
+                      <Text style={{ width: W.c2 }} />
+                      <Text style={{ width: W.c3 }} />
+                      <Text style={{ width: W.c4 }} />
+                      {showPrices && <Text style={[{ width: W.c5 }, s.txtR, { color: MUTED, fontSize: 8 }]}>{fmt(svc.cost ?? 0)}</Text>}
                     </View>
                   ))}
                 </React.Fragment>
