@@ -82,6 +82,39 @@ describe('explainAccess синхронен с canAccessRoute (диагности
   }
 })
 
+describe('accessMatrix — закупщик с manager_workspace (Вера) получает менеджерский контур', () => {
+  const managerPaths = ['/crm', '/kp', '/orders', '/clients', '/calendar', '/installations', '/calculator/mirror', '/sales', '/contracts', '/manager', '/measure-requests']
+  // Пути, которых у закупщика нет в собственном allowlist (для проверки «закрыто без флага»).
+  // '/orders' исключён — он есть и у buyer штатно (логист видит заказы).
+  const managerOnlyPaths = managerPaths.filter(p => p !== '/orders')
+  it('с флагом — все менеджерские маршруты доступны', () => {
+    for (const p of managerPaths) {
+      expect(canAccessRoute('buyer', p, { managerWorkspace: true }), `buyer+mgr → ${p}`).toBe(true)
+    }
+  })
+  it('без флага — менеджерские маршруты закрыты', () => {
+    for (const p of managerOnlyPaths) {
+      expect(canAccessRoute('buyer', p), `buyer → ${p}`).toBe(false)
+    }
+  })
+  it('флаг НЕ протекает в другие роли (production не получает /manager)', () => {
+    expect(canAccessRoute('production', '/manager', { managerWorkspace: true })).toBe(false)
+    expect(canAccessRoute('seo', '/crm', { managerWorkspace: true })).toBe(false)
+  })
+  it('флаг не открывает финконтур (/cfo закрыт даже с manager_workspace)', () => {
+    expect(canAccessRoute('buyer', '/cfo', { managerWorkspace: true })).toBe(false)
+    expect(canAccessRoute('buyer', '/commercial', { managerWorkspace: true })).toBe(false)
+  })
+  it('explainAccess синхронен с гейтом при managerWorkspace', () => {
+    for (const p of [...managerPaths, '/cfo', '/commercial', '/whatever-new']) {
+      const gate = canAccessRoute('buyer', p, { managerWorkspace: true })
+      const ex = explainAccess('buyer', p, { managerWorkspace: true })
+      expect(ex.allowed, `${p}: ${ex.reason}`).toBe(gate)
+      expect(ex.reason.length).toBeGreaterThan(0)
+    }
+  })
+})
+
 describe('accessMatrix — корень и публичные пути открыты всем ролям', () => {
   for (const role of ALL_ROLES) {
     it(`${role}: /, /login, /access-denied, /api/* открыты`, () => {

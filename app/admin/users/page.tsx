@@ -568,15 +568,23 @@ export default function UsersPage() {
                           {isAdmin ? (
                             <span className="text-[10px] text-[#9a9a95]">Всё</span>
                           ) : isBuyer ? (
-                            <select
-                              value={perms.b2b_client_scope ?? ''}
-                              onChange={e => setBuyerScope(u, (e.target.value || null) as 'mglass_only' | 'all_clients' | null)}
-                              title="Доступ закупщика к B2B-калькулятору"
-                              className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
-                              <option value="">Только каталог</option>
-                              <option value="mglass_only">Просчёт: M GLASS</option>
-                              <option value="all_clients">Просчёт: все клиенты</option>
-                            </select>
+                            <div className="flex flex-col items-center gap-1">
+                              <select
+                                value={perms.b2b_client_scope ?? ''}
+                                onChange={e => setBuyerScope(u, (e.target.value || null) as 'mglass_only' | 'all_clients' | null)}
+                                title="Доступ закупщика к B2B-калькулятору"
+                                className="text-[10px] font-medium px-2 py-1 rounded-full border border-[#e4e4e0] bg-white cursor-pointer outline-none focus:border-[#111110]">
+                                <option value="">Только каталог</option>
+                                <option value="mglass_only">Просчёт: M GLASS</option>
+                                <option value="all_clients">Просчёт: все клиенты</option>
+                              </select>
+                              <button
+                                onClick={() => togglePerm(u, 'manager_workspace')}
+                                title="Вкладка «Менеджер»: полный контур MGlass (B2C) + B2B поверх закупщика"
+                                className={`text-[10px] px-2.5 py-1 rounded-full font-medium transition-colors ${perms.manager_workspace ? 'bg-[#111110] text-white hover:opacity-90' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                {perms.manager_workspace ? '✓ Менеджер' : '+ Менеджер'}
+                              </button>
+                            </div>
                           ) : (
                             <button
                               onClick={() => toggleExpandPerms(u.id)}
