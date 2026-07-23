@@ -78,6 +78,7 @@ export async function GET(
     productionDays,
     quoteDate,
     userNotes,
+    priceMode: notes.kp_price_mode === 'detailed' ? 'detailed' : 'consolidated',
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

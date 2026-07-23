@@ -76,6 +76,10 @@ export default function KPPrintPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [payTerms, setPayTerms] = useState<'50_50' | '100'>('50_50')
+  // Как показывать цену клиенту: 'consolidated' — только итог одной суммой (по
+  // умолчанию, чтобы не светить построчные цены услуг и не плодить вопросы);
+  // 'detailed' — построчная разбивка (для B2B-листов, где так принято).
+  const [priceMode, setPriceMode] = useState<'consolidated' | 'detailed'>('consolidated')
   const docRef = useRef<HTMLDivElement>(null)
 
   async function downloadPdf() {
@@ -109,6 +113,16 @@ export default function KPPrintPage() {
     } catch { /* не блокируем просмотр */ }
   }
 
+  async function savePriceMode(v: 'consolidated' | 'detailed') {
+    setPriceMode(v)
+    try {
+      const n = parseNotes(order?.notes ?? null)
+      const newNotes = JSON.stringify({ ...n, kp_price_mode: v })
+      await createClient().from('b2b_orders').update({ notes: newNotes }).eq('id', id)
+      setOrder(o => o ? { ...o, notes: newNotes } : o)
+    } catch { /* не блокируем просмотр */ }
+  }
+
   useEffect(() => {
     if (!id) return
     // Через серверный API с проверкой доступа (не прямой запрос к b2b_orders анон-ключом).
@@ -136,6 +150,7 @@ export default function KPPrintPage() {
         })
         const n0 = parseNotes((raw.notes as string) || null)
         setPayTerms(n0.kp_payment_terms === '100' ? '100' : '50_50')
+        setPriceMode(n0.kp_price_mode === 'detailed' ? 'detailed' : 'consolidated')
         setLoading(false)
       })
   }, [id])
@@ -164,6 +179,7 @@ export default function KPPrintPage() {
   const totalWeight = order.total_weight
 
   const items = order.items
+  const showPrices = priceMode === 'detailed'
 
   return (
     <>
@@ -185,6 +201,11 @@ export default function KPPrintPage() {
 
       {/* Toolbar — screen only */}
       <div id="kp-print-btn" className="fixed top-4 right-4 z-50 print:hidden flex gap-2">
+        <select value={priceMode} onChange={e => savePriceMode(e.target.value as 'consolidated' | 'detailed')}
+          className="bg-white text-[#1a1a18] border border-[#e0e0da] text-sm px-3 py-2 rounded-lg shadow-lg cursor-pointer">
+          <option value="consolidated">Цена одной суммой</option>
+          <option value="detailed">Цены по позициям</option>
+        </select>
         <select value={payTerms} onChange={e => savePayTerms(e.target.value as '50_50' | '100')}
           className="bg-white text-[#1a1a18] border border-[#e0e0da] text-sm px-3 py-2 rounded-lg shadow-lg cursor-pointer">
           <option value="50_50">Оплата 50/50</option>
@@ -257,7 +278,9 @@ export default function KPPrintPage() {
                 <th className="text-center py-2 px-2 font-semibold text-[10px] uppercase tracking-wide text-[#6b6b66] w-28">Размер (мм)</th>
                 <th className="text-center py-2 px-2 font-semibold text-[10px] uppercase tracking-wide text-[#6b6b66] w-12">Кол-во</th>
                 <th className="text-center py-2 px-2 font-semibold text-[10px] uppercase tracking-wide text-[#6b6b66] w-16">Площадь м²</th>
-                <th className="text-right py-2 pl-2 font-semibold text-[10px] uppercase tracking-wide text-[#6b6b66] w-20">Стоимость</th>
+                {showPrices && (
+                  <th className="text-right py-2 pl-2 font-semibold text-[10px] uppercase tracking-wide text-[#6b6b66] w-20">Стоимость</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -283,9 +306,11 @@ export default function KPPrintPage() {
                       <td className="py-2.5 px-2 text-center font-mono text-[11px]">
                         {fmtN(item.totalAreaNet ?? 0)}
                       </td>
-                      <td className="py-2.5 pl-2 text-right font-mono font-semibold">
-                        {fmt(baseTotal)}
-                      </td>
+                      {showPrices && (
+                        <td className="py-2.5 pl-2 text-right font-mono font-semibold">
+                          {fmt(baseTotal)}
+                        </td>
+                      )}
                     </tr>
                     {/* Services sub-rows */}
                     {(item.services ?? []).map((svc, si) => (
@@ -294,16 +319,18 @@ export default function KPPrintPage() {
                         <td className="pb-1.5 pl-3 text-[11px] text-[#6b6b66]" colSpan={5}>
                           ↳ {svc.name}
                         </td>
-                        <td className="pb-1.5 pl-2 text-right font-mono text-[11px] text-[#6b6b66]">
-                          {fmt(svc.cost ?? 0)}
-                        </td>
+                        {showPrices && (
+                          <td className="pb-1.5 pl-2 text-right font-mono text-[11px] text-[#6b6b66]">
+                            {fmt(svc.cost ?? 0)}
+                          </td>
+                        )}
                       </tr>
                     ))}
                     {/* Comment */}
                     {item.comment && (
                       <tr key={`cmt-${idx}`} className="border-b border-[#f8f8f5]">
                         <td />
-                        <td className="pb-2 pl-3 text-[10px] italic text-[#9b9b96]" colSpan={6}>
+                        <td className="pb-2 pl-3 text-[10px] italic text-[#9b9b96]" colSpan={showPrices ? 6 : 5}>
                           {item.comment}
                         </td>
                       </tr>
