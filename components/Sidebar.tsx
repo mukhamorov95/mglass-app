@@ -211,6 +211,7 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
   { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
   { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
+  { href: '/admin/access-check',     label: 'Диагностика прав', icon: '🔎' },
   { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
   { href: '/production-app',              label: 'Production App',      icon: '📱' },
   { href: '/production-app/supervisor',   label: 'Панель производства',  icon: '🔭' },

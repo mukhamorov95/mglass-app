@@ -296,3 +296,27 @@ export function canAccessRoute(
 
 // Back-compat alias — keep until call sites migrate.
 export const canAccess = canAccessRoute
+
+// То же решение, что canAccessRoute, но с человеческой причиной — для экрана
+// диагностики прав. Держать в синхроне с canAccessRoute (один путь решения).
+export function explainAccess(
+  role: Role | string | null | undefined,
+  pathname: string,
+  opts?: { b2bScope?: B2BScope | string | null },
+): { allowed: boolean; reason: string } {
+  const r = normalizeRole(role)
+  if (!r) return { allowed: false, reason: 'нет роли' }
+  if (isOwnerRole(r)) return { allowed: true, reason: 'владелец (admin/ceo) — доступ ко всему' }
+  if (pathname === '/' || pathname.startsWith('/api/') || pathname === '/login' || pathname === '/access-denied') {
+    return { allowed: true, reason: 'общедоступный путь' }
+  }
+  const allowed = ROLE_ALLOWED[r] ?? []
+  const matchAllow = (p: string) => p === '/' ? pathname === '/' : (pathname === p || pathname.startsWith(p + '/'))
+  const hit = allowed.find(matchAllow)
+  if (hit) return { allowed: true, reason: `в списке роли «${r}» (${hit})` }
+  if (r === 'buyer' && (opts?.b2bScope === 'mglass_only' || opts?.b2bScope === 'all_clients')) {
+    const sHit = SCOPED_BUYER_B2B_PATHS.find(matchAllow)
+    if (sHit) return { allowed: true, reason: `B2B-контур закупщика (скоуп ${opts.b2bScope}, ${sHit})` }
+  }
+  return { allowed: false, reason: `не в списке роли «${r}»` }
+}
