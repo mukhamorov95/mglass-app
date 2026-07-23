@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { reconcileKp } from '@/lib/kpReconcile'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -70,6 +71,9 @@ export async function POST(req: Request) {
     '(напр. «AURA», «RADUGA CLASS»), маркетинговые эпитеты, эмодзи, а также цены/суммы,',
     'которых менеджер не называл. Формулировки бери близко к сказанному, не приукрашивай.',
     'Числа приводи к числовому виду (без пробелов и «₽»).',
+    'КАЖДАЯ строка (включая доставку и монтаж) ОБЯЗАНА иметь свою sum. Если менеджер',
+    'назвал общий итог, а услугу (доставка/подъём/монтаж) без отдельной цены — раздели:',
+    'sum этой строки = итого − сумма остальных строк. total = сумме всех строк (если не названа скидка).',
     'ВАЖНО про описание изделия (поле desc у items): собирай его строго в порядке —',
     'материал (стекло/зеркало), тип материала (осветлённое/не осветлённое, марка напр. М1),',
     'обработка и толщина (закалённое 8 мм), доп. информация, фурнитура и её цвет, цвет рамы',
@@ -95,7 +99,7 @@ export async function POST(req: Request) {
     if (!tool || tool.type !== 'tool_use') {
       return NextResponse.json({ error: 'no_structure' }, { status: 502 })
     }
-    return NextResponse.json({ kp: tool.input })
+    return NextResponse.json({ kp: reconcileKp(tool.input as Record<string, unknown>) })
   } catch (e) {
     const detail = e instanceof Error ? e.message : String(e)
     return NextResponse.json({ error: 'structure_failed', detail: detail.slice(0, 200) }, { status: 502 })
