@@ -267,7 +267,7 @@ const SCOPED_BUYER_B2B_PATHS: ReadonlyArray<string> = [
 export function canAccessRoute(
   role: Role | string | null | undefined,
   pathname: string,
-  opts?: { b2bScope?: B2BScope | string | null },
+  opts?: { b2bScope?: B2BScope | string | null; managerWorkspace?: boolean },
 ): boolean {
   const r = normalizeRole(role)
   if (!r) return false
@@ -291,6 +291,12 @@ export function canAccessRoute(
     if (SCOPED_BUYER_B2B_PATHS.some(matchAllow)) return true
   }
 
+  // Manager-workspace extension: a buyer with manager_workspace (Вера) additionally
+  // gets the full manager contour (MGlass B2C + B2B) on top of the buyer/logist one.
+  if (r === 'buyer' && opts?.managerWorkspace) {
+    if ((ROLE_ALLOWED.manager ?? []).some(matchAllow)) return true
+  }
+
   return false
 }
 
@@ -302,7 +308,7 @@ export const canAccess = canAccessRoute
 export function explainAccess(
   role: Role | string | null | undefined,
   pathname: string,
-  opts?: { b2bScope?: B2BScope | string | null },
+  opts?: { b2bScope?: B2BScope | string | null; managerWorkspace?: boolean },
 ): { allowed: boolean; reason: string } {
   const r = normalizeRole(role)
   if (!r) return { allowed: false, reason: 'нет роли' }
@@ -317,6 +323,10 @@ export function explainAccess(
   if (r === 'buyer' && (opts?.b2bScope === 'mglass_only' || opts?.b2bScope === 'all_clients')) {
     const sHit = SCOPED_BUYER_B2B_PATHS.find(matchAllow)
     if (sHit) return { allowed: true, reason: `B2B-контур закупщика (скоуп ${opts.b2bScope}, ${sHit})` }
+  }
+  if (r === 'buyer' && opts?.managerWorkspace) {
+    const mHit = (ROLE_ALLOWED.manager ?? []).find(matchAllow)
+    if (mHit) return { allowed: true, reason: `менеджерский контур закупщика (manager_workspace, ${mHit})` }
   }
   return { allowed: false, reason: `не в списке роли «${r}»` }
 }

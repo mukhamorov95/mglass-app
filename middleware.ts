@@ -23,7 +23,7 @@ function readScoped(cookieValue: string | undefined, userId: string): string | u
   if (cookieValue.slice(0, sep) !== userId) return undefined
   return cookieValue.slice(sep + 1)
 }
-const ROLE_COOKIES = ['user-role', 'user-b2b-scope'] as const
+const ROLE_COOKIES = ['user-role', 'user-b2b-scope', 'user-mgr-ws'] as const
 
 export async function middleware(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request })
@@ -147,13 +147,16 @@ export async function middleware(request: NextRequest) {
   if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo) {
     const cached      = readScoped(request.cookies.get('user-role')?.value, user.id)
     const cachedScope = readScoped(request.cookies.get('user-b2b-scope')?.value, user.id)
+    const cachedMgr   = readScoped(request.cookies.get('user-mgr-ws')?.value, user.id)
     let role: Role | null = normalizeRole(cached)
     // Empty-string payload means "checked, no scope" — distinct from "not checked
     // yet" (undefined). readScoped returns undefined for another user's / old cookie.
     let b2bScope: B2BScope | undefined =
       cachedScope === undefined ? undefined : normalizeB2BScope(cachedScope)
+    // '1'/'0' — проверено; undefined — ещё не читали (новая кука после деплоя).
+    let mgrWs: boolean | undefined = cachedMgr === undefined ? undefined : cachedMgr === '1'
 
-    if (!role || b2bScope === undefined) {
+    if (!role || b2bScope === undefined || mgrWs === undefined) {
       const { data } = await supabase
         .from('users')
         .select('role, permissions')
@@ -162,8 +165,9 @@ export async function middleware(request: NextRequest) {
       role = normalizeRole(data?.role)
       // Bootstrap: known owner email gets admin rights even with no DB row.
       if (!role && user.email === OWNER_BOOTSTRAP_EMAIL) role = 'admin'
-      const perms = (data?.permissions ?? null) as { b2b_client_scope?: unknown } | null
+      const perms = (data?.permissions ?? null) as { b2b_client_scope?: unknown; manager_workspace?: unknown } | null
       b2bScope = normalizeB2BScope(perms?.b2b_client_scope)
+      mgrWs = perms?.manager_workspace === true
       if (role) {
         supabaseResponse.cookies.set('user-role', `${user.id}|${role}`, {
           maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
@@ -171,6 +175,9 @@ export async function middleware(request: NextRequest) {
       }
       // Cache scope even when null so we don't hit the DB on every request.
       supabaseResponse.cookies.set('user-b2b-scope', `${user.id}|${b2bScope ?? ''}`, {
+        maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
+      })
+      supabaseResponse.cookies.set('user-mgr-ws', `${user.id}|${mgrWs ? '1' : '0'}`, {
         maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
       })
     }
@@ -182,7 +189,7 @@ export async function middleware(request: NextRequest) {
       return redirect(url)
     }
 
-    if (role && !canAccessRoute(role, pathname, { b2bScope: b2bScope ?? null })) {
+    if (role && !canAccessRoute(role, pathname, { b2bScope: b2bScope ?? null, managerWorkspace: mgrWs ?? false })) {
       const url = request.nextUrl.clone()
       url.pathname = '/access-denied'
       return redirect(url)

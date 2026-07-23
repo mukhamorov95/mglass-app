@@ -12,6 +12,10 @@ export type UserPermissions = {
   see_clients:       boolean
   see_earnings:      boolean
   b2b_client_scope?: B2BClientScope | null
+  // Второе рабочее пространство «Менеджер» поверх роли закупщика (Вера): полный
+  // контур MGlass (B2C) + B2B как у менеджера, с переключателем вкладок в сайдбаре.
+  // Даёт доступ к менеджерским маршрутам В ДОПОЛНЕНИЕ к контуру закупщика/логиста.
+  manager_workspace?: boolean
 }
 
 export const DEFAULT_PERMISSIONS: UserPermissions = {
@@ -21,4 +25,5 @@ export const DEFAULT_PERMISSIONS: UserPermissions = {
   see_clients:       true,
   see_earnings:      true,
   b2b_client_scope:  null,
+  manager_workspace: false,
 }

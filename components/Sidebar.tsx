@@ -452,6 +452,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
   const isAdmin = role === 'admin'
 
   const [viewMode, setViewMode]     = useState<ViewMode>('manager')
+  // Закупщик с manager_workspace (Вера): две вкладки — Менеджер / Логист.
+  const [buyerWs, setBuyerWs]       = useState<'manager' | 'logist'>('manager')
   const [open, setOpen]             = useState<Set<string>>(new Set())
   const [mobileOpen, setMobileOpen] = useState(false)
   const [syncState, setSyncState]   = useState<SyncState>('idle')
@@ -466,7 +468,14 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       setViewMode(mode)
       setOpen(new Set(autoOpenAdmin(pathname, mode)))
     } else if (role) {
-      setOpen(new Set(autoOpenRole(pathname, role)))
+      const base = autoOpenRole(pathname, role)
+      if (role === 'buyer' && permissions.manager_workspace) {
+        const saved = localStorage.getItem('buyerWorkspace')
+        const ws = saved === 'logist' ? 'logist' : 'manager'
+        setBuyerWs(ws)
+        if (ws === 'manager') base.push('mglass', 'b2b')  // менеджерские секции открыты сразу
+      }
+      setOpen(new Set(base))
     }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -488,6 +497,12 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     setViewMode(mode)
     localStorage.setItem('sidebarMode', mode)
     setOpen(new Set(autoOpenAdmin(pathname, mode)))
+  }
+
+  function switchBuyerWs(ws: 'manager' | 'logist') {
+    setBuyerWs(ws)
+    localStorage.setItem('buyerWorkspace', ws)
+    if (ws === 'manager') setOpen(prev => new Set([...prev, 'mglass', 'b2b']))
   }
 
   function toggle(key: string) {
@@ -643,6 +658,69 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     return MANAGER_B2B
   }
 
+  // Менеджерское пространство: AmoCRM + MGlass (B2C) + B2B. Используется и для
+  // роли manager, и как вкладка «Менеджер» у закупщика с manager_workspace (Вера).
+  function renderManagerWorkspace() {
+    const mglassNav = buildMglassNav()
+    const b2bNav    = buildB2bNav()
+    return (
+      <>
+        <div className="space-y-px mb-2">
+          {MANAGER_AMO.map(item => navItem(item, 'bg-[#f0f0ec] text-[#111110] font-medium'))}
+        </div>
+        <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+        {permissions.see_mglass && workspaceAccordion(
+          'mglass', 'MGlass',
+          'bg-[#111110]', 'text-[#111110]',
+          mglassNav,
+          'bg-[#f0f0ec] text-[#111110] font-medium',
+        )}
+        {permissions.see_mglass && permissions.see_b2b && (
+          <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
+        )}
+        {permissions.see_b2b && workspaceAccordion(
+          'b2b', 'B2B',
+          'bg-orange-400', 'text-[#c2600a]',
+          b2bNav,
+          'bg-[#fff1e8] text-[#c2410c] font-medium',
+        )}
+      </>
+    )
+  }
+
+  // Пространство «Логист / Закупщик»: текущий контур закупщика (B2B по скоупу,
+  // склад, закупки, логистика, справочники, производство).
+  function renderBuyerLogist() {
+    const showB2B = hasB2BSalesScope(permissions)
+    const b2bAll = isAllClientsScope(permissions)
+    return (
+      <>
+        <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
+        {showB2B && accordion(
+          'buyer_b2b',
+          b2bAll ? 'B2B' : 'B2B M GLASS',
+          'text-orange-600',
+          'text-orange-400',
+          b2bAll ? BUYER_B2B_ALL : BUYER_B2B_MGLASS,
+          'bg-[#fff1e8] text-[#c2410c] font-medium',
+        )}
+        {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
+        {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
+        {showB2B && accordion(
+          'buyer_production',
+          'Производство',
+          'text-orange-600',
+          'text-orange-400',
+          BUYER_PRODUCTION,
+          'bg-[#fff1e8] text-[#c2410c] font-medium',
+        )}
+      </>
+    )
+  }
+
   function renderNav() {
     // Бухгалтерия: только свой раздел
     if (role === 'accountant') return (
@@ -686,65 +764,29 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
       </>
     )
 
-    if (role === 'manager') {
-      const mglassNav = buildMglassNav()
-      const b2bNav    = buildB2bNav()
-      return (
-        <>
-          <div className="space-y-px mb-2">
-            {MANAGER_AMO.map(item => navItem(item, 'bg-[#f0f0ec] text-[#111110] font-medium'))}
-          </div>
-          <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
-          {permissions.see_mglass && workspaceAccordion(
-            'mglass', 'MGlass',
-            'bg-[#111110]', 'text-[#111110]',
-            mglassNav,
-            'bg-[#f0f0ec] text-[#111110] font-medium',
-          )}
-          {permissions.see_mglass && permissions.see_b2b && (
-            <div className="my-1 mx-2 h-px bg-[#f0f0ec]" />
-          )}
-          {permissions.see_b2b && workspaceAccordion(
-            'b2b', 'B2B',
-            'bg-orange-400', 'text-[#c2600a]',
-            b2bNav,
-            'bg-[#fff1e8] text-[#c2410c] font-medium',
-          )}
-        </>
-      )
-    }
+    if (role === 'manager') return renderManagerWorkspace()
 
     // Buyer: аккордеон-секции. Если у buyer есть B2B-скоуп, дополнительно
     // показываем группу B2B: mglass_only — внутренний M GLASS-контур,
     // all_clients (Вера) — полный B2B со списком клиентов. B2B ставим ПЕРВОЙ,
     // чтобы это была явная отдельная вкладка, как просил владелец.
     if (role === 'buyer') {
-      const showB2B = hasB2BSalesScope(permissions)
-      const b2bAll = isAllClientsScope(permissions)
+      // Без manager_workspace — обычный закупщик, только его контур.
+      if (!permissions.manager_workspace) return renderBuyerLogist()
+      // Вера: две вкладки — Менеджер (слева) / Логист (справа).
       return (
         <>
-          <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-emerald-600">Логист / Закупщик</div>
-          {showB2B && accordion(
-            'buyer_b2b',
-            b2bAll ? 'B2B' : 'B2B M GLASS',
-            'text-orange-600',
-            'text-orange-400',
-            b2bAll ? BUYER_B2B_ALL : BUYER_B2B_MGLASS,
-            'bg-[#fff1e8] text-[#c2410c] font-medium',
-          )}
-          {accordion('buyer_sklad',        'Склад',        'text-emerald-600', 'text-emerald-400', BUYER_SKLAD,        'bg-emerald-50 text-emerald-700 font-medium')}
-          {accordion('buyer_zakupki',      'Закупки',      'text-emerald-600', 'text-emerald-400', BUYER_ZAKUPKI,      'bg-emerald-50 text-emerald-700 font-medium')}
-          {accordion('buyer_logistika',    'Логистика',    'text-emerald-600', 'text-emerald-400', BUYER_LOGISTIKA,    'bg-emerald-50 text-emerald-700 font-medium')}
-          {accordion('buyer_spravochniki', 'Справочники',  'text-emerald-600', 'text-emerald-400', BUYER_SPRAVOCHNIKI, 'bg-emerald-50 text-emerald-700 font-medium')}
-          {accordion('buyer_pomosh',       'Помощь',       'text-emerald-600', 'text-emerald-400', BUYER_POMOSH,       'bg-emerald-50 text-emerald-700 font-medium')}
-          {showB2B && accordion(
-            'buyer_production',
-            'Производство',
-            'text-orange-600',
-            'text-orange-400',
-            BUYER_PRODUCTION,
-            'bg-[#fff1e8] text-[#c2410c] font-medium',
-          )}
+          <div className="flex bg-[#efefec] rounded-[7px] p-[3px] gap-[2px] mb-2">
+            {([['manager', 'Менеджер'], ['logist', 'Логист']] as const).map(([v, l]) => (
+              <button key={v} onClick={() => switchBuyerWs(v)}
+                className={`flex-1 py-[5px] rounded-[5px] text-[11px] font-semibold transition-all ${
+                  buyerWs === v ? 'bg-white text-[#111110] shadow-sm' : 'text-[#9a9a95] hover:text-[#6b6b66]'
+                }`}>
+                {l}
+              </button>
+            ))}
+          </div>
+          {buyerWs === 'manager' ? renderManagerWorkspace() : renderBuyerLogist()}
         </>
       )
     }
