@@ -154,6 +154,28 @@ export default function InstallationsPage() {
 
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
+  // Предзаполнение из карточки заказа/КП: /installations?order_no&client_name&…
+  // Открываем форму сразу заполненной. window.location вместо useSearchParams —
+  // чтобы не тянуть Suspense-границу в client-компонент.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sp = new URLSearchParams(window.location.search)
+    const keys = ['order_no', 'client_name', 'phone', 'address', 'order_total', 'title'] as const
+    if (!keys.some(k => sp.get(k))) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- разовое предзаполнение из URL после маунта (window нет на сервере)
+    setForm(f => ({
+      ...f,
+      order_no:    sp.get('order_no')    ?? f.order_no,
+      client_name: sp.get('client_name') ?? f.client_name,
+      phone:       sp.get('phone')       ?? f.phone,
+      address:     sp.get('address')     ?? f.address,
+      order_total: sp.get('order_total') ?? f.order_total,
+      title:       sp.get('title')       ?? f.title,
+    }))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setFormOpen(true)
+  }, [])
+
   const load = useCallback(async () => {
     try {
       const { data: { user } } = await sb.auth.getUser()

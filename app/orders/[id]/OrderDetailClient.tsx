@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import type { Order, OrderLine, OrderStatus, MarginStatus, PaymentStatus } from '@/lib/types'
+import AssignInstallationButton from '@/components/AssignInstallationButton'
 import {
   ORDER_STATUS_LABELS, MARGIN_STATUS_LABELS, MARGIN_STATUS_COLORS,
   PAYMENT_STATUS_LABELS, PAYMENT_STATUS_COLORS,
@@ -622,6 +623,15 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
               </select>
               {savingBrigade && <span className="text-[12px] text-[#9a9a95] self-center">Сохраняю...</span>}
             </div>
+            <AssignInstallationButton
+              orderNo={customNumber || order.number}
+              clientName={order.client_name}
+              phone={order.client_phone}
+              address={order.object_address || deliveryAddr}
+              orderTotal={order.total_sale_price}
+              className="w-full justify-center inline-flex items-center gap-1.5 px-4 py-2.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-[#2a2a28] transition-colors"
+              label="🔧 Назначить монтаж (в календарь)"
+            />
           </div>
 
           {/* Payment tracking */}

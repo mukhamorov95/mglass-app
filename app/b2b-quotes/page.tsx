@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import Pagination from '@/components/Pagination'
+import AssignInstallationButton from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
@@ -888,6 +889,13 @@ export default function B2BQuotesPage() {
                         className="text-[11px] text-[#c4c4be] hover:text-emerald-600 px-1.5 py-1 rounded hover:bg-emerald-50 transition-colors">
                         Счёт
                       </Link>
+                      {/* Назначить монтаж — открывает форму /installations предзаполненной */}
+                      <AssignInstallationButton
+                        orderNo={quote.custom_number}
+                        clientName={quote.client_name}
+                        orderTotal={finalPrice}
+                        label="🔧"
+                        className="text-[11px] text-[#c4c4be] hover:text-amber-600 px-1.5 py-1 rounded hover:bg-amber-50 transition-colors" />
                       {/* Редактировать в калькуляторе (та же запись; для копии — кнопка ⧉ рядом) */}
                       <Link href={`/calculator/b2b?orderId=${quote.id}`}
                         title="Редактировать в калькуляторе"

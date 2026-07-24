@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase-browser'
 
 type AppointmentType = 'measurement' | 'installation'
 type AppointmentStatus = 'planned' | 'done' | 'cancelled'
@@ -15,7 +16,37 @@ type Appointment = {
   notes:         string | null
   status:        AppointmentStatus
   order_id:      string | null
+  client_name:   string | null
   orders:        { number: string; client_name: string } | null
+}
+
+// Монтажи из таблицы installations (богатая форма /installations) — вторая
+// линия событий календаря рядом с appointments. Читаем напрямую браузерным
+// клиентом (permissive RLS), как это делает сама страница /installations.
+type InstRow = {
+  id:             number
+  order_no:       string
+  title:          string | null
+  client_name:    string | null
+  address:        string | null
+  scheduled_date: string | null
+  time_from:      string | null
+  time_to:        string | null
+  crew_id:        number | null
+  status:         'planned' | 'done' | 'canceled'
+}
+
+// Единое событие календаря: и замер/монтаж из appointments, и монтаж из installations
+type CalEvent = {
+  key:     string
+  kind:    AppointmentType
+  source:  'appointment' | 'installation'
+  at:      Date
+  status:  AppointmentStatus
+  title:   string
+  address: string | null
+  sub:     string | null
+  apptId?: string
 }
 
 const TYPE_LABELS: Record<AppointmentType, string> = {
@@ -61,8 +92,11 @@ const WEEK_DAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const MONTH_NAMES = ['январь','февраль','март','апрель','май','июнь','июль','август','сентябрь','октябрь','ноябрь','декабрь']
 
 export default function CalendarPage() {
+  const sb = createClient()
   const [monday, setMonday] = useState(() => getMonday(new Date()))
   const [appointments, setAppointments] = useState<Appointment[]>([])
+  const [installs, setInstalls] = useState<InstRow[]>([])
+  const [crews, setCrews] = useState<{ id: number; name: string }[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
   const [selectedDate, setSelectedDate] = useState<string>('')
@@ -85,9 +119,18 @@ export default function CalendarPage() {
     setLoading(true)
     const from = days[0].toISOString()
     const to   = new Date(days[6].getTime() + 86_400_000).toISOString()
-    const res  = await fetch(`/api/appointments?from=${from}&to=${to}`)
-    const data = await res.json()
-    setAppointments(Array.isArray(data) ? data : [])
+    const fromDay = days[0].toISOString().slice(0, 10)
+    const toDay   = days[6].toISOString().slice(0, 10)
+    const [apptData, instQ, crewQ] = await Promise.all([
+      fetch(`/api/appointments?from=${from}&to=${to}`).then(r => r.json()).catch(() => []),
+      sb.from('installations')
+        .select('id,order_no,title,client_name,address,scheduled_date,time_from,time_to,crew_id,status')
+        .gte('scheduled_date', fromDay).lte('scheduled_date', toDay),
+      sb.from('installation_crews').select('id,name'),
+    ])
+    setAppointments(Array.isArray(apptData) ? apptData : [])
+    setInstalls((instQ.data ?? []) as InstRow[])
+    setCrews((crewQ.data ?? []) as { id: number; name: string }[])
     setLoading(false)
   }
 
@@ -139,6 +182,33 @@ export default function CalendarPage() {
   }
 
   const today = new Date()
+  const crewName = (id: number | null) => crews.find(c => c.id === id)?.name ?? null
+
+  // Слияние двух источников в один список событий недели
+  const events: CalEvent[] = [
+    ...appointments.map(a => ({
+      key:     'a' + a.id,
+      kind:    a.type,
+      source:  'appointment' as const,
+      at:      new Date(a.scheduled_at),
+      status:  a.status,
+      title:   a.orders?.client_name || a.client_name || TYPE_LABELS[a.type],
+      address: a.address,
+      sub:     a.assignee_name,
+      apptId:  a.id,
+    })),
+    ...installs.map(i => ({
+      key:     'i' + i.id,
+      kind:    'installation' as const,
+      source:  'installation' as const,
+      at:      new Date(`${i.scheduled_date ?? ''}T${i.time_from || '10:00'}:00`),
+      status:  (i.status === 'canceled' ? 'cancelled' : i.status) as AppointmentStatus,
+      title:   i.client_name || `#${i.order_no}`,
+      address: i.address,
+      sub:     [[i.time_from, i.time_to].filter(Boolean).join('–'), crewName(i.crew_id)].filter(Boolean).join(' · ') || null,
+    })),
+  ]
+  const plannedEvents = events.filter(e => e.status === 'planned')
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -180,7 +250,9 @@ export default function CalendarPage() {
           <div className="grid grid-cols-7">
             {days.map((day, i) => {
               const isToday  = isSameDay(day, today)
-              const dayAppts = appointments.filter(a => isSameDay(new Date(a.scheduled_at), day))
+              const dayAppts = events
+                .filter(e => isSameDay(e.at, day))
+                .sort((a, b) => a.at.getTime() - b.at.getTime())
               const dateStr  = day.toISOString().slice(0, 10)
 
               return (
@@ -198,30 +270,32 @@ export default function CalendarPage() {
                   {/* Events */}
                   <div className="p-1 space-y-1">
                     {loading ? null : dayAppts.map(a => (
-                      <div key={a.id}
+                      <div key={a.key}
                         className={`rounded-lg border px-2 py-1.5 ${STATUS_COLORS[a.status]}`}>
                         <div className="flex items-center gap-1 mb-0.5">
-                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
-                            {TYPE_LABELS[a.type]}
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded border ${TYPE_COLORS[a.kind]}`}>
+                            {a.source === 'installation' ? '🔧 ' : ''}{TYPE_LABELS[a.kind]}
                           </span>
                           <span className="text-[10px] text-[#9a9a95]">
-                            {new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                            {a.at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
-                        {a.orders && (
-                          <p className="text-[11px] font-semibold text-[#111110] truncate">{a.orders.client_name}</p>
+                        <p className="text-[11px] font-semibold text-[#111110] truncate">{a.title}</p>
+                        {a.sub && (
+                          <p className="text-[10px] text-[#9a9a95] truncate">{a.sub}</p>
                         )}
-                        {a.assignee_name && (
-                          <p className="text-[10px] text-[#9a9a95] truncate">{a.assignee_name}</p>
-                        )}
-                        {a.status === 'planned' && (
+                        {a.source === 'installation' ? (
+                          <Link href="/installations" className="mt-1 inline-block text-[10px] text-amber-700 hover:text-amber-900">
+                            → монтажи
+                          </Link>
+                        ) : a.status === 'planned' && a.apptId ? (
                           <button
-                            onClick={() => updateStatus(a.id, 'done')}
+                            onClick={() => updateStatus(a.apptId!, 'done')}
                             className="mt-1 text-[10px] text-emerald-600 hover:text-emerald-800"
                           >
                             ✓ Выполнено
                           </button>
-                        )}
+                        ) : null}
                       </div>
                     ))}
 
@@ -238,49 +312,52 @@ export default function CalendarPage() {
           </div>
         </div>
 
-        {/* Upcoming appointments list */}
-        {appointments.filter(a => a.status === 'planned').length > 0 && (
+        {/* Upcoming list — замеры + монтажи из обоих источников */}
+        {plannedEvents.length > 0 && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
             <div className="px-5 py-3 bg-[#f8f8f7] border-b border-[#e4e4e0]">
               <p className="text-[12px] font-bold text-[#9a9a95] uppercase tracking-wider">
-                Предстоящие ({appointments.filter(a => a.status === 'planned').length})
+                Предстоящие ({plannedEvents.length})
               </p>
             </div>
             <div className="divide-y divide-[#f0f0ec]">
-              {appointments
-                .filter(a => a.status === 'planned')
-                .sort((a, b) => a.scheduled_at.localeCompare(b.scheduled_at))
+              {plannedEvents
+                .sort((a, b) => a.at.getTime() - b.at.getTime())
                 .map(a => (
-                  <div key={a.id} className="px-5 py-3.5 flex items-start gap-4">
+                  <div key={a.key} className="px-5 py-3.5 flex items-start gap-4">
                     <div className="text-center flex-shrink-0 w-12">
                       <p className="text-[18px] font-bold text-[#111110]">
-                        {new Date(a.scheduled_at).getDate()}
+                        {a.at.getDate()}
                       </p>
                       <p className="text-[10px] text-[#9a9a95] uppercase">
-                        {MONTH_NAMES[new Date(a.scheduled_at).getMonth()].slice(0, 3)}
+                        {MONTH_NAMES[a.at.getMonth()].slice(0, 3)}
                       </p>
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-0.5">
-                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${TYPE_COLORS[a.type]}`}>
-                          {TYPE_LABELS[a.type]}
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded border ${TYPE_COLORS[a.kind]}`}>
+                          {a.source === 'installation' ? '🔧 ' : ''}{TYPE_LABELS[a.kind]}
                         </span>
                         <span className="text-[12px] text-[#9a9a95]">
-                          {new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {a.at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
-                      {a.orders && (
-                        <p className="text-[13px] font-semibold text-[#111110]">{a.orders.client_name}</p>
-                      )}
+                      <p className="text-[13px] font-semibold text-[#111110]">{a.title}</p>
                       {a.address && <p className="text-[12px] text-[#9a9a95]">{a.address}</p>}
-                      {a.assignee_name && <p className="text-[11px] text-[#b4b4b0]">{a.assignee_name}</p>}
+                      {a.sub && <p className="text-[11px] text-[#b4b4b0]">{a.sub}</p>}
                     </div>
-                    <button
-                      onClick={() => updateStatus(a.id, 'done')}
-                      className="text-[12px] text-emerald-600 hover:text-emerald-800 flex-shrink-0"
-                    >
-                      Выполнено ✓
-                    </button>
+                    {a.source === 'installation' ? (
+                      <Link href="/installations" className="text-[12px] text-amber-700 hover:text-amber-900 flex-shrink-0">
+                        → монтажи
+                      </Link>
+                    ) : a.apptId ? (
+                      <button
+                        onClick={() => updateStatus(a.apptId!, 'done')}
+                        className="text-[12px] text-emerald-600 hover:text-emerald-800 flex-shrink-0"
+                      >
+                        Выполнено ✓
+                      </button>
+                    ) : null}
                   </div>
                 ))}
             </div>
