@@ -117,30 +117,38 @@ export async function POST() {
     if (!error) updated++
   }
 
+  // Построчная вставка: уникальный индекс b2b_materials_active_uniq
+  // (name, category, thickness) WHERE active ловит гонку двух параллельных синков
+  // — конфликтная строка (код 23505) пропускается, а не плодит дубль и не роняет
+  // остальные вставки (батч был бы атомарным «всё или ничего»).
   let inserted = 0
+  let skipped = 0
   let insertError: string | null = null
-  if (toInsert.length > 0) {
-    const { error, data } = await supabase
+  const insertedRows: { id: number; supplier_id: string | null; supplier_material_name: string | null }[] = []
+  for (const row of toInsert) {
+    const { data, error } = await supabase
       .from('b2b_materials')
-      .insert(toInsert)
+      .insert(row)
       .select('id, supplier_id, supplier_material_name')
+      .single()
     if (error) {
+      if (error.code === '23505') { skipped++; continue }  // уже вставлен параллельным синком
       insertError = error.message
-    } else {
-      inserted = data?.length ?? toInsert.length
-      if (data && data.length > 0) {
-        const newVariants = (data as { id: number; supplier_id: string | null; supplier_material_name: string | null }[]).map(mat => ({
-          material_id: mat.id,
-          sheet_width: 3210,
-          sheet_height: 2250,
-          supplier_id: mat.supplier_id ?? null,
-          supplier_material_name: mat.supplier_material_name ?? null,
-          is_default: true,
-          active: true,
-        }))
-        await supabase.from('b2b_material_sheet_variants').insert(newVariants)
-      }
+      break
     }
+    if (data) { inserted++; insertedRows.push(data) }
+  }
+  if (insertedRows.length > 0) {
+    const newVariants = insertedRows.map(mat => ({
+      material_id: mat.id,
+      sheet_width: 3210,
+      sheet_height: 2250,
+      supplier_id: mat.supplier_id ?? null,
+      supplier_material_name: mat.supplier_material_name ?? null,
+      is_default: true,
+      active: true,
+    }))
+    await supabase.from('b2b_material_sheet_variants').insert(newVariants)
   }
 
   // Деактивация призраков: активный листовой материал, у которого в справочнике
@@ -154,5 +162,5 @@ export async function POST() {
     if (!error) deactivated++
   }
 
-  return NextResponse.json({ ok: !insertError, updated, inserted, deactivated, total: updated + inserted, error: insertError })
+  return NextResponse.json({ ok: !insertError, updated, inserted, skipped, deactivated, total: updated + inserted, error: insertError })
 }

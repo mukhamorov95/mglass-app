@@ -347,12 +347,22 @@ export default function B2BCalculatorPage() {
             ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
           }
         })
-        setMaterials(parsed)
+        // Дедуп: одна запись на (name|category|thickness). Защита от дублей в
+        // выпадающем списке, если в справочнике случайно оказались два материала
+        // с одинаковым именем/толщиной. Приоритет — с продажной ценой.
+        const dedup = new Map<string, (typeof parsed)[number]>()
+        for (const m of parsed) {
+          const k = `${m.name}|${m.category}|${m.thickness}`
+          const prev = dedup.get(k)
+          if (!prev || (m.sale_price ?? 0) > (prev.sale_price ?? 0)) dedup.set(k, m)
+        }
+        const deduped = [...dedup.values()]
+        setMaterials(deduped)
         setServices(svcs ?? [])
-        if (parsed.length > 0) {
+        if (deduped.length > 0) {
           const sc = SUPER_CATS[0]
           setFSuperCat(sc.value)
-          const superMats = parsed.filter(m => (sc.cats as readonly string[]).includes(m.category))
+          const superMats = deduped.filter(m => (sc.cats as readonly string[]).includes(m.category))
           const mat = pickDefault(superMats, sc.value)
           if (mat) { setFThickness(mat.thickness); setFMatId(mat.id); setFWaste(mat.waste_percent) }
         }
