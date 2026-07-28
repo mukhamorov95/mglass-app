@@ -607,6 +607,10 @@ export default function B2BCalculatorPage() {
 
   function handleAddFactoryItem() {
     if (!factoryQuote) return
+    // Без габаритов изделие молча выпадает из раскроя, загрузки станций и
+    // потребности в материале, а в КП уходит «0 × 0» — не пускаем (как в
+    // handleAddItem для листовых материалов).
+    if (!(factoryQuote.widthMm > 0) || !(factoryQuote.heightMm > 0)) return
     const qty = Number(fKind === 'fmirror' ? fmQty : flQty) || 1
     const item = factoryQuoteToItem(factoryQuote, qty, fComment || undefined)
     setItems(prev => [...prev, { ...item, localId: crypto.randomUUID() }])

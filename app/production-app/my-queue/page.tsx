@@ -368,8 +368,17 @@ export default function MyQueuePage() {
     .sort((a, b) => b.pieces - a.pieces)
 
   // ── Табло мастера: по ИЗДЕЛИЯМ (quantity), сегодня и неделя ──
-  const piecesOf = (rows: { order_id: number; item_index: number }[], src: Map<number, OrderLite>) =>
-    rows.reduce((s, t) => s + qtyOf(src.get(t.order_id), t.item_index), 0)
+  // Деталь считается ОДИН раз, даже если у мастера на неё несколько задач
+  // (две станции = две задачи на одну стекляшку) — иначе выработка врёт вдвое.
+  const piecesOf = (rows: { order_id: number; item_index: number }[], src: Map<number, OrderLite>) => {
+    const seen = new Set<string>()
+    return rows.reduce((s, t) => {
+      const k = `${t.order_id}:${t.item_index}`
+      if (seen.has(k)) return s
+      seen.add(k)
+      return s + qtyOf(src.get(t.order_id), t.item_index)
+    }, 0)
+  }
   const todayIso = new Date(); todayIso.setHours(0, 0, 0, 0)
   const doneToday = doneWeek.filter(t => new Date(t.completed_at) >= todayIso)
   const donePiecesToday = piecesOf(doneToday, doneOrders)
@@ -385,6 +394,7 @@ export default function MyQueuePage() {
 
   const totalReady = activeTasks.filter(isReady).length
   const totalWaiting = activeTasks.length - totalReady
+  const totalDetails = new Set(activeTasks.map(t => `${t.order_id}:${t.item_index}`)).size
 
   if (loading) return (
     <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка...</div>
@@ -396,7 +406,7 @@ export default function MyQueuePage() {
         <div className="flex items-start justify-between gap-2">
           <div>
             <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои задачи{viewMaster ? ` · ${viewMaster.name}` : ''}</h1>
-            <p className="text-[13px] text-[#9a9a95] mt-0.5">{byOrder.size} заказов · {totalReady} деталей готово к работе · {totalWaiting} ожидают этапа</p>
+            <p className="text-[13px] text-[#9a9a95] mt-0.5">{byOrder.size} заказов · {totalDetails} деталей · {totalReady} задач готово · {totalWaiting} ждут этапа</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
@@ -616,7 +626,11 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   const ready = live.filter(isReady)
   const waiting = live.filter(t => !isReady(t))
   const inWork = live.filter(t => t.status === 'in_progress').length
-  const pieces = live.reduce((s, t) => s + qtyOf(order, t.item_index), 0)
+  // Деталь ≠ задача: у мастера с двумя станциями (закалка+упаковка) на одну
+  // стекляшку приходится две задачи. Считаем детали по уникальному item_index,
+  // иначе карточка пишет «4 дет.» там, где деталей две (как в режиме «По материалу»).
+  const liveItems = [...new Set(live.map(t => t.item_index))]
+  const pieces = liveItems.reduce((s, i) => s + qtyOf(order, i), 0)
   const startable = ready.filter(t => t.status === 'queued').map(t => t.id)
   const doneable = ready.filter(t => t.status === 'queued' || t.status === 'in_progress').map(t => t.id)
   const overdue = daysLbl?.includes('роср')
@@ -668,7 +682,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
           )}
           <div className="text-right flex-shrink-0">
             <p className="text-[12px] font-mono text-[#111110]">
-              {live.length} дет. · {pieces} изд.{inWork > 0 ? ` · 🔧 ${inWork}` : ''}
+              {liveItems.length} дет. · {pieces} изд.{live.length !== liveItems.length ? ` · ${live.length} задач` : ''}{inWork > 0 ? ` · 🔧 ${inWork}` : ''}
               {doneTasks.length > 0 && <span className="text-emerald-700"> · ✓ {doneTasks.length} сделано</span>}
             </p>
             <p className="text-[11px] flex gap-x-2 justify-end flex-wrap">
@@ -695,7 +709,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
           {startable.length > 1 && (
             <button onClick={() => onStartAll(startable)}
               className="w-full py-2 rounded-lg border border-emerald-300 text-emerald-700 text-[13px] font-medium hover:bg-emerald-50">
-              Взял весь заказ в работу ({startable.length} дет.)
+              Взял весь заказ в работу ({startable.length} задач)
             </button>
           )}
 
@@ -704,7 +718,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             {doneable.length > 1 && (
               <button onClick={() => onDoneAll(doneable)}
                 className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
-                ✅ Весь заказ готов ({doneable.length} дет.)
+                ✅ Весь заказ готов ({doneable.length} задач)
               </button>
             )}
             <button onClick={() => onNoMatOrder(orderId)}

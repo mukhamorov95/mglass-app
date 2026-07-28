@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { PRODUCT_DEADLINES, deadlineFor, type ProductKind } from '@/lib/contractDeadlines'
+import ContractPaymentsPanel from '@/components/ContractPaymentsPanel'
 
 type Customer = Record<string, string>
 type Spec = { name: string; desc?: string; dimensions?: string; qty?: string }
@@ -111,6 +112,7 @@ export default function ContractsPage() {
   const [history, setHistory] = useState<HistRow[]>([])
   const [canDelete, setCanDelete] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [payOpen, setPayOpen] = useState<Set<number>>(new Set())
 
   const set = (patch: Partial<Form>) => { setForm(f => ({ ...f, ...patch })); setSavedId(null) }
   const setCust = (k: string, v: string) => { setForm(f => ({ ...f, customer: { ...f.customer, [k]: v } })); setSavedId(null) }
@@ -456,17 +458,24 @@ export default function ContractsPage() {
                   {open && (
                     <div className="divide-y divide-[#f5f5f3] border-t border-[#f0f0ec]">
                       {g.rows.map(r => (
-                        <div key={r.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#fafaf9]">
-                          <div className="min-w-0">
-                            <p className="text-[13px] font-semibold text-[#111110] truncate">Договор № {r.number} · {r.customer_type === 'company' ? 'юрлицо' : 'физлицо'}</p>
-                            <p className="text-[11px] text-[#9a9a95]">{r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</p>
+                        <div key={r.id}>
+                          <div className="flex items-center justify-between px-4 py-2.5 hover:bg-[#fafaf9] cursor-pointer"
+                            onClick={() => setPayOpen(p => { const n = new Set(p); n.has(r.id) ? n.delete(r.id) : n.add(r.id); return n })}>
+                            <div className="min-w-0">
+                              <p className="text-[13px] font-semibold text-[#111110] truncate">
+                                <span className="text-[#9a9a95] mr-1.5">{payOpen.has(r.id) ? '▾' : '▸'}</span>
+                                Договор № {r.number} · {r.customer_type === 'company' ? 'юрлицо' : 'физлицо'}
+                              </p>
+                              <p className="text-[11px] text-[#9a9a95]">{r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</p>
+                            </div>
+                            <div className="flex items-center gap-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                              <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
+                              <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
+                              <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
+                              {canDelete && <button onClick={e => del(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
-                            <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
-                            <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
-                            {canDelete && <button onClick={e => del(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
-                          </div>
+                          {payOpen.has(r.id) && <ContractPaymentsPanel contractId={r.id} total={numOr(r.total ?? 0)} />}
                         </div>
                       ))}
                     </div>
