@@ -12,8 +12,10 @@ type Sale = {
   order_no: string | null; client: string | null; amount: number; partner_fee: number; prepayment: number
   prepayment_paid: boolean; remainder_paid: boolean; payment_method: string; manager: string | null; status: string
 }
-type Totals = { sum: number; count: number; avg: number }
-type MgrRow = { manager: string; count: number; sum: number; avg: number }
+// paid — реально поступившие деньги (из payments), отдельно от суммы продаж:
+// продажа считается полной суммой счёта, а деньги приходят частями.
+type Totals = { sum: number; count: number; avg: number; paid?: number }
+type MgrRow = { manager: string; count: number; sum: number; avg: number; paid?: number }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
@@ -26,7 +28,7 @@ const EMPTY = { sale_date: '', ready_date: '', order_no: '', client: '', amount:
 
 export default function SalesPage() {
   const [sales, setSales] = useState<Sale[]>([])
-  const [totals, setTotals] = useState<Totals>({ sum: 0, count: 0, avg: 0 })
+  const [totals, setTotals] = useState<Totals>({ sum: 0, count: 0, avg: 0, paid: 0 })
   const [managers, setManagers] = useState<MgrRow[]>([])
   const [month, setMonth] = useState('')
   const [canAll, setCanAll] = useState(false)
@@ -98,8 +100,15 @@ export default function SalesPage() {
         </div>
 
         {/* Итоги месяца */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mb-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
           <div className={tile}><p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Продаж за месяц</p><p className="text-[20px] font-bold text-[#111110] mt-0.5">{fmt(totals.sum)}</p></div>
+          <div className={tile}>
+            <p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Поступило денег</p>
+            <p className="text-[20px] font-bold text-emerald-700 mt-0.5">{fmt(totals.paid ?? 0)}</p>
+            {totals.sum > (totals.paid ?? 0) && (
+              <p className="text-[11px] text-amber-700 mt-0.5">ждём {fmt(totals.sum - (totals.paid ?? 0))}</p>
+            )}
+          </div>
           <div className={tile}><p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Количество</p><p className="text-[20px] font-bold text-[#111110] mt-0.5">{totals.count}</p></div>
           <div className={tile}><p className="text-[11px] text-[#9a9a95] uppercase tracking-wide">Средний чек</p><p className="text-[20px] font-bold text-[#111110] mt-0.5">{fmt(totals.avg)}</p></div>
         </div>
@@ -112,7 +121,10 @@ export default function SalesPage() {
               {managers.map(m => (
                 <div key={m.manager} className="flex items-center justify-between rounded-lg bg-[#fafaf9] border border-[#f0f0ec] px-3 py-2">
                   <span className="text-[13px] font-medium text-[#111110] truncate">{m.manager}</span>
-                  <span className="text-[12px] text-[#6b6b66] shrink-0">{m.count} · <b className="text-[#111110]">{fmt(m.sum)}</b> · ср. {fmt(m.avg)}</span>
+                  <span className="text-[12px] text-[#6b6b66] shrink-0">
+                    {m.count} · <b className="text-[#111110]">{fmt(m.sum)}</b> · ср. {fmt(m.avg)}
+                    {m.paid != null && <> · <span className="text-emerald-700">💰 {fmt(m.paid)}</span></>}
+                  </span>
                 </div>
               ))}
             </div>

@@ -130,6 +130,13 @@ const toLC = (c: RawComponent): MirrorLightingComponent => ({
 export type FactoryQuote = {
   label: string          // название позиции
   spec: string           // краткая комплектация для комментария
+  // Габариты обязаны дойти до позиции заказа: без них изделие молча выпадает
+  // из раскроя, загрузки станций и потребности в материале (везде проверка
+  // «нет размеров — пропустить»), а в КП клиенту уходит «0 × 0».
+  widthMm: number
+  heightMm: number
+  thicknessMm: number
+  perimeterM: number
   areaPiece: number      // м² за штуку
   weightPerPiece: number // кг за штуку
   factoryCostPiece: number   // себестоимость производства за штуку
@@ -244,6 +251,10 @@ export function calcFactoryMirror(
   return {
     label: `${labelBase} ${p.mirrorName} ${p.mirrorMm} мм`,
     spec: specParts.join(' · '),
+    widthMm: p.widthMm,
+    heightMm: p.heightMm,
+    thicknessMm: p.mirrorMm,
+    perimeterM: Math.round(2 * (p.widthMm + p.heightMm) / 1000 * 1000) / 1000,
     areaPiece: res.area,
     weightPerPiece: Math.round(res.area * p.mirrorMm * 2.5 * 10) / 10,
     factoryCostPiece: Math.round(directCost),
@@ -307,6 +318,12 @@ export function calcFactoryLoft(
   return {
     label: `Лофт-${kind} ${p.widthMm}×${p.heightMm} мм`,
     spec: res.spec,
+    widthMm: p.widthMm,
+    heightMm: p.heightMm,
+    // В справочнике материалов толщины нет отдельным полем — вынимаем из названия
+    // («Осветлённое 8 мм»); не нашли — 0, габариты важнее и они уже проставлены.
+    thicknessMm: Number(/(\d+)\s*мм/.exec(glass.name)?.[1] ?? 0),
+    perimeterM: Math.round(2 * (p.widthMm + p.heightMm) / 1000 * 1000) / 1000,
     areaPiece: res.areaM2,
     weightPerPiece: res.weightKg,
     factoryCostPiece: directCost,
@@ -336,11 +353,11 @@ export function factoryQuoteToItem(q: FactoryQuote, quantity: number, comment?: 
   const totalAreaNet = Math.round(q.areaPiece * qty * 10000) / 10000
   return {
     materialId: 0, materialName: q.label, category: 'изделие',
-    thickness: 0, width: 0, height: 0, quantity: qty, wastePercent: 0,
+    thickness: q.thicknessMm, width: q.widthMm, height: q.heightMm, quantity: qty, wastePercent: 0,
     hasTempering: false, hasFacet: false, facetTypeMm: null, hasHoles: false, shape: q.shape ?? 'rect',
     services: [],
     areaPiece: q.areaPiece, totalAreaNet, totalAreaBilled: totalAreaNet,
-    perimeterM: 0,
+    perimeterM: q.perimeterM,
     weightPerM2: q.areaPiece > 0 ? Math.round(q.weightPerPiece / q.areaPiece * 10) / 10 : 0,
     totalWeight: Math.round(q.weightPerPiece * qty * 10) / 10,
     costMaterial: costWithVat, costTempering: 0, costFacet: 0, costEdge: 0, costTransport: 0, costPackaging: 0,
