@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import AssignInstallationButton from '@/components/AssignInstallationButton'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -223,6 +224,12 @@ export default function KPPrintPage() {
         >
           🖨 Печать
         </button>
+        <AssignInstallationButton
+          orderNo={kpDisplay}
+          clientName={order.client_name}
+          orderTotal={totalFinal}
+          className="bg-white text-[#1a1a18] border border-[#e0e0da] text-sm px-4 py-2 rounded-lg shadow-lg hover:bg-[#f5f5f0] transition-colors"
+        />
       </div>
 
       {/* KP Document */}
