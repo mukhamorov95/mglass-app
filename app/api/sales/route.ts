@@ -47,25 +47,52 @@ export async function GET(req: NextRequest) {
 
   const { from, to, ym } = monthRange(new URL(req.url).searchParams.get('month'))
   const sb = createServiceClient()
-  let query = sb.from('crm_sales').select('*').gte('sale_date', from).lt('sale_date', to).order('sale_date', { ascending: true }).order('id', { ascending: true })
+  // Отдел продаж — ТОЛЬКО розница M-Glass. B2B/производство сюда не мешаем:
+  // каждый оплаченный B2B-заказ автоматически рождает строку department='b2b'
+  // (lib/salesLedger.upsertSaleFromB2B + ночной реконсилиатор), и без фильтра
+  // они занижали средний чек. То же правило уже действует в сверке денег
+  // (api/cron/money-integrity) и в замороженном базлайне.
+  let query = sb.from('crm_sales').select('*')
+    .gte('sale_date', from).lt('sale_date', to)
+    .eq('voided', false).neq('department', 'b2b')
+    .order('sale_date', { ascending: true }).order('id', { ascending: true })
   if (!me.canAll) query = query.eq('manager', me.name)
   const { data, error } = await query
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const sales = (data ?? []) as SaleRow[]
 
+  // «Поступило» ≠ «продано»: продажа считается полной суммой счёта в месяце
+  // первой оплаты, а деньги приходят частями (предоплата/промежуточные/остаток)
+  // и живут построчно в payments. Показываем обе цифры — их расхождение и есть
+  // дебиторка месяца.
+  const saleIds = sales.map(r => r.id)
+  const paidBySale = new Map<number, number>()
+  if (saleIds.length > 0) {
+    const { data: pays } = await sb.from('payments')
+      .select('crm_sale_id, amount')
+      .in('crm_sale_id', saleIds)
+      .is('voided_at', null)
+    for (const p of (pays ?? []) as { crm_sale_id: number | null; amount: number }[]) {
+      if (p.crm_sale_id == null) continue
+      paidBySale.set(p.crm_sale_id, (paidBySale.get(p.crm_sale_id) ?? 0) + Number(p.amount || 0))
+    }
+  }
+
   const sum = sales.reduce((s, r) => s + Number(r.amount || 0), 0)
+  const paid = sales.reduce((s, r) => s + (paidBySale.get(r.id) ?? 0), 0)
   const count = sales.length
   const avg = count ? Math.round(sum / count) : 0
-  const byMgr = new Map<string, { manager: string; count: number; sum: number }>()
+  const byMgr = new Map<string, { manager: string; count: number; sum: number; paid: number }>()
   for (const r of sales) {
     const k = r.manager || '—'
-    const cur = byMgr.get(k) ?? { manager: k, count: 0, sum: 0 }
-    cur.count++; cur.sum += Number(r.amount || 0)
+    const cur = byMgr.get(k) ?? { manager: k, count: 0, sum: 0, paid: 0 }
+    cur.count++; cur.sum += Number(r.amount || 0); cur.paid += paidBySale.get(r.id) ?? 0
     byMgr.set(k, cur)
   }
   const managers = [...byMgr.values()].map(m => ({ ...m, avg: m.count ? Math.round(m.sum / m.count) : 0 })).sort((a, b) => b.sum - a.sum)
 
-  return NextResponse.json({ sales: data ?? [], totals: { sum, count, avg }, managers, month: ym, me: me.name, canAll: me.canAll })
+  const salesOut = sales.map(r => ({ ...r, paid_amount: paidBySale.get(r.id) ?? 0 }))
+  return NextResponse.json({ sales: salesOut, totals: { sum, count, avg, paid }, managers, month: ym, me: me.name, canAll: me.canAll })
 }
 
 export async function POST(req: NextRequest) {

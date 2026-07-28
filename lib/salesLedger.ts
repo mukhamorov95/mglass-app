@@ -87,6 +87,56 @@ export async function upsertSaleFromRetail(
   return saleId
 }
 
+type ContractRow = {
+  id: number
+  number: string | null
+  total: number | null
+  customer: Record<string, unknown> | null
+  manager_name: string | null
+}
+
+// Имя клиента у договора лежит в jsonb customer (физлицо — ФИО, юрлицо — название).
+function contractClientName(customer: Record<string, unknown> | null): string {
+  if (!customer) return '—'
+  for (const k of ['name', 'fio', 'full_name', 'company', 'company_name', 'org', 'client']) {
+    const v = customer[k]
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return '—'
+}
+
+// Розница M-Glass: продажа рождается фактом ПЕРВОЙ оплаты по счёту (владелец
+// выбрал этот момент — как уже работает для B2B). sale_date не переписывается
+// последующими платежами: месяц продажи фиксируется первым поступлением.
+export async function upsertSaleFromContract(
+  svc: SupabaseClient,
+  contract: ContractRow,
+  opts: { paidAt: string; manager?: string | null; actorName?: string | null },
+): Promise<number | null> {
+  const { data: existing } = await svc.from('crm_sales')
+    .select('id, sale_date').eq('contract_id', contract.id).maybeSingle()
+  const prev = existing as { id: number; sale_date: string } | null
+
+  const row = {
+    contract_id: contract.id,
+    sale_date: prev?.sale_date ?? opts.paidAt,
+    department: 'mglass',
+    order_no: contract.number?.trim() || `Д-${contract.id}`,
+    client: contractClientName(contract.customer),
+    amount: Number(contract.total ?? 0),
+    manager: contract.manager_name ?? opts.manager ?? opts.actorName ?? null,
+    source: 'auto_contract_payment',
+    needs_review: true,
+    voided: false,
+    updated_at: new Date().toISOString(),
+  }
+  const { data, error } = await svc.from('crm_sales')
+    .upsert(row, { onConflict: 'contract_id' })
+    .select('id').single()
+  if (error) throw new Error(`upsertSaleFromContract(#${contract.id}): ${error.message}`)
+  return (data as { id: number }).id
+}
+
 // Откат оплаты: строка продажи не удаляется — помечается voided (история цела).
 export async function voidSale(svc: SupabaseClient, link: { b2bOrderId?: number; orderId?: string }): Promise<void> {
   let q = svc.from('crm_sales').update({ voided: true, updated_at: new Date().toISOString() })

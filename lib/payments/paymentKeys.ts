@@ -40,6 +40,13 @@ export function salePaymentKey(
   return `sale:${sale.id}:${part}`
 }
 
+// Договор/счёт: поступлений может быть СКОЛЬКО УГОДНО (предоплата + промежуточные
+// + остаток), поэтому ключ не канонизируется на документе, как у b2b/розницы, а
+// уникален на каждое поступление (uid выдаёт роут). Иначе второй платёж по тому
+// же счёту затирал бы первый через upsert по external_key.
+export const contractPaymentKey = (contractId: number, uid: string) =>
+  `contract:${contractId}:${uid}`
+
 export const planPaymentKey = (plannedPaymentId: number) => `plan:${plannedPaymentId}`
 export const manualPaymentKey = (uuid: string) => `manual:${uuid}`
 export const gsheetPaymentKey = (orderNo: string) => `gsheet:${orderNo.trim()}`
