@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
 import { PROD_SINCE, urgencyRank, urgencyTone, isUrgent, deadlineOf, launchedOf, daysLeftLabel, parseNotes } from '@/lib/orderFlags'
+import { materialLabelShort } from '@/lib/materialLabel'
 
 // Единый экран «Заказы»: список по срочности → клик раскрывает заказ (чертёж
 // сверху, детали × этапы кнопками, «Упаковано» = всё готово, «Проблема»).
@@ -25,7 +26,7 @@ const itemsArr = (v: unknown): Item[] => Array.isArray(v) ? v as Item[] : []
 function specLine(it?: Item): string {
   if (!it) return ''
   const dims = it.width && it.height ? `${it.width}×${it.height}` : ''
-  const mat = [it.materialName || it.category || '', it.thickness ? `${it.thickness}мм` : ''].filter(Boolean).join(' ')
+  const mat = materialLabelShort(it)
   const qty = it.quantity && it.quantity > 1 ? `${it.quantity} шт` : ''
   return [dims, mat, qty].filter(Boolean).join(' · ')
 }

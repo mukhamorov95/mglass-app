@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import type { B2BMaterial } from '@/lib/types'
+import { materialLabel } from '@/lib/materialLabel'
 import {
   runCuttingOptimizer,
   runCuttingOptimizerOptimized,
@@ -901,7 +902,7 @@ export default function B2BCuttingPage() {
               const sel = selectedIds.has(order.id)
               const matSummary = new Map<string, number>()
               for (const it of order.items) {
-                const k = `${it.materialName ?? '?'} ${it.thickness ?? '?'} мм`
+                const k = materialLabel(it) || '?'
                 matSummary.set(k, (matSummary.get(k) ?? 0) + (it.quantity ?? 1))
               }
               return (

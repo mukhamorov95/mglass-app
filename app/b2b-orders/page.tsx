@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
+import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -530,9 +531,9 @@ function buildProductionMessage(order: Order): string {
     const area = Number(item.totalAreaNet ?? 0)
     if (!groups.has(key)) {
       groups.set(key, {
-        // У изделий производства толщина уже в названии («… Осветлённое 4 мм»),
-        // второй раз не дописываем — иначе «4 мм 0 мм».
-        label: /\d+\s*мм\s*$/.test(String(item.materialName ?? '')) ? `${item.materialName}` : `${item.materialName} ${item.thickness} мм`,
+        // materialLabel сам подписывает зеркало/рифлёное и не дублирует толщину,
+        // если она уже в названии (изделия производства).
+        label: materialLabel(item as { materialName?: string; category?: string; thickness?: number }),
         hasTemp: !!item.hasTempering,
         lines: [],
       })
@@ -1675,7 +1676,7 @@ export default function B2BOrdersPage() {
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center flex-wrap gap-x-1.5 gap-y-0 min-w-0">
                       <span className="text-[#c4c4be]">#{idx + 1}</span>
-                      <span className="font-medium text-[#111110]">{String(item.materialName ?? '')}{/\d+\s*мм\s*$/.test(String(item.materialName ?? '')) ? '' : ` ${String(item.thickness ?? '')}мм`}</span>
+                      <span className="font-medium text-[#111110]">{materialLabelShort(item as { materialName?: string; category?: string; thickness?: number })}</span>
                       <span className="text-[#6b6b66]">{String(item.width ?? '')}×{String(item.height ?? '')} мм · {String(item.quantity ?? '')} шт.</span>
                       {!!item.hasTempering && (
                         <span className="text-[9px] font-medium text-amber-700 bg-amber-50 px-1 py-px rounded">Закалка</span>

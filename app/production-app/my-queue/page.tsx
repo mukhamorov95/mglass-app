@@ -8,6 +8,7 @@ import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { ANDON_REASONS } from '@/lib/productionRouting'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
+import { materialLabelShort } from '@/lib/materialLabel'
 
 // «Мои задачи»: карточка = ЗАКАЗ (раскрывается на месте — детали с кнопками и
 // чертёж), сверху личное табло мастера по ИЗДЕЛИЯМ (сегодня/неделя, процент),
@@ -38,7 +39,7 @@ const qtyOf = (o: OrderLite | undefined, idx: number) => Math.max(1, o?.items?.[
 function specLine(item?: ItemSpec): string {
   if (!item) return ''
   const dims = item.width && item.height ? `${item.width}×${item.height}` : ''
-  const mat = [item.materialName || item.category || '', item.thickness ? `${item.thickness}мм` : ''].filter(Boolean).join(' ')
+  const mat = materialLabelShort(item)
   const qty = item.quantity && item.quantity > 1 ? `${item.quantity} шт` : ''
   return [dims, mat, qty].filter(Boolean).join(' · ')
 }

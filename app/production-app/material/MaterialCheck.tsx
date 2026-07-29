@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { materialStatus, parseNotes } from '@/lib/orderFlags'
+import { materialLabelShort } from '@/lib/materialLabel'
 
 // Стадия «Материал» до резки (Бекмурза). Новый заказ, ушедший в резку, ждёт
 // решения: «материал есть» → режем; «материала нет» → notes.material_status=needed
@@ -15,7 +16,7 @@ type Order = { id: number; custom_number: string | null; client_name: string; it
 function itemsArr(items: unknown): Item[] { return Array.isArray(items) ? items as Item[] : [] }
 function materialsText(items: unknown): string {
   return itemsArr(items).map(it => {
-    const glass = [it.materialName || it.category || '', it.thickness ? `${it.thickness}мм` : ''].filter(Boolean).join(' ')
+    const glass = materialLabelShort(it)
     const dims = it.width && it.height ? `${it.width}×${it.height}` : ''
     const qty = it.quantity && it.quantity > 1 ? ` ×${it.quantity}` : ''
     return ([glass, dims].filter(Boolean).join(' ') + qty).trim()

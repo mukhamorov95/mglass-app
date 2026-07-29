@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, use } from 'react'
 import JsBarcode from 'jsbarcode'
 import { createClient } from '@/lib/supabase-browser'
 import { getApplicableStages, STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
+import { materialLabel } from '@/lib/materialLabel'
 
 // Печать наклеек на термопринтер: маршрутный лист заказа + наклейка на каждую
 // деталь (штрихкод Code128 = MG-<orderId>-<itemIndex>, читается камерой и любым
@@ -117,7 +118,7 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
         {/* Наклейки деталей */}
         {labels.map(({ item, itemIndex, piece, qty }, i) => {
           const dims = item.width && item.height ? `${item.width}×${item.height}` : '—'
-          const glass = [item.materialName || item.category || '', item.thickness ? `${item.thickness} мм` : ''].filter(Boolean).join(' · ')
+          const glass = materialLabel(item)
           const flags = [
             item.hasHoles !== false ? 'сверл.' : '',
             item.shape === 'curved' ? 'кривол.' : '',
