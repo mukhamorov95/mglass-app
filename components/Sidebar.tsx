@@ -231,6 +231,7 @@ const ADMIN_MARKETING: NavItem[] = [
 
 const ADMIN_VLADISLAV: NavItem[] = [
   { href: '/commercial',              label: 'Коммерческий',         icon: '📈' },
+  { href: '/commercial/churn',        label: 'Отток клиентов',       icon: '📉' },
   { href: '/ceo',                     label: 'CEO Обзор',            icon: '👑' },
   { href: '/vladislav',               label: 'Сообщения',            icon: '💬' },
   { href: '/vladislav/calls',         label: 'Анализ звонков',       icon: '📞' },
@@ -759,6 +760,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         <div className="px-2.5 pt-1 pb-1.5 text-[9px] font-bold uppercase tracking-widest text-indigo-600">Коммерческий</div>
         <div className="space-y-px">
           {navItem({ href: '/commercial', label: 'Аналитика менеджеров', icon: '📈' }, 'bg-indigo-50 text-indigo-700 font-medium')}
+          {navItem({ href: '/commercial/churn', label: 'Отток клиентов',  icon: '📉' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/sales',      label: 'Отдел продаж',         icon: '💰' }, 'bg-indigo-50 text-indigo-700 font-medium')}
           {navItem({ href: '/ceo',        label: 'CEO Обзор',            icon: '👑' }, 'bg-indigo-50 text-indigo-700 font-medium')}
         </div>
