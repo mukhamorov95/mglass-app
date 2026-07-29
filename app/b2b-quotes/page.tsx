@@ -461,8 +461,14 @@ export default function B2BQuotesPage() {
       const freshNotes = parseNotes((freshRow as { notes: string | null } | null)?.notes ?? null)
       await sb2.from('b2b_orders').update({ notes: JSON.stringify({ ...freshNotes, drawing_url: drawingUrl }) }).eq('id', workDateId)
     }
-    // Генерация задач в цех (best-effort).
-    fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => {})
+    // Генерация задач в цех. Раньше запрос уходил без await и с проглоченной
+    // ошибкой — заказ 0928-3 так и провисел 16 дней невидимым для цеха: статус
+    // «в работе» стоит, а задач ноль, и ни один производственный экран его не
+    // показывает. Теперь ждём ответ и говорим вслух, если не получилось.
+    const launched = await fetch(`/api/b2b-orders/${workDateId}/launch-production`, { method: 'POST' }).catch(() => null)
+    if (!launched?.ok) {
+      alert('Заказ запущен, НО задачи в цех не создались — цех его не увидит. Сообщите разработчику или повторите запуск.')
+    }
     setQuotes(prev => prev.map(x => x.id === workDateId ? {
       ...x,
       notes: newNotes,

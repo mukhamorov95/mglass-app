@@ -120,3 +120,15 @@ export const ANDON_REASONS: { code: string; label: string }[] = [
 
 export const ANDON_REASON_LABELS: Record<string, string> =
   Object.fromEntries(ANDON_REASONS.map(r => [r.code, r.label]))
+
+// Старые экраны хранят причину РУССКОЙ СТРОКОЙ (PROBLEM_REASONS в
+// productionStages), а БД принимает только коды из CHECK-констрейнта. Метки
+// совпадают дословно, поэтому переводим; неизвестное → 'other', чтобы проблема
+// дошла хоть как-то, а не отвалилась с 400 и не потерялась.
+export function andonCode(reasonOrCode: string | null | undefined): string {
+  const v = (reasonOrCode ?? '').trim()
+  if (!v) return 'other'
+  if (ANDON_REASONS.some(r => r.code === v)) return v
+  const byLabel = ANDON_REASONS.find(r => r.label.toLowerCase() === v.toLowerCase())
+  return byLabel?.code ?? 'other'
+}

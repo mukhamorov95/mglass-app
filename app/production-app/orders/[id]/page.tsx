@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { type DetailStageKey, type DetailStageState, type DetailStages, isMirrorItem, itemNeedsTempering, PROBLEM_REASONS, STAGE_LABELS, getApplicableStages } from '@/lib/productionStages'
+import { andonCode } from '@/lib/productionRouting'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -616,13 +617,25 @@ export default function ProductionOrderPage() {
       reason: reason || undefined,
       note:   note.trim() || undefined,
     })
+    // Запись в notes сама по себе никуда не доходит: блоб исключён из синка,
+    // и проблема не появляется ни в «Проблемах», ни в «Пуле на сегодня».
+    // Дублируем в production_tasks — тем же путём, что и экран по QR.
+    const r = await fetch(`/api/b2b-orders/${order.id}/problem`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_indexes: problemModal.items, reason_code: andonCode(reason), comment: note.trim() || null }),
+    }).catch(() => null)
     setSaving(false)
     setProblemModal(null)
 
     if (result) {
       const count = problemModal.items.length
       setSelectedItems(new Set())
-      setToast({ msg: `Проблема зафиксирована (${count} ${plural(count, 'позиция', 'позиции', 'позиций')})`, ok: false })
+      setToast({
+        msg: r?.ok
+          ? `Проблема зафиксирована (${count} ${plural(count, 'позиция', 'позиции', 'позиций')}) — видна начальнику`
+          : 'Проблема сохранена, но не дошла до цеха — сообщите начальнику',
+        ok: false,
+      })
       setTimeout(() => setToast(null), 4000)
     }
   }
