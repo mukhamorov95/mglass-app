@@ -224,6 +224,7 @@ export default async function CfoDashboardPage() {
               <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-2">Быстрые ссылки</p>
               {[
                 { href: '/cfo/b2b',     label: 'B2B аналитика (оборот/материал/закалка)' },
+                { href: '/cfo/order-economics', label: 'Честная экономика заказа (раскрой + труд)' },
                 { href: '/cfo/margins', label: 'Таблица маржинальности' },
                 { href: '/cfo/unit',    label: 'Unit-экономика заказов' },
                 { href: '/admin/cfo',   label: 'Финмодели и ДДС' },
