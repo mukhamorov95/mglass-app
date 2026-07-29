@@ -2,7 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
+import { createClient } from '@/lib/supabase-browser'
+
+// Раньше здесь был устаревший клиент lib/supabase.ts: он хранит сессию в
+// localStorage, а приложение логинится через @supabase/ssr в куки. Из-за этого
+// калькулятор ходил в базу как АНОНИМ, а не как залогиненный пользователь —
+// и любая RLS-политика «для authenticated» оставила бы его без прайса.
+const supabase = createClient()
 import { Material, Service, HardwareItem, FinancialSettings, PartnerType } from '@/lib/types'
 import PricingBlock from '@/components/PricingBlock'
 import { calculateLoft, LoftInputs, LoftSystemType, LoftResult } from '@/lib/loftCalculator'
