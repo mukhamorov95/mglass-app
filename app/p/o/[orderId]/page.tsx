@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
 import { type DetailStageKey, type DetailStageState, type DetailStages, itemNeedsTempering, getApplicableStages } from '@/lib/productionStages'
+import { ANDON_REASONS } from '@/lib/productionRouting'
 
 type OrderItem = {
   materialName?: string
@@ -252,6 +253,11 @@ export default function MobileOrderWorkPage() {
   const [loading,        setLoading]        = useState(true)
   const [error,          setError]          = useState<string | null>(null)
   const [currentUser,    setCurrentUser]    = useState<{ id: string; email?: string } | null>(null)
+  // Причина обязательна: без неё проблема бесполезна начальнику и не отличима
+  // от «мастер случайно нажал».
+  const [problemOpen, setProblemOpen] = useState(false)
+  const [problemReason, setProblemReason] = useState<string>(ANDON_REASONS[0].code)
+  const [problemComment, setProblemComment] = useState('')
   const [selectedItems,  setSelectedItems]  = useState<Set<number>>(new Set())
   const [selectedStages, setSelectedStages] = useState<Set<Exclude<DetailStageKey, 'problem'>>>(new Set())
   const [saving,         setSaving]         = useState(false)
@@ -406,11 +412,23 @@ export default function MobileOrderWorkPage() {
       return
     }
 
+    // Главное: пишем проблему в production_tasks — иначе она остаётся в JSON
+    // заказа, который исключён из синка, и её никто не видит (так и потерялась
+    // проблема Никиты 27.07). Причина обязательна.
+    const r = await fetch(`/api/b2b-orders/${order.id}/problem`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ item_indexes: [...selectedItems], reason_code: problemReason, comment: problemComment || null }),
+    }).catch(() => null)
+    const rd = await r?.json().catch(() => null)
+
     const count = selectedItems.size
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     setSelectedItems(new Set())
     setSelectedStages(new Set())
-    showToast(`⚠️ Проблема зафиксирована (${count} ${plural(count, 'поз.', 'поз.', 'поз.')})`, true)
+    setProblemOpen(false)
+    setProblemComment('')
+    if (r?.ok) showToast(`⚠️ Проблема зафиксирована (${count} ${plural(count, 'поз.', 'поз.', 'поз.')}) — видна начальнику`, true)
+    else showToast(rd?.error ?? 'Проблема сохранена, но не дошла до цеха — сообщите начальнику', false)
     setSaving(false)
   }
 
@@ -694,9 +712,9 @@ export default function MobileOrderWorkPage() {
                   }
                 </button>
 
-                {/* Problem — separate action */}
+                {/* Problem — сначала спрашиваем причину, потом фиксируем */}
                 <button
-                  onClick={markProblem}
+                  onClick={() => setProblemOpen(true)}
                   disabled={saving}
                   className="w-full mt-2.5 flex items-center justify-center gap-2.5 px-4 py-3.5 rounded-xl text-[13px] font-medium border border-red-200 text-red-600 bg-red-50 hover:bg-red-100 active:bg-red-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                 >
@@ -709,6 +727,40 @@ export default function MobileOrderWorkPage() {
 
         </div>
       </div>
+
+      {/* Что случилось — причина обязательна */}
+      {problemOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center">
+          <div className="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-[16px] font-bold text-[#111110]">Что случилось?</p>
+              <button onClick={() => setProblemOpen(false)} className="text-[#9a9a95] text-[18px]">✕</button>
+            </div>
+            <p className="text-[12px] text-[#6b6b66]">
+              Позиций выбрано: {selectedItems.size}. Начальник увидит проблему сразу.
+            </p>
+            <div className="space-y-1.5 max-h-[45vh] overflow-y-auto">
+              {ANDON_REASONS.map(r => (
+                <button key={r.code} onClick={() => setProblemReason(r.code)}
+                  className={`w-full text-left px-3 py-2.5 rounded-xl border text-[14px] ${problemReason === r.code ? 'border-red-500 bg-red-50 text-[#111110] font-semibold' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            <textarea value={problemComment} onChange={e => setProblemComment(e.target.value)} rows={2}
+              placeholder="Комментарий (необязательно)"
+              className="w-full border border-[#e4e4e0] rounded-xl px-3 py-2 text-[14px] outline-none focus:border-[#111110] resize-none" />
+            <div className="flex gap-2">
+              <button onClick={() => setProblemOpen(false)}
+                className="flex-1 py-3 rounded-xl border border-[#e4e4e0] text-[14px] text-[#6b6b66]">Отмена</button>
+              <button onClick={markProblem} disabled={saving || selectedItems.size === 0}
+                className="flex-1 py-3 rounded-xl bg-red-600 text-white text-[14px] font-semibold disabled:opacity-50">
+                {saving ? 'Отправляю…' : 'Сообщить'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }

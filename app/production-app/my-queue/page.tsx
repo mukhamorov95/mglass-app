@@ -728,46 +728,64 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </button>
           </div>
 
+          {/* Одна карточка = ОДНА ДЕТАЛЬ, внутри её этапы. Раньше карточка была
+              на задачу, и у мастера с двумя станциями одна стекляшка выглядела
+              как два разных изделия. */}
           <div className="space-y-1.5">
-            {ready.map(t => {
-              const active = t.status === 'in_progress'
-              const noMat = noMatOrder || noMatItems.includes(t.item_index)
+            {liveItems.map(idx => {
+              const itemTasks = live.filter(t => t.item_index === idx).sort((a, b) => a.sequence_order - b.sequence_order)
+              const itemReady = itemTasks.filter(isReady)
+              const itemWaiting = itemTasks.filter(t => !isReady(t))
+              const anyActive = itemTasks.some(t => t.status === 'in_progress')
+              const noMat = noMatOrder || noMatItems.includes(idx)
               return (
-                <div key={t.id} className={`rounded-lg border px-3 py-2 ${noMat ? 'border-red-200 bg-red-50/50' : active ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#eceff1]'}`}>
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div key={idx} className={`rounded-lg border px-3 py-2 ${noMat ? 'border-red-200 bg-red-50/50' : anyActive ? 'border-emerald-300 bg-emerald-50/40' : 'border-[#eceff1]'}`}>
+                  <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
-                      <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[t.item_index]) || `Поз. ${t.item_index + 1}`}</p>
+                      <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[idx]) || `Поз. ${idx + 1}`}</p>
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
-                        Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}{t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                        Поз. {idx + 1}
                         {noMat && (() => {
-                          const r = matReq.get(`${orderId}:${t.item_index}`) ?? matReq.get(`${orderId}:all`)
+                          const r = matReq.get(`${orderId}:${idx}`) ?? matReq.get(`${orderId}:all`)
                           return r?.status === 'arrived' ? ' · 📦 материал пришёл'
                             : r?.status === 'ordered' ? ` · 🚚 материал заказан${r.expected ? ` · к ${fmtShort(r.expected)}` : ''}`
                             : ' · 🛒 ждёт материал'
                         })()}
                       </p>
                     </div>
-                    <div className="flex gap-1.5 flex-shrink-0">
-                      {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
-                      <button onClick={() => onDone(t.id)} className="px-3.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
-                      <button onClick={() => onNoMatItem(orderId, t.item_index)} title={noMatItems.includes(t.item_index) ? 'Материал пришёл' : 'Нет материала на эту деталь'}
-                        className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium border ${noMatItems.includes(t.item_index) ? 'bg-[#111110] text-white border-[#111110]' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
-                        {noMatItems.includes(t.item_index) ? 'Мат. есть' : 'Нет мат.'}
-                      </button>
-                      <button onClick={() => onAndon(t.id)} className="px-2.5 py-1.5 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Проблема</button>
-                    </div>
+                    <button onClick={() => onNoMatItem(orderId, idx)} title={noMatItems.includes(idx) ? 'Материал пришёл' : 'Нет материала на эту деталь'}
+                      className={`px-2.5 py-1.5 rounded-lg text-[12px] font-medium border flex-shrink-0 ${noMatItems.includes(idx) ? 'bg-[#111110] text-white border-[#111110]' : 'border-amber-300 text-amber-700 hover:bg-amber-50'}`}>
+                      {noMatItems.includes(idx) ? 'Мат. есть' : 'Нет мат.'}
+                    </button>
                   </div>
-                </div>
-              )
-            })}
-            {waiting.map(t => {
-              const blocker = t.blocked_by_task_id ? blockers.get(t.blocked_by_task_id) : null
-              return (
-                <div key={t.id} className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2">
-                  <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[t.item_index]) || `Поз. ${t.item_index + 1}`}</p>
-                  <p className="text-[11px] text-amber-700">
-                    Поз. {t.item_index + 1} · {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key} — ждёт: {blocker ? STAGE_LABELS[blocker.stage_key as DetailStageKey] ?? blocker.stage_key : 'предыдущий этап'}
-                  </p>
+
+                  {/* Этапы этой детали: доступные — с кнопками, заблокированные — строкой */}
+                  <div className="mt-2 space-y-1">
+                    {itemReady.map(t => {
+                      const active = t.status === 'in_progress'
+                      return (
+                        <div key={t.id} className="flex items-center justify-between gap-2 flex-wrap">
+                          <span className="text-[11px] text-[#111110]">
+                            {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
+                            {t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                          </span>
+                          <div className="flex gap-1.5 flex-shrink-0">
+                            {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
+                            <button onClick={() => onDone(t.id)} className="px-3.5 py-1 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
+                            <button onClick={() => onAndon(t.id)} className="px-2.5 py-1 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Проблема</button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                    {itemWaiting.map(t => {
+                      const blocker = t.blocked_by_task_id ? blockers.get(t.blocked_by_task_id) : null
+                      return (
+                        <p key={t.id} className="text-[11px] text-amber-700">
+                          {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key} — ждёт: {blocker ? STAGE_LABELS[blocker.stage_key as DetailStageKey] ?? blocker.stage_key : 'предыдущий этап'}
+                        </p>
+                      )
+                    })}
+                  </div>
                 </div>
               )
             })}
