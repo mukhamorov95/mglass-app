@@ -9,6 +9,7 @@ import { ANDON_REASON_LABELS } from '@/lib/productionRouting'
 import { PROD_SINCE } from '@/lib/orderFlags'
 import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { materialLabel } from '@/lib/materialLabel'
+import { useCanViewMoney } from '@/lib/useCanViewMoney'
 
 // «Проблемы» — одна доска на всех: мастер видит свою проблему, цех видит общую
 // картину, владелец — сумму зависших изделий. Ничего не удаляем: решённая
@@ -43,7 +44,10 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 'all',   label: 'Всё' },
 ]
 
-const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+// Сумма — довод, зачем чинить проблему, но это выручка: показываем только тем,
+// у кого есть доступ к деньгам (как на вкладке «Деньги»). Остальным — прочерк.
+const RUB_RAW = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+const rub = (n: number, can: boolean | null) => can ? RUB_RAW(n) : '—'
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `#${id}`
 
 const fmtDateTime = (s: string | null) => {
@@ -68,6 +72,7 @@ function itemValue(o: OrderLite | undefined, idx: number): number {
 
 export default function ProblemsPage() {
   const sb = createClient()
+  const canMoney = useCanViewMoney()
   const [loading, setLoading] = useState(true)
   const [tasks, setTasks] = useState<ProblemRow[]>([])
   const [orders, setOrders] = useState<Map<number, OrderLite>>(new Map())
@@ -166,7 +171,7 @@ export default function ProblemsPage() {
           </div>
           <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-[#9a9a95]">На сумму</p>
-            <p className="text-[22px] font-bold font-mono text-[#111110] mt-0.5">{RUB(sumDeduped(openTasks))}</p>
+            <p className="text-[22px] font-bold font-mono text-[#111110] mt-0.5">{rub(sumDeduped(openTasks), canMoney)}</p>
           </div>
           <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
             <p className="text-[11px] uppercase tracking-wide text-[#9a9a95]">Решено за период</p>
@@ -191,7 +196,7 @@ export default function ProblemsPage() {
                 </div>
               )}
               {openTasks.map(t => (
-                <ProblemCard key={t.id} task={t} order={orders.get(t.order_id)} value={itemValue(orders.get(t.order_id), t.item_index)}>
+                <ProblemCard key={t.id} task={t} order={orders.get(t.order_id)} value={itemValue(orders.get(t.order_id), t.item_index)} canMoney={canMoney}>
                   {resolveFor === t.id ? (
                     <div className="mt-2 space-y-1.5">
                       <input value={resolveText} onChange={e => setResolveText(e.target.value)} autoFocus
@@ -226,7 +231,7 @@ export default function ProblemsPage() {
                 </div>
               )}
               {doneTasks.map(t => (
-                <ProblemCard key={t.id} task={t} order={orders.get(t.order_id)} value={itemValue(orders.get(t.order_id), t.item_index)} />
+                <ProblemCard key={t.id} task={t} order={orders.get(t.order_id)} value={itemValue(orders.get(t.order_id), t.item_index)} canMoney={canMoney} />
               ))}
             </div>
           </div>
@@ -236,10 +241,11 @@ export default function ProblemsPage() {
   )
 }
 
-function ProblemCard({ task, order, value, children }: {
+function ProblemCard({ task, order, value, canMoney, children }: {
   task: ProblemRow
   order: OrderLite | undefined
   value: number
+  canMoney: boolean | null
   children?: React.ReactNode
 }) {
   const resolved = !!task.problem_resolved_at
@@ -254,7 +260,7 @@ function ProblemCard({ task, order, value, children }: {
           <p className="text-[14px] font-bold text-[#111110] truncate">{orderNo(order, task.order_id)}</p>
           <p className="text-[12px] text-[#6b6b66] truncate">{order?.client_name}</p>
         </div>
-        <p className="text-[13px] font-mono font-semibold text-[#111110] flex-shrink-0">{RUB(value)}</p>
+        <p className="text-[13px] font-mono font-semibold text-[#111110] flex-shrink-0">{rub(value, canMoney)}</p>
       </div>
 
       <p className="text-[12px] font-mono text-[#111110] mt-2">{spec}</p>

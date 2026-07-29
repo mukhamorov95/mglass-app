@@ -8,6 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { itemsWeight } from '@/lib/deliveryWeight'
+import { useCanViewMoney } from '@/lib/useCanViewMoney'
 
 const REGION = 'voronezh'
 const CITY = 'Воронеж'
@@ -43,7 +44,7 @@ type Shipment = {
   loadedIds: number[]
 }
 
-const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
+const RUB_RAW = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const KG = (n: number) => (Math.round(n * 10) / 10).toLocaleString('ru-RU')
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 // Текущий год/месяц для дефолтного раскрытия истории (модульный уровень — не в рендере)
@@ -59,16 +60,18 @@ function parseNotes(raw: string | null): NotesData {
   try { return raw ? JSON.parse(raw) : {} } catch { return {} }
 }
 
-function ShipmentCard({ s, orders, clientNames, onShipped, onDelete, onRemove, onLimit, onToggleLoad }: {
+function ShipmentCard({ s, orders, clientNames, canMoney, onShipped, onDelete, onRemove, onLimit, onToggleLoad }: {
   s: Shipment
   orders: Order[]
   clientNames: Map<number, string>
+  canMoney: boolean | null
   onShipped: (s: Shipment) => void
   onDelete: (s: Shipment) => void
   onRemove: (shipmentId: number, orderId: number) => void
   onLimit: (shipmentId: number, kg: number | null) => void
   onToggleLoad: (shipmentId: number, orderId: number, loaded: boolean) => void
 }) {
+  const RUB = (n: number) => canMoney ? RUB_RAW(n) : '—'
   const os = orders.filter(o => s.orderIds.includes(o.id))
   const weight = s.status === 'shipped' && s.total_weight_kg != null ? s.total_weight_kg : os.reduce((sum, o) => sum + orderWeight(o), 0)
   const amount = s.status === 'shipped' && s.total_amount != null ? s.total_amount : os.reduce((sum, o) => sum + orderSum(o), 0)
@@ -197,6 +200,11 @@ function readinessOf(parsed: NotesData, nowMs: number): Readiness {
 }
 
 export default function VoronezhPage() {
+  // Экран логистики отдавал выручку по всему портфелю заказов любому мастеру
+  // (проверок не было вообще). Суммы — только тем, у кого есть доступ к деньгам;
+  // вес и количество изделий, по которым тут и работают, видны всем.
+  const canMoney = useCanViewMoney()
+  const RUB = (n: number) => canMoney ? RUB_RAW(n) : '—'
   const [loading, setLoading] = useState(true)
   const [clients, setClients] = useState<Client[]>([])
   const [orders, setOrders] = useState<Order[]>([])
@@ -527,7 +535,7 @@ export default function VoronezhPage() {
                   Выберите дату и создайте рейс — затем отмечайте заказы ниже и добавляйте их в него.
                 </div>
               )}
-              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
+              {drafts.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
             </div>
 
             {/* Пул заказов по клиентам */}
@@ -609,7 +617,7 @@ export default function VoronezhPage() {
                                 </button>
                                 {mOpen && (
                                   <div className="mt-2 space-y-2">
-                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
+                                    {trips.map(s => <ShipmentCard key={s.id} s={s} orders={orders} clientNames={clientNames} canMoney={canMoney} onShipped={markShipped} onDelete={deleteShipment} onRemove={removeFromShipment} onLimit={setLimit} onToggleLoad={toggleLoad} />)}
                                   </div>
                                 )}
                               </div>
