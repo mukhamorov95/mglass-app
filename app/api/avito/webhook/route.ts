@@ -69,29 +69,13 @@ export async function POST(req: NextRequest) {
     .select('msg_id')
   if (!fresh || fresh.length === 0) return NextResponse.json({ ok: true, duplicate: true })
 
-  // Не-текст (фото/голос/файл) — не теряем молча: пингуем человека со ссылкой
-  // на карточку (если лид по этому чату уже есть).
-  if (v.type !== 'text' || !rawText.trim()) {
-    const { data: exist } = await service.from('crm_leads').select('id').eq('avito_chat_id', v.chat_id).maybeSingle()
-    const leadId = (exist as { id: number } | null)?.id
-    // Факт вложения фиксируем в ленте лида — иначе он существует только в Telegram-пинге
-    if (leadId) {
-      await service.from('crm_lead_events').insert({
-        lead_id: leadId, kind: 'message', author: null,
-        text: `КЛИЕНТ: 📎 прислал вложение (${v.type || 'файл'}) — открой чат в приложении Авито`,
-      }).then(() => service.from('crm_leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId))
-    }
-    const url = leadId ? `https://mglass-app.vercel.app/crm/${leadId}` : 'https://mglass-app.vercel.app/crm'
-    await notifyAdmins([
-      '📎 <b>Авито: клиент прислал вложение (не текст)</b>',
-      'Иван это не обработает — нужен человек.',
-      `Карточка: ${url}`,
-    ].join('\n')).catch(() => {})
-    return NextResponse.json({ ok: true, non_text: true })
-  }
-  const text = rawText.slice(0, 4000)
-
-  // Лид по чату (avito_chat_id уникален) — устойчиво к гонке двух первых сообщений.
+  // ЛИД СОЗДАЁМ ПЕРВЫМ ДЕЛОМ — до разбора типа сообщения.
+  //
+  // Раньше проверка «не текст» стояла ВЫШЕ создания лида и для нового чата
+  // искала лид, которого ещё нет: сообщение помечалось обработанным и исчезало.
+  // За 23–29.07 так потерялось 349 обращений с Авито — вебхук принимал их
+  // ежедневно (до 96 в день), а в CRM не попало ни одного. Теперь любое
+  // обращение сначала становится видимым лидом, и только потом разбирается.
   const { data: found } = await service.from('crm_leads').select('*')
     .eq('avito_chat_id', v.chat_id).order('id', { ascending: true }).limit(1)
   let lead = (found?.[0] ?? null) as Record<string, unknown> | null
@@ -111,6 +95,25 @@ export async function POST(req: NextRequest) {
   }
   if (!lead) return NextResponse.json({ ok: true, no_lead: true })
   const leadId = lead.id as number
+
+  // Не-текст (фото/голос/файл) ИЛИ неизвестный формат от Авито. Лид уже есть,
+  // поэтому обращение видно в CRM в любом случае. В ленту пишем, что именно
+  // пришло — по этой записи видно, если Авито снова сменит формат payload.
+  if (v.type !== 'text' || !rawText.trim()) {
+    const what = v.type && v.type !== 'text' ? `вложение (${v.type})` : `сообщение без текста (type=${v.type ?? '—'})`
+    await service.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'message', author: null,
+      text: `КЛИЕНТ: 📎 ${what} — открой чат в приложении Авито`,
+    })
+    await service.from('crm_leads').update({ updated_at: new Date().toISOString() }).eq('id', leadId)
+    await notifyAdmins([
+      '📎 <b>Авито: обращение без текста</b>',
+      'Иван это не обработает — нужен человек.',
+      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+    ].join('\n')).catch(() => {})
+    return NextResponse.json({ ok: true, non_text: true, type: v.type ?? null })
+  }
+  const text = rawText.slice(0, 4000)
 
   await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `КЛИЕНТ: ${text}`, author: null })
 
