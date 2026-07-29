@@ -3,6 +3,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PROD_SINCE, parseNotes, materialStatus } from '@/lib/orderFlags'
+import { materialLabelShort } from '@/lib/materialLabel'
 
 // «Нужен материал» — сводка закупки: все заказы, где мастер отметил «нет
 // материала» (на весь заказ или на отдельные позиции), сгруппированные по
@@ -16,7 +17,7 @@ type Group = { key: string; label: string; pieces: number; areaM2: number; lines
 
 const specOf = (it: Item) => {
   const dims = it.width && it.height ? `${it.width}×${it.height}` : ''
-  const mat = [it.materialName || it.category || '', it.thickness ? `${it.thickness}мм` : ''].filter(Boolean).join(' ')
+  const mat = materialLabelShort(it)
   return [dims, mat].filter(Boolean).join(' · ')
 }
 

@@ -3,6 +3,7 @@ import {
   Document, Page, View, Text, StyleSheet, Font,
 } from '@react-pdf/renderer'
 import path from 'path'
+import { materialLabel } from '@/lib/materialLabel'
 
 Font.register({
   family: 'PTSans',
@@ -205,8 +206,7 @@ export default function QuotePDF(p: QuotePDFProps) {
               const svcRow    = idx % 2 === 0
                 ? { ...s.trow, paddingTop: 2, paddingBottom: 3 }
                 : { ...s.trowAlt, paddingTop: 2, paddingBottom: 3 }
-              const desc  = [item.materialName, item.thickness ? `${item.thickness}мм` : null]
-                .filter(Boolean).join(', ')
+              const desc  = materialLabel(item)
               const temper = item.hasTempering ? ' [закалка]' : ''
               const size  = (item.width && item.height) ? `${item.width} × ${item.height}` : '—'
               return (
