@@ -2,10 +2,13 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { liveOrders, orderAmount } from '@/lib/liveOrders'
 
 // Дебиторская задолженность: кто должен, сколько и сколько дней.
 // B2B — из b2b_orders (счёт: notes.stages.invoice_sent/invoice_paid, notes.payment_status,
 // предоплата notes.prepayment_amount, долг = сумма − предоплата).
+// Только не архивные заказы (liveOrders): архивные дубли импорта давали здесь
+// «долг» 33 964 ₽, которого /ceo не видел — две страницы, одна метрика, разные ответы.
 // B2C — договоры/счета (contracts, status sent/signed): оплата живёт в AmoCRM,
 // здесь список выставленного для контроля менеджерами.
 
@@ -65,16 +68,21 @@ export default function ReceivablesPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const [{ data: bo }, { data: ct }] = await Promise.all([
-      sb.from('b2b_orders')
-        .select('id, custom_number, client_name, total_sale_inc_vat, total_after_discount, created_at, launched_at, notes')
-        .order('created_at', { ascending: false }).limit(1000),
-      sb.from('contracts')
-        .select('id, number, total, status, customer, created_at')
-        .in('status', ['sent', 'signed'])
-        .order('created_at', { ascending: false }).limit(300),
-    ])
-    setOrders((bo ?? []).map(o => ({ ...o, notes: parseNotes(o.notes) })))
+    const cols = 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, created_at, launched_at, notes'
+    // Постранично: PostgREST режет ответ на 1000 строках, живых заказов больше —
+    // без этого просроченный счёт мог просто не доехать до экрана.
+    const bo: B2BOrder[] = []
+    const { data: ct } = await sb.from('contracts')
+      .select('id, number, total, status, customer, created_at')
+      .in('status', ['sent', 'signed'])
+      .order('created_at', { ascending: false }).limit(300)
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await liveOrders(sb, cols).order('created_at', { ascending: false }).range(from, from + 999)
+      if (error || !data?.length) break
+      bo.push(...(data as unknown as B2BOrder[]))
+      if (data.length < 1000) break
+    }
+    setOrders(bo.map(o => ({ ...o, notes: parseNotes(o.notes) })))
     setContracts((ct ?? []) as Contract[])
     setLoading(false)
   }, [sb])
@@ -90,7 +98,7 @@ export default function ReceivablesPage() {
       if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) return []
       if (!st.invoice_sent) return []                 // счёт не выставлялся
       if (st.invoice_paid || n.payment_status === 'paid') return []
-      const total = o.total_after_discount ?? o.total_sale_inc_vat ?? 0
+      const total = orderAmount(o)
       const prepay = n.payment_status === 'partial' ? (n.prepayment_amount || 0) : (n.prepayment_amount || 0)
       const debt = Math.max(0, total - prepay)
       if (debt <= 0) return []
@@ -214,7 +222,7 @@ export default function ReceivablesPage() {
             <div className="mt-2 flex flex-wrap gap-2">
               {noInvoice.map(o => (
                 <a key={o.id} href="/b2b-orders" className="text-[12px] bg-white border border-amber-200 rounded-lg px-2.5 py-1 hover:bg-amber-100">
-                  №{o.custom_number || o.id} · {o.client_name || '—'} · <span className="font-mono">{fmt(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)}</span>
+                  №{o.custom_number || o.id} · {o.client_name || '—'} · <span className="font-mono">{fmt(orderAmount(o))}</span>
                 </a>
               ))}
             </div>

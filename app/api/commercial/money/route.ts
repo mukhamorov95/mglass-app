@@ -1,10 +1,16 @@
 import { NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
+import { launchedOrders, orderAmount } from '@/lib/liveOrders'
 
 // Продажи по менеджеру за текущий месяц: выручка + маржа + сделки + средний чек.
 // Объединяет B2B (b2b_orders, владелец в notes.manager_name) и B2C (calculations,
 // created_by → users.name). Read-only. РОП (commercial) и владелец видят команду.
+//
+// Выручка B2B = ЗАПУЩЕННЫЕ в работу не архивные заказы (launchedOrders), а не
+// notes.status. Словарь статусов уехал: рабочий статус июльских заказов — 'sent',
+// а агрегат искал 'confirmed'/'agreed' и находил 3 архивные строки на 68 073 ₽
+// вместо 161 заказа на 3 704 807 ₽. На этом лидерборде висит мотивация менеджеров.
 
 type ManagerRow = {
   name: string
@@ -35,9 +41,8 @@ export async function GET() {
 
   const [{ data: users }, { data: b2b }, { data: calcs }] = await Promise.all([
     sb.from('users').select('id,name'),
-    sb.from('b2b_orders')
-      .select('total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at')
-      .gte('created_at', since).limit(5000),
+    launchedOrders(sb, 'total_after_discount,total_sale_inc_vat,margin_percent,notes,created_at')
+      .gte('created_at', since),
     sb.from('calculations')
       .select('created_by,final_price,margin,created_at,status')
       .eq('status', 'approved').gte('created_at', since).limit(5000),
@@ -53,15 +58,11 @@ export async function GET() {
     return map.get(name)!
   }
 
-  // B2B — только подтверждённые/согласованные заказы
+  // B2B — заказы, запущенные в работу за месяц
   for (const o of (b2b ?? []) as Record<string, unknown>[]) {
     const notes = parseNotes(o.notes as string | null)
-    const status = notes.status as string | undefined
-    if (status !== 'confirmed' && status !== 'agreed') continue
     const name = (notes.manager_name as string) || 'Без менеджера'
-    const price = (Number(o.discount_percent) || 0) > 0
-      ? Number(o.total_after_discount) || 0
-      : Number(o.total_sale_inc_vat) || 0
+    const price = orderAmount(o as { total_after_discount?: number | null; total_sale_inc_vat?: number | null })
     const row = bump(name)
     row.deals++; row.revenue += price; row.b2bRevenue += price
     const m = Number(o.margin_percent)

@@ -3,10 +3,20 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
+import { liveOrders, orderAmount } from '@/lib/liveOrders'
 
 // «Обзор за 60 секунд»: деньги и алерты владельца поверх менеджерской сводки.
 // Дебиторка и касса — та же логика, что /cfo/receivables и /cfo/cashflow;
 // план vs ТБ — из finplan_models (юниты mglass+production).
+
+type DebtRow = {
+  id: number
+  custom_number: string | null
+  client_name: string | null
+  total_sale_inc_vat: number | null
+  total_after_discount: number | null
+  notes: unknown
+}
 
 type Pulse = {
   debtSum: number; debtCount: number; topDebtor: string; topDebtorDays: number; over30: number
@@ -41,21 +51,29 @@ export default function MoneyPulse() {
         const now = new Date()
         const today = new Date(now); today.setHours(0, 0, 0, 0)
         const in7d = new Date(today.getTime() + 7 * 86400000)
-        const [{ data: orders }, { data: fp }, { data: pp }, { data: tasks }] = await Promise.all([
-          sb.from('b2b_orders').select('id, custom_number, client_name, total_sale_inc_vat, total_after_discount, notes')
-            .order('created_at', { ascending: false }).limit(1000),
+        // Дебиторка — агрегат по ВСЕМ живым заказам, а не по топ-1000: PostgREST режет
+        // ответ на 1000 строках, а живых 2 843, и счёт мог не попасть в окно.
+        const cols = 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, notes'
+        const orders: DebtRow[] = []
+        const [{ data: fp }, { data: pp }, { data: tasks }] = await Promise.all([
           sb.from('finplan_models').select('unit,data'),
           sb.from('planned_payments').select('kind, amount, due_date').eq('status', 'planned'),
           sb.from('production_tasks').select('status'),
         ])
+        for (let from = 0; ; from += 1000) {
+          const { data, error } = await liveOrders(sb, cols).order('created_at', { ascending: false }).range(from, from + 999)
+          if (error || !data?.length) break
+          orders.push(...(data as unknown as DebtRow[]))
+          if (data.length < 1000) break
+        }
         // дебиторка + приходы 7 дней
         let debtSum = 0, debtCount = 0, over30 = 0, inflow7 = 0
         let topDebtor = '', topDebt = 0, topDebtorDays = 0
-        for (const o of orders ?? []) {
+        for (const o of orders) {
           const n = parseNotes(o.notes); const st = (n.stages ?? {}) as Record<string, string>
           if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
           if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
-          const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
+          const total = orderAmount(o)
           const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
           if (debt <= 0) continue
           const days = Math.floor((now.getTime() - new Date(st.invoice_sent).getTime()) / 86400000)

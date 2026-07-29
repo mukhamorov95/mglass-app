@@ -3,6 +3,8 @@ import { createClient } from '@supabase/supabase-js'
 import Anthropic from '@anthropic-ai/sdk'
 import * as tg from '@/lib/telegram'
 import { readMemory, writeMemory, writeLog, startRun, finishRun, failRun } from '@/lib/agentMemory'
+import { launchedOrders } from '@/lib/liveOrders'
+import { PROD_SINCE } from '@/lib/orderFlags'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -67,6 +69,7 @@ export async function GET(req: Request) {
       { data: orders24 },
       { data: todayB2b,  error: b2bErrToday },
       { data: activeB2b, error: b2bErrActive },
+      { data: launchedB2b, error: b2bErrLaunched },
       { data: inProd },
       { data: agentSettings },
       { data: logsToday },
@@ -79,10 +82,13 @@ export async function GET(req: Request) {
         .select('id, total_after_discount, notes')
         .gte('created_at', todayStart.toISOString())
         .is('archived_at', null),
-      // Все активные B2B-заказы — для paid today и остатка к оплате
+      // Все активные B2B-заказы — для paid today
       supabase.from('b2b_orders')
         .select('id, total_after_discount, notes')
         .is('archived_at', null),
+      // Запущенные в работу заказы актуального периода — для остатка к оплате
+      launchedOrders(supabase, 'id, total_after_discount, notes')
+        .gte('created_at', PROD_SINCE),
       supabase.from('production_tasks').select('order_id').neq('status', 'done'),
       supabase.from('agent_settings').select('agent_key, enabled, is_running, last_action_text, last_run_at, memory, total_runs'),
       supabase.from('agent_logs').select('agent_key, level, message, ran_at').gte('ran_at', today.toISOString()).order('ran_at', { ascending: false }).limit(50),
@@ -91,6 +97,7 @@ export async function GET(req: Request) {
 
     if (b2bErrToday)  console.error('agent-ceo b2b today error:', b2bErrToday)
     if (b2bErrActive) console.error('agent-ceo b2b active error:', b2bErrActive)
+    if (b2bErrLaunched) console.error('agent-ceo b2b launched error:', b2bErrLaunched)
 
     // ── Считаем KPI ──────────────────────────────────────────────────────────
     const calcCount    = calcs24?.length ?? 0
@@ -133,8 +140,12 @@ export async function GET(req: Request) {
     const b2bPaidCount   = paidTodayRows.length
     const b2bPaidRevenue = paidTodayRows.reduce((s, o) => s + Number(o.total_after_discount ?? 0), 0)
 
-    // Осталось к оплате: confirmed/agreed без оплаты по обоим механизмам
-    const unpaidRows = (activeB2b ?? []).filter(o => {
+    // Осталось к оплате: только запущенные в работу заказы актуального периода.
+    // Без окна по дате сюда падал весь исторический хвост (2 532 заказа / 63 957 870 ₽,
+    // из них 1 927 созданы в 2025 и раньше) — владельцу в Telegram уходило 64 млн
+    // фиктивной дебиторки. Окно — то же PROD_SINCE, что и у производственного контура.
+    type UnpaidRow = { id: number; total_after_discount: number | null; notes: unknown }
+    const unpaidRows = ((launchedB2b ?? []) as unknown as UnpaidRow[]).filter(o => {
       const n = parseB2bNotes(o.notes)
       if (!['confirmed', 'agreed'].includes(n.status as string)) return false
       const isPaid = n.payment_status === 'paid'
