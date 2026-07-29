@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
+import { liveOrders, orderAmount } from '@/lib/liveOrders'
 
 export const runtime = 'nodejs'
 export const maxDuration = 60
@@ -34,9 +35,19 @@ export async function GET(req: Request) {
     const today = new Date(now); today.setHours(0, 0, 0, 0)
     const in7d = new Date(today.getTime() + 7 * 86400000)
 
-    const [{ data: orders }, { data: fp }, { data: pp }, { data: tasks }, { data: calcsY }] = await Promise.all([
-      sb.from('b2b_orders').select('id, custom_number, client_name, total_sale_inc_vat, total_after_discount, created_at, notes')
-        .order('created_at', { ascending: false }).limit(1000),
+    // Дебиторка — только живые заказы и постранично: архивные дубли импорта дают
+    // владельцу фиктивный долг, а потолок PostgREST в 1000 строк прятал реальный.
+    type OrderRow = { id: number; custom_number: string | null; client_name: string | null; total_sale_inc_vat: number | null; total_after_discount: number | null; created_at: string; notes: unknown }
+    const orders: OrderRow[] = []
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await liveOrders(sb, 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, created_at, notes')
+        .order('created_at', { ascending: false }).range(from, from + 999)
+      if (error || !data?.length) break
+      orders.push(...(data as unknown as OrderRow[]))
+      if (data.length < 1000) break
+    }
+
+    const [{ data: fp }, { data: pp }, { data: tasks }, { data: calcsY }] = await Promise.all([
       sb.from('finplan_models').select('unit,data'),
       sb.from('planned_payments').select('kind, amount, due_date').eq('status', 'planned'),
       sb.from('production_tasks').select('status'),
@@ -48,12 +59,12 @@ export async function GET(req: Request) {
     // ── Дебиторка B2B ──
     type Debtor = { label: string; debt: number; days: number }
     const debtors: Debtor[] = []
-    for (const o of orders ?? []) {
+    for (const o of orders) {
       const n = parseNotes(o.notes)
       const st = (n.stages ?? {}) as Record<string, string>
       if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
       if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
-      const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
+      const total = orderAmount(o)
       const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
       if (debt <= 0) continue
       const days = Math.floor((now.getTime() - new Date(st.invoice_sent).getTime()) / 86400000)
@@ -73,12 +84,12 @@ export async function GET(req: Request) {
     }
     // приходы: счета, ожидаемые в окне (дата счёта + 14 дн; просроченные — считаем в окне)
     let inflow7 = 0
-    for (const o of orders ?? []) {
+    for (const o of orders) {
       const n = parseNotes(o.notes)
       const st = (n.stages ?? {}) as Record<string, string>
       if (!['confirmed', 'agreed', 'sent'].includes(String(n.status ?? ''))) continue
       if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
-      const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
+      const total = orderAmount(o)
       const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
       if (debt <= 0) continue
       const expect = new Date(new Date(st.invoice_sent).getTime() + 14 * 86400000)

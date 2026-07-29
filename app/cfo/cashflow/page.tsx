@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { liveOrders, orderAmount } from '@/lib/liveOrders'
 
 // ДДС / платёжный календарь: прогноз остатка денег по неделям.
 // Приходы: неоплаченные счета B2B (дебиторка; ожидание = дата счёта + 14 дней,
@@ -60,13 +61,21 @@ export default function CashflowPage() {
       const { data: p } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
       setMeName(p?.name ?? user.email ?? '')
     }
-    const [{ data: fp }, { data: bo }, { data: pp }] = await Promise.all([
+    // Дебиторка — только живые заказы и постранично: PostgREST режет ответ на 1000
+    // строках, и счёт мог просто не доехать. Та же методика, что /cfo/receivables и /ceo.
+    type BoRow = { id: number; custom_number: string | null; client_name: string | null; total_sale_inc_vat: number | null; total_after_discount: number | null; notes: unknown }
+    const bo: BoRow[] = []
+    const [{ data: fp }, { data: pp }] = await Promise.all([
       sb.from('finplan_models').select('unit,data'),
-      sb.from('b2b_orders')
-        .select('id, custom_number, client_name, total_sale_inc_vat, total_after_discount, notes')
-        .order('created_at', { ascending: false }).limit(1000),
       sb.from('planned_payments').select('*').eq('status', 'planned').order('due_date'),
     ])
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await liveOrders(sb, 'id, custom_number, client_name, total_sale_inc_vat, total_after_discount, notes')
+        .order('created_at', { ascending: false }).range(from, from + 999)
+      if (error || !data?.length) break
+      bo.push(...(data as unknown as BoRow[]))
+      if (data.length < 1000) break
+    }
     // остаток на счёте + постоянные из финмодели
     let fixed = 0
     for (const row of fp ?? []) {
@@ -80,12 +89,12 @@ export default function CashflowPage() {
     // дебиторка → ожидаемые приходы
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const flows: Flow[] = []
-    for (const o of bo ?? []) {
+    for (const o of bo) {
       const n = parseNotes(o.notes) as { status?: string; payment_status?: string; prepayment_amount?: number; stages?: Record<string, string> }
       const st = n.stages ?? {}
       if (!['confirmed', 'agreed', 'sent'].includes(n.status ?? '')) continue
       if (!st.invoice_sent || st.invoice_paid || n.payment_status === 'paid') continue
-      const total = (o.total_after_discount ?? o.total_sale_inc_vat ?? 0) as number
+      const total = orderAmount(o)
       const debt = Math.max(0, total - (Number(n.prepayment_amount) || 0))
       if (debt <= 0) continue
       let expect = addDays(new Date(st.invoice_sent), 14)

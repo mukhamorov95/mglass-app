@@ -3,9 +3,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { useCanViewMoney } from '@/lib/useCanViewMoney'
+import { launchedOrders } from '@/lib/liveOrders'
 
 // Отток по действующим клиентам. Новые клиенты маскируют потери: в сумме рост,
 // а внутри — база утекает. Здесь только те, кто уже покупал.
+//
+// Считаем по ЗАПУЩЕННЫМ в работу заказам (launchedOrders), а не по всем живым:
+// просчёт — это намерение, а не покупка, и клиент, который прислал просчёты и
+// не запустил, не «покупал больше». На грязных данных (архивные + просчёты)
+// экран завышал потери примерно в 10 раз и показывал в риске клиентов, у
+// которых потерь нет вообще.
 //
 // Падение заказов и падение чека — РАЗНЫЕ диагнозы. «Реже заказывает» — это про
 // отношения и сервис. «Чек упал» при том же числе заказов — крупные позиции ушли
@@ -205,12 +212,13 @@ export default function ChurnPage() {
     const since = new Date(at - 180 * 86400000).toISOString()
     const acc: OrderRow[] = []
     for (let from = 0; ; from += 1000) {
-      const { data, error } = await sb.from('b2b_orders')
-        .select('client_name,created_at,total_after_discount,total_sale_inc_vat')
+      // Только живые: с архивными дублями импорта оборот за 180 дней был 70,5 млн
+      // вместо 22,6 млн, и вердикты «ушёл / растёт» строились на утроенных суммах.
+      const { data, error } = await launchedOrders(sb, 'client_name,created_at,total_after_discount,total_sale_inc_vat')
         .gte('created_at', since)
         .order('created_at', { ascending: false }).range(from, from + 999)
       if (error || !data?.length) break
-      acc.push(...(data as OrderRow[]))
+      acc.push(...(data as unknown as OrderRow[]))
       if (data.length < 1000) break
     }
     setNow(at)

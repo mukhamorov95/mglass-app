@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
+import { liveOrders } from '@/lib/liveOrders'
 
 type Order = {
   id: number
@@ -59,13 +60,18 @@ export default function B2BAnalyticsPage() {
   useEffect(() => {
     async function load() {
       const sb = createClient()
-      const { data } = await sb
-        .from('b2b_orders')
-        .select('id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at')
-        .order('created_at')
-        .limit(5000)
+      const cols = 'id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at'
+      // Постранично: PostgREST режет ответ на 1000 строках, .limit(5000) её не поднимал —
+      // экран получал только самые старые 1000 записей (2024-08…2025-05) и за 2026 показывал ноль.
+      const acc: Order[] = []
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await liveOrders(sb, cols).order('created_at').range(from, from + 999)
+        if (error || !data?.length) break
+        acc.push(...(data as unknown as Order[]))
+        if (data.length < 1000) break
+      }
       // Extract manager_name from notes JSON (stored there since no DB column yet)
-      const enriched = (data ?? []).map((o: Order) => ({
+      const enriched = acc.map((o: Order) => ({
         ...o,
         manager_name: (parseNotes(o.notes).manager_name as string | null) ?? null,
       }))

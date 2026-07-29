@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BCRM, B2BInteraction, clientToCRM, B2B_INTERACTION_TYPES } from '@/lib/types'
+import { liveOrders } from '@/lib/liveOrders'
 
 type Quote = {
   id: number
@@ -99,32 +100,39 @@ export default function ManagerDashboardPage() {
     const now = new Date()
     const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
 
-    let quotesQuery = sb.from('b2b_orders')
-      .select('id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at,created_by')
+    let quotesQuery = liveOrders(sb, 'id,client_id,client_name,total_after_discount,total_sale_inc_vat,discount_percent,margin_percent,notes,created_at,created_by')
       .order('created_at', { ascending: false })
       .limit(500)
     if (!localCanSeeAll && user) {
       quotesQuery = quotesQuery.eq('created_by', user.id)
     }
 
-    const [{ data: qs }, { data: cls }, { data: orders }, { data: lastInts }] = await Promise.all([
+    const [{ data: qs }, { data: cls }, { data: lastInts }] = await Promise.all([
       quotesQuery,
       sb.from('b2b_clients').select(CRM_COLS).eq('active', true),
-      sb.from('b2b_orders')
-        .select('client_id,total_after_discount,discount_percent,total_sale_inc_vat')
-        .gte('created_at', new Date(now.getFullYear(), 0, 1).toISOString()),
       sb.from('b2b_interactions')
         .select('id,client_id,type,note,outcome,next_action,next_action_date,created_by,created_at')
         .order('created_at', { ascending: false })
         .limit(2000),
     ])
 
-    setQuotes(qs ?? [])
+    setQuotes((qs ?? []) as unknown as Quote[])
 
+    // Оборот клиента с начала года — постранично и только по живым заказам.
+    // Раньше: без archived_at и без пагинации PostgREST отдавал произвольные 1000 из
+    // 2 926 строк, а с архивными дублями сумма за 2026 выходила 77,6 млн вместо 24,4 млн.
+    type YtdRow = { client_id: number; total_after_discount: number | null; discount_percent: number | null; total_sale_inc_vat: number | null }
     const totalByClient = new Map<number, number>()
-    for (const o of orders ?? []) {
-      const v = o.discount_percent > 0 ? o.total_after_discount : o.total_sale_inc_vat
-      totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + v)
+    for (let from = 0; ; from += 1000) {
+      const { data, error } = await liveOrders(sb, 'client_id,total_after_discount,discount_percent,total_sale_inc_vat')
+        .gte('created_at', new Date(now.getFullYear(), 0, 1).toISOString())
+        .order('created_at', { ascending: false }).range(from, from + 999)
+      if (error || !data?.length) break
+      for (const o of data as unknown as YtdRow[]) {
+        const v = Number((o.discount_percent ?? 0) > 0 ? o.total_after_discount : o.total_sale_inc_vat) || 0
+        totalByClient.set(o.client_id, (totalByClient.get(o.client_id) ?? 0) + v)
+      }
+      if (data.length < 1000) break
     }
     const lastIntByClient = new Map<number, B2BInteraction>()
     for (const i of (lastInts ?? []) as B2BInteraction[]) {
