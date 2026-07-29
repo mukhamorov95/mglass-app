@@ -65,6 +65,23 @@ describe('accessMatrix — изоляция данных между ролями
   }
 })
 
+// Регрессия конкретного бага: менеджер не мог сформировать КП из корзины зеркал —
+// кнопка «КП (PDF)» открывает /cart/print, а /cart не было в allowlist → access-denied.
+describe('accessMatrix — менеджер проходит весь путь продажи (класс бага Веры)', () => {
+  const salesPaths = [
+    '/calculator/mirror', '/calculator/shower', '/calculator/loft', '/calculator/b2b', '/calculator/quick',
+    '/cart', '/cart/print',          // корзина мультизаказа + КП (PDF)
+    '/calculations', '/calculations/123', '/calculations/123/print',
+    '/kp', '/contracts', '/crm', '/sales', '/orders', '/clients',
+    '/b2b-quotes', '/b2b-orders', '/b2b-cutting',
+  ]
+  for (const p of salesPaths) {
+    it(`менеджер открывает ${p}`, () => {
+      expect(canAccessRoute('manager', p)).toBe(true)
+    })
+  }
+})
+
 describe('explainAccess синхронен с canAccessRoute (диагностика = реальный гейт)', () => {
   const paths = ['/', '/cfo', '/commercial', '/accounting', '/calculator/b2b', '/b2b-orders', '/production-app', '/admin/users', '/api/x']
   const scopes = [null, 'mglass_only', 'all_clients'] as const
