@@ -93,6 +93,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
   const [prepayDate, setPrepayDate]         = useState(order.prepayment_date ?? '')
   const [paymentNotes, setPaymentNotes]     = useState(order.payment_notes ?? '')
   const [savingPayment, setSavingPayment]   = useState(false)
+  const [payWarning, setPayWarning]         = useState<string | null>(null)
 
   const [zones, setZones]           = useState<Zone[]>([])
   const [brigades, setBrigades]     = useState<Brigade[]>([])
@@ -169,7 +170,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
 
   async function savePayment() {
     setSavingPayment(true)
-    await fetch(`/api/orders/${order.id}/payment`, {
+    const r = await fetch(`/api/orders/${order.id}/payment`, {
       method:  'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body:    JSON.stringify({
@@ -179,6 +180,10 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
         payment_notes:     paymentNotes,
       }),
     })
+    // Если деньги не дошли до учёта — говорим прямо, а не молча «сохранено»:
+    // иначе продажа не появится в Отделе продаж, и никто об этом не узнает.
+    const d = await r.json().catch(() => null)
+    setPayWarning(Array.isArray(d?.warnings) && d.warnings.length ? String(d.warnings[0]) : null)
     setSavingPayment(false)
     router.refresh()
   }
@@ -704,6 +709,11 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             >
               {savingPayment ? 'Сохраняю...' : 'Сохранить оплату'}
             </button>
+            {payWarning && (
+              <p className="text-[12px] text-amber-700">
+                ⚠️ Статус сохранён, но деньги не попали в учёт — продажа не появится в Отделе продаж. {payWarning}
+              </p>
+            )}
           </div>
 
           {/* Completion photos */}
