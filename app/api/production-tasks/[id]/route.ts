@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 import { cascadePriorStages } from '@/lib/productionCascade'
+
+// Действия цеха доступны рабочим производства и владельцу (+ закупщик Вера,
+// надзор за цехом). Проверка на СЕРВЕРЕ, не только скрытием кнопок в UI (№3).
+const SHOP_ROLES = ['production', 'admin', 'ceo', 'buyer'] as const
 
 // PATCH — отметка производственной задачи рабочим (Выполнено / Проблема).
 // Двойная запись: production_tasks (новая модель очередей) И notes.detail_stages
@@ -16,6 +21,8 @@ export async function PATCH(
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole([...SHOP_ROLES])
+  if (guard instanceof NextResponse) return guard
 
   const { id } = await params
   const taskId = Number(id)
