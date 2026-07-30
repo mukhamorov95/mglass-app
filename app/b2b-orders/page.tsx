@@ -585,6 +585,11 @@ export default function B2BOrdersPage() {
   const [editCustomNum, setEditCustomNum]   = useState('')
   const [editClientNum, setEditClientNum]   = useState('')
   const [savingNum, setSavingNum]           = useState(false)
+  // Правка итоговой суммы запущенного заказа (владелец, только вниз)
+  const [editTotalId, setEditTotalId]       = useState<number | null>(null)
+  const [editTotalVal, setEditTotalVal]     = useState('')
+  const [savingTotal, setSavingTotal]       = useState(false)
+  const [totalErr, setTotalErr]             = useState<string | null>(null)
 
   // Production extras
   const [materials, setMaterials]     = useState<MatFull[]>([])
@@ -632,6 +637,28 @@ export default function B2BOrdersPage() {
     ))
     setSavingNum(false)
     setEditNumId(null)
+  }
+
+  // Владелец меняет итог заказа: серверный роут пересчитывает все позиции
+  // пропорционально (НДС/маржа заново), синхронит реестр продаж. Только вниз.
+  async function saveOrderTotal(orderId: number, oldTotal: number) {
+    setTotalErr(null)
+    const nt = Math.round(Number(editTotalVal))
+    if (!nt || nt <= 0) { setTotalErr('Введите сумму'); return }
+    if (nt >= oldTotal) { setTotalErr(`Меньше ${Math.round(oldTotal).toLocaleString('ru-RU')} ₽`); return }
+    setSavingTotal(true)
+    try {
+      const res = await fetch(`/api/b2b-orders/${orderId}/adjust-total`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newTotal: nt }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { setTotalErr(json.error || 'Ошибка'); return }
+      setEditTotalId(null); setEditTotalVal('')
+      await loadOrders()
+    } catch {
+      setTotalErr('Сеть недоступна')
+    } finally { setSavingTotal(false) }
   }
 
   async function generateNumber(orderId: number) {
@@ -1450,6 +1477,32 @@ export default function B2BOrdersPage() {
 
     return (
       <div className="border-t border-[#f0f0ec] px-4 py-3 space-y-3 bg-[#fafaf9]">
+
+        {/* Счёт / КП / правка суммы (владелец) */}
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href={`/b2b-quotes/${order.id}/invoice`} target="_blank"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🧾 Счёт клиенту</Link>
+          <Link href={`/b2b-quotes/${order.id}/kp`} target="_blank"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📄 КП</Link>
+          {isOwner && (editTotalId === order.id ? (
+            <span className="flex items-center gap-1.5">
+              <span className="text-[10px] text-[#9a9a95]">Новая сумма ₽:</span>
+              <input autoFocus type="number" value={editTotalVal}
+                onChange={e => { setEditTotalVal(e.target.value); setTotalErr(null) }}
+                placeholder={String(Math.round(finalPrice))}
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono w-28 bg-white outline-none focus:border-[#111110]"
+                onKeyDown={e => { if (e.key === 'Enter') saveOrderTotal(order.id, finalPrice); if (e.key === 'Escape') { setEditTotalId(null); setTotalErr(null) } }} />
+              <button onClick={() => saveOrderTotal(order.id, finalPrice)} disabled={savingTotal}
+                className="px-2.5 py-1 bg-[#111110] text-white text-[11px] rounded-lg hover:bg-black disabled:opacity-40">{savingTotal ? '…' : 'Пересчитать'}</button>
+              <button onClick={() => { setEditTotalId(null); setEditTotalVal(''); setTotalErr(null) }} className="px-1.5 py-1 text-[11px] text-[#9a9a95] hover:text-[#111110]">Отмена</button>
+              {totalErr && <span className="text-[10px] text-red-500">{totalErr}</span>}
+            </span>
+          ) : (
+            <button onClick={() => { setEditTotalId(order.id); setEditTotalVal(''); setTotalErr(null) }}
+              title="Пересчитать все позиции под новую (меньшую) сумму"
+              className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
+          ))}
+        </div>
 
         {/* Номера заказа */}
         {editNumId === order.id ? (
