@@ -11,7 +11,19 @@ export default async function OrdersPage() {
   let orders: Order[] = []
   let usersMap: Record<string, string> = {}
 
-  if (isAdmin) {
+  const supabase = await createServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+
+  // «Видит все сделки»: владелец (admin/ceo) или менеджер с can_view_all_deals.
+  // RLS на orders режет по manager_id, поэтому при галке читаем сервис-клиентом
+  // (иначе менеджер с расширенным доступом всё равно видел бы только свои).
+  let canViewAll = isAdmin || role === 'ceo'
+  if (!canViewAll && user?.id) {
+    const { data: profile } = await supabase.from('users').select('can_view_all_deals').eq('id', user.id).maybeSingle()
+    canViewAll = profile?.can_view_all_deals === true
+  }
+
+  if (canViewAll) {
     const admin = createServiceClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -25,7 +37,6 @@ export default async function OrdersPage() {
       (usersData ?? []).map((u: { id: string; name: string; email: string }) => [u.id, u.name ?? u.email])
     )
   } else {
-    const supabase = await createServerClient()
     const { data } = await supabase
       .from('orders')
       .select('*')

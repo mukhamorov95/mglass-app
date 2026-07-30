@@ -33,6 +33,7 @@ type Calc = {
 
 type Props = {
   isAdmin: boolean
+  canViewAll: boolean   // admin/ceo или менеджер с can_view_all_deals — видит все КП
   usersMap: Record<string, string>
   allSettings: FinancialSettings[]
   userId: string | null
@@ -188,7 +189,7 @@ function findSettings(c: Calc, all: FinancialSettings[]): FinancialSettings | nu
   )
 }
 
-export default function CalculationsClient({ isAdmin, usersMap, allSettings, userId }: Props) {
+export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allSettings, userId }: Props) {
   const [calcs, setCalcs]         = useState<Calc[]>([])
   const [loading, setLoading]     = useState(true)
   const [search, setSearch]       = useState('')
@@ -218,7 +219,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
       .from('calculations')
       .select('id,created_at,created_by,product_type,input_data,cost_breakdown,financial_breakdown,base_price,discount,partner_percent,final_price,margin,profit,manager_bonus,status,client_text,client_name,client_phone,order_group_id,order_number')
       .order('created_at', { ascending: false })
-    if (!isAdmin && userId) {
+    if (!canViewAll && userId) {
       query = query.eq('created_by', userId)
     }
     const { data } = await query
@@ -523,7 +524,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                             <span className="text-[11px] text-[#9a9a95]">
                               {new Date(gi[0].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                             </span>
-                            {isAdmin && managerName && (
+                            {(isAdmin || canViewAll) && managerName && (
                               <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
                             )}
                             <select value={gi[0].status} onChange={e => updateGroupStatus(gi[0].order_group_id!, e.target.value)}
@@ -704,7 +705,7 @@ export default function CalculationsClient({ isAdmin, usersMap, allSettings, use
                           <span className="text-[11px] text-[#9a9a95]">
                             {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
                           </span>
-                          {isAdmin && managerName && (
+                          {(isAdmin || canViewAll) && managerName && (
                             <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
                           )}
                           <select value={c.status} onChange={e => updateStatus(c.id, e.target.value)}

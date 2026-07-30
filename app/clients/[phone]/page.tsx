@@ -46,6 +46,10 @@ export default async function ClientDetailPage({
   const { phone: encodedKey } = await params
   const key = decodeURIComponent(encodedKey)
 
+  // «Видит всех клиентов»: владелец или менеджер с галкой can_view_all_clients.
+  const { data: profile } = await supabase.from('users').select('can_view_all_clients').eq('id', user!.id).maybeSingle()
+  const seeAllClients = role === 'admin' || role === 'ceo' || profile?.can_view_all_clients === true
+
   // Match by phone or name
   let ordersQuery = supabase
     .from('orders')
@@ -53,7 +57,7 @@ export default async function ClientDetailPage({
     .or(`client_phone.eq.${key},client_name.eq.${key}`)
     .order('created_at', { ascending: false })
 
-  if (role !== 'admin') ordersQuery = ordersQuery.eq('manager_id', user!.id)
+  if (!seeAllClients) ordersQuery = ordersQuery.eq('manager_id', user!.id)
 
   const { data: orders } = await ordersQuery
 
