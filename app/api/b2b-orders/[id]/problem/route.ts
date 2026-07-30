@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSessionUser } from '@/lib/getRole'
+import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { ANDON_REASONS } from '@/lib/productionRouting'
@@ -17,6 +18,8 @@ const CODES = new Set(ANDON_REASONS.map(r => r.code))
 export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string }> }) {
   const user = await getSessionUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  const guard = await requireRole(['production', 'admin', 'ceo', 'buyer'])
+  if (guard instanceof NextResponse) return guard
 
   const orderId = Number((await ctx.params).id)
   if (!orderId) return NextResponse.json({ error: 'Некорректный заказ' }, { status: 400 })

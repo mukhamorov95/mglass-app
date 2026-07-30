@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { buildProductionTasks } from '@/lib/productionRouting'
 
@@ -15,6 +16,9 @@ export async function POST(
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
+  // Запуск в работу — менеджеры/владелец/закупщик, не любой залогиненный (№3).
+  const guard = await requireRole(['manager', 'commercial', 'admin', 'ceo', 'buyer'])
+  if (guard instanceof NextResponse) return guard
 
   const { id } = await params
   const orderId = Number(id)
