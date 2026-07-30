@@ -2197,9 +2197,17 @@ export default function B2BOrdersPage() {
                         />
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0">
-                              {order.custom_number?.trim() || `00${order.id}`}
-                            </span>
+                            {isOwner ? (
+                              <Link href={`/cfo/order-economics/${order.id}`} onClick={e => e.stopPropagation()}
+                                title="Экономика заказа: себестоимость, расход, маржа"
+                                className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+                                {order.custom_number?.trim() || `00${order.id}`} ₽
+                              </Link>
+                            ) : (
+                              <span className="text-[13px] font-bold text-[#111110] bg-[#f0f0ec] px-2 py-px rounded font-mono flex-shrink-0">
+                                {order.custom_number?.trim() || `00${order.id}`}
+                              </span>
+                            )}
                             {order.client_order_number && (
                               <span className="text-[10px] text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded font-mono flex-shrink-0">
                                 кл.{order.client_order_number}
@@ -2359,9 +2367,17 @@ export default function B2BOrdersPage() {
                                 <span className="text-[10px] font-bold text-[#d4d4ce] flex-shrink-0 w-4 text-right">{orderIdx + 1}</span>
                                 <div className="min-w-0 flex-1">
                                   <div className="flex items-center gap-1.5 flex-wrap">
-                                    <span className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0">
-                                      {order.custom_number?.trim() || `00${order.id}`}
-                                    </span>
+                                    {isOwner ? (
+                                      <Link href={`/cfo/order-economics/${order.id}`} onClick={e => e.stopPropagation()}
+                                        title="Экономика заказа: себестоимость, расход, маржа"
+                                        className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0 hover:bg-blue-50 hover:text-blue-700 transition-colors">
+                                        {order.custom_number?.trim() || `00${order.id}`} ₽
+                                      </Link>
+                                    ) : (
+                                      <span className="text-[15px] font-bold font-mono text-[#111110] bg-[#f0f0ec] px-2 py-0.5 rounded flex-shrink-0">
+                                        {order.custom_number?.trim() || `00${order.id}`}
+                                      </span>
+                                    )}
                                     {order.client_order_number && (
                                       <span className="text-[10px] font-mono text-[#6b6b66] bg-[#f8f8f5] border border-[#e4e4e0] px-1.5 py-px rounded flex-shrink-0">
                                         кл.{order.client_order_number}
