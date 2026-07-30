@@ -8,6 +8,11 @@ import AssignInstallationButton from '@/components/AssignInstallationButton'
 import { computeProductionSummary, type MatLight } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
+import { computeOrderEconomics, type EcoOrder, type EcoItem } from '@/lib/orderEconomics'
+import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
+import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
+
+const HONEST_THIN = 25   // ниже — «тонко»
 
 const PAGE_SIZE = 50
 
@@ -246,6 +251,7 @@ export default function B2BQuotesPage() {
   const [quotes, setQuotes]           = useState<Quote[]>([])
   const [attachments, setAttachments] = useState<Attachment[]>([])
   const [materials, setMaterials]     = useState<MatLight[]>([])
+  const [throughput, setThroughput]   = useState<ShopThroughput | null>(null)
   const [loading, setLoading]         = useState(true)
   const [loadError, setLoadError]     = useState<string | null>(null)
   const [expanded, setExpanded]       = useState<number | null>(null)
@@ -535,16 +541,28 @@ export default function B2BQuotesPage() {
         }
       }
 
-      const [{ data: orders }, { data: attaches }, { data: mats }] = await Promise.all([
+      // Пропускная способность цеха за 30 дней — знаменатель ставок труда для честной маржи.
+      const since30 = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10)
+      const [{ data: orders }, { data: attaches }, { data: mats }, { data: thruRows }] = await Promise.all([
         ordersQuery,
         sb.from('b2b_calculation_attachments').select('*').order('created_at', { ascending: false }).limit(5000),
         sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,cost_price,waste_percent').eq('active', true),
+        sb.from('b2b_orders').select('items').is('archived_at', null).gte('launched_at', since30),
       ])
       setQuotes((orders ?? []).map(q => ({
         ...q, items: Array.isArray(q.items) ? (q.items as OrderItem[]) : [],
       })))
       setAttachments(attaches ?? [])
       setMaterials((mats ?? []) as MatLight[])
+      let tN = 0, tE = 0, tD = 0
+      for (const o of (thruRows ?? []) as { items: unknown }[]) {
+        for (const it of (Array.isArray(o.items) ? o.items as Record<string, number | boolean>[] : [])) {
+          const w = Number(it.width) || 0, h = Number(it.height) || 0, q = Number(it.quantity) || 0
+          tN += w * h / 1e6 * q; tE += (Number(it.perimeterM) || 2 * (w + h) / 1000) * q
+          if (it.hasHoles) tD += q
+        }
+      }
+      setThroughput({ netM2: tN, edgeM: tE, drilledPcs: tD, packedPcs: 0 })
     } catch (err) {
       console.error('[b2b-quotes] load error:', err)
       setLoadError(err instanceof Error ? err.message : 'Не удалось загрузить данные')
@@ -656,6 +674,30 @@ export default function B2BQuotesPage() {
     }
     return list
   }, [quotes, tab, search])
+
+  // Честная маржа по просчётам (быстрый режим: без раскроя — материал уже с
+  // авторасходом в сохранённых позициях, честная разница = недостающий труд).
+  const isOwner = userRole === 'admin' || userRole === 'ceo'
+  const honestByQuote = useMemo(() => {
+    const m = new Map<number, { honest: number; system: number }>()
+    if (!throughput) return m
+    for (const q of visible) {
+      const items: EcoItem[] = (q.items as unknown as Record<string, unknown>[]).map(it => {
+        const billed = Number(it.totalAreaBilled) || 0
+        return {
+          materialName: String(it.materialName ?? ''), thickness: Number(it.thickness) || 0, category: String(it.category ?? ''),
+          width: Number(it.width) || 0, height: Number(it.height) || 0, quantity: Number(it.quantity) || 0,
+          wastePercent: Number(it.wastePercent) || 0,
+          costPerM2: billed > 0 ? (Number(it.costMaterial) || 0) / billed : 0,
+          hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles, perimeterM: Number(it.perimeterM) || 0,
+        }
+      })
+      const order: EcoOrder = { id: q.id, clientName: q.client_name, revenue: q.total_after_discount || q.total_sale_inc_vat || 0, items }
+      const eco = computeOrderEconomics(order, DEFAULT_SHOP_SALARIES, throughput, DEFAULT_REUSE_RATE, { skipNesting: true })
+      m.set(q.id, { honest: eco.honestMargin, system: eco.systemMargin })
+    }
+    return m
+  }, [visible, throughput])
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0 }
@@ -816,8 +858,20 @@ export default function B2BQuotesPage() {
 
                   <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap sm:flex-shrink-0">
 
-                    {/* Низкая маржа */}
-                    {(quote.margin_percent ?? 0) > 0 && quote.margin_percent < 15 && (
+                    {/* Честная маржа (по раскрою + труд) — до запуска в работу */}
+                    {isOwner && honestByQuote.has(quote.id) && (() => {
+                      const hm = honestByQuote.get(quote.id)!.honest
+                      const cls = hm < HONEST_THIN ? 'bg-red-50 text-red-600' : hm < 35 ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'
+                      return (
+                        <Link href={`/cfo/order-economics/${quote.id}`}
+                          title={`Честная маржа ${hm}% (раскрой + труд). Клик — детали. Система показывает ${honestByQuote.get(quote.id)!.system}%`}
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${cls} hover:ring-1 hover:ring-current`}>
+                          честн. {hm}%{hm < HONEST_THIN ? ' · тонко' : ''} ₽
+                        </Link>
+                      )
+                    })()}
+                    {/* Низкая маржа по системе — только не-владельцам (у владельца выше честная) */}
+                    {!isOwner && (quote.margin_percent ?? 0) > 0 && quote.margin_percent < 15 && (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-50 text-red-600" title="Маржа ниже 15%">
                         ⚠️ {quote.margin_percent}%
                       </span>

@@ -77,21 +77,31 @@ export function computeOrderEconomics(
   salaries: ShopSalaries,
   throughput: ShopThroughput,
   reuseRate = DEFAULT_REUSE_RATE,
+  // Быстрый режим для списков (без раскроя): честный материал = системному.
+  // Для просчётов после #167 системный уже с авторасходом, так что разница между
+  // «система» и «честно» приходит из недостающего труда (резка/сверловка). Экран
+  // одного заказа считает полный раскрой (skipNesting=false).
+  opts: { skipNesting?: boolean } = {},
 ): OrderEconomics {
   const rates = laborRates(salaries, throughput)
 
-  // ── Материал: раскрой реальных деталей ────────────────────────────────────
-  const usageItems: UsageItem[] = order.items
-    .filter(it => it.width > 0 && it.height > 0 && it.quantity > 0)
-    .map(it => ({
-      materialName: it.materialName, thickness: it.thickness, category: it.category,
-      width: it.width, height: it.height, quantity: it.quantity, costPerM2: it.costPerM2,
-      sheetWidth: it.sheetWidth, sheetHeight: it.sheetHeight, patternDirection: it.patternDirection,
-    }))
-  const usage = computeMaterialUsage(usageItems, reuseRate)
-  const honestMaterial = usage.reduce((s, u) => s + u.honestCost, 0)
-  const sheets = usage.reduce((s, u) => s + u.sheets, 0)
-  const netM2 = usage.reduce((s, u) => s + u.netM2, 0)
+  // ── Материал: раскрой реальных деталей (или пропуск для быстрого списка) ────
+  let honestMaterial = 0, sheets = 0, netM2 = 0
+  if (opts.skipNesting) {
+    honestMaterial = -1  // проставим после пробега по позициям (= systemMaterial)
+  } else {
+    const usageItems: UsageItem[] = order.items
+      .filter(it => it.width > 0 && it.height > 0 && it.quantity > 0)
+      .map(it => ({
+        materialName: it.materialName, thickness: it.thickness, category: it.category,
+        width: it.width, height: it.height, quantity: it.quantity, costPerM2: it.costPerM2,
+        sheetWidth: it.sheetWidth, sheetHeight: it.sheetHeight, patternDirection: it.patternDirection,
+      }))
+    const usage = computeMaterialUsage(usageItems, reuseRate)
+    honestMaterial = usage.reduce((s, u) => s + u.honestCost, 0)
+    sheets = usage.reduce((s, u) => s + u.sheets, 0)
+    netM2 = usage.reduce((s, u) => s + u.netM2, 0)
+  }
 
   // ── Пробег по позициям: система-материал, закалка, доставка, кромочный метраж ─
   let systemMaterial = 0, billedM2 = 0, pieces = 0
@@ -112,6 +122,9 @@ export function computeOrderEconomics(
       laborTransport += q * TRANSPORT_PER_PIECE
     }
   }
+
+  // Быстрый режим: честный материал = системному (см. opts.skipNesting), листы/нетто из пробега.
+  if (opts.skipNesting) { honestMaterial = systemMaterial; netM2 = netM2Sys }
 
   // ── Труд по живым ставкам ─────────────────────────────────────────────────
   const labor = pieceLaborCost(rates, { netM2: netM2Sys, edgeM, drilledPcs, pcs: pieces })
