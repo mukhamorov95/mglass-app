@@ -41,35 +41,55 @@ export async function GET() {
     .from('b2b_clients').select('id,name').eq('user_id', user.id).maybeSingle()
   if (cErr || !client) return NextResponse.json({ linked: false, client: null, orders: [] })
 
+  // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
+  // Партнёр видит и просчёты, которые мы сделали для него.
   const { data } = await svc
     .from('b2b_orders')
-    .select('id,custom_number,client_order_number,created_at,total_after_discount,total_sale_inc_vat,notes')
+    .select('id,custom_number,client_order_number,created_at,launched_at,total_after_discount,total_sale_inc_vat,notes')
     .eq('client_id', client.id)
-    .not('notes', 'ilike', '%"status":"quote"%')
     .is('archived_at', null)
     .order('created_at', { ascending: false })
-    .limit(200)
+    .limit(300)
 
   const orders = (data ?? []).map((o: Record<string, unknown>) => {
     const pn = parseNotes(o.notes as string | null)
     const stages = (pn.stages ?? {}) as Record<string, unknown>
+    const status = (pn.status as string | undefined) || 'quote'
+    const launched = !!(o.launched_at || pn.launched_at)
     const shipped = stages.shipped === true
-    const doneN = LANE.filter(s => stages[s.key] === true).length
-    // Текущий этап = первый невыполненный; если упаковано — «готов»/«отгружен».
-    const frontier = LANE.find(s => stages[s.key] !== true)
     const packed = stages.packed === true
-    const stage = shipped ? 'Отгружен' : packed ? 'Готов к выдаче' : frontier ? frontier.label : 'В работе'
+    const doneN = LANE.filter(s => stages[s.key] === true).length
+    const frontier = LANE.find(s => stages[s.key] !== true)
+
+    // lane: quote (просчёт) · submitted (отправлен в работу, ждёт нас) · in_work · shipped
+    const lane = shipped ? 'shipped'
+      : launched ? 'in_work'
+      : status === 'pending_approval' ? 'submitted'
+      : 'quote'
+
+    const stage = lane === 'shipped' ? 'Отгружен'
+      : lane === 'submitted' ? 'Отправлен в работу'
+      : lane === 'quote' ? 'Просчёт'
+      : packed ? 'Готов к выдаче'
+      : frontier ? frontier.label : 'В работе'
+
+    // Пересчитан ли просчёт нами и почему (для подсветки партнёру).
+    const history = Array.isArray(pn.status_history) ? pn.status_history : []
+    const lastComment = (pn.status_comment as string | undefined) || null
+
     return {
       id: o.id as number,
       number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
       clientOrderNumber: (o.client_order_number as string | null) ?? null,
       created_at: o.created_at as string,
       amount: (o.total_after_discount as number | null) ?? (o.total_sale_inc_vat as number | null) ?? 0,
-      progressPct: Math.round((doneN / LANE.length) * 100),
+      lane,
+      progressPct: lane === 'in_work' || lane === 'shipped' ? Math.round((doneN / LANE.length) * 100) : 0,
       stage,
       shipped,
       ready: packed && !shipped,
       deadline: deadline(pn, o.created_at as string),
+      recalcNote: history.length > 0 ? lastComment : null,
     }
   })
 
