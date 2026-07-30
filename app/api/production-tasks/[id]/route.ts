@@ -66,27 +66,21 @@ export async function PATCH(
     ? await cascadePriorStages(svc, task.order_id, task.item_index, task.sequence_order, now)
     : []
 
-  // 2) notes.detail_stages (зеркалим для прогресса на уровне заказа). Best-effort.
+  // 2) notes.detail_stages (зеркалим для прогресса на уровне заказа).
+  // АТОМАРНО через mark_detail_stages: правка под блокировкой строки, чтобы
+  // одновременные отметки по одному заказу не затирали друг друга (причина №2).
   if (action === 'done' || action === 'problem') {
-    const { data: order } = await svc.from('b2b_orders').select('notes').eq('id', task.order_id).single()
-    if (order) {
-      const notes = typeof order.notes === 'string'
-        ? (() => { try { return JSON.parse(order.notes) } catch { return {} } })()
-        : (order.notes ?? {})
-      const ds = (notes.detail_stages ?? {}) as Record<string, Record<string, unknown>>
-      const key = String(task.item_index)
-      ds[key] = ds[key] ?? {}
-      if (action === 'done') {
-        ds[key][task.stage_key] = { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined }
-        for (const st of cascaded) {
-          ds[key][st] = { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true }
-        }
-      } else {
-        ds[key][task.stage_key] = { status: 'problem', updated_at: now, updated_by: user.id, reason: body.reason_code ?? 'other', note: body.comment ?? undefined }
+    const item = String(task.item_index)
+    const updates: { item: string; stage: string; entry: Record<string, unknown> }[] = []
+    if (action === 'done') {
+      updates.push({ item, stage: task.stage_key, entry: { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined } })
+      for (const st of cascaded) {
+        updates.push({ item, stage: st, entry: { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true } })
       }
-      notes.detail_stages = ds
-      await svc.from('b2b_orders').update({ notes: JSON.stringify(notes) }).eq('id', task.order_id)
+    } else {
+      updates.push({ item, stage: task.stage_key, entry: { status: 'problem', updated_at: now, updated_by: user.id, reason: body.reason_code ?? 'other', note: body.comment ?? undefined } })
     }
+    await svc.rpc('mark_detail_stages', { p_order_id: task.order_id, p_updates: updates })
   }
 
   // 3) третье зеркало: если все позиции этапа закрыты — проставить order-level флаг (для /b2b-orders/Сводки)

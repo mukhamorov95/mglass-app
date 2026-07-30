@@ -519,25 +519,24 @@ export default function ProductionOrderPage() {
     const now            = new Date().toISOString()
     const newStages: DetailStages = { ...existingStages }
 
+    // Атомарная запись: собираем правки и применяем через mark_detail_stages
+    // (jsonb_set под блокировкой строки). Прямой перезаписью всего notes из
+    // браузера две одновременные отметки затирали друг друга (причина №2).
+    const updates: { item: string; stage: string; entry: Record<string, unknown> }[] = []
     for (const idx of targetItems) {
-      newStages[String(idx)] = {
-        ...newStages[String(idx)],
-        [stageKey]: {
-          status:           stageKey === 'problem' ? 'problem' : 'done',
-          updated_at:       now,
-          updated_by:       currentUser.id,
-          updated_by_email: currentUser.email,
-          ...extraFields,
-        },
+      const entry = {
+        status:           stageKey === 'problem' ? 'problem' : 'done',
+        updated_at:       now,
+        updated_by:       currentUser.id,
+        updated_by_email: currentUser.email,
+        ...extraFields,
       }
+      newStages[String(idx)] = { ...newStages[String(idx)], [stageKey]: entry }
+      updates.push({ item: String(idx), stage: stageKey, entry })
     }
 
-    const updatedNotes = { ...notesObj, detail_stages: newStages }
     const sb           = createClient()
-    const { error: updateErr } = await sb
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(updatedNotes) })
-      .eq('id', order.id)
+    const { error: updateErr } = await sb.rpc('mark_detail_stages', { p_order_id: order.id, p_updates: updates })
 
     if (updateErr) {
       setToast({ msg: 'Ошибка сохранения', ok: false })
@@ -545,6 +544,9 @@ export default function ProductionOrderPage() {
       return
     }
 
+    // Оптимистично обновляем локальное состояние для мгновенного отклика;
+    // источник правды — БД (перечитается при следующей загрузке).
+    const updatedNotes = { ...notesObj, detail_stages: newStages }
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     return updatedNotes
   }
@@ -557,7 +559,8 @@ export default function ProductionOrderPage() {
     const nextUrgent = !notesObj.urgent
     const updatedNotes = { ...notesObj, urgent: nextUrgent }
     const sb = createClient()
-    const { error } = await sb.from('b2b_orders').update({ notes: JSON.stringify(updatedNotes) }).eq('id', order.id)
+    // Атомарно, чтобы переключение срочности не затёрло одновременную отметку этапа.
+    const { error } = await sb.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { urgent: nextUrgent } })
     if (error) { setToast({ msg: 'Ошибка сохранения', ok: false }); setTimeout(() => setToast(null), 3000); return }
     setOrder(prev => prev ? { ...prev, notes: JSON.stringify(updatedNotes) } : prev)
     setToast({ msg: nextUrgent ? '🔥 Заказ отмечен срочным' : 'Срочность снята', ok: true }); setTimeout(() => setToast(null), 2500)

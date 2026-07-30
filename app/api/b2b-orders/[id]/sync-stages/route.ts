@@ -72,22 +72,13 @@ export async function POST(
 
   // Каскадно закрытые этапы дописываем в notes.detail_stages — иначе на старых
   // экранах они остались бы неотмеченными (клиент записал только свой этап).
+  // АТОМАРНО (mark_detail_stages) — без гонки на перезаписи всего notes (причина №2).
   if (cascaded.length > 0) {
-    const { data: ord } = await svc.from('b2b_orders').select('notes').eq('id', orderId).single()
-    if (ord) {
-      const notes = typeof ord.notes === 'string'
-        ? (() => { try { return JSON.parse(ord.notes) } catch { return {} } })()
-        : (ord.notes ?? {})
-      const ds = (notes.detail_stages ?? {}) as Record<string, Record<string, unknown>>
-      for (const c of cascaded) {
-        const key = String(c.item_index)
-        ds[key] = ds[key] ?? {}
-        if ((ds[key][c.stage_key] as { status?: string } | undefined)?.status === 'done') continue
-        ds[key][c.stage_key] = { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true }
-      }
-      notes.detail_stages = ds
-      await svc.from('b2b_orders').update({ notes: JSON.stringify(notes) }).eq('id', orderId)
-    }
+    const updates = cascaded.map(c => ({
+      item: String(c.item_index), stage: c.stage_key,
+      entry: { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true },
+    }))
+    await svc.rpc('mark_detail_stages', { p_order_id: orderId, p_updates: updates })
   }
 
   // Третье зеркало: закрытые этапы (все позиции) → order-level notes.stages для /b2b-orders/Сводки
