@@ -122,6 +122,7 @@ const BUYER_PRODUCTION: NavItem[] = [
 
 const SEO_ANALYTICS: NavItem[] = [
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
+  { href: '/b2b-growth',    label: 'Развитие B2B',  icon: '🚀' },
   { href: '/ai-stats',      label: 'Статистика AI', icon: '📈' },
   { href: '/amo-analysis',  label: 'Воронка AMO',   icon: '🔍' },
   { href: '/ai-sales',      label: 'AI Продажи',    icon: '🤝' },
@@ -284,6 +285,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
 ]
 
 const ADMIN_B2B: NavEntry[] = [
+  { href: '/b2b-growth',             label: 'Развитие B2B',      icon: '🚀' },
   { href: '/admin/b2b-clients',      label: 'Клиенты',           icon: '🏢' },
   { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },

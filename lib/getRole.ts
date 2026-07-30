@@ -170,6 +170,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   seo: [
     '/',
     '/b2b-analytics',
+    '/b2b-growth',
     '/marketing',
     '/ai-assistant',
     '/vladislav',
@@ -203,6 +204,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   commercial: [
     '/',
     '/commercial',
+    '/b2b-growth',
     '/installations',
     '/crm',
     '/sales',
