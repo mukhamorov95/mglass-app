@@ -21,6 +21,10 @@
       "schedule": "15 4 * * *"
     },
     {
+      "path": "/api/cron/production-reconcile",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/cron/avito-followup",
       "schedule": "0 11 * * 1-6"
     },
