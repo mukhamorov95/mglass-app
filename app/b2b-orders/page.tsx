@@ -790,11 +790,15 @@ export default function B2BOrdersPage() {
 
       if (search.trim()) {
         const q = search.trim().toLowerCase()
+        // Заказы без custom_number идентифицируются по id (в ленте показаны как
+        // 05066 = падинг id). Поэтому ищем и по id, нормализуя ведущие нули.
+        const qn = q.replace(/\D/g, '').replace(/^0+/, '')
         const match =
           o.client_name.toLowerCase().includes(q) ||
           (o.custom_number ?? '').toLowerCase().includes(q) ||
           (o.client_order_number ?? '').toLowerCase().includes(q) ||
-          getOrderNum(pn).toLowerCase().includes(q)
+          getOrderNum(pn).toLowerCase().includes(q) ||
+          (qn !== '' && String(o.id).includes(qn))
         if (!match) return false
       }
 
@@ -906,12 +910,14 @@ export default function B2BOrdersPage() {
     const base = search.trim()
       ? orders.filter(o => {
           const q = search.trim().toLowerCase()
+          const qn = q.replace(/\D/g, '').replace(/^0+/, '')
           const pn = o.parsedNotes
           return (
             o.client_name.toLowerCase().includes(q) ||
             (o.custom_number ?? '').toLowerCase().includes(q) ||
             (o.client_order_number ?? '').toLowerCase().includes(q) ||
-            getOrderNum(pn).toLowerCase().includes(q)
+            getOrderNum(pn).toLowerCase().includes(q) ||
+            (qn !== '' && String(o.id).includes(qn))
           )
         })
       : orders
