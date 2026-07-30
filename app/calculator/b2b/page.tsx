@@ -52,9 +52,10 @@ const SUPER_CATS = [
 ] as const
 type SuperCat = typeof SUPER_CATS[number]['value']
 import {
-  calcItem, calcTotals, effectiveItemTotal, WASTE_OPTIONS, TEMPERING_COST, VAT,
+  calcItem, calcTotals, effectiveItemTotal, TEMPERING_COST, VAT,
   type B2BOrderItem, type B2BOrderTotals, type FacetPrice, type MinPriceReason,
 } from '@/lib/b2bCalculator'
+import { applyAutoWasteToItems } from '@/lib/autoWasteApply'
 
 const fmt  = (n: number) => n.toLocaleString('ru-RU') + ' ₽'
 const fmtN = (n: number, d = 3) => n.toLocaleString('ru-RU', { maximumFractionDigits: d })
@@ -828,10 +829,15 @@ export default function B2BCalculatorPage() {
     try { localStorage.removeItem(DRAFT_KEY) } catch {}
   }
 
+  // Себестоимость и маржа — по АВТОМАТИЧЕСКОМУ расходу из раскроя, а не по
+  // ручному проценту. Пересчитывается на каждое изменение состава заказа (расход
+  // одного материала зависит от всех его деталей). Цена клиента не меняется.
+  const itemsAuto = useMemo(() => applyAutoWasteToItems(items, materials), [items, materials])
+
   const totals: B2BOrderTotals | null = useMemo(() => {
-    if (items.length === 0) return null
-    return calcTotals(items, discount)
-  }, [items, discount])
+    if (itemsAuto.length === 0) return null
+    return calcTotals(itemsAuto, discount)
+  }, [itemsAuto, discount])
 
   const totalMinPriceDelta = useMemo(
     () => items.reduce((s, i) => s + (i.minPriceDelta ?? 0), 0),
@@ -979,8 +985,9 @@ export default function B2BCalculatorPage() {
     setSavedAsPending(false)
     const sb = createClient()
     const t = totals!
-    const avgMargin = items.length > 0
-      ? Math.round(items.reduce((s, i) => s + i.margin, 0) / items.length)
+    // Сохраняем позиции с себестоимостью по авторасходу (маржа — из них же).
+    const avgMargin = itemsAuto.length > 0
+      ? Math.round(itemsAuto.reduce((s, i) => s + i.margin, 0) / itemsAuto.length)
       : 0
     const authorName = managerName ?? managerEmail ?? null
     const editing = editingOrderId != null
@@ -999,7 +1006,7 @@ export default function B2BCalculatorPage() {
       client_name: selectedClient.name,
       discount_percent: discount,
       margin_percent: avgMargin,
-      items: items,
+      items: itemsAuto,
       total_area: t.totalAreaNet,
       total_weight: t.totalWeight,
       total_cost_net: t.totalCostExVat,
@@ -1543,21 +1550,21 @@ export default function B2BCalculatorPage() {
               <div>
                 <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
                   Отход
-                  {selectedMaterial && !selectedMaterial.passthrough && fWaste === selectedMaterial.waste_percent && (
-                    <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">авто</span>
-                  )}
-                  {selectedMaterial?.passthrough && <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>}
+                  {selectedMaterial?.passthrough
+                    ? <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>
+                    : <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">по раскрою</span>}
                 </label>
                 {selectedMaterial?.passthrough ? (
                   <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
                     10% — проходной
                   </div>
                 ) : (
-                  <select
-                    className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-                    value={fWaste} onChange={e => setFWaste(Number(e.target.value))}>
-                    {WASTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                  </select>
+                  // Расход считается автоматически из раскроя деталей заказа (по
+                  // материалу). Ручной ввод убран — он «перекладывал» в одних местах
+                  // и «недокладывал» в других. Число видно в позициях после добавления.
+                  <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6e6e73]">
+                    авто по раскрою
+                  </div>
                 )}
               </div>
               {fSuperCat === 'стекло' && (
@@ -1886,7 +1893,7 @@ export default function B2BCalculatorPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-[#f8f8f7]">
-                      {items.map((item, idx) => {
+                      {itemsAuto.map((item, idx) => {
                         const itemAfterDiscount = Math.round(item.saleIncVat * (1 - discount / 100))
                         const em = effectiveItemMargin(item, discount)
                         return (
@@ -2010,7 +2017,7 @@ export default function B2BCalculatorPage() {
                           <td className="px-3 py-2.5 text-right font-mono text-[#9a9a95] whitespace-nowrap">{totals.totalCostExVat.toLocaleString('ru-RU')} ₽</td>
                           <td className="px-3 py-2.5 text-right">
                             {items.length > 0 && (() => {
-                              const avg = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                              const avg = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
                               return <span className={`text-[11px] font-semibold px-1.5 py-0.5 rounded ${marginBadgeClass(avg)}`}>{avg}%</span>
                             })()}
                           </td>
@@ -2075,7 +2082,7 @@ export default function B2BCalculatorPage() {
 
                 {/* Маржа и прибыль — итоговая строка */}
                 {(() => {
-                  const avgEm = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                  const avgEm = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
                   return (
                     <div className="flex items-center gap-2 py-2 px-3 rounded-lg bg-[#f8f8f7] border border-[#f0f0ec]">
                       <span className={`text-[12px] font-bold px-2 py-0.5 rounded ${marginBadgeClass(avgEm)}`}>{avgEm}%</span>
@@ -2092,7 +2099,7 @@ export default function B2BCalculatorPage() {
                 {(() => {
                   const target = strategy.target_margin || 40
                   const minM   = strategy.min_margin || 25
-                  const avgEm  = Math.round(items.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / items.length)
+                  const avgEm  = Math.round(itemsAuto.reduce((s, i) => s + effectiveItemMargin(i, discount), 0) / itemsAuto.length)
                   const price  = totals.totalAfterDiscount
                   // Цена при целевой марже m (тот же расход): множитель по марже.
                   const priceAt = (m: number) => (avgEm >= 100 || m >= 100) ? price : Math.round(price * (100 - avgEm) / (100 - m))
@@ -2108,7 +2115,7 @@ export default function B2BCalculatorPage() {
                     recs.push({ tone: 'ok', head: 'В цель', text: `Маржа ${avgEm}% — здоровая, в целевом коридоре. Цена конкурентная и прибыльная. Предел торга ≈ ${fmt(priceAt(minM))} (${minM}%).` })
                   }
                   if (items.length > 1) {
-                    const perPos = items.map((i, idx) => ({ idx: idx + 1, m: effectiveItemMargin(i, discount), name: i.materialName }))
+                    const perPos = itemsAuto.map((i, idx) => ({ idx: idx + 1, m: effectiveItemMargin(i, discount), name: i.materialName }))
                     const worst = perPos.reduce((a, b) => b.m < a.m ? b : a)
                     if (worst.m < avgEm - 8) recs.push({ tone: 'info', head: `Позиция ${worst.idx}`, text: `${worst.name}: маржа ${worst.m}% — заметно ниже средней. Проверьте размер/скидку по ней.` })
                   }
@@ -2453,17 +2460,20 @@ export default function B2BCalculatorPage() {
               {/* Отход + Закалка */}
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Отход</label>
+                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
+                    Отход
+                    <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">
+                      {eSelectedMat?.passthrough ? 'фикс.' : 'по раскрою'}
+                    </span>
+                  </label>
                   {eSelectedMat?.passthrough ? (
                     <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
                       10% — проходной
                     </div>
                   ) : (
-                    <select
-                      className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-[#111110]"
-                      value={eWaste} onChange={e => setEWaste(Number(e.target.value))}>
-                      {WASTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-                    </select>
+                    <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6e6e73]">
+                      авто по раскрою
+                    </div>
                   )}
                 </div>
                 <div>

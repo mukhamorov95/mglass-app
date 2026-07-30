@@ -304,6 +304,29 @@ export function calcItem(
   }
 }
 
+// Пересчёт позиции под новый процент расхода (авторасход из раскроя). Меняет
+// ТОЛЬКО зависящие от расхода поля: billed-площадь, себестоимость материала и
+// производные (НДС к вычету, себест. без НДС, маржа). Цена клиенту (saleIncVat)
+// не трогается — она из прайса и от расхода не зависит. costPerM2 берём из уже
+// посчитанной позиции (costMaterial / totalAreaBilled), не пересобирая calcItem.
+export function applyAutoWaste(item: B2BOrderItem, wastePercent: number): B2BOrderItem {
+  const net = item.totalAreaNet
+  if (net <= 0 || item.totalAreaBilled <= 0 || wastePercent < 0) return item
+  const costPerM2      = item.costMaterial / item.totalAreaBilled
+  const newBilled      = Math.round(net * (1 + wastePercent / 100) * 10000) / 10000
+  const newCostMaterial = Math.round(newBilled * costPerM2)
+  const dCost          = newCostMaterial - item.costMaterial
+  const newCostWithVat = item.costWithVat + dCost
+  const newInputVat    = Math.round(newCostWithVat * VAT / (100 + VAT))
+  const newCostExVat   = newCostWithVat - newInputVat
+  const newMargin      = item.saleExVat > 0 ? Math.round((1 - newCostExVat / item.saleExVat) * 100) : item.margin
+  return {
+    ...item, wastePercent,
+    totalAreaBilled: newBilled, costMaterial: newCostMaterial,
+    costWithVat: newCostWithVat, inputVat: newInputVat, costExVat: newCostExVat, margin: newMargin,
+  }
+}
+
 export function calcTotals(items: B2BOrderItem[], discountPercent: number): B2BOrderTotals {
   const totalAreaNet       = r3(items.reduce((s, i) => s + i.totalAreaNet, 0))
   const totalWeight        = r2(items.reduce((s, i) => s + i.totalWeight, 0))
