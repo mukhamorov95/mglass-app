@@ -24,7 +24,7 @@ type Item = {
   created_at: string
 }
 
-type TabKey = Item['kind'] | 'brochure' | 'callcenter'
+type TabKey = Item['kind'] | 'brochure' | 'callcenter' | 'partners'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'hypothesis', label: 'Гипотезы' },
@@ -35,6 +35,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'problem', label: 'Проблемы' },
   { key: 'brochure', label: 'Брошюра' },
   { key: 'callcenter', label: 'Колл-центр' },
+  { key: 'partners', label: 'Кабинеты партнёров' },
 ]
 
 // Наборы статусов по типу
@@ -192,6 +193,8 @@ export default function B2BGrowthPage() {
           <Brochure />
         ) : tab === 'callcenter' ? (
           <CallCenter />
+        ) : tab === 'partners' ? (
+          <PartnersTab />
         ) : tab === 'channel_stage' ? (
           <Funnel stages={byKind('channel_stage')} targets={byKind('call_target')} />
         ) : (
@@ -359,6 +362,106 @@ function Funnel({ stages, targets }: { stages: Item[]; targets: Item[] }) {
       <p className="text-[10px] text-[#9a9a95] pt-2 border-t border-[#f0f0ec]">
         Цифры считаются по статусам целей во вкладке «Обзвон цехов». Веди статусы там — воронка обновится сама.
       </p>
+    </div>
+  )
+}
+
+type PClient = { id: number; name: string; contact: string | null; phone: string | null; discountPercent: number; linked: boolean; email: string | null }
+
+function PartnersTab() {
+  const [clients, setClients] = useState<PClient[]>([])
+  const [loading, setLoading] = useState(true)
+  const [openId, setOpenId] = useState<number | null>(null)
+  const [email, setEmail] = useState('')
+  const [pass, setPass] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [created, setCreated] = useState<{ clientName: string; email: string; password: string } | null>(null)
+
+  const load = useCallback(async () => {
+    const r = await fetch('/api/admin/partners').then(x => x.json()).catch(() => ({ clients: [] }))
+    setClients(r.clients ?? [])
+    setLoading(false)
+  }, [])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load() }, [load])
+
+  async function create(clientId: number) {
+    setErr(null)
+    if (!email.trim()) { setErr('Укажите email'); return }
+    setBusy(true)
+    try {
+      const r = await fetch('/api/admin/partners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, email, password: pass }) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Ошибка'); return }
+      setCreated({ clientName: d.clientName, email: d.email, password: d.password })
+      setOpenId(null); setEmail(''); setPass('')
+      await load()
+    } finally { setBusy(false) }
+  }
+
+  if (loading) return <div className="text-xs text-[#9a9a95] py-8 text-center">Загрузка…</div>
+
+  const linked = clients.filter(c => c.linked)
+  const notLinked = clients.filter(c => !c.linked)
+
+  return (
+    <div className="space-y-3">
+      <div className="bg-white rounded-lg border border-[#e4e4e0] p-3 text-[12px] text-[#6b6b66]">
+        Создайте партнёру доступ в личный кабинет прямо здесь — без захода в Supabase. Выберите клиента, задайте email и пароль (или оставьте пусто — сгенерируем). Партнёр зайдёт и сменит пароль сам.
+      </div>
+
+      {created && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
+          <p className="text-[13px] font-semibold text-emerald-800">Доступ создан — {created.clientName}</p>
+          <p className="text-[12px] text-emerald-800 mt-1 font-mono">Логин: {created.email}</p>
+          <p className="text-[12px] text-emerald-800 font-mono">Пароль: {created.password}</p>
+          <p className="text-[11px] text-emerald-700 mt-1">Скопируйте и передайте партнёру. Пароль он поменяет сам при входе на /login → «Сменить пароль».</p>
+          <button onClick={() => setCreated(null)} className="text-[11px] text-emerald-700 underline mt-1">Скрыть</button>
+        </div>
+      )}
+
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95]">Без кабинета · {notLinked.length}</p>
+      {notLinked.map(c => (
+        <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3">
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-[#111110] truncate">{c.name}</p>
+              <p className="text-[11px] text-[#9a9a95] truncate">{[c.contact, c.phone].filter(Boolean).join(' · ') || 'нет контактов'} · скидка {c.discountPercent}%</p>
+            </div>
+            {openId === c.id ? (
+              <button onClick={() => setOpenId(null)} className="text-[11px] text-[#9a9a95] flex-shrink-0">Отмена</button>
+            ) : (
+              <button onClick={() => { setOpenId(c.id); setEmail(''); setPass(''); setErr(null) }} className="text-[11px] px-2.5 py-1 rounded-lg bg-[#111110] text-white flex-shrink-0">Создать доступ</button>
+            )}
+          </div>
+          {openId === c.id && (
+            <div className="mt-2 space-y-2">
+              <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email партнёра" type="email"
+                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+              <input value={pass} onChange={e => setPass(e.target.value)} placeholder="временный пароль (пусто = сгенерировать)"
+                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+              {err && <p className="text-[11px] text-red-500">{err}</p>}
+              <button onClick={() => create(c.id)} disabled={busy} className="w-full py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold disabled:opacity-40">{busy ? '…' : 'Создать кабинет'}</button>
+            </div>
+          )}
+        </div>
+      ))}
+
+      {linked.length > 0 && (
+        <>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] pt-2">С кабинетом · {linked.length}</p>
+          {linked.map(c => (
+            <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3 flex items-center justify-between">
+              <div className="min-w-0">
+                <p className="text-[13px] font-semibold text-[#111110] truncate">{c.name}</p>
+                <p className="text-[11px] text-[#9a9a95] font-mono truncate">{c.email ?? '—'}</p>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">кабинет активен</span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   )
 }
