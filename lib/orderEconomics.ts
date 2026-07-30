@@ -29,6 +29,8 @@ export type EcoItem = {
   sheetWidth?: number
   sheetHeight?: number
   patternDirection?: 'none' | 'along_length' | 'along_width'
+  servicesCostPrice?: number // себестоимость доп-услуг позиции (пескоструй, макет, плёнка…)
+  servicesSale?: number      // продажа доп-услуг позиции (для показа разрыва)
 }
 
 export type EcoOrder = {
@@ -58,6 +60,8 @@ export type OrderEconomics = {
   laborTransport: number
   honestLabor: number        // резка+сверловка+кромка+упаковка (оклады)
   systemLabor: number        // кромка+упаковка (что калькулятор реально заложил)
+  servicesCost: number       // себестоимость доп-услуг (пескоструй, макет, плёнка…)
+  servicesSale: number       // продажа доп-услуг (разрыв = недозаложенная себест.)
   // Итоги
   systemCost: number         // как считает система (материал ручной + текущие строки)
   honestCost: number         // честно (материал раскрой + все операции по ставкам)
@@ -107,6 +111,7 @@ export function computeOrderEconomics(
   let systemMaterial = 0, billedM2 = 0, pieces = 0
   let laborTempering = 0, laborTransport = 0
   let edgeM = 0, drilledPcs = 0, netM2Sys = 0
+  let servicesCost = 0, servicesSale = 0
   for (const it of order.items) {
     const q = it.quantity || 0
     const net = it.width * it.height / 1_000_000 * q
@@ -121,6 +126,8 @@ export function computeOrderEconomics(
       laborTempering += net * (TEMPERING_COST[it.thickness] ?? 0)
       laborTransport += q * TRANSPORT_PER_PIECE
     }
+    servicesCost += it.servicesCostPrice || 0
+    servicesSale += it.servicesSale || 0
   }
 
   // Быстрый режим: честный материал = системному (см. opts.skipNesting), листы/нетто из пробега.
@@ -137,8 +144,11 @@ export function computeOrderEconomics(
   const systemLabor = systemEdge + systemPack + laborTempering + laborTransport
   const honestLabor = labor.cutting + labor.drilling + labor.edge + labor.packaging + laborTempering + laborTransport
 
-  const systemCost = Math.round(systemMaterial + systemLabor)
-  const honestCost = Math.round(honestMaterial + honestLabor)
+  // Себестоимость доп-услуг (пескоструй, макет, плёнка…) входит в ОБА расчёта —
+  // калькулятор уже кладёт её в costExVat позиции, но экраны раньше её не
+  // показывали отдельно. Продажа услуг сидит в выручке (revenue).
+  const systemCost = Math.round(systemMaterial + systemLabor + servicesCost)
+  const honestCost = Math.round(honestMaterial + honestLabor + servicesCost)
   const rev = order.revenue || 0
   const systemMargin = rev > 0 ? (rev - systemCost) / rev * 100 : 0
   const honestMargin = rev > 0 ? (rev - honestCost) / rev * 100 : 0
@@ -150,6 +160,7 @@ export function computeOrderEconomics(
     laborCutting: labor.cutting, laborDrilling: labor.drilling, laborEdge: labor.edge,
     laborPackaging: labor.packaging, laborTempering: Math.round(laborTempering), laborTransport: Math.round(laborTransport),
     honestLabor: Math.round(honestLabor), systemLabor: Math.round(systemLabor),
+    servicesCost: Math.round(servicesCost), servicesSale: Math.round(servicesSale),
     systemCost, honestCost,
     systemMargin: r1(systemMargin), honestMargin: r1(honestMargin), marginGap: r1(systemMargin - honestMargin),
     edgeMPerM2: netM2Sys > 0 ? r1(edgeM / netM2Sys) : 0,

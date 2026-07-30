@@ -684,12 +684,16 @@ export default function B2BQuotesPage() {
     for (const q of visible) {
       const items: EcoItem[] = (q.items as unknown as Record<string, unknown>[]).map(it => {
         const billed = Number(it.totalAreaBilled) || 0
+        const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
+        const n = (x: unknown) => Number(x) || 0
         return {
           materialName: String(it.materialName ?? ''), thickness: Number(it.thickness) || 0, category: String(it.category ?? ''),
           width: Number(it.width) || 0, height: Number(it.height) || 0, quantity: Number(it.quantity) || 0,
           wastePercent: Number(it.wastePercent) || 0,
           costPerM2: billed > 0 ? (Number(it.costMaterial) || 0) / billed : 0,
           hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles, perimeterM: Number(it.perimeterM) || 0,
+          servicesCostPrice: svc.reduce((a, x) => a + n(x.costPrice), 0) + n(it.costFacet) + n(it.costTriplex),
+          servicesSale: svc.reduce((a, x) => a + n(x.cost), 0) + n(it.saleFacet) + n(it.saleTriplex),
         }
       })
       const order: EcoOrder = { id: q.id, clientName: q.client_name, revenue: q.total_after_discount || q.total_sale_inc_vat || 0, items }

@@ -37,6 +37,7 @@ function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: 
   const name = String(it.materialName ?? '')
   const thk = num(it.thickness)
   const s = sheet.get(`${name}|${thk}`)
+  const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
   return {
     materialName: name, thickness: thk, category: String(it.category ?? ''),
     width: num(it.width), height: num(it.height), quantity: num(it.quantity),
@@ -45,6 +46,8 @@ function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: 
     perimeterM: num(it.perimeterM),
     sheetWidth: s?.w, sheetHeight: s?.h,
     patternDirection: (s?.pat ?? 'none') as EcoItem['patternDirection'],
+    servicesCostPrice: svc.reduce((a, x) => a + num(x.costPrice), 0) + num(it.costFacet) + num(it.costTriplex),
+    servicesSale: svc.reduce((a, x) => a + num(x.cost), 0) + num(it.saleFacet) + num(it.saleTriplex),
   }
 }
 
