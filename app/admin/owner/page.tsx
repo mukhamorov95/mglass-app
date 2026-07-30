@@ -53,6 +53,8 @@ const SECTIONS = [
       { href: '/admin/shower-hardware',emoji: '🚿', label: 'Фурнитура душевые', desc: 'Каталог с ценами по поставщикам' },
       { href: '/admin/b2b-clients',    emoji: '🏢', label: 'B2B клиенты',  desc: 'Оптовики, скидки, история' },
       { href: '/admin/b2b-materials',  emoji: '📋', label: 'B2B материалы',desc: 'Прайс для B2B-расчётов' },
+      { href: '/admin/b2b-services',   emoji: '➕', label: 'B2B доп-услуги', desc: 'Пескоструй, макет, триплекс — цена и себестоимость' },
+      { href: '/admin/b2b-surcharges', emoji: '📐', label: 'Надбавки за габариты', desc: 'Ступени высота/ширина/сложность → % к цене' },
     ],
   },
   {

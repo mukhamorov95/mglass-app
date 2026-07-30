@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
+import { applicableSurcharges, surchargeServicesFor, type SurchargeRule } from '@/lib/surcharges'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
@@ -259,6 +260,11 @@ export default function B2BCalculatorPage() {
   const [eTriplexMat3, setETriplexMat3] = useState<number | null>(null)
   const [eServiceIds, setEServiceIds] = useState<number[]>([])
 
+  // Авто-надбавки за габариты/сложность. Снятые вручную правила — в dismissed-сете.
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  const [fDismissedSurcharges, setFDismissedSurcharges] = useState<Set<number>>(new Set())
+  const [eDismissedSurcharges, setEDismissedSurcharges] = useState<Set<number>>(new Set())
+
   useEffect(() => {
     async function load() {
       try {
@@ -296,7 +302,7 @@ export default function B2BCalculatorPage() {
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -305,10 +311,12 @@ export default function B2BCalculatorPage() {
           sb.from('production_settings').select('*').eq('id', 1).maybeSingle(),
           sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
+          sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
         ])
         if (psData) setProdSettings(psData as ProductionSettings)
         setFilms((filmsData ?? []) as B2BFilm[])
         setFacetPrices((facetData ?? []) as FacetPrice[])
+        setSurchargeRules((surchargeData ?? []) as SurchargeRule[])
 
         const totals = new Map<number, number>()
         for (const o of orders ?? []) {
@@ -494,6 +502,10 @@ export default function B2BCalculatorPage() {
   const discount         = selectedClient?.discount_percent ?? 0
   const selectedMaterial = materials.find(m => m.id === fMatId) ?? null
   const selectedServices = services.filter(s => fServiceIds.includes(s.id))
+  // Триплекс не показываем в списке доп-услуг — он ставится отдельной кнопкой
+  // сверху. Но сам per_m2-ряд остаётся активным как источник цены триплексации
+  // (см. triplexPrice), поэтому прячем его только из рендера списка.
+  const visibleServices = services.filter(s => !(s.type === 'per_m2' && /триплекс/i.test(s.name)))
 
   function handleMaterialChange(id: number) {
     const mat = materials.find(m => m.id === id)
@@ -637,7 +649,9 @@ export default function B2BCalculatorPage() {
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
 
-    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering, resolveSvcs(selectedServices, fTierSel, fFilmSel), fFacet, fFacet ? fFacetMm : null, facetPrices,
+    const surchargeSvcs = surchargeServicesFor({ width: w, height: h, shape: fCurved ? 'curved' : 'rect' }, surchargeRules, fDismissedSurcharges)
+    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering,
+      [...resolveSvcs(selectedServices, fTierSel, fFilmSel), ...surchargeSvcs], fFacet, fFacet ? fFacetMm : null, facetPrices,
       fTriplex, fTriplexLayers, triplexPrice, fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [], fMinPrice)
     setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
     setFWidth('')
@@ -650,6 +664,7 @@ export default function B2BCalculatorPage() {
     setFTriplex(false)
     setFTriplexMat2(null)
     setFTriplexMat3(null)
+    setFDismissedSurcharges(new Set())
     setSavedOrderId(null)   // изменили состав — можно снова сохранить
     widthRef.current?.focus()
   }
@@ -762,7 +777,10 @@ export default function B2BCalculatorPage() {
     setETriplexLayers(item.triplexLayers === 3 ? 3 : 2)
     setETriplexMat2(item.triplexGlasses?.[0]?.materialId ?? null)
     setETriplexMat3(item.triplexGlasses?.[1]?.materialId ?? null)
-    setEServiceIds(item.services.map(s => s.id))
+    // Только реальные услуги (id > 0). Надбавки (синтетические отрицательные id)
+    // не чекбоксы — они пересчитываются заново от габаритов при сохранении.
+    setEServiceIds(item.services.filter(s => s.id > 0).map(s => s.id))
+    setEDismissedSurcharges(new Set())
     setEComment(item.comment ?? '')
     setEditingLocalId(item.localId)
   }
@@ -778,7 +796,9 @@ export default function B2BCalculatorPage() {
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
-    const calc = calcItem(mat, w, h, q, eWaste, eTempering, resolveSvcs(svcs, eTierSel, eFilmSel), eFacet, eFacet ? eFacetMm : null, facetPrices,
+    const eSurchargeSvcs = surchargeServicesFor({ width: w, height: h, shape: eCurved ? 'curved' : 'rect' }, surchargeRules, eDismissedSurcharges)
+    const calc = calcItem(mat, w, h, q, eWaste, eTempering,
+      [...resolveSvcs(svcs, eTierSel, eFilmSel), ...eSurchargeSvcs], eFacet, eFacet ? eFacetMm : null, facetPrices,
       eTriplex, eTriplexLayers, triplexPrice, eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice)
     setItems(prev => prev.map(i => i.localId === editingLocalId
       ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
@@ -1701,7 +1721,7 @@ export default function B2BCalculatorPage() {
                   </div>
                 </summary>
                 <div className="mt-1 border border-[#e4e4e0] rounded-lg overflow-hidden">
-                  {services.map(s => {
+                  {visibleServices.map(s => {
                     const checked = fServiceIds.includes(s.id)
                     const tiers = s.size_tiers ?? []
                     const tierIdx = fTierSel[s.id] ?? 0
@@ -1765,6 +1785,32 @@ export default function B2BCalculatorPage() {
                 </div>
               </details>
             )}
+
+            {/* Авто-надбавки за габариты/сложность — применяются к цене изделия */}
+            {(() => {
+              const applicable = applicableSurcharges({ width: Number(fWidth) || 0, height: Number(fHeight) || 0, shape: fCurved ? 'curved' : 'rect' }, surchargeRules)
+              if (applicable.length === 0) return null
+              return (
+                <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-1">
+                  <div className="flex items-center gap-1.5 mb-0.5">
+                    <span className="text-[11px] font-semibold text-amber-800">⚙️ Надбавки за габариты</span>
+                    <span className="text-[10px] text-amber-600">снимаются галочкой · строка в КП</span>
+                  </div>
+                  {applicable.map(r => {
+                    const on = !fDismissedSurcharges.has(r.id)
+                    return (
+                      <label key={r.id} className="flex items-center gap-2 cursor-pointer select-none">
+                        <input type="checkbox" checked={on}
+                          onChange={() => setFDismissedSurcharges(prev => { const n = new Set(prev); if (on) n.add(r.id); else n.delete(r.id); return n })}
+                          className="w-3 h-3 rounded accent-amber-600 flex-shrink-0" />
+                        <span className="text-[12px] text-[#111110] flex-1 leading-tight">{r.label}</span>
+                        <span className="text-[11px] font-mono font-semibold text-amber-700 flex-shrink-0">+{r.surcharge_percent}%</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )
+            })()}
 
             {/* Чертёж / файл */}
             <div>
@@ -2379,7 +2425,8 @@ export default function B2BCalculatorPage() {
       // Живой пересчёт: сумма позиции обновляется по мере изменения полей.
       const ePreviewItem   = eCanSave
         ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
-            resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
+            [...resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
+             ...surchargeServicesFor({ width: Number(eWidth), height: Number(eHeight), shape: eCurved ? 'curved' : 'rect' }, surchargeRules, eDismissedSurcharges)],
             eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice,
             eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice), localId: '' }
         : null
@@ -2566,7 +2613,7 @@ export default function B2BCalculatorPage() {
                 <div>
                   <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Доп. услуги</label>
                   <div className="border border-[#e4e4e0] rounded-lg overflow-hidden">
-                    {services.map(s => {
+                    {visibleServices.map(s => {
                       const checked = eServiceIds.includes(s.id)
                       const tiers = s.size_tiers ?? []
                       const tierIdx = eTierSel[s.id] ?? 0
@@ -2630,6 +2677,31 @@ export default function B2BCalculatorPage() {
                   </div>
                 </div>
               )}
+
+              {/* Авто-надбавки за габариты/сложность */}
+              {(() => {
+                const applicable = applicableSurcharges({ width: Number(eWidth) || 0, height: Number(eHeight) || 0, shape: eCurved ? 'curved' : 'rect' }, surchargeRules)
+                if (applicable.length === 0) return null
+                return (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50/70 px-3 py-2 space-y-1">
+                    <div className="flex items-center gap-1.5 mb-0.5">
+                      <span className="text-[11px] font-semibold text-amber-800">⚙️ Надбавки за габариты</span>
+                    </div>
+                    {applicable.map(r => {
+                      const on = !eDismissedSurcharges.has(r.id)
+                      return (
+                        <label key={r.id} className="flex items-center gap-2 cursor-pointer select-none">
+                          <input type="checkbox" checked={on}
+                            onChange={() => setEDismissedSurcharges(prev => { const n = new Set(prev); if (on) n.add(r.id); else n.delete(r.id); return n })}
+                            className="w-3 h-3 rounded accent-amber-600 flex-shrink-0" />
+                          <span className="text-[12px] text-[#111110] flex-1 leading-tight">{r.label}</span>
+                          <span className="text-[11px] font-mono font-semibold text-amber-700 flex-shrink-0">+{r.surcharge_percent}%</span>
+                        </label>
+                      )
+                    })}
+                  </div>
+                )
+              })()}
 
               {/* Комментарий */}
               <div>
