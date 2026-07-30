@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { createClient } from '@/lib/supabase-browser'
 
 // Кабинет партнёра — «Мои заказы» (read-only). Партнёр видит свои заказы во всех
 // состояниях: просчёт → отправлен в работу → в работе → отгружен. Никаких
@@ -45,6 +46,15 @@ export default function PartnerPage() {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(true)
 
+  // Самостоятельная смена пароля. supabase.auth.updateUser — операция аутентификации
+  // (не запрос к таблицам), пароль идёт из браузера партнёра прямо в Supabase Auth,
+  // минуя наш сервер. Партнёр уже залогинен, поэтому смена работает.
+  const [showPwd, setShowPwd] = useState(false)
+  const [pwd, setPwd] = useState('')
+  const [pwd2, setPwd2] = useState('')
+  const [pwdSaving, setPwdSaving] = useState(false)
+  const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
   useEffect(() => {
     fetch('/api/partner/orders')
       .then(r => r.json())
@@ -53,6 +63,20 @@ export default function PartnerPage() {
       .finally(() => setLoading(false))
   }, [])
 
+  async function changePassword() {
+    setPwdMsg(null)
+    if (pwd.length < 8) { setPwdMsg({ ok: false, text: 'Минимум 8 символов' }); return }
+    if (pwd !== pwd2) { setPwdMsg({ ok: false, text: 'Пароли не совпадают' }); return }
+    setPwdSaving(true)
+    try {
+      const { error } = await createClient().auth.updateUser({ password: pwd })
+      if (error) { setPwdMsg({ ok: false, text: error.message }); return }
+      setPwdMsg({ ok: true, text: 'Пароль изменён' })
+      setPwd(''); setPwd2('')
+      setTimeout(() => setShowPwd(false), 1200)
+    } finally { setPwdSaving(false) }
+  }
+
   if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
 
   const orders = data?.orders ?? []
@@ -60,12 +84,44 @@ export default function PartnerPage() {
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои заказы</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">
-          {data?.client?.name ? `${data.client.name} · ` : ''}M-Glass · производство по чертежам
-        </p>
+      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Мои заказы</h1>
+          <p className="text-[13px] text-[#9a9a95] mt-0.5 truncate">
+            {data?.client?.name ? `${data.client.name} · ` : ''}M-Glass · производство по чертежам
+          </p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button onClick={() => { setShowPwd(true); setPwdMsg(null) }}
+            className="text-[11px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">Сменить пароль</button>
+          <button onClick={async () => { await createClient().auth.signOut(); window.location.href = '/login' }}
+            className="text-[11px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#111110] transition-colors">Выйти</button>
+        </div>
       </div>
+
+      {showPwd && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowPwd(false)}>
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-[15px] font-semibold text-[#111110]">Смена пароля</h2>
+              <button onClick={() => setShowPwd(false)} className="text-[#9a9a95] hover:text-[#111110] text-lg leading-none">✕</button>
+            </div>
+            <p className="text-[12px] text-[#9a9a95] mb-3">Придумайте свой пароль — его будете знать только вы.</p>
+            <input type="password" value={pwd} onChange={e => { setPwd(e.target.value); setPwdMsg(null) }}
+              placeholder="Новый пароль (мин. 8 символов)" autoFocus
+              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-2" />
+            <input type="password" value={pwd2} onChange={e => { setPwd2(e.target.value); setPwdMsg(null) }}
+              placeholder="Повторите пароль"
+              onKeyDown={e => { if (e.key === 'Enter') changePassword() }}
+              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            {pwdMsg && <p className={`text-[12px] mt-2 ${pwdMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{pwdMsg.text}</p>}
+            <button onClick={changePassword} disabled={pwdSaving}
+              className="w-full mt-3 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40 transition-colors">
+              {pwdSaving ? 'Сохраняю…' : 'Сохранить пароль'}
+            </button>
+          </div>
+        </div>
+      )}
 
       <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
         {!data?.linked && (
