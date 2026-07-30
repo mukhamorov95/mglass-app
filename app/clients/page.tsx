@@ -12,14 +12,20 @@ export default async function ClientsPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Fetch orders (filter by manager for non-admins)
+  // «Видит всех клиентов»: владелец (admin/ceo) — всегда; менеджер — если в
+  // /admin/users включена галка can_view_all_clients. Раньше фильтр смотрел
+  // только на role !== 'admin', поэтому галка не применялась.
+  const { data: profile } = await supabase.from('users').select('can_view_all_clients').eq('id', user!.id).maybeSingle()
+  const seeAllClients = role === 'admin' || role === 'ceo' || profile?.can_view_all_clients === true
+
+  // Fetch orders (filter by manager unless user can see all clients)
   let query = supabase
     .from('orders')
     .select('id, client_name, client_phone, total_sale_price, status, created_at, margin_percent')
     .not('status', 'eq', 'cancelled')
     .order('created_at', { ascending: false })
 
-  if (role !== 'admin') query = query.eq('manager_id', user!.id)
+  if (!seeAllClients) query = query.eq('manager_id', user!.id)
 
   const { data: orders } = await query
 
@@ -30,7 +36,7 @@ export default async function ClientsPage() {
     .not('client_name', 'is', null)
     .order('created_at', { ascending: false })
 
-  if (role !== 'admin') calcQuery = calcQuery.eq('created_by', user!.id)
+  if (!seeAllClients) calcQuery = calcQuery.eq('created_by', user!.id)
   const { data: calcRows } = await calcQuery
 
   type ClientEntry = {
