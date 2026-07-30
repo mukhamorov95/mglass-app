@@ -19,12 +19,16 @@ function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: 
   const billed = num(it.totalAreaBilled)
   const name = String(it.materialName ?? ''); const thk = num(it.thickness)
   const s = sheet.get(`${name}|${thk}`)
+  const svc = Array.isArray(it.services) ? it.services as Record<string, unknown>[] : []
+  const servicesCostPrice = svc.reduce((a, x) => a + num(x.costPrice), 0) + num(it.costFacet) + num(it.costTriplex)
+  const servicesSale = svc.reduce((a, x) => a + num(x.cost), 0) + num(it.saleFacet) + num(it.saleTriplex)
   return {
     materialName: name, thickness: thk, category: String(it.category ?? ''),
     width: num(it.width), height: num(it.height), quantity: num(it.quantity),
     wastePercent: num(it.wastePercent), costPerM2: billed > 0 ? num(it.costMaterial) / billed : 0,
     hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles, perimeterM: num(it.perimeterM),
     sheetWidth: s?.w, sheetHeight: s?.h, patternDirection: (s?.pat ?? 'none') as EcoItem['patternDirection'],
+    servicesCostPrice, servicesSale,
   }
 }
 
@@ -86,6 +90,8 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
     ['Кромка', e.laborEdge, false], ['Упаковка', e.laborPackaging, false],
     ['Закалка (подрядчик)', e.laborTempering, false], ['Доставка на закалку', e.laborTransport, false],
   ]
+  // Разрыв доп-услуг: продано на servicesSale, а себестоимость заложена только на servicesCost.
+  const servicesUncosted = e.servicesSale > 0 && e.servicesCost < e.servicesSale * 0.5
 
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
@@ -148,9 +154,22 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
                   <td className="py-1.5 text-right font-mono font-bold">{fmt(e.honestLabor)} ₽</td>
                 </tr>
                 <tr><td className="py-1 text-[#9a9a95]">Заложено в себест. сейчас</td><td className="py-1 text-right font-mono text-[#9a9a95]">{fmt(e.systemLabor)} ₽</td></tr>
+                {(e.servicesSale > 0 || e.servicesCost > 0) && (
+                  <tr className="border-t border-[#e4e4e0]">
+                    <td className="py-1.5 text-[#6b6b66]">
+                      Доп. услуги / фацет / триплекс
+                      {servicesUncosted && <span className="ml-1 text-[9px] text-red-500 font-medium">себест. не задана</span>}
+                    </td>
+                    <td className="py-1.5 text-right font-mono">
+                      <span className="text-[#111110] font-medium">себест. {fmt(e.servicesCost)} ₽</span>
+                      <span className="text-[#9a9a95]"> · продано {fmt(e.servicesSale)} ₽</span>
+                    </td>
+                  </tr>
+                )}
               </tbody>
             </table>
-            <p className="text-[10px] text-[#9a9a95] mt-2">Кромка на м²: {e.edgeMPerM2} пог.м/м². Резка и сверловка окладами не заложены — сидят в марже.</p>
+            <p className="text-[10px] text-[#9a9a95] mt-2">Кромка на м²: {e.edgeMPerM2} пог.м/м². Резка и сверловка окладами не заложены — сидят в марже.
+              {servicesUncosted && <span className="text-red-500"> Доп-услуги проданы, но себестоимость в справочнике = 0 — задай её в «Услуги».</span>}</p>
           </div>
         </div>
 
