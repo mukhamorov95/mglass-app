@@ -18,7 +18,15 @@ export default async function CalculationsPage() {
   const { data: settingsData } = await supabase.from('financial_settings').select('*')
   allSettings = (settingsData ?? []) as FinancialSettings[]
 
-  if (isAdmin) {
+  // «Видит все сделки»: владелец (admin/ceo) или менеджер с can_view_all_deals.
+  // Раньше все КП видел только admin — галка can_view_all_deals не применялась.
+  let canViewAll = isAdmin || role === 'ceo'
+  if (!canViewAll && userId) {
+    const { data: profile } = await supabase.from('users').select('can_view_all_deals').eq('id', userId).maybeSingle()
+    canViewAll = profile?.can_view_all_deals === true
+  }
+
+  if (canViewAll) {
     const admin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -29,5 +37,5 @@ export default async function CalculationsPage() {
     }
   }
 
-  return <CalculationsClient isAdmin={isAdmin} usersMap={usersMap} allSettings={allSettings} userId={userId} />
+  return <CalculationsClient isAdmin={isAdmin} canViewAll={canViewAll} usersMap={usersMap} allSettings={allSettings} userId={userId} />
 }
