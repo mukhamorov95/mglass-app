@@ -17,6 +17,9 @@ type Item = {
   impact: string | null
   contact: string | null
   segment: string | null
+  owner: string | null       // кто проверяет гипотезу
+  metric: string | null      // критерий: что подтверждает/отклоняет
+  due_date: string | null    // срок проверки
   sort_order: number
   created_at: string
 }
@@ -68,6 +71,9 @@ export default function B2BGrowthPage() {
   const [nDetail, setNDetail] = useState('')
   const [nSegment, setNSegment] = useState('')
   const [nContact, setNContact] = useState('')
+  const [nOwner, setNOwner] = useState('')
+  const [nMetric, setNMetric] = useState('')
+  const [nDue, setNDue] = useState('')
 
   const load = useCallback(async () => {
     const { data } = await createClient().from('b2b_growth_items').select('*').order('kind').order('sort_order').order('created_at')
@@ -93,15 +99,22 @@ export default function B2BGrowthPage() {
     await sb.from('b2b_growth_items').insert({
       kind, title: nTitle.trim(), detail: nDetail.trim() || null,
       segment: nSegment.trim() || null, contact: nContact.trim() || null,
+      owner: nOwner.trim() || null, metric: nMetric.trim() || null, due_date: nDue || null,
       status: defaultStatus, sort_order: 999,
     })
-    setNTitle(''); setNDetail(''); setNSegment(''); setNContact(''); setAdding(false)
+    setNTitle(''); setNDetail(''); setNSegment(''); setNContact(''); setNOwner(''); setNMetric(''); setNDue(''); setAdding(false)
     load()
   }
 
   async function setStatus(id: number, status: string) {
     await createClient().from('b2b_growth_items').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
     setItems(prev => prev.map(i => i.id === id ? { ...i, status } : i))
+  }
+
+  // Правка «кто проверяет / критерий / срок» прямо на карточке гипотезы.
+  async function patchField(id: number, patch: Partial<Pick<Item, 'owner' | 'metric' | 'due_date'>>) {
+    setItems(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i))
+    await createClient().from('b2b_growth_items').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id)
   }
 
   async function remove(id: number) {
@@ -198,6 +211,16 @@ export default function B2BGrowthPage() {
                       className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#111110]" />
                   </div>
                 )}
+                {tab === 'hypothesis' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input value={nOwner} onChange={e => setNOwner(e.target.value)} placeholder="Кто проверяет (ответственный)"
+                      className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#111110]" />
+                    <input value={nMetric} onChange={e => setNMetric(e.target.value)} placeholder="Критерий: что подтвердит/отклонит"
+                      className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#111110]" />
+                    <input type="date" value={nDue} onChange={e => setNDue(e.target.value)} title="Срок проверки"
+                      className="border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#111110]" />
+                  </div>
+                )}
                 <div className="flex gap-2">
                   <button onClick={() => addItem(tab as Item['kind'])} className="px-3 py-1.5 bg-[#111110] text-white rounded-lg text-xs font-medium">Добавить</button>
                   <button onClick={() => setAdding(false)} className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-xs text-[#6b6b66]">Отмена</button>
@@ -228,7 +251,7 @@ export default function B2BGrowthPage() {
             )}
 
             {byKind(tab as Item['kind']).map(it => (
-              <Card key={it.id} item={it} onStatus={setStatus} onRemove={remove}
+              <Card key={it.id} item={it} onStatus={setStatus} onRemove={remove} onPatch={patchField}
                 onToLead={tab === 'call_target' ? toLead : undefined}
                 leadBusy={leadBusy === it.id} leadId={leadDone[it.id]} />
             ))}
@@ -242,13 +265,15 @@ export default function B2BGrowthPage() {
   )
 }
 
-function Card({ item, onStatus, onRemove, onToLead, leadBusy, leadId }: {
+function Card({ item, onStatus, onRemove, onPatch, onToLead, leadBusy, leadId }: {
   item: Item; onStatus: (id: number, s: string) => void; onRemove: (id: number) => void
+  onPatch?: (id: number, patch: Partial<Pick<Item, 'owner' | 'metric' | 'due_date'>>) => void
   onToLead?: (item: Item) => void; leadBusy?: boolean; leadId?: number
 }) {
   const statuses = STATUS_SETS[item.kind]
   const cur = statuses?.find(s => s.value === item.status)
   const done = item.status === 'done' || item.status === 'resolved' || item.status === 'won'
+  const overdue = item.due_date && item.status === 'testing' && item.due_date < new Date().toISOString().slice(0, 10)
   return (
     <div className={`bg-white rounded-lg border border-[#e4e4e0] p-3 ${done ? 'opacity-70' : ''}`}>
       <div className="flex items-start justify-between gap-2">
@@ -263,6 +288,25 @@ function Card({ item, onStatus, onRemove, onToLead, leadBusy, leadId }: {
         </div>
         {cur && <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${cur.cls}`}>{cur.label}</span>}
       </div>
+      {item.kind === 'hypothesis' && onPatch && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 mt-2 pt-2 border-t border-[#f4f4f0]">
+          <label className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-wide text-[#9a9a95]">Проверяет</span>
+            <input defaultValue={item.owner ?? ''} onBlur={e => { const v = e.target.value.trim() || null; if (v !== (item.owner ?? null)) onPatch(item.id, { owner: v }) }}
+              placeholder="—" className="border border-[#e4e4e0] rounded px-1.5 py-1 text-[11px] outline-none focus:border-[#111110]" />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className="text-[9px] uppercase tracking-wide text-[#9a9a95]">Критерий</span>
+            <input defaultValue={item.metric ?? ''} onBlur={e => { const v = e.target.value.trim() || null; if (v !== (item.metric ?? null)) onPatch(item.id, { metric: v }) }}
+              placeholder="что подтвердит/отклонит" className="border border-[#e4e4e0] rounded px-1.5 py-1 text-[11px] outline-none focus:border-[#111110]" />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            <span className={`text-[9px] uppercase tracking-wide ${overdue ? 'text-red-500 font-semibold' : 'text-[#9a9a95]'}`}>Срок{overdue ? ' · просрочен' : ''}</span>
+            <input type="date" defaultValue={item.due_date ?? ''} onBlur={e => { const v = e.target.value || null; if (v !== (item.due_date ?? null)) onPatch(item.id, { due_date: v }) }}
+              className={`border rounded px-1.5 py-1 text-[11px] outline-none focus:border-[#111110] ${overdue ? 'border-red-300' : 'border-[#e4e4e0]'}`} />
+          </label>
+        </div>
+      )}
       {statuses && (
         <div className="flex gap-1 mt-2 flex-wrap items-center">
           {statuses.map(s => (
