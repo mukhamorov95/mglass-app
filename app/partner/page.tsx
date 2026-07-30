@@ -92,6 +92,8 @@ export default function PartnerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          <a href="/partner/new"
+            className="text-[11px] px-2.5 py-1.5 rounded-lg bg-[#1d1d1f] text-white font-semibold hover:bg-black transition-colors">＋ Новый просчёт</a>
           <button onClick={() => { setShowPwd(true); setPwdMsg(null) }}
             className="text-[11px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">Сменить пароль</button>
           <button onClick={async () => { await createClient().auth.signOut(); window.location.href = '/login' }}
