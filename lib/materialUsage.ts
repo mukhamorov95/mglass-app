@@ -161,4 +161,35 @@ export function sumUsage(rows: MaterialUsage[]): UsageTotals {
   }
 }
 
+/**
+ * Автоматический процент расхода на каждый материал заказа — замена ручного
+ * waste_percent в калькуляторе. Возвращает Map<materialKey, waste%>, где
+ * materialKey = `${name}|${thickness}`.
+ *
+ * Расход считается ПО ЗАКАЗУ (все детали материала кроятся вместе), поэтому
+ * эффективный процент один на материал — как и в раскрое на самом деле. Для
+ * позиций одного материала он одинаковый, для разных материалов — разный.
+ *
+ * reuseRate — доля крупного остатка, возвращаемого на стеллаж (см.
+ * DEFAULT_REUSE_RATE). Высокая ставка не даёт мелким заказам «съесть» целый лист
+ * бумажно: остаток кредитуется обратно.
+ */
+export function autoWasteByMaterial(
+  items: UsageItem[],
+  reuseRate = DEFAULT_REUSE_RATE,
+  settings: CuttingSettings = DEFAULT_CUTTING_SETTINGS,
+): Map<string, number> {
+  const rows = computeMaterialUsage(items, reuseRate, settings)
+  const out = new Map<string, number>()
+  for (const r of rows) {
+    // materialKey из computeMaterialUsage = `${name}|${thk}|${cat}`. Сводим к
+    // `${name}|${thk}` — калькулятор ищет материал по имени+толщине.
+    const [name, thk] = r.materialKey.split('|')
+    const netCost = r.netCost || 1
+    const pct = Math.max(0, (r.honestCost / netCost - 1) * 100)
+    out.set(`${name}|${thk}`, Math.round(pct * 10) / 10)
+  }
+  return out
+}
+
 function round(n: number): number { return Math.round(n * 10) / 10 }
