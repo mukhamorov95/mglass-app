@@ -591,6 +591,7 @@ export default function B2BOrdersPage() {
   const [variantsByMaterialId, setVariantsByMaterialId] = useState<Record<number, SheetVariantMin[]>>({})
   const [managerCode, setManagerCode] = useState<number>(0)
   const [canDelete, setCanDelete]     = useState(false)
+  const [isOwner, setIsOwner]         = useState(false)   // admin/ceo — видят экономику заказа
   const [generatingNum, setGeneratingNum] = useState<number | null>(null)
   const [msgOpenId, setMsgOpenId]     = useState<number | null>(null)
   const [nowTs, setNowTs]             = useState(0)
@@ -712,6 +713,7 @@ export default function B2BOrdersPage() {
       const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
       setManagerCode(profile?.manager_code ?? 0)
       setCanDelete(profile?.role === 'admin' || profile?.can_delete === true)
+      setIsOwner(profile?.role === 'admin' || profile?.role === 'ceo')
 
       // Пагинация: тянем ВСЕ заказы. Supabase режет выборку на 1000 строк/запрос,
       // а с историей 2024/2025 их >2600 — при одном .limit(1000) новые месяцы
@@ -1486,7 +1488,14 @@ export default function B2BOrdersPage() {
         ) : (
           <div className="flex items-center gap-2 flex-wrap">
             {order.custom_number && (
-              <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+              isOwner ? (
+                <Link href={`/cfo/order-economics/${order.id}`} title="Открыть экономику заказа (себестоимость, расход, маржа)"
+                  className="text-[13px] font-bold font-mono text-[#111110] underline decoration-dotted underline-offset-2 hover:text-blue-600">
+                  {order.custom_number} ₽
+                </Link>
+              ) : (
+                <span className="text-[13px] font-bold font-mono text-[#111110]">{order.custom_number}</span>
+              )
             )}
             {order.client_order_number && (
               <span className="text-[11px] font-mono text-[#6b6b66] bg-[#f0f0ec] px-1.5 py-0.5 rounded">кл. {order.client_order_number}</span>
