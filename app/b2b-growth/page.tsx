@@ -363,73 +363,90 @@ function Funnel({ stages, targets }: { stages: Item[]; targets: Item[] }) {
   )
 }
 
+// Каталог того, что партнёр перепродаёт своему клиенту с наценкой. Числа —
+// ориентиры наценки партнёра (не наши цены); точные ставки владелец впишет.
+const PARTNER_CATALOG: { title: string; desc: string; margin: string; emoji: string }[] = [
+  { emoji: '💡', title: 'Зеркало с подсветкой (LED)', desc: 'В шкафы-купе, ванные, прихожие. Сенсор, диммер, подогрев. Готовое изделие «под ключ».', margin: 'наценка партнёра 40–70%' },
+  { emoji: '🚪', title: 'Лофт-перегородки', desc: 'Межкомнатные и зонирующие: чёрный профиль + закалённое стекло. Замер → изготовление → монтаж.', margin: 'наценка партнёра 30–50%' },
+  { emoji: '🚿', title: 'Душевые перегородки и кабины', desc: 'Распашные, раздвижные, угловые. Закалка, фурнитура, монтаж.', margin: 'наценка партнёра 30–50%' },
+  { emoji: '🪞', title: 'Резка стекла и зеркала под мебель', desc: 'Базовое: фартуки-скинали, фасады, полки, зеркала в двери. Партии любого объёма.', margin: 'объём → низкая цена за деталь' },
+]
+
 function Brochure() {
   return (
     <div className="bg-white rounded-lg border border-[#e4e4e0] p-6 space-y-5 print:border-0">
       <div className="flex justify-between items-start">
         <div>
-          <h2 className="text-lg font-bold text-[#111110]">M-Glass · Производство</h2>
-          <p className="text-sm text-[#6b6b66] mt-0.5">Стекло и зеркало под нарезку для мебельных производств</p>
+          <h2 className="text-lg font-bold text-[#111110]">M-Glass — производственный партнёр</h2>
+          <p className="text-sm text-[#6b6b66] mt-0.5">Одно окно: стекло, зеркало и готовые изделия. Заказывай у нас — продавай своему клиенту дороже.</p>
         </div>
         <button onClick={() => window.print()} className="px-3 py-1.5 text-xs border border-[#e4e4e0] rounded-lg text-[#6b6b66] hover:bg-[#fafaf9] print:hidden">🖨 Печать</button>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4 text-sm">
-        <div className="space-y-2">
-          <h3 className="font-semibold text-[#111110]">Что режем</h3>
+      {/* Оффер партнёру — заработок */}
+      <div className="bg-[#111110] text-white rounded-lg p-4">
+        <p className="text-sm font-semibold">Не просто режем стекло — даём тебе высокомаржинальный товар</p>
+        <p className="text-[13px] text-white/80 mt-1 leading-relaxed">Твой клиент хочет зеркало с подсветкой, лофт-перегородку или душевую? Закажи у нас готовое изделие по цене производителя, добавь свою наценку — заработай и сэкономь время. Всё в одном окне, короткий срок, свой цех полного цикла.</p>
+      </div>
+
+      {/* Каталог: что перепродавать */}
+      <div>
+        <h3 className="font-semibold text-[#111110] mb-2">Что продаёшь своему клиенту</h3>
+        <div className="grid sm:grid-cols-2 gap-2.5">
+          {PARTNER_CATALOG.map(p => (
+            <div key={p.title} className="border border-[#e4e4e0] rounded-lg p-3">
+              <p className="text-[13px] font-semibold text-[#111110]">{p.emoji} {p.title}</p>
+              <p className="text-[12px] text-[#6b6b66] mt-1 leading-relaxed">{p.desc}</p>
+              <p className="text-[11px] text-emerald-700 font-medium mt-1.5">🎯 {p.margin}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Производственные возможности (вторично) */}
+      <div className="grid md:grid-cols-2 gap-4 text-sm border-t border-[#f0f0ec] pt-4">
+        <div className="space-y-1">
+          <h3 className="font-semibold text-[#111110]">Материалы</h3>
           <ul className="text-[13px] text-[#4b4b47] space-y-1 leading-relaxed">
-            <li>• Осветлённое и обычное стекло 4–12 мм</li>
-            <li>• Зеркало (серебро, осветлённое, тонированное, состаренное)</li>
+            <li>• Стекло 4–12 мм: осветлённое, обычное, тонированное в массе</li>
+            <li>• Зеркало: серебро, осветлённое, тонированное, состаренное</li>
             <li>• Сатин (матовое), рифлёное, лакобель</li>
-            <li>• Тонированное в массе (бронза, графит)</li>
-          </ul>
-          <h3 className="font-semibold text-[#111110] pt-2">Обработка</h3>
-          <ul className="text-[13px] text-[#4b4b47] space-y-1 leading-relaxed">
-            <li>• Закалка (безопасное стекло)</li>
-            <li>• Полировка кромки по периметру</li>
-            <li>• Сверловка отверстий</li>
-            <li>• Фацет 10/15/20 мм</li>
           </ul>
         </div>
-        <div className="space-y-2">
-          <h3 className="font-semibold text-[#111110]">Под мебель — идеально</h3>
+        <div className="space-y-1">
+          <h3 className="font-semibold text-[#111110]">Обработка · полный цикл</h3>
           <ul className="text-[13px] text-[#4b4b47] space-y-1 leading-relaxed">
-            <li>• Партии от десятков до <b>тысяч одинаковых деталей</b></li>
-            <li>• Лист 3210×2250 мм — плотный раскрой типовых размеров</li>
-            <li>• Зеркала в двери шкафов-купе, фартуки-скинали для кухонь, стеклянные фасады, полки, витрины</li>
-            <li>• Свой цех: резка → закалка → кромка → сверловка → упаковка</li>
+            <li>• Закалка, полировка кромки, сверловка, фацет</li>
+            <li>• Пескоструй (матирование / рисунок по трафарету)</li>
+            <li>• Свой цех: резка → закалка → кромка → сборка → упаковка → доставка</li>
           </ul>
-          <div className="bg-[#f5f5f3] rounded-lg p-3 mt-2">
-            <p className="text-[13px] text-[#111110] font-semibold">Почему выгодно на объёме</p>
-            <p className="text-[12px] text-[#6b6b66] mt-1 leading-relaxed">Оборудование и мастера — фиксированная стоимость. Чем больше партия, тем ниже цена за деталь. На типовых прямоугольниках даём конкурентную цену за м² с коротким сроком.</p>
-          </div>
         </div>
       </div>
 
       <div className="border-t border-[#f0f0ec] pt-4 grid md:grid-cols-3 gap-3 text-[13px]">
-        <div><span className="text-[#9a9a95]">Минимальная партия</span><br /><b className="text-[#111110]">обсуждается под задачу</b></div>
+        <div><span className="text-[#9a9a95]">Партии</span><br /><b className="text-[#111110]">от штуки до тысяч деталей</b></div>
         <div><span className="text-[#9a9a95]">Срок</span><br /><b className="text-[#111110]">от 2–5 рабочих дней</b></div>
-        <div><span className="text-[#9a9a95]">Цена</span><br /><b className="text-[#111110]">за м², по спецификации</b></div>
+        <div><span className="text-[#9a9a95]">Формат работы</span><br /><b className="text-[#111110]">личный кабинет партнёра</b></div>
       </div>
 
-      <div className="bg-[#111110] text-white rounded-lg p-4 flex items-center justify-between flex-wrap gap-2">
+      <div className="bg-[#f5f5f3] rounded-lg p-4 flex items-center justify-between flex-wrap gap-2">
         <div>
-          <p className="text-sm font-semibold">Пришлите спецификацию — сделаем просчёт в тот же день</p>
-          <p className="text-xs text-white/70 mt-0.5">Список деталей: материал, размеры, количество, обработка</p>
+          <p className="text-sm font-semibold text-[#111110]">Пришлите спецификацию — просчёт в тот же день</p>
+          <p className="text-xs text-[#6b6b66] mt-0.5">Материал, размеры, количество, обработка. Или заведём вам кабинет — считайте сами.</p>
         </div>
-        <div className="text-right text-xs text-white/80">
+        <div className="text-right text-xs text-[#6b6b66]">
           <p>Телефон: ____________</p>
           <p>Почта / мессенджер: ____________</p>
         </div>
       </div>
-      <p className="text-[10px] text-[#c4c4be] print:hidden">Контакты и минимальную партию впишите под свою политику перед печатью/отправкой.</p>
+      <p className="text-[10px] text-[#c4c4be] print:hidden">Числа наценки — ориентир; впишите свои цены и контакты перед печатью/отправкой.</p>
     </div>
   )
 }
 
-const OUTREACH_MSG = `Здравствуйте! Это M-Glass — своё производство стекла и зеркала.
-Режем под мебель: зеркала в шкафы-купе, стеклянные фартуки-скинали для кухонь, фасады, полки. Партии любого объёма, закалка/полировка кромки/сверловка, цена за м².
-Пришлите спецификацию (материал, размеры, количество) — просчитаем в тот же день.`
+const OUTREACH_MSG = `Здравствуйте! Это M-Glass — своё производство полного цикла (стекло, зеркало, готовые изделия).
+Работаем как ваш производственный партнёр в одно окно: режем стекло/зеркало под мебель, а также делаем зеркала с подсветкой, лофт-перегородки и душевые. Закажите у нас — продайте своему клиенту с наценкой. Партии любого объёма, короткий срок, свой цех.
+Пришлите спецификацию — просчитаем в тот же день. При объёме заведём вам личный кабинет: считайте и заказывайте сами.`
 
 function CallCenter() {
   const [copied, setCopied] = useState(false)
