@@ -109,6 +109,44 @@ export default function B2BGrowthPage() {
     setItems(prev => prev.filter(i => i.id !== id))
   }
 
+  // Массовый ввод целей обзвона: строка = «Название | телефон | сегмент»
+  // (разделитель | — или таб). Одно поле — только название.
+  const [bulk, setBulk] = useState(false)
+  const [bulkText, setBulkText] = useState('')
+  async function bulkAddTargets() {
+    const rows = bulkText.split('\n').map(l => l.trim()).filter(Boolean).map((line, i) => {
+      const parts = line.split(/\s*[|\t—]\s*/)
+      return {
+        kind: 'call_target', title: parts[0], contact: parts[1] || null, segment: parts[2] || null,
+        status: 'new', sort_order: 900 + i,
+      }
+    }).filter(r => r.title)
+    if (!rows.length) return
+    await createClient().from('b2b_growth_items').insert(rows)
+    setBulkText(''); setBulk(false); load()
+  }
+
+  // Заинтересованный цех → лид в CRM с источником «обзвон» (для замера конверсии
+  // канала отдельно от Авито). Цель помечаем «интерес».
+  const [leadBusy, setLeadBusy] = useState<number | null>(null)
+  const [leadDone, setLeadDone] = useState<Record<number, number>>({})
+  async function toLead(item: Item) {
+    setLeadBusy(item.id)
+    const sb = createClient()
+    const phone = (item.contact ?? '').match(/[+\d][\d\s()-]{6,}/)?.[0]?.trim() ?? null
+    const { data } = await sb.from('crm_leads').insert({
+      source: 'обзвон', name: item.title, phone, city: 'Воронеж',
+      product: 'Производство: нарезка стекла/зеркала под мебель',
+      note: [item.segment, item.detail].filter(Boolean).join(' · ') || null,
+    }).select('id').single()
+    if (data?.id) {
+      setLeadDone(prev => ({ ...prev, [item.id]: data.id as number }))
+      await sb.from('b2b_growth_items').update({ status: 'interested', updated_at: new Date().toISOString() }).eq('id', item.id)
+      setItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'interested' } : i))
+    }
+    setLeadBusy(null)
+  }
+
   return (
     <div className="bg-[#f5f5f3] min-h-screen">
       <div className="max-w-[1000px] mx-auto px-4 py-4 space-y-4">
@@ -165,14 +203,34 @@ export default function B2BGrowthPage() {
                   <button onClick={() => setAdding(false)} className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-xs text-[#6b6b66]">Отмена</button>
                 </div>
               </div>
+            ) : bulk && tab === 'call_target' ? (
+              <div className="bg-white rounded-lg border border-[#e4e4e0] p-3 space-y-2">
+                <p className="text-[10px] text-[#9a9a95]">Вставь список из 2ГИС — по одной строке. Формат: <b>Название | телефон | сегмент</b> (телефон и сегмент необязательны).</p>
+                <textarea autoFocus value={bulkText} onChange={e => setBulkText(e.target.value)} rows={6}
+                  placeholder={'Микс-М | +7 473 209-08-88 | шкафы-купе\nТэрра | | кухни\n…'}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-xs outline-none focus:border-[#111110] font-mono" />
+                <div className="flex gap-2">
+                  <button onClick={bulkAddTargets} className="px-3 py-1.5 bg-[#111110] text-white rounded-lg text-xs font-medium">Добавить все</button>
+                  <button onClick={() => setBulk(false)} className="px-3 py-1.5 border border-[#e4e4e0] rounded-lg text-xs text-[#6b6b66]">Отмена</button>
+                </div>
+              </div>
             ) : (
-              <button onClick={() => setAdding(true)} className="w-full py-2 border border-dashed border-[#d4d4d0] rounded-lg text-xs text-[#9a9a95] hover:bg-white hover:text-[#6b6b66]">
-                + Добавить
-              </button>
+              <div className="flex gap-2">
+                <button onClick={() => setAdding(true)} className="flex-1 py-2 border border-dashed border-[#d4d4d0] rounded-lg text-xs text-[#9a9a95] hover:bg-white hover:text-[#6b6b66]">
+                  + Добавить
+                </button>
+                {tab === 'call_target' && (
+                  <button onClick={() => setBulk(true)} className="px-3 py-2 border border-dashed border-[#d4d4d0] rounded-lg text-xs text-[#9a9a95] hover:bg-white hover:text-[#6b6b66] whitespace-nowrap">
+                    📋 Списком
+                  </button>
+                )}
+              </div>
             )}
 
             {byKind(tab as Item['kind']).map(it => (
-              <Card key={it.id} item={it} onStatus={setStatus} onRemove={remove} />
+              <Card key={it.id} item={it} onStatus={setStatus} onRemove={remove}
+                onToLead={tab === 'call_target' ? toLead : undefined}
+                leadBusy={leadBusy === it.id} leadId={leadDone[it.id]} />
             ))}
             {byKind(tab as Item['kind']).length === 0 && (
               <div className="text-xs text-[#9a9a95] py-6 text-center">Пусто. Добавьте первую запись.</div>
@@ -184,7 +242,10 @@ export default function B2BGrowthPage() {
   )
 }
 
-function Card({ item, onStatus, onRemove }: { item: Item; onStatus: (id: number, s: string) => void; onRemove: (id: number) => void }) {
+function Card({ item, onStatus, onRemove, onToLead, leadBusy, leadId }: {
+  item: Item; onStatus: (id: number, s: string) => void; onRemove: (id: number) => void
+  onToLead?: (item: Item) => void; leadBusy?: boolean; leadId?: number
+}) {
   const statuses = STATUS_SETS[item.kind]
   const cur = statuses?.find(s => s.value === item.status)
   const done = item.status === 'done' || item.status === 'resolved' || item.status === 'won'
@@ -203,13 +264,21 @@ function Card({ item, onStatus, onRemove }: { item: Item; onStatus: (id: number,
         {cur && <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded font-medium ${cur.cls}`}>{cur.label}</span>}
       </div>
       {statuses && (
-        <div className="flex gap-1 mt-2 flex-wrap">
+        <div className="flex gap-1 mt-2 flex-wrap items-center">
           {statuses.map(s => (
             <button key={s.value} onClick={() => onStatus(item.id, s.value)}
               className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${item.status === s.value ? s.cls + ' font-semibold' : 'text-[#9a9a95] hover:bg-[#f0f0ec]'}`}>
               {s.label}
             </button>
           ))}
+          {onToLead && (
+            leadId
+              ? <a href={`/crm/${leadId}`} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 font-medium">✓ В CRM #{leadId} →</a>
+              : <button onClick={() => onToLead(item)} disabled={leadBusy}
+                  className="text-[10px] px-1.5 py-0.5 rounded bg-[#111110] text-white font-medium disabled:opacity-50">
+                  {leadBusy ? '…' : '→ В CRM (обзвон)'}
+                </button>
+          )}
           <button onClick={() => onRemove(item.id)} className="ml-auto text-[10px] text-[#c4c4be] hover:text-red-500">удалить</button>
         </div>
       )}
@@ -314,10 +383,27 @@ function Brochure() {
   )
 }
 
+const OUTREACH_MSG = `Здравствуйте! Это M-Glass — своё производство стекла и зеркала.
+Режем под мебель: зеркала в шкафы-купе, стеклянные фартуки-скинали для кухонь, фасады, полки. Партии любого объёма, закалка/полировка кромки/сверловка, цена за м².
+Пришлите спецификацию (материал, размеры, количество) — просчитаем в тот же день.`
+
 function CallCenter() {
+  const [copied, setCopied] = useState(false)
+  async function copyMsg() {
+    try { await navigator.clipboard.writeText(OUTREACH_MSG); setCopied(true); setTimeout(() => setCopied(false), 2000) } catch {}
+  }
   return (
     <div className="bg-white rounded-lg border border-[#e4e4e0] p-5 space-y-5 text-sm">
       <h2 className="text-base font-bold text-[#111110]">Аутсорс-колл-центр — как это работает</h2>
+
+      <div className="bg-[#f5f5f3] rounded-lg p-3">
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="font-semibold text-[#111110] text-[13px]">Сообщение после звонка (WhatsApp/почта)</p>
+          <button onClick={copyMsg} className="text-[11px] px-2 py-1 rounded-lg bg-[#111110] text-white font-medium">{copied ? '✓ Скопировано' : 'Копировать'}</button>
+        </div>
+        <p className="text-[12px] text-[#4b4b47] whitespace-pre-wrap leading-relaxed">{OUTREACH_MSG}</p>
+        <p className="text-[10px] text-[#9a9a95] mt-1.5">Прикрепи брошюру (вкладка «Брошюра» → печать в PDF). Контакты впиши свои.</p>
+      </div>
 
       <Section title="Идея">
         Внешние операторы обзванивают мебельные цеха по нашему списку и скрипту, снимают потребность (что режут, какие объёмы),
