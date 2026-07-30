@@ -1163,11 +1163,13 @@ export default function B2BCalculatorPage() {
             {/* Номера заказа */}
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Наш номер</label>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
+                  Наш номер <span className="text-[11px] font-normal text-[#9a9a95]">— пусто = авто (05xxx)</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="МГ-001"
-                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
+                  placeholder="авто при запуске"
+                  className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all placeholder:text-[#c4c4be]"
                   value={ourOrderNumber}
                   onChange={e => setOurOrderNumber(e.target.value)}
                 />
