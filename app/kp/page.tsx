@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 
 interface ISpeechRecognition extends EventTarget {
   lang: string; continuous: boolean; interimResults: boolean
@@ -62,6 +61,29 @@ function emptyForm(): Form {
 
 const L = 'block text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1'
 const I = 'w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] bg-white'
+
+// PDF-чертёж → PNG первой страницы (для листа 3 КП). pdf.js грузим статикой из
+// public/ мимо бандлера — тот же приём, что в /design-scan (иначе виснет worker).
+async function pdfFirstPageToPng(file: File): Promise<Blob | null> {
+  try {
+    const pdfjs = (await import(
+      /* webpackIgnore: true */ /* turbopackIgnore: true */ '/pdf.min.mjs' as string
+    )) as typeof import('pdfjs-dist')
+    pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs'
+    const buf = await file.arrayBuffer()
+    const doc = await pdfjs.getDocument({ data: buf }).promise
+    const page = await doc.getPage(1)
+    const base = page.getViewport({ scale: 1 })
+    const viewport = page.getViewport({ scale: 1600 / base.width })
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.round(viewport.width); canvas.height = Math.round(viewport.height)
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, canvas.width, canvas.height)
+    const task = page.render({ canvasContext: ctx, viewport, intent: 'print' } as unknown as Parameters<typeof page.render>[0])
+    await task.promise
+    return await new Promise<Blob | null>(res => canvas.toBlob(b => res(b), 'image/png'))
+  } catch { return null }
+}
 
 export default function KpPage() {
   const [tab, setTab] = useState<'new' | 'history'>('new')
@@ -214,16 +236,30 @@ export default function KpPage() {
   const rmSpec = (i: number) => set({ spec: form.spec.filter((_, j) => j !== i) })
 
   // ── photo ──────────────────────────────────────────────
+  // Принимаем картинку ИЛИ PDF-чертёж. PDF рендерим первой страницей в PNG на
+  // клиенте (pdf.js), заливаем через серверный роут (обходит storage-RLS бакета).
   async function uploadPhoto(file: File) {
-    setBusy('Загрузка фото…')
+    const flash = (m: string) => { setBusy(m); setTimeout(() => setBusy(b => (b === m ? null : b)), 3500) }
     try {
-      const sb = createClient()
-      const path = `${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`
-      const { error } = await sb.storage.from('kp-photos').upload(path, file, { upsert: true })
-      if (error) { setBusy('Ошибка загрузки фото'); setTimeout(() => setBusy(null), 2500); return }
-      const { data } = sb.storage.from('kp-photos').getPublicUrl(path)
-      set({ photo_url: data.publicUrl })
-    } finally { setBusy(null) }
+      let blob: Blob = file
+      let name = file.name
+      if (file.type === 'application/pdf' || /\.pdf$/i.test(file.name)) {
+        setBusy('Читаю PDF…')
+        const png = await pdfFirstPageToPng(file)
+        if (!png) return flash('Не удалось прочитать PDF — приложите картинку')
+        blob = png; name = file.name.replace(/\.pdf$/i, '') + '.png'
+      }
+      setBusy('Загрузка фото…')
+      const fd = new FormData()
+      fd.append('file', blob, name)
+      const res = await fetch('/api/kp/photo', { method: 'POST', body: fd })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || !data.url) return flash(data.error || `Ошибка загрузки (${res.status})`)
+      set({ photo_url: data.url as string })
+      setBusy(null)
+    } catch (e) {
+      flash(e instanceof Error ? e.message : 'Ошибка загрузки')
+    }
   }
 
   // ── save ───────────────────────────────────────────────
@@ -393,12 +429,12 @@ export default function KpPage() {
                 </div>
               </div>
               <div className="col-span-3">
-                <label className={L}>Фото / чертёж изделия (в PDF)</label>
+                <label className={L}>Фото / чертёж изделия — картинка или PDF (лист 3 КП)</label>
                 <div className="flex items-center gap-3">
-                  <input type="file" accept="image/*" onChange={e => e.target.files?.[0] && uploadPhoto(e.target.files[0])} className="text-[12px]" />
+                  <input type="file" accept="image/*,application/pdf" onChange={e => e.target.files?.[0] && uploadPhoto(e.target.files[0])} className="text-[12px]" />
                   {form.photo_url && (
                     <>{/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={form.photo_url} alt="" className="h-14 rounded border border-[#e4e4e0]" />
+                    <img src={form.photo_url} alt="" crossOrigin="anonymous" className="h-14 rounded border border-[#e4e4e0]" />
                     <button onClick={() => set({ photo_url: null })} className="text-[12px] text-red-500">убрать</button></>
                   )}
                 </div>

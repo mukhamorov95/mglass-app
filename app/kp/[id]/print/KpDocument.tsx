@@ -265,7 +265,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="img">
             {kp.photo_url
               // eslint-disable-next-line @next/next/no-img-element
-              ? <img src={kp.photo_url} alt="Схема" />
+              ? <img src={kp.photo_url} alt="Схема" crossOrigin="anonymous" />
               : <div className="noimg">Фото / чертёж изделия</div>}
           </div>
           <div className="list">

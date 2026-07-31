@@ -122,6 +122,20 @@ const CSS = `
 }
 `
 
+// Дождаться реальной загрузки всех картинок листов. Иначе html2canvas снимет
+// пустой слот фото на листе 3 — удалённое фото со стораджа медленнее логотипа.
+async function waitImages(root: ParentNode) {
+  const imgs = Array.from(root.querySelectorAll('img'))
+  await Promise.all(imgs.map(img => (img.complete && img.naturalWidth > 0)
+    ? Promise.resolve()
+    : new Promise<void>(res => {
+        const done = () => res()
+        img.addEventListener('load', done, { once: true })
+        img.addEventListener('error', done, { once: true })
+        setTimeout(done, 8000)
+      })))
+}
+
 // Детерминированная генерация PDF из экранных листов (WYSIWYG, всегда 3 листа A4).
 // Что на экране — то и в файле; не зависит от браузерного движка печати.
 async function generatePdf(number: string, setBusy?: (v: boolean) => void) {
@@ -130,7 +144,8 @@ async function generatePdf(number: string, setBusy?: (v: boolean) => void) {
     const [h2cMod, jspdfMod] = await Promise.all([import('html2canvas'), import('jspdf')])
     const html2canvas = h2cMod.default
     const jsPDF = jspdfMod.jsPDF
-    await new Promise(r => setTimeout(r, 80))
+    await waitImages(document.querySelector('.kp-scope') ?? document)
+    await new Promise(r => setTimeout(r, 120))
     const pages = Array.from(document.querySelectorAll<HTMLElement>('.kp-page'))
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
     const A4W = 210, A4H = 297
@@ -144,6 +159,8 @@ async function generatePdf(number: string, setBusy?: (v: boolean) => void) {
       pdf.addImage(img, 'JPEG', (A4W - w) / 2, 0, w, h)
     }
     pdf.save(`КП-${number || 'proposal'}.pdf`)
+  } catch (e) {
+    alert('Не удалось сформировать PDF: ' + (e instanceof Error ? e.message : 'ошибка'))
   } finally {
     setBusy?.(false)
   }
@@ -185,19 +202,16 @@ export default function KpPrintPage() {
   }, [id])
 
   // Пришли по кнопке «Сохранить в PDF» (?print=1) → сразу открываем диалог сохранения.
-  // Ждём загрузки логотипа, чтобы он попал в PDF; страховка по таймауту.
+  // Ждём загрузки ВСЕХ картинок (логотип + фото схемы на листе 3), иначе фото не попадёт.
   useEffect(() => {
     if (!kp || typeof window === 'undefined') return
     if (new URLSearchParams(window.location.search).get('print') !== '1') return
-    let done = false
-    const fire = () => { if (done) return; done = true; setTimeout(() => generatePdf(kp.number ?? '', setGenerating), 300) }
-    const img = document.querySelector('.kp-head img') as HTMLImageElement | null
-    if (img && !img.complete) {
-      img.addEventListener('load', fire, { once: true })
-      img.addEventListener('error', fire, { once: true })
-    }
-    const t = setTimeout(fire, 1500)
-    return () => clearTimeout(t)
+    let cancelled = false
+    ;(async () => {
+      await waitImages(document.querySelector('.kp-scope') ?? document)
+      if (!cancelled) setTimeout(() => generatePdf(kp.number ?? '', setGenerating), 250)
+    })()
+    return () => { cancelled = true }
   }, [kp])
 
   if (loading) return <div style={{ padding: 40, fontFamily: 'sans-serif', color: '#8a8a85' }}>Загрузка КП…</div>
