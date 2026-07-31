@@ -268,6 +268,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
   { href: '/admin/mirror-lighting', label: 'Подсветка зеркал', icon: '💡', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
+  { href: '/admin/pricing-v2',      label: 'Маржа / финмодель зеркал', icon: '📈', indent: true },
   { groupLabel: 'Фурнитура' },
   { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
