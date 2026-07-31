@@ -1419,44 +1419,26 @@ export default function B2BCalculatorPage() {
                 )}
                 {factoryQuote && (
                   <div className="rounded-lg border border-[#e4e4e0] bg-[#f8f8f7] px-3 py-2.5 space-y-1">
+                    {/* Экономика ПРОИЗВОДСТВА (только цех): себестоимость → наценка → две цены
+                        продажи цеха (внутренняя M-Glass и внешним компаниям). Перепродажу
+                        M-Glass своим клиентам здесь НЕ показываем — это её розница/быстрый
+                        расчёт, отдельный уровень; иначе путаница уровней и цен. */}
                     <div className="flex justify-between text-[12px]">
                       <span className="text-[#6b6b66]">Себестоимость производства</span>
                       <span className="font-mono text-[#111110]">{factoryQuote.factoryCostPiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
-                    <div className="flex justify-between text-[13px] font-semibold">
-                      <span className="text-[#111110]">Цена производства <span className="text-[10px] text-[#9a9a95] font-normal">(внешним B2B, маржа {factoryQuote.marginPercent}%)</span></span>
-                      <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
+                    <div className="flex justify-between text-[12px]">
+                      <span className="text-[#6b6b66]">Наценка производства <span className="text-[10px] text-[#9a9a95]">(маржа {factoryQuote.marginPercent}% от цены, налог включён)</span></span>
+                      <span className="font-mono text-[#111110]">+{(factoryQuote.prodPricePiece - factoryQuote.factoryCostPiece).toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
-                    {/* Внутренняя передаточная цена: розничная маржа M-Glass добавится в быстром
-                        расчёте — полную производственную маржу внутрь группы не задваиваем */}
                     <div className="flex justify-between text-[13px] font-semibold border-t border-[#f0f0ec] pt-1">
-                      <span className="text-blue-700">Для M-Glass <span className="text-[10px] text-[#9a9a95] font-normal">(внутренняя — в быстрый расчёт)</span></span>
+                      <span className="text-blue-700">Цена для M-Glass <span className="text-[10px] text-[#9a9a95] font-normal">(внутренняя · себест. +{Math.round((factoryQuote.transferPricePiece / factoryQuote.factoryCostPiece - 1) * 100)}%)</span></span>
                       <span className="font-mono text-blue-700">{factoryQuote.transferPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
                     </div>
-                    {/* Каналы: дилерская цена строится ОТ розницы (RRP − скидка канала),
-                        а не от себестоимости — партнёру-перепродавцу остаётся заработок */}
-                    {(() => {
-                      const cfg = fKind === 'floft' ? factoryData?.loftCfg : factoryData?.mirrorCfg
-                      const denom = cfg ? 1 - (cfg.productionMarginPercent + cfg.productionTaxPercent) / 100 : 0.48
-                      if (denom <= 0) return null
-                      const rrp = Math.round(factoryQuote.transferPricePiece / denom)
-                      const dealerDisc = discount > 0 ? discount : 30
-                      const dealer = Math.round(rrp * (1 - dealerDisc / 100))
-                      const ourPct = dealer > 0 ? Math.round((1 - factoryQuote.factoryCostPiece / dealer) * 100) : 0
-                      return (
-                        <div className="text-[11px] border-t border-[#f0f0ec] pt-1 space-y-0.5">
-                          <div className="flex justify-between text-[#6b6b66]">
-                            <span>Розница M-Glass (RRP)</span>
-                            <span className="font-mono">≈ {rrp.toLocaleString('ru-RU')} ₽/шт</span>
-                          </div>
-                          <div className="flex justify-between font-semibold text-[#111110]">
-                            <span>Партнёру-перепродавцу <span className="text-[10px] text-[#9a9a95] font-normal">(RRP −{dealerDisc}%{discount > 0 && selectedClient ? ` · ${selectedClient.name}` : ''})</span></span>
-                            <span className="font-mono">{dealer.toLocaleString('ru-RU')} ₽/шт</span>
-                          </div>
-                          <p className="text-[10px] text-[#9a9a95]">наша маржа на дилерской ≈ {ourPct}% · заработок партнёра — до {dealerDisc}% от розницы</p>
-                        </div>
-                      )
-                    })()}
+                    <div className="flex justify-between text-[13px] font-semibold">
+                      <span className="text-[#111110]">Цена для сторонних компаний <span className="text-[10px] text-[#9a9a95] font-normal">(внешний B2B)</span></span>
+                      <span className="font-mono text-emerald-700">{factoryQuote.prodPricePiece.toLocaleString('ru-RU')} ₽/шт</span>
+                    </div>
                     <p className="text-[10px] text-[#9a9a95]">{factoryQuote.spec}</p>
                     {isAdmin && !!factoryQuote.costLines?.length && (
                       <div className="pt-1 border-t border-[#f0f0ec]">
