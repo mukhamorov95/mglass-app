@@ -55,13 +55,21 @@ export default function PartnerPage() {
   const [pwdSaving, setPwdSaving] = useState(false)
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
-  useEffect(() => {
-    fetch('/api/partner/orders')
-      .then(r => r.json())
-      .then((d: Resp) => setData(d))
-      .catch(() => setData({ linked: false, client: null, orders: [] }))
-      .finally(() => setLoading(false))
-  }, [])
+  const [submittingId, setSubmittingId] = useState<number | null>(null)
+
+  function load() {
+    return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
+  }
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { load().finally(() => setLoading(false)) }, [])
+
+  async function submitQuote(id: number) {
+    setSubmittingId(id)
+    try {
+      const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
+      if (r.ok) await load()
+    } finally { setSubmittingId(null) }
+  }
 
   async function changePassword() {
     setPwdMsg(null)
@@ -145,7 +153,7 @@ export default function PartnerPage() {
           return (
             <div key={lane.key}>
               <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] pt-3">{lane.label} · {list.length}</p>
-              {list.map(o => <OrderCard key={o.id} o={o} />)}
+              {list.map(o => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />)}
             </div>
           )
         })}
@@ -154,7 +162,7 @@ export default function PartnerPage() {
   )
 }
 
-function OrderCard({ o }: { o: Order }) {
+function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
   return (
     <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 mt-2">
       <div className="flex items-start justify-between gap-2 mb-2">
@@ -182,6 +190,12 @@ function OrderCard({ o }: { o: Order }) {
         <div className="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
           ✎ Пересчитано менеджером: {o.recalcNote}
         </div>
+      )}
+      {o.lane === 'quote' && (
+        <button onClick={() => onSubmit(o.id)} disabled={submitting}
+          className="mt-2 w-full py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40 transition-colors">
+          {submitting ? 'Отправляю…' : 'Отправить в работу'}
+        </button>
       )}
     </div>
   )

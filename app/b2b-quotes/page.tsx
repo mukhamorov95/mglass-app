@@ -807,6 +807,8 @@ export default function B2BQuotesPage() {
             const isWorkDateThis     = workDateId === quote.id
             const isDiscountEditThis = discountEditId === quote.id
             const workStartedAt      = parsed.work_started_at ? String(parsed.work_started_at) : null
+            const isPartnerFrom = (quote as { source?: string }).source === 'partner'
+            const isPartnerReq  = isPartnerFrom && (parsed.status === 'pending_approval' || !!parsed.submitted_by_partner_at)
 
             // Discount preview — computed once per row, cheap arithmetic
             const discBase      = quote.total_sale_inc_vat
@@ -832,6 +834,12 @@ export default function B2BQuotesPage() {
                     <span className="text-[11px] font-bold text-[#c4c4be] flex-shrink-0">#{quote.id}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {isPartnerReq && (
+                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">🤝 Заявка партнёра · проверить</span>
+                        )}
+                        {isPartnerFrom && !isPartnerReq && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">🤝 от партнёра</span>
+                        )}
                         {quote.custom_number && (
                           <span className="text-[13px] font-bold font-mono text-[#111110]">{quote.custom_number}</span>
                         )}
