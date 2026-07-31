@@ -809,6 +809,9 @@ export default function B2BQuotesPage() {
             const workStartedAt      = parsed.work_started_at ? String(parsed.work_started_at) : null
             const isPartnerFrom = (quote as { source?: string }).source === 'partner'
             const isPartnerReq  = isPartnerFrom && (parsed.status === 'pending_approval' || !!parsed.submitted_by_partner_at)
+            const aiReview = (parsed.ai_review && typeof parsed.ai_review === 'object')
+              ? parsed.ai_review as { issues?: { severity?: string; text?: string }[]; summary?: string }
+              : null
 
             // Discount preview — computed once per row, cheap arithmetic
             const discBase      = quote.total_sale_inc_vat
@@ -1160,6 +1163,19 @@ export default function B2BQuotesPage() {
                 {/* ── Expanded: items table ──────────────────────────────── */}
                 {isOpen && (
                   <div className="border-t border-[#f0f0ec]">
+
+                    {/* AI-проверка логики просчёта партнёра */}
+                    {aiReview && (aiReview.summary || (aiReview.issues?.length ?? 0) > 0) && (
+                      <div className="px-4 py-2.5 border-b border-[#f0f0ec] bg-indigo-50/40">
+                        <p className="text-[11px] font-semibold text-indigo-800 mb-1">🤖 AI-проверка логики просчёта партнёра</p>
+                        {aiReview.summary && <p className="text-[11px] text-[#4b4b47] mb-1">{aiReview.summary}</p>}
+                        {(aiReview.issues ?? []).map((iss, i) => (
+                          <p key={i} className={`text-[11px] flex items-start gap-1.5 ${iss.severity === 'warn' ? 'text-amber-800' : 'text-[#6b6b66]'}`}>
+                            <span className="flex-shrink-0">{iss.severity === 'warn' ? '⚠' : 'ℹ'}</span><span>{iss.text}</span>
+                          </p>
+                        ))}
+                      </div>
+                    )}
 
                     {/* Status comment (last) */}
                     {statusComment && (

@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { reviewPartnerQuote, type ReviewItem } from '@/lib/ai-tools/reviewPartnerQuote'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
+// Заодно прогоняем AI-анализ логики (best-effort) — результат кладём в notes.ai_review
+// для менеджера. Цену AI не трогает (её считает наш движок).
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerClient()
@@ -19,7 +22,7 @@ export async function POST(req: NextRequest) {
   if (!quoteId) return NextResponse.json({ error: 'Не указан просчёт' }, { status: 400 })
 
   const { data: order } = await svc.from('b2b_orders')
-    .select('id,client_id,launched_at,notes').eq('id', quoteId).maybeSingle()
+    .select('id,client_id,launched_at,notes,items').eq('id', quoteId).maybeSingle()
   if (!order || order.client_id !== client.id) return NextResponse.json({ error: 'Просчёт не найден' }, { status: 404 })
   if (order.launched_at) return NextResponse.json({ error: 'Заказ уже в работе' }, { status: 400 })
 
@@ -32,6 +35,18 @@ export async function POST(req: NextRequest) {
   notes.status = 'pending_approval'
   notes.status_history = history
   notes.submitted_by_partner_at = new Date().toISOString()
+
+  // AI-проверка логики просчёта — best-effort, не роняет отправку.
+  try {
+    const rawItems = Array.isArray(order.items) ? (order.items as Record<string, unknown>[]) : []
+    const reviewItems: ReviewItem[] = rawItems.map(it => ({
+      material: String(it.materialName ?? ''), thickness: Number(it.thickness) || 0,
+      width: Number(it.width) || 0, height: Number(it.height) || 0, quantity: Number(it.quantity) || 0,
+      hasTempering: !!it.hasTempering, hasFacet: !!it.hasFacet, hasHoles: !!it.hasHoles, shape: String(it.shape ?? 'rect'),
+    }))
+    const review = await reviewPartnerQuote(reviewItems)
+    if (review.summary || review.issues.length) notes.ai_review = review
+  } catch { /* AI недоступен — заявка всё равно уходит */ }
 
   const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes), updated_at: new Date().toISOString() }).eq('id', quoteId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
