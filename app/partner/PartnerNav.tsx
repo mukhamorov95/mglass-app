@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase-browser'
 const LINKS = [
   { href: '/partner', label: 'Мои заказы', icon: '📦' },
   { href: '/partner/new', label: 'Новый просчёт', icon: '🧮' },
+  { href: '/partner/catalog', label: 'Каталог', icon: '🛍️' },
 ]
 
 export default function PartnerNav() {
