@@ -61,12 +61,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-full bg-[#f8f8f7]">
         <OrganizationProvider initialOrgId={orgId} initialRole={orgRole}>
           <CartProvider>
-            {user ? (
+            {user && role !== 'partner' ? (
               <div className="flex min-h-screen">
                 <Sidebar userEmail={user.email ?? ''} role={role} permissions={permissions} />
                 <main className="flex-1 min-w-0 pt-12 lg:pt-0">{children}</main>
               </div>
             ) : (
+              // Партнёр (и гость) — без нашей внутренней навигации. Кабинет партнёра
+              // рендерит своё левое меню в app/partner/layout.tsx.
               <main className="min-h-screen">{children}</main>
             )}
           </CartProvider>
