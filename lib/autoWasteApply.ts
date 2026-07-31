@@ -36,6 +36,11 @@ export function applyAutoWasteToItems(items: B2BOrderItem[], materials: MatLike[
 
   const usage: UsageItem[] = items
     .filter(it => it.width > 0 && it.height > 0 && it.quantity > 0 && it.totalAreaBilled > 0)
+    // Изделия производства ('изделие') — своя ПОЛНАЯ себестоимость цеха
+    // (стекло+фурнитура+работа+накладные+резерв брака 5%). Авто-расход раскроя
+    // к ним неприменим: он раздул бы весь cost (включая труд/фурнитуру) на % обрези
+    // и задвоил брак. Не нестим и не пересчитываем — см. .map ниже.
+    .filter(it => it.category !== 'изделие')
     // «Проходной» материал — фиксированный расход по бизнес-правилу, не нестится.
     .filter(it => !matLookup.get(`${it.materialName}|${it.thickness}`)?.passthrough)
     .map(it => {
@@ -52,6 +57,7 @@ export function applyAutoWasteToItems(items: B2BOrderItem[], materials: MatLike[
 
   const wasteMap = autoWasteByMaterial(usage, CALC_REUSE_RATE)
   return items.map(it => {
+    if (it.category === 'изделие') return it   // изделие производства — себестоимость финальная
     const pct = wasteMap.get(`${it.materialName}|${it.thickness}`)
     return pct != null ? applyAutoWaste(it, pct) : it
   })
