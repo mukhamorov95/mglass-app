@@ -140,4 +140,15 @@ describe('applyAutoWasteToItems — расход из раскроя по мат
   it('пустой заказ возвращается как есть', () => {
     expect(applyAutoWasteToItems([], [MAT])).toEqual([])
   })
+
+  it('изделие производства НЕ трогается авто-расходом (своя полная себестоимость)', () => {
+    const factory: B2BOrderItem = {
+      ...makeItem(700, 2575, 1, 30),
+      category: 'изделие', materialName: 'Зеркало с подсветкой Осветлённое 4 мм',
+    }
+    const out = applyAutoWasteToItems([factory], [MAT])
+    expect(out[0].costExVat).toBe(factory.costExVat)   // себестоимость не раздувается
+    expect(out[0].margin).toBe(factory.margin)
+    expect(out[0].wastePercent).toBe(factory.wastePercent)
+  })
 })
