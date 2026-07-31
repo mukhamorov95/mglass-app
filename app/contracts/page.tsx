@@ -13,7 +13,7 @@ type Form = {
   customer: Customer
   spec: Spec[]
   total: string; make_sum: string; install_sum: string; delivery_sum: string; lift_sum: string; prepayment: string
-  product_kind: ProductKind; make_days: number; install_days: number
+  product_kind: ProductKind; make_days: number; install_days: number; draft_days: number
   vat_rate: number
 }
 const SERVICE_RE = /монтаж|демонтаж|доставк|подъ[её]м|замер|выезд/i
@@ -76,7 +76,7 @@ function emptyForm(): Form {
     number: '', date: fmtDate(d), date_iso: isoDate(d), kp_id: null,
     customer_type: 'individual', customer: {}, spec: [],
     total: '', make_sum: '', install_sum: '', delivery_sum: '', lift_sum: '', prepayment: '',
-    product_kind: 'mirror', make_days: 15, install_days: 5, vat_rate: 5,
+    product_kind: 'mirror', make_days: 15, install_days: 5, draft_days: 3, vat_rate: 5,
   }
 }
 
@@ -322,7 +322,8 @@ export default function ContractsPage() {
                   {Object.entries(PRODUCT_DEADLINES).map(([k, v]) => <option key={k} value={k}>{v.label} ({v.make}+{v.install})</option>)}
                 </select>
               </div>
-              <div className="col-span-3 text-[12px] text-[#6b6b66]">Срок по договору: <b>{form.make_days} раб. дн.</b> изготовление + <b>{form.install_days} раб. дн.</b> монтаж = <b>{form.make_days + form.install_days} раб. дн.</b></div>
+              <div><label className={L}>Чертежи, раб. дн. (п.4.2)</label><input className={I} type="number" min={0} value={form.draft_days} onChange={e => set({ draft_days: Number(e.target.value) || 0 })} placeholder="3" /></div>
+              <div className="col-span-3 text-[12px] text-[#6b6b66]">Чертежи на согласование: <b>{form.draft_days} раб. дн.</b> с подписания · Срок по договору: <b>{form.make_days} раб. дн.</b> изготовление + <b>{form.install_days} раб. дн.</b> монтаж = <b>{form.make_days + form.install_days} раб. дн.</b></div>
             </div>
 
             {/* Customer */}
