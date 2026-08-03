@@ -22,7 +22,8 @@ const DRY = process.argv.includes('--dry')
 const GENERIC = new Set(['ок', 'окей', 'да', 'нет', 'хорошо', 'спасибо', 'принял', 'принято', '+', 'ага', 'угу', 'здравствуйте', 'добрый день'])
 const isGeneric = (s) => GENERIC.has(s.trim().toLowerCase().replace(/[.!,)]+$/, ''))
 
-const hashOf = (a, b) => createHash('sha1').update(a + '' + b).digest('hex').slice(0, 24)
+// Тот же алгоритм, что exampleHash в lib/avito/managerExamples.ts (единый дедуп).
+const hashOf = (context, reply) => createHash('sha1').update(context + ' ' + reply).digest('hex').slice(0, 24)
 
 async function fetchAll(table, cols, extra = q => q) {
   const page = 1000

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest'
-import { rankExamples, type ManagerExample } from '@/lib/avito/managerExamples'
+import {
+  rankExamples, clientContextFromHistory, exampleHash, isUsefulReply,
+  type ManagerExample,
+} from '@/lib/avito/managerExamples'
 
 const ex = (client_context: string, manager_reply: string, won = false): ManagerExample =>
   ({ client_context, manager_reply, won })
@@ -37,5 +40,31 @@ describe('rankExamples', () => {
   it('соблюдает лимит', () => {
     const list = Array.from({ length: 10 }, (_, i) => ex(`душевая перегородка вариант ${i}`, `ответ ${i}`))
     expect(rankExamples(list, 'душевая перегородка', 3)).toHaveLength(3)
+  })
+})
+
+describe('clientContextFromHistory', () => {
+  it('берёт последнюю пачку реплик клиента', () => {
+    const h = ['КЛИЕНТ: привет', 'БОТ: здравствуйте', 'КЛИЕНТ: нужна душевая', 'КЛИЕНТ: 90 на 190']
+    expect(clientContextFromHistory(h)).toBe('нужна душевая 90 на 190')
+  })
+  it('пропускает ответ бота в хвосте и берёт клиента до него', () => {
+    const h = ['КЛИЕНТ: сколько стоит зеркало', 'БОТ: примерно 5000']
+    expect(clientContextFromHistory(h)).toBe('сколько стоит зеркало')
+  })
+  it('нет реплик клиента → пусто', () => {
+    expect(clientContextFromHistory(['БОТ: привет', 'МЕНЕДЖЕР: здравствуйте'])).toBe('')
+  })
+})
+
+describe('exampleHash / isUsefulReply', () => {
+  it('хеш детерминирован и зависит от контента', () => {
+    expect(exampleHash('a', 'b')).toBe(exampleHash('a', 'b'))
+    expect(exampleHash('a', 'b')).not.toBe(exampleHash('a', 'c'))
+  })
+  it('отсекает дежурные/короткие ответы', () => {
+    expect(isUsefulReply('ок')).toBe(false)
+    expect(isUsefulReply('спасибо.')).toBe(false)
+    expect(isUsefulReply('Пришлите размеры проёма — посчитаю сегодня')).toBe(true)
   })
 })

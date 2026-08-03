@@ -4,6 +4,7 @@ import { getSessionUser } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { isAvitoConfigured, avitoGetSelfId, avitoListMessages, avitoSendMessage } from '@/lib/avito'
+import { saveManagerExample, clientContextFromHistory } from '@/lib/avito/managerExamples'
 
 // Переписка с клиентом Авито прямо из CRM: GET — живая история диалога,
 // POST — отправить сообщение (и «забрать» лид у Ивана: manager = менеджер).
@@ -11,8 +12,8 @@ import { isAvitoConfigured, avitoGetSelfId, avitoListMessages, avitoSendMessage 
 const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 
 async function leadChatId(sb: ReturnType<typeof createServiceClient>, leadId: number) {
-  const { data } = await sb.from('crm_leads').select('id,avito_chat_id,manager').eq('id', leadId).maybeSingle()
-  return data as { id: number; avito_chat_id: string | null; manager: string | null } | null
+  const { data } = await sb.from('crm_leads').select('id,avito_chat_id,manager,product,status').eq('id', leadId).maybeSingle()
+  return data as { id: number; avito_chat_id: string | null; manager: string | null; product: string | null; status: string | null } | null
 }
 
 async function myName(): Promise<string | null> {
@@ -74,6 +75,19 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     return NextResponse.json({ error: 'Авито отклонил отправку: ' + (e as Error).message }, { status: 502 })
   }
+
+  // Обучение бота (Фаза 3): фиксируем «на что ответил менеджер» ДО записи его
+  // реплики в ленту. Fail-open — обучение не должно мешать отправке.
+  try {
+    const { data: evs } = await sb.from('crm_lead_events')
+      .select('text').eq('lead_id', leadId).eq('kind', 'message')
+      .order('id', { ascending: true }).limit(40)
+    const context = clientContextFromHistory(((evs ?? []) as { text: string }[]).map(e => e.text))
+    await saveManagerExample(sb, {
+      lead_id: leadId, product: lead.product, client_context: context,
+      manager_reply: text, won: lead.status === 'won',
+    })
+  } catch { /* обучение не критично */ }
 
   await sb.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `МЕНЕДЖЕР: ${text}`, author: me })
   // Менеджер забрал диалог у AI — Иван больше не автоотвечает в этом чате.
