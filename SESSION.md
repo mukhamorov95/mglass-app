@@ -49,6 +49,13 @@
 «УРОКИ ИЗ РЕАЛЬНЫХ СДЕЛОК»). Отчёт: AVITO AI/05_РАЗБОР_СДЕЛОК_AMO.md. PR #129 на ревью (не мёрджен).
 Скрипты разбора — в scratchpad (PII-выгрузки удалены после анализа).
 
+## Приём заявок с сайта Mglass (PR #133, смёржен, задеплоен, живой)
+POST /api/site/lead (whitelist middleware, CORS *) → crm_leads source='site', manager='Администратор'
+(env SITE_LEAD_OWNER) → по RLS видит только владелец, обрабатывает первым; бот не трогает.
+Антиспам: honeypot hp + опц. SITE_LEAD_SECRET. GET /api/site/lead = health (200). Проверено в проде.
+Владельцу: вставить форму на сайт (сниппет выдан), первую заявку создаёт сам для проверки.
+Позже: сменить manager на пул/round-robin или подключить бота.
+
 ## Статус: ЗАДЕПЛОЕНО В ПРОД
 PR #122 смёрджен в main (squash, коммит 0a73e3b), Vercel Production deploy = success.
 Миграции в проде. Всё Авито-направление (Фазы 1–3 + вариант A) живо на mglass-app.vercel.app.
