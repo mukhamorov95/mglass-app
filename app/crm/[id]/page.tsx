@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
+import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
 
 type Lead = {
   id: number
@@ -13,6 +14,8 @@ type Lead = {
   order_no: string | null; product: string | null; sizes: string | null; budget: string | null
   est_amount: number | null; est_profit: number | null
   stage: string; qualified: boolean; score: number | null; score_reason: string | null
+  flags: Record<string, boolean> | null; readiness: number | null
+  heat: 'cold' | 'warm' | 'hot' | null; missing_next: string | null
   manager: string | null; note: string | null
   status: 'active' | 'won' | 'lost'; lost_reason: string | null
   avito_chat_id: string | null; created_at: string; updated_at: string
@@ -30,6 +33,11 @@ const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 function fmtD(s: string) { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 const RUB = (n: number) => n.toLocaleString('ru-RU')
 const TASK_KIND: Record<string, string> = { call: '📞 Звонок', meeting: '🤝 Встреча', measure: '📐 Замер', followup: '🔔 Напоминание', other: '• Другое' }
+const HEAT: Record<'cold' | 'warm' | 'hot', { label: string; icon: string; cls: string; bar: string }> = {
+  cold: { label: 'Холодный', icon: '🔵', cls: 'bg-slate-100 text-slate-600', bar: 'bg-slate-300' },
+  warm: { label: 'В работе бота', icon: '🟡', cls: 'bg-amber-100 text-amber-700', bar: 'bg-amber-400' },
+  hot: { label: 'Готов менеджеру', icon: '🟢', cls: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' },
+}
 
 function Field({ label, value, onSave, isNum, placeholder }: {
   label: string; value: string | number | null; onSave: (v: string | number | null) => void; isNum?: boolean; placeholder?: string
@@ -54,6 +62,77 @@ function Field({ label, value, onSave, isNum, placeholder }: {
           {value != null && value !== '' ? String(value) : <span className="text-[#c4c4be]">{placeholder ?? 'указать'}</span>}
         </button>
       )}
+    </div>
+  )
+}
+
+// Мини-калькулятор в карточке: менеджеру не нужно считать вручную (боль «тяжело
+// посчитать»). Дёргает детерминированный /api/calc/quick, цену можно записать в лид.
+function QuickCalc({ onSave }: { onSave: (amount: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const [type, setType] = useState<'shower' | 'mirror' | 'loft'>('shower')
+  const [w, setW] = useState('')
+  const [h, setH] = useState('')
+  const [budget, setBudget] = useState(true)
+  const [light, setLight] = useState(false)
+  const [res, setRes] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function calc() {
+    if (!w || !h) { setErr('укажите ширину и высоту (мм)'); return }
+    setBusy(true); setErr(''); setRes(null)
+    try {
+      const options: Record<string, unknown> = {}
+      if (budget) options.tier = 'budget'
+      if (type === 'mirror' && light) options.hasLighting = true
+      const r = await fetch('/api/calc/quick', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, width: Number(w), height: Number(h), options }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'ошибка расчёта')
+      setRes(Math.round(d.finalPrice))
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      className="mt-2 w-full px-2 py-2 rounded-lg border border-[#e4e4e0] text-[12px] font-semibold text-[#6b6b66] hover:border-[#111110]">
+      🧮 Посчитать
+    </button>
+  )
+  const inp = 'border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]'
+  return (
+    <div className="mt-2 rounded-lg border border-[#e4e4e0] p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-semibold text-[#111110]">🧮 Быстрый расчёт</span>
+        <button onClick={() => setOpen(false)} className="text-[11px] text-[#9a9a95]">свернуть</button>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <select value={type} onChange={e => setType(e.target.value as typeof type)} className={`${inp} col-span-3 bg-white`}>
+          <option value="shower">Душевая (прямая)</option>
+          <option value="mirror">Зеркало</option>
+          <option value="loft">Лофт-перегородка</option>
+        </select>
+        <input value={w} onChange={e => setW(e.target.value)} type="number" placeholder="ширина, мм" className={`${inp} col-span-1`} />
+        <input value={h} onChange={e => setH(e.target.value)} type="number" placeholder="высота, мм" className={`${inp} col-span-1`} />
+        <button onClick={calc} disabled={busy} className="col-span-1 px-2 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold disabled:opacity-50">
+          {busy ? '…' : 'Считать'}
+        </button>
+      </div>
+      <div className="flex items-center gap-3 text-[12px] text-[#6b6b66]">
+        <label className="flex items-center gap-1.5"><input type="checkbox" checked={budget} onChange={e => setBudget(e.target.checked)} className="accent-[#111110]" />эконом</label>
+        {type === 'mirror' && <label className="flex items-center gap-1.5"><input type="checkbox" checked={light} onChange={e => setLight(e.target.checked)} className="accent-[#111110]" />с подсветкой</label>}
+      </div>
+      {err && <p className="text-[11px] text-red-600">{err}</p>}
+      {res != null && (
+        <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+          <span className="text-[13px] font-bold text-emerald-800">{res.toLocaleString('ru-RU')} ₽</span>
+          <button onClick={() => onSave(res)} className="text-[12px] font-semibold text-emerald-700 underline">→ в предв. цену</button>
+        </div>
+      )}
+      <p className="text-[10px] text-[#c4c4be]">Точный авторасчёт — для простых конфигураций; сложные считает производство после замера.</p>
     </div>
   )
 }
@@ -334,7 +413,41 @@ export default function LeadDetailPage() {
             <Field label="Бюджет" value={lead.budget} onSave={v => patch({ budget: v as string | null })} />
             <Field label="Предв.цена" value={lead.est_amount} onSave={v => patch({ est_amount: v as number | null })} isNum placeholder="₽" />
 
-            {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
+            <div className="mt-3 rounded-lg border border-[#e4e4e0] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-semibold text-[#111110]">Готовность заявки</span>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${HEAT[lead.heat ?? 'cold'].cls}`}>
+                  {HEAT[lead.heat ?? 'cold'].icon} {HEAT[lead.heat ?? 'cold'].label}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-[#eee] overflow-hidden">
+                <div className={`h-full ${HEAT[lead.heat ?? 'cold'].bar}`} style={{ width: `${Math.min(100, lead.readiness ?? 0)}%` }} />
+              </div>
+              <p className="mt-1 mb-2 text-[11px] text-[#9a9a95]">{lead.readiness ?? 0}% собрано</p>
+              <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+                {FLAGS.filter(f => f.group === 'core' || f.group === 'support').map(f => {
+                  const on = !!lead.flags?.[f.key]
+                  return (
+                    <li key={f.key} className={`text-[11px] flex items-center gap-1 ${on ? 'text-[#111110]' : 'text-[#c4c4bf]'}`}>
+                      <span>{on ? '✅' : '⬜'}</span>
+                      <span className={f.isCore ? 'font-medium' : ''}>{f.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              {lead.missing_next && FLAG_BY_KEY[lead.missing_next as FlagKey] && (
+                <p className="mt-2 text-[11px] text-sky-700">🤖 Бот запрашивает: {FLAG_BY_KEY[lead.missing_next as FlagKey].label}</p>
+              )}
+              {lead.flags && Object.keys(lead.flags).some(k => lead.flags?.[k] && FLAG_BY_KEY[k as FlagKey]?.group === 'disqualify') && (
+                <p className="mt-2 text-[11px] text-red-600">⛔ {Object.keys(lead.flags)
+                  .filter(k => lead.flags?.[k] && FLAG_BY_KEY[k as FlagKey]?.group === 'disqualify')
+                  .map(k => FLAG_BY_KEY[k as FlagKey].label).join(', ')}</p>
+              )}
+            </div>
+
+            <QuickCalc onSave={n => patch({ est_amount: n }, `🧮 Расчёт: ${n.toLocaleString('ru-RU')} ₽`)} />
+
+            {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг бота: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
 
             <div className="flex gap-2 mt-3">
               <button onClick={() => patch({ qualified: !lead.qualified }, lead.qualified ? 'Снят с ключевого' : '⭐ Ключевой этап')}

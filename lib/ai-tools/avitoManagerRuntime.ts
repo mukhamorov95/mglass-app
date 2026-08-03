@@ -8,6 +8,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { quickCalc, type CalcType } from '@/lib/quickCalc'
 import { guardPrices, extractPhone, shouldHandOver, mergeClientBurst, type DialogMsg } from './avitoGuards'
+import { FLAGS, type LeadFlags } from '@/lib/avito/flags'
+import { type ManagerExample } from '@/lib/avito/managerExamples'
 
 export type { DialogMsg }
 
@@ -28,6 +30,7 @@ export type ManagerTurn = {
   score: number
   score_reason: string
   needs_human: boolean
+  flags: LeadFlags
   price_guard_hits?: number
 }
 
@@ -68,7 +71,15 @@ const PERSONA = `Ты — Иван, менеджер компании M-Glass (�
 
 КВАЛИФИКАЦИЯ (qualified=true — «наш клиент, работаем»):
 - Понятен продукт нашего профиля + есть контакт или клиент активно идёт к сделке.
-- score 0–100: 80+ горячий (размеры есть, цена ок, готов к замеру), 50–79 тёплый, <50 холодный/нецелевой. score_reason — одна фраза почему.`
+- score 0–100: 80+ горячий (размеры есть, цена ок, готов к замеру), 50–79 тёплый, <50 холодный/нецелевой. score_reason — одна фраза почему.
+
+ФЛАЖКИ ГОТОВНОСТИ (поле flags — заполняй КАЖДЫЙ ход):
+- Ставь true у каждого флага, который УЖЕ виден из всей переписки (не только из последнего сообщения). Что не подтверждено — не ставь (по умолчанию false).
+${FLAGS.map(f => `  • ${f.key} — ${f.desc}`).join('\n')}
+- Флаги накапливаются: то, что подтвердилось раньше, оставляй true и дальше.
+- Твоя задача — добывать недостающие флаги ПО ОДНОМУ за сообщение, в порядке приоритета: продукт → размеры → место установки → фото проёма → телефон → согласие на замер. Не задавай больше одного «добывающего» вопроса за раз и не проси то, что уже известно.
+- Фото и место установки проси прямо: «Скиньте, пожалуйста, фото проёма/места, где будет стоять — так точнее посчитаю и подберу решение».
+- Как только собрано всё ядро (product+sizes+place+contact) ИЛИ клиент готов на замер и дал телефон — заявку подхватит менеджер; веди себя спокойно, не дожимай агрессивно.`
 
 const RESPOND_TOOL: Anthropic.Tool = {
   name: 'respond',
@@ -104,13 +115,33 @@ const RESPOND_TOOL: Anthropic.Tool = {
       score: { type: 'number' },
       score_reason: { type: 'string' },
       needs_human: { type: 'boolean' },
+      flags: {
+        type: 'object',
+        description: 'Дискретные флажки готовности заявки — true у каждого, что подтверждено всей перепиской',
+        properties: Object.fromEntries(FLAGS.map(f => [f.key, { type: 'boolean', description: f.desc }])),
+      },
     },
-    required: ['reply', 'extracted', 'qualified', 'score', 'score_reason', 'needs_human'],
+    required: ['reply', 'extracted', 'qualified', 'score', 'score_reason', 'needs_human', 'flags'],
   },
 }
 
-export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): Promise<ManagerTurn> {
+export async function runAvitoManager(
+  history: DialogMsg[],
+  known: LeadKnown,
+  opts: { examples?: ManagerExample[] } = {},
+): Promise<ManagerTurn> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  // Few-shot: как опытные менеджеры отвечали в похожих ситуациях. Подмешиваем в
+  // system как образцы стиля/аргументации — не как жёсткие шаблоны (цены всё равно
+  // только из калькулятора, guardPrices вырежет любую выдуманную сумму).
+  const examples = opts.examples ?? []
+  const systemText = examples.length
+    ? PERSONA + '\n\nПРИМЕРЫ ОТВЕТОВ ОПЫТНЫХ МЕНЕДЖЕРОВ (перенимай тон, стиль и аргументацию; НЕ копируй дословно, НЕ бери из них цифры/условия):\n' +
+      examples.map((e, i) =>
+        `${i + 1}. Клиент: «${e.client_context.slice(0, 300)}»\n   Менеджер: «${e.manager_reply.slice(0, 400)}»`,
+      ).join('\n')
+    : PERSONA
 
   const knownLines = Object.entries(known).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
   const messages: Anthropic.MessageParam[] = [
@@ -123,7 +154,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
   const res = await anthropic.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 1200,
-    system: PERSONA,
+    system: systemText,
     tools: [RESPOND_TOOL],
     tool_choice: { type: 'tool', name: 'respond' },
     messages,
@@ -138,6 +169,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
     score?: number
     score_reason?: string
     needs_human?: boolean
+    flags?: Record<string, unknown>
   }
 
   let reply = input.reply ?? 'Секунду, уточню детали и вернусь.'
@@ -179,6 +211,15 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
     }
   }
 
+  // Флаги: берём только известные ключи, приводим к boolean.
+  const flags: LeadFlags = {}
+  const rawFlags = input.flags ?? {}
+  for (const f of FLAGS) if (rawFlags[f.key] === true) flags[f.key] = true
+  // Телефон снят стражем/моделью — контакт есть, что бы ни решила модель.
+  if (extracted.phone) flags.contact = true
+  // Цена реально посчитана калькулятором — значит озвучена (без выдумок модели).
+  if (allowedPrices.length > 0) flags.price_quoted = true
+
   return {
     reply: guarded.text,
     extracted,
@@ -188,6 +229,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
     score_reason: input.score_reason ?? '',
     // Слишком длинный диалог или вычищенная цена — повод подключить человека.
     needs_human: (input.needs_human ?? false) || guarded.replaced > 0 || shouldHandOver(history),
+    flags,
     price_guard_hits: guarded.replaced,
   }
 }

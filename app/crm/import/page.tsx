@@ -7,7 +7,7 @@ type Extracted = { name?: string | null; product?: string | null; sizes?: string
 type Candidate = {
   chat_id: string; title: string; clientName: string; lastText: string
   already_imported: boolean; status: 'interested' | 'refused' | 'unclear'; reason: string
-  extracted: Extracted; score: number
+  extracted: Extracted; score: number; flags?: Record<string, boolean>
 }
 type Resp = { selfId?: number; scanned?: number; candidates?: Candidate[]; error?: string; hint?: string }
 
@@ -52,7 +52,7 @@ export default function AvitoImportPage() {
       chat_id: c.chat_id, name: c.clientName || c.extracted.name || undefined,
       phone: c.extracted.phone || undefined, product: c.extracted.product || undefined,
       sizes: c.extracted.sizes || undefined, city: c.extracted.city || undefined,
-      budget: c.extracted.budget || undefined, score: c.score,
+      budget: c.extracted.budget || undefined, score: c.score, flags: c.flags,
     }))
     try {
       const r = await fetch('/api/avito/import', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items }) })

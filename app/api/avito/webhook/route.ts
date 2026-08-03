@@ -4,6 +4,9 @@ import { runAvitoManager, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/
 import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
 import { isBotEnabled } from '@/lib/aiKillSwitch'
+import { scoreLead } from '@/lib/avito/scoreLead'
+import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
+import { getRelevantExamples } from '@/lib/avito/managerExamples'
 
 // Вебхук Avito Messenger: входящее сообщение клиента → лид в crm_leads (по
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
@@ -161,9 +164,12 @@ export async function POST(req: NextRequest) {
     budget: lead.budget as string | null, phone: lead.phone as string | null,
   }
 
+  // Few-shot: подбираем похожие ответы живых менеджеров (fail-open → []).
+  const examples = await getRelevantExamples(service, { product: known.product, clientText: text })
+
   let turn
   try {
-    turn = await runAvitoManager(history, known)
+    turn = await runAvitoManager(history, known, { examples })
   } catch (e) {
     // Ошибка модели ДО отправки — снимаем метку дедупа, чтобы ретрай Авито
     // переобработал сообщение (иначе ответ был бы потерян навсегда).
@@ -181,9 +187,47 @@ export async function POST(req: NextRequest) {
   if (turn.est_amount != null) patch.est_amount = turn.est_amount
   patch.score = turn.score
   patch.score_reason = turn.score_reason
-  const becameQualified = turn.qualified && !lead.qualified
-  if (turn.qualified) patch.qualified = true
+
+  // Флажки накапливаются: OR-мёрдж прежних с новыми (флаг, ставший true, не сбрасываем).
+  const prevFlags = (lead.flags ?? {}) as LeadFlags
+  const mergedFlags: LeadFlags = { ...prevFlags }
+  const newlySet: FlagKey[] = []
+  for (const [k, v] of Object.entries(turn.flags)) {
+    if (v && !prevFlags[k as FlagKey]) { mergedFlags[k as FlagKey] = true; newlySet.push(k as FlagKey) }
+  }
+  const sc = scoreLead(mergedFlags)
+  patch.flags = mergedFlags
+  patch.readiness = sc.readiness
+  patch.heat = sc.heat
+  patch.missing_next = sc.missingNext
+
+  // 🟢 сработало правило «отдать человеку» (собрано ядро ИЛИ замер+телефон).
+  const wasHot = (lead.heat as string | null) === 'hot'
+  const becameHot = sc.isHot && !wasHot
+  const becameQualified = (turn.qualified || sc.isHot) && !lead.qualified
+  if (turn.qualified || sc.isHot) patch.qualified = true
   await service.from('crm_leads').update(patch).eq('id', leadId)
+
+  // Каждый новый флаг — событие в ленту (прозрачная история + материал для обучения).
+  if (newlySet.length) {
+    await service.from('crm_lead_events').insert(
+      newlySet.map(k => ({ lead_id: leadId, kind: 'system', text: `✅ Флаг: ${FLAG_BY_KEY[k].label}`, author: 'AI' })),
+    )
+  }
+
+  // Заявка загорелась 🟢 — заводим задачу «перезвонить», чтобы её взял человек.
+  if (becameHot) {
+    await service.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'system', author: 'AI',
+      text: `🔥 Заявка готова менеджеру (${sc.reason}), готовность ${sc.readiness}%`,
+    })
+    try {
+      await service.from('crm_tasks').insert({
+        lead_id: leadId, kind: 'call', title: `Перезвонить — заявка готова (${sc.reason})`,
+        due_at: new Date().toISOString(),
+      })
+    } catch { /* таблица задач может отличаться — не блокируем ответ клиенту */ }
+  }
 
   // Перепроверка перед отправкой: не забрал ли чат человек за время работы модели.
   const { data: cur } = await service.from('crm_leads').select('manager').eq('id', leadId).maybeSingle()
@@ -203,14 +247,21 @@ export async function POST(req: NextRequest) {
   }
 
   // Горячий лид / нужен человек → Telegram
-  if (becameQualified || turn.needs_human) {
-    const title = becameQualified ? '⭐ <b>Горячий лид с Авито</b>' : '✋ <b>Авито: нужен человек</b>'
+  if (becameHot || becameQualified || turn.needs_human) {
+    const title = becameHot ? '🔥 <b>Авито: заявка готова менеджеру</b>'
+      : becameQualified ? '⭐ <b>Горячий лид с Авито</b>'
+      : '✋ <b>Авито: нужен человек</b>'
+    const setFlags = Object.keys(mergedFlags)
+      .filter(k => mergedFlags[k as FlagKey] && FLAG_BY_KEY[k as FlagKey]?.group !== 'disqualify')
+      .map(k => FLAG_BY_KEY[k as FlagKey].label)
     const lines = [
       title,
       [turn.extracted.name ?? lead.name, turn.extracted.phone ?? lead.phone].filter(Boolean).join(' · '),
       [turn.extracted.product ?? lead.product, turn.extracted.sizes ?? lead.sizes].filter(Boolean).join(' · '),
       turn.est_amount != null ? `Предв. цена: ${Math.round(turn.est_amount).toLocaleString('ru-RU')} ₽` : '',
-      `Скоринг: ${turn.score}/100 — ${turn.score_reason}`,
+      `Готовность: ${sc.readiness}% · ядро ${sc.coreDone}/${sc.coreTotal}`,
+      setFlags.length ? `Флаги: ${setFlags.join(', ')}` : '',
+      `Скоринг бота: ${turn.score}/100 — ${turn.score_reason}`,
       '',
       `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
     ].filter(Boolean)

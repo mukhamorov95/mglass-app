@@ -26,6 +26,8 @@ type Lead = {
   qualified: boolean
   score: number | null
   score_reason: string | null
+  heat: 'cold' | 'warm' | 'hot' | null
+  readiness: number | null
   manager: string | null
   note: string | null
   status: 'active' | 'won' | 'lost'
@@ -55,6 +57,13 @@ const ACT_KIND_META: Record<string, { icon: string; label: string }> = {
   stage: { icon: '➡️', label: 'Этапы' }, note: { icon: '📝', label: 'Заметки' }, system: { icon: '⚙️', label: 'Система' },
 }
 const TASK_ICON: Record<string, string> = { call: '📞', meeting: '🤝', measure: '📐', followup: '🔔', other: '•' }
+// «Светофор» готовности заявки (см. lib/avito/scoreLead). Горячие — наверх колонки.
+const HEAT_META: Record<'hot' | 'warm' | 'cold', { dot: string; label: string; rank: number }> = {
+  hot: { dot: '🟢', label: 'Готов менеджеру', rank: 2 },
+  warm: { dot: '🟡', label: 'В работе бота', rank: 1 },
+  cold: { dot: '🔵', label: 'Холодный', rank: 0 },
+}
+const heatRank = (h: Lead['heat']) => HEAT_META[(h ?? 'cold') as 'hot' | 'warm' | 'cold']?.rank ?? 0
 
 const EMPTY = {
   source: 'manual' as Lead['source'], name: '', phone: '', city: '', product: '', sizes: '',
@@ -71,6 +80,7 @@ export default function CrmPage() {
   const [form, setForm] = useState({ ...EMPTY })
   const [search, setSearch] = useState('')
   const [srcFilter, setSrcFilter] = useState<'all' | Lead['source']>('all')
+  const [heatFilter, setHeatFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
   const [showClosed, setShowClosed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [scoped, setScoped] = useState(false)   // менеджер видит только свои лиды
@@ -159,12 +169,17 @@ export default function CrmPage() {
   const visible = leads.filter(l =>
     (showClosed ? true : l.status === 'active') &&
     (srcFilter === 'all' || l.source === srcFilter) &&
+    (heatFilter === 'all' || (l.heat ?? 'cold') === heatFilter) &&
     (!q || (l.name ?? '').toLowerCase().includes(q) || (l.phone ?? '').includes(q) || (l.product ?? '').toLowerCase().includes(q))
   )
   const byStage = new Map<string, Lead[]>()
   for (const l of visible) byStage.set(l.stage, [...(byStage.get(l.stage) ?? []), l])
+  // Внутри колонки — горячие наверх (🟢 → 🟡 → 🔵), затем по свежести.
+  for (const [st, list] of byStage) byStage.set(st, list.sort((a, b) =>
+    heatRank(b.heat) - heatRank(a.heat) || new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()))
 
   const keyLeads = visible.filter(l => l.qualified && l.status === 'active')
+  const hotLeads = leads.filter(l => l.heat === 'hot' && l.status === 'active')
 
   // Задачи (amoCRM): открытые, отсортированы по сроку; «на сегодня и просроченные»
   // — верхняя панель; просроченные подсвечивают карточку.
@@ -191,6 +206,8 @@ export default function CrmPage() {
             </h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">
               Активных: {leads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
+              {' · '}<button onClick={() => setHeatFilter(h => h === 'hot' ? 'all' : 'hot')}
+                className={`font-semibold ${heatFilter === 'hot' ? 'text-emerald-700 underline' : 'text-emerald-600'}`}>🟢 готовы менеджеру: {hotLeads.length}</button>
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -200,6 +217,13 @@ export default function CrmPage() {
               className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
               <option value="all">Все источники</option>
               {(Object.keys(SOURCE_LABEL) as Lead['source'][]).map(s => <option key={s} value={s}>{SOURCE_LABEL[s]}</option>)}
+            </select>
+            <select value={heatFilter} onChange={e => setHeatFilter(e.target.value as typeof heatFilter)}
+              className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
+              <option value="all">Вся готовность</option>
+              <option value="hot">🟢 Готов менеджеру</option>
+              <option value="warm">🟡 В работе бота</option>
+              <option value="cold">🔵 Холодный</option>
             </select>
             <label className="flex items-center gap-1.5 text-[12px] text-[#6b6b66]">
               <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} className="accent-[#111110]" />
@@ -363,8 +387,9 @@ export default function CrmPage() {
                       <div className="p-2 space-y-2 min-h-[40px]">
                         {list.map(l => (
                           <button key={l.id} onClick={() => router.push(`/crm/${l.id}`)}
-                            className={`w-full text-left rounded-lg border p-2.5 hover:border-[#111110] transition-colors ${l.qualified ? 'border-amber-300 bg-amber-50/50' : 'border-[#eceff1]'}`}>
+                            className={`w-full text-left rounded-lg border p-2.5 hover:border-[#111110] transition-colors ${l.heat === 'hot' ? 'border-emerald-400 bg-emerald-50/50' : l.qualified ? 'border-amber-300 bg-amber-50/50' : 'border-[#eceff1]'}`}>
                             <p className="text-[12px] font-bold text-[#111110] truncate">
+                              {l.heat && l.heat !== 'cold' && <span title={HEAT_META[l.heat].label}>{HEAT_META[l.heat].dot} </span>}
                               {l.qualified && '⭐ '}{l.name || l.phone || `Лид #${l.id}`}
                               {l.status === 'won' && ' ✅'}{l.status === 'lost' && ' ✖'}
                               {overdueLeadIds.has(l.id) && <span title="Просроченная задача"> 🔴</span>}
@@ -372,6 +397,7 @@ export default function CrmPage() {
                             <p className="text-[11px] text-[#6b6b66] truncate">{[l.product, l.sizes].filter(Boolean).join(' · ')}</p>
                             <p className="text-[10px] text-[#9a9a95] mt-0.5">
                               {SOURCE_LABEL[l.source]}{l.manager ? ` · ${l.manager}` : ''}{l.est_amount != null ? ` · ${RUB(Number(l.est_amount))} ₽` : ''}
+                              {l.source === 'avito' && l.readiness != null && l.readiness > 0 ? ` · ${l.readiness}%` : ''}
                             </p>
                           </button>
                         ))}

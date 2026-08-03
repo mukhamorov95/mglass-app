@@ -4,6 +4,7 @@
 
 import Anthropic from '@anthropic-ai/sdk'
 import { type DialogMsg, type LeadKnown } from './avitoManagerRuntime'
+import { FLAGS, type LeadFlags } from '@/lib/avito/flags'
 
 export type LeadStatus = 'interested' | 'refused' | 'unclear'
 export type ClassifiedLead = {
@@ -11,6 +12,7 @@ export type ClassifiedLead = {
   reason: string
   extracted: LeadKnown
   score: number
+  flags: LeadFlags
 }
 
 const SYSTEM = `Ты классификатор входящих диалогов Авито для компании M-Glass (Москва): собственное производство зеркал, душевых перегородок и лофт-перегородок из стекла.
@@ -20,7 +22,10 @@ const SYSTEM = `Ты классификатор входящих диалого�
 - refused — клиент ЯВНО отказался («не интересно», «уже купил/заказал», «передумал», «спасибо, не надо»), ЛИБО это не наш профиль (автостёкла, ремонт стеклопакетов, мебель без стекла), ЛИБО спам/нерелевант.
 - unclear — не хватает информации (пустой чат, одно слово, только «здравствуйте»).
 
-Сними данные клиента, какие видно (имя, продукт, размеры, город, бюджет, телефон). score 0–100 — насколько «горячий» (есть продукт+размеры+готовность = высокий).`
+Сними данные клиента, какие видно (имя, продукт, размеры, город, бюджет, телефон). score 0–100 — насколько «горячий» (есть продукт+размеры+готовность = высокий).
+
+Заполни flags — true у каждого признака, который виден из переписки (что не подтверждено — не ставь):
+${FLAGS.map(f => `- ${f.key}: ${f.desc}`).join('\n')}`
 
 const TOOL: Anthropic.Tool = {
   name: 'classify',
@@ -39,8 +44,13 @@ const TOOL: Anthropic.Tool = {
         },
       },
       score: { type: 'number' },
+      flags: {
+        type: 'object',
+        description: 'Дискретные флажки готовности — true у подтверждённых перепиской',
+        properties: Object.fromEntries(FLAGS.map(f => [f.key, { type: 'boolean', description: f.desc }])),
+      },
     },
-    required: ['status', 'reason', 'extracted', 'score'],
+    required: ['status', 'reason', 'extracted', 'score', 'flags'],
   },
 }
 
@@ -48,7 +58,7 @@ export async function classifyAvitoDialog(history: DialogMsg[]): Promise<Classif
   // Пустой/односложный диалог — не тратим токены
   const clientText = history.filter(m => m.from === 'client').map(m => m.text).join(' ').trim()
   if (clientText.length < 3) {
-    return { status: 'unclear', reason: 'пустой диалог', extracted: {}, score: 0 }
+    return { status: 'unclear', reason: 'пустой диалог', extracted: {}, score: 0, flags: {} }
   }
 
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
@@ -64,11 +74,18 @@ export async function classifyAvitoDialog(history: DialogMsg[]): Promise<Classif
   })
 
   const tu = res.content.find(c => c.type === 'tool_use') as Anthropic.ToolUseBlock | undefined
-  const input = (tu?.input ?? {}) as Partial<ClassifiedLead>
+  const input = (tu?.input ?? {}) as Partial<ClassifiedLead> & { flags?: Record<string, unknown> }
+
+  const flags: LeadFlags = {}
+  const rawFlags = input.flags ?? {}
+  for (const f of FLAGS) if (rawFlags[f.key] === true) flags[f.key] = true
+  if (input.extracted?.phone) flags.contact = true
+
   return {
     status: (input.status as LeadStatus) ?? 'unclear',
     reason: input.reason ?? '',
     extracted: input.extracted ?? {},
     score: Math.max(0, Math.min(100, Math.round(input.score ?? 0))),
+    flags,
   }
 }
