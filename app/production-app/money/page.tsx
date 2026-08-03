@@ -72,6 +72,12 @@ export default function MoneyPage() {
   }).filter(r => r.orders > 0 || r.key <= data.nowKey) : []
   const totalOrders = months.reduce((s, r) => s + r.orders, 0)
   const totalAmount = months.reduce((s, r) => s + r.amount, 0)
+  // Бонусный фонд месяца = маржа% × доля фонда (5%) от выручки — только если месяц
+  // прошёл ТБ-1 (иначе маржа не покрывает постоянку, фонда нет).
+  const bonusRate = m ? (m.marginPct / 100) * (m.funds.prodBonus / 100) : 0
+  const monthBonus = (amount: number) =>
+    (m?.tb1 != null && bonusRate > 0 && amount >= m.tb1) ? Math.round(amount * bonusRate) : null
+  const totalBonus = months.reduce((s, r) => s + (monthBonus(r.amount) ?? 0), 0)
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -171,22 +177,32 @@ export default function MoneyPage() {
                       <th className="px-4 py-2.5">Месяц · 2026</th>
                       <th className="px-4 py-2.5 text-right">Объектов</th>
                       <th className="px-4 py-2.5 text-right">Сумма</th>
+                      <th className="px-4 py-2.5 text-right">Бонус · {m?.funds.prodBonus ?? 5}% от маржи</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {months.map(r => (
+                    {months.map(r => {
+                      const bonus = monthBonus(r.amount)
+                      return (
                       <tr key={r.key} className={`border-b border-[#f0f0ee] ${r.key === data.nowKey ? 'bg-[#fafaf8]' : ''}`}>
                         <td className="px-4 py-2.5 text-[#111110]">{r.label}{r.key === data.nowKey && <span className="ml-2 text-[11px] text-[#9a9a95]">текущий</span>}</td>
                         <td className="px-4 py-2.5 text-right font-mono">{r.orders}</td>
                         <td className="px-4 py-2.5 text-right font-mono">{RUB(r.amount)}</td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {bonus != null
+                            ? <span className="text-emerald-700 font-semibold">{RUB(bonus)}</span>
+                            : <span className="text-[#c4c4be]">— ниже ТБ-1</span>}
+                        </td>
                       </tr>
-                    ))}
+                      )
+                    })}
                   </tbody>
                   <tfoot>
                     <tr className="font-semibold">
                       <td className="px-4 py-2.5">Итого</td>
                       <td className="px-4 py-2.5 text-right font-mono">{totalOrders}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{RUB(totalAmount)}</td>
+                      <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{RUB(totalBonus)}</td>
                     </tr>
                   </tfoot>
                 </table>
