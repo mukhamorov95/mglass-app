@@ -14,6 +14,23 @@ type B2bOrderRow = {
   total_after_discount: number | null
   total_sale_inc_vat: number | null
   total_cost_net: number | null
+  total_cost_vat?: number | null
+  items?: unknown
+}
+
+// Себестоимость B2B-заказа С НДС — чтобы сходиться с amount (тоже с НДС), иначе
+// маржа в реестре завышалась ~на 8-12 п.п. (net против inc-VAT). Считаем из
+// позиций (costWithVat — материал+закалка+кромка+упаковка+доставка), как в
+// /production-app/money; фолбэк на колонку total_cost_vat, затем net×1.22 (НДС 22%).
+function b2bCostWithVat(order: B2bOrderRow): number {
+  let items: Record<string, unknown>[] = []
+  if (Array.isArray(order.items)) items = order.items as Record<string, unknown>[]
+  else if (typeof order.items === 'string') { try { const p = JSON.parse(order.items); if (Array.isArray(p)) items = p } catch {} }
+  const itemsCost = items.reduce((s, it) => s + (Number(it?.costWithVat) || 0), 0)
+  if (itemsCost > 0) return itemsCost
+  if (order.total_cost_vat != null) return Number(order.total_cost_vat)
+  if (order.total_cost_net != null) return Number(order.total_cost_net) * 1.22
+  return 0
 }
 
 type RetailOrderRow = {
@@ -56,7 +73,8 @@ export async function upsertSaleFromB2B(
     .select('id').single()
   if (error) throw new Error(`upsertSaleFromB2B(#${order.id}): ${error.message}`)
   const saleId = (data as { id: number }).id
-  if (order.total_cost_net != null) await upsertCost(svc, saleId, Number(order.total_cost_net), 'b2b_order')
+  const costWithVat = b2bCostWithVat(order)
+  if (costWithVat > 0) await upsertCost(svc, saleId, costWithVat, 'b2b_order')
   return saleId
 }
 

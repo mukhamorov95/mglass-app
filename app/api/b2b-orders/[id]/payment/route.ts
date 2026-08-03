@@ -55,13 +55,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 
   const svc = createServiceClient()
   const { data: orderRow, error: oErr } = await svc.from('b2b_orders')
-    .select('id, custom_number, client_name, total_after_discount, total_sale_inc_vat, total_cost_net, created_by_name, notes')
+    .select('id, custom_number, client_name, total_after_discount, total_sale_inc_vat, total_cost_net, total_cost_vat, items, created_by_name, notes')
     .eq('id', orderId).maybeSingle()
   if (oErr || !orderRow) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
   const order = orderRow as {
     id: number; custom_number: string | null; client_name: string | null
     total_after_discount: number | null; total_sale_inc_vat: number | null
-    total_cost_net: number | null; created_by_name: string | null; notes: unknown
+    total_cost_net: number | null; total_cost_vat: number | null; items: unknown; created_by_name: string | null; notes: unknown
   }
 
   const total = Number(order.total_after_discount ?? order.total_sale_inc_vat ?? 0)

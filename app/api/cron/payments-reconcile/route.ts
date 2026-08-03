@@ -32,14 +32,14 @@ export async function GET(req: NextRequest) {
   type OrderRow = {
     id: number; custom_number: string | null; client_name: string | null
     total_after_discount: number | null; total_sale_inc_vat: number | null
-    total_cost_net: number | null; created_by_name: string | null; notes: unknown; created_at: string
+    total_cost_net: number | null; total_cost_vat: number | null; items: unknown; created_by_name: string | null; notes: unknown; created_at: string
   }
   // Постранично: у Supabase дефолтный потолок 1000 строк, заказов больше.
   const orders: OrderRow[] = []
   const PAGE = 1000
   for (let from = 0; ; from += PAGE) {
     const { data, error } = await svc.from('b2b_orders')
-      .select('id, custom_number, client_name, total_after_discount, total_sale_inc_vat, total_cost_net, created_by_name, notes, created_at')
+      .select('id, custom_number, client_name, total_after_discount, total_sale_inc_vat, total_cost_net, total_cost_vat, items, created_by_name, notes, created_at')
       .order('id').range(from, from + PAGE - 1)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     const page = (data ?? []) as OrderRow[]
