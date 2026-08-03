@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
-import { canAccessRoute, normalizeRole, type Role, type B2BScope } from './lib/getRole'
+import { canAccessRoute, isOwnerRole, normalizeRole, type Role, type B2BScope } from './lib/getRole'
 import { classifyDevice } from './lib/deviceClass'
+import { OWNER_2FA_COOKIE, isOwner2faEnabled, owner2faSecret, verifyOwner2faCookie } from './lib/owner2faCookie'
 
 const OWNER_BOOTSTRAP_EMAIL = 'admin@mglass.ru'
 
@@ -180,6 +181,27 @@ export async function middleware(request: NextRequest) {
       supabaseResponse.cookies.set('user-mgr-ws', `${user.id}|${mgrWs ? '1' : '0'}`, {
         maxAge: 3600, path: '/', httpOnly: true, sameSite: 'lax',
       })
+    }
+
+    // Второй фактор для владельца (owner-tier). Пока OWNER_2FA_ENABLED не задан —
+    // не срабатывает вовсе (ноль риска локаута; сбросил флаг = сразу обычный вход).
+    // Кука owner-2fa-ok подписана HMAC — подделать, зная только пароль, нельзя.
+    // Выход на /login/2fa и сами роуты 2fa/* исключены, иначе не подтвердить код.
+    if (isOwner2faEnabled() && role && isOwnerRole(role)) {
+      const twofaExempt = pathname === '/login/2fa' || pathname.startsWith('/api/security/2fa/')
+      if (!twofaExempt) {
+        const passed = await verifyOwner2faCookie(request.cookies.get(OWNER_2FA_COOKIE)?.value, user.id, owner2faSecret())
+        if (!passed) {
+          if (pathname.startsWith('/api/')) {
+            const res = NextResponse.json({ error: '2fa_required' }, { status: 401 })
+            supabaseResponse.cookies.getAll().forEach(c => res.cookies.set(c))
+            return res
+          }
+          const url = request.nextUrl.clone()
+          url.pathname = '/login/2fa'
+          return redirect(url)
+        }
+      }
     }
 
     // Redirect production workers from the home page to their app
