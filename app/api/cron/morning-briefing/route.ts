@@ -27,7 +27,7 @@ export async function GET(req: Request) {
   // CRON_FAIL_GUARD: падение крона раньше было тихим 500 — теперь пинг владельцу
   try {
     const auth = req.headers.get('authorization')
-    if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
+    if (!process.env.CRON_SECRET || auth !== `Bearer ${process.env.CRON_SECRET}`) {
       return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
     }
     const sb = db()

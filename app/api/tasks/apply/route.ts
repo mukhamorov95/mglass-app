@@ -26,7 +26,10 @@ export async function POST(req: Request) {
   if (task.type === 'config') {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_APP_URL}/api/cron/process-tasks`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' } }
+      { method: 'POST', headers: {
+        'Content-Type': 'application/json',
+        ...(process.env.CRON_SECRET ? { Authorization: `Bearer ${process.env.CRON_SECRET}` } : {}),
+      } }
     )
     const data = await res.json()
     return NextResponse.json(data)

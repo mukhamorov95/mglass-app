@@ -34,7 +34,7 @@ type OrderRow = { id: number; custom_number: string | null; client_name: string 
 
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET
-  if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
+  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403 })
   }
   const svc = createServiceClient()
