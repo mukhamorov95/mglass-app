@@ -85,6 +85,8 @@ export default function UsersPage() {
   const [invitePassword, setInvitePassword] = useState('')
   const [inviteRole, setInviteRole]     = useState<'manager' | 'admin' | 'buyer'>('manager')
   const [inviteName, setInviteName]     = useState('')
+  const [inviteLink, setInviteLink]     = useState<string | null>(null)
+  const [linkCopied, setLinkCopied]     = useState(false)
   const [saving, setSaving]             = useState(false)
   const [error, setError]               = useState<string | null>(null)
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set())
@@ -172,6 +174,43 @@ export default function UsersPage() {
     setShowInvite(false)
     setInviteEmail(''); setInvitePassword(''); setInviteName(''); setInviteRole('manager')
     fetchUsers()
+  }
+
+  // Пригласить ссылкой: человек сам задаёт пароль (владелец его не вводит и не
+  // узнаёт — пароль не попадает в браузер владельца). Пароль не нужен.
+  async function inviteByLink() {
+    setSaving(true); setError(null); setInviteLink(null)
+    const res = await fetch('/api/admin/invite-link', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: inviteEmail, role: inviteRole, name: inviteName }),
+    })
+    const json = await res.json()
+    setSaving(false)
+    if (!res.ok) { setError(json.error ?? 'Ошибка'); return }
+    setInviteLink(json.link)
+    fetchUsers()
+  }
+
+  // Сброс пароля существующему: ссылку он откроет сам и задаст новый пароль.
+  async function resetLink(userId: string) {
+    setError(null); setInviteLink(null)
+    const res = await fetch('/api/admin/invite-link', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userId }),
+    })
+    const json = await res.json()
+    if (!res.ok) { setError(json.error ?? 'Ошибка'); setShowInvite(true); return }
+    setInviteLink(json.link); setShowInvite(true)
+  }
+
+  async function copyInviteLink() {
+    if (!inviteLink) return
+    try { await navigator.clipboard.writeText(inviteLink); setLinkCopied(true); setTimeout(() => setLinkCopied(false), 1500) } catch { /* noop */ }
+  }
+
+  function closeInvite() {
+    setShowInvite(false); setError(null); setInviteLink(null)
+    setInviteEmail(''); setInvitePassword(''); setInviteName(''); setInviteRole('manager')
   }
 
   function togglePassword(id: string) {
@@ -372,6 +411,7 @@ export default function UsersPage() {
                                 </button>
                               )}
                               <button onClick={() => startEditPassword(u)} className="text-[#d4d4ce] hover:text-blue-400 text-[11px]">✏️</button>
+                              <button onClick={() => resetLink(u.id)} className="text-[#d4d4ce] hover:text-blue-500 text-[11px]" title="Ссылка: пусть задаст пароль сам">🔗</button>
                             </div>
                           )}
                         </td>
@@ -654,50 +694,76 @@ export default function UsersPage() {
         {showInvite && (
           <div
             className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4 overflow-y-auto"
-            onClick={e => { if (e.target === e.currentTarget) { setShowInvite(false); setError(null) } }}>
+            onClick={e => { if (e.target === e.currentTarget) closeInvite() }}>
             <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 w-full max-w-sm shadow-xl">
-              <h2 className="text-[15px] font-semibold text-[#111110] mb-4">Новый пользователь</h2>
-              <form onSubmit={handleInvite} className="space-y-3">
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Имя</label>
-                  <input value={inviteName} onChange={e => setInviteName(e.target.value)}
-                    placeholder="Александра"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Email</label>
-                  <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
-                    placeholder="manager@mglass.ru"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Пароль</label>
-                  <input type="text" required minLength={6} value={invitePassword} onChange={e => setInvitePassword(e.target.value)}
-                    placeholder="Минимум 6 символов"
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Роль</label>
-                  <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin' | 'buyer')}
-                    className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]">
-                    <option value="manager">Менеджер</option>
-                    <option value="buyer">Закупщик</option>
-                    <option value="measurer">Замерщик</option>
-                    <option value="admin">Администратор</option>
-                  </select>
-                </div>
-                {error && <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-                <div className="flex gap-2 pt-1">
-                  <button type="submit" disabled={saving}
-                    className="flex-1 bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28] disabled:opacity-50">
-                    {saving ? 'Создание...' : 'Создать'}
+              {inviteLink ? (
+                <>
+                  <h2 className="text-[15px] font-semibold text-[#111110] mb-2">Ссылка для входа</h2>
+                  <p className="text-[12px] text-[#6b6b66] mb-3">Отправьте её человеку (Telegram/WhatsApp). Он откроет и задаст <b>свой</b> пароль — вы его не вводите и не видите. Ссылка одноразовая, действует 7 дней.</p>
+                  <div className="flex gap-2 mb-3">
+                    <input readOnly value={inviteLink} onFocus={e => e.currentTarget.select()}
+                      className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[11px] font-mono text-[#6b6b66] outline-none" />
+                    <button type="button" onClick={copyInviteLink}
+                      className="px-3 bg-[#111110] text-white text-[12px] font-medium rounded-lg hover:bg-[#2a2a28] whitespace-nowrap">
+                      {linkCopied ? 'Скопировано' : 'Копировать'}
+                    </button>
+                  </div>
+                  <button type="button" onClick={closeInvite}
+                    className="w-full bg-[#f0f0ec] text-[#6b6b66] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">
+                    Готово
                   </button>
-                  <button type="button" onClick={() => { setShowInvite(false); setError(null) }}
-                    className="flex-1 bg-[#f0f0ec] text-[#6b6b66] text-[13px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">
-                    Отмена
-                  </button>
-                </div>
-              </form>
+                </>
+              ) : (
+                <>
+                  <h2 className="text-[15px] font-semibold text-[#111110] mb-1">Новый пользователь</h2>
+                  <p className="text-[12px] text-[#8a8a85] mb-4">Лучше «Пригласить ссылкой»: человек задаёт свой пароль сам, вы его не вводите и не видите.</p>
+                  <form onSubmit={handleInvite} className="space-y-3">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Имя</label>
+                      <input value={inviteName} onChange={e => setInviteName(e.target.value)}
+                        placeholder="Александра"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Email</label>
+                      <input type="email" required value={inviteEmail} onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="manager@mglass.ru"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Роль</label>
+                      <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin' | 'buyer')}
+                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]">
+                        <option value="manager">Менеджер</option>
+                        <option value="buyer">Закупщик</option>
+                        <option value="measurer">Замерщик</option>
+                        <option value="admin">Администратор</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Пароль <span className="normal-case text-[#c4c4be]">(необязательно)</span></label>
+                      <input type="text" minLength={6} value={invitePassword} onChange={e => setInvitePassword(e.target.value)}
+                        placeholder="только если задаёте вручную"
+                        className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
+                    </div>
+                    {error && <p className="text-[12px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
+                    <button type="button" onClick={inviteByLink} disabled={saving || !inviteEmail}
+                      className="w-full bg-[#111110] text-white text-[13px] font-medium rounded-lg py-2 hover:bg-[#2a2a28] disabled:opacity-40">
+                      {saving ? 'Создание...' : '🔗 Пригласить ссылкой'}
+                    </button>
+                    <div className="flex gap-2">
+                      <button type="submit" disabled={saving || !invitePassword}
+                        className="flex-1 bg-white border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium rounded-lg py-2 hover:bg-[#f6f6f4] disabled:opacity-40">
+                        Создать с паролем
+                      </button>
+                      <button type="button" onClick={closeInvite}
+                        className="flex-1 bg-[#f0f0ec] text-[#6b6b66] text-[12px] font-medium rounded-lg py-2 hover:bg-[#e8e8e4]">
+                        Отмена
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
             </div>
           </div>
         )}

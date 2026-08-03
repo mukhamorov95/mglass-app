@@ -73,6 +73,9 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/vlad/calendar/')
   // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
   const isPublicDemo = pathname.startsWith('/design/')
+  // Установка пароля по одноразовой ссылке: пользователь ещё не вошёл, поэтому
+  // страница и её API доступны без сессии (действие защищено токеном в ссылке).
+  const isPublicAuth = pathname === '/set-password' || pathname.startsWith('/api/auth/set-password')
 
   // Транзиентный сбой Auth (таймаут/5xx/рейт-лимит) ≠ «нет сессии»: пропускаем
   // запрос как есть — сессия скорее всего жива, редирект на /login затёр бы её
@@ -81,7 +84,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  if (!user && !isLoginPage && !isWebhook && !isPublicDemo) {
+  if (!user && !isLoginPage && !isWebhook && !isPublicDemo && !isPublicAuth) {
     const url = request.nextUrl.clone()
     // Голый redirect БЕЗ переноса кук: при гонке ротации refresh-токена
     // (параллельные запросы с планшета) проигравший нёс бы сюда ОЧИЩЕННЫЕ куки
