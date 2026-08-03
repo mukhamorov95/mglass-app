@@ -49,6 +49,16 @@ function isOutgoing(msg: Record<string, unknown>): boolean {
 }
 
 export async function POST(req: Request) {
+  // Опциональный секрет вебхука. Пока WAZZUP_WEBHOOK_SECRET не задан — приём
+  // работает как раньше (Wazzup вызовы не подписывает). Когда владелец задаст env
+  // И добавит ?secret=... в URL вебхука в кабинете Wazzup — чужие POST отсекаются.
+  // Секрет принимаем из query (?secret=) или заголовка X-Webhook-Secret.
+  const webhookSecret = process.env.WAZZUP_WEBHOOK_SECRET
+  if (webhookSecret) {
+    const provided = new URL(req.url).searchParams.get('secret') ?? req.headers.get('x-webhook-secret')
+    if (provided !== webhookSecret) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
+  }
+
   let body: { messages?: unknown[] }
   try {
     body = await req.json()
