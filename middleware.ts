@@ -68,6 +68,8 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/telegram/') ||
                     pathname.startsWith('/api/avito/webhook') ||
                     pathname.startsWith('/api/onlinepbx/') ||
+                    // Публичный приём заявок с сайта Mglass (антиспам — в самом роуте)
+                    pathname.startsWith('/api/site/') ||
                     // ICS-фид календаря владельца: календарь не умеет логиниться,
                     // аутентификация — секрет в URL (проверяется в самом роуте)
                     pathname.startsWith('/api/vlad/calendar/')
