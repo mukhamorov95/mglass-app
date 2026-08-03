@@ -35,22 +35,41 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'forbidden' }, { status: 403, headers: CORS })
   }
 
-  const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
-  if (!body) return NextResponse.json({ error: 'bad json' }, { status: 400, headers: CORS })
+  // Формы шлют по-разному: Tilda — form-urlencoded/multipart, код-форма — JSON.
+  const ct = req.headers.get('content-type') || ''
+  const body: Record<string, unknown> = {}
+  if (ct.includes('application/json')) {
+    Object.assign(body, ((await req.json().catch(() => null)) as Record<string, unknown>) ?? {})
+  } else {
+    const fd = await req.formData().catch(() => null)
+    if (fd) for (const [k, val] of fd.entries()) body[k] = typeof val === 'string' ? val : ''
+  }
+
+  // Tilda при подключении вебхука шлёт тестовый пинг — отвечаем ok, лид не заводим.
+  if (body.test != null && Object.keys(body).length <= 3) {
+    return NextResponse.json({ ok: true, test: true }, { headers: CORS })
+  }
+
+  // Индекс по нижнему регистру: поля формы могут называться по-разному (Tilda/ручные).
+  const lower: Record<string, string> = {}
+  for (const [k, v] of Object.entries(body)) if (typeof v === 'string' && v.trim()) lower[k.toLowerCase()] = v.trim()
+  const pick = (...keys: string[]) => { for (const k of keys) { const v = lower[k.toLowerCase()]; if (v) return v } return null }
+  const clip = (s: string | null, n: number) => (s ? s.slice(0, n) : null)
 
   // Honeypot: скрытое поле, которое заполняют только боты — тихо отбрасываем.
-  if (typeof body.hp === 'string' && body.hp.trim()) return NextResponse.json({ ok: true }, { headers: CORS })
+  if (pick('hp')) return NextResponse.json({ ok: true }, { headers: CORS })
 
-  const str = (v: unknown, max = 500) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null)
-  const name = str(body.name, 200)
-  const phone = str(body.phone, 50)
-  const message = str(body.message ?? body.comment ?? body.text, 2000)
-  const product = str(body.product, 200)
-  const sizes = str(body.sizes, 200)
-  const city = str(body.city, 200)
-  const budget = str(body.budget, 200)
-  const page = str(body.page ?? body.url, 500)
-  const utm = str(typeof body.utm === 'object' ? JSON.stringify(body.utm) : body.utm, 500)
+  const name = clip(pick('name', 'имя', 'fio', 'фио', 'firstname'), 200)
+  const phone = clip(pick('phone', 'телефон', 'tel', 'phone-number'), 50)
+  const email = clip(pick('email', 'почта', 'e-mail'), 200)
+  const message = clip(pick('message', 'comment', 'text', 'сообщение', 'комментарий', 'вопрос', 'textarea'), 2000)
+  const product = clip(pick('product', 'продукт', 'изделие', 'услуга'), 200)
+  const sizes = clip(pick('sizes', 'размеры', 'размер'), 200)
+  const city = clip(pick('city', 'город'), 200)
+  const budget = clip(pick('budget', 'бюджет'), 200)
+  const page = clip(pick('page', 'url') ?? req.headers.get('referer'), 500)
+  const utmPairs = Object.entries(lower).filter(([k]) => k.startsWith('utm')).map(([k, v]) => `${k}=${v}`)
+  const utm = utmPairs.length ? utmPairs.join(' ').slice(0, 500) : null
 
   // Пустышки не заводим — нужен хоть какой-то способ связи или суть запроса.
   if (!phone && !name && !message) {
@@ -58,7 +77,7 @@ export async function POST(req: NextRequest) {
   }
 
   const service = db()
-  const noteParts = [message, product && `Продукт: ${product}`, sizes && `Размеры: ${sizes}`, page && `Страница: ${page}`, utm && `UTM: ${utm}`].filter(Boolean)
+  const noteParts = [message, product && `Продукт: ${product}`, sizes && `Размеры: ${sizes}`, email && `Email: ${email}`, page && `Страница: ${page}`, utm && `UTM: ${utm}`].filter(Boolean)
   const { data: created, error } = await service.from('crm_leads').insert({
     source: 'site', name, phone, city, product, sizes, budget,
     manager: OWNER, stage: 'Получена новая заявка',
