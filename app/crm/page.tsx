@@ -81,6 +81,8 @@ export default function CrmPage() {
   const [search, setSearch] = useState('')
   const [srcFilter, setSrcFilter] = useState<'all' | Lead['source']>('all')
   const [heatFilter, setHeatFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
+  const [periodFilter, setPeriodFilter] = useState<'month' | 'prev' | 'all'>('month')
+  const [mgrFilter, setMgrFilter] = useState('all')
   const [showClosed, setShowClosed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [scoped, setScoped] = useState(false)   // менеджер видит только свои лиды
@@ -166,7 +168,21 @@ export default function CrmPage() {
   }
 
   const q = search.trim().toLowerCase()
-  const visible = leads.filter(l =>
+  // Границы периода берём из `now` (проставляется в эффекте) — не дёргаем Date в
+  // рендере. По умолчанию показываем только текущий месяц: доска не забита старьём.
+  const nowD = now ? new Date(now) : null
+  const monthStart = nowD ? new Date(nowD.getFullYear(), nowD.getMonth(), 1).getTime() : 0
+  const prevMonthStart = nowD ? new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1).getTime() : 0
+  const inPeriod = (l: Lead) => {
+    if (periodFilter === 'all' || !now) return true
+    const t = new Date(l.created_at).getTime()
+    if (periodFilter === 'month') return t >= monthStart
+    return t >= prevMonthStart && t < monthStart   // 'prev'
+  }
+  // База периода + менеджера — от неё считаем счётчики, чтобы цифры совпадали с доской.
+  const periodLeads = leads.filter(l => inPeriod(l) && (mgrFilter === 'all' || (l.manager ?? '') === mgrFilter))
+  const managers = [...new Set(leads.map(l => l.manager).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'ru'))
+  const visible = periodLeads.filter(l =>
     (showClosed ? true : l.status === 'active') &&
     (srcFilter === 'all' || l.source === srcFilter) &&
     (heatFilter === 'all' || (l.heat ?? 'cold') === heatFilter) &&
@@ -179,7 +195,7 @@ export default function CrmPage() {
     heatRank(b.heat) - heatRank(a.heat) || new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()))
 
   const keyLeads = visible.filter(l => l.qualified && l.status === 'active')
-  const hotLeads = leads.filter(l => l.heat === 'hot' && l.status === 'active')
+  const hotLeads = periodLeads.filter(l => l.heat === 'hot' && l.status === 'active')
 
   // Задачи (amoCRM): открытые, отсортированы по сроку; «на сегодня и просроченные»
   // — верхняя панель; просроченные подсвечивают карточку.
@@ -205,7 +221,7 @@ export default function CrmPage() {
               {scoped && <span className="ml-2 text-[11px] font-medium align-middle px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             </h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">
-              Активных: {leads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
+              Активных: {periodLeads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
               {' · '}<button onClick={() => setHeatFilter(h => h === 'hot' ? 'all' : 'hot')}
                 className={`font-semibold ${heatFilter === 'hot' ? 'text-emerald-700 underline' : 'text-emerald-600'}`}>🟢 готовы менеджеру: {hotLeads.length}</button>
             </p>
@@ -225,6 +241,19 @@ export default function CrmPage() {
               <option value="warm">🟡 В работе бота</option>
               <option value="cold">🔵 Холодный</option>
             </select>
+            <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value as typeof periodFilter)}
+              className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
+              <option value="month">Текущий месяц</option>
+              <option value="prev">Прошлый месяц</option>
+              <option value="all">Всё время</option>
+            </select>
+            {!scoped && managers.length > 0 && (
+              <select value={mgrFilter} onChange={e => setMgrFilter(e.target.value)}
+                className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
+                <option value="all">Все менеджеры</option>
+                {managers.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
             <label className="flex items-center gap-1.5 text-[12px] text-[#6b6b66]">
               <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} className="accent-[#111110]" />
               закрытые
