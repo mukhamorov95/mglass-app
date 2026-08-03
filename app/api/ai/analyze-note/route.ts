@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { requireOwner } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -19,6 +20,8 @@ async function applyToBotKnowledge(supabase: ReturnType<typeof db>, newFact: str
 }
 
 export async function POST(req: Request) {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   try {
     const { content, noteId } = await req.json() as { content: string; noteId?: string }
     if (!content?.trim()) return NextResponse.json({ error: 'empty' }, { status: 400 })

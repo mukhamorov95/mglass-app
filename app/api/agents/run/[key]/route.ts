@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase-server'
+import { requireOwner } from '@/lib/apiAuth'
 
 const ALLOWED_KEYS = ['revenue', 'analyst', 'production', 'catalog']
 
@@ -12,9 +12,8 @@ export async function POST(
     return NextResponse.json({ error: 'Unknown agent' }, { status: 404 })
   }
 
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
 
   // Строим baseUrl: для localhost используем http, для прода — https
   const host = req.headers.get('host') ?? 'localhost:3000'
