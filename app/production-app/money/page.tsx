@@ -184,7 +184,7 @@ export default function MoneyPage() {
                       <th className="px-4 py-2.5 text-right">Объектов</th>
                       <th className="px-4 py-2.5 text-right">Сумма</th>
                       <th className="px-4 py-2.5 text-right">Бонус · {m?.funds.prodBonus ?? 5}% от маржи</th>
-                      {showReal && <th className="px-4 py-2.5 text-right text-[#111110]">🔒 Реальная маржа <span className="normal-case tracking-normal text-[10px] text-[#9a9a95]">только вы</span></th>}
+                      {showReal && <th className="px-4 py-2.5 text-right text-[#111110]">🔒 Реальная маржа, ₽ <span className="normal-case tracking-normal text-[10px] text-[#9a9a95]">только вы</span></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -201,10 +201,11 @@ export default function MoneyPage() {
                             : <span className="text-[#c4c4be]">— ниже ТБ-1</span>}
                         </td>
                         {showReal && (() => {
-                          const rm = data.monthlyReal![r.key]?.marginPct
-                          if (rm == null || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
-                          const good = m?.marginPct != null ? rm >= m.marginPct : rm >= 0
-                          return <td className={`px-4 py-2.5 text-right font-mono font-semibold ${good ? 'text-emerald-700' : 'text-amber-700'}`}>{rm}%</td>
+                          const real = data.monthlyReal![r.key]
+                          if (!real || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
+                          const marginRub = Math.round(r.amount - real.cost)
+                          const good = m?.marginPct != null ? real.marginPct >= m.marginPct : real.marginPct >= 0
+                          return <td className={`px-4 py-2.5 text-right font-mono font-semibold ${good ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(marginRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{real.marginPct}%</span></td>
                         })()}
                       </tr>
                       )
@@ -216,14 +217,14 @@ export default function MoneyPage() {
                       <td className="px-4 py-2.5 text-right font-mono">{totalOrders}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{RUB(totalAmount)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{RUB(totalBonus)}</td>
-                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{totalRealMargin}%</td>}
+                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(totalAmount - totalRealCost)} <span className="text-[10px] text-[#9a9a95] font-normal">{totalRealMargin}%</span></td>}
                     </tr>
                   </tfoot>
                 </table>
                 </div>
                 {showReal && (
                   <p className="px-4 py-2.5 text-[11px] text-[#9a9a95] border-t border-[#f0f0ee]">
-                    🔒 «Реальная маржа» — по факту заказов месяца (выручка − себестоимость из заказов). Зелёная ≥ план {m?.marginPct ?? 60}%, янтарная — ниже. Колонку видите только вы (админ).
+                    🔒 «Реальная маржа, ₽» — сколько маржи нагенерили по факту заказов месяца (выручка − себестоимость). Мелким — % от выручки. Зелёная ≥ план {m?.marginPct ?? 60}%, янтарная — ниже. Колонку видите только вы (админ).
                   </p>
                 )}
               </div>
