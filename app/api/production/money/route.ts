@@ -65,7 +65,7 @@ export async function GET() {
   const monthlyCost: Record<string, number> = {}   // сумма себестоимости по месяцу (для реальной маржи, только админу)
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from('b2b_orders')
-      .select('created_at, total_after_discount, total_sale_inc_vat, total_cost_vat')
+      .select('created_at, total_after_discount, total_sale_inc_vat, total_cost_vat, total_cost_net, items')
       .gte('created_at', '2026-01-01')
       .is('archived_at', null)
       .not('notes', 'ilike', '%"status":"quote"%')
@@ -79,7 +79,14 @@ export async function GET() {
       cur.orders += 1
       cur.amount += o.total_after_discount ?? o.total_sale_inc_vat ?? 0
       monthly[mKey] = cur
-      monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + (o.total_cost_vat ?? 0)
+      // Себестоимость по ФАКТУ позиций: у каждой позиции costWithVat уже включает
+      // материал + закалку + фацет + кромку + упаковку + доставку. Колонки
+      // total_cost_vat/net у многих заказов пустые (0% себестоимости → маржа 100%),
+      // поэтому считаем из items; на колонки падаем только как фолбэк.
+      const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
+      const itemsCost = items.reduce((s, it) => s + (Number(it?.costWithVat) || 0), 0)
+      const orderCost = itemsCost > 0 ? itemsCost : (Number(o.total_cost_vat) || Number(o.total_cost_net) || 0)
+      monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + orderCost
     }
     if (!data || data.length < 1000) break
   }
