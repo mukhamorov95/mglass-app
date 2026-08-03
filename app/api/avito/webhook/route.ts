@@ -6,6 +6,7 @@ import { notifyAdmins } from '@/lib/telegram'
 import { isBotEnabled } from '@/lib/aiKillSwitch'
 import { scoreLead } from '@/lib/avito/scoreLead'
 import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
+import { getRelevantExamples } from '@/lib/avito/managerExamples'
 
 // Вебхук Avito Messenger: входящее сообщение клиента → лид в crm_leads (по
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
@@ -163,9 +164,12 @@ export async function POST(req: NextRequest) {
     budget: lead.budget as string | null, phone: lead.phone as string | null,
   }
 
+  // Few-shot: подбираем похожие ответы живых менеджеров (fail-open → []).
+  const examples = await getRelevantExamples(service, { product: known.product, clientText: text })
+
   let turn
   try {
-    turn = await runAvitoManager(history, known)
+    turn = await runAvitoManager(history, known, { examples })
   } catch (e) {
     // Ошибка модели ДО отправки — снимаем метку дедупа, чтобы ретрай Авито
     // переобработал сообщение (иначе ответ был бы потерян навсегда).

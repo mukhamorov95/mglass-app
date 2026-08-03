@@ -9,6 +9,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { quickCalc, type CalcType } from '@/lib/quickCalc'
 import { guardPrices, extractPhone, shouldHandOver, mergeClientBurst, type DialogMsg } from './avitoGuards'
 import { FLAGS, type LeadFlags } from '@/lib/avito/flags'
+import { type ManagerExample } from '@/lib/avito/managerExamples'
 
 export type { DialogMsg }
 
@@ -124,8 +125,23 @@ const RESPOND_TOOL: Anthropic.Tool = {
   },
 }
 
-export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): Promise<ManagerTurn> {
+export async function runAvitoManager(
+  history: DialogMsg[],
+  known: LeadKnown,
+  opts: { examples?: ManagerExample[] } = {},
+): Promise<ManagerTurn> {
   const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+
+  // Few-shot: как опытные менеджеры отвечали в похожих ситуациях. Подмешиваем в
+  // system как образцы стиля/аргументации — не как жёсткие шаблоны (цены всё равно
+  // только из калькулятора, guardPrices вырежет любую выдуманную сумму).
+  const examples = opts.examples ?? []
+  const systemText = examples.length
+    ? PERSONA + '\n\nПРИМЕРЫ ОТВЕТОВ ОПЫТНЫХ МЕНЕДЖЕРОВ (перенимай тон, стиль и аргументацию; НЕ копируй дословно, НЕ бери из них цифры/условия):\n' +
+      examples.map((e, i) =>
+        `${i + 1}. Клиент: «${e.client_context.slice(0, 300)}»\n   Менеджер: «${e.manager_reply.slice(0, 400)}»`,
+      ).join('\n')
+    : PERSONA
 
   const knownLines = Object.entries(known).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
   const messages: Anthropic.MessageParam[] = [
@@ -138,7 +154,7 @@ export async function runAvitoManager(history: DialogMsg[], known: LeadKnown): P
   const res = await anthropic.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 1200,
-    system: PERSONA,
+    system: systemText,
     tools: [RESPOND_TOOL],
     tool_choice: { type: 'tool', name: 'respond' },
     messages,
