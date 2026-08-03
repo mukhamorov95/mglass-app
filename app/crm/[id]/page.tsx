@@ -5,6 +5,7 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
+import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
 
 type Lead = {
   id: number
@@ -13,6 +14,8 @@ type Lead = {
   order_no: string | null; product: string | null; sizes: string | null; budget: string | null
   est_amount: number | null; est_profit: number | null
   stage: string; qualified: boolean; score: number | null; score_reason: string | null
+  flags: Record<string, boolean> | null; readiness: number | null
+  heat: 'cold' | 'warm' | 'hot' | null; missing_next: string | null
   manager: string | null; note: string | null
   status: 'active' | 'won' | 'lost'; lost_reason: string | null
   avito_chat_id: string | null; created_at: string; updated_at: string
@@ -30,6 +33,11 @@ const AI_MANAGERS = ['Иван (AI)', 'AI-менеджер']
 function fmtD(s: string) { return new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) }
 const RUB = (n: number) => n.toLocaleString('ru-RU')
 const TASK_KIND: Record<string, string> = { call: '📞 Звонок', meeting: '🤝 Встреча', measure: '📐 Замер', followup: '🔔 Напоминание', other: '• Другое' }
+const HEAT: Record<'cold' | 'warm' | 'hot', { label: string; icon: string; cls: string; bar: string }> = {
+  cold: { label: 'Холодный', icon: '🔵', cls: 'bg-slate-100 text-slate-600', bar: 'bg-slate-300' },
+  warm: { label: 'В работе бота', icon: '🟡', cls: 'bg-amber-100 text-amber-700', bar: 'bg-amber-400' },
+  hot: { label: 'Готов менеджеру', icon: '🟢', cls: 'bg-emerald-100 text-emerald-700', bar: 'bg-emerald-500' },
+}
 
 function Field({ label, value, onSave, isNum, placeholder }: {
   label: string; value: string | number | null; onSave: (v: string | number | null) => void; isNum?: boolean; placeholder?: string
@@ -334,7 +342,39 @@ export default function LeadDetailPage() {
             <Field label="Бюджет" value={lead.budget} onSave={v => patch({ budget: v as string | null })} />
             <Field label="Предв.цена" value={lead.est_amount} onSave={v => patch({ est_amount: v as number | null })} isNum placeholder="₽" />
 
-            {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
+            <div className="mt-3 rounded-lg border border-[#e4e4e0] p-3">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[12px] font-semibold text-[#111110]">Готовность заявки</span>
+                <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${HEAT[lead.heat ?? 'cold'].cls}`}>
+                  {HEAT[lead.heat ?? 'cold'].icon} {HEAT[lead.heat ?? 'cold'].label}
+                </span>
+              </div>
+              <div className="h-2 rounded-full bg-[#eee] overflow-hidden">
+                <div className={`h-full ${HEAT[lead.heat ?? 'cold'].bar}`} style={{ width: `${Math.min(100, lead.readiness ?? 0)}%` }} />
+              </div>
+              <p className="mt-1 mb-2 text-[11px] text-[#9a9a95]">{lead.readiness ?? 0}% собрано</p>
+              <ul className="grid grid-cols-2 gap-x-3 gap-y-1">
+                {FLAGS.filter(f => f.group === 'core' || f.group === 'support').map(f => {
+                  const on = !!lead.flags?.[f.key]
+                  return (
+                    <li key={f.key} className={`text-[11px] flex items-center gap-1 ${on ? 'text-[#111110]' : 'text-[#c4c4bf]'}`}>
+                      <span>{on ? '✅' : '⬜'}</span>
+                      <span className={f.isCore ? 'font-medium' : ''}>{f.label}</span>
+                    </li>
+                  )
+                })}
+              </ul>
+              {lead.missing_next && FLAG_BY_KEY[lead.missing_next as FlagKey] && (
+                <p className="mt-2 text-[11px] text-sky-700">🤖 Бот запрашивает: {FLAG_BY_KEY[lead.missing_next as FlagKey].label}</p>
+              )}
+              {lead.flags && Object.keys(lead.flags).some(k => lead.flags?.[k] && FLAG_BY_KEY[k as FlagKey]?.group === 'disqualify') && (
+                <p className="mt-2 text-[11px] text-red-600">⛔ {Object.keys(lead.flags)
+                  .filter(k => lead.flags?.[k] && FLAG_BY_KEY[k as FlagKey]?.group === 'disqualify')
+                  .map(k => FLAG_BY_KEY[k as FlagKey].label).join(', ')}</p>
+              )}
+            </div>
+
+            {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг бота: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
 
             <div className="flex gap-2 mt-3">
               <button onClick={() => patch({ qualified: !lead.qualified }, lead.qualified ? 'Снят с ключевого' : '⭐ Ключевой этап')}
