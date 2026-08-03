@@ -4,6 +4,8 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { isAvitoConfigured, avitoGetSelfId, avitoListChats, avitoListMessages } from '@/lib/avito'
 import { classifyAvitoDialog } from '@/lib/ai-tools/avitoLeadClassifier'
 import { type DialogMsg } from '@/lib/ai-tools/avitoManagerRuntime'
+import { scoreLead } from '@/lib/avito/scoreLead'
+import { type LeadFlags } from '@/lib/avito/flags'
 
 // Импорт существующих заявок Авито в CRM. GET — превью с классификацией
 // (интересно/отказ), POST — вставка выбранных (кроме отказников) в crm_leads.
@@ -49,7 +51,7 @@ export async function GET(req: NextRequest) {
 
       if (already) {
         return { chat_id: chat.id, title, clientName: otherName, lastText,
-          already_imported: true, status: 'interested' as const, reason: 'уже в CRM', extracted: {}, score: 0 }
+          already_imported: true, status: 'interested' as const, reason: 'уже в CRM', extracted: {}, score: 0, flags: {} }
       }
 
       let history: DialogMsg[] = []
@@ -64,7 +66,7 @@ export async function GET(req: NextRequest) {
 
       const cls = await classifyAvitoDialog(history)
       return { chat_id: chat.id, title, clientName: otherName || cls.extracted.name || '', lastText,
-        already_imported: false, status: cls.status, reason: cls.reason, extracted: cls.extracted, score: cls.score }
+        already_imported: false, status: cls.status, reason: cls.reason, extracted: cls.extracted, score: cls.score, flags: cls.flags }
     })
 
     return NextResponse.json({ selfId, scanned: chats.length, limit, candidates })
@@ -78,7 +80,7 @@ export async function GET(req: NextRequest) {
 
 type ImportItem = {
   chat_id: string; name?: string; phone?: string; product?: string
-  sizes?: string; city?: string; budget?: string; score?: number
+  sizes?: string; city?: string; budget?: string; score?: number; flags?: LeadFlags
 }
 
 export async function POST(req: NextRequest) {
@@ -94,13 +96,19 @@ export async function POST(req: NextRequest) {
   const { data: existing } = await sb.from('crm_leads').select('avito_chat_id').in('avito_chat_id', items.map(i => i.chat_id))
   const seen = new Set((existing ?? []).map(r => r.avito_chat_id as string))
 
-  const toInsert = items.filter(i => !seen.has(i.chat_id)).map(i => ({
-    source: 'avito', avito_chat_id: i.chat_id, manager: 'Импорт с Авито',
-    stage: 'Получена новая заявка',
-    name: i.name || null, phone: i.phone || null, product: i.product || null,
-    sizes: i.sizes || null, city: i.city || null, budget: i.budget || null,
-    score: Number.isFinite(i.score) ? i.score : null,
-  }))
+  const toInsert = items.filter(i => !seen.has(i.chat_id)).map(i => {
+    const flags = i.flags ?? {}
+    const sc = scoreLead(flags)
+    return {
+      source: 'avito', avito_chat_id: i.chat_id, manager: 'Импорт с Авито',
+      stage: 'Получена новая заявка',
+      name: i.name || null, phone: i.phone || null, product: i.product || null,
+      sizes: i.sizes || null, city: i.city || null, budget: i.budget || null,
+      score: Number.isFinite(i.score) ? i.score : null,
+      flags, readiness: sc.readiness, heat: sc.heat, missing_next: sc.missingNext,
+      qualified: sc.isHot,
+    }
+  })
   if (!toInsert.length) return NextResponse.json({ ok: true, inserted: 0, skipped: items.length })
 
   const { data: inserted, error } = await sb.from('crm_leads').insert(toInsert).select('id')

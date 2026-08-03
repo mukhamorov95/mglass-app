@@ -66,6 +66,77 @@ function Field({ label, value, onSave, isNum, placeholder }: {
   )
 }
 
+// Мини-калькулятор в карточке: менеджеру не нужно считать вручную (боль «тяжело
+// посчитать»). Дёргает детерминированный /api/calc/quick, цену можно записать в лид.
+function QuickCalc({ onSave }: { onSave: (amount: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const [type, setType] = useState<'shower' | 'mirror' | 'loft'>('shower')
+  const [w, setW] = useState('')
+  const [h, setH] = useState('')
+  const [budget, setBudget] = useState(true)
+  const [light, setLight] = useState(false)
+  const [res, setRes] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function calc() {
+    if (!w || !h) { setErr('укажите ширину и высоту (мм)'); return }
+    setBusy(true); setErr(''); setRes(null)
+    try {
+      const options: Record<string, unknown> = {}
+      if (budget) options.tier = 'budget'
+      if (type === 'mirror' && light) options.hasLighting = true
+      const r = await fetch('/api/calc/quick', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type, width: Number(w), height: Number(h), options }),
+      })
+      const d = await r.json()
+      if (!r.ok) throw new Error(d.error || 'ошибка расчёта')
+      setRes(Math.round(d.finalPrice))
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (!open) return (
+    <button onClick={() => setOpen(true)}
+      className="mt-2 w-full px-2 py-2 rounded-lg border border-[#e4e4e0] text-[12px] font-semibold text-[#6b6b66] hover:border-[#111110]">
+      🧮 Посчитать
+    </button>
+  )
+  const inp = 'border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]'
+  return (
+    <div className="mt-2 rounded-lg border border-[#e4e4e0] p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-[12px] font-semibold text-[#111110]">🧮 Быстрый расчёт</span>
+        <button onClick={() => setOpen(false)} className="text-[11px] text-[#9a9a95]">свернуть</button>
+      </div>
+      <div className="grid grid-cols-3 gap-2">
+        <select value={type} onChange={e => setType(e.target.value as typeof type)} className={`${inp} col-span-3 bg-white`}>
+          <option value="shower">Душевая (прямая)</option>
+          <option value="mirror">Зеркало</option>
+          <option value="loft">Лофт-перегородка</option>
+        </select>
+        <input value={w} onChange={e => setW(e.target.value)} type="number" placeholder="ширина, мм" className={`${inp} col-span-1`} />
+        <input value={h} onChange={e => setH(e.target.value)} type="number" placeholder="высота, мм" className={`${inp} col-span-1`} />
+        <button onClick={calc} disabled={busy} className="col-span-1 px-2 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold disabled:opacity-50">
+          {busy ? '…' : 'Считать'}
+        </button>
+      </div>
+      <div className="flex items-center gap-3 text-[12px] text-[#6b6b66]">
+        <label className="flex items-center gap-1.5"><input type="checkbox" checked={budget} onChange={e => setBudget(e.target.checked)} className="accent-[#111110]" />эконом</label>
+        {type === 'mirror' && <label className="flex items-center gap-1.5"><input type="checkbox" checked={light} onChange={e => setLight(e.target.checked)} className="accent-[#111110]" />с подсветкой</label>}
+      </div>
+      {err && <p className="text-[11px] text-red-600">{err}</p>}
+      {res != null && (
+        <div className="flex items-center justify-between rounded-lg bg-emerald-50 border border-emerald-200 px-3 py-2">
+          <span className="text-[13px] font-bold text-emerald-800">{res.toLocaleString('ru-RU')} ₽</span>
+          <button onClick={() => onSave(res)} className="text-[12px] font-semibold text-emerald-700 underline">→ в предв. цену</button>
+        </div>
+      )}
+      <p className="text-[10px] text-[#c4c4be]">Точный авторасчёт — для простых конфигураций; сложные считает производство после замера.</p>
+    </div>
+  )
+}
+
 export default function LeadDetailPage() {
   const params = useParams()
   const id = Number(params.id)
@@ -373,6 +444,8 @@ export default function LeadDetailPage() {
                   .map(k => FLAG_BY_KEY[k as FlagKey].label).join(', ')}</p>
               )}
             </div>
+
+            <QuickCalc onSave={n => patch({ est_amount: n }, `🧮 Расчёт: ${n.toLocaleString('ru-RU')} ₽`)} />
 
             {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг бота: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
 
