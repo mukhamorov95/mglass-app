@@ -62,9 +62,10 @@ export async function GET() {
 
   // Сборка помесячно с января 2026: заказы производства (без просчётов/истории/архива)
   const monthly: Record<string, { orders: number; amount: number }> = {}
+  const monthlyCost: Record<string, number> = {}   // сумма себестоимости по месяцу (для реальной маржи, только админу)
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from('b2b_orders')
-      .select('created_at, total_after_discount, total_sale_inc_vat')
+      .select('created_at, total_after_discount, total_sale_inc_vat, total_cost_vat')
       .gte('created_at', '2026-01-01')
       .is('archived_at', null)
       .not('notes', 'ilike', '%"status":"quote"%')
@@ -78,8 +79,22 @@ export async function GET() {
       cur.orders += 1
       cur.amount += o.total_after_discount ?? o.total_sale_inc_vat ?? 0
       monthly[mKey] = cur
+      monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + (o.total_cost_vat ?? 0)
     }
     if (!data || data.length < 1000) break
+  }
+
+  // Реальная маржа по факту заказов месяца — приватная колонка ТОЛЬКО для admin.
+  // Данные вычисляем и отдаём лишь ему; в браузер остальных ролей не уходят.
+  const isAdmin = profile?.role === 'admin'
+  let monthlyReal: Record<string, { cost: number; marginPct: number }> | undefined
+  if (isAdmin) {
+    monthlyReal = {}
+    for (const k of Object.keys(monthly)) {
+      const rev = monthly[k].amount
+      const cost = monthlyCost[k] ?? 0
+      monthlyReal[k] = { cost: Math.round(cost), marginPct: rev > 0 ? Math.round((1 - cost / rev) * 1000) / 10 : 0 }
+    }
   }
 
   // Факт выручки текущего месяца — для прогресса к ТБ
@@ -102,5 +117,5 @@ export async function GET() {
     }
   }).sort((a, b) => (b.years ?? -1) - (a.years ?? -1))
 
-  return NextResponse.json({ model, monthly, nowKey, factThisMonth, bonusTeam })
+  return NextResponse.json({ model, monthly, monthlyReal, isAdmin, nowKey, factThisMonth, bonusTeam })
 }
