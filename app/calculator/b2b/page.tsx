@@ -1005,10 +1005,15 @@ export default function B2BCalculatorPage() {
     setSavedAsPending(false)
     const sb = createClient()
     const t = totals!
-    // Сохраняем позиции с себестоимостью по авторасходу (маржа — из них же).
-    const avgMargin = itemsAuto.length > 0
-      ? Math.round(itemsAuto.reduce((s, i) => s + i.margin, 0) / itemsAuto.length)
-      : 0
+    // Маржа заказа — взвешенная по выручке и с учётом скидки/договорных цен, а не
+    // простое среднее по позициям: крупная низкомаржинальная позиция должна тянуть
+    // общую маржу вниз сильнее мелкой. Из margin_percent её читают крон-аномалии,
+    // /commercial/money и AI — среднее по позициям врало (мелкая дорогая маскировала
+    // крупную дешёвую, скидка вообще не учитывалась). Считаем как реальную:
+    // (выручка_безНДС_после_скидки − себестоимость_безНДС) / выручка_безНДС.
+    const revExVatAfter = itemsAuto.reduce((s, i) => s + effectiveItemTotal(i, discount) * 100 / (100 + VAT), 0)
+    const costExVatSum  = itemsAuto.reduce((s, i) => s + i.costExVat, 0)
+    const avgMargin = revExVatAfter > 0 ? Math.round((1 - costExVatSum / revExVatAfter) * 100) : 0
     const authorName = managerName ?? managerEmail ?? null
     const editing = editingOrderId != null
     const baseNotes = editing ? { ...editOrigNotesRef.current } : {}
