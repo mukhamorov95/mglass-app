@@ -261,8 +261,12 @@ export function calculateMirror(
       name:  'Сборка рамки',
       qty:   fc.totalMinutes,
       unit:  'мин',
-      price: Math.round(fc.totalMinutes > 0 ? fc.assemblySale / fc.totalMinutes : 0),
-      total: fc.assemblySale,
+      // Себестоимость сборки (не assemblySale): вся строка попадает в totalCost,
+      // к которому ниже применяется единая маржа /(1−маржа−налог). assemblySale
+      // уже включает overhead+маржу → в сумме получалась двойная маржа на сборке
+      // рамки (профиль при этом шёл по себестоимости — была рассогласованность).
+      price: Math.round(fc.totalMinutes > 0 ? fc.assemblyCost / fc.totalMinutes : 0),
+      total: fc.assemblyCost,
     })
   }
 
