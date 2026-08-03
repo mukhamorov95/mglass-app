@@ -87,14 +87,19 @@ export async function POST(req: NextRequest) {
     .eq('avito_chat_id', v.chat_id).order('id', { ascending: true }).limit(1)
   let lead = (found?.[0] ?? null) as Record<string, unknown> | null
   if (!lead) {
+    // Обычный insert, НЕ upsert(onConflict): уникальный индекс на avito_chat_id
+    // частичный (WHERE avito_chat_id IS NOT NULL), и Postgres не принимает его в
+    // ON CONFLICT (ошибка 42P10). Из-за этого создание лида падало на КАЖДОМ
+    // новом чате и Иван молчал с 16.07. Индекс всё равно защищает от гонки: при
+    // конкурентной вставке второй insert упадёт по индексу → перечитываем.
     const { data: created } = await service.from('crm_leads')
-      .upsert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'Иван (AI)' }, { onConflict: 'avito_chat_id', ignoreDuplicates: true })
+      .insert({ source: 'avito', avito_chat_id: v.chat_id, manager: 'Иван (AI)' })
       .select('*')
     lead = (created?.[0] ?? null) as Record<string, unknown> | null
     if (lead) {
       await service.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', text: 'Лид создан из Авито-чата', author: 'AI' })
     } else {
-      // Конкурентная вставка выиграла — перечитываем существующий лид.
+      // Вставка не удалась (гонка/индекс) — лид уже создан параллельным вызовом, перечитываем.
       const { data: re } = await service.from('crm_leads').select('*')
         .eq('avito_chat_id', v.chat_id).order('id', { ascending: true }).limit(1)
       lead = (re?.[0] ?? null) as Record<string, unknown> | null
