@@ -360,6 +360,28 @@ export default function VoronezhPage() {
     load()
   }
 
+  // Переместить один заказ из пула в ЛЮБОЙ рейс, включая отгруженный (заказ уехал
+  // в прошлом рейсе, а система про это не знала). В отгружённый — сразу «погружен»
+  // + докидываем вес/сумму к снимку итогов рейса, чтобы история осталась честной.
+  async function moveOrderToTrip(o: Order, shipmentId: number) {
+    const ship = shipments.find(s => s.id === shipmentId)
+    if (!ship) return
+    const isShipped = ship.status !== 'draft'
+    setSaving(true)
+    const sb = createClient()
+    const { error } = await sb.from('delivery_shipment_orders')
+      .insert({ shipment_id: shipmentId, order_id: o.id, loaded: isShipped })
+    if (!error && isShipped) {
+      await sb.from('delivery_shipments').update({
+        total_weight_kg: Math.round(((ship.total_weight_kg ?? 0) + orderWeight(o)) * 10) / 10,
+        total_amount: Math.round((ship.total_amount ?? 0) + orderSum(o)),
+      }).eq('id', shipmentId)
+    }
+    setSaving(false)
+    if (error) { setErr(error.message); return }
+    load()
+  }
+
   async function setLimit(shipmentId: number, kg: number | null) {
     const sb = createClient()
     const { error } = await sb.from('delivery_shipments').update({ max_weight_kg: kg }).eq('id', shipmentId)
@@ -577,6 +599,13 @@ export default function VoronezhPage() {
                             <span className={`text-[11px] px-2 py-0.5 rounded-full border ${r.cls}`}>{r.label}</span>
                             <span className="ml-auto font-mono text-[13px] text-[#4b4b47]">{KG(orderWeight(o))} кг</span>
                             <span className="font-mono text-[13px] text-[#111110] w-28 text-right">{RUB(orderSum(o))} ₽</span>
+                            <select value="" disabled={saving} title="Переместить заказ в рейс (можно в отгруженный)"
+                              onClick={e => e.stopPropagation()} onMouseDown={e => e.stopPropagation()}
+                              onChange={e => { const sid = Number(e.target.value); e.currentTarget.value = ''; if (sid) moveOrderToTrip(o, sid) }}
+                              className="text-[11px] border border-[#e4e4e0] rounded px-1.5 py-1 bg-white text-[#4b4b47] max-w-[160px] hover:border-[#111110]">
+                              <option value="">→ в рейс…</option>
+                              {shipments.map(s => <option key={s.id} value={s.id}>{s.title ?? `Рейс ${s.id}`}{s.status !== 'draft' ? ' · отгружен' : ''}</option>)}
+                            </select>
                           </label>
                         )
                       })}
