@@ -19,6 +19,8 @@ type Money = {
     tb1: number | null
   } | null
   monthly: Record<string, { orders: number; amount: number }>
+  monthlyReal?: Record<string, { cost: number; marginPct: number }>   // реальная маржа по факту — только для admin
+  isAdmin?: boolean
   nowKey: string
   factThisMonth: { orders: number; amount: number }
   bonusTeam: { name: string; hiredAt: string | null; years: number | null; eligible: boolean }[]
@@ -78,6 +80,10 @@ export default function MoneyPage() {
   const monthBonus = (amount: number) =>
     (m?.tb1 != null && bonusRate > 0 && amount >= m.tb1) ? Math.round(amount * bonusRate) : null
   const totalBonus = months.reduce((s, r) => s + (monthBonus(r.amount) ?? 0), 0)
+  // Реальная маржа по факту — приватная колонка только для admin (API отдаёт данные лишь ему).
+  const showReal = !!(data?.isAdmin && data?.monthlyReal)
+  const totalRealCost = months.reduce((s, r) => s + (data?.monthlyReal?.[r.key]?.cost ?? 0), 0)
+  const totalRealMargin = totalAmount > 0 ? Math.round((1 - totalRealCost / totalAmount) * 1000) / 10 : 0
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -178,6 +184,7 @@ export default function MoneyPage() {
                       <th className="px-4 py-2.5 text-right">Объектов</th>
                       <th className="px-4 py-2.5 text-right">Сумма</th>
                       <th className="px-4 py-2.5 text-right">Бонус · {m?.funds.prodBonus ?? 5}% от маржи</th>
+                      {showReal && <th className="px-4 py-2.5 text-right text-[#111110]">🔒 Реальная маржа <span className="normal-case tracking-normal text-[10px] text-[#9a9a95]">только вы</span></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -193,6 +200,12 @@ export default function MoneyPage() {
                             ? <span className="text-emerald-700 font-semibold">{RUB(bonus)}</span>
                             : <span className="text-[#c4c4be]">— ниже ТБ-1</span>}
                         </td>
+                        {showReal && (() => {
+                          const rm = data.monthlyReal![r.key]?.marginPct
+                          if (rm == null || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
+                          const good = m?.marginPct != null ? rm >= m.marginPct : rm >= 0
+                          return <td className={`px-4 py-2.5 text-right font-mono font-semibold ${good ? 'text-emerald-700' : 'text-amber-700'}`}>{rm}%</td>
+                        })()}
                       </tr>
                       )
                     })}
@@ -203,10 +216,16 @@ export default function MoneyPage() {
                       <td className="px-4 py-2.5 text-right font-mono">{totalOrders}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{RUB(totalAmount)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{RUB(totalBonus)}</td>
+                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{totalRealMargin}%</td>}
                     </tr>
                   </tfoot>
                 </table>
                 </div>
+                {showReal && (
+                  <p className="px-4 py-2.5 text-[11px] text-[#9a9a95] border-t border-[#f0f0ee]">
+                    🔒 «Реальная маржа» — по факту заказов месяца (выручка − себестоимость из заказов). Зелёная ≥ план {m?.marginPct ?? 60}%, янтарная — ниже. Колонку видите только вы (админ).
+                  </p>
+                )}
               </div>
             )}
 
