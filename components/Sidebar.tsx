@@ -121,6 +121,7 @@ const BUYER_PRODUCTION: NavItem[] = [
 // ─── SEO role ─────────────────────────────────────────────────────────────────
 
 const SEO_ANALYTICS: NavItem[] = [
+  { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
   { href: '/b2b-growth',    label: 'Развитие B2B',  icon: '🚀' },
   { href: '/ai-stats',      label: 'Статистика AI', icon: '📈' },
@@ -182,6 +183,7 @@ const CEO_OWNER: NavItem[] = [
 ]
 
 const CEO_ANALYTICS: NavItem[] = [
+  { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
   { href: '/b2b-analytics', label: 'B2B Аналитика', icon: '📊' },
   { href: '/vladislav',     label: 'Vladislav AI',  icon: '💬' },
   { href: '/marketing',     label: 'Маркетинг',     icon: '📣' },
@@ -219,6 +221,7 @@ const ADMIN_OWNER: NavItem[] = [
 ]
 
 const ADMIN_MARKETING: NavItem[] = [
+  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🌐' },
   { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
   { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
   { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },

@@ -1,5 +1,8 @@
 ## Текущая задача
-Система флажков + обучение бота (Авито) — Фазы 1+2+3 готовы, PR #122 (ветка feature/avito-lead-flags).
+Заявки с сайта → CRM. ВАЖНО: сайт = mglass-web (~/SEO MGLASS APP/mglass-web, Next.js, деплой vercel CLI,
+НЕ git, НЕ Tilda). Он УЖЕ пишет заявки напрямую в ту же Supabase → crm_leads source='site' (app/api/lead/route.ts).
+Добавил в сайте назначение на владельца (manager=LEAD_OWNER||'Администратор'). Лишний CRM-эндпоинт /api/site/lead удалён (сайт им не пользовался).
+mglass.pro на Tilda — ОТДЕЛЬНОЕ/неактуальное, не путать.
 
 ## Фаза 3 (обучение бота) — сделано
 - supabase/migrations/20260803_ai_manager_examples.sql — корпус «клиент → ответ менеджера» (RLS server-only)
@@ -49,18 +52,13 @@
 «УРОКИ ИЗ РЕАЛЬНЫХ СДЕЛОК»). Отчёт: AVITO AI/05_РАЗБОР_СДЕЛОК_AMO.md. PR #129 на ревью (не мёрджен).
 Скрипты разбора — в scratchpad (PII-выгрузки удалены после анализа).
 
-## Сайт: mglass.pro на TILDA (не в коде!)
-Локального репо сайта нет (только mglass-app=CRM, mglass-design=старый форк). В ~/Desktop/site —
-контент+SEO-план для Tilda. Интеграция заявок — вебзук Tilda на /api/site/lead. Эндпоинт сделан
-Tilda-совместимым (PR #134, задеплоен): form-urlencoded+JSON, гибкий маппинг полей, тестовый пинг.
-Настройка (за владельцем): Tilda → Настройки сайта → Формы → Webhook → https://mglass-app.vercel.app/api/site/lead.
-
-## Приём заявок с сайта Mglass (PR #133, смёржен, задеплоен, живой)
-POST /api/site/lead (whitelist middleware, CORS *) → crm_leads source='site', manager='Администратор'
-(env SITE_LEAD_OWNER) → по RLS видит только владелец, обрабатывает первым; бот не трогает.
-Антиспам: honeypot hp + опц. SITE_LEAD_SECRET. GET /api/site/lead = health (200). Проверено в проде.
-Владельцу: вставить форму на сайт (сниппет выдан), первую заявку создаёт сам для проверки.
-Позже: сменить manager на пул/round-robin или подключить бота.
+## Приём заявок с сайта — РЕАЛЬНАЯ картина
+Сайт mglass-web (~/SEO MGLASS APP/mglass-web) уже пишет заявки в общую Supabase → crm_leads
+source='site' через свой app/api/lead/route.ts (Telegram, honeypot 'company', UTM, инференс продукта, heat).
+Правка: добавлено manager=LEAD_OWNER||'Администратор' (владелец обрабатывает первым; сейчас в CRM только он).
+Лишний CRM-эндпоинт /api/site/lead и его строка в middleware УДАЛЕНЫ (PR #133/#134 были из ошибочного Tilda-пути).
+Деплой сайта — vercel --prod из папки сайта (CLI авторизован mukhamorov95-1222).
+Опционально: миграция landing_page/utm в crm_leads (у сайта есть фолбэк, если колонок нет).
 
 ## Статус: ЗАДЕПЛОЕНО В ПРОД
 PR #122 смёрджен в main (squash, коммит 0a73e3b), Vercel Production deploy = success.
