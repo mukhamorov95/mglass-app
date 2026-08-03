@@ -105,14 +105,14 @@ export async function POST(req: NextRequest) {
   const phoneNorm = normalizePhone(phoneRaw)
   const sb = createServiceClient()
 
-  // Дедуп по id звонка (АТС ретраит / шлёт несколько событий). Мягкий: если
-  // колонки meta ещё нет — просто пропускаем проверку.
+  // Атомарный барьер идемпотентности. АТС ретраит вебхук — раньше SELECT-дедуп
+  // проигрывал гонку (6 запросов за 270 мс одновременно видели «дубля нет» и все
+  // вставляли лид+событие → фантомные лиды и дубли-звонки). Теперь первый запрос
+  // «занимает» call_id вставкой в crm_processed_calls (PK), а ретраи ловят
+  // конфликт уникальности и выходят ДО создания лида/события.
   if (callId) {
-    try {
-      const { data: dup } = await sb.from('crm_lead_events')
-        .select('id').eq('kind', 'call').eq('meta->>call_id', callId).limit(1)
-      if (dup && dup.length) return NextResponse.json({ ok: true, duplicate: true })
-    } catch { /* нет колонки meta — дедуп недоступен до миграции */ }
+    const { error: claimErr } = await sb.from('crm_processed_calls').insert({ call_id: callId })
+    if (claimErr) return NextResponse.json({ ok: true, duplicate: true })
   }
 
   // Ищем лид по номеру: быстрый путь ILIKE по 10 цифрам, иначе скан с
@@ -139,6 +139,7 @@ export async function POST(req: NextRequest) {
     if (lead) await sb.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', text: 'Лид создан из входящего звонка', author: null })
   }
   if (!lead) return NextResponse.json({ ok: true, no_lead: true })
+  if (callId) await sb.from('crm_processed_calls').update({ lead_id: lead.id }).eq('call_id', callId).then(() => {}, () => {})
 
   const arrow = outbound ? 'Исходящий' : 'Входящий'
   const text = missed
