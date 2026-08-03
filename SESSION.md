@@ -49,6 +49,12 @@
 «УРОКИ ИЗ РЕАЛЬНЫХ СДЕЛОК»). Отчёт: AVITO AI/05_РАЗБОР_СДЕЛОК_AMO.md. PR #129 на ревью (не мёрджен).
 Скрипты разбора — в scratchpad (PII-выгрузки удалены после анализа).
 
+## Сайт: mglass.pro на TILDA (не в коде!)
+Локального репо сайта нет (только mglass-app=CRM, mglass-design=старый форк). В ~/Desktop/site —
+контент+SEO-план для Tilda. Интеграция заявок — вебзук Tilda на /api/site/lead. Эндпоинт сделан
+Tilda-совместимым (PR #134, задеплоен): form-urlencoded+JSON, гибкий маппинг полей, тестовый пинг.
+Настройка (за владельцем): Tilda → Настройки сайта → Формы → Webhook → https://mglass-app.vercel.app/api/site/lead.
+
 ## Приём заявок с сайта Mglass (PR #133, смёржен, задеплоен, живой)
 POST /api/site/lead (whitelist middleware, CORS *) → crm_leads source='site', manager='Администратор'
 (env SITE_LEAD_OWNER) → по RLS видит только владелец, обрабатывает первым; бот не трогает.
