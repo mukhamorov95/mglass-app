@@ -12,7 +12,8 @@ export type Heat = 'cold' | 'warm' | 'hot'
 export type LeadScore = {
   readiness: number          // 0..100 — доля собранного «веса» положительных флагов
   heat: Heat                 // cold → бот молчит | warm → бот добирает | hot → человеку
-  isHot: boolean             // сработало правило «отдать человеку»
+  isHot: boolean             // сработало правило «горячий, следим»
+  measureClosed: boolean     // «Закрыт на замер» — терминал робота, передача человеку
   disqualified: boolean      // есть дисквалифицирующий флаг
   coreDone: number           // сколько ядровых флагов собрано
   coreTotal: number
@@ -41,6 +42,11 @@ export function scoreLead(flags: LeadFlags): LeadScore {
   const measureFastTrack = !!flags.ready_measure && !!flags.contact
   const isHot = !disqualified && (allCore || measureFastTrack)
 
+  // «Закрыт на замер» (терминал робота → человек): клиент согласился на платный
+  // замер + телефон + адрес + объект готов (правило владельца — минимум срывов).
+  const measureClosed = !disqualified && !!flags.measure_agreed && !!flags.contact
+    && !!flags.address_known && !!flags.object_ready
+
   let heat: Heat = 'cold'
   if (!disqualified) {
     if (isHot) heat = 'hot'
@@ -57,5 +63,5 @@ export function scoreLead(flags: LeadFlags): LeadScore {
         ? `в работе бота: собрано ядра ${coreDone}/${coreTotal}`
         : 'новый/сырой лид'
 
-  return { readiness, heat, isHot, disqualified, coreDone, coreTotal, missingNext, reason }
+  return { readiness, heat, isHot, measureClosed, disqualified, coreDone, coreTotal, missingNext, reason }
 }

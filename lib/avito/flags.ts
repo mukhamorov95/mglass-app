@@ -11,8 +11,9 @@ export type FlagGroup = 'core' | 'support' | 'info' | 'disqualify'
 
 export type FlagKey =
   | 'product' | 'sizes' | 'place' | 'contact'
-  | 'photo' | 'ready_measure' | 'price_ok' | 'price_quoted'
-  | 'b2b' | 'repeat_referral' | 'timeline' | 'budget' | 'in_zone' | 'object_type'
+  | 'photo' | 'ready_measure' | 'measure_agreed' | 'address_known' | 'object_ready'
+  | 'price_ok' | 'price_quoted' | 'b2b' | 'repeat_referral' | 'timeline' | 'budget'
+  | 'in_zone' | 'object_type' | 'stall'
   | 'not_our_profile' | 'refused' | 'spam'
 
 export type LeadFlags = Partial<Record<FlagKey, boolean>>
@@ -48,8 +49,17 @@ export const FLAGS: FlagDef[] = [
     ask: 'попроси фото проёма/места, где будет стоять изделие — так точнее расчёт и замер',
     desc: 'клиент прислал фото проёма/места установки' },
   { key: 'ready_measure', label: 'Готов на замер', group: 'support', weight: 3, askPriority: 5,
-    ask: 'предложи бесплатный замер и получи согласие на выезд',
-    desc: 'клиент согласен на замер/выезд — сильнейший сигнал покупки' },
+    ask: 'предложи замер (2500₽ по Москве, сумма идёт в зачёт заказа) и прощупай готовность к выезду',
+    desc: 'клиент в принципе не против замера/выезда — сильный сигнал покупки' },
+  { key: 'measure_agreed', label: 'Согласился на замер', group: 'support', weight: 3, askPriority: 6,
+    ask: 'зафиксируй согласие на замер (2500₽, в зачёт заказа) и спроси удобное окно (день/время)',
+    desc: 'клиент ЯВНО согласился на платный замер (2500₽, в зачёт заказа)' },
+  { key: 'address_known', label: 'Адрес объекта', group: 'support', weight: 2, askPriority: 7,
+    ask: 'уточни адрес объекта (город, район/улица) — для выезда замерщика',
+    desc: 'известен адрес, куда ехать на замер' },
+  { key: 'object_ready', label: 'Объект готов к замеру', group: 'support', weight: 2, askPriority: 8,
+    ask: 'уточни готовность: закончена ли черновая, установлена ли ванна/поддон, есть ли доступ',
+    desc: 'зона готова к замеру (черновая закончена, ванна/поддон на месте, есть доступ) — иначе выезд сорвётся' },
   { key: 'price_ok', label: 'Цена устроила', group: 'support', weight: 2,
     desc: 'цена названа и клиента устроила (важно: «дорого» — НЕ ставит этот флаг и НЕ отказ)' },
   { key: 'price_quoted', label: 'Цена озвучена', group: 'support', weight: 1,
@@ -65,9 +75,11 @@ export const FLAGS: FlagDef[] = [
   { key: 'in_zone', label: 'Москва / МО', group: 'support', weight: 1,
     desc: 'объект в Москве или области (зона монтажа)' },
 
-  // ℹ️ Инфо-сегментация
+  // ℹ️ Инфо-сегментация и состояние
   { key: 'object_type', label: 'Тип объекта известен', group: 'info', weight: 1,
     desc: 'выяснен тип объекта: квартира / частный дом / коммерция' },
+  { key: 'stall', label: 'Отложен (ремонт/отпуск/позже)', group: 'info', weight: 0,
+    desc: 'клиент отложил: «ремонт идёт», «в отпуске», «позже», «ждём плитку» — НЕ отказ, вести по триггеру' },
 
   // ⛔ Дисквалификация — гасит лид (readiness → 0, статус → refused)
   { key: 'not_our_profile', label: 'Не наш профиль', group: 'disqualify', weight: 0,

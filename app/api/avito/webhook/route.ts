@@ -4,9 +4,13 @@ import { runAvitoManager, type DialogMsg, type LeadKnown } from '@/lib/ai-tools/
 import { avitoSendMessage, isAvitoConfigured } from '@/lib/avito'
 import { notifyAdmins } from '@/lib/telegram'
 import { isBotEnabled } from '@/lib/aiKillSwitch'
-import { scoreLead } from '@/lib/avito/scoreLead'
+import { decideNextAction } from '@/lib/avito/dispatcher'
 import { FLAG_BY_KEY, type LeadFlags, type FlagKey } from '@/lib/avito/flags'
 import { getRelevantExamples } from '@/lib/avito/managerExamples'
+import { CRM_ZONES } from '@/lib/crmStages'
+
+// Робот ведёт заявку только в зоне «Квалификация»; дальше курирует человек.
+const QUALIFICATION_STAGES = new Set(CRM_ZONES.find(z => z.zone === 'Квалификация')?.stages ?? [])
 
 // Вебхук Avito Messenger: входящее сообщение клиента → лид в crm_leads (по
 // avito_chat_id) → AI-менеджер отвечает → снятые данные и скоринг в карточку.
@@ -139,6 +143,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, human_handling: true })
   }
 
+  // Робот работает только зону «Квалификация». Если лид уже дальше (закрыт на
+  // замер / в продаже / производстве) — курирует человек, бот молчит и пингует.
+  const curStage = (lead.stage as string | null) ?? null
+  if (curStage && !QUALIFICATION_STAGES.has(curStage)) {
+    await notifyAdmins([
+      '💬 <b>Авито: сообщение по заявке в работе у менеджера</b>',
+      `Этап: ${curStage}`,
+      `Клиент: ${text.slice(0, 200)}`,
+      `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+    ].join('\n')).catch(() => {})
+    return NextResponse.json({ ok: true, past_qualification: true })
+  }
+
   // Kill-switch с /vladislav: бот выключен — сообщение сохранено выше, отвечает человек.
   if (!(await isBotEnabled(service))) {
     await notifyAdmins([
@@ -195,17 +212,29 @@ export async function POST(req: NextRequest) {
   for (const [k, v] of Object.entries(turn.flags)) {
     if (v && !prevFlags[k as FlagKey]) { mergedFlags[k as FlagKey] = true; newlySet.push(k as FlagKey) }
   }
-  const sc = scoreLead(mergedFlags)
+  // Диспетчер: детерминированное решение по флагам (робот ведёт зону «Квалификация»).
+  const dispatch = decideNextAction(mergedFlags)
+  const sc = dispatch.score
   patch.flags = mergedFlags
   patch.readiness = sc.readiness
   patch.heat = sc.heat
   patch.missing_next = sc.missingNext
 
-  // 🟢 сработало правило «отдать человеку» (собрано ядро ИЛИ замер+телефон).
   const wasHot = (lead.heat as string | null) === 'hot'
   const becameHot = sc.isHot && !wasHot
   const becameQualified = (turn.qualified || sc.isHot) && !lead.qualified
   if (turn.qualified || sc.isHot) patch.qualified = true
+
+  const measureClosed = dispatch.action === 'close_measure'
+  if (measureClosed) {
+    patch.stage = dispatch.stage          // → «Замер назначен» (выходит из зоны робота)
+    patch.qualified = true
+  } else if (dispatch.action === 'disqualify') {
+    patch.status = 'lost'
+    if (!lead.lost_reason) patch.lost_reason = dispatch.reason
+  } else if (dispatch.action === 'park' && dispatch.stage && curStage !== dispatch.stage) {
+    patch.stage = dispatch.stage          // → «Долгострой» (задача-себе — Фаза B)
+  }
   await service.from('crm_leads').update(patch).eq('id', leadId)
 
   // Каждый новый флаг — событие в ленту (прозрачная история + материал для обучения).
@@ -215,8 +244,20 @@ export async function POST(req: NextRequest) {
     )
   }
 
-  // Заявка загорелась 🟢 — заводим задачу «перезвонить», чтобы её взял человек.
-  if (becameHot) {
+  if (measureClosed) {
+    // Терминал робота: заявка закрыта на замер → задача менеджеру оформить выезд.
+    await service.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'system', author: 'AI',
+      text: `🎯 Закрыт на замер (согласие + телефон + адрес + готовность) — оформить выезд замерщика`,
+    })
+    try {
+      await service.from('crm_tasks').insert({
+        lead_id: leadId, kind: 'measure',
+        title: 'Оформить заявку на замер (подтвердить время из графика замерщиков)',
+        due_at: new Date().toISOString(),
+      })
+    } catch { /* не блокируем ответ клиенту */ }
+  } else if (becameHot) {
     await service.from('crm_lead_events').insert({
       lead_id: leadId, kind: 'system', author: 'AI',
       text: `🔥 Заявка готова менеджеру (${sc.reason}), готовность ${sc.readiness}%`,
@@ -226,7 +267,24 @@ export async function POST(req: NextRequest) {
         lead_id: leadId, kind: 'call', title: `Перезвонить — заявка готова (${sc.reason})`,
         due_at: new Date().toISOString(),
       })
-    } catch { /* таблица задач может отличаться — не блокируем ответ клиенту */ }
+    } catch { /* не блокируем ответ клиенту */ }
+  } else if (dispatch.action === 'park') {
+    // Задача-себе: бот вернётся к отложенному клиенту в назначенный день (Фаза B).
+    const days = turn.followUp.inDays ?? 3
+    const due = new Date(Date.now() + days * 86_400_000).toISOString()
+    const note = turn.followUp.note
+    try {
+      await service.from('crm_tasks').delete()
+        .eq('lead_id', leadId).eq('kind', 'followup').eq('done', false).eq('assignee', 'Иван (AI)')
+      await service.from('crm_tasks').insert({
+        lead_id: leadId, kind: 'followup', assignee: 'Иван (AI)',
+        title: note ? `Вернуться: ${note}` : 'Вернуться к отложенному клиенту', due_at: due,
+      })
+      await service.from('crm_lead_events').insert({
+        lead_id: leadId, kind: 'system', author: 'AI',
+        text: `⏸ Отложен${note ? ` (${note})` : ''} — напомню о себе через ${days} дн. (${due.slice(0, 10)})`,
+      })
+    } catch { /* не блокируем ответ клиенту */ }
   }
 
   // Перепроверка перед отправкой: не забрал ли чат человек за время работы модели.
@@ -246,9 +304,10 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Горячий лид / нужен человек → Telegram
-  if (becameHot || becameQualified || turn.needs_human) {
-    const title = becameHot ? '🔥 <b>Авито: заявка готова менеджеру</b>'
+  // Закрыт на замер / горячий лид / нужен человек → Telegram
+  if (measureClosed || becameHot || becameQualified || turn.needs_human) {
+    const title = measureClosed ? '🎯 <b>Авито: ЗАКРЫТ НА ЗАМЕР — оформить выезд замерщика</b>'
+      : becameHot ? '🔥 <b>Авито: заявка готова менеджеру</b>'
       : becameQualified ? '⭐ <b>Горячий лид с Авито</b>'
       : '✋ <b>Авито: нужен человек</b>'
     const setFlags = Object.keys(mergedFlags)

@@ -27,7 +27,21 @@
 - lib/avito/managerExamples.ts: clientContextFromHistory / isUsefulReply / exampleHash (единый хеш со скриптом) / saveManagerExample.
 - Обучение теперь идёт само: менеджер пишет через CRM → пример сохраняется → webhook подмешивает боту. vitest 261/261.
 
-## Новое: разбор сделок AmoCRM → уроки боту (PR #129, ветка feature/amo-deal-lessons)
+## Новое: автономный диспетчер бота, Фаза A (ветка feature/avito-autonomous-dispatcher, PR — на ревью)
+Бот ведёт заявку сам по левой стороне (зона «Квалификация») до «Закрыт на замер», потом человек.
+- lib/avito/flags.ts: +measure_agreed, address_known, object_ready, stall.
+- lib/avito/scoreLead.ts: +measureClosed (согласие+телефон+адрес+готовность).
+- lib/avito/dispatcher.ts (новый): decideNextAction → disqualify/close_measure/park/collect (чистая, тесты).
+- avitoManagerRuntime: персона — дожим на замер (2500₽ в зачёт заказа), брать окно+адрес+готовность.
+- webhook: бот работает ТОЛЬКО зону «Квалификация»; close_measure→этап «Замер назначен»+задача kind=measure+Telegram; park→«Долгострой»; disqualify→lost.
+- Решения владельца: замер 2500₽ в зачёт; «закрыт»=согласие+телефон+адрес+готовность; дату финализирует менеджер.
+- 268/268 тестов, tsc/lint чисто.
+Фаза B (готово): бот при stall заполняет follow_up (in_days+note) → webhook ставит crm_task с датой (лид «Долгострой») → крон avito-followup будит бота по созревшим задачам-себе с контекстом.
+Фаза C (готово): кнопка «Сделать заявку на замер для замерщика» в карточке (этап «Замер назначен») → создаёт заявку в СУЩЕСТВУЮЩЕЙ measure_requests (не дубль!) + колонка lead_id (миграция 20260803_measure_requests_lead_link.sql) → пул замерщиков /measurer-cabinet.
+ВСЁ A+B+C в PR #130 (не мёржено). Перед деплоем применить 20260803_measure_requests_lead_link.sql. 268/268, build ✓.
+ДАЛЬШЕ: D мультиканал (Wazzup/Telegram → тот же движок).
+
+## Разбор сделок AmoCRM → уроки боту (PR #129, смёржен 741e363)
 Проанализированы 216 сделок «Продажи» за 90д (129 выигранных, read-only). Amo хранит только
 входящие сообщения клиентов + внутренние заметки менеджеров (исходящие реплики недоступны).
 Находки: срыв замеров из-за неготовности объекта (117), дожим «отложенных» по триггеру,

@@ -36,6 +36,12 @@ describe('scoreLead — светофор', () => {
     expect(s.reason).toContain('замер')
   })
 
+  it('«закрыт на замер» = согласие + телефон + адрес + готовность', () => {
+    expect(scoreLead({ measure_agreed: true, contact: true, address_known: true, object_ready: true }).measureClosed).toBe(true)
+    expect(scoreLead({ measure_agreed: true, contact: true }).measureClosed).toBe(false)
+    expect(scoreLead({ measure_agreed: true, contact: true, address_known: true, object_ready: true, refused: true }).measureClosed).toBe(false)
+  })
+
   it('готов на замер БЕЗ телефона — ещё не горячий', () => {
     const s = scoreLead({ ready_measure: true })
     expect(s.isHot).toBe(false)
