@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@supabase/supabase-js'
+import { requireOwner } from '@/lib/apiAuth'
 
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -12,6 +13,8 @@ function db() {
 }
 
 export async function POST(req: Request) {
+  const guard = await requireOwner()
+  if (guard instanceof NextResponse) return guard
   try {
     const { voiceInput } = await req.json() as { voiceInput: string }
     if (!voiceInput?.trim()) return NextResponse.json({ error: 'empty' }, { status: 400 })
