@@ -1,11 +1,12 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 import { CRM_STAGES, stageProgress, FIRST_STAGE, ASSIGNED_STAGE } from '@/lib/crmStages'
 import { FLAGS, FLAG_BY_KEY, type FlagKey } from '@/lib/avito/flags'
+import { buildMeasureStructured } from '@/lib/measureStructured'
 
 type Lead = {
   id: number
@@ -133,6 +134,91 @@ function QuickCalc({ onSave }: { onSave: (amount: number) => void }) {
         </div>
       )}
       <p className="text-[10px] text-[#c4c4be]">Точный авторасчёт — для простых конфигураций; сложные считает производство после замера.</p>
+    </div>
+  )
+}
+
+type MeasureReq = { id: number; address: string | null; scheduled_at: string | null; measurer_name: string | null; status: string }
+
+// Заявка на замер для замерщика (Фаза C): видна, когда бот закрыл лид на замер.
+// Создаёт заявку в СУЩЕСТВУЮЩЕМ пуле замерщиков (measure_requests) и линкует на лид —
+// это точка передачи заявки от робота человеку. Дальше — /measurer-cabinet, /measure-calendar.
+function MeasureRequestBox({ lead }: { lead: Lead }) {
+  const sb = useMemo(() => createClient(), [])
+  const [reqs, setReqs] = useState<MeasureReq[]>([])
+  const [open, setOpen] = useState(false)
+  const [addr, setAddr] = useState(lead.address ?? '')
+  const [scope, setScope] = useState([lead.product, lead.sizes].filter(Boolean).join(', '))
+  const [notes, setNotes] = useState('')
+  const [price, setPrice] = useState('2500')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  const load = useCallback(async () => {
+    const { data } = await sb.from('measure_requests')
+      .select('id,address,scheduled_at,measurer_name,status').eq('lead_id', lead.id).order('id', { ascending: false })
+    setReqs((data ?? []) as MeasureReq[])
+  }, [sb, lead.id])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { void load() }, [load])
+
+  async function submit() {
+    if (!addr.trim()) { setErr('укажите адрес объекта'); return }
+    setBusy(true); setErr('')
+    try {
+      const { data: { user } } = await sb.auth.getUser()
+      let mgrId: string | null = null, mgrName: string | null = null
+      if (user) {
+        const { data: p } = await sb.from('users').select('id,name').eq('id', user.id).maybeSingle()
+        const pr = p as { id: string; name: string | null } | null
+        mgrId = pr?.id ?? null; mgrName = pr?.name ?? user.email ?? null
+      }
+      const fields = {
+        deal_number: lead.order_no, client_name: lead.name || lead.phone || `Лид #${lead.id}`,
+        phone: lead.phone, address: addr.trim(), scope: scope.trim() || null,
+        notes: notes.trim() || null, visit_price: Number(price.replace(/\s/g, '')) || 0,
+        payer: 'клиент (в зачёт заказа)', is_repeat: false,
+      }
+      const { error } = await sb.from('measure_requests').insert({
+        ...fields, structured_text: buildMeasureStructured(fields),
+        lead_id: lead.id, manager_id: mgrId, manager_name: mgrName, measurer_fee: 0,
+      })
+      if (error) throw new Error(error.message)
+      await sb.from('crm_leads').update({ stage: 'Замер назначен', updated_at: new Date().toISOString() }).eq('id', lead.id)
+      await sb.from('crm_lead_events').insert({ lead_id: lead.id, kind: 'system', author: mgrName, text: `📐 Заявка на замер оформлена для замерщика (${addr.trim()})` })
+      setOpen(false); setNotes(''); load()
+    } catch (e) { setErr((e as Error).message) } finally { setBusy(false) }
+  }
+
+  if (lead.stage !== 'Замер назначен' && reqs.length === 0) return null
+  const inp = 'border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]'
+  return (
+    <div className="mt-3 rounded-lg border border-emerald-300 bg-emerald-50/40 p-3 space-y-2">
+      <p className="text-[12px] font-semibold text-emerald-800">📐 Замер (2500₽, в зачёт заказа)</p>
+      {reqs.map(r => (
+        <div key={r.id} className="text-[11px] text-[#111110] rounded-lg bg-white border border-emerald-200 px-2.5 py-1.5">
+          <span className="font-semibold">{r.status === 'scheduled' ? '🗓 назначен' : r.status === 'done' ? '✅ выполнен' : r.status === 'cancelled' ? '✖ отменён' : r.status === 'issue' ? '⚠️ сложность' : '🆕 в пуле'}</span>
+          {r.scheduled_at ? ` · ${new Date(r.scheduled_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}` : ''}
+          {r.measurer_name ? ` · ${r.measurer_name}` : ''}{r.address ? ` · ${r.address}` : ''}
+        </div>
+      ))}
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="w-full px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700">
+          Сделать заявку на замер для замерщика
+        </button>
+      ) : (
+        <div className="space-y-2">
+          <input value={addr} onChange={e => setAddr(e.target.value)} placeholder="Адрес объекта *" className={`${inp} w-full`} />
+          <input value={scope} onChange={e => setScope(e.target.value)} placeholder="Что мерить (изделие, размеры)" className={`${inp} w-full`} />
+          <input value={notes} onChange={e => setNotes(e.target.value)} placeholder="Доступ / парковка / пожелания по времени" className={`${inp} w-full`} />
+          <input value={price} onChange={e => setPrice(e.target.value)} type="number" placeholder="Выезд, ₽" className={`${inp} w-full`} />
+          {err && <p className="text-[11px] text-red-600">{err}</p>}
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={busy} className="flex-1 px-2 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold disabled:opacity-50">{busy ? '…' : 'В пул замерщиков'}</button>
+            <button onClick={() => setOpen(false)} className="px-3 py-2 rounded-lg border border-[#e4e4e0] text-[12px] text-[#6b6b66]">Отмена</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -446,6 +532,8 @@ export default function LeadDetailPage() {
             </div>
 
             <QuickCalc onSave={n => patch({ est_amount: n }, `🧮 Расчёт: ${n.toLocaleString('ru-RU')} ₽`)} />
+
+            <MeasureRequestBox lead={lead} />
 
             {lead.score != null && <p className="mt-2 text-[11px] text-[#9a9a95]">Скоринг бота: {lead.score}/100{lead.score_reason ? ` — ${lead.score_reason}` : ''}</p>}
 

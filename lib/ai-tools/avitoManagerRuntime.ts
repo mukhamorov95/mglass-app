@@ -31,6 +31,7 @@ export type ManagerTurn = {
   score_reason: string
   needs_human: boolean
   flags: LeadFlags
+  followUp: { inDays: number | null; note: string | null }
   price_guard_hits?: number
 }
 
@@ -83,7 +84,7 @@ ${FLAGS.map(f => `  • ${f.key} — ${f.desc}`).join('\n')}
 
 УРОКИ ИЗ РЕАЛЬНЫХ СДЕЛОК (разбор выигранных заявок AmoCRM — так закрываются реальные клиенты):
 - ГОТОВНОСТЬ ОБЪЕКТА перед замером. Прежде чем звать замерщика, уточни, готова ли зона: закончена ли черновая отделка, установлена ли ванна/поддон, есть ли доступ. Если не готово — не назначай замер вслепую, а зафиксируй повод вернуться: «напишите, когда закончите черновую/поставите поддон — приедем на замер без лишнего выезда». (Частая потеря — сорванный замер из-за неготовности объекта.)
-- «ОТЛОЖЕННЫЕ» — НЕ отказ. «Ремонт идёт», «я в отпуске», «позже», «ждём плитку» — не бросай и не ставь qualified=false. Спокойно договорись о конкретном поводе следующего касания и оставь тёплым (timeline).
+- «ОТЛОЖЕННЫЕ» — НЕ отказ. «Ремонт идёт», «я в отпуске», «позже», «ждём плитку» — не бросай и не ставь qualified=false. Поставь флаг stall, договорись о конкретном поводе следующего касания и ЗАПОЛНИ follow_up (in_days — через сколько вернуться, note — по какому поводу): я сам напомню о себе в этот день.
 - ДИЗАЙНЕР/ПРОРАБ/B2B — приоритет. Если пишет дизайнер/прораб или упоминает «за заказчика», «+% дизайнеру» — веди предметно (точные спеки: цвет фурнитуры, тип уплотнителя, осветлённое стекло, высоты до мм), отвечай быстро: такие клиенты приводят повторные объекты (флаг b2b).
 - СКОРОСТЬ РЕШАЕТ. Отвечай сразу и по делу — клиенты прямо раздражаются на долгие ответы. Твоё преимущество перед человеком — мгновенный ответ 24/7.
 - НЕ ПЕРЕОБЕЩАЙ. Точный размер, сроки и гарантии — только после замера. Реальные рекламации возникали из-за обещаний «на глаз» и ошибок в размерах; лучше честное «уточним на замере».
@@ -133,6 +134,14 @@ const RESPOND_TOOL: Anthropic.Tool = {
         type: 'object',
         description: 'Дискретные флажки готовности заявки — true у каждого, что подтверждено всей перепиской',
         properties: Object.fromEntries(FLAGS.map(f => [f.key, { type: 'boolean', description: f.desc }])),
+      },
+      follow_up: {
+        type: 'object',
+        description: 'Заполняй ТОЛЬКО если клиент отложил (stall): когда вернуться и по какому поводу',
+        properties: {
+          in_days: { type: ['number', 'null'], description: 'через сколько дней вернуться (напр. «через 2 недели» → 14, «на след. неделе» → 7)' },
+          note: { type: ['string', 'null'], description: 'повод возврата коротко: «закончит черновую», «после отпуска»' },
+        },
       },
     },
     required: ['reply', 'extracted', 'qualified', 'score', 'score_reason', 'needs_human', 'flags'],
@@ -184,6 +193,7 @@ export async function runAvitoManager(
     score_reason?: string
     needs_human?: boolean
     flags?: Record<string, unknown>
+    follow_up?: { in_days?: number | null; note?: string | null }
   }
 
   let reply = input.reply ?? 'Секунду, уточню детали и вернусь.'
@@ -244,6 +254,10 @@ export async function runAvitoManager(
     // Слишком длинный диалог или вычищенная цена — повод подключить человека.
     needs_human: (input.needs_human ?? false) || guarded.replaced > 0 || shouldHandOver(history),
     flags,
+    followUp: {
+      inDays: typeof input.follow_up?.in_days === 'number' ? Math.max(1, Math.min(120, Math.round(input.follow_up.in_days))) : null,
+      note: input.follow_up?.note ? String(input.follow_up.note).slice(0, 200) : null,
+    },
     price_guard_hits: guarded.replaced,
   }
 }

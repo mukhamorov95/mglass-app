@@ -268,6 +268,23 @@ export async function POST(req: NextRequest) {
         due_at: new Date().toISOString(),
       })
     } catch { /* не блокируем ответ клиенту */ }
+  } else if (dispatch.action === 'park') {
+    // Задача-себе: бот вернётся к отложенному клиенту в назначенный день (Фаза B).
+    const days = turn.followUp.inDays ?? 3
+    const due = new Date(Date.now() + days * 86_400_000).toISOString()
+    const note = turn.followUp.note
+    try {
+      await service.from('crm_tasks').delete()
+        .eq('lead_id', leadId).eq('kind', 'followup').eq('done', false).eq('assignee', 'Иван (AI)')
+      await service.from('crm_tasks').insert({
+        lead_id: leadId, kind: 'followup', assignee: 'Иван (AI)',
+        title: note ? `Вернуться: ${note}` : 'Вернуться к отложенному клиенту', due_at: due,
+      })
+      await service.from('crm_lead_events').insert({
+        lead_id: leadId, kind: 'system', author: 'AI',
+        text: `⏸ Отложен${note ? ` (${note})` : ''} — напомню о себе через ${days} дн. (${due.slice(0, 10)})`,
+      })
+    } catch { /* не блокируем ответ клиенту */ }
   }
 
   // Перепроверка перед отправкой: не забрал ли чат человек за время работы модели.
