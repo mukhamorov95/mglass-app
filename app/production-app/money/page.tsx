@@ -5,7 +5,7 @@
 // Доступ выдаёт владелец в /admin/users (галка «Деньги»); менять данные нельзя —
 // правки только в /cfo/breakeven.
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Fragment } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 
 type Money = {
@@ -19,7 +19,7 @@ type Money = {
     tb1: number | null
   } | null
   monthly: Record<string, { orders: number; amount: number }>
-  monthlyReal?: Record<string, { cost: number; marginPct: number }>   // реальная маржа по факту — только для admin
+  monthlyReal?: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number> }>   // реальная маржа + разбивка себестоимости — только admin
   isAdmin?: boolean
   nowKey: string
   factThisMonth: { orders: number; amount: number }
@@ -29,6 +29,15 @@ type Money = {
 const RUB = (n: number | null | undefined) => n == null ? '—' : Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const MONTHS_RU = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 type View = 'model' | 'monthly' | 'plan'
+// Статьи себестоимости для разбивки по клику на реальную маржу.
+const COST_LABELS: [string, string][] = [
+  ['material', 'Стекло / зеркало / изделие'],
+  ['tempering', 'Закалка'],
+  ['edge', 'Кромка, шлифовка'],
+  ['facet', 'Фацет'],
+  ['packaging', 'Упаковка'],
+  ['transport', 'Логистика, доставка'],
+]
 
 function TbRow({ level, sum, desc, tone }: { level: string; sum: string; desc: string; tone: string }) {
   return (
@@ -44,6 +53,7 @@ function TbRow({ level, sum, desc, tone }: { level: string; sum: string; desc: s
 
 export default function MoneyPage() {
   const [view, setView] = useState<View>('model')
+  const [openBreak, setOpenBreak] = useState<string | null>(null)   // раскрытая разбивка себестоимости месяца
   const [data, setData] = useState<Money | null>(null)
   const [denied, setDenied] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -195,8 +205,11 @@ export default function MoneyPage() {
                   <tbody>
                     {months.map(r => {
                       const bonus = monthBonus(r.amount)
+                      const real = showReal ? data.monthlyReal![r.key] : undefined
+                      const isOpen = openBreak === r.key && !!real && r.amount > 0 && real.cost > 0
                       return (
-                      <tr key={r.key} className={`border-b border-[#f0f0ee] ${r.key === data.nowKey ? 'bg-[#fafaf8]' : ''}`}>
+                      <Fragment key={r.key}>
+                      <tr className={`border-b border-[#f0f0ee] ${r.key === data.nowKey ? 'bg-[#fafaf8]' : ''}`}>
                         <td className="px-4 py-2.5 text-[#111110]">{r.label}{r.key === data.nowKey && <span className="ml-2 text-[11px] text-[#9a9a95]">текущий</span>}</td>
                         <td className="px-4 py-2.5 text-right font-mono">{r.orders}</td>
                         <td className="px-4 py-2.5 text-right font-mono">{RUB(r.amount)}</td>
@@ -206,14 +219,49 @@ export default function MoneyPage() {
                             : <span className="text-[#c4c4be]">— ниже ТБ-1</span>}
                         </td>
                         {showReal && (() => {
-                          const real = data.monthlyReal![r.key]
                           if (!real || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
                           if (real.cost <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">— нет данных</td>
                           const marginRub = Math.round(r.amount - real.cost)
                           const good = m?.marginPct != null ? real.marginPct >= m.marginPct : real.marginPct >= 0
-                          return <td className={`px-4 py-2.5 text-right font-mono font-semibold ${good ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(marginRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{real.marginPct}%</span></td>
+                          return (
+                            <td className="px-4 py-2.5 text-right">
+                              <button onClick={() => setOpenBreak(isOpen ? null : r.key)} title="Показать, куда ушла себестоимость"
+                                className={`font-mono font-semibold hover:underline ${good ? 'text-emerald-700' : 'text-amber-700'}`}>
+                                {RUB(marginRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{real.marginPct}%</span> <span className="text-[9px] text-[#9a9a95]">{isOpen ? '▾' : '▸'}</span>
+                              </button>
+                            </td>
+                          )
                         })()}
                       </tr>
+                      {isOpen && real && (
+                        <tr className="bg-[#fbfbfa] border-b border-[#f0f0ee]">
+                          <td colSpan={showReal ? 5 : 4} className="px-6 py-3">
+                            <div className="text-[12px] font-semibold text-[#111110] mb-1.5">🔒 Куда ушла себестоимость · {r.label}</div>
+                            <div className="space-y-1 max-w-sm">
+                              {COST_LABELS.filter(([k]) => (real.breakdown?.[k] ?? 0) > 0).map(([k, label]) => (
+                                <div key={k} className="flex justify-between text-[12px]">
+                                  <span className="text-[#6b6b66]">{label}</span>
+                                  <span className="font-mono text-[#111110]">{RUB(real.breakdown[k])}</span>
+                                </div>
+                              ))}
+                              {(() => {
+                                const known = COST_LABELS.reduce((s, [k]) => s + (real.breakdown?.[k] ?? 0), 0)
+                                const other = Math.round(real.cost - known)
+                                return other > 1 ? (
+                                  <div className="flex justify-between text-[12px]"><span className="text-[#6b6b66]">Прочее / изделия без разбивки</span><span className="font-mono text-[#111110]">{RUB(other)}</span></div>
+                                ) : null
+                              })()}
+                              <div className="flex justify-between text-[12px] font-semibold border-t border-[#e4e4e0] pt-1">
+                                <span>Итого себестоимость</span><span className="font-mono">{RUB(real.cost)}</span>
+                              </div>
+                              <div className="flex justify-between text-[12px] font-semibold text-emerald-700">
+                                <span>Реальная маржа (выручка {RUB(r.amount)} − себест.)</span><span className="font-mono">{RUB(Math.round(r.amount - real.cost))}</span>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      </Fragment>
                       )
                     })}
                   </tbody>

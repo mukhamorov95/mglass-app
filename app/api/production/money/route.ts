@@ -63,6 +63,7 @@ export async function GET() {
   // Сборка помесячно с января 2026: заказы производства (без просчётов/истории/архива)
   const monthly: Record<string, { orders: number; amount: number }> = {}
   const monthlyCost: Record<string, number> = {}   // сумма себестоимости по месяцу (для реальной маржи, только админу)
+  const monthlyBreak: Record<string, Record<string, number>> = {}   // разбивка себестоимости по статьям (клик по сумме)
   for (let from = 0; ; from += 1000) {
     const { data, error } = await service.from('b2b_orders')
       .select('created_at, total_after_discount, total_sale_inc_vat, total_cost_vat, total_cost_net, items')
@@ -89,6 +90,17 @@ export async function GET() {
       const itemsCost = items.reduce((s, it) => s + (Number(it?.costWithVat) || 0), 0)
       const orderCost = itemsCost > 0 ? itemsCost : (Number(o.total_cost_vat) || Number(o.total_cost_net) || 0)
       monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + orderCost
+      // Разбивка себестоимости по статьям (сумма компонентов = costWithVat позиции).
+      const bd = monthlyBreak[mKey] ?? {}
+      for (const it of items) {
+        bd.material  = (bd.material  ?? 0) + (Number(it?.costMaterial)  || 0)
+        bd.tempering = (bd.tempering ?? 0) + (Number(it?.costTempering) || 0)
+        bd.edge      = (bd.edge      ?? 0) + (Number(it?.costEdge)      || 0)
+        bd.facet     = (bd.facet     ?? 0) + (Number(it?.costFacet)     || 0)
+        bd.packaging = (bd.packaging ?? 0) + (Number(it?.costPackaging) || 0)
+        bd.transport = (bd.transport ?? 0) + (Number(it?.costTransport) || 0)
+      }
+      monthlyBreak[mKey] = bd
     }
     if (!data || data.length < 1000) break
   }
@@ -96,13 +108,15 @@ export async function GET() {
   // Реальная маржа по факту заказов месяца — приватная колонка ТОЛЬКО для admin.
   // Данные вычисляем и отдаём лишь ему; в браузер остальных ролей не уходят.
   const isAdmin = profile?.role === 'admin'
-  let monthlyReal: Record<string, { cost: number; marginPct: number }> | undefined
+  let monthlyReal: Record<string, { cost: number; marginPct: number; breakdown: Record<string, number> }> | undefined
   if (isAdmin) {
     monthlyReal = {}
     for (const k of Object.keys(monthly)) {
       const rev = monthly[k].amount
       const cost = monthlyCost[k] ?? 0
-      monthlyReal[k] = { cost: Math.round(cost), marginPct: rev > 0 ? Math.round((1 - cost / rev) * 1000) / 10 : 0 }
+      const bd = monthlyBreak[k] ?? {}
+      const breakdown = Object.fromEntries(Object.entries(bd).map(([kk, v]) => [kk, Math.round(v)]).filter(([, v]) => (v as number) > 0))
+      monthlyReal[k] = { cost: Math.round(cost), marginPct: rev > 0 ? Math.round((1 - cost / rev) * 1000) / 10 : 0, breakdown }
     }
   }
 
