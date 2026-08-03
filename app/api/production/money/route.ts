@@ -83,7 +83,9 @@ export async function GET() {
       // материал + закалку + фацет + кромку + упаковку + доставку. Колонки
       // total_cost_vat/net у многих заказов пустые (0% себестоимости → маржа 100%),
       // поэтому считаем из items; на колонки падаем только как фолбэк.
-      const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
+      let items: Record<string, unknown>[] = []
+      if (Array.isArray(o.items)) items = o.items as Record<string, unknown>[]
+      else if (typeof o.items === 'string') { try { const p = JSON.parse(o.items); if (Array.isArray(p)) items = p } catch {} }
       const itemsCost = items.reduce((s, it) => s + (Number(it?.costWithVat) || 0), 0)
       const orderCost = itemsCost > 0 ? itemsCost : (Number(o.total_cost_vat) || Number(o.total_cost_net) || 0)
       monthlyCost[mKey] = (monthlyCost[mKey] ?? 0) + orderCost

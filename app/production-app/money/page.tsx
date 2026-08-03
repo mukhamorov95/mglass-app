@@ -82,8 +82,13 @@ export default function MoneyPage() {
   const totalBonus = months.reduce((s, r) => s + (monthBonus(r.amount) ?? 0), 0)
   // Реальная маржа по факту — приватная колонка только для admin (API отдаёт данные лишь ему).
   const showReal = !!(data?.isAdmin && data?.monthlyReal)
-  const totalRealCost = months.reduce((s, r) => s + (data?.monthlyReal?.[r.key]?.cost ?? 0), 0)
-  const totalRealMargin = totalAmount > 0 ? Math.round((1 - totalRealCost / totalAmount) * 1000) / 10 : 0
+  // Итог реальной маржи — только по месяцам, где есть себестоимость в позициях
+  // (иначе месяцы без данных дали бы фейковые 100% и разбавили бы общий %).
+  const realMonths = months.filter(r => (data?.monthlyReal?.[r.key]?.cost ?? 0) > 0)
+  const realRevBase = realMonths.reduce((s, r) => s + r.amount, 0)
+  const totalRealCost = realMonths.reduce((s, r) => s + (data?.monthlyReal?.[r.key]?.cost ?? 0), 0)
+  const totalRealRub = Math.round(realRevBase - totalRealCost)
+  const totalRealMargin = realRevBase > 0 ? Math.round((1 - totalRealCost / realRevBase) * 1000) / 10 : 0
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
@@ -203,6 +208,7 @@ export default function MoneyPage() {
                         {showReal && (() => {
                           const real = data.monthlyReal![r.key]
                           if (!real || r.amount <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">—</td>
+                          if (real.cost <= 0) return <td className="px-4 py-2.5 text-right font-mono text-[#c4c4be]">— нет данных</td>
                           const marginRub = Math.round(r.amount - real.cost)
                           const good = m?.marginPct != null ? real.marginPct >= m.marginPct : real.marginPct >= 0
                           return <td className={`px-4 py-2.5 text-right font-mono font-semibold ${good ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(marginRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{real.marginPct}%</span></td>
@@ -217,7 +223,7 @@ export default function MoneyPage() {
                       <td className="px-4 py-2.5 text-right font-mono">{totalOrders}</td>
                       <td className="px-4 py-2.5 text-right font-mono">{RUB(totalAmount)}</td>
                       <td className="px-4 py-2.5 text-right font-mono text-emerald-700">{RUB(totalBonus)}</td>
-                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(totalAmount - totalRealCost)} <span className="text-[10px] text-[#9a9a95] font-normal">{totalRealMargin}%</span></td>}
+                      {showReal && <td className={`px-4 py-2.5 text-right font-mono ${m?.marginPct != null && totalRealMargin >= m.marginPct ? 'text-emerald-700' : 'text-amber-700'}`}>{RUB(totalRealRub)} <span className="text-[10px] text-[#9a9a95] font-normal">{totalRealMargin}%</span></td>}
                     </tr>
                   </tfoot>
                 </table>
