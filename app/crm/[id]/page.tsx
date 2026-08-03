@@ -408,6 +408,13 @@ export default function LeadDetailPage() {
             <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">{SOURCE_LABEL[lead.source]}</span>
             {lead.status === 'won' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">Сделка</span>}
             {lead.status === 'lost' && <span className="text-[11px] px-2 py-0.5 rounded-full bg-red-100 text-red-600">Отказ</span>}
+            {lead.source === 'avito' && lead.avito_chat_id && (
+              <a href={`https://www.avito.ru/profile/messenger/channel/${lead.avito_chat_id}`} target="_blank" rel="noopener noreferrer"
+                title="Открыть переписку на сайте Авито в новой вкладке"
+                className="text-[11px] px-2.5 py-0.5 rounded-full bg-[#e6f4ea] text-emerald-700 font-semibold hover:bg-emerald-100 whitespace-nowrap">
+                ↗ Открыть в Авито
+              </a>
+            )}
           </div>
           {flash && <span className="text-[12px] text-emerald-700">{flash}</span>}
         </div>
