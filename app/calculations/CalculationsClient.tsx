@@ -362,6 +362,7 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
               { href: '/calculator/shower', label: '🚿 Душевая' },
               { href: '/calculator/mirror', label: '🪞 Зеркало' },
               { href: '/calculator/loft',   label: '🏗️ Лофт' },
+              { href: '/calculator/railing', label: '🪜 Ограждение' },
             ].map(l => (
               <Link key={l.href} href={l.href}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
