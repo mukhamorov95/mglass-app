@@ -88,6 +88,11 @@ export default function PartnerNav() {
           <span className="tx">Каталог</span>
         </Link>
 
+        <Link href="/partner/docs" className={item(path.startsWith('/partner/docs'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3.2 3.2V17H6z" /><path d="M11 2.5v3.2h3.2" /><line x1="8" y1="10" x2="12" y2="10" /><line x1="8" y1="13" x2="12" y2="13" /></svg></span>
+          <span className="tx">Документы</span>
+        </Link>
+
         <div className="lbl">Помощь</div>
         <Link href="/partner/guide" className={item(path.startsWith('/partner/guide'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" /><path d="M7.9 7.6a2.2 2.2 0 1 1 3 2c-.8.5-1 1-1 1.9" /><line x1="10" y1="14.3" x2="10" y2="14.35" /></svg></span>
