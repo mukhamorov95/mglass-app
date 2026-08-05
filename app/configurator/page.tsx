@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { PartitionDrawing } from '@/components/configurator/PartitionDrawing'
+import { PartitionIso } from '@/components/configurator/PartitionIso'
 import {
   PARTITION_TYPES, FINISHES, HINGES, computeConfiguration,
   type PartitionTypeId, type FinishId, type Dims,
@@ -194,7 +194,7 @@ export default function ConfiguratorPage() {
             </div>
           )}
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-4 flex items-center justify-center">
-            <PartitionDrawing config={config} />
+            <PartitionIso config={config} />
           </div>
           {config.warnings.length > 0 && (
             <div className="mt-3 space-y-1">

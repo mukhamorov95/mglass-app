@@ -113,6 +113,7 @@ export type PartitionType = {
   id: PartitionTypeId
   label: string
   group: PartitionGroup
+  corner: boolean            // угловая (два стекла под 90°) — для изометрии
   desc: string
   thickness: number[]        // допустимые толщины стекла, мм
   constraints: Constraints
@@ -129,7 +130,7 @@ const door = (d: Dims) => d.doorWidth ?? 600
 
 export const PARTITION_TYPES: PartitionType[] = [
   {
-    id: 'stationary', label: 'Стационарная (walk-in)', group: 'stationary',
+    id: 'stationary', corner: false, label: 'Стационарная (walk-in)', group: 'stationary',
     desc: 'Неподвижная панель на профиле + стабилизационная штанга',
     thickness: [8, 10],
     constraints: { width: [500, 1400], height: [1800, 2200], needsWidth2: false },
@@ -142,7 +143,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     ],
   },
   {
-    id: 'straight-swing', label: 'Прямая распашная', group: 'swing',
+    id: 'straight-swing', corner: false, label: 'Прямая распашная', group: 'swing',
     desc: 'Неподвижная панель + распашная дверь на петлях стекло-стекло',
     thickness: [8, 10],
     constraints: { width: [700, 1600], height: [1800, 2100], needsWidth2: false, doorWidth: [500, 800] },
@@ -167,7 +168,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     },
   },
   {
-    id: 'straight-sliding', label: 'Прямая раздвижная', group: 'sliding',
+    id: 'straight-sliding', corner: false, label: 'Прямая раздвижная', group: 'sliding',
     desc: 'Неподвижная панель + раздвижная дверь на системе РД-001',
     thickness: [8, 10],
     constraints: { width: [900, 1800], height: [1800, 2100], needsWidth2: false },
@@ -188,7 +189,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     ],
   },
   {
-    id: 'trapezoid', label: 'Трапеция распашная', group: 'swing',
+    id: 'trapezoid', corner: false, label: 'Трапеция распашная', group: 'swing',
     desc: 'Трапециевидная неподвижная панель + распашная дверь',
     thickness: [8, 10],
     constraints: {
@@ -216,7 +217,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     },
   },
   {
-    id: 'corner-swing', label: 'Угловая распашная', group: 'swing',
+    id: 'corner-swing', corner: true, label: 'Угловая распашная', group: 'swing',
     desc: 'Две стороны: боковая панель + фронтальная панель с распашной дверью',
     thickness: [8, 10],
     constraints: {
@@ -242,7 +243,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     ],
   },
   {
-    id: 'corner-sliding', label: 'Угловая раздвижная', group: 'sliding',
+    id: 'corner-sliding', corner: true, label: 'Угловая раздвижная', group: 'sliding',
     desc: 'Две стороны с раздвижными дверями на системе РД-001',
     thickness: [8, 10],
     constraints: {
@@ -265,7 +266,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     ],
   },
   {
-    id: 'bath-screen', label: 'Шторка на ванну', group: 'screen',
+    id: 'bath-screen', corner: false, label: 'Шторка на ванну', group: 'screen',
     desc: 'Неподвижная шторка на борт ванны со стабилизатором Munich-001',
     thickness: [8],
     constraints: { width: [400, 1200], height: [1200, 1600], needsWidth2: false },
@@ -277,7 +278,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     ],
   },
   {
-    id: 'bath-screen-swing', label: 'Шторка на ванну распашная', group: 'screen',
+    id: 'bath-screen-swing', corner: false, label: 'Шторка на ванну распашная', group: 'screen',
     desc: 'Неподвижная часть + распашная секция на петле Balge-004',
     thickness: [8],
     constraints: { width: [700, 1400], height: [1200, 1600], needsWidth2: false, doorWidth: [350, 600] },
