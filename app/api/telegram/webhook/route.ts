@@ -823,6 +823,9 @@ async function handle(update: any, baseUrl: string) {
         source: transcription ? 'voice' : 'text', status: 'queued', created_by: tgUser.user_id,
       }).select('id').single()
       const { count } = await db().from('owner_tasks').select('id', { count: 'exact', head: true }).eq('status', 'queued')
+      const { data: liveWorkers } = await db().from('owner_task_workers')
+        .select('worker_id').gte('last_seen', new Date(Date.now() - 5 * 60_000).toISOString()).limit(1)
+      const workerAlive = (liveWorkers?.length ?? 0) > 0
       const text = [
         `✅ <b>Задача #${row?.id ?? '?'} в очереди</b> (в очереди: ${count ?? 1})`,
         '',
@@ -831,7 +834,9 @@ async function handle(update: any, baseUrl: string) {
         `<i>Категория: ${category} · приоритет: ${priority}</i>`,
         assessment ? `\n🧠 ${assessment}` : '',
         '',
-        '<i>✅ Уже в системе — открой в ERP, чтобы взять в работу.</i>',
+        workerAlive
+          ? '<i>🟢 Воркер активен — задача уйдёт в работу.</i>'
+          : '<i>⚪️ Воркер не запущен — подхватит при следующем старте. Можно открыть в ERP.</i>',
       ].filter(Boolean).join('\n')
       const kb: InlineKeyboard = [
         [{ text: '📋 Открыть задачи в ERP', url: `${APP_URL}/vlad/tasks` }],

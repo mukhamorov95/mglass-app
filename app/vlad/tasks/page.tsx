@@ -28,11 +28,13 @@ export default function OwnerTasksPage() {
   const [tasks, setTasks] = useState<Task[]>([])
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState<number | null>(null)
+  const [worker, setWorker] = useState<{ alive: boolean; list: { worker_id: string }[] }>({ alive: false, list: [] })
 
   async function load() {
     const r = await fetch('/api/vlad/owner-tasks')
     const j = await r.json()
     setTasks((j.tasks ?? []) as Task[])
+    setWorker(j.worker ?? { alive: false, list: [] })
     setLoading(false)
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -67,6 +69,12 @@ export default function OwnerTasksPage() {
           Очередь: <b className="text-amber-700">{queued}</b> · в работе: <b className="text-blue-700">{inWork}</b>
           {' · '}диктуешь боту — появляется здесь сразу
         </p>
+        <div className={`mt-2 inline-flex items-center gap-1.5 text-[12px] rounded-full border px-2.5 py-1 ${
+          worker.alive ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]'
+        }`}>
+          {worker.alive ? '🟢 Воркер активен' : '⚪️ Воркер не запущен'}
+          {worker.alive && worker.list[0] && <span className="opacity-70">· {worker.list[0].worker_id}</span>}
+        </div>
       </div>
 
       {loading ? (

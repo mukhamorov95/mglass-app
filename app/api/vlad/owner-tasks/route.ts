@@ -11,14 +11,19 @@ async function guardOwner() {
 
 export async function GET() {
   if (!await guardOwner()) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  const { data, error } = await createServiceClient()
+  const svc = createServiceClient()
+  const { data, error } = await svc
     .from('owner_tasks')
     .select('id, title, details, category, priority, source, status, result_note, created_at, updated_at')
     .in('status', ['queued', 'in_progress', 'done', 'cancelled'])
     .order('created_at', { ascending: false })
     .limit(200)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ tasks: data ?? [] })
+  const { data: workers } = await svc.from('owner_task_workers')
+    .select('worker_id, last_seen').order('last_seen', { ascending: false }).limit(5)
+  const now = Date.now()
+  const alive = (workers ?? []).filter(w => now - new Date(w.last_seen as string).getTime() < 5 * 60_000)
+  return NextResponse.json({ tasks: data ?? [], worker: { alive: alive.length > 0, list: alive } })
 }
 
 export async function PATCH(req: Request) {
