@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { parseNotes } from '@/lib/orderFlags'
+import { getRole } from '@/lib/getRole'
+import { getPartnerClientId } from '@/lib/partnerScope'
 
 // Чертёж заказа лежит в приватном bucket b2b-attachments (order-drawings/<id>),
 // прямой publicUrl отдаёт 404 «Bucket not found» — редиректим на короткоживущую
@@ -14,9 +16,19 @@ export async function GET(_req: Request, { params }: { params: Promise<{ orderId
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const role = await getRole()
+  if (!role) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: row } = await svc.from('b2b_orders').select('notes').eq('id', oid).single()
+  const { data: row } = await svc.from('b2b_orders').select('notes, client_id').eq('id', oid).single()
+  if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  // Партнёр — только чертёж своего заказа. Внутренние роли — любой.
+  if (role === 'partner') {
+    const clientId = await getPartnerClientId(user.id)
+    if (!clientId || (row as { client_id: number | null }).client_id !== clientId) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+  }
   const drawing = parseNotes(row?.notes ?? null).drawing_url
   if (typeof drawing !== 'string' || !drawing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 

@@ -23,6 +23,7 @@ type Order = {
   recalcNote: string | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
+type Stats = { linked: boolean; year: number; ordersCount: number; sumYear: number; avgCheck: number; inWork: number; readyToShip: number; byMonth: number[] }
 
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -56,12 +57,15 @@ export default function PartnerPage() {
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
 
   const [submittingId, setSubmittingId] = useState<number | null>(null)
+  const [stats, setStats] = useState<Stats | null>(null)
 
   function load() {
     return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
   }
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { load().finally(() => setLoading(false)) }, [])
+  useEffect(() => {
+    load().finally(() => setLoading(false))
+    fetch('/api/partner/stats').then(r => r.json()).then((s: Stats) => { if (s.linked) setStats(s) }).catch(() => {})
+  }, [])
 
   async function submitQuote(id: number) {
     setSubmittingId(id)
@@ -134,6 +138,23 @@ export default function PartnerPage() {
       )}
 
       <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
+        {/* Табло за год */}
+        {data?.linked && stats && (stats.ordersCount > 0 || stats.inWork > 0) && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-1">
+            {[
+              { k: `Заказов за ${stats.year}`, v: String(stats.ordersCount) },
+              { k: 'Сумма за год', v: fmtMoney(stats.sumYear) },
+              { k: 'Средний чек', v: fmtMoney(stats.avgCheck) },
+              { k: 'В работе сейчас', v: `${stats.inWork}${stats.readyToShip ? ` · ${stats.readyToShip} готов${stats.readyToShip === 1 ? '' : 'ы'}` : ''}` },
+            ].map(t => (
+              <div key={t.k} className="bg-white rounded-xl border border-[#e4e4e0] px-3 py-2.5">
+                <p className="text-[11px] text-[#9a9a95] font-medium">{t.k}</p>
+                <p className="text-[17px] font-bold text-[#111110] tracking-tight mt-1 tabular-nums">{t.v}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
         {!data?.linked && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
             <p className="text-[14px] text-[#111110] font-medium">Аккаунт ещё не привязан к вашей компании</p>
@@ -163,8 +184,10 @@ export default function PartnerPage() {
 }
 
 function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
+  const clickable = o.lane !== 'quote'
   return (
-    <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 mt-2">
+    <div onClick={clickable ? () => { window.location.href = `/partner/order/${o.id}` } : undefined}
+      className={`bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 mt-2 ${clickable ? 'cursor-pointer hover:border-[#111110] transition-colors' : ''}`}>
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="min-w-0">
           <p className="text-[14px] font-bold text-[#111110] truncate">

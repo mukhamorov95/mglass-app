@@ -1,85 +1,86 @@
 ## Текущая задача
-Заявки с сайта → CRM. ВАЖНО: сайт = mglass-web (~/SEO MGLASS APP/mglass-web, Next.js, деплой vercel CLI,
-НЕ git, НЕ Tilda). Он УЖЕ пишет заявки напрямую в ту же Supabase → crm_leads source='site' (app/api/lead/route.ts).
-Добавил в сайте назначение на владельца (manager=LEAD_OWNER||'Администратор'). Лишний CRM-эндпоинт /api/site/lead удалён (сайт им не пользовался).
-mglass.pro на Tilda — ОТДЕЛЬНОЕ/неактуальное, не путать.
+Личный кабинет B2B-заказчика — Фазы 0/1 + ядро калькулятора СДЕЛАНЫ. На проверку владельцу.
+Спец: `docs/B2B_CLIENT_CABINET.md`. Ветка feat/b2b-client-cabinet (worktree mglass-b2b-cabinet).
 
-## Фаза 3 (обучение бота) — сделано
-- supabase/migrations/20260803_ai_manager_examples.sql — корпус «клиент → ответ менеджера» (RLS server-only)
-- lib/avito/managerExamples.ts — rankExamples (чистая, 5 тестов) + getRelevantExamples (fail-open)
-- avitoManagerRuntime — 3-й параметр opts.examples, few-shot в system-промпт (не копировать цены)
-- webhook — getRelevantExamples(product, текст) → передаёт боту
-- scripts/mine-manager-replies.mjs — майнит пары из crm_lead_events в ai_manager_examples (идемпотентно по hash; --dry для превью). ЗАПУСТИТЬ после применения миграции: node scripts/mine-manager-replies.mjs
+## Сделано и проверено (tsc чисто, eslint чисто, 270/270 тестов)
+КАЛЬКУЛЯТОР (идентичность клиент=менеджер):
+- lib/b2b/computeQuote.ts — единый движок (calcItem + надбавки за габариты + услуги), зовут ОБА
+- app/calculator/b2b/page.tsx — 3 сайта переведены на computeQuoteItem (drawing-import оставлен)
+- app/api/partner/quote/route.ts — единый движок, реальные материалы/надбавки/триплекс/фацет
+- app/partner/new/page.tsx — форма как у менеджера на реальных данных (зеркало 4/6, реальные типы, чипы надбавок)
+- app/api/partner/materials — отдаёт материалы+фацет+надбавки (без cost). Тест __tests__/b2b/computeQuote.test.ts
+БЕЗОПАСНОСТЬ (Фаза 0):
+- Миграция 20260805_b2b_partner_isolation_backstop.sql — НЕ применена (прод-запись блокирует классификатор; применить в SQL Editor)
+- Фикс 3 утечек API (drawing/attachments/docs-printed) + lib/partnerScope.ts
+- Аудит partner-submit → security_events
+ПРОВИЖИНИНГ (Фаза 0 шаг 3):
+- app/api/admin/b2b-access + app/admin/b2b-access/page.tsx — выдать/отозвать доступ, ссылка set-password
+КАБИНЕТ (Фаза 1):
+- app/api/partner/stats + Табло в app/partner/page.tsx (заказов за год, сумма, средний чек, в работе)
+- app/api/partner/order/[id] + app/partner/order/[id]/page.tsx — карточка заказа (позиции, чертёж, таймлайн)
+- Карточки заказов кликабельны → карточка
+
+## Осталось (Фаза 2 / хвосты)
+- Применить миграцию безопасности (владелец, SQL Editor)
+- Документы: скачивание КП/счёт-спецификации из кабинета (есть внутренние print-страницы b2b, адаптировать под partner)
+- Уведомления: партнёру о смене статуса; менеджеру о новой заявке (Telegram/почта)
+- Реальный логотип в public/ (сейчас геометрическая заглушка в прототипе)
+- Живой e2e-тест: создать партнёра через /admin/b2b-access → войти → проверить калькулятор/заказы
+- ⚠️ build в worktree падает на симлинке node_modules (Turbopack) — не код; в обычном checkout/CI ок
 
 ## Что сделано (эта сессия)
-- lib/avito/flags.ts (новый) → единый каталог флагов (ядро/усиливающие/инфо/дисквалиф.), веса, порядок сбора ASK_ORDER. Добавлены флаги object_type и repeat_referral, усилен вес photo (3).
-- lib/avito/scoreLead.ts (новый) → детерминированный скоринг: флаги → readiness(0–100) → heat(cold/warm/hot) → missingNext. Правило 🟢: всё ядро ИЛИ (ready_measure+contact).
-- __tests__/ai/scoreLead.test.ts (новый) → 8 тестов, все зелёные.
-- supabase/migrations/20260803_crm_lead_flags.sql (новый) → crm_leads += flags jsonb, readiness int, heat text(check), missing_next text; индекс по heat.
-- lib/ai-tools/avitoManagerRuntime.ts → tool respond отдаёт flags{}; ManagerTurn.flags; секция «ФЛАЖКИ ГОТОВНОСТИ» в персоне (собирать по одному в порядке приоритета); price_quoted/contact проставляются детерминированно.
-- app/api/avito/webhook/route.ts → OR-мёрдж флагов, scoreLead, запись flags/readiness/heat/missing_next; при becameHot — событие + автозадача crm_tasks «Перезвонить»; событие на каждый новый флаг; Telegram обогащён (готовность, ядро, список флагов, новый заголовок 🔥).
-- app/crm/[id]/page.tsx → блок «Готовность заявки» (чеклист флагов + прогресс-бар + светофор + «бот запрашивает …» + дисквалификация).
-- Проверки: vitest 251/251 ✓, tsc по изменённым файлам чисто, eslint по изменённым — 0 ошибок (1 предсущ. warning RUB).
+- Проанализирован проект: партнёрский контур, auth/security, B2B-калькулятор, данные
+- Найден готовый фундамент кабинета `/partner` (вход, ленты заказов, калькулятор, отправка в работу)
+- Настроена изоляция: worktree `mglass-b2b-cabinet`, ветка `feat/b2b-client-cabinet` от main
+- Зафиксированы решения владельца: все модули (табло/карточка/документы/уведомления),
+  калькулятор = детали стекло+зеркало, запуск = пилот, вход = пароль+аудит (2FA на будущее)
+- Написана спецификация архитектуры → `docs/B2B_CLIENT_CABINET.md`
 
-## Статус БД (прод, применено владельцем через SQL Editor)
-- Обе миграции 20260803_* применены в прод (проверено: flags/readiness/heat/missing_next есть, ai_manager_examples есть).
-- Майнинг запущен: пар «клиент→менеджер» 0 (в истории 22 КЛИЕНТ + 12 БОТ, 0 МЕНЕДЖЕР) — корпус пуст, т.к. менеджеры ещё не перехватывали чаты через CRM. Скрипт корректен; корпус наполнится, когда появятся ответы менеджеров.
+## Фаза 0 — прогресс
+- [x] Шаг 1: RLS-бэкстоп → `supabase/migrations/20260805_b2b_partner_isolation_backstop.sql`
+      (хелпер `is_partner()` + `AND NOT is_partner()` во все широкие B2B-политики; безопасно для внутренних).
+      ⚠️ Найдена реальная дыра: политика "auth" = FOR ALL authenticated на b2b_orders/b2b_clients +
+      USING(true) на materials/services/attachments → любой залогиненный видел всё. Закрыто миграцией.
+      НЕ ПРИМЕНЕНО — применить вручную в Supabase SQL Editor (владелец).
+- [x] Шаг 2: аудит внутренних API. Исправлены 3 утечки (service-role без проверки роли):
+      `/api/b2b/drawing/[orderId]`, `/api/b2b/attachments/[id]` (чужие чертежи по id),
+      `/api/b2b-orders/[id]/docs-printed` (запись в чужой заказ). Добавлен `lib/partnerScope.ts`.
+      Уже безопасны: adjust-total, launch-production, sync-stages, problem, payment, invoice-batch.
+      Осталось по мелочи: `/api/b2b/parse-pdf` (не утечка данных, guard добавить позже).
+- [ ] Шаг 3: админ-выдача доступа клиенту (учётка + привязка user_id + ссылка set-password), UI в /admin.
+- [ ] Шаг 4: лог входов/действий партнёра в `security_events`.
 
-## Фаза 3, вариант A (живое обучение) — СДЕЛАНО
-- app/api/avito/thread POST: при перехвате менеджером пара «контекст клиента → ответ» сразу пишется в ai_manager_examples (fail-open).
-- lib/avito/managerExamples.ts: clientContextFromHistory / isUsefulReply / exampleHash (единый хеш со скриптом) / saveManagerExample.
-- Обучение теперь идёт само: менеджер пишет через CRM → пример сохраняется → webhook подмешивает боту. vitest 261/261.
+## Калькулятор — единый расчёт (в работе)
+Решение владельца: клиент и менеджер считают ОДНИМ модулем. Сверловка/вырезы — пока флаг (без цены).
+- [x] `lib/b2b/computeQuote.ts` — общий `computeQuoteItem`/`computeQuoteTotals` (calcItem + надбавки за габариты + услуги)
+- [x] `/api/partner/quote` переписан на общий модуль → теперь применяет надбавки b2b_surcharge_rules,
+      триплекс, фацет, мин.цену, реальные материалы. Раньше звал движок с пустыми услугами → цена расходилась.
+- [x] Тест-регресс `__tests__/b2b/computeQuote.test.ts` (надбавка применяется; мелкие детали без изменений) — зелёный
+- [x] Менеджерская `app/calculator/b2b/page.tsx` переведена на `computeQuoteItem` (3 сайта: add/edit-preview/edit-save).
+      Drawing-import (стр. 712) намеренно оставлен на calcItem (там без надбавок). tsc чисто, eslint чисто, 270 тестов зелёные.
+- [x] UI `/partner/new` переписан под реальные данные: сегмент Стекло/Зеркало, толщина/тип из `b2b_materials`,
+      тумблеры (закалка только стекло, фацет+мм, сверловка-флаг, криволинейка, мин.цена, триплекс+слои), чипы надбавок,
+      живой пересчёт через `/api/partner/quote`. Материалы/фацет/надбавки — из `/api/partner/materials` (без cost).
+- Проверка: tsc чисто по всем затронутым файлам, eslint чисто, `npx vitest run` = 270/270.
+  ⚠️ `npm run build` в этом worktree падает из-за симлинка node_modules (Turbopack «points out of filesystem root»),
+     это инфраструктура worktree, НЕ код; в обычном checkout/CI билд идёт.
 
-## Новое: автономный диспетчер бота, Фаза A (ветка feature/avito-autonomous-dispatcher, PR — на ревью)
-Бот ведёт заявку сам по левой стороне (зона «Квалификация») до «Закрыт на замер», потом человек.
-- lib/avito/flags.ts: +measure_agreed, address_known, object_ready, stall.
-- lib/avito/scoreLead.ts: +measureClosed (согласие+телефон+адрес+готовность).
-- lib/avito/dispatcher.ts (новый): decideNextAction → disqualify/close_measure/park/collect (чистая, тесты).
-- avitoManagerRuntime: персона — дожим на замер (2500₽ в зачёт заказа), брать окно+адрес+готовность.
-- webhook: бот работает ТОЛЬКО зону «Квалификация»; close_measure→этап «Замер назначен»+задача kind=measure+Telegram; park→«Долгострой»; disqualify→lost.
-- Решения владельца: замер 2500₽ в зачёт; «закрыт»=согласие+телефон+адрес+готовность; дату финализирует менеджер.
-- 268/268 тестов, tsc/lint чисто.
-Фаза B (готово): бот при stall заполняет follow_up (in_days+note) → webhook ставит crm_task с датой (лид «Долгострой») → крон avito-followup будит бота по созревшим задачам-себе с контекстом.
-Фаза C (готово): кнопка «Сделать заявку на замер для замерщика» в карточке (этап «Замер назначен») → создаёт заявку в СУЩЕСТВУЮЩЕЙ measure_requests (не дубль!) + колонка lead_id (миграция 20260803_measure_requests_lead_link.sql) → пул замерщиков /measurer-cabinet.
-ВСЁ A+B+C в PR #130 (не мёржено). Перед деплоем применить 20260803_measure_requests_lead_link.sql. 268/268, build ✓.
-ДАЛЬШЕ: D мультиканал (Wazzup/Telegram → тот же движок).
-
-## Разбор сделок AmoCRM → уроки боту (PR #129, смёржен 741e363)
-Проанализированы 216 сделок «Продажи» за 90д (129 выигранных, read-only). Amo хранит только
-входящие сообщения клиентов + внутренние заметки менеджеров (исходящие реплики недоступны).
-Находки: срыв замеров из-за неготовности объекта (117), дожим «отложенных» по триггеру,
-приоритет B2B/дизайнерам, скорость ответа. Внесены в персону avitoManagerRuntime (секция
-«УРОКИ ИЗ РЕАЛЬНЫХ СДЕЛОК»). Отчёт: AVITO AI/05_РАЗБОР_СДЕЛОК_AMO.md. PR #129 на ревью (не мёрджен).
-Скрипты разбора — в scratchpad (PII-выгрузки удалены после анализа).
-
-## Приём заявок с сайта — РЕАЛЬНАЯ картина
-Сайт mglass-web (~/SEO MGLASS APP/mglass-web) уже пишет заявки в общую Supabase → crm_leads
-source='site' через свой app/api/lead/route.ts (Telegram, honeypot 'company', UTM, инференс продукта, heat).
-Правка: добавлено manager=LEAD_OWNER||'Администратор' (владелец обрабатывает первым; сейчас в CRM только он).
-Лишний CRM-эндпоинт /api/site/lead и его строка в middleware УДАЛЕНЫ (PR #133/#134 были из ошибочного Tilda-пути).
-Деплой сайта — vercel --prod из папки сайта (CLI авторизован mukhamorov95-1222).
-Опционально: миграция landing_page/utm в crm_leads (у сайта есть фолбэк, если колонок нет).
-
-## Статус: ЗАДЕПЛОЕНО В ПРОД
-PR #122 смёрджен в main (squash, коммит 0a73e3b), Vercel Production deploy = success.
-Миграции в проде. Всё Авито-направление (Фазы 1–3 + вариант A) живо на mglass-app.vercel.app.
-Смотреть: /crm (доска, фильтр готовности), /crm/[id] (блок «Готовность заявки» + 🧮 Посчитать),
-/crm/import, /crm/bot-test. Корпус: Supabase Table Editor → ai_manager_examples.
+## Осталось проверить вживую
+Дым-тест кабинета (вход партнёром) — нужен тестовый partner-аккаунт. Логика доказана тестом
+(надбавка применяется у клиента) + tsc/eslint. Параллельно ждёт Фаза 0 шаг 3 — админ-выдача доступа.
 
 ## Следующий шаг
-1. Проверить в проде: менеджер отвечает клиенту через /crm/[id] → строка в ai_manager_examples → бот подмешивает пример.
-2. У существующих лидов флажки пусты (heat=cold, 0%) — оживут с первым новым сообщением клиента (webhook пересчитает).
-3. Открытый вопрос: авто-распределитель 🟢-заявок (round-robin) — пока НЕ делаем, общий пул.
-4. Не начато: разбор расхождений бот↔менеджер → правила персоны (Фаза 3, шаг 3).
-
-## Примечание по доступу
-Supabase MCP прописан в КЛАУД/.mcp.json (токен открытым текстом — стоит вынести в env). Прямой DDL через Management API блокируется авто-классификатором; миграции применяет владелец в SQL Editor или через MCP при запуске из mglass-app.
+Фаза 0, шаг 3: `/admin/b2b-access` — создать auth-учётку партнёру + привязать `b2b_clients.user_id`
++ роль `partner` + ссылка `set-password`. Переиспользовать `invite-link`/`set-password`.
 
 ## Контекст
-Хаб компетенции по Авито: ~/Desktop/КЛАУД/mglass-app <-> /Users/mukhamorov01/AVITO AI (доки 01–04 + ROADMAP).
-Дизайн флажков: AVITO AI/03_СИСТЕМА_ФЛАЖКОВ.md. Решения владельца: порог 🟢 = ядро ИЛИ замер+телефон; набор флагов + object_type + repeat_referral + усиленный photo.
-Изменения НЕ закоммичены (владелец не просил commit). Ветка feature/avito-lead-flags от main.
+- Ветка/worktree: mglass-b2b-cabinet (feat/b2b-client-cabinet от main); БД Supabase общая — миграции аддитивные
+- `b2b_orders` — одна таблица (просчёт+заказ), статус в `notes` JSON, позиции в `items` JSONB
+- Изоляция сейчас на коде (service-role + фильтр по user_id); усиливаем RLS-бэкстопом
+- Цена клиента без cost/margin — уже так в `/api/partner/*`
+- Движок цен общий: `lib/b2bCalculator.ts` + `lib/b2bMaterialPricing.ts`
 
 ## Открытые вопросы
-- Автоназначение на конкретного менеджера при 🟢 пока не делаем (нет round-robin) — задача уходит в общий пул, менеджеры видят по RLS. Обсудить, нужен ли авто-распределитель.
-- bot-test (/crm/bot-test) пока не показывает флаги в UI (данные уже приходят в turn.flags) — добавить в Фазе 2.
+- Канал уведомлений (email/Telegram) — к Фазе 2
+- Отдельная org на партнёра vs deny-политика — выбрать при Рубеже 2
+- Self-edit реквизитов клиентом — уточнить

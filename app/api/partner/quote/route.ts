@@ -2,12 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
-import { calcItem, calcTotals, type FacetPrice, type B2BOrderItem } from '@/lib/b2bCalculator'
-import type { B2BMaterial } from '@/lib/types'
+import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
+import type { FacetPrice, B2BOrderItem } from '@/lib/b2bCalculator'
+import type { SurchargeRule } from '@/lib/surcharges'
+import type { B2BMaterial, B2BService } from '@/lib/types'
 
-// Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР нашим движком (calcItem) — тот же,
-// что у менеджера. Наружу отдаём ТОЛЬКО цену партнёра, никогда cost/margin.
-// Клиентским цифрам не доверяем: берём материал/прайс с сервера по materialId.
+// Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР через ЕДИНЫЙ движок computeQuoteItem —
+// тот же, что у менеджера (/calculator/b2b). Включает авто-надбавки за габариты/
+// сложность (b2b_surcharge_rules), фацет, закалку, триплекс, мин.цену — цена
+// не может разойтись с менеджерской. Наружу отдаём ТОЛЬКО цену партнёра, никогда
+// cost/margin. Клиентским цифрам не доверяем: материал/прайс берём с сервера по materialId.
 // save=false → превью (не пишем в БД); save=true → сохраняем как b2b_orders quote.
 
 type ItemSpec = {
@@ -18,8 +22,14 @@ type ItemSpec = {
   hasTempering?: boolean
   hasFacet?: boolean
   facetTypeMm?: number | null
-  hasHoles?: boolean
+  hasHoles?: boolean               // сверловка — пока только флаг (на цену не влияет), как у менеджера
   shape?: 'rect' | 'curved'
+  hasTriplex?: boolean
+  triplexLayers?: 2 | 3
+  triplexMat2Id?: number | null
+  triplexMat3Id?: number | null
+  applyMinPrice?: boolean
+  comment?: string
 }
 
 export async function POST(req: NextRequest) {
@@ -38,15 +48,23 @@ export async function POST(req: NextRequest) {
   if (specs.length === 0) return NextResponse.json({ error: 'Нет позиций' }, { status: 400 })
   if (specs.length > 200) return NextResponse.json({ error: 'Слишком много позиций' }, { status: 400 })
 
-  const [{ data: mats }, { data: matrix }, { data: facets }] = await Promise.all([
+  // Все справочники — те же таблицы и активные строки, что и у менеджера.
+  const [{ data: mats }, { data: matrix }, { data: facets }, { data: surcharges }, { data: services }] = await Promise.all([
     svc.from('b2b_materials').select('*').eq('active', true),
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('facet_prices').select('*').eq('active', true),
+    svc.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
+    svc.from('b2b_services').select('*').eq('active', true),
   ])
   const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
   const byId = new Map(priced.map(m => [m.id, m]))
   const facetPrices = (facets ?? []) as FacetPrice[]
+  const surchargeRules = (surcharges ?? []) as SurchargeRule[]
   const discount = Number(client.discount_percent) || 0
+
+  // Цена триплексации — из справочника услуг (per_m2 «Триплекс»), как у менеджера.
+  const triplexSvc = ((services ?? []) as B2BService[]).find(s => s.type === 'per_m2' && /триплекс/i.test(s.name))
+  const triplexPrice = triplexSvc ? { salePerM2: Number(triplexSvc.value) || 0, costPerM2: Number(triplexSvc.cost_price) || 0 } : null
 
   const items: B2BOrderItem[] = []
   for (const s of specs) {
@@ -55,17 +73,36 @@ export async function POST(req: NextRequest) {
     const h = Number(s.height) || 0
     const q = Number(s.quantity) || 0
     if (!mat || w <= 0 || h <= 0 || q <= 0) return NextResponse.json({ error: 'Некорректная позиция' }, { status: 400 })
-    const calc = calcItem(
-      mat, w, h, q, mat.waste_percent, !!s.hasTempering, [],
-      !!s.hasFacet, s.hasFacet ? (Number(s.facetTypeMm) || 10) : null, facetPrices,
-      false, 2, null, [], true,
+
+    const triplexExtraGlasses = s.hasTriplex
+      ? [byId.get(Number(s.triplexMat2Id)) ?? mat, ...(s.triplexLayers === 3 ? [byId.get(Number(s.triplexMat3Id)) ?? mat] : [])]
+      : []
+
+    const calc = computeQuoteItem(
+      {
+        material: mat,
+        width: w, height: h, quantity: q,
+        hasTempering: !!s.hasTempering,
+        hasFacet: !!s.hasFacet,
+        facetTypeMm: s.hasFacet ? (Number(s.facetTypeMm) || 10) : null,
+        hasHoles: !!s.hasHoles,
+        shape: s.shape === 'curved' ? 'curved' : 'rect',
+        hasTriplex: !!s.hasTriplex,
+        triplexLayers: s.triplexLayers === 3 ? 3 : 2,
+        triplexPrice,
+        triplexExtraGlasses,
+        applyMinPrice: s.applyMinPrice !== false,
+        comment: typeof s.comment === 'string' ? s.comment.slice(0, 120) : undefined,
+        // resolvedServices: [] — доп-услуги в кабинете пилота не выбираются; надбавки за габариты применяются автоматически
+      },
+      { facetPrices, surchargeRules },
     )
-    items.push({ ...calc, localId: `p${items.length}`, hasHoles: !!s.hasHoles, shape: s.shape === 'curved' ? 'curved' : 'rect' })
+    items.push({ ...calc, localId: `p${items.length}` })
   }
 
-  const totals = calcTotals(items, discount)
+  const totals = computeQuoteTotals(items, discount)
 
-  // Партнёру — только безопасное: по позициям цена, и итог (его цена).
+  // Наружу — только безопасное: по позициям цена клиента (с НДС), и итог со скидкой.
   const safeItems = items.map(it => ({
     material: it.materialName,
     thickness: it.thickness,

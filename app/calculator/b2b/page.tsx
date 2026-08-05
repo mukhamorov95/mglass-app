@@ -5,7 +5,8 @@ import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
-import { applicableSurcharges, surchargeServicesFor, type SurchargeRule } from '@/lib/surcharges'
+import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
+import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
@@ -649,11 +650,18 @@ export default function B2BCalculatorPage() {
     const q = Number(fQty) || 1
     if (w <= 0 || h <= 0) return
 
-    const surchargeSvcs = surchargeServicesFor({ width: w, height: h, shape: fCurved ? 'curved' : 'rect' }, surchargeRules, fDismissedSurcharges)
-    const calc = calcItem(selectedMaterial, w, h, q, fWaste, fTempering,
-      [...resolveSvcs(selectedServices, fTierSel, fFilmSel), ...surchargeSvcs], fFacet, fFacet ? fFacetMm : null, facetPrices,
-      fTriplex, fTriplexLayers, triplexPrice, fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [], fMinPrice)
-    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID(), comment: fComment || undefined, hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect' }])
+    const calc = computeQuoteItem({
+      material: selectedMaterial, width: w, height: h, quantity: q,
+      wastePercent: fWaste, hasTempering: fTempering,
+      resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
+      hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
+      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect',
+      hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
+      triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
+      applyMinPrice: fMinPrice, comment: fComment || undefined,
+      dismissedSurcharges: fDismissedSurcharges,
+    }, { facetPrices, surchargeRules })
+    setItems(prev => [...prev, { ...calc, localId: crypto.randomUUID() }])
     setFWidth('')
     setFHeight('')
     setFQty('1')
@@ -796,12 +804,19 @@ export default function B2BCalculatorPage() {
     const q = Number(eQty) || 1
     if (w <= 0 || h <= 0) return
     const svcs = services.filter(s => eServiceIds.includes(s.id))
-    const eSurchargeSvcs = surchargeServicesFor({ width: w, height: h, shape: eCurved ? 'curved' : 'rect' }, surchargeRules, eDismissedSurcharges)
-    const calc = calcItem(mat, w, h, q, eWaste, eTempering,
-      [...resolveSvcs(svcs, eTierSel, eFilmSel), ...eSurchargeSvcs], eFacet, eFacet ? eFacetMm : null, facetPrices,
-      eTriplex, eTriplexLayers, triplexPrice, eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice)
+    const calc = computeQuoteItem({
+      material: mat, width: w, height: h, quantity: q,
+      wastePercent: eWaste, hasTempering: eTempering,
+      resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
+      hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
+      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+      hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
+      triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
+      applyMinPrice: eMinPrice, comment: eComment || undefined,
+      dismissedSurcharges: eDismissedSurcharges,
+    }, { facetPrices, surchargeRules })
     setItems(prev => prev.map(i => i.localId === editingLocalId
-      ? { ...calc, localId: editingLocalId, comment: eComment || undefined, hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect' }
+      ? { ...calc, localId: editingLocalId }
       : i))
     setEditingLocalId(null)
     setSavedOrderId(null)
@@ -2411,11 +2426,17 @@ export default function B2BCalculatorPage() {
       const eCanSave       = !!eSelectedMat && Number(eWidth) > 0 && Number(eHeight) > 0 && (eSelectedMat.sale_price ?? 0) > 0
       // Живой пересчёт: сумма позиции обновляется по мере изменения полей.
       const ePreviewItem   = eCanSave
-        ? { ...calcItem(eSelectedMat!, Number(eWidth), Number(eHeight), Number(eQty) || 1, eWaste, eTempering,
-            [...resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
-             ...surchargeServicesFor({ width: Number(eWidth), height: Number(eHeight), shape: eCurved ? 'curved' : 'rect' }, surchargeRules, eDismissedSurcharges)],
-            eFacet, eFacet ? eFacetMm : null, facetPrices, eTriplex, eTriplexLayers, triplexPrice,
-            eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [], eMinPrice), localId: '' }
+        ? { ...computeQuoteItem({
+            material: eSelectedMat!, width: Number(eWidth), height: Number(eHeight), quantity: Number(eQty) || 1,
+            wastePercent: eWaste, hasTempering: eTempering,
+            resolvedServices: resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
+            hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
+            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+            hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
+            triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
+            applyMinPrice: eMinPrice,
+            dismissedSurcharges: eDismissedSurcharges,
+          }, { facetPrices, surchargeRules }), localId: '' }
         : null
       const ePreviewTotal  = ePreviewItem ? Math.round(ePreviewItem.saleIncVat * (1 - discount / 100)) : null
       const ePreviewMargin = ePreviewItem ? effectiveItemMargin(ePreviewItem, discount) : null

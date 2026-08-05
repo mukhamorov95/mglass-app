@@ -1,0 +1,754 @@
+<title>Кабинет заказчика M-Glass — прототип</title>
+<style>
+  :root{
+    --bg:#f0f0ec; --surface:#ffffff; --surface-2:#f7f7f5;
+    --ink:#111110; --ink-2:#3a3a38; --muted:#9a9a95; --border:#e4e4e0;
+    --accent:#c0453a; --accent-ink:#ffffff; --brand-lt:#d0574a; --brand-dk:#9c3529;
+    --quote:#6b6b66; --quote-bg:#f0f0ec;
+    --amber:#b45309; --amber-bg:#fdf6ec; --amber-bd:#f0e0c8;
+    --blue:#1d4ed8; --blue-bg:#eef3fd; --blue-bd:#d4e0f7;
+    --green:#047857; --green-bg:#eaf6f0; --green-bd:#cbe9db;
+    --shadow:0 1px 2px rgba(17,17,16,.04),0 8px 24px rgba(17,17,16,.05);
+    --radius:16px;
+    --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  }
+  @media (prefers-color-scheme:dark){
+    :root{
+      --bg:#141413; --surface:#1f1f1e; --surface-2:#262625;
+      --ink:#f4f4f1; --ink-2:#c8c8c3; --muted:#8a8a85; --border:#33332f;
+      --accent:#d3564a; --accent-ink:#ffffff; --brand-lt:#d0574a; --brand-dk:#a1362a;
+      --quote:#a3a39d; --quote-bg:#2a2a28;
+      --amber:#e0a45c; --amber-bg:#2c2519; --amber-bd:#413621;
+      --blue:#7aa5f0; --blue-bg:#1a2133; --blue-bd:#2a3757;
+      --green:#5fc79a; --green-bg:#152a22; --green-bd:#234034;
+      --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"]{
+    --bg:#f0f0ec; --surface:#ffffff; --surface-2:#f7f7f5;
+    --ink:#111110; --ink-2:#3a3a38; --muted:#9a9a95; --border:#e4e4e0;
+    --accent:#c0453a; --accent-ink:#ffffff; --brand-lt:#d0574a; --brand-dk:#9c3529;
+    --quote:#6b6b66; --quote-bg:#f0f0ec;
+    --amber:#b45309; --amber-bg:#fdf6ec; --amber-bd:#f0e0c8;
+    --blue:#1d4ed8; --blue-bg:#eef3fd; --blue-bd:#d4e0f7;
+    --green:#047857; --green-bg:#eaf6f0; --green-bd:#cbe9db;
+    --shadow:0 1px 2px rgba(17,17,16,.04),0 8px 24px rgba(17,17,16,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#141413; --surface:#1f1f1e; --surface-2:#262625;
+    --ink:#f4f4f1; --ink-2:#c8c8c3; --muted:#8a8a85; --border:#33332f;
+    --accent:#f4f4f1; --accent-ink:#141413;
+    --quote:#a3a39d; --quote-bg:#2a2a28;
+    --amber:#e0a45c; --amber-bg:#2c2519; --amber-bd:#413621;
+    --blue:#7aa5f0; --blue-bg:#1a2133; --blue-bd:#2a3757;
+    --green:#5fc79a; --green-bg:#152a22; --green-bd:#234034;
+    --shadow:0 1px 2px rgba(0,0,0,.3),0 10px 30px rgba(0,0,0,.35);
+  }
+
+  *{box-sizing:border-box}
+  body{margin:0;font-family:var(--font);background:var(--bg);color:var(--ink);
+    -webkit-font-smoothing:antialiased;font-size:14px;line-height:1.45}
+  .tnum{font-variant-numeric:tabular-nums}
+  a{color:inherit}
+  button{font-family:inherit}
+
+  .app{display:grid;grid-template-columns:248px 1fr;min-height:100vh}
+
+  /* Sidebar */
+  .side{background:var(--surface);border-right:1px solid var(--border);
+    display:flex;flex-direction:column;position:sticky;top:0;height:100vh}
+  .brand{display:flex;align-items:center;gap:10px;padding:20px 20px 16px}
+  .brand .logo{width:34px;height:30px;flex-shrink:0;display:flex}
+  .brand .logo svg{width:34px;height:30px;display:block}
+  .brand .co{font-weight:800;letter-spacing:.02em;font-size:15px}
+  .brand .sub{font-size:11px;color:var(--muted);margin-top:1px}
+  .nav{display:flex;flex-direction:column;gap:2px;padding:8px 12px;flex:1}
+  .nav .lbl{font-size:10px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--muted);padding:14px 10px 6px}
+  .nav button{display:flex;align-items:center;gap:11px;width:100%;text-align:left;
+    background:none;border:0;padding:9px 10px;border-radius:10px;color:var(--ink-2);
+    font-size:13.5px;font-weight:500;cursor:pointer;transition:.14s}
+  .nav button:hover{background:var(--surface-2);color:var(--ink)}
+  .nav button.on{background:var(--accent);color:var(--accent-ink)}
+  .nav button.on svg{stroke:var(--accent-ink)}
+  .nav .ic{width:17px;height:17px;flex-shrink:0}
+  .nav .ic svg{width:18px;height:18px;stroke:var(--muted);fill:none;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+  .nav button:hover .ic svg{stroke:var(--ink)}
+  .nav .badge{margin-left:auto;background:var(--blue-bg);color:var(--blue);
+    border:1px solid var(--blue-bd);font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px}
+  /* Раскрывающийся раздел «Калькулятор» */
+  .grp{display:flex;flex-direction:column}
+  .grp .chev{margin-left:auto;font-size:9px;color:var(--muted);transition:.16s;transform:rotate(-90deg)}
+  .grp.open .chev{transform:rotate(0deg)}
+  .sub{display:none;flex-direction:column;gap:2px;margin:2px 0 4px 26px;
+    padding-left:10px;border-left:1px solid var(--border)}
+  .grp.open .sub{display:flex}
+  .sub button{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;
+    border:0;padding:8px 10px;border-radius:9px;color:var(--ink-2);font-size:13px;font-weight:500;cursor:pointer;transition:.14s}
+  .sub button:hover{background:var(--surface-2);color:var(--ink)}
+  .sub button.on{background:var(--accent);color:var(--accent-ink)}
+  .sub button .badge{margin-left:auto;background:var(--surface-2);color:var(--muted);
+    border:1px solid var(--border);font-size:10px;font-weight:700;padding:0 6px;border-radius:20px}
+  .sub button.on .badge{background:rgba(255,255,255,.2);color:#fff;border-color:transparent}
+  .who{border-top:1px solid var(--border);padding:12px;display:flex;align-items:center;gap:10px}
+  .who .av{width:32px;height:32px;border-radius:50%;background:var(--surface-2);
+    border:1px solid var(--border);display:grid;place-items:center;font-weight:700;font-size:12px;color:var(--ink-2)}
+  .who .nm{font-size:12.5px;font-weight:600;line-height:1.2}
+  .who .rl{font-size:11px;color:var(--muted)}
+  .who .out{margin-left:auto;background:none;border:0;color:var(--muted);cursor:pointer;padding:6px;border-radius:8px}
+  .who .out:hover{color:var(--ink);background:var(--surface-2)}
+
+  /* Main */
+  .main{padding:0 0 60px;overflow-x:hidden}
+  .top{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 82%,transparent);
+    backdrop-filter:saturate(1.4) blur(10px);border-bottom:1px solid var(--border);
+    padding:18px 32px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+  .top h1{margin:0;font-size:21px;font-weight:700;letter-spacing:-.02em}
+  .top .cap{font-size:12.5px;color:var(--muted);margin-top:2px}
+  .wrap{max-width:940px;margin:0 auto;padding:24px 32px}
+  .primary{background:var(--accent);color:var(--accent-ink);border:0;border-radius:11px;
+    padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;transition:.14s;white-space:nowrap}
+  .primary:hover{opacity:.88}
+  .ghost{background:var(--surface);color:var(--ink-2);border:1px solid var(--border);border-radius:11px;
+    padding:9px 15px;font-size:13px;font-weight:600;cursor:pointer;transition:.14s;white-space:nowrap}
+  .ghost:hover{border-color:var(--ink);color:var(--ink)}
+
+  .screen{display:none;animation:fade .22s ease}
+  .screen.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+
+  /* KPI */
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+  .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    padding:16px 18px;box-shadow:var(--shadow)}
+  .kpi .k{font-size:11.5px;color:var(--muted);font-weight:600}
+  .kpi .v{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-top:8px}
+  .kpi .d{font-size:11.5px;margin-top:6px;color:var(--green);font-weight:600}
+  .kpi .d.flat{color:var(--muted)}
+
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow)}
+  .card-h{padding:16px 18px;border-bottom:1px solid var(--border);display:flex;
+    align-items:center;justify-content:space-between}
+  .card-h h3{margin:0;font-size:14px;font-weight:700}
+  .card-h .mut{font-size:12px;color:var(--muted)}
+
+  /* Chart */
+  .chart{padding:20px 18px 8px;display:grid;grid-template-columns:repeat(12,1fr);
+    gap:8px;align-items:end;height:190px}
+  .bar{display:flex;flex-direction:column;align-items:center;gap:8px;height:100%;justify-content:flex-end}
+  .bar .fill{width:100%;max-width:26px;background:linear-gradient(var(--accent),color-mix(in srgb,var(--accent) 62%,var(--bg)));
+    border-radius:6px 6px 3px 3px;transition:.2s}
+  .bar:hover .fill{filter:brightness(1.15)}
+  .bar .m{font-size:10px;color:var(--muted);font-weight:600}
+  .bar.peak .fill{background:linear-gradient(var(--blue),color-mix(in srgb,var(--blue) 55%,var(--bg)))}
+
+  .split{display:grid;grid-template-columns:1.55fr 1fr;gap:14px;margin-top:14px}
+
+  /* status bars list */
+  .srow{display:flex;align-items:center;gap:12px;padding:11px 18px;border-top:1px solid var(--border)}
+  .srow:first-child{border-top:0}
+  .srow .nm{font-size:13px;font-weight:500;width:150px;flex-shrink:0}
+  .srow .track{flex:1;height:8px;background:var(--surface-2);border-radius:20px;overflow:hidden}
+  .srow .tk{height:100%;border-radius:20px}
+  .srow .ct{font-size:12.5px;color:var(--muted);font-weight:600;width:26px;text-align:right;flex-shrink:0}
+
+  /* pills */
+  .pill{font-size:11px;font-weight:600;padding:3px 10px;border-radius:20px;border:1px solid;white-space:nowrap;display:inline-flex;gap:5px;align-items:center}
+  .pill::before{content:"";width:6px;height:6px;border-radius:50%;background:currentColor}
+  .p-quote{color:var(--quote);background:var(--quote-bg);border-color:var(--border)}
+  .p-sub{color:var(--amber);background:var(--amber-bg);border-color:var(--amber-bd)}
+  .p-work{color:var(--blue);background:var(--blue-bg);border-color:var(--blue-bd)}
+  .p-ready{color:var(--green);background:var(--green-bg);border-color:var(--green-bd)}
+  .p-ship{color:var(--quote);background:var(--quote-bg);border-color:var(--border)}
+
+  /* Orders */
+  .lane-lbl{font-size:11px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    color:var(--muted);margin:22px 2px 10px;display:flex;gap:8px;align-items:center}
+  .lane-lbl .n{background:var(--surface-2);border:1px solid var(--border);color:var(--ink-2);
+    border-radius:20px;font-size:10.5px;padding:0 7px;font-weight:700}
+  .ord{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px 16px;
+    margin-bottom:10px;box-shadow:var(--shadow);cursor:pointer;transition:.14s}
+  .ord:hover{border-color:var(--ink);transform:translateY(-1px)}
+  .ord .r1{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+  .ord .num{font-size:14.5px;font-weight:700}
+  .ord .yr{color:var(--muted);font-weight:400}
+  .ord .meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .ord .amt{font-size:14.5px;font-weight:700}
+  .ord .prog{display:flex;align-items:center;gap:10px;margin-top:12px}
+  .ord .track{flex:1;height:6px;background:var(--surface-2);border-radius:20px;overflow:hidden}
+  .ord .tk{height:100%;border-radius:20px}
+  .ord .pc{font-size:11.5px;color:var(--muted);font-weight:600;white-space:nowrap}
+  .ord .recalc{margin-top:10px;font-size:11.5px;color:var(--amber);background:var(--amber-bg);
+    border:1px solid var(--amber-bd);border-radius:9px;padding:7px 10px}
+  .ord .send{margin-top:11px;width:100%;background:var(--accent);color:var(--accent-ink);
+    border:0;border-radius:10px;padding:9px;font-size:12.5px;font-weight:600;cursor:pointer}
+
+  /* Order detail */
+  .back{background:none;border:0;color:var(--muted);cursor:pointer;font-size:13px;font-weight:600;
+    padding:0;margin-bottom:14px;display:inline-flex;gap:6px;align-items:center}
+  .back:hover{color:var(--ink)}
+  table{width:100%;border-collapse:collapse}
+  .tbl-wrap{overflow-x:auto}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted);font-weight:600;
+    text-align:left;padding:12px 14px;border-bottom:1px solid var(--border)}
+  td{padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px}
+  tr:last-child td{border-bottom:0}
+  th.r,td.r{text-align:right}
+  .tot-row td{font-weight:700;font-size:14px;background:var(--surface-2)}
+
+  .timeline{padding:6px 18px 14px}
+  .tl{display:flex;gap:12px;padding:9px 0}
+  .tl .dot{width:11px;height:11px;border-radius:50%;margin-top:3px;flex-shrink:0;border:2px solid var(--surface)}
+  .tl .dot.done{background:var(--green)}
+  .tl .dot.now{background:var(--blue);box-shadow:0 0 0 4px var(--blue-bg)}
+  .tl .dot.wait{background:var(--border)}
+  .tl .ln{font-size:13px;font-weight:600}
+  .tl .dt{font-size:11.5px;color:var(--muted)}
+  .tl.pend .ln{color:var(--muted);font-weight:500}
+
+  .draw{border:1px dashed var(--border);border-radius:12px;height:100%;min-height:150px;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    color:var(--muted);background:var(--surface-2);cursor:pointer}
+  .draw:hover{border-color:var(--ink);color:var(--ink)}
+
+  /* Calculator */
+  .frm{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+  .fld{display:flex;flex-direction:column;gap:6px}
+  .fld.full{grid-column:1/-1}
+  .fld label{font-size:12px;font-weight:600;color:var(--ink-2)}
+  .fld input,.fld select{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;
+    padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:inherit;outline:none;width:100%}
+  .fld input:focus,.fld select:focus{border-color:var(--ink)}
+  .toggles{display:flex;gap:8px;flex-wrap:wrap}
+  .tg{display:flex;align-items:center;gap:8px;border:1px solid var(--border);background:var(--surface-2);
+    border-radius:10px;padding:8px 12px;font-size:12.5px;font-weight:600;cursor:pointer;color:var(--ink-2);user-select:none}
+  .tg.on{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .tg .bx{width:14px;height:14px;border-radius:4px;border:1.6px solid currentColor;display:grid;place-items:center;font-size:10px}
+
+  .sum{position:sticky;bottom:0;margin-top:16px}
+  .sum .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0}
+  .sum .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .info{font-size:12px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);
+    border-radius:10px;padding:10px 12px;display:flex;gap:8px;margin-top:6px}
+
+  /* Калькулятор — как в боевом приложении */
+  .seg{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:3px;gap:3px}
+  .seg button{flex:1;padding:9px;border:0;background:none;border-radius:8px;font-size:13.5px;font-weight:600;
+    color:var(--muted);cursor:pointer;transition:.14s}
+  .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+  .ro{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;
+    font-size:12.5px;color:var(--muted)}
+  .ro b{color:var(--green);font-weight:600}
+  .optgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .opt .t{font-size:12px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:5px}
+  .opt .box{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;border:1px solid var(--border);
+    border-radius:10px;cursor:pointer;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink);user-select:none;transition:.14s}
+  .opt .box:hover{border-color:var(--muted)}
+  .opt .box .ck{width:15px;height:15px;border-radius:4px;border:1.7px solid var(--muted);display:grid;
+    place-items:center;font-size:10px;color:transparent;flex-shrink:0}
+  .opt .box.on{border-width:1.5px}
+  .opt .box.on .ck{border-color:currentColor;color:currentColor}
+  .opt.c-orange  .box.on{border-color:#f0c088;background:var(--amber-bg);color:var(--amber)}
+  .opt.c-purple  .box.on{border-color:#d9c2ef;background:#f6f0fd;color:#7c3aed}
+  .opt.c-blue    .box.on{border-color:var(--blue-bd);background:var(--blue-bg);color:var(--blue)}
+  .opt.c-teal    .box.on{border-color:#bfe3dd;background:#eafaf6;color:#0d9488}
+  .opt.c-emerald .box.on{border-color:var(--green-bd);background:var(--green-bg);color:var(--green)}
+  .opt.c-indigo  .box.on{border-color:#c7c9f5;background:#eef0fe;color:#4f46e5}
+  .lab{font-size:12px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:5px}
+  .qrow{display:flex;align-items:center;gap:12px;padding:13px 18px;border-top:1px solid var(--border);cursor:pointer;transition:.12s}
+  .qrow:hover{background:var(--surface-2)}
+  .qrow .qn{font-size:13.5px;font-weight:700}
+  .qrow .qm{font-size:12px;color:var(--muted)}
+  .qrow .qa{margin-left:auto;font-size:13.5px;font-weight:700;white-space:nowrap}
+
+  /* Docs */
+  .doc{display:flex;align-items:center;gap:14px;padding:14px 18px;border-top:1px solid var(--border)}
+  .doc:first-child{border-top:0}
+  .doc .fi{width:38px;height:38px;border-radius:9px;background:var(--surface-2);border:1px solid var(--border);
+    display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--ink-2);flex-shrink:0}
+  .doc .fn{font-size:13.5px;font-weight:600}
+  .doc .fm{font-size:11.5px;color:var(--muted)}
+  .doc .dl{margin-left:auto;background:none;border:1px solid var(--border);border-radius:9px;
+    padding:7px 13px;font-size:12.5px;font-weight:600;color:var(--ink-2);cursor:pointer}
+  .doc .dl:hover{border-color:var(--ink);color:var(--ink)}
+
+  /* Guide */
+  .guide-hero{background:linear-gradient(135deg,var(--brand-lt),var(--brand-dk));
+    color:#fff;border-radius:var(--radius);padding:26px;margin-bottom:18px}
+  .guide-hero h2{margin:0 0 6px;font-size:20px;letter-spacing:-.02em}
+  .guide-hero p{margin:0;opacity:.85;font-size:13.5px;max-width:60ch}
+  .step{display:flex;gap:16px;padding:18px;border-top:1px solid var(--border)}
+  .step:first-child{border-top:0}
+  .step .no{width:30px;height:30px;border-radius:9px;background:var(--accent);color:var(--accent-ink);
+    display:grid;place-items:center;font-weight:700;font-size:14px;flex-shrink:0}
+  .step h4{margin:0 0 5px;font-size:14.5px;font-weight:700}
+  .step p{margin:0;font-size:13px;color:var(--ink-2);max-width:66ch}
+  .step .rule{margin-top:9px;font-size:12px;color:var(--muted);background:var(--surface-2);
+    border:1px solid var(--border);border-left:3px solid var(--blue);border-radius:0 8px 8px 0;padding:8px 12px}
+  .faq{padding:16px 18px;border-top:1px solid var(--border)}
+  .faq b{font-size:13px}
+  .faq p{margin:5px 0 0;font-size:12.5px;color:var(--ink-2)}
+
+  @media (max-width:860px){
+    .app{grid-template-columns:186px 1fr}
+    .brand{padding:16px 14px 12px}
+    .brand .co{font-size:14px}
+    .top{padding:14px 16px}
+    .wrap{padding:16px}
+    .kpis{grid-template-columns:1fr 1fr}
+    .split,.frm{grid-template-columns:1fr}
+    .chart{gap:4px;height:150px}
+  }
+  /* Узкий экран: сайдбар остаётся слева, сворачивается в колонку иконок */
+  @media (max-width:560px){
+    .app{grid-template-columns:60px 1fr}
+    .brand{justify-content:center;padding:16px 0 12px}
+    .brand .co,.brand .sub{display:none}
+    .nav{padding:8px 8px;align-items:center}
+    .nav .lbl{display:none}
+    .nav button{justify-content:center;padding:12px 0;width:44px}
+    .nav .tx{display:none}
+    .nav .badge{position:absolute;transform:translate(14px,-12px);margin:0;padding:0 5px}
+    .nav button{position:relative}
+    .grp.open .sub{display:none}
+    .grp .chev{display:none}
+    .sub button{width:44px}
+    .who{justify-content:center;padding:12px 0}
+    .who .nm,.who .rl,.who .out{display:none}
+    .top h1{font-size:18px}
+  }
+</style>
+
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="side">
+    <div class="brand">
+      <div class="logo" aria-label="M-Glass">
+        <svg viewBox="0 0 64 56" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="0,3 15,3 15,53 0,53" fill="var(--brand-lt)"/>
+          <polygon points="15,3 32,28 32,44 15,19" fill="var(--brand-lt)"/>
+          <polygon points="49,3 64,3 64,53 49,53" fill="var(--brand-dk)"/>
+          <polygon points="49,3 32,28 32,44 49,19" fill="var(--brand-dk)"/>
+        </svg>
+      </div>
+      <div><div class="co">M‑GLASS</div><div class="sub">Кабинет заказчика</div></div>
+    </div>
+    <nav class="nav" id="nav">
+      <div class="lbl">Работа</div>
+      <button data-s="dash" class="on"><span class="ic"><svg viewBox="0 0 20 20"><rect x="3" y="3" width="6" height="6" rx="1.4"/><rect x="11" y="3" width="6" height="6" rx="1.4"/><rect x="3" y="11" width="6" height="6" rx="1.4"/><rect x="11" y="11" width="6" height="6" rx="1.4"/></svg></span><span class="tx">Табло</span></button>
+
+      <div class="grp open" id="grpCalc">
+        <button class="grp-h" id="grpCalcHead"><span class="ic"><svg viewBox="0 0 20 20"><rect x="4.5" y="2.5" width="11" height="15" rx="2"/><line x1="7.2" y1="6" x2="12.8" y2="6"/><line x1="7.2" y1="10" x2="7.2" y2="10"/><line x1="10" y1="10" x2="10" y2="10"/><line x1="12.8" y1="10" x2="12.8" y2="10"/><line x1="7.2" y1="13.5" x2="7.2" y2="13.5"/><line x1="10" y1="13.5" x2="10" y2="13.5"/><line x1="12.8" y1="13.5" x2="12.8" y2="13.5"/></svg></span><span class="tx">Калькулятор</span><span class="chev">▾</span></button>
+        <div class="sub">
+          <button data-s="calc"><span class="tx">Новый просчёт</span></button>
+          <button data-s="quotes"><span class="tx">Мои просчёты</span><span class="badge">3</span></button>
+          <button data-s="orders"><span class="tx">Мои заказы</span><span class="badge">5</span></button>
+        </div>
+      </div>
+
+      <button data-s="docs"><span class="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3.2 3.2V17H6z"/><path d="M11 2.5v3.2h3.2"/><line x1="8" y1="10" x2="12" y2="10"/><line x1="8" y1="13" x2="12" y2="13"/></svg></span><span class="tx">Документы</span></button>
+      <div class="lbl">Помощь</div>
+      <button data-s="guide"><span class="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4"/><path d="M7.9 7.6a2.2 2.2 0 1 1 3 2c-.8.5-1 1-1 1.9"/><line x1="10" y1="14.3" x2="10" y2="14.3"/></svg></span><span class="tx">Как пользоваться</span></button>
+    </nav>
+    <div class="who">
+      <div class="av">ЛФ</div>
+      <div><div class="nm">Фабрика «Лофт»</div><div class="rl">ООО · договор №14</div></div>
+      <button class="out" title="Выйти">⎋</button>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="top">
+      <div>
+        <h1 id="ttl">Табло</h1>
+        <div class="cap" id="cap">Сводка по вашим заказам за 2026 год</div>
+      </div>
+      <div style="display:flex;gap:9px;align-items:center">
+        <button class="primary" onclick="go('calc')">＋ Просчёт</button>
+      </div>
+    </div>
+
+    <!-- ============ ТАБЛО ============ -->
+    <section class="screen on" id="s-dash">
+      <div class="wrap">
+        <div class="kpis">
+          <div class="kpi"><div class="k">Заказов за год</div><div class="v tnum">34</div><div class="d">▲ 8 к прошлому году</div></div>
+          <div class="kpi"><div class="k">Сумма за год</div><div class="v tnum">2 480 000&nbsp;₽</div><div class="d">▲ 21%</div></div>
+          <div class="kpi"><div class="k">Средний чек</div><div class="v tnum">72 900&nbsp;₽</div><div class="d flat">≈ на уровне</div></div>
+          <div class="kpi"><div class="k">Сейчас в работе</div><div class="v tnum">5</div><div class="d flat">2 готовы к отгрузке</div></div>
+        </div>
+
+        <div class="split">
+          <div class="card">
+            <div class="card-h"><h3>Заказы по месяцам</h3><span class="mut">2026 · шт.</span></div>
+            <div class="chart" id="chart"></div>
+          </div>
+          <div class="card">
+            <div class="card-h"><h3>Где ваши заказы</h3></div>
+            <div class="srow"><span class="nm">Просчёты</span><span class="track"><span class="tk" style="width:22%;background:var(--quote)"></span></span><span class="ct tnum">3</span></div>
+            <div class="srow"><span class="nm">Отправлены в работу</span><span class="track"><span class="tk" style="width:14%;background:var(--amber)"></span></span><span class="ct tnum">2</span></div>
+            <div class="srow"><span class="nm">В работе</span><span class="track"><span class="tk" style="width:36%;background:var(--blue)"></span></span><span class="ct tnum">5</span></div>
+            <div class="srow"><span class="nm">Готовы к отгрузке</span><span class="track"><span class="tk" style="width:14%;background:var(--green)"></span></span><span class="ct tnum">2</span></div>
+            <div class="srow"><span class="nm">Отгружено за год</span><span class="track"><span class="tk" style="width:100%;background:var(--border)"></span></span><span class="ct tnum">24</span></div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-h"><h3>Последнее движение</h3><span class="mut">обновляется автоматически</span></div>
+          <div class="srow" style="cursor:pointer" onclick="openOrder()"><span class="pill p-ready">Готов к выдаче</span><span style="font-weight:600">Заказ M-2408</span><span class="mut" style="margin-left:auto;font-size:12px">сегодня, 11:20</span></div>
+          <div class="srow"><span class="pill p-work">Закалка</span><span style="font-weight:600">Заказ M-2402</span><span class="mut" style="margin-left:auto;font-size:12px">вчера</span></div>
+          <div class="srow"><span class="pill p-sub">Отправлен в работу</span><span style="font-weight:600">Просчёт M-2411</span><span class="mut" style="margin-left:auto;font-size:12px">2 дня назад</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ МОИ ЗАКАЗЫ ============ -->
+    <section class="screen" id="s-orders">
+      <div class="wrap">
+        <div class="lane-lbl">Отправлены в работу <span class="n">2</span></div>
+        <div class="ord" onclick="openOrder()">
+          <div class="r1"><div><div class="num">M-2410 <span class="yr">· ваш № 339</span></div><div class="meta">от 31.07.26 · ждём подтверждения менеджера</div></div><div class="amt tnum">94 700&nbsp;₽</div></div>
+        </div>
+
+        <div class="lane-lbl">В работе <span class="n">5</span></div>
+        <div class="ord" onclick="openOrder()">
+          <div class="r1"><div><div class="num">M-2408 <span class="yr">· ваш № 337</span></div><div class="meta">от 24.07.26 · закалка → упаковка</div></div><div class="amt tnum">156 000&nbsp;₽</div></div>
+          <div class="prog"><span class="track"><span class="tk" style="width:86%;background:var(--green)"></span></span><span class="pill p-ready">Готов к выдаче</span></div>
+        </div>
+        <div class="ord" onclick="openOrder()">
+          <div class="r1"><div><div class="num">M-2402</div><div class="meta">от 21.07.26 · срок 08.08.26</div></div><div class="amt tnum">88 300&nbsp;₽</div></div>
+          <div class="prog"><span class="track"><span class="tk" style="width:64%;background:var(--blue)"></span></span><span class="pc tnum">64% · закалка</span></div>
+        </div>
+        <div class="ord" onclick="openOrder()">
+          <div class="r1"><div><div class="num">M-2399</div><div class="meta">от 18.07.26 · срок 11.08.26</div></div><div class="amt tnum">42 100&nbsp;₽</div></div>
+          <div class="prog"><span class="track"><span class="tk" style="width:38%;background:var(--blue)"></span></span><span class="pc tnum">38% · резка</span></div>
+        </div>
+
+        <div class="lane-lbl">Отгружены <span class="n">24</span></div>
+        <div class="ord" onclick="openOrder()">
+          <div class="r1"><div><div class="num">M-2390</div><div class="meta">отгружен 15.07.26</div></div><div class="amt tnum">73 900&nbsp;₽</div></div>
+          <div class="prog"><span class="track"><span class="tk" style="width:100%;background:var(--border)"></span></span><span class="pill p-ship">Отгружен</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ МОИ ПРОСЧЁТЫ ============ -->
+    <section class="screen" id="s-quotes">
+      <div class="wrap">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+          <p style="font-size:13px;color:var(--muted);margin:0">Сохранённые просчёты. Можно продолжить, отправить в работу или удалить.</p>
+          <button class="primary" onclick="go('calc')">＋ Новый просчёт</button>
+        </div>
+        <div class="ord">
+          <div class="r1"><div><div class="num">M-2411 <span class="yr">· ваш № 340</span></div><div class="meta">от 03.08.26 · зеркало, 6 позиций</div></div><div class="amt tnum">128 400&nbsp;₽</div></div>
+          <div class="recalc">✎ Пересчитано менеджером: уточнили толщину кромки на 2 позициях</div>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button class="ghost" style="flex:1;padding:8px" onclick="go('calc')">Открыть</button>
+            <button class="send" style="flex:2;margin-top:0" onclick="alert('Демонстрация: просчёт уйдёт менеджеру в работу.')">Отправить в работу</button>
+          </div>
+        </div>
+        <div class="ord">
+          <div class="r1"><div><div class="num">M-2409</div><div class="meta">от 01.08.26 · стекло закалённое, 4 позиции</div></div><div class="amt tnum">61 250&nbsp;₽</div></div>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button class="ghost" style="flex:1;padding:8px" onclick="go('calc')">Открыть</button>
+            <button class="send" style="flex:2;margin-top:0" onclick="alert('Демонстрация: просчёт уйдёт менеджеру в работу.')">Отправить в работу</button>
+          </div>
+        </div>
+        <div class="ord">
+          <div class="r1"><div><div class="num">M-2405</div><div class="meta">от 28.07.26 · стекло, 2 позиции</div></div><div class="amt tnum">18 900&nbsp;₽</div></div>
+          <div style="display:flex;gap:8px;margin-top:11px">
+            <button class="ghost" style="flex:1;padding:8px" onclick="go('calc')">Открыть</button>
+            <button class="send" style="flex:2;margin-top:0" onclick="alert('Демонстрация: просчёт уйдёт менеджеру в работу.')">Отправить в работу</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ КАРТОЧКА ЗАКАЗА ============ -->
+    <section class="screen" id="s-order">
+      <div class="wrap">
+        <button class="back" onclick="go('orders')">‹ Все заказы</button>
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:14px;flex-wrap:wrap;margin-bottom:16px">
+          <div>
+            <div style="font-size:22px;font-weight:700;letter-spacing:-.02em">Заказ M-2408 <span style="color:var(--muted);font-weight:400">· ваш № 337</span></div>
+            <div class="mut" style="color:var(--muted);font-size:13px;margin-top:3px">Создан 24.07.26 · срок отгрузки 06.08.26</div>
+          </div>
+          <span class="pill p-ready" style="font-size:12.5px;padding:6px 13px">Готов к выдаче</span>
+        </div>
+
+        <div class="split" style="margin-top:0">
+          <div class="card">
+            <div class="card-h"><h3>Позиции</h3><span class="mut">6 деталей</span></div>
+            <div class="tbl-wrap"><table>
+              <tr><th>Деталь</th><th>Размер, мм</th><th class="r">Кол-во</th><th class="r">Сумма</th></tr>
+              <tr><td>Стекло 6мм, прозрачное, закалка</td><td class="tnum">800 × 2000</td><td class="r tnum">2</td><td class="r tnum">48 600&nbsp;₽</td></tr>
+              <tr><td>Стекло 6мм, прозрачное, закалка + фацет 10</td><td class="tnum">700 × 1900</td><td class="r tnum">1</td><td class="r tnum">29 400&nbsp;₽</td></tr>
+              <tr><td>Зеркало 4мм, серебро</td><td class="tnum">600 × 900</td><td class="r tnum">3</td><td class="r tnum">42 000&nbsp;₽</td></tr>
+              <tr><td>Стекло 8мм, прозрачное, закалка, 4 отв.</td><td class="tnum">900 × 2100</td><td class="r tnum">1</td><td class="r tnum">36 000&nbsp;₽</td></tr>
+              <tr class="tot-row"><td colspan="3">Итого по вашей цене (с НДС)</td><td class="r tnum">156 000&nbsp;₽</td></tr>
+            </table></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:14px">
+            <div class="card" style="flex:1">
+              <div class="card-h"><h3>Чертёж</h3></div>
+              <div style="padding:14px"><div class="draw"><div style="font-size:26px">▤</div><div style="font-size:12.5px;font-weight:600">M-2408-чертёж.pdf</div><div style="font-size:11.5px">нажмите, чтобы открыть</div></div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-h"><h3>Ход производства</h3><span class="mut">86% готово</span></div>
+          <div class="timeline">
+            <div class="tl"><span class="dot done"></span><div><div class="ln">Чертёж подготовлен</div><div class="dt">25.07.26</div></div></div>
+            <div class="tl"><span class="dot done"></span><div><div class="ln">Материал получен</div><div class="dt">27.07.26</div></div></div>
+            <div class="tl"><span class="dot done"></span><div><div class="ln">Резка</div><div class="dt">29.07.26</div></div></div>
+            <div class="tl"><span class="dot done"></span><div><div class="ln">Полировка кромки</div><div class="dt">31.07.26</div></div></div>
+            <div class="tl"><span class="dot done"></span><div><div class="ln">Сверление</div><div class="dt">01.08.26</div></div></div>
+            <div class="tl"><span class="dot now"></span><div><div class="ln">Закалка</div><div class="dt">сейчас</div></div></div>
+            <div class="tl pend"><span class="dot wait"></span><div><div class="ln">Упаковка</div><div class="dt">ожидается</div></div></div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap">
+          <button class="ghost" onclick="go('docs')">↓ Скачать КП</button>
+          <button class="ghost" onclick="go('docs')">↓ Счёт-спецификация</button>
+          <button class="primary" onclick="go('calc')">Повторить заказ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ КАЛЬКУЛЯТОР ============ -->
+    <section class="screen" id="s-calc">
+      <div class="wrap">
+        <div class="card">
+          <div class="card-h"><h3>Новая позиция</h3><span class="mut">детали стекла и зеркала</span></div>
+          <div style="padding:18px">
+            <div class="frm">
+              <div class="fld full"><span class="lab">Материал</span>
+                <div class="seg" id="c-seg">
+                  <button class="on" data-mat="стекло">Стекло</button>
+                  <button data-mat="зеркало">Зеркало</button>
+                </div>
+              </div>
+              <div class="fld"><span class="lab">Толщина</span>
+                <select id="c-th"><option>4 мм</option><option>5 мм</option><option>6 мм</option><option selected>8 мм</option><option>10 мм</option></select>
+              </div>
+              <div class="fld"><span class="lab">Тип</span>
+                <select id="c-type"><option>Прозрачное М1</option><option>Тонированное</option><option>Сатин</option></select>
+              </div>
+              <div class="fld full"><span class="lab">Размеры и количество</span>
+                <div class="grid3">
+                  <input id="c-w" type="number" placeholder="Ширина" value="800">
+                  <input id="c-h" type="number" placeholder="Высота" value="2000">
+                  <input id="c-q" type="number" placeholder="Кол-во" value="2">
+                </div>
+              </div>
+              <div class="fld full"><span class="lab">Отход <span style="color:var(--green);font-weight:400;text-transform:none">по раскрою</span></span>
+                <div class="ro">авто по раскрою — считается по раскрою деталей заказа</div>
+              </div>
+              <div class="fld full"><span class="lab">Обработка</span>
+                <div class="optgrid" id="c-opts">
+                  <div class="opt c-orange" id="opt-temper"><span class="t">Закалка</span>
+                    <div class="box on" data-on="Закалённое" data-off="Без закалки"><span class="ck">✓</span><span class="v">Закалённое</span></div></div>
+                  <div class="opt c-purple"><span class="t">Фацет</span>
+                    <div class="box" data-on="Фацет" data-off="Без фацета"><span class="ck"></span><span class="v">Без фацета</span></div></div>
+                  <div class="opt c-blue"><span class="t">Сверловка</span>
+                    <div class="box" data-on="Есть отверстия" data-off="Без отверстий"><span class="ck"></span><span class="v">Без отверстий</span></div></div>
+                  <div class="opt c-teal"><span class="t">Криволинейка</span>
+                    <div class="box" data-on="Криволинейный рез" data-off="Прямой рез"><span class="ck"></span><span class="v">Прямой рез</span></div></div>
+                  <div class="opt c-emerald"><span class="t">Мин. цена</span>
+                    <div class="box on" data-on="Учитывать мин." data-off="Чистый расчёт"><span class="ck">✓</span><span class="v">Учитывать мин.</span></div></div>
+                  <div class="opt c-indigo"><span class="t">Триплекс</span>
+                    <div class="box" data-on="Триплекс" data-off="Без триплекса"><span class="ck"></span><span class="v">Без триплекса</span></div></div>
+                </div>
+              </div>
+              <div class="fld full"><input maxlength="120" placeholder="Комментарий к позиции (опционально)"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:16px">
+              <button class="primary" onclick="addPos()">＋ Добавить в просчёт</button>
+              <span class="info" style="margin-top:0;align-items:center">Цену считает наш серверный движок — та же, что у менеджера.</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-h"><h3>Просчёт</h3><span class="mut" id="c-count">2 позиции</span></div>
+          <div class="tbl-wrap"><table id="c-tbl">
+            <tr><th>Деталь</th><th>Размер</th><th class="r">Кол-во</th><th class="r">Цена</th></tr>
+            <tr><td>Стекло 6мм, закалка</td><td class="tnum">800×2000</td><td class="r tnum">2</td><td class="r tnum">48 600&nbsp;₽</td></tr>
+            <tr><td>Зеркало 4мм, серебро</td><td class="tnum">600×900</td><td class="r tnum">3</td><td class="r tnum">42 000&nbsp;₽</td></tr>
+          </table></div>
+          <div style="padding:16px 18px;border-top:1px solid var(--border)">
+            <div class="sum">
+              <div class="row"><span class="mut" style="color:var(--muted)">Ваша скидка 12% учтена</span><span class="big tnum" id="c-total">90 600&nbsp;₽</span></div>
+              <div style="display:flex;gap:10px">
+                <button class="ghost" style="flex:1" onclick="alert('Демонстрация: просчёт сохранён в «Мои просчёты».')">Сохранить просчёт</button>
+                <button class="primary" style="flex:1" onclick="alert('Демонстрация: отправлено менеджеру в работу.')">Отправить в работу</button>
+              </div>
+              <div class="info">📎 К просчёту можно приложить чертёж — менеджер увидит его сразу.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ ДОКУМЕНТЫ ============ -->
+    <section class="screen" id="s-docs">
+      <div class="wrap">
+        <div class="card">
+          <div class="card-h"><h3>Ваши документы</h3><span class="mut">КП и счета формируются автоматически</span></div>
+          <div class="doc"><div class="fi">PDF</div><div><div class="fn">Коммерческое предложение M-2408</div><div class="fm">24.07.26 · 156 000 ₽</div></div><button class="dl">Скачать</button></div>
+          <div class="doc"><div class="fi">PDF</div><div><div class="fn">Счёт-спецификация №2408 от ООО «М-Гласс»</div><div class="fm">24.07.26 · реквизиты вашей компании подставлены</div></div><button class="dl">Скачать</button></div>
+          <div class="doc"><div class="fi">PDF</div><div><div class="fn">Коммерческое предложение M-2402</div><div class="fm">21.07.26 · 88 300 ₽</div></div><button class="dl">Скачать</button></div>
+          <div class="doc"><div class="fi">PDF</div><div><div class="fn">Счёт-спецификация №2390</div><div class="fm">10.07.26 · оплачен</div></div><button class="dl">Скачать</button></div>
+        </div>
+        <div class="info" style="margin-top:14px">Реквизиты вашей компании (ИНН, Р/С, юр. адрес) хранятся у нас — счета заполняются сами. Изменились реквизиты? Напишите менеджеру.</div>
+      </div>
+    </section>
+
+    <!-- ============ ИНСТРУКЦИЯ / РЕГЛАМЕНТ ============ -->
+    <section class="screen" id="s-guide">
+      <div class="wrap">
+        <div class="guide-hero">
+          <h2>Как работать с кабинетом M-Glass</h2>
+          <p>Кабинет связан напрямую с нашим производством. Вы сами считаете детали, отправляете заказ в работу и видите каждый этап — от чертежа до отгрузки. Ниже — короткий регламент.</p>
+        </div>
+
+        <div class="card">
+          <div class="step"><div class="no">1</div><div>
+            <h4>Посчитайте детали</h4>
+            <p>Откройте «Новый просчёт», выберите материал (стекло или зеркало), укажите размеры, количество и обработку — закалка, фацет, отверстия. Цену считает наш движок, та же, что у менеджера.</p>
+            <div class="rule">Цена уже с вашей скидкой и НДС. Никаких «уточним позже» — вы сразу видите итог.</div>
+          </div></div>
+          <div class="step"><div class="no">2</div><div>
+            <h4>Сохраните и, если нужно, приложите чертёж</h4>
+            <p>Нажмите «Сохранить просчёт» — он появится в разделе «Мои просчёты». К просчёту можно приложить чертёж в PDF, чтобы мы сразу поняли задачу.</p>
+          </div></div>
+          <div class="step"><div class="no">3</div><div>
+            <h4>Отправьте в работу</h4>
+            <p>Когда просчёт готов — нажмите «Отправить в работу». Заявка уходит вашему менеджеру. Мы проверяем чертёж и запускаем заказ в производство.</p>
+            <div class="rule">Если менеджер что-то пересчитал (например, уточнил кромку) — вы увидите пометку прямо на карточке просчёта.</div>
+          </div></div>
+          <div class="step"><div class="no">4</div><div>
+            <h4>Следите за производством</h4>
+            <p>В «Мои заказы» заказ двигается по этапам: чертёж → материал → резка → полировка → сверление → закалка → упаковка. Виден процент готовности и срок отгрузки.</p>
+          </div></div>
+          <div class="step"><div class="no">5</div><div>
+            <h4>Заберите документы</h4>
+            <p>КП и счёт-спецификация формируются автоматически с реквизитами вашей компании — скачивайте в разделе «Документы» или из карточки заказа. Не нужно ждать менеджера.</p>
+          </div></div>
+        </div>
+
+        <div class="card" style="margin-top:14px">
+          <div class="card-h"><h3>Частые вопросы</h3></div>
+          <div class="faq"><b>Видит ли кто-то ещё мои заказы?</b><p>Нет. Вы видите только свою компанию. Другие заказчики не видят вас, вы не видите их — данные полностью изолированы.</p></div>
+          <div class="faq"><b>Показываете ли вы себестоимость?</b><p>Нет. В кабинете только ваша цена — с вашей скидкой и НДС. Наши внутренние цифры сюда не попадают.</p></div>
+          <div class="faq"><b>Как сменить пароль?</b><p>Кнопка «Сменить пароль» вверху. Новый пароль знаете только вы — мы его не видим.</p></div>
+          <div class="faq"><b>Нужна помощь?</b><p>Ваш менеджер M-Glass на связи — телефон и почта указаны в подтверждении доступа. Пишите по любому вопросу.</p></div>
+        </div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const TITLES = {
+    dash:['Табло','Сводка по вашим заказам за 2026 год'],
+    calc:['Новый просчёт','Детали стекла и зеркала — считаете сами'],
+    quotes:['Мои просчёты','Сохранённые расчёты — черновики заказов'],
+    orders:['Мои заказы','Заказы в производстве и отгруженные'],
+    order:['Заказ M-2408','Карточка заказа и ход производства'],
+    docs:['Документы','Коммерческие предложения и счета'],
+    guide:['Как пользоваться','Регламент работы с кабинетом M-Glass']
+  };
+  const CALC_GROUP=['calc','quotes','orders'];
+  function go(s){
+    document.querySelectorAll('.screen').forEach(el=>el.classList.remove('on'));
+    document.getElementById('s-'+s).classList.add('on');
+    document.querySelectorAll('#nav button[data-s]').forEach(b=>b.classList.toggle('on',b.dataset.s===s));
+    if(CALC_GROUP.includes(s)) document.getElementById('grpCalc').classList.add('open');
+    const t=TITLES[s]||TITLES.dash;
+    document.getElementById('ttl').textContent=t[0];
+    document.getElementById('cap').textContent=t[1];
+    window.scrollTo({top:0,behavior:'smooth'});
+  }
+  function openOrder(){ go('order'); }
+  document.getElementById('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-s]');if(b)go(b.dataset.s);});
+  document.getElementById('grpCalcHead').addEventListener('click',()=>{
+    if(window.matchMedia('(max-width:560px)').matches){ go('calc'); return; }
+    document.getElementById('grpCalc').classList.toggle('open');
+  });
+
+  // Материал Стекло/Зеркало → толщины/типы из РЕАЛЬНЫХ данных b2b_materials.
+  // Зеркало: только 4 и 6 мм. Тип зависит от толщины (как в боевом калькуляторе).
+  const MATS={
+    'стекло':{
+      4:['Прозрачное М1','Осветлённое CrystalVision','CrystalVision Matelux','Сатинированное бесцветное','Тонированное (бронза/графит)','Сатин тонированный'],
+      5:['Прозрачное М1','Сатинированное бесцветное','Сатин тонированный','Тонированное (бронза/графит)'],
+      6:['Прозрачное М1','Осветлённое CrystalVision','CrystalVision Matelux','Сатинированное бесцветное','Тонированное (бронза/графит)','Сатин тонированный'],
+      8:['Прозрачное М1','Осветлённое CrystalVision','CrystalVision Matelux','Сатинированное бесцветное','Тонированное (бронза/графит)','Сатин тонированный'],
+      10:['Прозрачное М1','Осветлённое CrystalVision','CrystalVision Matelux','Сатинированное бесцветное','Тонированное (бронза/графит)','Сатин тонированный'],
+      12:['Прозрачное М1','Осветлённое CrystalVision'],
+    },
+    'зеркало':{
+      4:['Осветлённое','Серебро','Тонированное (бронза/графит)','Antique Mirror A-1'],
+      6:['Осветлённое','Серебро','Тонированное (бронза/графит)'],
+    },
+  };
+  function fillTypes(m,th){ document.getElementById('c-type').innerHTML=(MATS[m][th]||[]).map(t=>`<option>${t}</option>`).join(''); }
+  function fillMats(m){
+    const ths=Object.keys(MATS[m]).map(Number).sort((a,b)=>a-b);
+    const def=m==='зеркало'?4:8;
+    document.getElementById('c-th').innerHTML=ths.map(t=>`<option${t===def?' selected':''}>${t} мм</option>`).join('');
+    fillTypes(m,def);
+    document.getElementById('opt-temper').style.display=m==='зеркало'?'none':'';
+  }
+  document.getElementById('c-seg').addEventListener('click',e=>{
+    const b=e.target.closest('button[data-mat]'); if(!b)return;
+    document.querySelectorAll('#c-seg button').forEach(x=>x.classList.toggle('on',x===b));
+    fillMats(b.dataset.mat);
+  });
+  document.getElementById('c-th').addEventListener('change',e=>{
+    fillTypes(document.querySelector('#c-seg button.on').dataset.mat, parseInt(e.target.value,10));
+  });
+  fillMats('стекло'); // корректные данные сразу при загрузке
+
+  // Тумблеры-карточки обработки
+  document.getElementById('c-opts').addEventListener('click',e=>{
+    const box=e.target.closest('.box'); if(!box)return;
+    box.classList.toggle('on');
+    const on=box.classList.contains('on');
+    box.querySelector('.ck').textContent=on?'✓':'';
+    box.querySelector('.v').textContent=on?box.dataset.on:box.dataset.off;
+  });
+
+  // chart
+  const data=[2,1,3,2,4,3,5,4,3,0,0,0], months=['Я','Ф','М','А','М','И','И','А','С','О','Н','Д'];
+  const max=Math.max(...data), peak=data.indexOf(max);
+  document.getElementById('chart').innerHTML=data.map((v,i)=>
+    `<div class="bar ${i===peak?'peak':''}" title="${v} заказов"><div class="fill" style="height:${v?Math.round(v/max*100):3}%"></div><div class="m">${months[i]}</div></div>`
+  ).join('');
+
+  // calculator add (visual only)
+  let posCount=2, posSum=90600;
+  function fmt(n){return n.toLocaleString('ru-RU')+' ₽';}
+  function addPos(){
+    const mat=document.querySelector('#c-seg button.on').dataset.mat;
+    const th=document.getElementById('c-th').value, type=document.getElementById('c-type').value;
+    const temper=!!document.querySelector('#opt-temper .box.on') && mat==='стекло';
+    const w=+document.getElementById('c-w').value||0, h=+document.getElementById('c-h').value||0, q=+document.getElementById('c-q').value||1;
+    if(!w||!h) return;
+    const price=Math.round((w*h/1e6)*q*(mat==='зеркало'?7800:9500)*(temper?1.25:1)/10)*10; // иллюстративно
+    const label=`${mat==='зеркало'?'Зеркало':'Стекло'} ${th}, ${type}${temper?', закалка':''}`;
+    const tbl=document.getElementById('c-tbl');
+    const tr=tbl.insertRow(-1);
+    tr.innerHTML=`<td>${label}</td><td class="tnum">${w}×${h}</td><td class="r tnum">${q}</td><td class="r tnum">${fmt(price)}</td>`;
+    posCount++; posSum+=price;
+    document.getElementById('c-count').textContent=posCount+' позиции';
+    document.getElementById('c-total').innerHTML=fmt(Math.round(posSum*0.88));
+    tr.animate([{background:'var(--blue-bg)'},{background:'transparent'}],{duration:800});
+  }
+</script>
