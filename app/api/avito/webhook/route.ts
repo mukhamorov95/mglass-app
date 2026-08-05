@@ -193,10 +193,46 @@ export async function POST(req: NextRequest) {
   try {
     turn = await runAvitoManager(history, known, { examples })
   } catch (e) {
-    // Ошибка модели ДО отправки — снимаем метку дедупа, чтобы ретрай Авито
+    const emsg = e instanceof Error ? e.message : String(e)
+    const estatus = (e as { status?: number } | null)?.status
+    // Устойчивый сбой AI (кончились кредиты Anthropic / протух ключ / лимит счёта):
+    // ретраить бессмысленно — Авито заштормит вебхук, а клиент повиснет без ответа.
+    // Так и выгорело 05.08: 311 ошибок за сутки, 22 клиента без единого ответа.
+    // При degraded: НЕ снимаем дедуп (Авито не ретраит), даём клиенту вежливый
+    // фолбэк и шлём троттлингованный алерт владельцу.
+    const degraded = estatus === 401 || estatus === 402 || estatus === 403 ||
+      ((estatus === 400 || estatus == null) && /credit|billing|quota|insufficient|balance/i.test(emsg))
+
+    if (degraded) {
+      await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `⚠️ AI недоступен: ${emsg.slice(0, 200)}`, author: 'AI' })
+      const fallback = 'Здравствуйте! Спасибо за обращение — уже подключаю менеджера, он ответит вам с минуты на минуту.'
+      await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'message', text: `БОТ: ${fallback}`, author: 'AI' })
+      if (isAvitoConfigured() && v.user_id != null) {
+        try { await avitoSendMessage(v.user_id, v.chat_id, fallback) } catch { /* фолбэк не критичен */ }
+      }
+      // Троттлинг алерта: не чаще раза в 15 минут (иначе шквал одинаковых сообщений).
+      let shouldAlert = true
+      try {
+        const { data: last } = await service.from('ai_settings').select('value').eq('key', 'ai_error_last_alert').maybeSingle()
+        const lastTs = Number((last as { value?: string } | null)?.value ?? 0)
+        if (Date.now() - lastTs < 15 * 60 * 1000) shouldAlert = false
+        else await service.from('ai_settings').upsert({ key: 'ai_error_last_alert', value: String(Date.now()) }, { onConflict: 'key' })
+      } catch { /* нет таблицы/сбой — не глушим алерт */ }
+      if (shouldAlert) {
+        await notifyAdmins([
+          '⚠️ <b>Avito: AI-менеджер недоступен</b>',
+          emsg.slice(0, 300),
+          'Клиентам уходит вежливый фолбэк, заявки ждут человека. Проверьте баланс Anthropic / ключ.',
+          `Карточка: https://mglass-app.vercel.app/crm/${leadId}`,
+        ].join('\n')).catch(() => {})
+      }
+      return NextResponse.json({ ok: true, ai_degraded: true })
+    }
+
+    // Транзиентная ошибка (429/5xx/сеть) — снимаем метку дедупа, чтобы ретрай Авито
     // переобработал сообщение (иначе ответ был бы потерян навсегда).
     await service.from('avito_processed_messages').delete().eq('msg_id', msgKey)
-    await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Ошибка AI: ${e instanceof Error ? e.message : e}`, author: 'AI' })
+    await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Ошибка AI: ${emsg}`, author: 'AI' })
     return NextResponse.json({ ok: false, ai_error: true }, { status: 500 })
   }
 
