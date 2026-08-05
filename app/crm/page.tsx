@@ -70,6 +70,14 @@ const EMPTY = {
   budget: '', est_amount: '', est_profit: '', manager: '', note: '',
 }
 
+function agoRu(ms: number) {
+  const m = Math.max(0, Math.round(ms / 60000))
+  if (m < 60) return `${m} мин назад`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} ч назад`
+  return `${Math.round(h / 24)} дн назад`
+}
+
 export default function CrmPage() {
   const sb = createClient()
   const router = useRouter()
@@ -94,6 +102,7 @@ export default function CrmPage() {
   const [actFilter, setActFilter] = useState('all')
   const [actOpen, setActOpen] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [botStatus, setBotStatus] = useState<{ botEnabled: boolean; lastAvitoAt: string | null; avito24h: number } | null>(null)
   const [now, setNow] = useState(0)   // «сейчас» из эффекта (правило чистоты рендера)
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
@@ -119,6 +128,7 @@ export default function CrmPage() {
       fetch('/api/crm/ingest').then(r => r.ok ? r.json() : null).then(d => { if (d?.mode) setIngestMode(d.mode) }).catch(() => {})
       fetch('/api/crm/activity?days=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setActivity((d.events ?? []) as ActEvent[]) }).catch(() => {})
       fetch('/api/crm/tasks').then(r => r.ok ? r.json() : null).then(d => { if (d) setTasks((d.tasks ?? []) as Task[]) }).catch(() => {})
+      fetch('/api/crm/bot-status').then(r => r.ok ? r.json() : null).then(d => { if (d) setBotStatus(d) }).catch(() => {})
     } finally { setLoading(false) }
   }, [sb])
 
@@ -225,6 +235,18 @@ export default function CrmPage() {
               {' · '}<button onClick={() => setHeatFilter(h => h === 'hot' ? 'all' : 'hot')}
                 className={`font-semibold ${heatFilter === 'hot' ? 'text-emerald-700 underline' : 'text-emerald-600'}`}>🟢 готовы менеджеру: {hotLeads.length}</button>
             </p>
+            {botStatus && (
+              <a href="/vladislav" title="Настройки AI-бота"
+                className={`inline-flex items-center gap-1.5 mt-1.5 text-[12px] rounded-full border px-2.5 py-0.5 no-underline ${
+                  botStatus.botEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                🤖 Иван · {botStatus.botEnabled ? 'работает' : 'выключен'}
+                <span className="opacity-70">
+                  · Авито 24ч: {botStatus.avito24h}
+                  {botStatus.lastAvitoAt && now > 0 ? `, посл. ${agoRu(now - new Date(botStatus.lastAvitoAt).getTime())}` : ''}
+                </span>
+              </a>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: имя / телефон"
