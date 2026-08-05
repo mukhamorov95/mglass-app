@@ -107,15 +107,29 @@ export function PartitionDrawing({ config }: { config: Configuration }) {
         </>
       )}
 
-      {/* петли на стыке фикс/дверь: 250 мм от верха и низа (правило M-Glass) */}
+      {/* петли: реальная площадка на стыке, 250 мм от верха и низа (правило M-Glass) */}
       {config.hinge && doorRect && fixedRect && doorHinges > 0 && (() => {
         const seamX = doorRect.x <= fixedRect.x ? doorRect.x + doorRect.w : doorRect.x
+        const toward = doorRect.x > fixedRect.x ? 1 : -1
+        const pl = config.hinge.plate
+        const doorPx = pl.doorSide * scale, statPx = pl.statSide * scale
+        const hPx = Math.max(11, pl.h * scale)
+        const e1 = seamX + toward * doorPx, e2 = seamX - toward * statPx
+        const px1 = Math.min(e1, e2), pw = Math.abs(e1 - e2)
         const ys = doorHinges === 2
           ? [250, dims.height - 250]
           : Array.from({ length: doorHinges }, (_, i) => 250 + (i * (dims.height - 500)) / (doorHinges - 1))
-        return ys.map((mm, i) => (
-          <circle key={i} cx={seamX} cy={y0 + (mm / dims.height) * gh} r={5} fill={hex} stroke="#fff" strokeWidth={1} />
-        ))
+        return ys.map((mm, i) => {
+          const cy = y0 + (mm / dims.height) * gh
+          return (
+            <g key={i}>
+              <rect x={px1} y={cy - hPx / 2} width={pw} height={hPx} rx={2} fill={hex} stroke="#4a4a46" strokeWidth={0.8} />
+              <line x1={px1} y1={cy - hPx / 2 + 1.5} x2={px1 + pw} y2={cy - hPx / 2 + 1.5} stroke="#ffffff" strokeWidth={1} opacity={0.35} />
+              <rect x={seamX - toward * statPx * 0.6} y={cy - hPx * 0.3} width={Math.max(4, hPx * 0.42)} height={hPx * 0.6} rx={1} fill="#ffffff" opacity={0.22} />
+              <line x1={seamX} y1={cy - hPx / 2} x2={seamX} y2={cy + hPx / 2} stroke="#2c2c29" strokeWidth={0.9} />
+            </g>
+          )
+        })
       })()}
 
       {/* ручка на открывающейся кромке двери */}

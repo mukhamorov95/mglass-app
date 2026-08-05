@@ -63,16 +63,21 @@ export type HingeModel = {
   priceFrom: number
   premium: boolean
   cutout?: string
+  // Габариты площадки петли (мм) для отрисовки на чертеже
+  plate: { doorSide: number; statSide: number; h: number }
 }
 
 export const HINGES: HingeModel[] = [
   { code: 'Balge-004',  name: 'Balge-004 · стекло-стекло 135–180°', mount: 'glass', angle: '135–180°',
-    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 4394, premium: false },
+    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 4394, premium: false,
+    plate: { doorSide: 58, statSide: 44, h: 55 } },
   { code: 'Dessau-103', name: 'Dessau-103 · стекло-стекло 180°',    mount: 'glass', angle: '180°, фикс 90°',
     glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 6949, premium: true,
-    cutout: 'дверь R13 (40×38), стационар R9 (16×32)' },
+    cutout: 'дверь R13 (40×38), стационар R9 (16×32)',
+    plate: { doorSide: 70, statSide: 47, h: 60 } },   // точно с чертежа Dessau 103 (117×60)
   { code: 'Dessau-101', name: 'Dessau-101 · стена-стекло 90°',      mount: 'wall',  angle: '90°',
-    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 6817, premium: true },
+    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 6817, premium: true,
+    plate: { doorSide: 60, statSide: 0, h: 55 } },
 ]
 
 // Правило М-Glass: дверь ≤700×2200 держат 2 петли (250 мм от верха и низа), иначе 3.
