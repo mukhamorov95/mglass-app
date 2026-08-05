@@ -32,7 +32,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc.from('b2b_clients').select('id').eq('user_id', user.id).maybeSingle()
+  const { data: client } = await svc.from('b2b_clients')
+    .select('id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account')
+    .eq('user_id', user.id).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const { data: o } = await svc.from('b2b_orders')
@@ -86,6 +88,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     id: o.id,
     number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
     clientOrderNumber: (o.client_order_number as string | null) ?? null,
+    clientName: client.name,
+    buyer: {
+      name: client.full_name || client.name,
+      inn: client.inn ?? null, kpp: client.kpp ?? null, ogrn: client.ogrn ?? null,
+      legalAddress: client.legal_address ?? null,
+      bankAccount: client.bank_account ?? null, bankName: client.bank_name ?? null,
+      bik: client.bik ?? null, corrAccount: client.corr_account ?? null,
+    },
     created_at: o.created_at,
     lane,
     ready: packed && !shipped,
