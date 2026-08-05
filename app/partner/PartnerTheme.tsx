@@ -222,6 +222,38 @@ const CSS = `
 .pcab .cat-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:860px){.pcab .cat-grid{grid-template-columns:1fr}}
 
+/* Calculator */
+.pcab .frm{display:grid;grid-template-columns:1fr 1fr;gap:14px 16px}
+.pcab .fld{display:flex;flex-direction:column;gap:6px}
+.pcab .fld.full{grid-column:1/-1}
+.pcab .fld input,.pcab .fld select,.pcab .fld textarea{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:inherit;outline:none;width:100%}
+.pcab .fld input:focus,.pcab .fld select:focus,.pcab .fld textarea:focus{border-color:var(--ink)}
+.pcab .seg{display:flex;background:var(--surface-2);border:1px solid var(--border);border-radius:11px;padding:3px;gap:3px}
+.pcab .seg button{flex:1;padding:9px;border:0;background:none;border-radius:8px;font-size:13.5px;font-weight:600;color:var(--muted);cursor:pointer;transition:.14s}
+.pcab .seg button.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.pcab .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px}
+.pcab .ro{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:9px 12px;font-size:12.5px;color:var(--muted)}
+.pcab .optgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.pcab .opt .t{font-size:12px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:5px}
+.pcab .opt .box{display:flex;align-items:center;gap:9px;height:38px;padding:0 12px;border:1px solid var(--border);border-radius:10px;cursor:pointer;background:var(--surface);font-size:13px;font-weight:600;color:var(--ink);user-select:none;transition:.14s}
+.pcab .opt .box:hover{border-color:var(--muted)}
+.pcab .opt .box .ck{width:15px;height:15px;border-radius:4px;border:1.7px solid var(--muted);display:grid;place-items:center;font-size:10px;color:transparent;flex-shrink:0}
+.pcab .opt .box.on{border-width:1.5px}
+.pcab .opt .box.on .ck{border-color:currentColor;color:currentColor}
+.pcab .opt.c-orange .box.on{border-color:#f0c088;background:var(--amber-bg);color:var(--amber)}
+.pcab .opt.c-purple .box.on{border-color:#d9c2ef;background:#f6f0fd;color:#7c3aed}
+.pcab .opt.c-blue .box.on{border-color:var(--blue-bd);background:var(--blue-bg);color:var(--blue)}
+.pcab .opt.c-teal .box.on{border-color:#bfe3dd;background:#eafaf6;color:#0d9488}
+.pcab .opt.c-emerald .box.on{border-color:var(--green-bd);background:var(--green-bg);color:var(--green)}
+.pcab .opt.c-indigo .box.on{border-color:#c7c9f5;background:#eef0fe;color:#4f46e5}
+.pcab .lab{font-size:12px;font-weight:600;color:var(--ink-2);display:block;margin-bottom:5px}
+.pcab .sum .row{display:flex;justify-content:space-between;align-items:center;padding:12px 0}
+.pcab .sum .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+.pcab .info{font-size:12px;color:var(--muted);background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;display:flex;gap:8px;margin-top:6px}
+.pcab .rm{background:none;border:0;color:var(--muted);cursor:pointer;font-size:13px;padding:2px 6px;line-height:1}
+.pcab .rm:hover{color:var(--accent)}
+.pcab .schip{font-size:11px;background:var(--amber-bg);border:1px solid var(--amber-bd);color:var(--amber);border-radius:20px;padding:2px 9px;font-weight:600}
+
 @media (max-width:860px){
   .pcab{grid-template-columns:186px 1fr}
   .pcab .brand{padding:16px 14px 12px}
