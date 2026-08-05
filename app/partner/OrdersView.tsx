@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 
-// Общий вид списка заказов кабинета. Один компонент под три пункта меню:
-//   view='all'    → Табло + все лейны (страница /partner)
+// Списки кабинета (дизайн из прототипа, .pcab). Один компонент под два меню:
 //   view='quotes' → просчёты (quote + submitted)   (/partner/quotes)
 //   view='orders' → заказы (в работе + отгружены)   (/partner/orders)
-// Никаких себестоимости/маржи — только цена клиента, прогресс, причина пересчёта.
+// Табло (view='all') вынесено в отдельный Dashboard. Только цена клиента.
 
 type Lane = 'quote' | 'submitted' | 'in_work' | 'shipped'
 type Order = {
@@ -16,7 +16,6 @@ type Order = {
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
-type Stats = { linked: boolean; year: number; ordersCount: number; sumYear: number; avgCheck: number; inWork: number; readyToShip: number; byMonth: number[] }
 
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
@@ -29,18 +28,10 @@ const VIEW_LANES: Record<'all' | 'quotes' | 'orders', Lane[]> = {
   quotes: ['quote', 'submitted'],
   orders: ['in_work', 'shipped'],
 }
-const VIEW_META: Record<'all' | 'quotes' | 'orders', { title: string; empty: string }> = {
-  all: { title: 'Мои заказы', empty: 'Пока нет заказов' },
-  quotes: { title: 'Мои просчёты', empty: 'Пока нет просчётов. Создайте новый в разделе «Калькулятор».' },
-  orders: { title: 'Мои заказы', empty: 'Пока нет заказов в работе.' },
-}
-
-function stageColor(o: Order) {
-  if (o.lane === 'shipped')   return 'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]'
-  if (o.lane === 'quote')     return 'bg-[#f5f5f3] text-[#6b6b66] border-[#e4e4e0]'
-  if (o.lane === 'submitted') return 'bg-amber-50 text-amber-700 border-amber-200'
-  if (o.ready)                return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-  return 'bg-blue-50 text-blue-700 border-blue-200'
+const VIEW_META: Record<'all' | 'quotes' | 'orders', { title: string; cap: string; empty: string }> = {
+  all: { title: 'Мои заказы', cap: 'Все ваши просчёты и заказы', empty: 'Пока нет заказов' },
+  quotes: { title: 'Мои просчёты', cap: 'Сохранённые расчёты — продолжить или отправить в работу', empty: 'Пока нет просчётов. Создайте новый в разделе «Калькулятор».' },
+  orders: { title: 'Мои заказы', cap: 'Запущенные в производство и отгруженные', empty: 'Пока нет заказов в работе.' },
 }
 
 export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' | 'orders' }) {
@@ -52,15 +43,11 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
   const [pwdSaving, setPwdSaving] = useState(false)
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
-  const [stats, setStats] = useState<Stats | null>(null)
 
   function load() {
     return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
   }
-  useEffect(() => {
-    load().finally(() => setLoading(false))
-    if (view === 'all') fetch('/api/partner/stats').then(r => r.json()).then((s: Stats) => { if (s.linked) setStats(s) }).catch(() => {})
-  }, [view])
+  useEffect(() => { load().finally(() => setLoading(false)) }, [])
 
   async function submitQuote(id: number) {
     setSubmittingId(id)
@@ -84,138 +71,108 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
     } finally { setPwdSaving(false) }
   }
 
-  if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
-
+  const meta = VIEW_META[view]
   const orders = data?.orders ?? []
   const lanes = VIEW_LANES[view]
   const visible = orders.filter(o => lanes.includes(o.lane))
-  const meta = VIEW_META[view]
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6 flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">{meta.title}</h1>
-          <p className="text-[13px] text-[#9a9a95] mt-0.5 truncate">
-            {data?.client?.name ? `${data.client.name} · ` : ''}M-Glass · производство по чертежам
-          </p>
+    <>
+      <div className="top">
+        <div>
+          <h1>{meta.title}</h1>
+          <div className="cap">{data?.client?.name ? `${data.client.name} · ` : ''}{meta.cap}</div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
-          <a href="/partner/new"
-            className="text-[11px] px-2.5 py-1.5 rounded-lg bg-[#1d1d1f] text-white font-semibold hover:bg-black transition-colors">＋ Новый просчёт</a>
-          <button onClick={() => { setShowPwd(true); setPwdMsg(null) }}
-            className="text-[11px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">Сменить пароль</button>
-          <button onClick={async () => { await createClient().auth.signOut(); window.location.href = '/login' }}
-            className="text-[11px] px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#111110] transition-colors">Выйти</button>
+        <div style={{ display: 'flex', gap: 9, alignItems: 'center' }}>
+          <button className="ghost" onClick={() => { setShowPwd(true); setPwdMsg(null) }}>Сменить пароль</button>
+          <Link className="primary" href="/partner/new">＋ Новый просчёт</Link>
         </div>
       </div>
 
       {showPwd && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => setShowPwd(false)}>
-          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl p-5" onClick={e => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-[15px] font-semibold text-[#111110]">Смена пароля</h2>
-              <button onClick={() => setShowPwd(false)} className="text-[#9a9a95] hover:text-[#111110] text-lg leading-none">✕</button>
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.5)', zIndex: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16 }} onClick={() => setShowPwd(false)}>
+          <div className="card" style={{ width: '100%', maxWidth: 380, padding: 20 }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700 }}>Смена пароля</h3>
+              <button className="out" onClick={() => setShowPwd(false)} style={{ background: 'none', border: 0, cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
-            <p className="text-[12px] text-[#9a9a95] mb-3">Придумайте свой пароль — его будете знать только вы.</p>
-            <input type="password" value={pwd} onChange={e => { setPwd(e.target.value); setPwdMsg(null) }}
-              placeholder="Новый пароль (мин. 8 символов)" autoFocus
-              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-2" />
-            <input type="password" value={pwd2} onChange={e => { setPwd2(e.target.value); setPwdMsg(null) }}
-              placeholder="Повторите пароль"
-              onKeyDown={e => { if (e.key === 'Enter') changePassword() }}
-              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
-            {pwdMsg && <p className={`text-[12px] mt-2 ${pwdMsg.ok ? 'text-emerald-600' : 'text-red-500'}`}>{pwdMsg.text}</p>}
-            <button onClick={changePassword} disabled={pwdSaving}
-              className="w-full mt-3 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40 transition-colors">
+            <p className="cap" style={{ marginTop: 0, marginBottom: 12 }}>Придумайте свой пароль — его будете знать только вы.</p>
+            <div className="fld" style={{ marginBottom: 8 }}>
+              <input className="pinput" type="password" value={pwd} onChange={e => { setPwd(e.target.value); setPwdMsg(null) }} placeholder="Новый пароль (мин. 8 символов)" autoFocus />
+            </div>
+            <div className="fld">
+              <input className="pinput" type="password" value={pwd2} onChange={e => { setPwd2(e.target.value); setPwdMsg(null) }} placeholder="Повторите пароль" onKeyDown={e => { if (e.key === 'Enter') changePassword() }} />
+            </div>
+            {pwdMsg && <p style={{ fontSize: 12, marginTop: 8, color: pwdMsg.ok ? 'var(--green)' : '#dc2626' }}>{pwdMsg.text}</p>}
+            <button className="primary" onClick={changePassword} disabled={pwdSaving} style={{ width: '100%', marginTop: 14, padding: 11 }}>
               {pwdSaving ? 'Сохраняю…' : 'Сохранить пароль'}
             </button>
           </div>
         </div>
       )}
 
-      <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
-        {view === 'all' && data?.linked && stats && (stats.ordersCount > 0 || stats.inWork > 0) && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-1">
-            {[
-              { k: `Заказов за ${stats.year}`, v: String(stats.ordersCount) },
-              { k: 'Сумма за год', v: fmtMoney(stats.sumYear) },
-              { k: 'Средний чек', v: fmtMoney(stats.avgCheck) },
-              { k: 'В работе сейчас', v: `${stats.inWork}${stats.readyToShip ? ` · ${stats.readyToShip} готов${stats.readyToShip === 1 ? '' : 'ы'}` : ''}` },
-            ].map(t => (
-              <div key={t.k} className="bg-white rounded-xl border border-[#e4e4e0] px-3 py-2.5">
-                <p className="text-[11px] text-[#9a9a95] font-medium">{t.k}</p>
-                <p className="text-[17px] font-bold text-[#111110] tracking-tight mt-1 tabular-nums">{t.v}</p>
-              </div>
-            ))}
+      <div className="wrap">
+        <style dangerouslySetInnerHTML={{ __html: '.pcab .pinput{background:var(--surface-2);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:13.5px;color:var(--ink);font-family:inherit;outline:none;width:100%}.pcab .pinput:focus{border-color:var(--ink)}' }} />
+
+        {loading && <div className="note"><div className="s">Загрузка…</div></div>}
+
+        {!loading && !data?.linked && (
+          <div className="note">
+            <div className="t">Аккаунт ещё не привязан к вашей компании</div>
+            <div className="s">Обратитесь к вашему менеджеру M-Glass, чтобы открыть доступ к заказам.</div>
           </div>
         )}
 
-        {!data?.linked && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#111110] font-medium">Аккаунт ещё не привязан к вашей компании</p>
-            <p className="text-[13px] text-[#9a9a95] mt-1">Обратитесь к вашему менеджеру M-Glass, чтобы открыть доступ к заказам.</p>
-          </div>
+        {!loading && data?.linked && visible.length === 0 && (
+          <div className="note"><div className="s">{meta.empty}</div></div>
         )}
 
-        {data?.linked && visible.length === 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">{meta.empty}</p>
-          </div>
-        )}
-
-        {lanes.map(lane => {
+        {!loading && data?.linked && lanes.map(lane => {
           const list = visible.filter(o => o.lane === lane)
           if (list.length === 0) return null
           return (
             <div key={lane}>
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] pt-3">{LANE_LABEL[lane]} · {list.length}</p>
+              <div className="lane-lbl">{LANE_LABEL[lane]} <span className="n">{list.length}</span></div>
               {list.map(o => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />)}
             </div>
           )
         })}
       </div>
-    </div>
+    </>
   )
 }
 
 function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
   const clickable = o.lane !== 'quote'
-  return (
-    <div onClick={clickable ? () => { window.location.href = `/partner/order/${o.id}` } : undefined}
-      className={`bg-white rounded-xl border border-[#e4e4e0] px-4 py-3 mt-2 ${clickable ? 'cursor-pointer hover:border-[#111110] transition-colors' : ''}`}>
-      <div className="flex items-start justify-between gap-2 mb-2">
-        <div className="min-w-0">
-          <p className="text-[14px] font-bold text-[#111110] truncate">
-            {o.number}
-            {o.clientOrderNumber && <span className="text-[#9a9a95] font-normal"> · ваш № {o.clientOrderNumber}</span>}
-          </p>
-          <p className="text-[12px] text-[#9a9a95]">от {fmtDate(o.created_at)} · {fmtMoney(o.amount)}</p>
+  const body = (
+    <>
+      <div className="r1">
+        <div>
+          <div className="num">{o.number}{o.clientOrderNumber && <span className="yr"> · ваш № {o.clientOrderNumber}</span>}</div>
+          <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
         </div>
-        <span className={`text-[10px] font-medium px-2 py-1 rounded-full border whitespace-nowrap flex-shrink-0 ${stageColor(o)}`}>
-          {o.stage}
-        </span>
+        <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>
+
       {(o.lane === 'in_work' || o.lane === 'shipped') && (
-        <div className="flex items-center gap-2">
-          <div className="flex-1 h-1.5 bg-[#f0f0ec] rounded-full overflow-hidden">
-            <div className={`h-full rounded-full ${o.ready ? 'bg-emerald-500' : o.lane === 'shipped' ? 'bg-[#c4c4be]' : 'bg-blue-500'}`} style={{ width: `${o.lane === 'shipped' ? 100 : o.progressPct}%` }} />
-          </div>
-          {o.lane === 'in_work' && <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">{o.progressPct}%</span>}
-          {o.lane === 'in_work' && <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">· срок {fmtDate(o.deadline)}</span>}
+        <div className="prog">
+          <span className="track"><span className="tk" style={{ width: `${o.lane === 'shipped' ? 100 : o.progressPct}%`, background: o.ready ? 'var(--green)' : o.lane === 'shipped' ? 'var(--border)' : 'var(--blue)' }} /></span>
+          {o.ready ? <span className="pill p-ready">Готов к выдаче</span>
+            : o.lane === 'shipped' ? <span className="pill p-ship">Отгружен</span>
+            : <span className="pc tnum">{o.progressPct}% · {o.stage}</span>}
         </div>
       )}
-      {o.recalcNote && (
-        <div className="mt-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
-          ✎ Пересчитано менеджером: {o.recalcNote}
-        </div>
-      )}
+
+      {o.recalcNote && <div className="recalc">✎ Пересчитано менеджером: {o.recalcNote}</div>}
+
       {o.lane === 'quote' && (
-        <button onClick={() => onSubmit(o.id)} disabled={submitting}
-          className="mt-2 w-full py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40 transition-colors">
+        <button className="send" onClick={e => { e.preventDefault(); onSubmit(o.id) }} disabled={submitting}>
           {submitting ? 'Отправляю…' : 'Отправить в работу'}
         </button>
       )}
-    </div>
+    </>
   )
+  return clickable
+    ? <Link href={`/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
+    : <div className="ord">{body}</div>
 }

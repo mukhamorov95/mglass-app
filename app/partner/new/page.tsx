@@ -153,35 +153,37 @@ export default function PartnerNewQuotePage() {
     if (id) setSavedId(id)
   }
 
-  if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
+  if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
   if (!linked) return (
-    <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center p-6">
-      <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center max-w-sm">
-        <p className="text-[14px] text-[#111110] font-medium">Аккаунт не привязан</p>
-        <p className="text-[13px] text-[#9a9a95] mt-1">Обратитесь к менеджеру M-Glass.</p>
-        <Link href="/partner" className="text-[12px] text-blue-600 mt-3 inline-block">← Мои заказы</Link>
-      </div>
-    </div>
+    <div className="wrap"><div className="note">
+      <div className="t">Аккаунт не привязан</div>
+      <div className="s">Обратитесь к менеджеру M-Glass.</div>
+      <Link href="/partner" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Табло</Link>
+    </div></div>
   )
 
-  const inputCls = 'w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] outline-none focus:border-[#111110]'
-  const optCls = (on: boolean) => `flex items-center justify-center gap-2 h-[36px] px-2 border rounded-lg cursor-pointer text-[12.5px] font-medium transition-colors ${on ? 'border-[#111110] bg-[#f0f0ec] text-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`
+  const inputCls = 'w-full bg-[var(--surface-2)] border border-[var(--border)] rounded-lg px-2.5 py-2 text-[13px] text-[var(--ink)] outline-none focus:border-[var(--ink)]'
+  const optCls = (on: boolean) => `flex items-center justify-center gap-2 h-[36px] px-2 border rounded-lg cursor-pointer text-[12.5px] font-medium transition-colors ${on ? 'border-[var(--accent)] bg-[var(--surface-2)] text-[var(--ink)]' : 'border-[var(--border)] text-[var(--ink-2)] hover:border-[var(--muted)]'}`
 
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-24">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6 flex items-center justify-between">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Новый просчёт</h1>
-        <Link href="/partner" className="text-[12px] text-[#9a9a95] hover:text-[#111110]">← Мои заказы</Link>
+    <>
+      <div className="top">
+        <div>
+          <h1>Новый просчёт</h1>
+          <div className="cap">Посчитайте по своим ценам и сохраните</div>
+        </div>
+        <Link className="ghost" href="/partner/quotes">Мои просчёты</Link>
       </div>
 
-      <div className="px-4 pt-4 space-y-3 max-w-[760px] mx-auto">
+      <div className="wrap" style={{ maxWidth: 780 }}>
+       <div className="space-y-3">
         {/* Форма позиции — как у менеджера */}
-        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 space-y-3">
+        <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-4 space-y-3">
           {/* Стекло / Зеркало */}
-          <div className="flex bg-[#f0f0f2] rounded-[10px] p-[3px] gap-[2px]">
+          <div className="flex bg-[var(--surface-2)] rounded-[10px] p-[3px] gap-[2px]">
             {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
               <button key={s.value} onClick={() => changeSuperCat(s.value)}
-                className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${superCat === s.value ? 'bg-white shadow-sm text-[#111110]' : 'text-[#6e6e73] hover:text-[#111110]'}`}>
+                className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${superCat === s.value ? 'bg-[var(--surface)] shadow-sm text-[var(--ink)]' : 'text-[var(--ink-2)] hover:text-[var(--ink)]'}`}>
                 {s.label}
               </button>
             ))}
@@ -190,13 +192,13 @@ export default function PartnerNewQuotePage() {
           {/* Толщина + Тип */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Толщина</label>
+              <label className="block text-[12px] font-medium text-[var(--ink-2)] mb-1">Толщина</label>
               <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }} className={inputCls}>
                 {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Тип</label>
+              <label className="block text-[12px] font-medium text-[var(--ink-2)] mb-1">Тип</label>
               <select value={matId ?? ''} onChange={e => { setMatId(Number(e.target.value)); setPreview(null) }} className={inputCls}>
                 {typesAtThickness.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
               </select>
@@ -205,7 +207,7 @@ export default function PartnerNewQuotePage() {
 
           {/* Размеры */}
           <div>
-            <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
+            <label className="block text-[12px] font-medium text-[var(--ink-2)] mb-1">Размеры и количество</label>
             <div className="grid grid-cols-3 gap-2">
               <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" className={`${inputCls} font-mono`} />
               <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" className={`${inputCls} font-mono`} />
@@ -264,25 +266,25 @@ export default function PartnerNewQuotePage() {
           )}
 
           <button onClick={addPosition} disabled={!canAdd}
-            className="w-full bg-[#1d1d1f] text-white text-[13px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
+            className="w-full bg-[var(--accent)] text-white text-[13px] font-semibold py-2.5 rounded-lg hover:opacity-90 disabled:opacity-40 transition-colors">
             ＋ Добавить позицию
           </button>
         </div>
 
         {/* Список позиций с ценой (цена — с сервера) */}
         {list.length > 0 && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9a9a95] mb-2">Позиции · {list.length}</div>
+          <div className="bg-[var(--surface)] rounded-2xl border border-[var(--border)] p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--muted)] mb-2">Позиции · {list.length}</div>
             {list.map((s, i) => {
               const p = preview?.items[i]
               return (
-                <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-[#f4f4f0] last:border-0">
-                  <span className="text-[#6b6b66] truncate pr-2">
+                <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-[var(--border)] last:border-0">
+                  <span className="text-[var(--ink-2)] truncate pr-2">
                     {p?.material ?? materials.find(m => m.id === s.materialId)?.name} · {s.width}×{s.height} · {s.quantity} шт
                     {s.hasTempering ? ' · закалка' : ''}{s.hasFacet ? ' · фацет' : ''}{s.hasTriplex ? ' · триплекс' : ''}
                   </span>
                   <span className="flex items-center gap-2 flex-shrink-0">
-                    <span className="font-mono font-medium text-[#111110]">{p ? fmt(p.price) : (busy ? '…' : '')}</span>
+                    <span className="font-mono font-medium text-[var(--ink)]">{p ? fmt(p.price) : (busy ? '…' : '')}</span>
                     <button onClick={() => removePosition(i)} className="text-[11px] text-red-400 hover:text-red-600">✕</button>
                   </span>
                 </div>
@@ -290,8 +292,8 @@ export default function PartnerNewQuotePage() {
             })}
             {preview && (
               <div className="flex items-center justify-between pt-2 mt-1">
-                <span className="text-[12px] text-[#9a9a95]">{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
-                <span className="text-[17px] font-bold font-mono text-[#111110]">{fmt(preview.total)}</span>
+                <span className="text-[12px] text-[var(--muted)]">{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
+                <span className="text-[17px] font-bold font-mono text-[var(--ink)]">{fmt(preview.total)}</span>
               </div>
             )}
           </div>
@@ -299,7 +301,7 @@ export default function PartnerNewQuotePage() {
 
         <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2}
           placeholder="Комментарий к просчёту (необязательно)"
-          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+          className="w-full bg-[var(--surface)] border border-[var(--border)] rounded-lg px-3 py-2 text-[13px] text-[var(--ink)] outline-none focus:border-[var(--ink)]" />
 
         {err && <div className="text-[12px] text-red-500">{err}</div>}
 
@@ -307,17 +309,18 @@ export default function PartnerNewQuotePage() {
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
             <p className="text-[14px] font-semibold text-emerald-800">Просчёт сохранён ✓</p>
             <p className="text-[12px] text-emerald-700 mt-0.5">Он появился в разделе «Мои просчёты». Отправьте его в работу, когда будете готовы.</p>
-            <Link href="/partner" className="text-[12px] text-blue-600 mt-2 inline-block">← К моим заказам</Link>
+            <Link href="/partner/quotes" className="text-[12px] text-blue-600 mt-2 inline-block">← К моим просчётам</Link>
           </div>
         ) : (
           <div className="flex gap-2 pt-1">
             <button onClick={() => save()} disabled={busy || list.length === 0}
-              className="flex-1 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40">
+              className="flex-1 py-2.5 rounded-lg bg-[var(--accent)] text-white text-[13px] font-semibold hover:opacity-90 disabled:opacity-40">
               {busy ? '…' : 'Сохранить просчёт'}
             </button>
           </div>
         )}
+       </div>
       </div>
-    </div>
+    </>
   )
 }
