@@ -51,5 +51,11 @@ export async function POST(req: NextRequest) {
   const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes), updated_at: new Date().toISOString() }).eq('id', quoteId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Аудит: партнёр отправил просчёт в работу (best-effort, не роняет ответ).
+  await svc.from('security_events').insert({
+    user_id: user.id, event: 'partner_quote_submitted',
+    meta: { orderId: quoteId, clientId: client.id },
+  }).then(() => {}, () => {})
+
   return NextResponse.json({ ok: true })
 }

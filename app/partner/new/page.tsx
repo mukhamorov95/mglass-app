@@ -1,33 +1,74 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 
-// Партнёрский калькулятор. Цену считает СЕРВЕР (/api/partner/quote) нашим движком —
-// в браузере никакой себестоимости/маржи. Партнёр видит только свою цену.
+// Партнёрский калькулятор. Форма и НАБОР полей — как у менеджера (/calculator/b2b),
+// данные из реальных справочников (/api/partner/materials). Цену считает СЕРВЕР
+// (/api/partner/quote) ЕДИНЫМ движком computeQuoteItem — тот же, что у менеджера,
+// с надбавками за габариты. В браузере никакой себестоимости/маржи: партнёр видит
+// только свою цену. Сверловка — пока флаг (на цену не влияет), как и у менеджера.
 
 type Material = { id: number; name: string; category: string; thickness: number; salePrice: number }
-type Draft = {
-  key: string
-  materialId: number | null
-  width: string
-  height: string
-  quantity: string
-  hasTempering: boolean
-  hasFacet: boolean
-  hasHoles: boolean
-}
+type FacetOpt = { typeMm: number; salePrice: number }
 type PricedItem = { material: string; thickness: number; width: number; height: number; quantity: number; price: number }
 
+type Spec = {
+  materialId: number; width: number; height: number; quantity: number
+  hasTempering: boolean; hasFacet: boolean; facetTypeMm: number | null; hasHoles: boolean
+  shape: 'rect' | 'curved'; hasTriplex: boolean; triplexLayers: number
+  triplexMat2Id: number | null; triplexMat3Id: number | null; applyMinPrice: boolean
+}
+
+// Супер-категории — как в менеджерском калькуляторе (вкладка «Стекло» объединяет
+// стекло/тонированное/сатин/рифлёное/декоративное; «Зеркало» — только зеркало).
+const SUPER_CATS = [
+  { value: 'стекло', label: 'Стекло', cats: ['стекло', 'тонированное', 'сатин', 'рифленое', 'декоративное'] },
+  { value: 'зеркало', label: 'Зеркало', cats: ['зеркало'] },
+] as const
+type SuperCat = typeof SUPER_CATS[number]['value']
+
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-let seq = 0
-const newKey = () => `d${seq++}`
+
+// Дефолтный выбор (толщина + тип) для супер-категории — без эффекта, чтобы не
+// дёргать setState в useEffect (правило react-hooks/set-state-in-effect).
+function firstSel(mats: Material[], sc: SuperCat): { thickness: number | null; matId: number | null } {
+  const def = SUPER_CATS.find(s => s.value === sc) ?? SUPER_CATS[0]
+  const cm = mats.filter(m => (def.cats as readonly string[]).includes(m.category))
+  const ths = [...new Set(cm.map(m => m.thickness))].sort((a, b) => a - b)
+  const thickness = ths[0] ?? null
+  const matId = cm.find(m => m.thickness === thickness)?.id ?? null
+  return { thickness, matId }
+}
 
 export default function PartnerNewQuotePage() {
   const [materials, setMaterials] = useState<Material[]>([])
+  const [facetOpts, setFacetOpts] = useState<FacetOpt[]>([])
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  const [discount, setDiscount] = useState(0)
   const [linked, setLinked] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [drafts, setDrafts] = useState<Draft[]>([{ key: newKey(), materialId: null, width: '', height: '', quantity: '1', hasTempering: false, hasFacet: false, hasHoles: false }])
+
+  // Текущая позиция (одна форма, как у менеджера)
+  const [superCat, setSuperCat] = useState<SuperCat>('стекло')
+  const [thickness, setThickness] = useState<number | null>(null)
+  const [matId, setMatId] = useState<number | null>(null)
+  const [width, setWidth] = useState('')
+  const [height, setHeight] = useState('')
+  const [qty, setQty] = useState('1')
+  const [tempering, setTempering] = useState(false)
+  const [facet, setFacet] = useState(false)
+  const [facetMm, setFacetMm] = useState<number>(10)
+  const [holes, setHoles] = useState(false)
+  const [curved, setCurved] = useState(false)
+  const [minPrice, setMinPrice] = useState(true)
+  const [triplex, setTriplex] = useState(false)
+  const [triplexLayers, setTriplexLayers] = useState<2 | 3>(2)
+  const [triplexMat2, setTriplexMat2] = useState<number | null>(null)
+  const [triplexMat3, setTriplexMat3] = useState<number | null>(null)
+
+  const [list, setList] = useState<Spec[]>([])
   const [comment, setComment] = useState('')
   const [preview, setPreview] = useState<{ items: PricedItem[]; total: number } | null>(null)
   const [busy, setBusy] = useState(false)
@@ -37,42 +78,79 @@ export default function PartnerNewQuotePage() {
   useEffect(() => {
     fetch('/api/partner/materials').then(r => r.json()).then(d => {
       if (!d.linked) { setLinked(false); return }
-      setMaterials(d.materials ?? [])
-      if (d.materials?.[0]) setDrafts(ds => ds.map(x => x.materialId == null ? { ...x, materialId: d.materials[0].id } : x))
+      const mats = (d.materials ?? []) as Material[]
+      setMaterials(mats)
+      setFacetOpts(d.facetOptions ?? [])
+      setSurchargeRules((d.surcharges ?? []) as SurchargeRule[])
+      setDiscount(Number(d.discountPercent) || 0)
+      if (d.facetOptions?.[0]) setFacetMm(Number(d.facetOptions[0].typeMm))
+      const sel = firstSel(mats, 'стекло')
+      setThickness(sel.thickness); setMatId(sel.matId)
     }).catch(() => setLinked(false)).finally(() => setLoading(false))
   }, [])
 
-  function setField(key: string, patch: Partial<Draft>) {
-    setDrafts(ds => ds.map(d => d.key === key ? { ...d, ...patch } : d))
+  const catDef = useMemo(() => SUPER_CATS.find(s => s.value === superCat) ?? SUPER_CATS[0], [superCat])
+  const catMats = useMemo(() => materials.filter(m => (catDef.cats as readonly string[]).includes(m.category)), [materials, catDef])
+  const thicknesses = useMemo(() => [...new Set(catMats.map(m => m.thickness))].sort((a, b) => a - b), [catMats])
+  const typesAtThickness = useMemo(() => catMats.filter(m => m.thickness === thickness), [catMats, thickness])
+  const glassMats = useMemo(() => materials.filter(m => (SUPER_CATS[0].cats as readonly string[]).includes(m.category)), [materials])
+
+  // Надбавки за габариты для текущей позиции (подсветка клиенту — снять нельзя).
+  const activeSurcharges = useMemo(() => {
+    const w = Number(width) || 0, h = Number(height) || 0
+    if (w <= 0 || h <= 0) return []
+    return applicableSurcharges({ width: w, height: h, shape: curved ? 'curved' : 'rect' }, surchargeRules)
+  }, [width, height, curved, surchargeRules])
+
+  const isMirror = superCat === 'зеркало'
+  const canAdd = matId != null && Number(width) > 0 && Number(height) > 0 && Number(qty) > 0
+
+  function changeSuperCat(sc: SuperCat) {
+    setSuperCat(sc)
+    const sel = firstSel(materials, sc)
+    setThickness(sel.thickness); setMatId(sel.matId)
+    if (sc === 'зеркало') setTempering(false)
     setPreview(null); setSavedId(null)
   }
-  function addRow() {
-    setDrafts(ds => [...ds, { key: newKey(), materialId: materials[0]?.id ?? null, width: '', height: '', quantity: '1', hasTempering: false, hasFacet: false, hasHoles: false }])
-    setPreview(null)
-  }
-  function removeRow(key: string) { setDrafts(ds => ds.filter(d => d.key !== key)); setPreview(null) }
 
-  function specs() {
-    return drafts
-      .filter(d => d.materialId && Number(d.width) > 0 && Number(d.height) > 0 && Number(d.quantity) > 0)
-      .map(d => ({ materialId: d.materialId, width: Number(d.width), height: Number(d.height), quantity: Number(d.quantity), hasTempering: d.hasTempering, hasFacet: d.hasFacet, facetTypeMm: 10, hasHoles: d.hasHoles }))
-  }
-
-  async function run(save: boolean) {
-    setErr(null)
-    const items = specs()
-    if (items.length === 0) { setErr('Заполните хотя бы одну позицию (материал, размеры, кол-во)'); return }
-    setBusy(true)
+  async function recompute(next: Spec[], save = false): Promise<number | null> {
+    if (next.length === 0) { setPreview(null); return null }
+    setErr(null); setBusy(true)
     try {
       const res = await fetch('/api/partner/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, save, comment }),
+        body: JSON.stringify({ items: next, save, comment }),
       })
       const d = await res.json()
-      if (!res.ok) { setErr(d.error || 'Ошибка'); return }
+      if (!res.ok) { setErr(d.error || 'Ошибка расчёта'); return null }
       setPreview({ items: d.items, total: d.total })
-      if (save && d.quoteId) setSavedId(d.quoteId)
-    } catch { setErr('Сеть недоступна') } finally { setBusy(false) }
+      return save ? (d.quoteId ?? null) : null
+    } catch { setErr('Сеть недоступна'); return null } finally { setBusy(false) }
+  }
+
+  function addPosition() {
+    if (!canAdd) return
+    const spec: Spec = {
+      materialId: matId!, width: Number(width), height: Number(height), quantity: Number(qty),
+      hasTempering: !isMirror && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
+      hasHoles: holes, shape: curved ? 'curved' : 'rect',
+      hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
+      applyMinPrice: minPrice,
+    }
+    const next = [...list, spec]
+    setList(next)
+    setWidth(''); setHeight(''); setQty('1'); setHoles(false); setCurved(false); setFacet(false); setTriplex(false)
+    setSavedId(null)
+    void recompute(next, false)
+  }
+  function removePosition(idx: number) {
+    const next = list.filter((_, i) => i !== idx)
+    setList(next); setSavedId(null)
+    void recompute(next, false)
+  }
+  async function save() {
+    const id = await recompute(list, true)
+    if (id) setSavedId(id)
   }
 
   if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -86,6 +164,9 @@ export default function PartnerNewQuotePage() {
     </div>
   )
 
+  const inputCls = 'w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] outline-none focus:border-[#111110]'
+  const optCls = (on: boolean) => `flex items-center justify-center gap-2 h-[36px] px-2 border rounded-lg cursor-pointer text-[12.5px] font-medium transition-colors ${on ? 'border-[#111110] bg-[#f0f0ec] text-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#c4c4be]'}`
+
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-24">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6 flex items-center justify-between">
@@ -93,34 +174,128 @@ export default function PartnerNewQuotePage() {
         <Link href="/partner" className="text-[12px] text-[#9a9a95] hover:text-[#111110]">← Мои заказы</Link>
       </div>
 
-      <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
-        {drafts.map((d, i) => (
-          <div key={d.key} className="bg-white rounded-xl border border-[#e4e4e0] p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-[#9a9a95]">Позиция {i + 1}</span>
-              {drafts.length > 1 && <button onClick={() => removeRow(d.key)} className="text-[11px] text-red-400 hover:text-red-600">Удалить</button>}
+      <div className="px-4 pt-4 space-y-3 max-w-[760px] mx-auto">
+        {/* Форма позиции — как у менеджера */}
+        <div className="bg-white rounded-xl border border-[#e4e4e0] p-4 space-y-3">
+          {/* Стекло / Зеркало */}
+          <div className="flex bg-[#f0f0f2] rounded-[10px] p-[3px] gap-[2px]">
+            {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
+              <button key={s.value} onClick={() => changeSuperCat(s.value)}
+                className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${superCat === s.value ? 'bg-white shadow-sm text-[#111110]' : 'text-[#6e6e73] hover:text-[#111110]'}`}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Толщина + Тип */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Толщина</label>
+              <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }} className={inputCls}>
+                {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
+              </select>
             </div>
-            <select value={d.materialId ?? ''} onChange={e => setField(d.key, { materialId: Number(e.target.value) })}
-              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] outline-none focus:border-[#111110]">
-              {materials.map(m => <option key={m.id} value={m.id}>{m.name} · {m.thickness}мм</option>)}
-            </select>
-            <div className="grid grid-cols-3 gap-2">
-              <input type="number" value={d.width} onChange={e => setField(d.key, { width: e.target.value })} placeholder="Ширина, мм"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-              <input type="number" value={d.height} onChange={e => setField(d.key, { height: e.target.value })} placeholder="Высота, мм"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-              <input type="number" value={d.quantity} onChange={e => setField(d.key, { quantity: e.target.value })} placeholder="Кол-во"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-            </div>
-            <div className="flex flex-wrap gap-3 text-[12px]">
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasTempering} onChange={e => setField(d.key, { hasTempering: e.target.checked })} className="accent-[#111110]" />Закалка</label>
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasFacet} onChange={e => setField(d.key, { hasFacet: e.target.checked })} className="accent-[#111110]" />Фацет</label>
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasHoles} onChange={e => setField(d.key, { hasHoles: e.target.checked })} className="accent-[#111110]" />Отверстия</label>
+            <div>
+              <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Тип</label>
+              <select value={matId ?? ''} onChange={e => { setMatId(Number(e.target.value)); setPreview(null) }} className={inputCls}>
+                {typesAtThickness.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+              </select>
             </div>
           </div>
-        ))}
 
-        <button onClick={addRow} className="w-full text-[13px] text-[#6b6b66] hover:text-[#111110] border border-dashed border-[#d4d4ce] rounded-lg py-2">＋ Добавить позицию</button>
+          {/* Размеры */}
+          <div>
+            <label className="block text-[12px] font-medium text-[#6e6e73] mb-1">Размеры и количество</label>
+            <div className="grid grid-cols-3 gap-2">
+              <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" className={`${inputCls} font-mono`} />
+              <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" className={`${inputCls} font-mono`} />
+              <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Кол-во" className={`${inputCls} font-mono`} />
+            </div>
+          </div>
+
+          {/* Обработка — тумблеры как у менеджера */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {!isMirror && (
+              <label className={optCls(tempering)}><input type="checkbox" className="hidden" checked={tempering} onChange={e => setTempering(e.target.checked)} />{tempering ? 'Закалённое' : 'Без закалки'}</label>
+            )}
+            <label className={optCls(facet)}><input type="checkbox" className="hidden" checked={facet} onChange={e => setFacet(e.target.checked)} />{facet ? 'Фацет' : 'Без фацета'}</label>
+            <label className={optCls(holes)}><input type="checkbox" className="hidden" checked={holes} onChange={e => setHoles(e.target.checked)} />{holes ? 'Есть отверстия' : 'Без отверстий'}</label>
+            <label className={optCls(curved)}><input type="checkbox" className="hidden" checked={curved} onChange={e => setCurved(e.target.checked)} />{curved ? 'Криволинейный' : 'Прямой рез'}</label>
+            <label className={optCls(minPrice)}><input type="checkbox" className="hidden" checked={minPrice} onChange={e => setMinPrice(e.target.checked)} />{minPrice ? 'Учитывать мин.' : 'Чистый расчёт'}</label>
+            <label className={optCls(triplex)}><input type="checkbox" className="hidden" checked={triplex} onChange={e => setTriplex(e.target.checked)} />{triplex ? 'Триплекс' : 'Без триплекса'}</label>
+          </div>
+
+          {/* Фацет: выбор мм */}
+          {facet && facetOpts.length > 0 && (
+            <select value={facetMm} onChange={e => setFacetMm(Number(e.target.value))} className={inputCls}>
+              {facetOpts.map(f => <option key={f.typeMm} value={f.typeMm}>Фацет {f.typeMm} мм — {fmt(f.salePrice)}/м.п.</option>)}
+            </select>
+          )}
+
+          {/* Триплекс: слои + доп. стёкла */}
+          {triplex && (
+            <div className="space-y-2 border border-indigo-100 bg-indigo-50/40 rounded-lg p-2">
+              <select value={triplexLayers} onChange={e => setTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)} className={inputCls}>
+                <option value={2}>2 стекла</option>
+                <option value={3}>3 стекла</option>
+              </select>
+              <select value={triplexMat2 ?? ''} onChange={e => setTriplexMat2(e.target.value ? Number(e.target.value) : null)} className={inputCls}>
+                <option value="">Стекло 2: как основное</option>
+                {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 2: {m.name} {m.thickness} мм</option>)}
+              </select>
+              {triplexLayers === 3 && (
+                <select value={triplexMat3 ?? ''} onChange={e => setTriplexMat3(e.target.value ? Number(e.target.value) : null)} className={inputCls}>
+                  <option value="">Стекло 3: как основное</option>
+                  {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 3: {m.name} {m.thickness} мм</option>)}
+                </select>
+              )}
+            </div>
+          )}
+
+          {/* Надбавки за габариты — клиент видит, но не снимает */}
+          {activeSurcharges.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {activeSurcharges.map(r => (
+                <span key={r.id} className="text-[11px] bg-amber-50 border border-amber-200 text-amber-700 rounded-full px-2 py-0.5">
+                  {r.label} · +{r.surcharge_percent}%
+                </span>
+              ))}
+            </div>
+          )}
+
+          <button onClick={addPosition} disabled={!canAdd}
+            className="w-full bg-[#1d1d1f] text-white text-[13px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
+            ＋ Добавить позицию
+          </button>
+        </div>
+
+        {/* Список позиций с ценой (цена — с сервера) */}
+        {list.length > 0 && (
+          <div className="bg-white rounded-xl border border-[#e4e4e0] p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#9a9a95] mb-2">Позиции · {list.length}</div>
+            {list.map((s, i) => {
+              const p = preview?.items[i]
+              return (
+                <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-[#f4f4f0] last:border-0">
+                  <span className="text-[#6b6b66] truncate pr-2">
+                    {p?.material ?? materials.find(m => m.id === s.materialId)?.name} · {s.width}×{s.height} · {s.quantity} шт
+                    {s.hasTempering ? ' · закалка' : ''}{s.hasFacet ? ' · фацет' : ''}{s.hasTriplex ? ' · триплекс' : ''}
+                  </span>
+                  <span className="flex items-center gap-2 flex-shrink-0">
+                    <span className="font-mono font-medium text-[#111110]">{p ? fmt(p.price) : (busy ? '…' : '')}</span>
+                    <button onClick={() => removePosition(i)} className="text-[11px] text-red-400 hover:text-red-600">✕</button>
+                  </span>
+                </div>
+              )
+            })}
+            {preview && (
+              <div className="flex items-center justify-between pt-2 mt-1">
+                <span className="text-[12px] text-[#9a9a95]">{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
+                <span className="text-[17px] font-bold font-mono text-[#111110]">{fmt(preview.total)}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2}
           placeholder="Комментарий к просчёту (необязательно)"
@@ -128,34 +303,15 @@ export default function PartnerNewQuotePage() {
 
         {err && <div className="text-[12px] text-red-500">{err}</div>}
 
-        {preview && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-3">
-            {preview.items.map((it, i) => (
-              <div key={i} className="flex items-center justify-between text-[12px] py-1 border-b border-[#f4f4f0] last:border-0">
-                <span className="text-[#6b6b66] truncate pr-2">{it.material} · {it.width}×{it.height} · {it.quantity} шт</span>
-                <span className="font-mono font-medium text-[#111110] flex-shrink-0">{fmt(it.price)}</span>
-              </div>
-            ))}
-            <div className="flex items-center justify-between pt-2 mt-1">
-              <span className="text-[13px] font-semibold text-[#111110]">Итого ваша цена</span>
-              <span className="text-[17px] font-bold font-mono text-[#111110]">{fmt(preview.total)}</span>
-            </div>
-          </div>
-        )}
-
         {savedId ? (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
             <p className="text-[14px] font-semibold text-emerald-800">Просчёт сохранён ✓</p>
-            <p className="text-[12px] text-emerald-700 mt-0.5">Он появился в «Мои заказы» → Просчёты. Менеджер M-Glass его проверит.</p>
+            <p className="text-[12px] text-emerald-700 mt-0.5">Он появился в разделе «Мои просчёты». Отправьте его в работу, когда будете готовы.</p>
             <Link href="/partner" className="text-[12px] text-blue-600 mt-2 inline-block">← К моим заказам</Link>
           </div>
         ) : (
           <div className="flex gap-2 pt-1">
-            <button onClick={() => run(false)} disabled={busy}
-              className="flex-1 py-2.5 rounded-lg border border-[#111110] text-[13px] font-semibold text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
-              {busy ? '…' : 'Посчитать'}
-            </button>
-            <button onClick={() => run(true)} disabled={busy}
+            <button onClick={() => save()} disabled={busy || list.length === 0}
               className="flex-1 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40">
               {busy ? '…' : 'Сохранить просчёт'}
             </button>
