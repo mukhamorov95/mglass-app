@@ -70,6 +70,14 @@ const EMPTY = {
   budget: '', est_amount: '', est_profit: '', manager: '', note: '',
 }
 
+function agoRu(ms: number) {
+  const m = Math.max(0, Math.round(ms / 60000))
+  if (m < 60) return `${m} мин назад`
+  const h = Math.round(m / 60)
+  if (h < 24) return `${h} ч назад`
+  return `${Math.round(h / 24)} дн назад`
+}
+
 export default function CrmPage() {
   const sb = createClient()
   const router = useRouter()
@@ -81,6 +89,8 @@ export default function CrmPage() {
   const [search, setSearch] = useState('')
   const [srcFilter, setSrcFilter] = useState<'all' | Lead['source']>('all')
   const [heatFilter, setHeatFilter] = useState<'all' | 'hot' | 'warm' | 'cold'>('all')
+  const [periodFilter, setPeriodFilter] = useState<'month' | 'prev' | 'all'>('month')
+  const [mgrFilter, setMgrFilter] = useState('all')
   const [showClosed, setShowClosed] = useState(false)
   const [toast, setToast] = useState<string | null>(null)
   const [scoped, setScoped] = useState(false)   // менеджер видит только свои лиды
@@ -92,6 +102,7 @@ export default function CrmPage() {
   const [actFilter, setActFilter] = useState('all')
   const [actOpen, setActOpen] = useState(true)
   const [tasks, setTasks] = useState<Task[]>([])
+  const [botStatus, setBotStatus] = useState<{ botEnabled: boolean; lastAvitoAt: string | null; avito24h: number } | null>(null)
   const [now, setNow] = useState(0)   // «сейчас» из эффекта (правило чистоты рендера)
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(null), 1800) }
 
@@ -117,6 +128,7 @@ export default function CrmPage() {
       fetch('/api/crm/ingest').then(r => r.ok ? r.json() : null).then(d => { if (d?.mode) setIngestMode(d.mode) }).catch(() => {})
       fetch('/api/crm/activity?days=1').then(r => r.ok ? r.json() : null).then(d => { if (d) setActivity((d.events ?? []) as ActEvent[]) }).catch(() => {})
       fetch('/api/crm/tasks').then(r => r.ok ? r.json() : null).then(d => { if (d) setTasks((d.tasks ?? []) as Task[]) }).catch(() => {})
+      fetch('/api/crm/bot-status').then(r => r.ok ? r.json() : null).then(d => { if (d) setBotStatus(d) }).catch(() => {})
     } finally { setLoading(false) }
   }, [sb])
 
@@ -166,7 +178,21 @@ export default function CrmPage() {
   }
 
   const q = search.trim().toLowerCase()
-  const visible = leads.filter(l =>
+  // Границы периода берём из `now` (проставляется в эффекте) — не дёргаем Date в
+  // рендере. По умолчанию показываем только текущий месяц: доска не забита старьём.
+  const nowD = now ? new Date(now) : null
+  const monthStart = nowD ? new Date(nowD.getFullYear(), nowD.getMonth(), 1).getTime() : 0
+  const prevMonthStart = nowD ? new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1).getTime() : 0
+  const inPeriod = (l: Lead) => {
+    if (periodFilter === 'all' || !now) return true
+    const t = new Date(l.created_at).getTime()
+    if (periodFilter === 'month') return t >= monthStart
+    return t >= prevMonthStart && t < monthStart   // 'prev'
+  }
+  // База периода + менеджера — от неё считаем счётчики, чтобы цифры совпадали с доской.
+  const periodLeads = leads.filter(l => inPeriod(l) && (mgrFilter === 'all' || (l.manager ?? '') === mgrFilter))
+  const managers = [...new Set(leads.map(l => l.manager).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'ru'))
+  const visible = periodLeads.filter(l =>
     (showClosed ? true : l.status === 'active') &&
     (srcFilter === 'all' || l.source === srcFilter) &&
     (heatFilter === 'all' || (l.heat ?? 'cold') === heatFilter) &&
@@ -179,7 +205,7 @@ export default function CrmPage() {
     heatRank(b.heat) - heatRank(a.heat) || new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime()))
 
   const keyLeads = visible.filter(l => l.qualified && l.status === 'active')
-  const hotLeads = leads.filter(l => l.heat === 'hot' && l.status === 'active')
+  const hotLeads = periodLeads.filter(l => l.heat === 'hot' && l.status === 'active')
 
   // Задачи (amoCRM): открытые, отсортированы по сроку; «на сегодня и просроченные»
   // — верхняя панель; просроченные подсвечивают карточку.
@@ -205,10 +231,22 @@ export default function CrmPage() {
               {scoped && <span className="ml-2 text-[11px] font-medium align-middle px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">только мои</span>}
             </h1>
             <p className="text-[13px] text-[#9a9a95] mt-0.5">
-              Активных: {leads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
+              Активных: {periodLeads.filter(l => l.status === 'active').length} · ⭐ ключевой этап: {keyLeads.length}
               {' · '}<button onClick={() => setHeatFilter(h => h === 'hot' ? 'all' : 'hot')}
                 className={`font-semibold ${heatFilter === 'hot' ? 'text-emerald-700 underline' : 'text-emerald-600'}`}>🟢 готовы менеджеру: {hotLeads.length}</button>
             </p>
+            {botStatus && (
+              <a href="/vladislav" title="Настройки AI-бота"
+                className={`inline-flex items-center gap-1.5 mt-1.5 text-[12px] rounded-full border px-2.5 py-0.5 no-underline ${
+                  botStatus.botEnabled ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-red-50 text-red-700 border-red-200'
+                }`}>
+                🤖 Иван · {botStatus.botEnabled ? 'работает' : 'выключен'}
+                <span className="opacity-70">
+                  · Авито 24ч: {botStatus.avito24h}
+                  {botStatus.lastAvitoAt && now > 0 ? `, посл. ${agoRu(now - new Date(botStatus.lastAvitoAt).getTime())}` : ''}
+                </span>
+              </a>
+            )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: имя / телефон"
@@ -225,6 +263,19 @@ export default function CrmPage() {
               <option value="warm">🟡 В работе бота</option>
               <option value="cold">🔵 Холодный</option>
             </select>
+            <select value={periodFilter} onChange={e => setPeriodFilter(e.target.value as typeof periodFilter)}
+              className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
+              <option value="month">Текущий месяц</option>
+              <option value="prev">Прошлый месяц</option>
+              <option value="all">Всё время</option>
+            </select>
+            {!scoped && managers.length > 0 && (
+              <select value={mgrFilter} onChange={e => setMgrFilter(e.target.value)}
+                className="border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] bg-white">
+                <option value="all">Все менеджеры</option>
+                {managers.map(m => <option key={m} value={m}>{m}</option>)}
+              </select>
+            )}
             <label className="flex items-center gap-1.5 text-[12px] text-[#6b6b66]">
               <input type="checkbox" checked={showClosed} onChange={e => setShowClosed(e.target.checked)} className="accent-[#111110]" />
               закрытые

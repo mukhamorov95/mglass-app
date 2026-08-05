@@ -141,6 +141,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/calculator/mirror',
     '/calculator/shower',
     '/calculator/loft',
+    '/calculator/railing',
     '/calculations',
     '/cart',            // корзина мультизаказа B2C + «КП (PDF)» (/cart/print) — без неё менеджер не сформирует КП
     '/orders',
