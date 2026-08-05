@@ -4,10 +4,11 @@ import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 
-// Партнёрский калькулятор (тёмная тема). Форма и НАБОР полей — как у менеджера
-// (/calculator/b2b), данные из реальных справочников (/api/partner/materials).
-// Цену считает СЕРВЕР (/api/partner/quote) ЕДИНЫМ движком computeQuoteItem — тот
-// же, что у менеджера, с надбавками за габариты. В браузере никакой себестоимости.
+// Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
+// как у менеджера (/calculator/b2b), данные из реальных справочников
+// (/api/partner/materials). Цену считает СЕРВЕР (/api/partner/quote) ЕДИНЫМ движком
+// computeQuoteItem — тот же, что у менеджера, с надбавками за габариты. В браузере
+// никакой себестоимости/маржи: партнёр видит только свою цену.
 
 type Material = { id: number; name: string; category: string; thickness: number; salePrice: number }
 type FacetOpt = { typeMm: number; salePrice: number }
@@ -35,6 +36,20 @@ function firstSel(mats: Material[], sc: SuperCat): { thickness: number | null; m
   const thickness = ths[0] ?? null
   const matId = cm.find(m => m.thickness === thickness)?.id ?? null
   return { thickness, matId }
+}
+
+function OptBox({ color, title, on, onLabel, offLabel, onToggle }: {
+  color: string; title: string; on: boolean; onLabel: string; offLabel: string; onToggle: () => void
+}) {
+  return (
+    <div className={`opt c-${color}`}>
+      <span className="t">{title}</span>
+      <div className={`box${on ? ' on' : ''}`} onClick={onToggle} role="checkbox" aria-checked={on}>
+        <span className="ck">{on ? '✓' : ''}</span>
+        <span className="v">{on ? onLabel : offLabel}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function PartnerNewQuotePage() {
@@ -68,6 +83,7 @@ export default function PartnerNewQuotePage() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<number | null>(null)
+  const [submitted, setSubmitted] = useState(false)
 
   useEffect(() => {
     fetch('/api/partner/materials').then(r => r.json()).then(d => {
@@ -103,7 +119,7 @@ export default function PartnerNewQuotePage() {
     const sel = firstSel(materials, sc)
     setThickness(sel.thickness); setMatId(sel.matId)
     if (sc === 'зеркало') setTempering(false)
-    setPreview(null); setSavedId(null)
+    setPreview(null); setSavedId(null); setSubmitted(false)
   }
 
   async function recompute(next: Spec[], save = false): Promise<number | null> {
@@ -133,184 +149,197 @@ export default function PartnerNewQuotePage() {
     const next = [...list, spec]
     setList(next)
     setWidth(''); setHeight(''); setQty('1'); setHoles(false); setCurved(false); setFacet(false); setTriplex(false)
-    setSavedId(null)
+    setSavedId(null); setSubmitted(false)
     void recompute(next, false)
   }
   function removePosition(idx: number) {
     const next = list.filter((_, i) => i !== idx)
-    setList(next); setSavedId(null)
+    setList(next); setSavedId(null); setSubmitted(false)
     void recompute(next, false)
   }
   async function save() {
     const id = await recompute(list, true)
-    if (id) setSavedId(id)
+    if (id) { setSavedId(id); setSubmitted(false) }
+  }
+  async function saveAndSubmit() {
+    const id = await recompute(list, true)
+    if (!id) return
+    setSavedId(id)
+    try {
+      const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
+      if (r.ok) setSubmitted(true)
+    } catch { /* просчёт сохранён — отправить можно позже из «Мои просчёты» */ }
   }
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[var(--p-muted)]">Загрузка…</div>
-  if (!linked) return (
-    <div className="min-h-screen flex items-center justify-center p-6">
-      <div className="bg-[var(--p-surface)] rounded-2xl border border-[var(--p-border)] p-8 text-center max-w-sm">
-        <p className="text-[14px] font-medium">Аккаунт не привязан</p>
-        <p className="text-[13px] text-[var(--p-muted)] mt-1">Обратитесь к менеджеру M-Glass.</p>
-        <Link href="/partner" className="text-[12px] text-[#7aa5f0] mt-3 inline-block">← Мои заказы</Link>
+  const top = (
+    <div className="top">
+      <div>
+        <h1>Новый просчёт</h1>
+        <div className="cap">Посчитайте по своим ценам и сохраните</div>
       </div>
+      <Link className="ghost" href="/partner/quotes">Мои просчёты</Link>
     </div>
   )
 
-  const inputCls = 'w-full bg-[var(--p-surface2)] border border-[var(--p-border)] rounded-lg px-2.5 py-2 text-[13px] text-[var(--p-ink)] outline-none focus:border-[var(--p-acc)]'
-  const lblCls = 'block text-[12px] font-medium text-[var(--p-muted)] mb-1'
-  const optCls = (on: boolean) => `flex items-center justify-center gap-2 h-[36px] px-2 border rounded-lg cursor-pointer text-[12.5px] font-medium transition-colors ${on ? 'border-[var(--p-acc)] bg-[#2a1f1c] text-[var(--p-ink)]' : 'border-[var(--p-border)] text-[var(--p-ink2)] hover:border-[var(--p-muted)]'}`
+  if (loading) return <>{top}<div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div></>
+  if (!linked) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">Аккаунт не привязан</div>
+      <div className="s">Обратитесь к менеджеру M-Glass.</div>
+      <Link href="/partner" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Табло</Link>
+    </div></div></>
+  )
+
+  const availableCats = SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category)))
 
   return (
-    <div className="min-h-screen pb-24">
-      <div className="sticky top-0 z-10 bg-[var(--p-surface)]/90 backdrop-blur border-b border-[var(--p-border)] px-5 pt-12 pb-3.5 lg:pt-5 flex items-center justify-between">
-        <h1 className="text-[21px] font-bold tracking-tight">Новый просчёт</h1>
-        <Link href="/partner" className="text-[12px] text-[var(--p-muted)] hover:text-[var(--p-ink)]">← Мои заказы</Link>
-      </div>
+    <>
+      {top}
+      <div className="wrap" style={{ maxWidth: 820 }}>
+        {/* Новая позиция */}
+        <div className="card">
+          <div className="card-h"><h3>Новая позиция</h3><span className="mut">детали стекла и зеркала</span></div>
+          <div style={{ padding: 18 }}>
+            <div className="frm">
+              <div className="fld full">
+                <span className="lab">Материал</span>
+                <div className="seg">
+                  {availableCats.map(s => (
+                    <button key={s.value} className={superCat === s.value ? 'on' : ''} onClick={() => changeSuperCat(s.value)}>{s.label}</button>
+                  ))}
+                </div>
+              </div>
 
-      <div className="px-5 pt-4 space-y-3 max-w-[760px] mx-auto">
-        <div className="bg-[var(--p-surface)] rounded-2xl border border-[var(--p-border)] p-4 space-y-3">
-          {/* Стекло / Зеркало */}
-          <div className="flex bg-[var(--p-surface2)] border border-[var(--p-border)] rounded-[10px] p-[3px] gap-[2px]">
-            {SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category))).map(s => (
-              <button key={s.value} onClick={() => changeSuperCat(s.value)}
-                className={`flex-1 py-1.5 rounded-[8px] text-[13px] font-medium transition-all ${superCat === s.value ? 'bg-[#3a3a35] text-[var(--p-ink)]' : 'text-[var(--p-muted)] hover:text-[var(--p-ink)]'}`}>
-                {s.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Толщина + Тип */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={lblCls}>Толщина</label>
-              <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }} className={inputCls}>
-                {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={lblCls}>Тип</label>
-              <select value={matId ?? ''} onChange={e => { setMatId(Number(e.target.value)); setPreview(null) }} className={inputCls}>
-                {typesAtThickness.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-              </select>
-            </div>
-          </div>
-
-          {/* Размеры */}
-          <div>
-            <label className={lblCls}>Размеры и количество</label>
-            <div className="grid grid-cols-3 gap-2">
-              <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" className={`${inputCls} font-mono`} />
-              <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" className={`${inputCls} font-mono`} />
-              <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Кол-во" className={`${inputCls} font-mono`} />
-            </div>
-          </div>
-
-          {/* Обработка */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {!isMirror && (
-              <label className={optCls(tempering)}><input type="checkbox" className="hidden" checked={tempering} onChange={e => setTempering(e.target.checked)} />{tempering ? 'Закалённое' : 'Без закалки'}</label>
-            )}
-            <label className={optCls(facet)}><input type="checkbox" className="hidden" checked={facet} onChange={e => setFacet(e.target.checked)} />{facet ? 'Фацет' : 'Без фацета'}</label>
-            <label className={optCls(holes)}><input type="checkbox" className="hidden" checked={holes} onChange={e => setHoles(e.target.checked)} />{holes ? 'Есть отверстия' : 'Без отверстий'}</label>
-            <label className={optCls(curved)}><input type="checkbox" className="hidden" checked={curved} onChange={e => setCurved(e.target.checked)} />{curved ? 'Криволинейный' : 'Прямой рез'}</label>
-            <label className={optCls(minPrice)}><input type="checkbox" className="hidden" checked={minPrice} onChange={e => setMinPrice(e.target.checked)} />{minPrice ? 'Учитывать мин.' : 'Чистый расчёт'}</label>
-            <label className={optCls(triplex)}><input type="checkbox" className="hidden" checked={triplex} onChange={e => setTriplex(e.target.checked)} />{triplex ? 'Триплекс' : 'Без триплекса'}</label>
-          </div>
-
-          {/* Фацет: выбор мм */}
-          {facet && facetOpts.length > 0 && (
-            <select value={facetMm} onChange={e => setFacetMm(Number(e.target.value))} className={inputCls}>
-              {facetOpts.map(f => <option key={f.typeMm} value={f.typeMm}>Фацет {f.typeMm} мм — {fmt(f.salePrice)}/м.п.</option>)}
-            </select>
-          )}
-
-          {/* Триплекс: слои + доп. стёкла */}
-          {triplex && (
-            <div className="space-y-2 border border-[#2a3757] bg-[#1a2133]/40 rounded-lg p-2">
-              <select value={triplexLayers} onChange={e => setTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)} className={inputCls}>
-                <option value={2}>2 стекла</option>
-                <option value={3}>3 стекла</option>
-              </select>
-              <select value={triplexMat2 ?? ''} onChange={e => setTriplexMat2(e.target.value ? Number(e.target.value) : null)} className={inputCls}>
-                <option value="">Стекло 2: как основное</option>
-                {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 2: {m.name} {m.thickness} мм</option>)}
-              </select>
-              {triplexLayers === 3 && (
-                <select value={triplexMat3 ?? ''} onChange={e => setTriplexMat3(e.target.value ? Number(e.target.value) : null)} className={inputCls}>
-                  <option value="">Стекло 3: как основное</option>
-                  {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 3: {m.name} {m.thickness} мм</option>)}
+              <div className="fld">
+                <span className="lab">Толщина</span>
+                <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }}>
+                  {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
                 </select>
+              </div>
+              <div className="fld">
+                <span className="lab">Тип</span>
+                <select value={matId ?? ''} onChange={e => { setMatId(Number(e.target.value)); setPreview(null) }}>
+                  {typesAtThickness.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+
+              <div className="fld full">
+                <span className="lab">Размеры и количество</span>
+                <div className="grid3">
+                  <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" />
+                  <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" />
+                  <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Кол-во" />
+                </div>
+              </div>
+
+              <div className="fld full">
+                <span className="lab">Отход <span style={{ color: 'var(--green)', fontWeight: 400, textTransform: 'none' }}>по раскрою</span></span>
+                <div className="ro">авто по раскрою — считается по раскрою деталей заказа</div>
+              </div>
+
+              <div className="fld full">
+                <span className="lab">Обработка</span>
+                <div className="optgrid">
+                  {!isMirror && <OptBox color="orange" title="Закалка" on={tempering} onLabel="Закалённое" offLabel="Без закалки" onToggle={() => setTempering(v => !v)} />}
+                  <OptBox color="purple" title="Фацет" on={facet} onLabel="Фацет" offLabel="Без фацета" onToggle={() => setFacet(v => !v)} />
+                  <OptBox color="blue" title="Сверловка" on={holes} onLabel="Есть отверстия" offLabel="Без отверстий" onToggle={() => setHoles(v => !v)} />
+                  <OptBox color="teal" title="Криволинейка" on={curved} onLabel="Криволинейный рез" offLabel="Прямой рез" onToggle={() => setCurved(v => !v)} />
+                  <OptBox color="emerald" title="Мин. цена" on={minPrice} onLabel="Учитывать мин." offLabel="Чистый расчёт" onToggle={() => setMinPrice(v => !v)} />
+                  <OptBox color="indigo" title="Триплекс" on={triplex} onLabel="Триплекс" offLabel="Без триплекса" onToggle={() => setTriplex(v => !v)} />
+                </div>
+              </div>
+
+              {facet && facetOpts.length > 0 && (
+                <div className="fld full">
+                  <select value={facetMm} onChange={e => setFacetMm(Number(e.target.value))}>
+                    {facetOpts.map(f => <option key={f.typeMm} value={f.typeMm}>Фацет {f.typeMm} мм — {fmt(f.salePrice)}/м.п.</option>)}
+                  </select>
+                </div>
+              )}
+
+              {triplex && (
+                <div className="fld full" style={{ gap: 8 }}>
+                  <select value={triplexLayers} onChange={e => setTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                    <option value={2}>2 стекла</option>
+                    <option value={3}>3 стекла</option>
+                  </select>
+                  <select value={triplexMat2 ?? ''} onChange={e => setTriplexMat2(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">Стекло 2: как основное</option>
+                    {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 2: {m.name} {m.thickness} мм</option>)}
+                  </select>
+                  {triplexLayers === 3 && (
+                    <select value={triplexMat3 ?? ''} onChange={e => setTriplexMat3(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Стекло 3: как основное</option>
+                      {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 3: {m.name} {m.thickness} мм</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {activeSurcharges.length > 0 && (
+                <div className="fld full" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {activeSurcharges.map(r => <span key={r.id} className="schip">{r.label} · +{r.surcharge_percent}%</span>)}
+                </div>
               )}
             </div>
-          )}
 
-          {/* Надбавки за габариты */}
-          {activeSurcharges.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {activeSurcharges.map(r => (
-                <span key={r.id} className="text-[11px] bg-[#2c2519] border border-[#413621] text-[#e0a45c] rounded-full px-2 py-0.5">
-                  {r.label} · +{r.surcharge_percent}%
-                </span>
-              ))}
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="primary" onClick={addPosition} disabled={!canAdd} style={!canAdd ? { opacity: 0.4, cursor: 'default' } : undefined}>＋ Добавить в просчёт</button>
+              <span className="info" style={{ marginTop: 0, alignItems: 'center' }}>Цену считает наш серверный движок — та же, что у менеджера.</span>
             </div>
-          )}
-
-          <button onClick={addPosition} disabled={!canAdd}
-            className="w-full bg-[var(--p-acc)] text-[var(--p-acc-ink)] text-[13px] font-semibold py-2.5 rounded-lg hover:opacity-90 disabled:opacity-40 transition-opacity">
-            ＋ Добавить позицию
-          </button>
+          </div>
         </div>
 
-        {/* Список позиций */}
+        {/* Просчёт */}
         {list.length > 0 && (
-          <div className="bg-[var(--p-surface)] rounded-2xl border border-[var(--p-border)] p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-wide text-[var(--p-muted)] mb-2">Позиции · {list.length}</div>
-            {list.map((s, i) => {
-              const p = preview?.items[i]
-              return (
-                <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-[var(--p-border)] last:border-0">
-                  <span className="text-[var(--p-ink2)] truncate pr-2">
-                    {p?.material ?? materials.find(m => m.id === s.materialId)?.name} · {s.width}×{s.height} · {s.quantity} шт
-                    {s.hasTempering ? ' · закалка' : ''}{s.hasFacet ? ' · фацет' : ''}{s.hasTriplex ? ' · триплекс' : ''}
-                  </span>
-                  <span className="flex items-center gap-2 flex-shrink-0">
-                    <span className="font-mono font-medium text-[var(--p-ink)]">{p ? fmt(p.price) : (busy ? '…' : '')}</span>
-                    <button onClick={() => removePosition(i)} className="text-[11px] text-red-400 hover:text-red-300">✕</button>
-                  </span>
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="card-h"><h3>Просчёт</h3><span className="mut">{list.length} поз.</span></div>
+            <div className="tbl-wrap"><table>
+              <thead><tr><th>Деталь</th><th>Размер</th><th className="r">Кол-во</th><th className="r">Цена</th><th></th></tr></thead>
+              <tbody>
+                {list.map((s, i) => {
+                  const p = preview?.items[i]
+                  const name = p?.material ?? materials.find(m => m.id === s.materialId)?.name ?? '—'
+                  return (
+                    <tr key={i}>
+                      <td>{name}{s.hasTempering ? ', закалка' : ''}{s.hasFacet ? ', фацет' : ''}{s.hasTriplex ? ', триплекс' : ''}</td>
+                      <td className="tnum">{s.width} × {s.height}</td>
+                      <td className="r tnum">{s.quantity}</td>
+                      <td className="r tnum">{p ? fmt(p.price) : (busy ? '…' : '')}</td>
+                      <td className="r"><button className="rm" onClick={() => removePosition(i)} title="Убрать">✕</button></td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table></div>
+
+            <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }}>
+              <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2} placeholder="Комментарий к просчёту (необязательно)" style={{ marginBottom: 12 }} />
+              {err && <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 10 }}>{err}</div>}
+
+              {savedId ? (
+                <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
+                  <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : 'Просчёт сохранён ✓'}</div>
+                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство.' : 'Он появился в разделе «Мои просчёты».'}</div>
+                  <Link href="/partner/quotes" className="s" style={{ display: 'inline-block', marginTop: 8, color: 'var(--blue)' }}>→ Мои просчёты</Link>
                 </div>
-              )
-            })}
-            {preview && (
-              <div className="flex items-center justify-between pt-2 mt-1">
-                <span className="text-[12px] text-[var(--p-muted)]">{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
-                <span className="text-[18px] font-bold font-mono text-[var(--p-ink)]">{fmt(preview.total)}</span>
-              </div>
-            )}
-          </div>
-        )}
-
-        <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2}
-          placeholder="Комментарий к просчёту (необязательно)"
-          className="w-full bg-[var(--p-surface)] border border-[var(--p-border)] rounded-lg px-3 py-2 text-[13px] text-[var(--p-ink)] outline-none focus:border-[var(--p-acc)]" />
-
-        {err && <div className="text-[12px] text-red-400">{err}</div>}
-
-        {savedId ? (
-          <div className="bg-[#152a22] border border-[#234034] rounded-2xl p-4 text-center">
-            <p className="text-[14px] font-semibold text-[#5fc79a]">Просчёт сохранён ✓</p>
-            <p className="text-[12px] text-[#5fc79a]/80 mt-0.5">Он появился в разделе «Мои просчёты». Отправьте его в работу, когда будете готовы.</p>
-            <Link href="/partner/quotes" className="text-[12px] text-[#7aa5f0] mt-2 inline-block">→ К моим просчётам</Link>
-          </div>
-        ) : (
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => save()} disabled={busy || list.length === 0}
-              className="flex-1 py-2.5 rounded-lg bg-[var(--p-acc)] text-[var(--p-acc-ink)] text-[13px] font-semibold hover:opacity-90 disabled:opacity-40 transition-opacity">
-              {busy ? '…' : 'Сохранить просчёт'}
-            </button>
+              ) : (
+                <div className="sum">
+                  <div className="row">
+                    <span className="mut" style={{ color: 'var(--muted)' }}>{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
+                    <span className="big tnum">{preview ? fmt(preview.total) : (busy ? '…' : '—')}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="ghost" style={{ flex: 1 }} onClick={save} disabled={busy || list.length === 0}>Сохранить просчёт</button>
+                    <button className="primary" style={{ flex: 1 }} onClick={saveAndSubmit} disabled={busy || list.length === 0}>Отправить в работу</button>
+                  </div>
+                  <div className="info">📎 Сохранённый просчёт появится в «Мои просчёты» — оттуда его можно отправить в работу.</div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
-    </div>
+    </>
   )
 }

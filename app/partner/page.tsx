@@ -1,7 +1,7 @@
-import OrdersView from './OrdersView'
+import Dashboard from './Dashboard'
 
-// Табло + все заказы (обзор). Просчёты и Заказы — отдельными пунктами меню
-// (/partner/quotes, /partner/orders) через тот же OrdersView с фильтром.
+// Табло — сводка по заказам клиента. Списки просчётов и заказов — отдельными
+// пунктами меню (/partner/quotes, /partner/orders).
 export default function PartnerPage() {
-  return <OrdersView view="all" />
+  return <Dashboard />
 }
