@@ -129,6 +129,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         )}
 
         <div className="flex gap-2 pt-1">
+          <Link href={`/partner/order/${o.id}/kp`} className="flex-1 text-center py-2.5 rounded-lg border border-[#111110] text-[#111110] text-[13px] font-semibold hover:bg-[#f0f0ec]">Скачать КП</Link>
           <Link href="/partner/new" className="flex-1 text-center py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black">Повторить заказ</Link>
         </div>
       </div>

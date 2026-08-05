@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { reviewPartnerQuote, type ReviewItem } from '@/lib/ai-tools/reviewPartnerQuote'
+import { notifyAdmins } from '@/lib/telegram'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -56,6 +57,13 @@ export async function POST(req: NextRequest) {
     user_id: user.id, event: 'partner_quote_submitted',
     meta: { orderId: quoteId, clientId: client.id },
   }).then(() => {}, () => {})
+
+  // Уведомление менеджерам/владельцу в Telegram (best-effort).
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')
+  await notifyAdmins(
+    `🧾 <b>Новая заявка от партнёра</b>\n${client.name} отправил просчёт №${quoteId} в работу.` +
+    (base ? `\n${base}/b2b-quotes` : ''),
+  ).catch(() => {})
 
   return NextResponse.json({ ok: true })
 }
