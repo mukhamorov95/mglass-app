@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PartitionDrawing } from '@/components/configurator/PartitionDrawing'
 import {
-  PARTITION_TYPES, FINISHES, computeConfiguration,
+  PARTITION_TYPES, FINISHES, HINGES, computeConfiguration,
   type PartitionTypeId, type FinishId, type Dims,
 } from '@/lib/configurator/catalog'
 
@@ -43,6 +43,7 @@ export default function ConfiguratorPage() {
   const [dims, setDims] = useState<Dims>(() => defaultsFor('corner-swing'))
   const [thickness, setThickness] = useState(8)
   const [finishId, setFinishId] = useState<FinishId>('chrome')
+  const [hingeCode, setHingeCode] = useState('Balge-004')
   const [hwCost, setHwCost] = useState<Record<string, number>>({})
 
   useEffect(() => {
@@ -65,8 +66,8 @@ export default function ConfiguratorPage() {
   function setD<K extends keyof Dims>(k: K, v: Dims[K]) { setDims(d => ({ ...d, [k]: v })) }
 
   const config = useMemo(
-    () => computeConfiguration(typeId, dims, thickness, finishId),
-    [typeId, dims, thickness, finishId],
+    () => computeConfiguration(typeId, dims, thickness, finishId, hingeCode),
+    [typeId, dims, thickness, finishId, hingeCode],
   )
 
   const lines = config.bom.map(b => {
@@ -146,6 +147,29 @@ export default function ConfiguratorPage() {
             </div>
             <p className="text-[12px] text-[#6b6b66] mt-1.5">{config.finish.label}</p>
           </div>
+
+          {type.constraints.doorWidth && (
+            <div>
+              <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Петля</label>
+              <div className="grid gap-1.5">
+                {HINGES.filter(h => h.mount === 'glass').map(h => (
+                  <button key={h.code} onClick={() => setHingeCode(h.code)}
+                    className={`text-left px-3 py-2 rounded-lg text-[13px] border transition-colors ${
+                      hingeCode === h.code ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:border-[#c4c4be]'
+                    }`}>
+                    <div className="flex justify-between">
+                      <span>{h.code}{h.premium ? ' · премиум' : ''}</span>
+                      <span className="font-mono text-[12px]">от {h.priceFrom.toLocaleString('ru-RU')} ₽</span>
+                    </div>
+                    <span className={`block text-[11px] ${hingeCode === h.code ? 'text-white/60' : 'text-[#9a9a95]'}`}>Угол {h.angle}</span>
+                  </button>
+                ))}
+              </div>
+              {config.hinge?.cutout && (
+                <p className="text-[11px] text-[#9a9a95] mt-1.5">Вырез в стекле: {config.hinge.cutout}</p>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Чертёж */}

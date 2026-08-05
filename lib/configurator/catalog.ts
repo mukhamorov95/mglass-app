@@ -51,6 +51,34 @@ export const HARDWARE: Record<string, Hardware> = {
   'CAP':       { code: 'Заглушка', name: 'Заглушка',                         category: 'доп',          unit: 'шт',    colorable: true },
 }
 
+// ── Петли (выбираемые модели, данные vetro-furniture.ru) ──────────
+export type HingeMount = 'glass' | 'wall'
+export type HingeModel = {
+  code: string
+  name: string
+  mount: HingeMount
+  angle: string
+  glassMm: [number, number]
+  maxDoor: { w: number; h: number; kg: number }  // на 2 петли
+  priceFrom: number
+  premium: boolean
+  cutout?: string
+}
+
+export const HINGES: HingeModel[] = [
+  { code: 'Balge-004',  name: 'Balge-004 · стекло-стекло 135–180°', mount: 'glass', angle: '135–180°',
+    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 4394, premium: false },
+  { code: 'Dessau-103', name: 'Dessau-103 · стекло-стекло 180°',    mount: 'glass', angle: '180°, фикс 90°',
+    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 6949, premium: true,
+    cutout: 'дверь R13 (40×38), стационар R9 (16×32)' },
+  { code: 'Dessau-101', name: 'Dessau-101 · стена-стекло 90°',      mount: 'wall',  angle: '90°',
+    glassMm: [8, 10], maxDoor: { w: 700, h: 2000, kg: 35 }, priceFrom: 6817, premium: true },
+]
+
+// Правило М-Glass: дверь ≤700×2200 держат 2 петли (250 мм от верха и низа), иначе 3.
+export const hingeCount = (doorW: number, height: number) =>
+  (doorW <= 700 && height <= 2200 ? 2 : 3)
+
 // ── Размеры (редактируемые пользователем) ─────────────────────────
 export type Dims = {
   width: number       // основной проём, мм
@@ -87,7 +115,6 @@ export type PartitionType = {
   bom: (d: Dims) => BomItem[]
 }
 
-const hinges = (h: number) => (h <= 1950 ? 2 : 3)
 const mp = (mm: number) => Math.round(mm) / 1000            // мм → м.п.
 const item = (code: keyof typeof HARDWARE | string, qty: number): BomItem => {
   const hw = HARDWARE[code]
@@ -124,7 +151,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     bom: d => {
       const dw = door(d)
       return [
-        item('Balge-004', hinges(d.height)),
+        item('Balge-004', hingeCount(door(d), d.height)),
         item('SD-210', 1),
         item('Pr-002', mp(d.height + (d.width - dw))),
         item('BAR-30x10', 1),
@@ -173,7 +200,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     bom: d => {
       const dw = door(d)
       return [
-        item('Balge-004', hinges(d.height)),
+        item('Balge-004', hingeCount(door(d), d.height)),
         item('SD-210', 1),
         item('Pr-002', mp(d.height + (d.width - dw) + (d.width2 ?? 0))),
         item('BAR-30x10', 1),
@@ -200,7 +227,7 @@ export const PARTITION_TYPES: PartitionType[] = [
       ]
     },
     bom: d => [
-      item('Balge-004', hinges(d.height) + 1),   // +1 угловое соединение стекло-стекло
+      item('Balge-004', hingeCount(door(d), d.height) + 1),   // +1 угловое соединение стекло-стекло
       item('SD-210', 1),
       item('Pr-002', mp(d.height * 2 + d.width + (d.width2 ?? 0))),
       item('BAR-30x10', 1),
@@ -259,7 +286,7 @@ export const PARTITION_TYPES: PartitionType[] = [
     bom: d => {
       const dw = door(d)
       return [
-        item('Balge-004', hinges(d.height)),
+        item('Balge-004', hingeCount(door(d), d.height)),
         item('Pr-002', mp(d.height + (d.width - dw))),
         item('Munich-001', 1),
         item('SEAL', mp(d.height)),
@@ -281,6 +308,7 @@ export type Configuration = {
   dims: Dims
   thickness: number
   finish: Finish
+  hinge: HingeModel | null
   panels: Panel[]
   glassAreaM2: number
   bom: BomItem[]
@@ -294,6 +322,7 @@ export function computeConfiguration(
   dims: Dims,
   thickness: number,
   finishId: FinishId,
+  hingeCode = 'Balge-004',
 ): Configuration {
   const type = getType(typeId)
   const finish = FINISHES.find(f => f.id === finishId) ?? FINISHES[0]
@@ -301,7 +330,10 @@ export function computeConfiguration(
   const glassAreaM2 = Number(
     panels.reduce((s, p) => s + (p.w * p.h) / 1_000_000, 0).toFixed(2),
   )
-  const bom = type.bom(dims)
+  const hingeModel = HINGES.find(h => h.code === hingeCode) ?? HINGES[0]
+  const bom = type.bom(dims).map(b =>
+    b.category === 'петли' ? { ...b, code: hingeModel.code, name: hingeModel.name } : b)
+  const hinge = bom.some(b => b.category === 'петли') ? hingeModel : null
 
   const warnings: string[] = []
   const c = type.constraints
@@ -320,6 +352,11 @@ export function computeConfiguration(
     if (p.role === 'fixed' && p.w < 200 && p.w > 0)
       warnings.push(`Неподвижная секция ${p.w} мм слишком узкая`)
   }
+  if (hinge) {
+    const dw = dims.doorWidth ?? 600
+    if (dw > hinge.maxDoor.w)
+      warnings.push(`Ширина двери ${dw} мм превышает ${hinge.maxDoor.w} мм для петли ${hinge.code}`)
+  }
 
-  return { type, dims, thickness, finish, panels, glassAreaM2, bom, warnings }
+  return { type, dims, thickness, finish, hinge, panels, glassAreaM2, bom, warnings }
 }

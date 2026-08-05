@@ -1,4 +1,4 @@
-import type { Configuration } from '@/lib/configurator/catalog'
+import { hingeCount, type Configuration } from '@/lib/configurator/catalog'
 
 // Параметрический фронтальный чертёж перегородки — перерисовывается от размеров.
 // Инженерная эстетика: стекло, профиль/штанга/петли/ручка в цвете финиша, размерные линии.
@@ -51,8 +51,7 @@ export function PartitionDrawing({ config }: { config: Configuration }) {
   const doorRect = laid.find(r => r.role === 'door')
   const fixedRect = laid.find(r => r.role === 'fixed' || r.role === 'return')
   const isSliding = type.group === 'sliding'
-  const isScreen = type.group === 'screen'
-  const hinges = config.bom.find(b => b.code === 'Balge-004')?.qty ?? 0
+  const doorHinges = config.hinge ? hingeCount(dims.doorWidth ?? 600, dims.height) : 0
   const returnRect = laid.find(r => r.role === 'return')
 
   return (
@@ -108,13 +107,15 @@ export function PartitionDrawing({ config }: { config: Configuration }) {
         </>
       )}
 
-      {/* петли Balge-004 на стыке фикс/дверь */}
-      {!isSliding && !isScreen && doorRect && fixedRect && hinges > 0 && (() => {
+      {/* петли на стыке фикс/дверь: 250 мм от верха и низа (правило M-Glass) */}
+      {config.hinge && doorRect && fixedRect && doorHinges > 0 && (() => {
         const seamX = doorRect.x <= fixedRect.x ? doorRect.x + doorRect.w : doorRect.x
-        return Array.from({ length: hinges }).map((_, i) => {
-          const t = (i + 1) / (hinges + 1)
-          return <circle key={i} cx={seamX} cy={y0 + gh * t} r={5} fill={hex} stroke="#fff" strokeWidth={1} />
-        })
+        const ys = doorHinges === 2
+          ? [250, dims.height - 250]
+          : Array.from({ length: doorHinges }, (_, i) => 250 + (i * (dims.height - 500)) / (doorHinges - 1))
+        return ys.map((mm, i) => (
+          <circle key={i} cx={seamX} cy={y0 + (mm / dims.height) * gh} r={5} fill={hex} stroke="#fff" strokeWidth={1} />
+        ))
       })()}
 
       {/* ручка на открывающейся кромке двери */}
