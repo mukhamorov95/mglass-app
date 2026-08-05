@@ -10,6 +10,18 @@ import {
 
 const GLASS_PRICE: Record<number, number> = { 8: 4200, 10: 5200 } // ₽/м², ориентировочно
 
+// Каталожные карточки (рендеры из «Комплектации перегородок»)
+const RENDER: Partial<Record<PartitionTypeId, string>> = {
+  'corner-swing':      '/configurator/renders/corner-swing.jpg',
+  'straight-swing':    '/configurator/renders/straight-swing.jpg',
+  'trapezoid':         '/configurator/renders/trapezoid.jpg',
+  'corner-sliding':    '/configurator/renders/corner-sliding.jpg',
+  'straight-sliding':  '/configurator/renders/straight-sliding.jpg',
+  'bath-screen':       '/configurator/renders/bath-screen.jpg',
+  'bath-screen-swing': '/configurator/renders/bath-screen-swing.jpg',
+  'stationary':        '/configurator/renders/stationary.jpg',
+}
+
 function mid([a, b]: [number, number]) { return Math.round((a + b) / 200) * 100 }
 
 function defaultsFor(id: PartitionTypeId): Dims {
@@ -172,8 +184,15 @@ export default function ConfiguratorPage() {
           )}
         </div>
 
-        {/* Чертёж */}
-        <div className="min-w-0">
+        {/* Визуал: каталожный рендер + живой чертёж */}
+        <div className="min-w-0 space-y-4">
+          {RENDER[typeId] && (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={RENDER[typeId]} alt={type.label} className="w-full rounded-lg" />
+              <p className="text-[11px] text-[#9a9a95] mt-2 text-center">Каталог M-Glass · {type.label}</p>
+            </div>
+          )}
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-4 flex items-center justify-center">
             <PartitionDrawing config={config} />
           </div>
