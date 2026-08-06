@@ -84,6 +84,9 @@ export default function PartnerNewQuotePage() {
   const [err, setErr] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<number | null>(null)
   const [submitted, setSubmitted] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)   // редактируем существующий просчёт
+  const [livePrice, setLivePrice] = useState<number | null>(null)   // живая цена текущей позиции
+  const [liveBusy, setLiveBusy] = useState(false)
 
   useEffect(() => {
     fetch('/api/partner/materials').then(r => r.json()).then(d => {
@@ -96,8 +99,41 @@ export default function PartnerNewQuotePage() {
       if (d.facetOptions?.[0]) setFacetMm(Number(d.facetOptions[0].typeMm))
       const sel = firstSel(mats, 'стекло')
       setThickness(sel.thickness); setMatId(sel.matId)
+      // Режим редактирования: /partner/new?edit=<id> — грузим позиции просчёта.
+      const editParam = new URLSearchParams(window.location.search).get('edit')
+      if (editParam) {
+        fetch(`/api/partner/quote/${editParam}`).then(r => r.ok ? r.json() : Promise.reject())
+          .then((q: { id: number; comment: string; specs: Spec[] }) => {
+            setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
+            void recompute(q.specs, false)
+          }).catch(() => {})
+      }
     }).catch(() => setLinked(false)).finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  // Живая цена текущей позиции (дебаунс). Всё setState — внутри async-колбэка
+  // (не в теле эффекта), чтобы не нарушать react-hooks/set-state-in-effect.
+  useEffect(() => {
+    const valid = matId != null && Number(width) > 0 && Number(height) > 0 && Number(qty) > 0
+    const spec = valid ? {
+      materialId: matId!, width: Number(width), height: Number(height), quantity: Number(qty),
+      hasTempering: superCat !== 'зеркало' && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
+      hasHoles: holes, shape: (curved ? 'curved' : 'rect') as 'rect' | 'curved',
+      hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
+      applyMinPrice: minPrice,
+    } : null
+    const t = setTimeout(async () => {
+      if (!spec) { setLivePrice(null); return }
+      setLiveBusy(true)
+      try {
+        const r = await fetch('/api/partner/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [spec], save: false }) })
+        const d = await r.json()
+        if (d.ok) setLivePrice(d.total)
+      } catch { /* сеть — просто не показываем цену */ } finally { setLiveBusy(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [matId, width, height, qty, tempering, facet, facetMm, holes, curved, minPrice, triplex, triplexLayers, triplexMat2, triplexMat3, superCat])
 
   const catDef = useMemo(() => SUPER_CATS.find(s => s.value === superCat) ?? SUPER_CATS[0], [superCat])
   const catMats = useMemo(() => materials.filter(m => (catDef.cats as readonly string[]).includes(m.category)), [materials, catDef])
@@ -128,7 +164,7 @@ export default function PartnerNewQuotePage() {
     try {
       const res = await fetch('/api/partner/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: next, save, comment }),
+        body: JSON.stringify({ items: next, save, comment, editId: save ? editingId : undefined }),
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Ошибка расчёта'); return null }
@@ -157,6 +193,25 @@ export default function PartnerNewQuotePage() {
     setList(next); setSavedId(null); setSubmitted(false)
     void recompute(next, false)
   }
+  // Изменить позицию: подставляем её параметры в форму и убираем из списка
+  // (клиент правит и снова «Добавить»).
+  function editRow(i: number) {
+    const s = list[i]
+    const mat = materials.find(m => m.id === s.materialId)
+    const sc: SuperCat = mat && (SUPER_CATS[1].cats as readonly string[]).includes(mat.category) ? 'зеркало' : 'стекло'
+    setSuperCat(sc)
+    setThickness(mat?.thickness ?? null)
+    setMatId(s.materialId)
+    setWidth(String(s.width)); setHeight(String(s.height)); setQty(String(s.quantity))
+    setTempering(s.hasTempering); setFacet(s.hasFacet); if (s.facetTypeMm) setFacetMm(s.facetTypeMm)
+    setHoles(s.hasHoles); setCurved(s.shape === 'curved'); setMinPrice(s.applyMinPrice)
+    setTriplex(s.hasTriplex); setTriplexLayers(s.triplexLayers === 3 ? 3 : 2)
+    setTriplexMat2(s.triplexMat2Id); setTriplexMat3(s.triplexMat3Id)
+    const next = list.filter((_, idx) => idx !== i)
+    setList(next); setSavedId(null); setSubmitted(false)
+    void recompute(next, false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
   async function save() {
     const id = await recompute(list, true)
     if (id) { setSavedId(id); setSubmitted(false) }
@@ -174,8 +229,8 @@ export default function PartnerNewQuotePage() {
   const top = (
     <div className="top">
       <div>
-        <h1>Новый просчёт</h1>
-        <div className="cap">Посчитайте по своим ценам и сохраните</div>
+        <h1>{editingId ? `Просчёт #${editingId}` : 'Новый просчёт'}</h1>
+        <div className="cap">{editingId ? 'Измените позиции и сохраните' : 'Посчитайте по своим ценам и сохраните'}</div>
       </div>
       <Link className="ghost" href="/partner/quotes">Мои просчёты</Link>
     </div>
@@ -224,8 +279,16 @@ export default function PartnerNewQuotePage() {
               </div>
 
               <div className="fld full">
-                <span className="lab">Размеры и количество</span>
-                <div className="grid3">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+                  <span className="lab" style={{ marginBottom: 0 }}>Размеры и количество</span>
+                  {livePrice != null ? (
+                    <span style={{ textAlign: 'right', lineHeight: 1.05 }}>
+                      <span style={{ display: 'block', fontSize: 10, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>за позицию</span>
+                      <span className="tnum" style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{fmt(livePrice)}</span>
+                    </span>
+                  ) : liveBusy ? <span className="mut" style={{ fontSize: 12, color: 'var(--muted)' }}>считаю…</span> : null}
+                </div>
+                <div className="grid3" style={{ marginTop: 6 }}>
                   <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" />
                   <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" />
                   <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Кол-во" />
@@ -306,7 +369,10 @@ export default function PartnerNewQuotePage() {
                       <td className="tnum">{s.width} × {s.height}</td>
                       <td className="r tnum">{s.quantity}</td>
                       <td className="r tnum">{p ? fmt(p.price) : (busy ? '…' : '')}</td>
-                      <td className="r"><button className="rm" onClick={() => removePosition(i)} title="Убрать">✕</button></td>
+                      <td className="r" style={{ whiteSpace: 'nowrap' }}>
+                        <button className="rm" onClick={() => editRow(i)} title="Изменить">✎</button>
+                        <button className="rm" onClick={() => removePosition(i)} title="Убрать">✕</button>
+                      </td>
                     </tr>
                   )
                 })}
@@ -319,8 +385,8 @@ export default function PartnerNewQuotePage() {
 
               {savedId ? (
                 <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
-                  <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : 'Просчёт сохранён ✓'}</div>
-                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство.' : 'Он появился в разделе «Мои просчёты».'}</div>
+                  <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : editingId ? 'Просчёт обновлён ✓' : 'Просчёт сохранён ✓'}</div>
+                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
                   <Link href="/partner/quotes" className="s" style={{ display: 'inline-block', marginTop: 8, color: 'var(--blue)' }}>→ Мои просчёты</Link>
                 </div>
               ) : (
