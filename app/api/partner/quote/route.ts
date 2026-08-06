@@ -44,6 +44,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   const specs = Array.isArray(body?.items) ? (body.items as ItemSpec[]) : []
   const save = body?.save === true
+  const editId = Number(body?.editId) || null   // редактирование существующего просчёта
   const comment = typeof body?.comment === 'string' ? body.comment.slice(0, 500) : ''
   if (specs.length === 0) return NextResponse.json({ error: 'Нет позиций' }, { status: 400 })
   if (specs.length > 200) return NextResponse.json({ error: 'Слишком много позиций' }, { status: 400 })
@@ -118,6 +119,30 @@ export async function POST(req: NextRequest) {
   // Сохранение как просчёт (виден нам и партнёру). Полные поля (с cost) — для нас;
   // партнёр их не получает (его API отдаёт только цену).
   const marginPct = totals.totalSaleExVat > 0 ? Math.round((1 - totals.totalCostExVat / totals.totalSaleExVat) * 100) : 0
+
+  // Редактирование: обновляем существующий просчёт партнёра (строго свой, не запущенный).
+  if (editId) {
+    const { data: ex } = await svc.from('b2b_orders').select('id,client_id,launched_at,notes').eq('id', editId).maybeSingle()
+    const exr = ex as { client_id: number | null; launched_at: string | null; notes: string | null } | null
+    if (!exr || exr.client_id !== client.id) return NextResponse.json({ error: 'Просчёт не найден' }, { status: 404 })
+    if (exr.launched_at) return NextResponse.json({ error: 'Заказ уже в работе — редактирование недоступно' }, { status: 400 })
+    let en: Record<string, unknown> = {}
+    try { en = exr.notes ? JSON.parse(exr.notes) : {} } catch {}
+    if (en.status && en.status !== 'quote') return NextResponse.json({ error: 'Просчёт уже отправлен — редактирование недоступно' }, { status: 400 })
+    en.status = 'quote'; en.source = 'partner'
+    en.partner_comment = comment || undefined
+    en.updated_by_partner_at = new Date().toISOString()
+    const { error: upErr } = await svc.from('b2b_orders').update({
+      discount_percent: discount, margin_percent: marginPct, items,
+      total_area: totals.totalAreaNet, total_weight: totals.totalWeight,
+      total_cost_net: totals.totalCostExVat, total_cost_vat: totals.totalInputVat,
+      total_sale_inc_vat: totals.totalSaleIncVat, total_after_discount: totals.totalAfterDiscount,
+      notes: JSON.stringify(en), updated_at: new Date().toISOString(),
+    }).eq('id', editId)
+    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+    return NextResponse.json({ ok: true, quoteId: editId, items: safeItems, total: partnerTotal, discountPercent: discount })
+  }
+
   const notes = JSON.stringify({
     status: 'quote', source: 'partner', created_by_partner: true,
     partner_comment: comment || undefined,

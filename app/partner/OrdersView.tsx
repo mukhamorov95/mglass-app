@@ -143,6 +143,9 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
 }
 
 function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
+  // Просчёт → клик открывает его на редактирование в калькуляторе (состав + правка).
+  // Заказ (в работе/отгружен) → карточка заказа. «Отправить в работу» внутри
+  // просчёта делает preventDefault, поэтому не навигирует.
   const clickable = o.lane !== 'quote'
   const body = (
     <>
@@ -172,6 +175,8 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
       )}
     </>
   )
+  if (o.lane === 'quote')
+    return <Link href={`/partner/new?edit=${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
   return clickable
     ? <Link href={`/partner/order/${o.id}`} className="ord clk" style={{ display: 'block', textDecoration: 'none' }}>{body}</Link>
     : <div className="ord">{body}</div>
