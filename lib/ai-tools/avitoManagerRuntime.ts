@@ -166,12 +166,22 @@ export async function runAvitoManager(
   // system как образцы стиля/аргументации — не как жёсткие шаблоны (цены всё равно
   // только из калькулятора, guardPrices вырежет любую выдуманную сумму).
   const examples = opts.examples ?? []
-  const systemText = examples.length
-    ? PERSONA + '\n\nПРИМЕРЫ ОТВЕТОВ ОПЫТНЫХ МЕНЕДЖЕРОВ (перенимай тон, стиль и аргументацию; НЕ копируй дословно, НЕ бери из них цифры/условия):\n' +
-      examples.map((e, i) =>
-        `${i + 1}. Клиент: «${e.client_context.slice(0, 300)}»\n   Менеджер: «${e.manager_reply.slice(0, 400)}»`,
-      ).join('\n')
-    : PERSONA
+  // PERSONA + tools — стабильный префикс на каждом сообщении: кэшируем его
+  // (cache_control на первом system-блоке), чтобы не платить за ~2K токенов
+  // персоны каждый вызов. Примеры few-shot меняются реже диалога, но всё же
+  // варьируются — держим их ОТДЕЛЬНЫМ блоком ПОСЛЕ точки кэша (не ломают префикс).
+  const systemBlocks: Anthropic.TextBlockParam[] = [
+    { type: 'text', text: PERSONA, cache_control: { type: 'ephemeral' } },
+  ]
+  if (examples.length) {
+    systemBlocks.push({
+      type: 'text',
+      text: 'ПРИМЕРЫ ОТВЕТОВ ОПЫТНЫХ МЕНЕДЖЕРОВ (перенимай тон, стиль и аргументацию; НЕ копируй дословно, НЕ бери из них цифры/условия):\n' +
+        examples.map((e, i) =>
+          `${i + 1}. Клиент: «${e.client_context.slice(0, 300)}»\n   Менеджер: «${e.manager_reply.slice(0, 400)}»`,
+        ).join('\n'),
+    })
+  }
 
   const knownLines = Object.entries(known).filter(([, v]) => v).map(([k, v]) => `${k}: ${v}`).join('\n')
   const messages: Anthropic.MessageParam[] = [
@@ -184,7 +194,7 @@ export async function runAvitoManager(
   const res = await anthropic.messages.create({
     model: 'claude-opus-4-8',
     max_tokens: 1200,
-    system: systemText,
+    system: systemBlocks,
     tools: [RESPOND_TOOL],
     tool_choice: { type: 'tool', name: 'respond' },
     messages,
