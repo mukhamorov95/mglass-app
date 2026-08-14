@@ -249,6 +249,18 @@ export default function ContractsPage() {
   }
   function newDoc() { setForm(emptyForm()); setEditingId(null); setSavedId(null); setTab('new') }
 
+  // Копия договора: те же данные (изделие, заказчик, суммы), но НОВЫЙ документ —
+  // номер сгенерируется, дата сегодняшняя. Открывается в форме, можно менять всё
+  // (сменить/убрать заказчика, поправить спецификацию) и сохранить как отдельный.
+  function duplicateRow(r: HistRow) {
+    const c = r.content as Partial<Form>
+    const d = today()
+    setForm({ ...emptyForm(), ...c, customer: c.customer ?? {}, spec: c.spec ?? [], number: '', date: fmtDate(d), date_iso: isoDate(d) })
+    setEditingId(null)   // null → POST создаст новый договор
+    setSavedId(null)
+    setTab('new')
+  }
+
   async function del(id: number, e: React.MouseEvent) {
     e.stopPropagation()
     if (!confirm('Удалить договор безвозвратно?')) return
@@ -471,7 +483,8 @@ export default function ContractsPage() {
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
                               <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
-                              <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
+                              <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]" title="Изменить">✏️</button>
+                              <button onClick={() => duplicateRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110] font-medium" title="Сделать копию — новый договор с этими же данными">⧉ Копия</button>
                               <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
                               {canDelete && <button onClick={e => del(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                             </div>
