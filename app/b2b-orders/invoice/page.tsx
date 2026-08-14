@@ -5,6 +5,7 @@ import QRCode from 'qrcode'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
+import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 
 // Единый счёт на несколько B2B-заказов. Заказы идут на своих заказчиков, но
 // плательщик выбирается один (напр. MR GLASS выставляет счёт за заказы Дмитрия
@@ -62,8 +63,9 @@ function orderLineSums(o: Order): number[] {
 export default function BatchInvoicePage() {
   const [orders, setOrders] = useState<Order[]>([])
   const [payers, setPayers] = useState<Client[]>([])
+  const [entities, setEntities] = useState<B2BLegalEntity[]>([])
   const [ids, setIds] = useState<number[]>([])
-  const [payerId, setPayerId] = useState<number | null>(null)
+  const [payerEntityId, setPayerEntityId] = useState<number | null>(null)
   const [invNo, setInvNo] = useState('')
   const [qr, setQr] = useState('')
   const [loading, setLoading] = useState(true)
@@ -85,18 +87,23 @@ export default function BatchInvoicePage() {
     fetch(`/api/b2b-orders/invoice-batch?ids=${qIds.join(',')}`)
       .then(async r => {
         if (!r.ok) { setError((await r.json().catch(() => ({}))).error ?? 'Ошибка загрузки'); setLoading(false); return }
-        const d = await r.json() as { orders: Order[]; payers: Client[]; orderClients: Client[] }
+        const d = await r.json() as { orders: Order[]; payers: Client[]; orderClients: Client[]; entities: B2BLegalEntity[] }
         setOrders(d.orders)
-        // Кандидаты: клиенты с реквизитами + заказчики заказов (без дублей).
+        // Клиенты (для имён групп в селекторе юрлиц).
         const map = new Map<number, Client>()
         for (const c of [...d.payers, ...d.orderClients]) map.set(c.id, c)
         setPayers([...map.values()].sort((a, b) => a.name.localeCompare(b.name)))
-        // Плательщик по умолчанию: сохранённый в заказах (если один) → общий заказчик → первый с реквизитами.
+        const ents = d.entities ?? []
+        setEntities(ents)
+        // Юрлицо-плательщик по умолчанию: основное юрлицо сохранённого плательщика →
+        // общего заказчика → первое доступное.
         const storedPayers = [...new Set(d.orders.map(o => o.payer_client_id).filter((x): x is number => x != null))]
         const commonClient = [...new Set(d.orders.map(o => o.client_id).filter((x): x is number => x != null))]
-        if (storedPayers.length === 1) setPayerId(storedPayers[0])
-        else if (commonClient.length === 1) setPayerId(commonClient[0])
-        else if (d.payers.length) setPayerId(d.payers[0].id)
+        const defFor = (cid: number) => ents.find(e => e.client_id === cid && e.is_default) ?? ents.find(e => e.client_id === cid)
+        const def = (storedPayers.length === 1 && defFor(storedPayers[0]))
+          || (commonClient.length === 1 && defFor(commonClient[0]))
+          || ents[0] || null
+        setPayerEntityId(def ? def.id : null)
         // № счёта по умолчанию — диапазон номеров заказов.
         const nums = d.orders.map(orderNo).sort()
         setInvNo(nums.length > 1 ? `${nums[0]}–${nums[nums.length - 1]}` : (nums[0] ?? ''))
@@ -109,7 +116,8 @@ export default function BatchInvoicePage() {
     s + (o.total_after_discount || o.total_sale_inc_vat || 0), 0), [orders])
   const vat = Math.round(grandTotal * 22 / 122 * 100) / 100
   const itemCount = useMemo(() => orders.reduce((s, o) => s + (o.items?.length ?? 0), 0), [orders])
-  const payer = payers.find(p => p.id === payerId) ?? null
+  const payerEntity = entities.find(e => e.id === payerEntityId) ?? null
+  const payer = payerEntity
 
   useEffect(() => {
     if (!grandTotal) return
@@ -124,7 +132,8 @@ export default function BatchInvoicePage() {
       const r = await fetch('/api/invoices', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          invoice_no: invNo, payer_client_id: payerId, payer_name: payer?.full_name || payer?.name || null,
+          invoice_no: invNo, payer_client_id: payerEntity?.client_id ?? null, payer_entity_id: payerEntityId,
+          payer_name: payerEntity ? entityTitle(payerEntity) : null,
           order_ids: ids, amount: grandTotal, vat,
         }),
       })
@@ -138,7 +147,7 @@ export default function BatchInvoicePage() {
     try {
       const r = await fetch('/api/b2b-orders/invoice-batch', {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids, payerId }),
+        body: JSON.stringify({ ids, payerId: payerEntity?.client_id ?? null }),
       })
       if (r.ok) { setSavedPayer(true); setTimeout(() => setSavedPayer(false), 2000) }
     } finally { setSavingPayer(false) }
@@ -166,7 +175,7 @@ export default function BatchInvoicePage() {
   if (error) return <div className="flex items-center justify-center min-h-screen text-red-500 text-sm">{error}</div>
 
   const payerLine = payer ? [
-    payer.full_name || payer.name,
+    entityTitle(payer),
     payer.inn ? `ИНН ${payer.inn}` : '', payer.kpp ? `КПП ${payer.kpp}` : '',
     payer.ogrn ? `ОГРН ${payer.ogrn}` : '', payer.legal_address ? `адрес: ${payer.legal_address}` : '',
     payer.bank_account ? `р/с ${payer.bank_account}` : '', payer.bank_name || '',
@@ -215,15 +224,23 @@ export default function BatchInvoicePage() {
 
         <div className="mt-3 bg-white border border-[#e4e4e0] rounded-xl p-4 flex flex-wrap items-end gap-4">
           <div className="flex-1 min-w-[240px]">
-            <label className="block text-[11px] uppercase tracking-widest text-[#9a9a95] mb-1">Плательщик (на кого счёт)</label>
-            <select value={payerId ?? ''} onChange={e => setPayerId(e.target.value ? Number(e.target.value) : null)}
+            <label className="block text-[11px] uppercase tracking-widest text-[#9a9a95] mb-1">Плательщик — юрлицо (на кого счёт)</label>
+            <select value={payerEntityId ?? ''} onChange={e => setPayerEntityId(e.target.value ? Number(e.target.value) : null)}
               className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] bg-white outline-none focus:border-[#111110]">
-              <option value="">— выберите плательщика —</option>
-              {payers.map(p => (
-                <option key={p.id} value={p.id}>{p.full_name || p.name}{p.inn ? ` · ИНН ${p.inn}` : ' · без реквизитов'}</option>
-              ))}
+              <option value="">— выберите юрлицо —</option>
+              {[...new Set(entities.map(e => e.client_id))].map(cid => {
+                const cname = payers.find(p => p.id === cid)?.name ?? `Клиент ${cid}`
+                return (
+                  <optgroup key={cid} label={cname}>
+                    {entities.filter(e => e.client_id === cid).map(e => (
+                      <option key={e.id} value={e.id}>{entityTitle(e)}{e.inn ? ` · ИНН ${e.inn}` : ''}{e.is_default ? ' · основное' : ''}</option>
+                    ))}
+                  </optgroup>
+                )
+              })}
             </select>
-            {payer && !payer.inn && <p className="text-[11px] text-red-600 mt-1">У плательщика не заполнены реквизиты — добавьте их в карточке клиента.</p>}
+            {payer && !payer.inn && <p className="text-[11px] text-red-600 mt-1">У выбранного юрлица не заполнен ИНН — проверьте реквизиты в карточке клиента.</p>}
+            {!entities.length && <p className="text-[11px] text-red-600 mt-1">Нет юрлиц с реквизитами. Добавьте юрлицо в карточке клиента (B2B Клиенты → Реквизиты).</p>}
           </div>
           <div className="w-[150px]">
             <label className="block text-[11px] uppercase tracking-widest text-[#9a9a95] mb-1">№ счёта</label>
