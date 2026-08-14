@@ -9,6 +9,7 @@ import {
   B2B_SEGMENTS, B2B_STATUSES, B2B_SCORES,
 } from '@/lib/types'
 import Pagination from '@/components/Pagination'
+import EntitiesEditor from './EntitiesEditor'
 
 const PAGE_SIZE = 50
 
@@ -23,21 +24,8 @@ type ClientWithMeta = B2BClient & {
 
 const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes,manager_id,manager_code,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account'
 
-// Поля карточки реквизитов; «карточка заполнена» = есть ИНН
-const REQ_FIELDS = [
-  { key: 'full_name',     label: 'Полное юр. наименование', wide: true },
-  { key: 'inn',           label: 'ИНН' },
-  { key: 'kpp',           label: 'КПП' },
-  { key: 'ogrn',          label: 'ОГРН / ОГРНИП' },
-  { key: 'legal_address', label: 'Юридический адрес', wide: true },
-  { key: 'bank_account',  label: 'Р/С' },
-  { key: 'bank_name',     label: 'Банк' },
-  { key: 'bik',           label: 'БИК' },
-  { key: 'corr_account',  label: 'К/С' },
-] as const
-type ReqKey = typeof REQ_FIELDS[number]['key']
-type ReqForm = Record<ReqKey, string>
-const emptyReqForm = (): ReqForm => Object.fromEntries(REQ_FIELDS.map(f => [f.key, ''])) as ReqForm
+// «Реквизиты заполнены» = есть ИНН основного юрлица (плоское зеркало в карточке).
+// Список юрлиц клиента ведёт EntitiesEditor (таблица b2b_client_legal_entities).
 const hasRequisites = (c: B2BClient) => !!(c.inn && String(c.inn).trim())
 
 const segmentLabel = (v: string | null) =>
@@ -101,9 +89,6 @@ export default function B2BCRMClient() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null)
 
   // Реквизиты: инлайн-форма + AI-разбор вставленной карточки организации
-  const [reqForm, setReqForm] = useState<ReqForm>(emptyReqForm())
-  const [reqPaste, setReqPaste] = useState('')
-  const [reqParsing, setReqParsing] = useState(false)
 
   useEffect(() => { load(); loadManagers() }, [orgId])
 
@@ -261,49 +246,7 @@ export default function B2BCRMClient() {
   }
 
   function openRequisites(c: ClientWithMeta) {
-    setReqForm(Object.fromEntries(REQ_FIELDS.map(f => [f.key, (c[f.key] ?? '') as string])) as ReqForm)
-    setReqPaste('')
     toggleInline(c.id, 'requisites')
-  }
-
-  async function parseRequisites() {
-    if (!reqPaste.trim()) return
-    setReqParsing(true)
-    try {
-      const r = await fetch('/api/ai/parse-customer', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: reqPaste }),
-      })
-      const j = await r.json()
-      const cu = j.customer ?? {}
-      setReqForm(prev => ({
-        ...prev,
-        full_name:     cu.name ?? prev.full_name,
-        inn:           cu.inn ?? prev.inn,
-        kpp:           cu.kpp ?? prev.kpp,
-        ogrn:          cu.ogrn ?? prev.ogrn,
-        legal_address: cu.legal_address ?? prev.legal_address,
-        bank_account:  cu.account ?? prev.bank_account,
-        bank_name:     cu.bank ?? prev.bank_name,
-        bik:           cu.bik ?? prev.bik,
-        corr_account:  cu.corr_account ?? prev.corr_account,
-      }))
-      showInlineToast('Карточка разобрана — проверьте поля')
-    } catch {
-      showInlineToast('Не удалось разобрать текст')
-    } finally { setReqParsing(false) }
-  }
-
-  async function saveRequisites(clientId: number) {
-    setSavingInline(true)
-    const { sb } = createScopedClient(orgId)
-    const patch = Object.fromEntries(REQ_FIELDS.map(f => [f.key, reqForm[f.key].trim() || null]))
-    const { error } = await sb.from('b2b_clients').update(patch).eq('id', clientId).eq('organization_id', orgId)
-    setSavingInline(false)
-    if (error) { showInlineToast('Ошибка при сохранении'); return }
-    showInlineToast('Реквизиты сохранены')
-    setExpandedId(null)
-    load()
   }
 
   function showInlineToast(msg: string) {
@@ -597,44 +540,9 @@ export default function B2BCRMClient() {
                         </div>
                       )}
                       {expandMode === 'requisites' && (
-                        <div className="space-y-3">
-                          {/* AI-разбор карточки организации */}
-                          <div className="flex items-start gap-2">
-                            <textarea
-                              value={reqPaste}
-                              onChange={e => setReqPaste(e.target.value)}
-                              placeholder="Вставьте текст карточки организации (реквизиты из письма/файла) — разберу автоматически…"
-                              rows={2}
-                              className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[12px] outline-none focus:border-[#111110] bg-[#fafaf9] resize-y"
-                            />
-                            <button
-                              onClick={parseRequisites}
-                              disabled={reqParsing || !reqPaste.trim()}
-                              className="text-[12px] font-medium px-3 py-2 rounded-lg bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40 transition-colors whitespace-nowrap">
-                              {reqParsing ? 'Разбираю…' : '🪄 Разобрать'}
-                            </button>
-                          </div>
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-                            {REQ_FIELDS.map(f => (
-                              <div key={f.key} className={'wide' in f && f.wide ? 'md:col-span-3' : ''}>
-                                <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">{f.label}</p>
-                                <input
-                                  value={reqForm[f.key]}
-                                  onChange={e => setReqForm(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                  className="w-full border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] bg-[#fafaf9]"
-                                />
-                              </div>
-                            ))}
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => saveRequisites(c.id)}
-                              disabled={savingInline}
-                              className="text-[12px] font-semibold bg-[#111110] text-white px-4 py-1.5 rounded-lg disabled:opacity-40 hover:bg-[#2a2a28] transition-colors">
-                              {savingInline ? '...' : 'Сохранить реквизиты'}
-                            </button>
-                            <span className="text-[11px] text-[#9a9a95]">заполненная карточка подставляется в счета автоматически</span>
-                          </div>
+                        <div>
+                          <p className="text-[11px] text-[#9a9a95] mb-2">Юрлица заказчика — при счёте выбирается одно. Реквизиты добавляются, не затирая старые.</p>
+                          <EntitiesEditor clientId={c.id} orgId={orgId} onChanged={load} />
                         </div>
                       )}
                       {expandMode === 'manager' && (
