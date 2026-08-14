@@ -30,7 +30,7 @@ export async function POST(req: Request) {
   const a = await requireFin()
   if ('error' in a) return a.error
   const b = await req.json().catch(() => ({})) as {
-    invoice_no?: string; payer_client_id?: number | null; payer_name?: string
+    invoice_no?: string; payer_client_id?: number | null; payer_entity_id?: number | null; payer_name?: string
     order_ids?: number[]; amount?: number; vat?: number; comment?: string
   }
   const order_ids = (b.order_ids ?? []).map(Number).filter(n => n > 0)
@@ -40,6 +40,7 @@ export async function POST(req: Request) {
   const { data, error } = await a.sb.from('invoices').insert({
     invoice_no: (b.invoice_no ?? '').trim() || '—',
     payer_client_id: b.payer_client_id ?? null,
+    payer_entity_id: b.payer_entity_id ?? null,
     payer_name: b.payer_name ?? null,
     order_ids, amount: b.amount, vat: b.vat ?? 0,
     comment: b.comment ?? null,
