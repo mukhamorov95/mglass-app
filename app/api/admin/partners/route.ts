@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
+import { createSetupToken } from '@/lib/setupToken'
 import { randomBytes } from 'crypto'
 
 // Онбординг партнёра из приложения (только владелец). Создаёт auth-аккаунт,
@@ -76,5 +77,9 @@ export async function POST(req: NextRequest) {
   const { error: linkErr } = await db.from('b2b_clients').update({ user_id: uid }).eq('id', clientId)
   if (linkErr) return NextResponse.json({ error: 'link: ' + linkErr.message }, { status: 500 })
 
-  return NextResponse.json({ ok: true, email, password, clientName: client.name })
+  // Ссылка самостоятельной установки пароля (свой токен, без SMTP/плейнтекста):
+  // партнёр переходит и задаёт пароль сам. Владелец отправляет ссылку по email.
+  const token = await createSetupToken(uid)
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+  return NextResponse.json({ ok: true, email, clientName: client.name, link: `${base}/set-password?token=${token}` })
 }
