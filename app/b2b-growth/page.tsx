@@ -376,8 +376,9 @@ function PartnersTab() {
   const [pass, setPass] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [created, setCreated] = useState<{ clientName: string; email: string; link: string } | null>(null)
+  const [created, setCreated] = useState<{ clientName: string; email: string; link: string; resend?: boolean } | null>(null)
   const [copied, setCopied] = useState(false)
+  const [resendId, setResendId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/partners').then(x => x.json()).catch(() => ({ clients: [] }))
@@ -401,6 +402,16 @@ function PartnersTab() {
     } finally { setBusy(false) }
   }
 
+  async function resend(clientId: number) {
+    setResendId(clientId)
+    try {
+      const r = await fetch('/api/admin/partners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, resend: true }) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Ошибка'); return }
+      setCreated({ clientName: d.clientName, email: d.email, link: d.link, resend: true }); setCopied(false)
+    } finally { setResendId(null) }
+  }
+
   if (loading) return <div className="text-xs text-[#9a9a95] py-8 text-center">Загрузка…</div>
 
   const linked = clients.filter(c => c.linked)
@@ -414,9 +425,9 @@ function PartnersTab() {
 
       {created && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-          <p className="text-[13px] font-semibold text-emerald-800">Доступ создан — {created.clientName}</p>
+          <p className="text-[13px] font-semibold text-emerald-800">{created.resend ? 'Новая ссылка на пароль' : 'Доступ создан'} — {created.clientName}</p>
           <p className="text-[12px] text-emerald-800 mt-1 font-mono">Логин: {created.email}</p>
-          <p className="text-[11px] text-emerald-700 mt-1">Отправьте партнёру ссылку — по ней он задаст свой пароль:</p>
+          <p className="text-[11px] text-emerald-700 mt-1">Отправьте партнёру ссылку — по ней он задаст свой пароль{created.resend ? ' (прежние ссылки перестанут работать)' : ''}:</p>
           <div className="mt-1.5 flex items-center gap-2 flex-wrap">
             <input readOnly value={created.link} onFocus={e => e.target.select()}
               className="flex-1 min-w-[200px] bg-white border border-emerald-200 rounded px-2 py-1 text-[11px] font-mono text-emerald-900 outline-none" />
@@ -458,12 +469,17 @@ function PartnersTab() {
         <>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] pt-2">С кабинетом · {linked.length}</p>
           {linked.map(c => (
-            <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3 flex items-center justify-between">
+            <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-[#111110] truncate">{c.name}</p>
                 <p className="text-[11px] text-[#9a9a95] font-mono truncate">{c.email ?? '—'}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">кабинет активен</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => resend(c.id)} disabled={resendId === c.id}
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 transition-colors">
+                  {resendId === c.id ? '…' : '🔗 Ссылка на пароль'}</button>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">кабинет активен</span>
+              </div>
             </div>
           ))}
         </>
