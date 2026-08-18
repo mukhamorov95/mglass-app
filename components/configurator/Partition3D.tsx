@@ -53,7 +53,7 @@ function tiledMaterial(base: THREE.CanvasTexture, uM: number, vM: number) {
 
 function NicheMesh({ niche }: { niche: Niche }) {
   const { w, depth, wallH, trayH, walls } = niche
-  const base = useMemo(makeTileTexture, [])
+  const base = useMemo(() => makeTileTexture(), [])
   const WH = wallH + 0.4                    // стены выше кабины (до «потолка» ниши)
   const EXT = 1.2                           // вынос стен/пола за габарит — «угол комнаты»
   const FW = w + 2.6, FD = depth + 2.6      // большой облицованный пол
@@ -105,21 +105,21 @@ function Assembly3D({ assembly, metalMat }: { assembly: Assembly; metalMat: THRE
         <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
           <boxGeometry args={g.size} />
           <MeshTransmissionMaterial
-            transmission={1}
+            transmission={0.9}
             thickness={0.012}
-            roughness={0.015}
-            ior={1.47}
+            roughness={0.05}
+            ior={1.5}
             chromaticAberration={0.012}
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
             samples={5}
             resolution={384}
-            color="#f6fbf9"
-            attenuationColor="#dcefe7"
-            attenuationDistance={4}
-            clearcoat={0.4}
-            clearcoatRoughness={0.06}
+            color="#e6eef0"
+            attenuationColor="#cfe0dc"
+            attenuationDistance={1.8}
+            clearcoat={0.7}
+            clearcoatRoughness={0.05}
           />
         </mesh>
       ))}

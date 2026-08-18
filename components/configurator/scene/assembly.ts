@@ -32,7 +32,7 @@ export type MetalPart = {
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
 export type HardwarePlacement = {
   key: string
-  model: 'balge' | 'dessau' | 'sd210'
+  model: 'balge' | 'dessau' | 'sd210' | 'carrier'
   pos: [number, number, number]
   rotY: number
 }
@@ -198,6 +198,22 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   const addPost = (key: string, p: P) =>
     metal.push({ key, kind: 'post', rotY: 0, pos: [p[0], H / 2, p[1]], size: [PROFILE * 0.55, H, PROFILE * 0.55] })
 
+  // Раздвижная створка — две каретки-ролика на верхней штанге (верхнеподвес РД-001).
+  const addCarriers = (key: string, A: P, B: P) => {
+    const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz)
+    if (!L) return
+    const ux = dx / L, uz = dz / L        // вдоль створки
+    const nx = -dz / L, nz = dx / L       // нормаль (вынос на передний рельс)
+    const rotY = Math.atan2(-dz, dx)
+    const y = topY - 0.012
+    ;[0.24, 0.76].forEach((f, i) => {
+      hardware.push({
+        key: `${key}-c${i}`, model: 'carrier', rotY,
+        pos: [A[0] + ux * L * f + nx * SLIDE_GAP, y, A[1] + uz * L * f + nz * SLIDE_GAP],
+      })
+    })
+  }
+
   // Дверь: открыта наружу вокруг петлевой кромки Ph; ставит петли и ручку.
   const addDoor = (key: string, Ph: P, Pf: P, outward: P) => {
     const L = Math.hypot(Pf[0] - Ph[0], Pf[1] - Ph[1])
@@ -255,7 +271,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
       const sg = run.segs[i]
       const key = run.kp + i
       if (sg.t === 'fixed') addGlass(key, sa, sb, 'fixed')
-      else if (sg.t === 'slide') addGlass(key, sa, sb, 'door', SLIDE_GAP)   // створка вынесена на рельс
+      else if (sg.t === 'slide') { addGlass(key, sa, sb, 'door', SLIDE_GAP); addCarriers(key, sa, sb) }   // створка на рельсе + каретки
       else {
         const Ph = sg.hinge === 'a' ? sa : sb
         const Pf = sg.hinge === 'a' ? sb : sa
