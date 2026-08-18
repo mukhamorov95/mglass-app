@@ -6,7 +6,7 @@ import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurato
 
 const M = 0.001
 
-export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'carrier'
+export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe'
 
 export function hingeSpecByModel(model: string): HingeSpec {
   return model === 'dessau' ? DESSAU_103 : BALGE_004
@@ -71,32 +71,61 @@ function HandleSD210({ material }: { material: THREE.Material }) {
   )
 }
 
-// Каретка-ролик раздвижной РД-001 на штанге 30×10 (верхнеподвес). Узнаваемая:
-// обойма-корпус + два ролика по штанге + прижимная планка к стеклу. Точная
-// геометрия — по PDF (позже).
-function SlidingCarrier({ material }: { material: THREE.Material }) {
+// Каретка раздвижной РД-001 (Hip System): обхватывает штангу 30×10 двумя колёсами
+// (сверху и снизу бруса) + планка-зажим к стеклу створки. На двери две каретки —
+// это и есть «4 ролика», все СВЕРХУ (снизу двери креплений нет). Штанга вдоль X.
+function SlidingRoller({ material }: { material: THREE.Material }) {
   return (
     <group>
-      {/* обойма-корпус */}
-      <mesh material={material} castShadow>
-        <boxGeometry args={[48 * M, 26 * M, 20 * M]} />
-      </mesh>
-      {/* два ролика сверху — ось поперёк штанги, катятся вдоль неё */}
-      {[-15 * M, 15 * M].map((x, i) => (
-        <mesh key={i} position={[x, 16 * M, 0]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
-          <cylinderGeometry args={[10 * M, 10 * M, 14 * M, 20]} />
+      {[15 * M, -15 * M].map((y, i) => (
+        <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
+          <cylinderGeometry args={[11 * M, 11 * M, 11 * M, 24]} />
         </mesh>
       ))}
-      {/* прижимная планка к верхней кромке стекла */}
-      <mesh position={[0, -20 * M, 0]} material={material} castShadow>
-        <boxGeometry args={[34 * M, 24 * M, 8 * M]} />
+      {/* планка каретки к стеклу */}
+      <mesh position={[0, 0, 0]} material={material} castShadow>
+        <boxGeometry args={[15 * M, 42 * M, 9 * M]} />
+      </mesh>
+    </group>
+  )
+}
+
+// Держатель штанги на стационарном стекле: обойма вокруг штанги 30×10 + зажим на
+// стекле. Ставится по центру и ближе к свободному краю стационара.
+function TubeHolder({ material }: { material: THREE.Material }) {
+  return (
+    <group>
+      {/* обойма вокруг штанги */}
+      <mesh material={material} castShadow>
+        <boxGeometry args={[20 * M, 30 * M, 26 * M]} />
+      </mesh>
+      {/* зажим-планка на стекле (стекло позади штанги, к центру ниши) */}
+      <mesh position={[0, 0, -15 * M]} material={material} castShadow>
+        <boxGeometry args={[28 * M, 34 * M, 8 * M]} />
+      </mesh>
+    </group>
+  )
+}
+
+// Ручка-купе КУ-002: круглая утопленная чаша заподлицо со стеклом двери. Диск
+// смотрит наружу (плоскость ⊥ нормали двери → после rotY это ±Z-local).
+function KupeHandle({ material }: { material: THREE.Material }) {
+  return (
+    <group rotation={[Math.PI / 2, 0, 0]}>
+      <mesh material={material} castShadow>
+        <cylinderGeometry args={[26 * M, 26 * M, 6 * M, 28]} />
+      </mesh>
+      <mesh position={[0, -3 * M, 0]} material={material}>
+        <cylinderGeometry args={[18 * M, 18 * M, 5 * M, 28]} />
       </mesh>
     </group>
   )
 }
 
 export function Hardware({ model, material }: { model: HardwareModel; material: THREE.Material }) {
-  if (model === 'carrier') return <SlidingCarrier material={material} />
+  if (model === 'roller') return <SlidingRoller material={material} />
+  if (model === 'holder') return <TubeHolder material={material} />
+  if (model === 'kupe') return <KupeHandle material={material} />
   if (model === 'sd210') return <HandleSD210 material={material} />
   if (model === 'dessau') return <Hinge model="dessau" material={material} />
   return <Hinge model="balge" material={material} />

@@ -12,6 +12,7 @@ const M = 0.001
 const SWING_DEG = 20            // на сколько приоткрыта распашная дверь в визуале
 const SLIDE_GAP = 40 * M        // вынос раздвижной створки по Z (передний рельс)
 const PROFILE = 26 * M          // сечение профиля/штанги в визуале
+const TUBE_DROP = 0.06          // ось штанги 30×10 у раздвижных — на 60 мм ниже верха стекла
 
 export type GlassPart = {
   key: string
@@ -32,7 +33,7 @@ export type MetalPart = {
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
 export type HardwarePlacement = {
   key: string
-  model: 'balge' | 'dessau' | 'sd210' | 'carrier'
+  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe'
   pos: [number, number, number]
   rotY: number
 }
@@ -188,29 +189,40 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     glass.push({ key, role, rotY, pos: [cx + nx * zOff, H / 2, cz + nz * zOff], size: [L, H, t] })
     return { cx, cz, L, rotY }
   }
-  // Профиль/штанга вдоль рана (низ + верх).
-  const addRails = (kp: string, A: P, B: P) => {
+  const tubeY = H - TUBE_DROP   // ось штанги 30×10 у раздвижных (отступ от верха)
+
+  // Нижний П-профиль Pr-002 всегда; верх — распашные/стационар: штанга у верха;
+  // раздвижные: штанга 30×10 с отступом от верха (по ней ездят ролики).
+  const addRails = (kp: string, A: P, B: P, sliding: boolean) => {
     const cx = (A[0] + B[0]) / 2, cz = (A[1] + B[1]) / 2
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz), rotY = Math.atan2(-dz, dx)
     metal.push({ key: kp + '-bot', kind: 'profile', rotY, pos: [cx, bottomY, cz], size: [L, 0.0125, 0.018] })  // Pr-002 18×12.5
-    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx, topY, cz], size: [L, 0.010, 0.030] })         // штанга 30×10
+    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx, sliding ? tubeY : topY, cz], size: [L, 0.030, 0.010] })  // штанга 30×10
   }
   const addPost = (key: string, p: P) =>
     metal.push({ key, kind: 'post', rotY: 0, pos: [p[0], H / 2, p[1]], size: [PROFILE * 0.55, H, PROFILE * 0.55] })
 
-  // Раздвижная створка — две каретки-ролика на верхней штанге (верхнеподвес РД-001).
-  const addCarriers = (key: string, A: P, B: P) => {
+  const seg2 = (A: P, B: P) => {
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz)
+    return { ux: dx / L, uz: dz / L, nx: -dz / L, nz: dx / L, L, rotY: Math.atan2(-dz, dx) }
+  }
+  // Раздвижная створка РД-001: две каретки по штанге СВЕРХУ (по 2 колеса = «4 ролика»,
+  // снизу креплений нет) + ручка-купе. Всё крепление вверху.
+  const addSlideDoor = (key: string, A: P, B: P) => {
+    const { ux, uz, nx, nz, L, rotY } = seg2(A, B)
     if (!L) return
-    const ux = dx / L, uz = dz / L        // вдоль створки
-    const nx = -dz / L, nz = dx / L       // нормаль (вынос на передний рельс)
-    const rotY = Math.atan2(-dz, dx)
-    const y = topY - 0.012
+    const at = (f: number, y: number) => [A[0] + ux * L * f + nx * SLIDE_GAP, y, A[1] + uz * L * f + nz * SLIDE_GAP] as [number, number, number]
     ;[0.24, 0.76].forEach((f, i) => {
-      hardware.push({
-        key: `${key}-c${i}`, model: 'carrier', rotY,
-        pos: [A[0] + ux * L * f + nx * SLIDE_GAP, y, A[1] + uz * L * f + nz * SLIDE_GAP],
-      })
+      hardware.push({ key: `${key}-r${i}`, model: 'roller', rotY, pos: at(f, tubeY) })  // каретки по штанге
+    })
+    hardware.push({ key: `${key}-kupe`, model: 'kupe', rotY, pos: at(0.82, H / 2) })    // ручка-купе у кромки
+  }
+  // Держатели штанги на стационарном стекле: по центру и ближе к свободному краю.
+  const addTubeHolders = (key: string, A: P, B: P) => {
+    const { ux, uz, L, rotY } = seg2(A, B)
+    if (!L) return
+    ;[0.32, 0.72].forEach((f, i) => {
+      hardware.push({ key: `${key}-hold${i}`, model: 'holder', rotY, pos: [A[0] + ux * L * f, tubeY, A[1] + uz * L * f] })
     })
   }
 
@@ -264,14 +276,15 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   // Обход ранов: стёкла/двери/раздвижные + профили.
   for (const run of runs) {
     const n = run.segs.length
-    addRails(run.kp, run.A, run.B)
+    const sliding = run.segs.some(s => s.t === 'slide')
+    addRails(run.kp, run.A, run.B, sliding)
     for (let i = 0; i < n; i++) {
       const sa: P = [run.A[0] + (run.B[0] - run.A[0]) * i / n, run.A[1] + (run.B[1] - run.A[1]) * i / n]
       const sb: P = [run.A[0] + (run.B[0] - run.A[0]) * (i + 1) / n, run.A[1] + (run.B[1] - run.A[1]) * (i + 1) / n]
       const sg = run.segs[i]
       const key = run.kp + i
-      if (sg.t === 'fixed') addGlass(key, sa, sb, 'fixed')
-      else if (sg.t === 'slide') { addGlass(key, sa, sb, 'door', SLIDE_GAP); addCarriers(key, sa, sb) }   // створка на рельсе + каретки
+      if (sg.t === 'fixed') { addGlass(key, sa, sb, 'fixed'); if (sliding) addTubeHolders(key, sa, sb) }  // держатели штанги на стационаре
+      else if (sg.t === 'slide') { addGlass(key, sa, sb, 'door', SLIDE_GAP); addSlideDoor(key, sa, sb) }  // створка на рельсе + 4 ролика + купе
       else {
         const Ph = sg.hinge === 'a' ? sa : sb
         const Pf = sg.hinge === 'a' ? sb : sa

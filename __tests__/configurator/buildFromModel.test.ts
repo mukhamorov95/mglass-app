@@ -36,10 +36,13 @@ describe('buildFromModel — все 9 моделей строятся', () => {
     }
   })
 
-  it('раздвижные (М8, М9, М10, М12) — без распашных петель', () => {
+  it('раздвижные (М8, М9, М10, М12) — без распашных петель, но с роликами и купе', () => {
     for (const code of ['М8', 'М9', 'М10', 'М12']) {
       const a = buildFromModel(getModel(code), dimsFor(code), 8)
       expect(a.hardware.filter(h => h.model === 'balge').length).toBe(0)
+      expect(a.hardware.filter(h => h.model === 'roller').length).toBeGreaterThanOrEqual(2)  // 2 каретки на створку (сверху)
+      expect(a.hardware.some(h => h.model === 'kupe')).toBe(true)
+      expect(a.hardware.some(h => h.model === 'holder')).toBe(true)
     }
   })
 
