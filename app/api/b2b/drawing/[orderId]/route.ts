@@ -22,14 +22,17 @@ export async function GET(_req: Request, { params }: { params: Promise<{ orderId
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: row } = await svc.from('b2b_orders').select('notes, client_id').eq('id', oid).single()
   if (!row) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  // Партнёр — только чертёж своего заказа. Внутренние роли — любой.
+
+  // Партнёр — только чертёж своего заказа. Внутренние роли — любой. Без этой
+  // проверки партнёр мог перебором id вытащить чужие производственные чертежи.
   if (role === 'partner') {
     const clientId = await getPartnerClientId(user.id)
     if (!clientId || (row as { client_id: number | null }).client_id !== clientId) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
   }
-  const drawing = parseNotes(row?.notes ?? null).drawing_url
+
+  const drawing = parseNotes(row.notes ?? null).drawing_url
   if (typeof drawing !== 'string' || !drawing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   // В notes может лежать и старый publicUrl (с ?t=бустером), и просто путь
