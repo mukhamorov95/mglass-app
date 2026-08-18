@@ -1,0 +1,286 @@
+<title>ТЗ · 3D-конфигуратор душевых M-Glass</title>
+<style>
+  :root {
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f5f8f9; --border:#d9e0e4;
+    --ink:#141a1e; --ink-2:#47535b; --ink-3:#7d8993;
+    --accent:#2b6e8f; --accent-soft:#e2eef3; --brass:#9c7638;
+    --good:#2e7d5b; --good-soft:#e2f1ea; --warn:#9a6f1f; --warn-soft:#f4ecd8;
+    --shadow:0 1px 2px rgba(20,30,40,.05), 0 8px 24px rgba(20,40,55,.06);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0f1519; --surface:#161e23; --surface-2:#1a242a; --border:#2a353c;
+      --ink:#e8eef2; --ink-2:#a4b1ba; --ink-3:#6f7d87;
+      --accent:#5aa9cc; --accent-soft:#16303c; --brass:#c8a06a;
+      --good:#5bc08c; --good-soft:#123226; --warn:#d8ad50; --warn-soft:#302713;
+      --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg:#eef1f3; --surface:#ffffff; --surface-2:#f5f8f9; --border:#d9e0e4;
+    --ink:#141a1e; --ink-2:#47535b; --ink-3:#7d8993;
+    --accent:#2b6e8f; --accent-soft:#e2eef3; --brass:#9c7638;
+    --good:#2e7d5b; --good-soft:#e2f1ea; --warn:#9a6f1f; --warn-soft:#f4ecd8;
+    --shadow:0 1px 2px rgba(20,30,40,.05), 0 8px 24px rgba(20,40,55,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg:#0f1519; --surface:#161e23; --surface-2:#1a242a; --border:#2a353c;
+    --ink:#e8eef2; --ink-2:#a4b1ba; --ink-3:#6f7d87;
+    --accent:#5aa9cc; --accent-soft:#16303c; --brass:#c8a06a;
+    --good:#5bc08c; --good-soft:#123226; --warn:#d8ad50; --warn-soft:#302713;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+  * { box-sizing:border-box; }
+  html { -webkit-text-size-adjust:100%; }
+  body {
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system, ui-sans-serif, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    line-height:1.6; font-size:16px;
+    -webkit-font-smoothing:antialiased;
+  }
+  .mono { font-family:ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace; }
+  .wrap { max-width:62rem; margin:0 auto; padding:clamp(1.25rem,4vw,3rem); }
+  .eyebrow {
+    font-family:ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    text-transform:uppercase; letter-spacing:.16em; font-size:.72rem;
+    color:var(--accent); font-weight:600;
+  }
+  h1 { font-size:clamp(1.8rem,4.5vw,2.7rem); line-height:1.1; letter-spacing:-.02em; font-weight:700; margin:.5rem 0 .4rem; text-wrap:balance; }
+  h2 { font-size:clamp(1.3rem,3vw,1.65rem); letter-spacing:-.015em; font-weight:650; margin:0 0 .2rem; text-wrap:balance; }
+  h3 { font-size:1.02rem; font-weight:650; margin:1.4rem 0 .4rem; letter-spacing:-.01em; }
+  p { margin:.5rem 0; color:var(--ink-2); max-width:64ch; }
+  strong { color:var(--ink); font-weight:650; }
+  a { color:var(--accent); text-decoration:none; border-bottom:1px solid color-mix(in srgb, var(--accent) 35%, transparent); }
+  a:hover { border-bottom-color:var(--accent); }
+  a:focus-visible, button:focus-visible { outline:2px solid var(--accent); outline-offset:2px; border-radius:3px; }
+
+  header.masthead {
+    border-bottom:1px solid var(--border); padding-bottom:1.4rem; margin-bottom:2rem;
+  }
+  .meta { display:flex; flex-wrap:wrap; gap:.5rem 1.4rem; margin-top:.9rem; color:var(--ink-3); font-size:.82rem; }
+  .meta .mono { color:var(--ink-2); }
+
+  section { margin:2.6rem 0; }
+  .lead { font-size:1.06rem; color:var(--ink-2); max-width:66ch; }
+
+  .card {
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    padding:1.15rem 1.25rem; box-shadow:var(--shadow);
+  }
+  .grid { display:grid; gap:.9rem; }
+  @media (min-width:640px){ .grid.cols-2 { grid-template-columns:1fr 1fr; } .grid.cols-3 { grid-template-columns:repeat(3,1fr); } }
+
+  .tablewrap { overflow-x:auto; border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow); background:var(--surface); }
+  table { border-collapse:collapse; width:100%; font-size:.88rem; min-width:640px; }
+  th, td { text-align:left; padding:.6rem .8rem; border-bottom:1px solid var(--border); vertical-align:top; }
+  thead th { background:var(--surface-2); color:var(--ink-2); font-weight:600; font-size:.74rem; text-transform:uppercase; letter-spacing:.06em; position:sticky; top:0; }
+  tbody tr:last-child td { border-bottom:none; }
+  td.code { font-family:ui-monospace,Menlo,monospace; color:var(--accent); font-weight:600; white-space:nowrap; }
+  .num { font-variant-numeric:tabular-nums; }
+
+  .pill { display:inline-flex; align-items:center; gap:.35rem; font-size:.72rem; font-weight:600; padding:.12rem .5rem; border-radius:999px; white-space:nowrap; letter-spacing:.01em; }
+  .pill.done { background:var(--good-soft); color:var(--good); }
+  .pill.wip  { background:var(--accent-soft); color:var(--accent); }
+  .pill.plan { background:var(--surface-2); color:var(--ink-3); border:1px solid var(--border); }
+  .pill.gap  { background:var(--warn-soft); color:var(--warn); }
+
+  ol.phases { list-style:none; counter-reset:ph; padding:0; margin:1rem 0 0; display:grid; gap:.7rem; }
+  ol.phases > li {
+    counter-increment:ph; position:relative; padding:1rem 1.15rem 1rem 3.4rem;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow);
+  }
+  ol.phases > li::before {
+    content:counter(ph); position:absolute; left:1rem; top:1rem;
+    width:1.7rem; height:1.7rem; border-radius:8px; display:grid; place-items:center;
+    background:var(--accent-soft); color:var(--accent); font-weight:700; font-size:.9rem;
+    font-family:ui-monospace,Menlo,monospace;
+  }
+  ol.phases h3 { margin:0 0 .15rem; display:flex; flex-wrap:wrap; align-items:center; gap:.5rem; }
+  ol.phases p { margin:.2rem 0 0; font-size:.92rem; }
+
+  ul.clean { padding-left:1.1rem; margin:.5rem 0; }
+  ul.clean li { margin:.3rem 0; color:var(--ink-2); }
+  ul.clean li::marker { color:var(--accent); }
+
+  .steps { display:grid; gap:.6rem; margin-top:.8rem; counter-reset:st; }
+  .steps > div { position:relative; padding:.85rem 1rem .85rem 3rem; background:var(--surface-2); border:1px solid var(--border); border-radius:10px; }
+  .steps > div::before { counter-increment:st; content:"L" counter(st); position:absolute; left:.85rem; top:.85rem; font-family:ui-monospace,Menlo,monospace; font-size:.72rem; font-weight:700; color:var(--brass); }
+  .steps b { color:var(--ink); }
+
+  .callout { border-left:3px solid var(--brass); background:var(--surface-2); padding:.8rem 1rem; border-radius:0 10px 10px 0; margin:1rem 0; }
+  .callout .eyebrow { color:var(--brass); }
+
+  footer { margin-top:3rem; padding-top:1.4rem; border-top:1px solid var(--border); color:var(--ink-3); font-size:.82rem; }
+  hr { border:none; border-top:1px solid var(--border); margin:2rem 0; }
+</style>
+
+<div class="wrap">
+  <header class="masthead">
+    <div class="eyebrow">Техническое задание · внутренний документ</div>
+    <h1>3D-конфигуратор душевых перегородок M-Glass</h1>
+    <p class="lead">Как из параметрической модели собрать на сайте живую 3D-картинку уровня каталожного эскиза «Комплектации перегородок»: клиент выбирает компоновку и размеры — видит реальную кабину со своим профилем, петлями и ручкой, вращает её и оставляет заявку.</p>
+    <div class="meta">
+      <span>Версия <span class="mono">0.1</span></span>
+      <span>Ветка <span class="mono">feat/shower-3d-configurator</span></span>
+      <span>Референс визуала: каталог M-Glass + berusteklo</span>
+      <span>Стек: <span class="mono">Next.js · React-Three-Fiber</span></span>
+    </div>
+  </header>
+
+  <section>
+    <div class="eyebrow">1 · Цель и критерий попадания</div>
+    <h2>Что считаем результатом</h2>
+    <p>Продукт «попал», когда для <strong>любой выбранной модели</strong> 3D-сцена на сайте схематично совпадает с каталожным эскизом по трём осям: (1) какие полотна неподвижны и какое — дверь; (2) с какой стороны и каким механизмом открывается дверь; (3) какая фурнитура и где стоит. Плюс размеры клиента масштабируют стекло вживую, а материалы (стекло, финиш металла) читаются как настоящие.</p>
+    <div class="callout">
+      <div class="eyebrow">Принцип</div>
+      <p style="margin:.3rem 0 0">Одна параметрическая модель — источник и для картинки, и для спецификации, и для цены. Геометрия и расчёт стоимости не должны расходиться никогда.</p>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">2 · Анализ рынка и референсов</div>
+    <h2>Откуда берём правду</h2>
+    <div class="grid cols-2">
+      <div class="card">
+        <h3 style="margin-top:0">Каталог M-Glass — целевой визуал</h3>
+        <p>«Комплектации перегородок»: кабина в облицованной нише, полупрозрачное стекло, <strong>реальная фурнитура</strong> (Balge-004, SD-210, штанга 30×10, П-профиль) и выноски с фото-миниатюрами. Это эталон качества картинки.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">berusteklo — типология моделей</h3>
+        <p>Матрица <span class="mono">М1–М16</span>: форма × механизм × сторона двери. Но презентация — <strong>только фото + текст</strong>, без схем и 3D. Наша прямая возможность обойти референс.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">Radaway / CRL / Smart Glazier</h3>
+        <p>Единый мастер: <strong>выбор компоновки → размеры → материалы → цена</strong>. Компоновка выбирается сеткой пиктограмм план-вида с дугой открывания двери.</p>
+      </div>
+      <div class="card">
+        <h3 style="margin-top:0">privetmaket — интерактив</h3>
+        <p>Мебельный конструктор: клиент <strong>выделяет секции прямо на 3D-модели</strong>, размеры до 1 мм, живой пересчёт. Целевой уровень интерактива.</p>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">3 · Типология моделей</div>
+    <h2>Матрица компоновок</h2>
+    <p>Модель = <strong>форма</strong> (прямая / угловая / трапеция / П-образная / радиус / шторка) × <strong>механизм</strong> (стационар / распашная / раздвижная / маятниковая / гармошка) × <strong>сторона двери</strong> (лево / право — это тумблер, а не отдельные модели). Ниже — матрица berusteklo, сопоставленная с тем, что уже оцифровано у нас.</p>
+    <div class="tablewrap">
+      <table>
+        <thead>
+          <tr><th>Код</th><th>Форма</th><th>Расположение / дверь</th><th>Наш тип</th><th>Статус</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="code">М1</td><td>Прямая</td><td>Стационарная панель (walk-in), без двери</td><td class="mono">stationary</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">М2 / М3</td><td>Прямая</td><td>Неподвижное + распашная дверь (право / лево — зеркало)</td><td class="mono">straight-swing</td><td><span class="pill done">есть</span> <span class="pill gap">нужен тумблер L/R</span></td></tr>
+          <tr><td class="code">М4</td><td>Прямая</td><td>Два неподвижных + распашная дверь</td><td class="mono">— вариант</td><td><span class="pill gap">2 фикс.</span></td></tr>
+          <tr><td class="code">М5</td><td>Прямая</td><td>Только распашная дверь (в проём стена-стена)</td><td class="mono">— вариант</td><td><span class="pill gap">door-only</span></td></tr>
+          <tr><td class="code">М6</td><td>Угловая</td><td>Неподвижное + распашная дверь</td><td class="mono">corner-swing</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">М7</td><td>Угловая</td><td>Два неподвижных + распашная дверь</td><td class="mono">corner-swing +</td><td><span class="pill gap">2 фикс.</span></td></tr>
+          <tr><td class="code">М8</td><td>Угловая</td><td>Две раздвижные двери</td><td class="mono">corner-sliding</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">М9</td><td>Угловая</td><td>Раздвижная + два неподвижных</td><td class="mono">corner-sliding +</td><td><span class="pill wip">вариант</span></td></tr>
+          <tr><td class="code">М10</td><td>Прямая</td><td>Раздвижная (линейная)</td><td class="mono">straight-sliding</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">М11</td><td>Трапеция</td><td>Трапециевидная неподвижная + распашная дверь</td><td class="mono">trapezoid</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">М12</td><td>Прямая</td><td>Раздвижная, три полотна</td><td class="mono">straight-sliding +</td><td><span class="pill wip">вариант</span></td></tr>
+          <tr><td class="code">М13</td><td>Прямая</td><td>Маятниково-раздвижная</td><td class="mono">—</td><td><span class="pill gap">нет механизма</span></td></tr>
+          <tr><td class="code">М14 / М15</td><td>Прямая / Угловая</td><td>Гармошка (складная)</td><td class="mono">—</td><td><span class="pill gap">нет механизма</span></td></tr>
+          <tr><td class="code">М16</td><td>Прямая</td><td>BiSlide (ротор-раздвижная)</td><td class="mono">—</td><td><span class="pill gap">нет механизма</span></td></tr>
+          <tr><td class="code">—</td><td>Шторка на ванну</td><td>Неподвижная / распашная секция</td><td class="mono">bath-screen(-swing)</td><td><span class="pill done">есть</span></td></tr>
+          <tr><td class="code">—</td><td>П-образная / радиус</td><td>Три стороны / гнутое стекло</td><td class="mono">—</td><td><span class="pill gap">на будущее</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="margin-top:.8rem"><span class="pill done">есть</span> — оцифровано в <span class="mono">lib/configurator/catalog.ts</span>. <span class="pill gap">пробел</span> — требует нового параметрического правила и/или согласования по каталогу. Ядро (8 типов) закрывает большинство продаж; экзотику (маятник, гармошка, BiSlide, радиус) добавляем по приоритету спроса.</p>
+  </section>
+
+  <section>
+    <div class="eyebrow">4 · UX-поток</div>
+    <h2>Мастер конфигуратора</h2>
+    <p>Клиент ведётся по линейному мастеру — как у Radaway/CRL, но с 3D-превью и пиктограммами вместо фото-простыни berusteklo.</p>
+    <div class="grid cols-3">
+      <div class="card"><h3 style="margin-top:0">1. Компоновка</h3><p>Сетка <strong>пиктограмм план-вида</strong>: стена штриховкой, стекло линией, дуга/стрелки двери. Одна плитка — одно расположение.</p></div>
+      <div class="card"><h3 style="margin-top:0">2. Сторона двери</h3><p>Тумблер <strong>лево / право</strong> (и распашная наружу/внутрь). Убирает дубли-модели М2↔М3.</p></div>
+      <div class="card"><h3 style="margin-top:0">3. Размеры</h3><p>Ширина, высота, вторая сторона (угловые), дверь. Живой 3D пересчитывается мгновенно, с ограничениями мин/макс.</p></div>
+      <div class="card"><h3 style="margin-top:0">4. Материалы</h3><p>Стекло 8/10 мм и тон (прозрачное/матовое/тонированное), финиш металла, модель петли и ручки.</p></div>
+      <div class="card"><h3 style="margin-top:0">5. Цена / заявка</h3><p>Ориентир или «рассчитаем точно». Конфигурация уходит в CRM через <span class="mono">postMessage</span> из iframe на Tilda.</p></div>
+      <div class="card" style="border-style:dashed"><h3 style="margin-top:0">Опция: клик по секции</h3><p>Как privetmaket — выделение полотна прямо на 3D для правки. Фаза интерактива.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">5 · Алгоритм и механизм рендера</div>
+    <h2>Как картинка собирается — по слоям</h2>
+    <div class="steps">
+      <div><b>Параметрический слой.</b> <span class="mono">model + dims → { panels[], door{side,mechanism}, hardwarePoints[] }</span>. Топология и правила («ширина &gt; X → делить полотно», число петель от высоты/веса) живут здесь. Источник — <span class="mono">catalog.ts</span> (расширяем стороной двери и механизмами).</div>
+      <div><b>Геометрия-сборка.</b> Полотна → стёкла реальной толщины; профили → экструзия точного сечения (Pr-002 18×12,5, штанга 30×10); фурнитура → точки установки. Чистая функция, покрыта тестами.</div>
+      <div><b>Ниша и поддон.</b> Кабина стоит в облицованной плиткой нише (угловая — 2 стены, прямая — стакан). Стекло преломляет плитку → перестаёт быть «пустотой».</div>
+      <div><b>Модели фурнитуры.</b> Петли (Balge-004, Dessau-103), ручка SD-210, ролики РД-001 — по реальным чертежам (<span class="mono">hardwareSpecs.ts</span>), в едином металле выбранного финиша.</div>
+      <div><b>Материалы.</b> Стекло — physical/transmission + HDRI-окружение; металл — PBR по финишу (хром/чёрный/бронза/золото); плитка — процедурная текстура.</div>
+      <div><b>Интерактив.</b> Орбита, выбор компоновки, тумблер двери, живые размерные линии в 3D, анимация открытия двери, (опц.) клик по секции.</div>
+      <div><b>Выноски-комплектация.</b> HTML/SVG-оверлей поверх 3D с подписями и фото-миниатюрами фурнитуры из спецификации <span class="mono">bom</span> — тот самый каталожный лист, но живой. Экспорт эскиза картинкой/PDF в КП.</div>
+      <div><b>Цена и лид.</b> Детерминированный расчёт (как в текущем калькуляторе, финмодель), клиенту — без себестоимости; заявка с конфигурацией → CRM.</div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">6 · Данные и связки</div>
+    <h2>Что с чем соединяется</h2>
+    <ul class="clean">
+      <li><span class="mono">lib/configurator/catalog.ts</span> — единый источник: типы, панели, спецификация, петли, финиши. Расширяется стороной двери и новыми механизмами.</li>
+      <li><span class="mono">lib/configurator/hardwareSpecs.ts</span> — реальные размеры фурнитуры с чертежей (мм). Драйвит 3D-модели.</li>
+      <li>Цены фурнитуры — из <span class="mono">/admin/shower-hardware</span> (Supabase); стекло — из матрицы цен. Клиенту не показываем себестоимость.</li>
+      <li>Встраивание — публичный роут <span class="mono">/embed/shower</span>, iframe в Tilda, <span class="mono">postMessage</span> с конфигурацией → форма/лид → CRM.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">7 · Технологический стек</div>
+    <h2>Чем строим и почему</h2>
+    <div class="grid cols-2">
+      <div class="card"><h3 style="margin-top:0">React-Three-Fiber + drei</h3><p>Де-факто стандарт 3D для React/Next. Геометрия = функция состояния (размеров) → живой пересчёт бесплатно.</p></div>
+      <div class="card"><h3 style="margin-top:0">Процедурная геометрия</h3><p>Изделия «на заказ» строятся из размеров в рантайме, не растянутый готовый GLTF. Фурнитура фиксированных форм — модельки по чертежам.</p></div>
+      <div class="card"><h3 style="margin-top:0">Окружение без внешних файлов</h3><p>Студийная среда на Lightformer + процедурная плитка — работает офлайн и не упирается в CSP на проде.</p></div>
+      <div class="card"><h3 style="margin-top:0">Встраивание в Tilda</h3><p>iframe + postMessage — полная изоляция бандла, конфигурация уходит наверх с проверкой origin.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="eyebrow">8 · Фазовый план</div>
+    <h2>Последовательность до эталона</h2>
+    <ol class="phases">
+      <li><h3>Стабильный просмотр <span class="pill done">готово в коде</span></h3><p>Прод-сборка вместо нестабильного dev; клиент видит текущий прототип без падений.</p></li>
+      <li><h3>Ниша и поддон <span class="pill done">сделано</span></h3><p>Кабина в облицованной нише — главный скачок реализма за минимум работы. Стекло получает что преломлять.</p></li>
+      <li><h3>Реальная фурнитура <span class="pill done">сделано</span></h3><p>Петли Balge-004 / Dessau-103, ручка SD-210, каретка РД-001 по чертежам; профили — экструзия сечений.</p></li>
+      <li><h3>Материалы под эскиз <span class="pill plan">дальше</span></h3><p>Стекло, металл-PBR по финишам, плитка — точно под каталожную картинку; HDRI для хрома.</p></li>
+      <li><h3>Типология и сторона двери <span class="pill plan">дальше</span></h3><p>Пиктограммы компоновок, тумблер L/R, варианты «2 фикс.» и «door-only», механизмы (маятник, гармошка) по приоритету.</p></li>
+      <li><h3>Интерактив как privetmaket <span class="pill plan">дальше</span></h3><p>Клик по секции, размерные линии в 3D, анимация открытия двери.</p></li>
+      <li><h3>Выноски-комплектация + прод <span class="pill plan">дальше</span></h3><p>Оверлей-подписи из спецификации, экспорт эскиза, деплой и встраивание в Tilda → CRM.</p></li>
+    </ol>
+  </section>
+
+  <section>
+    <div class="eyebrow">9 · Что нужно от владельца</div>
+    <h2>Чтобы двигаться без догадок</h2>
+    <ul class="clean">
+      <li><strong>Полный каталог PDF</strong> в проекте (macOS блокирует <span class="mono">~/Downloads</span>): <span class="mono">cp ~/Downloads/"Комплектации перегородок.pdf" katalog.pdf</span> — тогда сканирую все 20 страниц и уточню расположение по каждой модели.</li>
+      <li><strong>Список моделей для MVP</strong> — какие из М1–М16 в первую очередь (чтобы не строить экзотику раньше спроса).</li>
+      <li><strong>Референс-картинка расположения</strong> по спорным моделям (М4, М7, М9, М12, маятник/гармошка) — из каталога или berusteklo.</li>
+      <li><strong>Чертежи оставшейся фурнитуры</strong>: ролики РД-001 (PDF есть), уплотнители, магниты, держатели, точные сечения профилей.</li>
+      <li><strong>Решения по продукту</strong>: показывать ли клиенту ориентир цены; нужна ли лид-форма в виджете или достаточно передачи в форму Tilda.</li>
+    </ul>
+  </section>
+
+  <section>
+    <div class="eyebrow">10 · Критерии приёмки</div>
+    <h2>Как проверяем «схематично попадает»</h2>
+    <ul class="clean">
+      <li>Для каждой модели из MVP-списка 3D-сцена совпадает с каталожным эскизом по расположению полотен, стороне и типу двери, набору и месту фурнитуры.</li>
+      <li>Изменение размеров вживую и корректно масштабирует стекло; ограничения мин/макс работают; предупреждения (деление полотна, узкая секция) показываются.</li>
+      <li>Финиш металла и толщина стекла визуально меняются; спецификация и цена соответствуют выбранной конфигурации.</li>
+      <li>Виджет открывается публично, заявка с конфигурацией уходит в CRM.</li>
+    </ul>
+  </section>
+
+  <footer>
+    M-Glass · ТЗ 3D-конфигуратора душевых · рабочий документ, уточняется по мере сканирования каталога и согласования списка моделей.
+  </footer>
+</div>

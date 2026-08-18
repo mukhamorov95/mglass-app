@@ -73,6 +73,8 @@ export async function middleware(request: NextRequest) {
                     pathname.startsWith('/api/vlad/calendar/')
   // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
   const isPublicDemo = pathname.startsWith('/design/')
+  // Встраиваемые виджеты для сайта (Tilda): публичный конфигуратор без логина.
+  const isPublicEmbed = pathname.startsWith('/embed/')
   // Установка пароля по одноразовой ссылке: пользователь ещё не вошёл, поэтому
   // страница и её API доступны без сессии (действие защищено токеном в ссылке).
   const isPublicAuth = pathname === '/set-password' || pathname.startsWith('/api/auth/set-password')
@@ -84,7 +86,7 @@ export async function middleware(request: NextRequest) {
     return supabaseResponse
   }
 
-  if (!user && !isLoginPage && !isWebhook && !isPublicDemo && !isPublicAuth) {
+  if (!user && !isLoginPage && !isWebhook && !isPublicDemo && !isPublicAuth && !isPublicEmbed) {
     const url = request.nextUrl.clone()
     // Голый redirect БЕЗ переноса кук: при гонке ротации refresh-токена
     // (параллельные запросы с планшета) проигравший нёс бы сюда ОЧИЩЕННЫЕ куки
@@ -112,7 +114,7 @@ export async function middleware(request: NextRequest) {
   // зарегистрировано ДРУГОЕ активное устройство — этот вход вытеснен (kick-old
   // при новом логине) → страница /device-limit. Проверка кэшируется кукой
   // device-ok на 5 минут; ошибки БД (нет таблицы и т.п.) — fail-open.
-  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo && !pathname.startsWith('/api/')) {
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo && !isPublicEmbed && !pathname.startsWith('/api/')) {
     const deviceId = request.cookies.get('device-id')?.value
     const okFor    = request.cookies.get('device-ok')?.value
     if (!deviceId) {
@@ -148,7 +150,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Role-based route protection
-  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo) {
+  if (user && !isLoginPage && !isAccessDenied && !isDeviceLimit && !isWebhook && !isPublicDemo && !isPublicEmbed) {
     const cached      = readScoped(request.cookies.get('user-role')?.value, user.id)
     const cachedScope = readScoped(request.cookies.get('user-b2b-scope')?.value, user.id)
     const cachedMgr   = readScoped(request.cookies.get('user-mgr-ws')?.value, user.id)

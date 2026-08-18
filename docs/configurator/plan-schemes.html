@@ -1,0 +1,176 @@
+<title>Расположение М1–М12 · вид сверху</title>
+<style>
+  :root{
+    --bg:#eef1f3;--surface:#fff;--surface-2:#f5f8f9;--border:#d9e0e4;
+    --ink:#141a1e;--ink-2:#47535b;--ink-3:#7d8993;
+    --glass:#2b7fa6;--glass-fill:#bfe0ee;--door:#b5772c;--wall:#5a646c;
+  }
+  @media (prefers-color-scheme:dark){:root{
+    --bg:#0f1519;--surface:#161e23;--surface-2:#1a242a;--border:#2a353c;
+    --ink:#e8eef2;--ink-2:#a4b1ba;--ink-3:#6f7d87;
+    --glass:#5cb4d6;--glass-fill:#1d3a47;--door:#d6a15a;--wall:#84929c;
+  }}
+  :root[data-theme="light"]{--bg:#eef1f3;--surface:#fff;--surface-2:#f5f8f9;--border:#d9e0e4;--ink:#141a1e;--ink-2:#47535b;--ink-3:#7d8993;--glass:#2b7fa6;--glass-fill:#bfe0ee;--door:#b5772c;--wall:#5a646c;}
+  :root[data-theme="dark"]{--bg:#0f1519;--surface:#161e23;--surface-2:#1a242a;--border:#2a353c;--ink:#e8eef2;--ink-2:#a4b1ba;--ink-3:#6f7d87;--glass:#5cb4d6;--glass-fill:#1d3a47;--door:#d6a15a;--wall:#84929c;}
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,ui-sans-serif,system-ui,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;line-height:1.55;}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;}
+  .wrap{max-width:70rem;margin:0 auto;padding:clamp(1.1rem,3.5vw,2.6rem);}
+  .eyebrow{font-family:ui-monospace,Menlo,monospace;text-transform:uppercase;letter-spacing:.16em;font-size:.72rem;color:var(--glass);font-weight:600;}
+  h1{font-size:clamp(1.6rem,4vw,2.3rem);letter-spacing:-.02em;margin:.4rem 0 .3rem;line-height:1.1;text-wrap:balance;}
+  p{color:var(--ink-2);max-width:64ch;}
+  .legend{display:flex;flex-wrap:wrap;gap:1.1rem;margin:1.2rem 0 1.6rem;padding:.9rem 1.1rem;background:var(--surface);border:1px solid var(--border);border-radius:12px;}
+  .legend div{display:flex;align-items:center;gap:.5rem;font-size:.82rem;color:var(--ink-2);}
+  .swatch{width:26px;height:0;flex:none;}
+  .grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:.9rem .9rem 1rem;box-shadow:0 1px 2px rgba(20,30,40,.05),0 8px 22px rgba(20,40,55,.05);}
+  .card h3{margin:0 0 .1rem;font-size:1rem;display:flex;align-items:baseline;gap:.5rem;}
+  .card h3 .code{font-family:ui-monospace,Menlo,monospace;color:var(--glass);font-weight:700;}
+  .card .desc{font-size:.8rem;color:var(--ink-3);min-height:2.4em;}
+  .card svg{width:100%;height:auto;display:block;margin:.3rem 0 .4rem;}
+  .card .att{font-size:.75rem;color:var(--ink-2);border-top:1px solid var(--border);padding-top:.5rem;}
+  .card .att b{color:var(--door);}
+  .card .att .g{color:var(--glass);font-weight:600;}
+  footer{margin-top:2rem;padding-top:1.2rem;border-top:1px solid var(--border);color:var(--ink-3);font-size:.82rem;}
+</style>
+
+<div class="wrap">
+  <div class="eyebrow">Алгоритм расположения · вид сверху</div>
+  <h1>Расположение М1–М12</h1>
+  <p>Каждая модель разложена по периметру: <b style="color:var(--wall)">стена</b> (штриховка), <b style="color:var(--glass)">неподвижное стекло</b> (линия), <b style="color:var(--door)">дверь</b> (петля-точка + дуга открывания). Все распашные двери открываются <b>наружу</b>. Точка петли лежит либо на стекле, либо на стене — жёсткое правило: где петля стекло-стекло, дверь не висит на стене. Правки владельца учтены: М6 и М12 убраны, угловые и трапеция перестроены. Сверь с «Беру стекло» и скажи, где ещё не так.</p>
+
+  <div class="legend">
+    <div><svg class="swatch" viewBox="0 0 26 10"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--wall)" stroke-width="5"/><line x1="3" y1="2" x2="7" y2="8" stroke="var(--wall)" stroke-width="1"/><line x1="9" y1="2" x2="13" y2="8" stroke="var(--wall)" stroke-width="1"/><line x1="15" y1="2" x2="19" y2="8" stroke="var(--wall)" stroke-width="1"/></svg> стена (плитка)</div>
+    <div><svg class="swatch" viewBox="0 0 26 10"><line x1="1" y1="5" x2="25" y2="5" stroke="var(--glass)" stroke-width="3.5"/></svg> неподвижное стекло</div>
+    <div><svg class="swatch" viewBox="0 0 26 12"><circle cx="4" cy="9" r="2.4" fill="var(--door)"/><line x1="4" y1="9" x2="22" y2="3" stroke="var(--door)" stroke-width="3"/></svg> дверь + петля</div>
+    <div><svg class="swatch" viewBox="0 0 26 10"><line x1="1" y1="4" x2="18" y2="4" stroke="var(--glass)" stroke-width="3"/><line x1="8" y1="7" x2="25" y2="7" stroke="var(--glass)" stroke-width="3"/></svg> раздвижная</div>
+  </div>
+
+  <div class="grid" id="grid"></div>
+
+  <footer>M-Glass · схемы расположения — рабочая версия. Правится под фактические модели каталога и «Беру стекло». Она же становится источником для 3D: стены, стекло и точка петли в 3D берутся отсюда.</footer>
+</div>
+
+<script>
+const NS="http://www.w3.org/2000/svg";
+// Раскладка каждой модели. Прямые (niche) — стены сзади/слева/справа, стекло по фронту.
+// Угловые (corner) — стены сзади/слева, стекло по правой (side) и нижней (front) сторонам,
+// встреча под 90° в правом-нижнем углу (стекло-стекло). segs идут от «стенового» конца.
+// door.h: 'a' петля у начала сегмента (P0), 'b' у конца (P1).
+const MODELS=[
+ {code:"М1",name:"Стационарная",shape:"walkin",desc:"Одна панель у стены, вход открыт (walk-in).",
+  runs:[{edge:"front",segs:[{t:"fixed"}],part:0.62}]},
+ {code:"М2",name:"Прямая",shape:"niche",desc:"Неподвижное + распашная дверь наружу, петля на стекле.",
+  runs:[{edge:"front",segs:[{t:"fixed"},{t:"door",h:"a"}]}]},
+ {code:"М4",name:"Прямая",shape:"niche",desc:"Стекло · дверь · стекло. Дверь по центру, петля и притвор на стекле.",
+  runs:[{edge:"front",segs:[{t:"fixed"},{t:"door",h:"a"},{t:"fixed"}]}]},
+ {code:"М7",name:"Угловая",shape:"corner",desc:"Стационар у стены + дверь на нём; открывается наружу, притвор к перпендикулярному стеклу.",
+  runs:[{edge:"side",segs:[{t:"fixed"}]},{edge:"front",segs:[{t:"fixed"},{t:"door",h:"a"}]}]},
+ {code:"М8",name:"Угловая раздвижная",shape:"corner",desc:"Два стационара у стен, две раздвижные створки съезжаются к углу.",
+  runs:[{edge:"side",segs:[{t:"fixed"},{t:"slide"}]},{edge:"front",segs:[{t:"fixed"},{t:"slide"}]}]},
+ {code:"М9",name:"Угловая раздвижная",shape:"corner",desc:"Стационары у створок; раздвижная едет вдоль стекла и приходит перпендикулярно к другому.",
+  runs:[{edge:"side",segs:[{t:"fixed"}]},{edge:"front",segs:[{t:"fixed"},{t:"slide"}]}]},
+ {code:"М10",name:"Прямая раздвижная",shape:"niche",desc:"Неподвижное + раздвижная дверь (РД-001).",
+  runs:[{edge:"front",segs:[{t:"fixed"},{t:"slide"}]}]},
+ {code:"М12",name:"Прямая раздвижная (центр)",shape:"niche",desc:"Два стационара у стен, центральная створка откатывается влево или вправо.",
+  runs:[{edge:"front",segs:[{t:"fixed"},{t:"slide"},{t:"fixed"}]}]},
+ {code:"М11",name:"Трапеция · пятигранник",shape:"trap",desc:"Срезанный угол: диагональное стекло под 135°, на нём дверь (петля стекло-стекло). Магнит 135°.",
+  runs:[]},
+];
+
+const TL=[52,30],TR=[196,30],BR=[196,138],BL=[52,138];
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function ln(s,x1,y1,x2,y2,cls,w){const e=el("line",{x1,y1,x2,y2});e.setAttribute("stroke",cls);if(w)e.setAttribute("stroke-width",w);e.setAttribute("stroke-linecap","round");s.appendChild(e);return e;}
+function wall(s,p0,p1,out){ // толстая линия + штриховка наружу
+  ln(s,p0[0],p0[1],p1[0],p1[1],"var(--wall)",5);
+  const dx=p1[0]-p0[0],dy=p1[1]-p0[1],L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L,n=8;
+  for(let i=1;i<n;i++){const x=p0[0]+ux*L*i/n,y=p0[1]+uy*L*i/n;
+    ln(s,x,y,x+out[0]*5+uy*4,y+out[1]*5-ux*4,"var(--wall)",1.1);}
+}
+function seglen(run){return run.segs.length;}
+function drawRun(s,p0,p1,inward,segs){
+  const dx=p1[0]-p0[0],dy=p1[1]-p0[1];
+  const n=segs.length;
+  for(let i=0;i<n;i++){
+    const a=[p0[0]+dx*i/n,p0[1]+dy*i/n], b=[p0[0]+dx*(i+1)/n,p0[1]+dy*(i+1)/n];
+    const sg=segs[i];
+    if(sg.t==="fixed"){ln(s,a[0],a[1],b[0],b[1],"var(--glass)",3.6);}
+    else if(sg.t==="slide"){
+      ln(s,a[0],a[1],b[0],b[1],"var(--glass)",3);
+      const ox=inward[0]*4.5,oy=inward[1]*4.5;
+      ln(s,a[0]+ox,a[1]+oy,b[0]+ox,b[1]+oy,"var(--glass)",3);
+      const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2,ux=dx/Math.hypot(dx,dy),uy=dy/Math.hypot(dx,dy);
+      ln(s,mx-ux*8,my-uy*8+oy,mx+ux*8,my+uy*8+oy,"var(--glass)",1.4);
+      const ar=el("polygon",{points:`${mx+ux*8},${my+uy*8+oy} ${mx+ux*3},${my+uy*3+oy-2.5} ${mx+ux*3},${my+uy*3+oy+2.5}`,fill:"var(--glass)"});s.appendChild(ar);
+    } else if(sg.t==="door"){
+      const hinge=sg.h==="a"?a:b, free=sg.h==="a"?b:a;
+      const len=Math.hypot(free[0]-hinge[0],free[1]-hinge[1]);
+      const cx=(free[0]-hinge[0])/len,cy=(free[1]-hinge[1])/len; // закрытое направление
+      const out=[-inward[0],-inward[1]];                         // распашная открывается НАРУЖУ
+      const R=Math.min(len,38);                                  // символ открывания фикс. размера
+      const ang=70*Math.PI/180, ca=Math.cos(ang), sa=Math.sin(ang);
+      const ox=cx*ca+out[0]*sa, oy=cy*ca+out[1]*sa;
+      const clx=hinge[0]+R*cx, cly=hinge[1]+R*cy, ex=hinge[0]+R*ox, ey=hinge[1]+R*oy;
+      ln(s,a[0],a[1],b[0],b[1],"var(--door)",3);                // дверь в проёме (закрыта)
+      const arc=el("path",{d:`M ${clx} ${cly} A ${R} ${R} 0 0 ${cross(cx,cy,out)>0?1:0} ${ex} ${ey}`,
+        fill:"none",stroke:"var(--door)","stroke-width":1,"stroke-dasharray":"3 3",opacity:.7});s.appendChild(arc);
+      ln(s,hinge[0],hinge[1],ex,ey,"var(--door)",2.2);          // полотно открыто (символ)
+      const hd=el("circle",{cx:hinge[0],cy:hinge[1],r:2.7,fill:"var(--door)"});s.appendChild(hd);
+    }
+  }
+}
+function cross(ax,ay,b){return ax*b[1]-ay*b[0];}
+
+function render(m){
+  const svg=el("svg",{viewBox:"0 0 240 190",role:"img","aria-label":m.code+" "+m.name});
+  if(m.shape==="walkin"){ // одна стена слева + частичное стекло по фронту, вход открыт
+    wall(svg,TL,BL,[-1,0]);
+    const run=m.runs[0];
+    drawRun(svg,BL,[BL[0]+(BR[0]-BL[0])*(run.part||0.62),BL[1]],[0,-1],run.segs);
+  } else if(m.shape==="niche"){
+    wall(svg,TL,TR,[0,-1]); wall(svg,TL,BL,[-1,0]); wall(svg,TR,BR,[1,0]);
+    drawRun(svg,BL,BR,[0,-1],m.runs[0].segs);
+  } else if(m.shape==="trap"){
+    // Пятигранник (neo-angle): угловые стены сзади+слева, внешний угол срезан диагональю 135°.
+    wall(svg,TL,TR,[0,-1]); wall(svg,TL,BL,[-1,0]);
+    const R1=[196,92], B1=[136,138];
+    ln(svg,TR[0],TR[1],R1[0],R1[1],"var(--glass)",3.6);   // правый стационар (у задней стены)
+    ln(svg,B1[0],B1[1],BL[0],BL[1],"var(--glass)",3.6);    // фронтальный стационар (у левой стены)
+    drawRun(svg,R1,B1,[-0.61,-0.79],[{t:"door",h:"a"}]);   // диагональная дверь 135°, наружу
+    svg.appendChild(el("circle",{cx:R1[0],cy:R1[1],r:2,fill:"var(--glass)"}));
+    svg.appendChild(el("circle",{cx:B1[0],cy:B1[1],r:2,fill:"var(--glass)"}));
+  } else if(m.shape==="corner"){
+    wall(svg,TL,TR,[0,-1]); wall(svg,TL,BL,[-1,0]);
+    const side=m.runs.find(r=>r.edge==="side"), front=m.runs.find(r=>r.edge==="front");
+    drawRun(svg,TR,BR,[-1,0],side.segs);        // боковое стекло: задняя стена → угол
+    drawRun(svg,BL,BR,[0,-1],front.segs);        // фронт: левая стена → угол
+    const c=el("circle",{cx:BR[0],cy:BR[1],r:2,fill:"var(--glass)"});svg.appendChild(c); // угол стекло-стекло
+  }
+  return svg;
+}
+
+function attach(m){ // текст: к чему крепится дверь
+  if(m.shape==="trap") return "стекло";      // дверь на скошенном стационаре
+  for(const r of m.runs){for(let i=0;i<r.segs.length;i++){const sg=r.segs[i];
+    if(sg.t==="door"){
+      const nb = sg.h==="a" ? (i>0?r.segs[i-1]:null) : (i<r.segs.length-1?r.segs[i+1]:null);
+      const to = nb ? "стекло" : (m.shape==="corner"&&r.edge==="front"&&i===0?"стекло (угол)":"стена");
+      return to;
+    }}}
+  return null;
+}
+
+const grid=document.getElementById("grid");
+for(const m of MODELS){
+  const card=document.createElement("div");card.className="card";
+  const h=document.createElement("h3");h.innerHTML=`<span class="code">${m.code}</span> ${m.name}`;card.appendChild(h);
+  const d=document.createElement("div");d.className="desc";d.textContent=m.desc;card.appendChild(d);
+  card.appendChild(render(m));
+  const at=attach(m);
+  const a=document.createElement("div");a.className="att";
+  a.innerHTML = at ? `Петля двери — на <b>${at.includes("стена")?"стене":"стекле"}</b> · <span class="g">${at}</span>` : `Без двери`;
+  card.appendChild(a);
+  grid.appendChild(card);
+}
+</script>
