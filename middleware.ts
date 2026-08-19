@@ -74,7 +74,8 @@ export async function middleware(request: NextRequest) {
   // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
   const isPublicDemo = pathname.startsWith('/design/')
   // Встраиваемые виджеты для сайта (Tilda): публичный конфигуратор без логина.
-  const isPublicEmbed = pathname.startsWith('/embed/')
+  // + серверный расчёт цены (себестоимость считается на сервере, не уходит в браузер).
+  const isPublicEmbed = pathname.startsWith('/embed/') || pathname.startsWith('/api/configurator/')
   // Установка пароля по одноразовой ссылке: пользователь ещё не вошёл, поэтому
   // страница и её API доступны без сессии (действие защищено токеном в ссылке).
   const isPublicAuth = pathname === '/set-password' || pathname.startsWith('/api/auth/set-password')
