@@ -12,7 +12,8 @@ import { createClient } from '@/lib/supabase-browser'
 const CALC_CHILDREN = [
   { href: '/partner/new', label: 'Новый просчёт' },
   { href: '/partner/quotes', label: 'Мои просчёты', badge: 'quotes' as const },
-  { href: '/partner/orders', label: 'Мои заказы', badge: 'orders' as const },
+  { href: '/partner/orders', label: 'Заказы в работе', badge: 'inwork' as const },
+  { href: '/partner/shipped', label: 'Отгруженные', badge: 'shipped' as const },
 ]
 
 type OrderLite = { lane: 'quote' | 'submitted' | 'in_work' | 'shipped' }
@@ -28,21 +29,22 @@ export default function PartnerNav() {
   const inCalc = CALC_CHILDREN.some(c => path.startsWith(c.href))
   const [open, setOpen] = useState(true)
   const [client, setClient] = useState<string | null>(null)
-  const [counts, setCounts] = useState<{ quotes: number; orders: number }>({ quotes: 0, orders: 0 })
+  const [counts, setCounts] = useState<{ quotes: number; inwork: number; shipped: number }>({ quotes: 0, inwork: 0, shipped: 0 })
 
   useEffect(() => {
     fetch('/api/partner/orders').then(r => r.json()).then((d: { client?: { name: string } | null; orders?: OrderLite[] }) => {
       if (d.client?.name) setClient(d.client.name)
       const os = d.orders ?? []
       setCounts({
-        quotes: os.filter(o => o.lane === 'quote' || o.lane === 'submitted').length,
-        orders: os.filter(o => o.lane === 'in_work').length,
+        quotes: os.filter(o => o.lane === 'quote').length,
+        inwork: os.filter(o => o.lane === 'submitted' || o.lane === 'in_work').length,
+        shipped: os.filter(o => o.lane === 'shipped').length,
       })
     }).catch(() => {})
   }, [])
 
   const item = (active: boolean, extra = '') => `it${active ? ' on' : ''}${extra ? ' ' + extra : ''}`
-  const badgeFor = (b?: 'quotes' | 'orders') => (b ? counts[b] : 0)
+  const badgeFor = (b?: 'quotes' | 'inwork' | 'shipped') => (b ? counts[b] : 0)
 
   return (
     <aside className="side">
