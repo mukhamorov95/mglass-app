@@ -7,8 +7,18 @@
 - ✅ **Тесты раскроя (#181).** __tests__/cuttingOptimizer.test.ts — 8 тестов (выбор формата + запрет поворота фактурного). Весь набор 320/30 зелёный.
 - ✅ **Прод-здоровье (#183).** По edge-логам: (1) profiles 406 ×159/сут — app/layout.tsx .single()→.maybeSingle() (у telegram_users нет строки в profiles, 406 на каждом рендере layout); (2) crm_sales 400 ×98/ночь — payments-reconcile писал prepayment:prepay||null в NOT NULL колонку (полная оплата без предоплаты → 23502, глотался try/catch). Фикс prepay||0. Advisors — только гигиена (unused_index, auth_rls_initplan и т.п.), не поломки.
 
+## Что сделано (эта сессия — вторая партия, ещё 3 направления)
+- ✅ **Supabase производительность (#184, миграция — НУЖНО ПРИМЕНИТЬ через пайплайн).** По advisors: auth_rls_initplan ×54 — auth.uid()/role() → (select …) через самодостаточный DO-блок (ALTER POLICY, семантика доступа не меняется); убран дубль-индекс pt_open_problems; +12 индексов на реально джойнящиеся FK. Файл supabase/migrations/20260819_optimize_rls_initplan_and_indexes.sql. Прямое применение к прод мне заблокировано защитой — применяет владелец.
+- ✅ **Глубже прод-ошибки — 2 реальных бага (#185 код, #186 миграция).** (1) Wazzup-вебхук: detectMessageType отдавал сырой тип (image/document/sticker…) → CHECK violation avito_messages_raw_message_type_check → ~20 входящих сообщений/сутки МОЛЧА терялись (continue). Фикс normalizeMessageType. (2) Таблиц mirror_frame_rates/mirror_frame_refs НЕ было в БД → страница /admin/mirror-frame-rates сломана (404); расчёт цел (дефолты). Миграция создаёт таблицы+RLS(как facet_prices)+сид дефолтами — НУЖНО ПРИМЕНИТЬ. Sentry не смотрел (нужна авторизация Sentry MCP владельцем).
+- ✅ **Экономия форматов в калькуляторе (#187).** В раскрое /calculator/b2b бейдж «−N лист(ов) vs дефолт» + суммарная экономия. Заодно ВОССТАНОВЛЕН регрессировавший бейдж «рисунок вдоль» из #177 (затёрло при копи-мердже #178; мультивыбор/закалка уцелели).
+
+## ⚠️ Требуют применения владельцем (миграции, прямое применение к прод мне заблокировано)
+- supabase/migrations/20260819_optimize_rls_initplan_and_indexes.sql (#184)
+- supabase/migrations/20260819_mirror_frame_rates_tables.sql (#186)
+Применить через миграционный пайплайн (supabase db push / CI). После — get_advisors(performance) должен обнулить auth_rls_initplan+duplicate_index; /admin/mirror-frame-rates заработает.
+
 ## Следующий шаг (основная ветка)
-Ждать задачу владельца. Возможные хвосты: чистка Supabase-гигиены (1 duplicate_index, unindexed FK) отдельным PR при желании; визуальная проверка мультивыбора/массовых действий калькулятора владельцем (страница за авторизацией).
+Ждать задачу владельца. Хвосты при желании: применить 2 миграции выше; Sentry-разбор JS-ошибок (нужна авторизация MCP); визуальный прогон калькулятора владельцем (за авторизацией); остальная Supabase-гигиена (unused_index ×68, multiple_permissive_policies ×59, оставшиеся 39 аудит-FK).
 
 ## Что сделано (эта сессия)
 - ✅ **Фактурное стекло (5b) — PR #175 в main.** /admin/glass-prices (модалка форматов) — селектор направления рисунка материала (Нет / вдоль длины / вдоль ширины) → b2b_materials.pattern_direction через PATCH /api/admin/b2b-materials/pattern (requireAdmin). Путь себестоимости (orderEconomics→materialUsage→cuttingOptimizer) уже уважал флаг (respect_pattern→canRotate:false). Колонка pattern_direction (text) в БД есть.
@@ -33,6 +43,13 @@
 - Фурнитура по ПОДГРУППАМ: Петли · Ручки · Ролики · Профили · Трубы/штанги · Крепёж · Заглушки · Уплотнители (магнитный уплотнитель).
 - Можно СОЗДАВАТЬ подгруппы и позиции, переименовывать, вписывать стоимость.
 Сделано: pricing.ts новая модель UnitPrices={glassPerM2, groups[], install/delivery/lift}; group={id,title,kind:'piece'|'bar',items}; piece item {key,name,prices:{цвет→₽},qtyMode:'auto'|'manual',fixedQty}; bar item {key,name,bars:{цвет→{2200,3000}}}. computeQuantities авто-добавляет cap=2×кусков профиля и seal=число распашных створок. computePrice отдаёт groupedLines[] (подгруппы со строками). migrateUnitPrices — старая плоская схема→подгруппы без потери введённых цен (профиль-хлысты в «хром» + масштаб на цвета). pricingStore читает через migrate. VisualizerPricingClient переписан (цвет наверх, редактор подгрупп с +позиция/+подгруппа/удалить/переименовать). Тесты 30/30, tsc чисто (в моих файлах). Собирается прод bnu7vnmkf → деплой.
+
+## Шаг 7 (в работе): общий справочник цен поставщиков
+Владелец: загрузить прайсы поставщиков, у каждого своя скидка, потом выбирать позиции из общего справочника где нужно (единый источник себестоимости).
+- Открытие: в БД уже есть /admin/shower-hardware (каталог фурнитуры с поставщиками/цветами/скидками) — но визуализатор с ним не связан. Решение (владелец выбрал «Единый каталог»): общий плоский справочник + связка.
+- ФАЗА 1 (СДЕЛАНО, грузится прод ba7izw9uc): таблицы supplier_price_sources (поставщик→скидка) + supplier_price_rows (поставщик·категория·артикул·наименование·цвет·розница·%·себест·url), RLS(read authenticated), RPC supplier_price_categories/supplier_price_reprice. Миграция supabase/migrations/20260819_supplier_price_reference.sql применена через MCP. Загружены 2 прайса: Ветро (−32%, 3261) + АВ24 (−25%, 3677) = 6938 строк (парсинг xlsx python→node upsert, скрипты в scratchpad). Страница /admin/supplier-catalog (поставщики+правка скидки с пересчётом, категории-фасеты, поиск, пагинация) + API /api/admin/supplier-catalog (GET/PATCH, requireOwner). Ссылки в сайдбар (Закупки).
+- ФАЗА 2 (следующий шаг): в /admin/visualizer-pricing у позиции кнопка «выбрать из справочника» → подставляет cost_price поставщика по цвету. Нужен маппинг цветов Ветро/АВ24 (Cp/PSS/SSS/BL…) → finishId визуализатора.
+- ФАЗА 3: самостоятельная загрузка файла владельцем (upload xlsx в UI); сейчас грузил я. Форматы разные: Ветро (Наименование|Цвет|Артикул|Цена|URL, категория из URL), АВ24 (№|Картинка|Артикул|Наименование|Цена, цвет в артикуле/названии, категории — строки-разделы).
 
 ## Дальше по дорожной карте
 Выноски с фото фурнитуры, экспорт эскиза (PDF), лид→CRM с Tilda, голый embed-layout, доп. модели.
