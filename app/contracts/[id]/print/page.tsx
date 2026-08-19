@@ -15,6 +15,8 @@ const CSS = `
 .dc-toolbar button.tab{background:#fff;color:#6b6b66;border:1px solid #d8d8d3}
 .dc-toolbar button.tab.on{background:#111110;color:#fff}
 .dc-toolbar button:disabled{opacity:.6}
+.dc-seal{display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d8d8d3;border-radius:8px;padding:9px 12px;font-size:13px;font-weight:600;color:#111110;cursor:pointer;user-select:none}
+.dc-seal input{width:15px;height:15px;cursor:pointer;margin:0}
 .doc-wrap{padding:24px 0;display:flex;justify-content:center}
 .doc-page{width:210mm;background:#fff;padding:16mm 15mm;box-shadow:0 2px 12px rgba(0,0,0,.25)}
 /* contract */
@@ -61,6 +63,7 @@ export default function ContractPrintPage() {
   const [tab, setTab] = useState<'contract' | 'invoice'>('contract')
   const [qr, setQr] = useState('')
   const [busy, setBusy] = useState(false)
+  const [withSeal, setWithSeal] = useState(true)
   const contractRef = useRef<HTMLDivElement>(null)
   const invoiceRef = useRef<HTMLDivElement>(null)
 
@@ -183,16 +186,20 @@ export default function ContractPrintPage() {
       <div className="dc-toolbar">
         <button className={`tab${tab === 'contract' ? ' on' : ''}`} onClick={() => setTab('contract')}>Договор</button>
         <button className={`tab${tab === 'invoice' ? ' on' : ''}`} onClick={() => setTab('invoice')}>Счёт</button>
+        <label className="dc-seal" title="Подпись и печать на документе">
+          <input type="checkbox" checked={withSeal} onChange={e => setWithSeal(e.target.checked)} />
+          Подпись и печать
+        </label>
         {tab === 'contract'
           ? <button onClick={downloadContract} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать договор'}</button>
           : <button onClick={downloadInvoice} disabled={busy}>{busy ? 'Готовлю…' : '💾 Скачать счёт'}</button>}
       </div>
       <div className="doc-wrap">
         <div style={{ display: tab === 'contract' ? 'block' : 'none' }}>
-          <div ref={contractRef}><ContractDocument c={c} /></div>
+          <div ref={contractRef}><ContractDocument c={c} withSeal={withSeal} /></div>
         </div>
         <div style={{ display: tab === 'invoice' ? 'block' : 'none' }}>
-          <div ref={invoiceRef}><InvoiceDocument c={c} qr={qr} /></div>
+          <div ref={invoiceRef}><InvoiceDocument c={c} qr={qr} withSeal={withSeal} /></div>
         </div>
       </div>
     </div>

@@ -48,10 +48,20 @@ export async function GET(req: Request) {
     ? await sb.from('b2b_clients').select(CLIENT_FIELDS).in('id', clientIds)
     : { data: [] }
 
+  // Юрлица кандидатов-плательщиков: выбор идёт на конкретное юрлицо (не просто клиента).
+  const candidateClientIds = [...new Set([...(payers ?? []), ...(orderClients ?? [])].map(c => c.id as number))]
+  const { data: entities } = candidateClientIds.length
+    ? await sb.from('b2b_client_legal_entities')
+        .select('id,client_id,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,is_default,active')
+        .in('client_id', candidateClientIds).eq('active', true)
+        .order('is_default', { ascending: false }).order('id', { ascending: true })
+    : { data: [] }
+
   return NextResponse.json({
     orders: visible.sort((a, b) => Number(a.id) - Number(b.id)),
     payers: payers ?? [],
     orderClients: orderClients ?? [],
+    entities: entities ?? [],
   })
 }
 

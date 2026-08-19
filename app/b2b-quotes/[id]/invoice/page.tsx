@@ -6,6 +6,7 @@ import QRCode from 'qrcode'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
+import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 type OrderItem = {
@@ -61,6 +62,17 @@ type Requisites = {
 // ─── Helpers ────────────────────────────────────────────────────────────────
 const EMPTY: Requisites = { full_name: '', inn: '', kpp: '', ogrn: '', legal_address: '', bank_account: '', bank_name: '', bik: '', corr_account: '', supply_contract_no: '', supply_contract_date: '' }
 
+// Реквизиты из юрлица или карточки клиента (одинаковые имена полей).
+function toReq(src: Record<string, unknown> | null | undefined): Requisites {
+  const s = (k: string) => (src?.[k] as string | null | undefined) ?? ''
+  return {
+    full_name: s('full_name') || s('name'),
+    inn: s('inn'), kpp: s('kpp'), ogrn: s('ogrn'), legal_address: s('legal_address'),
+    bank_account: s('bank_account'), bank_name: s('bank_name'), bik: s('bik'), corr_account: s('corr_account'),
+    supply_contract_no: s('supply_contract_no'), supply_contract_date: s('supply_contract_date'),
+  }
+}
+
 function money2(n: number): string {
   return (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
@@ -105,6 +117,8 @@ export default function InvoicePage() {
   const [parseText, setParseText] = useState('')
   const [parsing, setParsing] = useState(false)
   const [showEditor, setShowEditor] = useState(true)
+  const [entities, setEntities] = useState<B2BLegalEntity[]>([])
+  const [selectedEntityId, setSelectedEntityId] = useState<number | null>(null)
   const docRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -112,20 +126,14 @@ export default function InvoicePage() {
     fetch(`/api/quotes/${id}/invoice-data`)
       .then(async r => {
         if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этому расчёту' : 'Расчёт не найден'); setLoading(false); return }
-        const { order: o, client } = await r.json() as { order: Order; client: Client | null }
+        const { order: o, client, entities: ents } = await r.json() as { order: Order; client: Client | null; entities: B2BLegalEntity[] }
         setOrder(o)
         setBuyerName(o.client_name || client?.name || 'Клиент')
-        if (client) {
-          setReq({
-            full_name: client.full_name || client.name || '',
-            inn: client.inn || '', kpp: client.kpp || '', ogrn: client.ogrn || '',
-            legal_address: client.legal_address || '',
-            bank_account: client.bank_account || '', bank_name: client.bank_name || '',
-            bik: client.bik || '', corr_account: client.corr_account || '',
-            supply_contract_no: client.supply_contract_no || '',
-            supply_contract_date: client.supply_contract_date || '',
-          })
-        }
+        const list = ents ?? []
+        setEntities(list)
+        const def = list.find(e => e.is_default) ?? list[0] ?? null
+        if (def) { setSelectedEntityId(def.id); setReq(toReq(def)) }
+        else if (client) { setReq(toReq(client)) }
         setLoading(false)
       })
   }, [id])
@@ -153,15 +161,34 @@ export default function InvoicePage() {
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
   }, [order, totals])
 
+  async function refreshEntities(selectId?: number | null) {
+    const j = await fetch(`/api/quotes/${id}/invoice-data`).then(x => x.json()).catch(() => null)
+    if (j?.entities) {
+      setEntities(j.entities as B2BLegalEntity[])
+      if (selectId != null) setSelectedEntityId(selectId)
+    }
+  }
+
   async function save() {
     setSaving(true); setSaved(false)
     try {
       const r = await fetch(`/api/quotes/${id}/invoice-data`, {
         method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(req),
+        body: JSON.stringify({ entity: { id: selectedEntityId ?? undefined, ...req } }),
       })
-      if (r.ok) { setSaved(true); setTimeout(() => setSaved(false), 1800) }
+      if (r.ok) {
+        const j = await r.json().catch(() => ({}))
+        setSaved(true); setTimeout(() => setSaved(false), 1800)
+        await refreshEntities(j.entity_id ?? selectedEntityId)
+      }
     } finally { setSaving(false) }
+  }
+
+  // Выбор юрлица покупателя для этого счёта; «new» — добавить новое (не затирая старые).
+  function selectEntity(val: string) {
+    if (val === 'new') { setSelectedEntityId(null); setReq(EMPTY); return }
+    const e = entities.find(x => x.id === Number(val))
+    if (e) { setSelectedEntityId(e.id); setReq(toReq(e)) }
   }
 
   function applyCustomer(c: Record<string, string | undefined>) {
@@ -233,10 +260,10 @@ export default function InvoicePage() {
           bik: c.bik || req.bik, corr_account: c.corr_account || req.corr_account,
         }
         const sr = await fetch(`/api/quotes/${id}/invoice-data`, {
-          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(merged),
+          method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ entity: { id: selectedEntityId ?? undefined, ...merged } }),
         })
         setSaving(false)
-        if (sr.ok) { setSaved(true); setTimeout(() => setSaved(false), 2500) }
+        if (sr.ok) { const j = await sr.json().catch(() => ({})); setSaved(true); setTimeout(() => setSaved(false), 2500); await refreshEntities(j.entity_id ?? selectedEntityId) }
       }
     } finally { setParsing(false) }
   }
@@ -314,6 +341,16 @@ export default function InvoicePage() {
               <h3 className="text-[13px] font-bold text-[#111110]">Реквизиты покупателя (для счёта)</h3>
               {reqMissing && <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded">заполните — ИНН, банк, счёт</span>}
             </div>
+            {entities.length > 0 && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">Юрлицо покупателя:</span>
+                <select value={selectedEntityId ?? 'new'} onChange={e => selectEntity(e.target.value)}
+                  className="flex-1 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white">
+                  {entities.map(e => <option key={e.id} value={e.id}>{entityTitle(e)}{e.is_default ? ' · основное' : ''}</option>)}
+                  <option value="new">＋ Новое юрлицо…</option>
+                </select>
+              </div>
+            )}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
               {([
                 ['full_name', 'Полное наименование'], ['inn', 'ИНН'], ['kpp', 'КПП'],
@@ -350,7 +387,7 @@ export default function InvoicePage() {
                 </label>
                 <button onClick={save} disabled={saving}
                   className="text-[12px] px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">
-                  {saving ? '…' : saved ? '✓ Сохранено' : '💾 Сохранить к клиенту'}
+                  {saving ? '…' : saved ? '✓ Сохранено' : selectedEntityId ? '💾 Сохранить юрлицо' : '💾 Добавить юрлицо'}
                 </button>
               </div>
             </div>

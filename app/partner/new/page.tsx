@@ -1,167 +1,411 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 
-// Партнёрский калькулятор. Цену считает СЕРВЕР (/api/partner/quote) нашим движком —
-// в браузере никакой себестоимости/маржи. Партнёр видит только свою цену.
+// Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
+// как у менеджера (/calculator/b2b), данные из реальных справочников
+// (/api/partner/materials). Цену считает СЕРВЕР (/api/partner/quote) ЕДИНЫМ движком
+// computeQuoteItem — тот же, что у менеджера, с надбавками за габариты. В браузере
+// никакой себестоимости/маржи: партнёр видит только свою цену.
 
 type Material = { id: number; name: string; category: string; thickness: number; salePrice: number }
-type Draft = {
-  key: string
-  materialId: number | null
-  width: string
-  height: string
-  quantity: string
-  hasTempering: boolean
-  hasFacet: boolean
-  hasHoles: boolean
-}
+type FacetOpt = { typeMm: number; salePrice: number }
 type PricedItem = { material: string; thickness: number; width: number; height: number; quantity: number; price: number }
 
+type Spec = {
+  materialId: number; width: number; height: number; quantity: number
+  hasTempering: boolean; hasFacet: boolean; facetTypeMm: number | null; hasHoles: boolean
+  shape: 'rect' | 'curved'; hasTriplex: boolean; triplexLayers: number
+  triplexMat2Id: number | null; triplexMat3Id: number | null; applyMinPrice: boolean
+}
+
+const SUPER_CATS = [
+  { value: 'стекло', label: 'Стекло', cats: ['стекло', 'тонированное', 'сатин', 'рифленое', 'декоративное'] },
+  { value: 'зеркало', label: 'Зеркало', cats: ['зеркало'] },
+] as const
+type SuperCat = typeof SUPER_CATS[number]['value']
+
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-let seq = 0
-const newKey = () => `d${seq++}`
+
+function firstSel(mats: Material[], sc: SuperCat): { thickness: number | null; matId: number | null } {
+  const def = SUPER_CATS.find(s => s.value === sc) ?? SUPER_CATS[0]
+  const cm = mats.filter(m => (def.cats as readonly string[]).includes(m.category))
+  const ths = [...new Set(cm.map(m => m.thickness))].sort((a, b) => a - b)
+  const thickness = ths[0] ?? null
+  const matId = cm.find(m => m.thickness === thickness)?.id ?? null
+  return { thickness, matId }
+}
+
+function OptBox({ color, title, on, onLabel, offLabel, onToggle }: {
+  color: string; title: string; on: boolean; onLabel: string; offLabel: string; onToggle: () => void
+}) {
+  return (
+    <div className={`opt c-${color}`}>
+      <span className="t">{title}</span>
+      <div className={`box${on ? ' on' : ''}`} onClick={onToggle} role="checkbox" aria-checked={on}>
+        <span className="ck">{on ? '✓' : ''}</span>
+        <span className="v">{on ? onLabel : offLabel}</span>
+      </div>
+    </div>
+  )
+}
 
 export default function PartnerNewQuotePage() {
   const [materials, setMaterials] = useState<Material[]>([])
+  const [facetOpts, setFacetOpts] = useState<FacetOpt[]>([])
+  const [surchargeRules, setSurchargeRules] = useState<SurchargeRule[]>([])
+  const [discount, setDiscount] = useState(0)
   const [linked, setLinked] = useState(true)
   const [loading, setLoading] = useState(true)
-  const [drafts, setDrafts] = useState<Draft[]>([{ key: newKey(), materialId: null, width: '', height: '', quantity: '1', hasTempering: false, hasFacet: false, hasHoles: false }])
+
+  const [superCat, setSuperCat] = useState<SuperCat>('стекло')
+  const [thickness, setThickness] = useState<number | null>(null)
+  const [matId, setMatId] = useState<number | null>(null)
+  const [width, setWidth] = useState('')
+  const [height, setHeight] = useState('')
+  const [qty, setQty] = useState('1')
+  const [tempering, setTempering] = useState(false)
+  const [facet, setFacet] = useState(false)
+  const [facetMm, setFacetMm] = useState<number>(10)
+  const [holes, setHoles] = useState(false)
+  const [curved, setCurved] = useState(false)
+  const [minPrice, setMinPrice] = useState(true)
+  const [triplex, setTriplex] = useState(false)
+  const [triplexLayers, setTriplexLayers] = useState<2 | 3>(2)
+  const [triplexMat2, setTriplexMat2] = useState<number | null>(null)
+  const [triplexMat3, setTriplexMat3] = useState<number | null>(null)
+
+  const [list, setList] = useState<Spec[]>([])
   const [comment, setComment] = useState('')
   const [preview, setPreview] = useState<{ items: PricedItem[]; total: number } | null>(null)
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [savedId, setSavedId] = useState<number | null>(null)
+  const [submitted, setSubmitted] = useState(false)
+  const [editingId, setEditingId] = useState<number | null>(null)   // редактируем существующий просчёт
+  const [livePrice, setLivePrice] = useState<number | null>(null)   // живая цена текущей позиции
+  const [liveBusy, setLiveBusy] = useState(false)
 
   useEffect(() => {
     fetch('/api/partner/materials').then(r => r.json()).then(d => {
       if (!d.linked) { setLinked(false); return }
-      setMaterials(d.materials ?? [])
-      if (d.materials?.[0]) setDrafts(ds => ds.map(x => x.materialId == null ? { ...x, materialId: d.materials[0].id } : x))
+      const mats = (d.materials ?? []) as Material[]
+      setMaterials(mats)
+      setFacetOpts(d.facetOptions ?? [])
+      setSurchargeRules((d.surcharges ?? []) as SurchargeRule[])
+      setDiscount(Number(d.discountPercent) || 0)
+      if (d.facetOptions?.[0]) setFacetMm(Number(d.facetOptions[0].typeMm))
+      const sel = firstSel(mats, 'стекло')
+      setThickness(sel.thickness); setMatId(sel.matId)
+      // Режим редактирования: /partner/new?edit=<id> — грузим позиции просчёта.
+      const editParam = new URLSearchParams(window.location.search).get('edit')
+      if (editParam) {
+        fetch(`/api/partner/quote/${editParam}`).then(r => r.ok ? r.json() : Promise.reject())
+          .then((q: { id: number; comment: string; specs: Spec[] }) => {
+            setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
+            void recompute(q.specs, false)
+          }).catch(() => {})
+      }
     }).catch(() => setLinked(false)).finally(() => setLoading(false))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  function setField(key: string, patch: Partial<Draft>) {
-    setDrafts(ds => ds.map(d => d.key === key ? { ...d, ...patch } : d))
-    setPreview(null); setSavedId(null)
-  }
-  function addRow() {
-    setDrafts(ds => [...ds, { key: newKey(), materialId: materials[0]?.id ?? null, width: '', height: '', quantity: '1', hasTempering: false, hasFacet: false, hasHoles: false }])
-    setPreview(null)
-  }
-  function removeRow(key: string) { setDrafts(ds => ds.filter(d => d.key !== key)); setPreview(null) }
+  // Живая цена текущей позиции (дебаунс). Всё setState — внутри async-колбэка
+  // (не в теле эффекта), чтобы не нарушать react-hooks/set-state-in-effect.
+  useEffect(() => {
+    const valid = matId != null && Number(width) > 0 && Number(height) > 0 && Number(qty) > 0
+    const spec = valid ? {
+      materialId: matId!, width: Number(width), height: Number(height), quantity: Number(qty),
+      hasTempering: superCat !== 'зеркало' && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
+      hasHoles: holes, shape: (curved ? 'curved' : 'rect') as 'rect' | 'curved',
+      hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
+      applyMinPrice: minPrice,
+    } : null
+    const t = setTimeout(async () => {
+      if (!spec) { setLivePrice(null); return }
+      setLiveBusy(true)
+      try {
+        const r = await fetch('/api/partner/quote', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ items: [spec], save: false }) })
+        const d = await r.json()
+        if (d.ok) setLivePrice(d.total)
+      } catch { /* сеть — просто не показываем цену */ } finally { setLiveBusy(false) }
+    }, 300)
+    return () => clearTimeout(t)
+  }, [matId, width, height, qty, tempering, facet, facetMm, holes, curved, minPrice, triplex, triplexLayers, triplexMat2, triplexMat3, superCat])
 
-  function specs() {
-    return drafts
-      .filter(d => d.materialId && Number(d.width) > 0 && Number(d.height) > 0 && Number(d.quantity) > 0)
-      .map(d => ({ materialId: d.materialId, width: Number(d.width), height: Number(d.height), quantity: Number(d.quantity), hasTempering: d.hasTempering, hasFacet: d.hasFacet, facetTypeMm: 10, hasHoles: d.hasHoles }))
+  const catDef = useMemo(() => SUPER_CATS.find(s => s.value === superCat) ?? SUPER_CATS[0], [superCat])
+  const catMats = useMemo(() => materials.filter(m => (catDef.cats as readonly string[]).includes(m.category)), [materials, catDef])
+  const thicknesses = useMemo(() => [...new Set(catMats.map(m => m.thickness))].sort((a, b) => a - b), [catMats])
+  const typesAtThickness = useMemo(() => catMats.filter(m => m.thickness === thickness), [catMats, thickness])
+  const glassMats = useMemo(() => materials.filter(m => (SUPER_CATS[0].cats as readonly string[]).includes(m.category)), [materials])
+
+  const activeSurcharges = useMemo(() => {
+    const w = Number(width) || 0, h = Number(height) || 0
+    if (w <= 0 || h <= 0) return []
+    return applicableSurcharges({ width: w, height: h, shape: curved ? 'curved' : 'rect' }, surchargeRules)
+  }, [width, height, curved, surchargeRules])
+
+  const isMirror = superCat === 'зеркало'
+  const canAdd = matId != null && Number(width) > 0 && Number(height) > 0 && Number(qty) > 0
+
+  function changeSuperCat(sc: SuperCat) {
+    setSuperCat(sc)
+    const sel = firstSel(materials, sc)
+    setThickness(sel.thickness); setMatId(sel.matId)
+    if (sc === 'зеркало') setTempering(false)
+    setPreview(null); setSavedId(null); setSubmitted(false)
   }
 
-  async function run(save: boolean) {
-    setErr(null)
-    const items = specs()
-    if (items.length === 0) { setErr('Заполните хотя бы одну позицию (материал, размеры, кол-во)'); return }
-    setBusy(true)
+  async function recompute(next: Spec[], save = false): Promise<number | null> {
+    if (next.length === 0) { setPreview(null); return null }
+    setErr(null); setBusy(true)
     try {
       const res = await fetch('/api/partner/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items, save, comment }),
+        body: JSON.stringify({ items: next, save, comment, editId: save ? editingId : undefined }),
       })
       const d = await res.json()
-      if (!res.ok) { setErr(d.error || 'Ошибка'); return }
+      if (!res.ok) { setErr(d.error || 'Ошибка расчёта'); return null }
       setPreview({ items: d.items, total: d.total })
-      if (save && d.quoteId) setSavedId(d.quoteId)
-    } catch { setErr('Сеть недоступна') } finally { setBusy(false) }
+      return save ? (d.quoteId ?? null) : null
+    } catch { setErr('Сеть недоступна'); return null } finally { setBusy(false) }
   }
 
-  if (loading) return <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center text-[13px] text-[#9a9a95]">Загрузка…</div>
-  if (!linked) return (
-    <div className="min-h-screen bg-[#f5f5f3] flex items-center justify-center p-6">
-      <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center max-w-sm">
-        <p className="text-[14px] text-[#111110] font-medium">Аккаунт не привязан</p>
-        <p className="text-[13px] text-[#9a9a95] mt-1">Обратитесь к менеджеру M-Glass.</p>
-        <Link href="/partner" className="text-[12px] text-blue-600 mt-3 inline-block">← Мои заказы</Link>
+  function addPosition() {
+    if (!canAdd) return
+    const spec: Spec = {
+      materialId: matId!, width: Number(width), height: Number(height), quantity: Number(qty),
+      hasTempering: !isMirror && tempering, hasFacet: facet, facetTypeMm: facet ? facetMm : null,
+      hasHoles: holes, shape: curved ? 'curved' : 'rect',
+      hasTriplex: triplex, triplexLayers, triplexMat2Id: triplexMat2, triplexMat3Id: triplexMat3,
+      applyMinPrice: minPrice,
+    }
+    const next = [...list, spec]
+    setList(next)
+    setWidth(''); setHeight(''); setQty('1'); setHoles(false); setCurved(false); setFacet(false); setTriplex(false)
+    setSavedId(null); setSubmitted(false)
+    void recompute(next, false)
+  }
+  function removePosition(idx: number) {
+    const next = list.filter((_, i) => i !== idx)
+    setList(next); setSavedId(null); setSubmitted(false)
+    void recompute(next, false)
+  }
+  // Изменить позицию: подставляем её параметры в форму и убираем из списка
+  // (клиент правит и снова «Добавить»).
+  function editRow(i: number) {
+    const s = list[i]
+    const mat = materials.find(m => m.id === s.materialId)
+    const sc: SuperCat = mat && (SUPER_CATS[1].cats as readonly string[]).includes(mat.category) ? 'зеркало' : 'стекло'
+    setSuperCat(sc)
+    setThickness(mat?.thickness ?? null)
+    setMatId(s.materialId)
+    setWidth(String(s.width)); setHeight(String(s.height)); setQty(String(s.quantity))
+    setTempering(s.hasTempering); setFacet(s.hasFacet); if (s.facetTypeMm) setFacetMm(s.facetTypeMm)
+    setHoles(s.hasHoles); setCurved(s.shape === 'curved'); setMinPrice(s.applyMinPrice)
+    setTriplex(s.hasTriplex); setTriplexLayers(s.triplexLayers === 3 ? 3 : 2)
+    setTriplexMat2(s.triplexMat2Id); setTriplexMat3(s.triplexMat3Id)
+    const next = list.filter((_, idx) => idx !== i)
+    setList(next); setSavedId(null); setSubmitted(false)
+    void recompute(next, false)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+  async function save() {
+    const id = await recompute(list, true)
+    if (id) { setSavedId(id); setSubmitted(false) }
+  }
+  async function saveAndSubmit() {
+    const id = await recompute(list, true)
+    if (!id) return
+    setSavedId(id)
+    try {
+      const r = await fetch('/api/partner/submit', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ quoteId: id }) })
+      if (r.ok) setSubmitted(true)
+    } catch { /* просчёт сохранён — отправить можно позже из «Мои просчёты» */ }
+  }
+
+  const top = (
+    <div className="top">
+      <div>
+        <h1>{editingId ? `Просчёт #${editingId}` : 'Новый просчёт'}</h1>
+        <div className="cap">{editingId ? 'Измените позиции и сохраните' : 'Посчитайте по своим ценам и сохраните'}</div>
       </div>
+      <Link className="ghost" href="/partner/quotes">Мои просчёты</Link>
     </div>
   )
 
+  if (loading) return <>{top}<div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div></>
+  if (!linked) return (
+    <>{top}<div className="wrap"><div className="note">
+      <div className="t">Аккаунт не привязан</div>
+      <div className="s">Обратитесь к менеджеру M-Glass.</div>
+      <Link href="/partner" className="s" style={{ display: 'inline-block', marginTop: 10, color: 'var(--blue)' }}>← Табло</Link>
+    </div></div></>
+  )
+
+  const availableCats = SUPER_CATS.filter(s => materials.some(m => (s.cats as readonly string[]).includes(m.category)))
+
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-24">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6 flex items-center justify-between">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Новый просчёт</h1>
-        <Link href="/partner" className="text-[12px] text-[#9a9a95] hover:text-[#111110]">← Мои заказы</Link>
-      </div>
-
-      <div className="px-4 pt-4 space-y-2 max-w-[760px] mx-auto">
-        {drafts.map((d, i) => (
-          <div key={d.key} className="bg-white rounded-xl border border-[#e4e4e0] p-3 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] font-semibold text-[#9a9a95]">Позиция {i + 1}</span>
-              {drafts.length > 1 && <button onClick={() => removeRow(d.key)} className="text-[11px] text-red-400 hover:text-red-600">Удалить</button>}
-            </div>
-            <select value={d.materialId ?? ''} onChange={e => setField(d.key, { materialId: Number(e.target.value) })}
-              className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] outline-none focus:border-[#111110]">
-              {materials.map(m => <option key={m.id} value={m.id}>{m.name} · {m.thickness}мм</option>)}
-            </select>
-            <div className="grid grid-cols-3 gap-2">
-              <input type="number" value={d.width} onChange={e => setField(d.key, { width: e.target.value })} placeholder="Ширина, мм"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-              <input type="number" value={d.height} onChange={e => setField(d.key, { height: e.target.value })} placeholder="Высота, мм"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-              <input type="number" value={d.quantity} onChange={e => setField(d.key, { quantity: e.target.value })} placeholder="Кол-во"
-                className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-2 text-[13px] font-mono outline-none focus:border-[#111110]" />
-            </div>
-            <div className="flex flex-wrap gap-3 text-[12px]">
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasTempering} onChange={e => setField(d.key, { hasTempering: e.target.checked })} className="accent-[#111110]" />Закалка</label>
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasFacet} onChange={e => setField(d.key, { hasFacet: e.target.checked })} className="accent-[#111110]" />Фацет</label>
-              <label className="flex items-center gap-1.5 cursor-pointer"><input type="checkbox" checked={d.hasHoles} onChange={e => setField(d.key, { hasHoles: e.target.checked })} className="accent-[#111110]" />Отверстия</label>
-            </div>
-          </div>
-        ))}
-
-        <button onClick={addRow} className="w-full text-[13px] text-[#6b6b66] hover:text-[#111110] border border-dashed border-[#d4d4ce] rounded-lg py-2">＋ Добавить позицию</button>
-
-        <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2}
-          placeholder="Комментарий к просчёту (необязательно)"
-          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
-
-        {err && <div className="text-[12px] text-red-500">{err}</div>}
-
-        {preview && (
-          <div className="bg-white rounded-xl border border-[#e4e4e0] p-3">
-            {preview.items.map((it, i) => (
-              <div key={i} className="flex items-center justify-between text-[12px] py-1 border-b border-[#f4f4f0] last:border-0">
-                <span className="text-[#6b6b66] truncate pr-2">{it.material} · {it.width}×{it.height} · {it.quantity} шт</span>
-                <span className="font-mono font-medium text-[#111110] flex-shrink-0">{fmt(it.price)}</span>
+    <>
+      {top}
+      <div className="wrap" style={{ maxWidth: 820 }}>
+        {/* Новая позиция */}
+        <div className="card">
+          <div className="card-h"><h3>Новая позиция</h3><span className="mut">детали стекла и зеркала</span></div>
+          <div style={{ padding: 18 }}>
+            <div className="frm">
+              <div className="fld full">
+                <span className="lab">Материал</span>
+                <div className="seg">
+                  {availableCats.map(s => (
+                    <button key={s.value} className={superCat === s.value ? 'on' : ''} onClick={() => changeSuperCat(s.value)}>{s.label}</button>
+                  ))}
+                </div>
               </div>
-            ))}
-            <div className="flex items-center justify-between pt-2 mt-1">
-              <span className="text-[13px] font-semibold text-[#111110]">Итого ваша цена</span>
-              <span className="text-[17px] font-bold font-mono text-[#111110]">{fmt(preview.total)}</span>
+
+              <div className="fld">
+                <span className="lab">Толщина</span>
+                <select value={thickness ?? ''} onChange={e => { const t = Number(e.target.value); setThickness(t); setMatId(catMats.find(m => m.thickness === t)?.id ?? null); setPreview(null) }}>
+                  {thicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
+                </select>
+              </div>
+              <div className="fld">
+                <span className="lab">Тип</span>
+                <select value={matId ?? ''} onChange={e => { setMatId(Number(e.target.value)); setPreview(null) }}>
+                  {typesAtThickness.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                </select>
+              </div>
+
+              <div className="fld full">
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 10 }}>
+                  <span className="lab" style={{ marginBottom: 0 }}>Размеры и количество</span>
+                  {livePrice != null ? (
+                    <span style={{ textAlign: 'right', lineHeight: 1.05 }}>
+                      <span style={{ display: 'block', fontSize: 10, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em' }}>за позицию</span>
+                      <span className="tnum" style={{ fontSize: 18, fontWeight: 700, color: 'var(--accent)' }}>{fmt(livePrice)}</span>
+                    </span>
+                  ) : liveBusy ? <span className="mut" style={{ fontSize: 12, color: 'var(--muted)' }}>считаю…</span> : null}
+                </div>
+                <div className="grid3" style={{ marginTop: 6 }}>
+                  <input type="number" min="1" value={width} onChange={e => setWidth(e.target.value)} placeholder="Ширина, мм" />
+                  <input type="number" min="1" value={height} onChange={e => setHeight(e.target.value)} placeholder="Высота, мм" />
+                  <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} placeholder="Кол-во" />
+                </div>
+              </div>
+
+              <div className="fld full">
+                <span className="lab">Отход <span style={{ color: 'var(--green)', fontWeight: 400, textTransform: 'none' }}>по раскрою</span></span>
+                <div className="ro">авто по раскрою — считается по раскрою деталей заказа</div>
+              </div>
+
+              <div className="fld full">
+                <span className="lab">Обработка</span>
+                <div className="optgrid">
+                  {!isMirror && <OptBox color="orange" title="Закалка" on={tempering} onLabel="Закалённое" offLabel="Без закалки" onToggle={() => setTempering(v => !v)} />}
+                  <OptBox color="purple" title="Фацет" on={facet} onLabel="Фацет" offLabel="Без фацета" onToggle={() => setFacet(v => !v)} />
+                  <OptBox color="blue" title="Сверловка" on={holes} onLabel="Есть отверстия" offLabel="Без отверстий" onToggle={() => setHoles(v => !v)} />
+                  <OptBox color="teal" title="Криволинейка" on={curved} onLabel="Криволинейный рез" offLabel="Прямой рез" onToggle={() => setCurved(v => !v)} />
+                  <OptBox color="emerald" title="Мин. цена" on={minPrice} onLabel="Учитывать мин." offLabel="Чистый расчёт" onToggle={() => setMinPrice(v => !v)} />
+                  <OptBox color="indigo" title="Триплекс" on={triplex} onLabel="Триплекс" offLabel="Без триплекса" onToggle={() => setTriplex(v => !v)} />
+                </div>
+              </div>
+
+              {facet && facetOpts.length > 0 && (
+                <div className="fld full">
+                  <select value={facetMm} onChange={e => setFacetMm(Number(e.target.value))}>
+                    {facetOpts.map(f => <option key={f.typeMm} value={f.typeMm}>Фацет {f.typeMm} мм — {fmt(f.salePrice)}/м.п.</option>)}
+                  </select>
+                </div>
+              )}
+
+              {triplex && (
+                <div className="fld full" style={{ gap: 8 }}>
+                  <select value={triplexLayers} onChange={e => setTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                    <option value={2}>2 стекла</option>
+                    <option value={3}>3 стекла</option>
+                  </select>
+                  <select value={triplexMat2 ?? ''} onChange={e => setTriplexMat2(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">Стекло 2: как основное</option>
+                    {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 2: {m.name} {m.thickness} мм</option>)}
+                  </select>
+                  {triplexLayers === 3 && (
+                    <select value={triplexMat3 ?? ''} onChange={e => setTriplexMat3(e.target.value ? Number(e.target.value) : null)}>
+                      <option value="">Стекло 3: как основное</option>
+                      {glassMats.map(m => <option key={m.id} value={m.id}>Стекло 3: {m.name} {m.thickness} мм</option>)}
+                    </select>
+                  )}
+                </div>
+              )}
+
+              {activeSurcharges.length > 0 && (
+                <div className="fld full" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {activeSurcharges.map(r => <span key={r.id} className="schip">{r.label} · +{r.surcharge_percent}%</span>)}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 16, alignItems: 'center', flexWrap: 'wrap' }}>
+              <button className="primary" onClick={addPosition} disabled={!canAdd} style={!canAdd ? { opacity: 0.4, cursor: 'default' } : undefined}>＋ Добавить в просчёт</button>
+              <span className="info" style={{ marginTop: 0, alignItems: 'center' }}>Цену считает наш серверный движок — та же, что у менеджера.</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Просчёт */}
+        {list.length > 0 && (
+          <div className="card" style={{ marginTop: 14 }}>
+            <div className="card-h"><h3>Просчёт</h3><span className="mut">{list.length} поз.</span></div>
+            <div className="tbl-wrap"><table>
+              <thead><tr><th>Деталь</th><th>Размер</th><th className="r">Кол-во</th><th className="r">Цена</th><th></th></tr></thead>
+              <tbody>
+                {list.map((s, i) => {
+                  const p = preview?.items[i]
+                  const name = p?.material ?? materials.find(m => m.id === s.materialId)?.name ?? '—'
+                  return (
+                    <tr key={i}>
+                      <td>{name}{s.hasTempering ? ', закалка' : ''}{s.hasFacet ? ', фацет' : ''}{s.hasTriplex ? ', триплекс' : ''}</td>
+                      <td className="tnum">{s.width} × {s.height}</td>
+                      <td className="r tnum">{s.quantity}</td>
+                      <td className="r tnum">{p ? fmt(p.price) : (busy ? '…' : '')}</td>
+                      <td className="r" style={{ whiteSpace: 'nowrap' }}>
+                        <button className="rm" onClick={() => editRow(i)} title="Изменить">✎</button>
+                        <button className="rm" onClick={() => removePosition(i)} title="Убрать">✕</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table></div>
+
+            <div style={{ padding: '16px 18px', borderTop: '1px solid var(--border)' }}>
+              <textarea value={comment} onChange={e => setComment(e.target.value)} maxLength={500} rows={2} placeholder="Комментарий к просчёту (необязательно)" style={{ marginBottom: 12 }} />
+              {err && <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 10 }}>{err}</div>}
+
+              {savedId ? (
+                <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
+                  <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : editingId ? 'Просчёт обновлён ✓' : 'Просчёт сохранён ✓'}</div>
+                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
+                  <Link href="/partner/quotes" className="s" style={{ display: 'inline-block', marginTop: 8, color: 'var(--blue)' }}>→ Мои просчёты</Link>
+                </div>
+              ) : (
+                <div className="sum">
+                  <div className="row">
+                    <span className="mut" style={{ color: 'var(--muted)' }}>{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
+                    <span className="big tnum">{preview ? fmt(preview.total) : (busy ? '…' : '—')}</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    <button className="ghost" style={{ flex: 1 }} onClick={save} disabled={busy || list.length === 0}>Сохранить просчёт</button>
+                    <button className="primary" style={{ flex: 1 }} onClick={saveAndSubmit} disabled={busy || list.length === 0}>Отправить в работу</button>
+                  </div>
+                  <div className="info">📎 Сохранённый просчёт появится в «Мои просчёты» — оттуда его можно отправить в работу.</div>
+                </div>
+              )}
             </div>
           </div>
         )}
-
-        {savedId ? (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-            <p className="text-[14px] font-semibold text-emerald-800">Просчёт сохранён ✓</p>
-            <p className="text-[12px] text-emerald-700 mt-0.5">Он появился в «Мои заказы» → Просчёты. Менеджер M-Glass его проверит.</p>
-            <Link href="/partner" className="text-[12px] text-blue-600 mt-2 inline-block">← К моим заказам</Link>
-          </div>
-        ) : (
-          <div className="flex gap-2 pt-1">
-            <button onClick={() => run(false)} disabled={busy}
-              className="flex-1 py-2.5 rounded-lg border border-[#111110] text-[13px] font-semibold text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
-              {busy ? '…' : 'Посчитать'}
-            </button>
-            <button onClick={() => run(true)} disabled={busy}
-              className="flex-1 py-2.5 rounded-lg bg-[#1d1d1f] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40">
-              {busy ? '…' : 'Сохранить просчёт'}
-            </button>
-          </div>
-        )}
       </div>
-    </div>
+    </>
   )
 }

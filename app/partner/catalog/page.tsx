@@ -1,7 +1,7 @@
 import Link from 'next/link'
 
-// Каталог для партнёра: что можно заказать у нас и перепродать своему клиенту.
-// Никаких наших цен/себестоимости — только предложение и призыв посчитать.
+// Каталог для партнёра (дизайн из прототипа, .pcab): что можно заказать у нас
+// и перепродать своему клиенту. Никаких наших цен/себестоимости.
 
 const CATALOG: { emoji: string; title: string; desc: string; margin: string }[] = [
   { emoji: '💡', title: 'Зеркало с подсветкой (LED)', desc: 'В шкафы-купе, ванные, прихожие. Сенсор, диммер, подогрев. Готовое изделие «под ключ».', margin: 'ваша наценка 40–70%' },
@@ -14,31 +14,34 @@ const CATALOG: { emoji: string; title: string; desc: string; margin: string }[] 
 
 export default function PartnerCatalogPage() {
   return (
-    <div className="min-h-screen bg-[#f5f5f3] pb-20">
-      <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Каталог</h1>
-        <p className="text-[13px] text-[#9a9a95] mt-0.5">Закажите у нас — продайте своему клиенту дороже. Одно окно, короткий срок.</p>
+    <>
+      <div className="top">
+        <div>
+          <h1>Каталог</h1>
+          <div className="cap">Закажите у нас — продайте своему клиенту дороже. Одно окно, короткий срок.</div>
+        </div>
+        <Link className="primary" href="/partner/new">＋ Просчёт</Link>
       </div>
 
-      <div className="px-4 pt-4 max-w-[760px] mx-auto space-y-2">
-        <div className="grid sm:grid-cols-2 gap-2.5">
+      <div className="wrap">
+        <div className="cat-grid">
           {CATALOG.map(p => (
-            <div key={p.title} className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <p className="text-[14px] font-semibold text-[#111110]">{p.emoji} {p.title}</p>
-              <p className="text-[12px] text-[#6b6b66] mt-1 leading-relaxed">{p.desc}</p>
-              {p.margin !== '—' && <p className="text-[11px] text-emerald-700 font-medium mt-2">🎯 {p.margin}</p>}
+            <div className="card" key={p.title} style={{ padding: 16 }}>
+              <p style={{ fontSize: 14, fontWeight: 700 }}>{p.emoji} {p.title}</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 6, lineHeight: 1.5 }}>{p.desc}</p>
+              {p.margin !== '—' && <p style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: 8 }}>🎯 {p.margin}</p>}
             </div>
           ))}
         </div>
 
-        <div className="bg-[#111110] text-white rounded-xl p-4 flex items-center justify-between flex-wrap gap-2 mt-3">
+        <div className="card" style={{ marginTop: 14, padding: 16, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
           <div>
-            <p className="text-[14px] font-semibold">Посчитайте свой заказ прямо сейчас</p>
-            <p className="text-[12px] text-white/70 mt-0.5">Материал, размеры, обработка — цена сразу.</p>
+            <p style={{ fontSize: 14, fontWeight: 700 }}>Посчитайте свой заказ прямо сейчас</p>
+            <p className="cap" style={{ marginTop: 2 }}>Материал, размеры, обработка — цена сразу.</p>
           </div>
-          <Link href="/partner/new" className="text-[12px] px-3 py-2 rounded-lg bg-white text-[#111110] font-semibold hover:bg-white/90 transition-colors">＋ Новый просчёт</Link>
+          <Link className="primary" href="/partner/new">＋ Новый просчёт</Link>
         </div>
       </div>
-    </div>
+    </>
   )
 }

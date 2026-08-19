@@ -1,11 +1,33 @@
 import { createBrowserClient } from '@supabase/ssr'
 
+// Блокировка token-refresh supabase-js через Web Locks (navigator.locks) иногда
+// «залипает» — lock, удержанный умершим/зависшим контекстом, не освобождается, и
+// ЛЮБОЙ auth-вызов (getUser/getSession/запрос с рефрешем) виснет навсегда → страница
+// крутит «Загрузка…». Здесь lock с таймаутом ТОЛЬКО на ЗАХВАТ: если за отведённое
+// время не взяли — выполняем операцию без блокировки (лучше редкая гонка рефреша,
+// чем вечное зависание). Когда lock свободен — работает как обычно (fn ровно один раз).
+async function safeLock<R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
+  if (!locks) return fn()
+  const ac = new AbortController()
+  const timer = setTimeout(() => ac.abort(), acquireTimeout > 0 ? acquireTimeout : 5000)
+  try {
+    return await locks.request(name, { signal: ac.signal }, async () => fn())
+  } catch {
+    // не смогли взять lock за таймаут (или он залип) — выполняем без блокировки
+    return await fn()
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 // Standard client — RLS on the database enforces tenant isolation automatically
 // via the auth.org_id() function. Use this for auth and non-tenant queries.
 export function createClient() {
   return createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { auth: { lock: safeLock } }
   )
 }
 

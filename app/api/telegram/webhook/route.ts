@@ -17,6 +17,8 @@ function db() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://mglass-app.vercel.app'
+
 function withTimeout<T>(p: Promise<T>, ms: number, label = ''): Promise<T> {
   return Promise.race([
     p,
@@ -41,9 +43,12 @@ const MAIN_MENU: InlineKeyboard = [
     { text: '💬 Написать клиенту', callback_data: 'menu:msg' },
     { text: '📝 Задача в систему', callback_data: 'menu:task' },
   ],
+  [
+    { text: '🌐 Открыть ERP', url: `${APP_URL}/vlad` },
+  ],
 ]
 
-const TASK_PROMPT = '📝 <b>Задача в систему</b>\n\nНадиктуй голосом или напиши текстом, что нужно сделать. Я разберу, оценю и поставлю в очередь — Клод заберёт её при следующем запуске.\n\n<i>Выход: кнопка «🏠 Меню» или слово «меню»</i>'
+const TASK_PROMPT = '📝 <b>Задача в систему</b>\n\nНадиктуй голосом или напиши текстом, что нужно сделать. Я разберу, оценю и поставлю в очередь — сразу появится в ERP.\n\n<i>Выход: кнопка «🏠 Меню» или слово «меню»</i>'
 
 // Постоянные кнопки под полем ввода (этап 2 UX, docs/TG_BOT_UX_TZ.md)
 const REPLY_KB: string[][] = [
@@ -818,6 +823,9 @@ async function handle(update: any, baseUrl: string) {
         source: transcription ? 'voice' : 'text', status: 'queued', created_by: tgUser.user_id,
       }).select('id').single()
       const { count } = await db().from('owner_tasks').select('id', { count: 'exact', head: true }).eq('status', 'queued')
+      const { data: liveWorkers } = await db().from('owner_task_workers')
+        .select('worker_id').gte('last_seen', new Date(Date.now() - 5 * 60_000).toISOString()).limit(1)
+      const workerAlive = (liveWorkers?.length ?? 0) > 0
       const text = [
         `✅ <b>Задача #${row?.id ?? '?'} в очереди</b> (в очереди: ${count ?? 1})`,
         '',
@@ -826,9 +834,14 @@ async function handle(update: any, baseUrl: string) {
         `<i>Категория: ${category} · приоритет: ${priority}</i>`,
         assessment ? `\n🧠 ${assessment}` : '',
         '',
-        '<i>Клод заберёт задачу при следующем запуске на компьютере.</i>',
+        workerAlive
+          ? '<i>🟢 Воркер активен — задача уйдёт в работу.</i>'
+          : '<i>⚪️ Воркер не запущен — подхватит при следующем старте. Можно открыть в ERP.</i>',
       ].filter(Boolean).join('\n')
-      const kb: InlineKeyboard = [[{ text: '➕ Ещё задачу', callback_data: 'menu:task' }, { text: '🏠 Меню', callback_data: 'menu:main' }]]
+      const kb: InlineKeyboard = [
+        [{ text: '📋 Открыть задачи в ERP', url: `${APP_URL}/vlad/tasks` }],
+        [{ text: '➕ Ещё задачу', callback_data: 'menu:task' }, { text: '🏠 Меню', callback_data: 'menu:main' }],
+      ]
       if (waitMsgId) await editMessage(chatId, waitMsgId, text, kb)
       else await sendMessage(chatId, text, kb)
       await setSession(tid, 'task_input') // остаёмся в режиме — можно диктовать подряд

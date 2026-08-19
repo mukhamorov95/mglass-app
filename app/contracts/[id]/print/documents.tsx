@@ -66,7 +66,7 @@ export function customerLine(type: string | undefined, c: Customer = {}): string
 const money = (v: number | string | undefined, rate: number = EXECUTOR.vatRate) => `${RUB(v)} руб. (в т.ч. НДС ${rate}%)`
 
 // ── Счёт (1 страница) ───────────────────────────────────
-export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
+export function InvoiceDocument({ c, qr, withSeal = true }: { c: ContractContent; qr: string; withSeal?: boolean }) {
   const rate = c.vat_rate ?? EXECUTOR.vatRate
   const total = numOr(c.total)
   const prepay = (c.prepayment == null || c.prepayment === '') ? total : numOr(c.prepayment)
@@ -107,12 +107,16 @@ export function InvoiceDocument({ c, qr }: { c: ContractContent; qr: string }) {
       <div className="inv-sign">
         Руководитель предприятия
         <span className="inv-sig-wrap">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img className="inv-signature" src="/signature.png" alt="" />
+          {withSeal && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img className="inv-signature" src="/signature.png" alt="" />
+          )}
         </span>
         / {EXECUTOR.fio} /
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className="inv-stamp" src="/stamp.png" alt="" />
+        {withSeal && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img className="inv-stamp" src="/stamp.png" alt="" />
+        )}
       </div>
     </div>
   )
@@ -131,7 +135,7 @@ function specLine(s: SpecItem): string {
 }
 
 // ── Договор (юридический текст, полный — как оригинал бухгалтерии) ──────
-export function ContractDocument({ c }: { c: ContractContent }) {
+export function ContractDocument({ c, withSeal = true }: { c: ContractContent; withSeal?: boolean }) {
   const make = c.make_days ?? 15
   const install = c.install_days ?? 5
   const draft = c.draft_days ?? 3
@@ -179,7 +183,7 @@ export function ContractDocument({ c }: { c: ContractContent }) {
 
       <h3>5. ОБЯЗАННОСТИ СТОРОН</h3>
       <p>5.1. Исполнитель обязуется:</p>
-      <p>5.1.1. Изготовить, осуществить поставку и монтаж Изделий в соответствии с условиями настоящего Договора и Спецификации, обеспечивая надлежащее качество материалов и работ.</p>
+      <p>5.1.1. Выполнить комплекс работ, предусмотренный п. 1.1 настоящего Договора: проектирование, разработку итоговых чертежей по результатам замера на объекте и изготовление Изделий{predmetTail}, — в соответствии с условиями настоящего Договора и Спецификации, обеспечивая надлежащее качество материалов и работ.</p>
       <p>5.1.2. Обеспечить консультационную поддержку Заказчика по вопросам, связанным с эксплуатацией Изделий, по телефону и/или электронной почте.</p>
       <p>5.2. Заказчик обязуется:</p>
       <p>5.2.1. Своевременно и в полном объёме оплатить работы Исполнителя в порядке и размере, установленных разделом 6 настоящего Договора.</p>
@@ -240,10 +244,14 @@ export function ContractDocument({ c }: { c: ContractContent }) {
       <div className="c-req">
         <div><b>Исполнитель:</b><br />{EXECUTOR.name}<br />ИНН {EXECUTOR.inn}, ОГРНИП {EXECUTOR.ogrnip}<br />{EXECUTOR.legalAddress}<br />Счёт: {EXECUTOR.account}<br />{EXECUTOR.bankName}, БИК {EXECUTOR.bik}, К/С {EXECUTOR.corrAccount}
           <div className="c-sign">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="c-signature" src="/signature.png" alt="" />
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img className="c-stamp" src="/stamp.png" alt="" />
+            {withSeal && (
+              <>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="c-signature" src="/signature.png" alt="" />
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img className="c-stamp" src="/stamp.png" alt="" />
+              </>
+            )}
             <span className="c-sign-line">__________________ / {EXECUTOR.fioShort} /</span>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { PRODUCT_DEADLINES, deadlineFor, type ProductKind } from '@/lib/contractDeadlines'
 import ContractPaymentsPanel from '@/components/ContractPaymentsPanel'
+import { entityTitle, type B2BLegalEntity } from '@/lib/b2bLegalEntities'
 
 type Customer = Record<string, string>
 type Spec = { name: string; desc?: string; dimensions?: string; qty?: string }
@@ -113,11 +114,15 @@ export default function ContractsPage() {
   const [canDelete, setCanDelete] = useState(false)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [payOpen, setPayOpen] = useState<Set<number>>(new Set())
+  const [clientsEnt, setClientsEnt] = useState<{ clients: { id: number; name: string }[]; entities: B2BLegalEntity[] }>({ clients: [], entities: [] })
+  const [pickClientId, setPickClientId] = useState<number | null>(null)
+  const [pickEntityId, setPickEntityId] = useState<number | null>(null)
 
   const set = (patch: Partial<Form>) => { setForm(f => ({ ...f, ...patch })); setSavedId(null) }
   const setCust = (k: string, v: string) => { setForm(f => ({ ...f, customer: { ...f.customer, [k]: v } })); setSavedId(null) }
 
   useEffect(() => { fetch('/api/kp').then(r => r.json()).then(d => setKps(Array.isArray(d.items) ? d.items : [])).catch(() => {}) }, [])
+  useEffect(() => { fetch('/api/b2b-clients/entities').then(r => r.json()).then(d => setClientsEnt({ clients: d.clients ?? [], entities: d.entities ?? [] })).catch(() => {}) }, [])
   // eslint-disable-next-line react-hooks/immutability
   useEffect(() => { if (tab === 'history') loadHistory() }, [tab])
 
@@ -193,6 +198,17 @@ export default function ContractsPage() {
     set({ product_kind: kind, make_days: d.make, install_days: d.install })
   }
 
+  // Подставить заказчика (юрлицо) из сохранённого юрлица клиента.
+  function applyEntity() {
+    const e = clientsEnt.entities.find(x => x.id === pickEntityId)
+    if (!e) return
+    setForm(f => ({ ...f, customer_type: 'company', customer: { ...f.customer,
+      name: e.full_name ?? '', inn: e.inn ?? '', kpp: e.kpp ?? '', ogrn: e.ogrn ?? '',
+      legal_address: e.legal_address ?? '', account: e.bank_account ?? '', bank: e.bank_name ?? '',
+      bik: e.bik ?? '', corr_account: e.corr_account ?? '' } }))
+    setSavedId(null)
+  }
+
   function applyParsed(p: Record<string, unknown>) {
     if (!p) return
     const type = p.customer_type === 'company' ? 'company' : 'individual'
@@ -248,6 +264,18 @@ export default function ContractsPage() {
     setEditingId(r.id); setSavedId(null); setTab('new')
   }
   function newDoc() { setForm(emptyForm()); setEditingId(null); setSavedId(null); setTab('new') }
+
+  // Копия договора: те же данные (изделие, заказчик, суммы), но НОВЫЙ документ —
+  // номер сгенерируется, дата сегодняшняя. Открывается в форме, можно менять всё
+  // (сменить/убрать заказчика, поправить спецификацию) и сохранить как отдельный.
+  function duplicateRow(r: HistRow) {
+    const c = r.content as Partial<Form>
+    const d = today()
+    setForm({ ...emptyForm(), ...c, customer: c.customer ?? {}, spec: c.spec ?? [], number: '', date: fmtDate(d), date_iso: isoDate(d) })
+    setEditingId(null)   // null → POST создаст новый договор
+    setSavedId(null)
+    setTab('new')
+  }
 
   async function del(id: number, e: React.MouseEvent) {
     e.stopPropagation()
@@ -335,6 +363,25 @@ export default function ContractsPage() {
                   <button onClick={() => set({ customer_type: 'company' })} className={`px-3 py-1 text-[12px] rounded-md ${form.customer_type === 'company' ? 'bg-white shadow-sm font-medium' : 'text-[#9a9a95]'}`}>Юрлицо</button>
                 </div>
               </div>
+              {clientsEnt.entities.length > 0 && (
+                <div className="mb-3 flex items-center gap-2 flex-wrap text-[12px] bg-[#fafaf9] border border-[#e4e4e0] rounded-lg px-3 py-2">
+                  <span className="text-[#6b6b66]">Из сохранённого юрлица клиента:</span>
+                  <select value={pickClientId ?? ''} onChange={e => { setPickClientId(e.target.value ? Number(e.target.value) : null); setPickEntityId(null) }}
+                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white">
+                    <option value="">клиент…</option>
+                    {clientsEnt.clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                  {pickClientId != null && (
+                    <select value={pickEntityId ?? ''} onChange={e => setPickEntityId(e.target.value ? Number(e.target.value) : null)}
+                      className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110] bg-white">
+                      <option value="">юрлицо…</option>
+                      {clientsEnt.entities.filter(e => e.client_id === pickClientId).map(e => <option key={e.id} value={e.id}>{entityTitle(e)}</option>)}
+                    </select>
+                  )}
+                  <button onClick={applyEntity} disabled={pickEntityId == null}
+                    className="px-3 py-1 bg-[#111110] text-white rounded-lg disabled:opacity-40">Подставить</button>
+                </div>
+              )}
               {/* Автозаполнение: вставить текст или прикрепить карточку PDF */}
               <div className="mb-3 border border-dashed border-[#d8d8d3] rounded-lg p-3 bg-[#fafaf9]">
                 <p className="text-[12px] text-[#6b6b66] mb-2">Заполнить автоматически: вставьте реквизиты текстом или прикрепите карточку предприятия — PDF, фото или скриншот. Распознаю и заполню поля ниже.</p>
@@ -471,7 +518,8 @@ export default function ContractsPage() {
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
                               <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>
-                              <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]">✏️</button>
+                              <button onClick={() => editRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110]" title="Изменить">✏️</button>
+                              <button onClick={() => duplicateRow(r)} className="text-[12px] text-[#6b6b66] hover:text-[#111110] font-medium" title="Сделать копию — новый договор с этими же данными">⧉ Копия</button>
                               <a href={`/contracts/${r.id}/print`} target="_blank" rel="noreferrer" className="text-[12px] text-[#E1442E] font-medium">PDF</a>
                               {canDelete && <button onClick={e => del(r.id, e)} className="text-[12px] text-red-400 hover:text-red-600" title="Удалить (только админ)">🗑</button>}
                             </div>

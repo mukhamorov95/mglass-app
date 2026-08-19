@@ -30,9 +30,12 @@ After completing work, show:
 ### При старте каждой сессии (первым делом):
 1. Прочитай `SESSION.md` если файл существует
 2. Прочитай последние 5 коммитов: `git log --oneline -5`
-3. Проверь очередь задач владельца из Telegram-бота: `node scripts/owner-tasks.mjs`.
+3. Отметься живым воркером и проверь очередь задач владельца из Telegram-бота:
+   `node scripts/owner-tasks.mjs heartbeat` (после этого бот показывает владельцу
+   «🟢 воркер активен»), затем `node scripts/owner-tasks.mjs` — список + статус воркера.
    Если есть задачи со статусом queued — перечисли их владельцу, включи в план работ
-   (high — первыми) и отметь взятые: `node scripts/owner-tasks.mjs take <id>`;
+   (high — первыми). Бери атомарно: `node scripts/owner-tasks.mjs claim` (следующая
+   по приоритету, без гонок) или `take <id>` (конкретную, только если ещё в очереди);
    по завершении: `node scripts/owner-tasks.mjs done <id> "что сделано"`.
 4. Проверь уроки скана дизайн-проектов: `node scripts/scan-lessons.mjs`.
    Если есть непереваренные — обобщи повторяющиеся в постоянные правила SYSTEM

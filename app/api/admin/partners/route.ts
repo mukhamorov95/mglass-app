@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
+import { createSetupToken } from '@/lib/setupToken'
 import { randomBytes } from 'crypto'
 
 // Онбординг партнёра из приложения (только владелец). Создаёт auth-аккаунт,
@@ -43,25 +44,40 @@ export async function GET() {
   return NextResponse.json({ clients: withEmail })
 }
 
-// Создать доступ партнёру к его клиенту.
+// Создать доступ партнёру к его клиенту, либо (resend) переотправить уже
+// привязанному партнёру свежую ссылку установки пароля — без нового аккаунта.
 export async function POST(req: NextRequest) {
   const guard = await requireOwner()
   if (guard instanceof NextResponse) return guard
 
   const body = await req.json().catch(() => ({}))
   const clientId = Number(body?.clientId)
-  const email = String(body?.email || '').trim().toLowerCase()
-  const wantPass = String(body?.password || '').trim()
-  if (!clientId || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return NextResponse.json({ error: 'Укажите клиента и корректный email' }, { status: 400 })
-  }
-  if (wantPass && wantPass.length < 8) {
-    return NextResponse.json({ error: 'Пароль минимум 8 символов' }, { status: 400 })
-  }
+  const resend = body?.resend === true
+  if (!clientId) return NextResponse.json({ error: 'Укажите клиента' }, { status: 400 })
 
   const db = svc()
   const { data: client } = await db.from('b2b_clients').select('id,name,user_id').eq('id', clientId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Клиент не найден' }, { status: 404 })
+
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
+
+  // Переотправка: аккаунт уже есть — просто выдаём новую одноразовую ссылку.
+  // Прежние неиспользованные токены гасятся внутри createSetupToken.
+  if (resend) {
+    if (!client.user_id) return NextResponse.json({ error: 'У клиента ещё нет доступа — сначала создайте' }, { status: 400 })
+    const { data: au } = await db.auth.admin.getUserById(client.user_id)
+    const token = await createSetupToken(client.user_id)
+    return NextResponse.json({ ok: true, resend: true, email: au?.user?.email ?? '', clientName: client.name, link: `${base}/set-password?token=${token}` })
+  }
+
+  const email = String(body?.email || '').trim().toLowerCase()
+  const wantPass = String(body?.password || '').trim()
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return NextResponse.json({ error: 'Укажите корректный email' }, { status: 400 })
+  }
+  if (wantPass && wantPass.length < 8) {
+    return NextResponse.json({ error: 'Пароль минимум 8 символов' }, { status: 400 })
+  }
   if (client.user_id) return NextResponse.json({ error: 'У этого клиента уже есть доступ' }, { status: 400 })
 
   const password = wantPass || genPassword()
@@ -76,5 +92,8 @@ export async function POST(req: NextRequest) {
   const { error: linkErr } = await db.from('b2b_clients').update({ user_id: uid }).eq('id', clientId)
   if (linkErr) return NextResponse.json({ error: 'link: ' + linkErr.message }, { status: 500 })
 
-  return NextResponse.json({ ok: true, email, password, clientName: client.name })
+  // Ссылка самостоятельной установки пароля (свой токен, без SMTP/плейнтекста):
+  // партнёр переходит и задаёт пароль сам. Владелец отправляет ссылку по email.
+  const token = await createSetupToken(uid)
+  return NextResponse.json({ ok: true, email, clientName: client.name, link: `${base}/set-password?token=${token}` })
 }

@@ -1,12 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { requireRole } from '@/lib/apiAuth'
 
 // Отметка Валерии: чертежи по заказу распечатаны / нет. Хранится в notes.docs_printed.
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  // Внутреннее действие — партнёр и внешние роли сюда не ходят.
+  const guard = await requireRole(['production', 'admin', 'ceo', 'buyer', 'manager', 'commercial'])
+  if (guard instanceof NextResponse) return guard
+
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })

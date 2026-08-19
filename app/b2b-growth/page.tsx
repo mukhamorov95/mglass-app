@@ -376,7 +376,9 @@ function PartnersTab() {
   const [pass, setPass] = useState('')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [created, setCreated] = useState<{ clientName: string; email: string; password: string } | null>(null)
+  const [created, setCreated] = useState<{ clientName: string; email: string; link: string; resend?: boolean } | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [resendId, setResendId] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch('/api/admin/partners').then(x => x.json()).catch(() => ({ clients: [] }))
@@ -394,10 +396,20 @@ function PartnersTab() {
       const r = await fetch('/api/admin/partners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, email, password: pass }) })
       const d = await r.json()
       if (!r.ok) { setErr(d.error || 'Ошибка'); return }
-      setCreated({ clientName: d.clientName, email: d.email, password: d.password })
+      setCreated({ clientName: d.clientName, email: d.email, link: d.link }); setCopied(false)
       setOpenId(null); setEmail(''); setPass('')
       await load()
     } finally { setBusy(false) }
+  }
+
+  async function resend(clientId: number) {
+    setResendId(clientId)
+    try {
+      const r = await fetch('/api/admin/partners', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clientId, resend: true }) })
+      const d = await r.json()
+      if (!r.ok) { setErr(d.error || 'Ошибка'); return }
+      setCreated({ clientName: d.clientName, email: d.email, link: d.link, resend: true }); setCopied(false)
+    } finally { setResendId(null) }
   }
 
   if (loading) return <div className="text-xs text-[#9a9a95] py-8 text-center">Загрузка…</div>
@@ -408,16 +420,23 @@ function PartnersTab() {
   return (
     <div className="space-y-3">
       <div className="bg-white rounded-lg border border-[#e4e4e0] p-3 text-[12px] text-[#6b6b66]">
-        Создайте партнёру доступ в личный кабинет прямо здесь — без захода в Supabase. Выберите клиента, задайте email и пароль (или оставьте пусто — сгенерируем). Партнёр зайдёт и сменит пароль сам.
+        Создайте партнёру доступ в личный кабинет прямо здесь — без захода в Supabase. Выберите клиента и укажите email — партнёр получит ссылку и сам задаст пароль (плейнтекст-пароль не передаётся).
       </div>
 
       {created && (
         <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-          <p className="text-[13px] font-semibold text-emerald-800">Доступ создан — {created.clientName}</p>
+          <p className="text-[13px] font-semibold text-emerald-800">{created.resend ? 'Новая ссылка на пароль' : 'Доступ создан'} — {created.clientName}</p>
           <p className="text-[12px] text-emerald-800 mt-1 font-mono">Логин: {created.email}</p>
-          <p className="text-[12px] text-emerald-800 font-mono">Пароль: {created.password}</p>
-          <p className="text-[11px] text-emerald-700 mt-1">Скопируйте и передайте партнёру. Пароль он поменяет сам при входе на /login → «Сменить пароль».</p>
-          <button onClick={() => setCreated(null)} className="text-[11px] text-emerald-700 underline mt-1">Скрыть</button>
+          <p className="text-[11px] text-emerald-700 mt-1">Отправьте партнёру ссылку — по ней он задаст свой пароль{created.resend ? ' (прежние ссылки перестанут работать)' : ''}:</p>
+          <div className="mt-1.5 flex items-center gap-2 flex-wrap">
+            <input readOnly value={created.link} onFocus={e => e.target.select()}
+              className="flex-1 min-w-[200px] bg-white border border-emerald-200 rounded px-2 py-1 text-[11px] font-mono text-emerald-900 outline-none" />
+            <button onClick={() => { navigator.clipboard?.writeText(created.link); setCopied(true) }}
+              className="text-[11px] px-2.5 py-1 rounded bg-white border border-emerald-300 text-emerald-800 hover:bg-emerald-50">{copied ? '✓ Скопировано' : 'Скопировать'}</button>
+            <a href={`mailto:${created.email}?subject=${encodeURIComponent('Доступ в кабинет M-Glass')}&body=${encodeURIComponent(`Здравствуйте!\n\nВам открыт доступ в личный кабинет M-Glass. Перейдите по ссылке и задайте пароль:\n${created.link}\n\nПосле этого входите на странице /login.`)}`}
+              className="text-[11px] px-2.5 py-1 rounded bg-emerald-700 text-white hover:bg-emerald-800">✉️ Отправить на email</a>
+          </div>
+          <button onClick={() => setCreated(null)} className="text-[11px] text-emerald-700 underline mt-2">Скрыть</button>
         </div>
       )}
 
@@ -439,10 +458,8 @@ function PartnersTab() {
             <div className="mt-2 space-y-2">
               <input value={email} onChange={e => setEmail(e.target.value)} placeholder="email партнёра" type="email"
                 className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
-              <input value={pass} onChange={e => setPass(e.target.value)} placeholder="временный пароль (пусто = сгенерировать)"
-                className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
               {err && <p className="text-[11px] text-red-500">{err}</p>}
-              <button onClick={() => create(c.id)} disabled={busy} className="w-full py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold disabled:opacity-40">{busy ? '…' : 'Создать кабинет'}</button>
+              <button onClick={() => create(c.id)} disabled={busy} className="w-full py-2 rounded-lg bg-[#1d1d1f] text-white text-[12px] font-semibold disabled:opacity-40">{busy ? '…' : 'Создать доступ и ссылку'}</button>
             </div>
           )}
         </div>
@@ -452,12 +469,17 @@ function PartnersTab() {
         <>
           <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] pt-2">С кабинетом · {linked.length}</p>
           {linked.map(c => (
-            <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3 flex items-center justify-between">
+            <div key={c.id} className="bg-white rounded-lg border border-[#e4e4e0] p-3 flex items-center justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-[13px] font-semibold text-[#111110] truncate">{c.name}</p>
                 <p className="text-[11px] text-[#9a9a95] font-mono truncate">{c.email ?? '—'}</p>
               </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex-shrink-0">кабинет активен</span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <button onClick={() => resend(c.id)} disabled={resendId === c.id}
+                  className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 transition-colors">
+                  {resendId === c.id ? '…' : '🔗 Ссылка на пароль'}</button>
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">кабинет активен</span>
+              </div>
             </div>
           ))}
         </>
