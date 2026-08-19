@@ -44,7 +44,7 @@ export default async function CfoModelPage() {
 
   const incomes: IncomeLine[] = []
   const fixed: FixedLine[] = []
-  let fundsRub = 0
+  const fundsRubByUnit: Record<string, number> = {}
 
   for (const u of UNITS) {
     const d = byUnit[u.key]
@@ -58,7 +58,7 @@ export default async function CfoModelPage() {
     ;(d.fixed ?? []).forEach((f, i) => {
       fixed.push({ key: `${u.key}_f${i}`, label: f.name, unit: u.label, amount: f.amount || 0, isDebt: isDebtRow(f.name) })
     })
-    fundsRub += unitMargin * fundsPctOf(d.funds)
+    fundsRubByUnit[u.label] = Math.round(unitMargin * fundsPctOf(d.funds))
   }
 
   const hasData = incomes.length > 0
@@ -67,7 +67,7 @@ export default async function CfoModelPage() {
     <ModelClient
       incomes={incomes}
       fixed={fixed}
-      fundsRub={Math.round(fundsRub)}
+      fundsRubByUnit={fundsRubByUnit}
       hasData={hasData}
       updatedAt={updatedAt}
     />
