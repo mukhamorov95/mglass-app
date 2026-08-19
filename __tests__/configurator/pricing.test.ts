@@ -97,9 +97,26 @@ describe('pricing — cut-list + хлысты + цвет', () => {
     const balge = (hinges.items as { key: string; prices: Record<string, number> }[]).find(i => i.key === 'balge')!
     expect(balge.prices.chrome).toBe(7777)
     const profiles = up.groups.find(g => g.id === 'profiles')!
-    const prof = (profiles.items as { key: string; bars: Record<string, Record<number, number>> }[])[0]
-    expect(prof.bars.chrome[2200]).toBe(1000)   // хром = введённое значение, без наценки
-    expect(prof.bars.chrome[3000]).toBe(1200)
+    const prof = (profiles.items as { key: string; stocks: { len: number; prices: Record<string, number> }[] }[])[0]
+    const chrome2200 = prof.stocks.find(s => s.len === 2200)!.prices.chrome
+    const chrome3000 = prof.stocks.find(s => s.len === 3000)!.prices.chrome
+    expect(chrome2200).toBe(1000)   // хром = введённое значение, без наценки
+    expect(chrome3000).toBe(1200)
+  })
+
+  it('хлысты: длину можно задать произвольную (штанга ≠ профиль), цена берётся по длине', () => {
+    const a = buildFromModel(getModel('М10'), { width: 1400, height: 2000 }, 8)  // раздвижная — есть штанга
+    const q = computeQuantities(a, 8)
+    const up = buildDefaultUnitPrices('budget')
+    const tubes = up.groups.find(g => g.id === 'tubes')!
+    // задаём штанге НЕтиповые хлысты 2500/3200 с ценами
+    ;(tubes.items[0] as { stocks: { len: number; prices: Record<string, number> }[] }).stocks =
+      [{ len: 2500, prices: { chrome: 3000 } }, { len: 3200, prices: { chrome: 4200 } }]
+    const p = computePrice(q, up, DEFAULT_FINANCE, { finishId: 'chrome' })
+    expect(q.tubePieces.length).toBeGreaterThan(0)
+    expect(p.tubeCost).toBeGreaterThan(0)
+    // каждый кусок штанги подобран в один из заданных хлыстов → стоимость кратна 3000/4200
+    expect(Object.keys(p.tubeBars).every(len => len === '2500' || len === '3200')).toBe(true)
   })
 
   it('миграция: новая схема с подгруппами возвращается как есть', () => {

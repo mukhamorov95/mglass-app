@@ -42,7 +42,7 @@ export function computeQuantities(assembly: Assembly, thickness: number): Quanti
 
 // ── Справочник цен (СЕБЕСТОИМОСТЬ) — подгруппы фурнитуры ────────────
 export type PriceByColor = Record<string, number>           // finishId → ₽/шт
-export type BarByColor = Record<string, Record<number, number>>  // finishId → {2200: ₽, 3000: ₽}
+export type BarStock = { len: number; prices: PriceByColor } // хлыст: длина мм + цена по цвету
 
 export type PieceItem = {
   key: string
@@ -54,7 +54,7 @@ export type PieceItem = {
 export type BarItem = {
   key: string                     // 'profile' | 'tube' — привязка к геометрии; иначе кол-ва нет
   name: string
-  bars: BarByColor
+  stocks: BarStock[]              // хлысты: длина у профиля/штанги РАЗНАЯ, редактируется в админке
 }
 export type HardwareGroup =
   | { id: string; title: string; kind: 'piece'; items: PieceItem[] }
@@ -90,11 +90,8 @@ const byColor = (base: number): PriceByColor => {
   for (const c of FINISH_IDS) out[c] = Math.round(base * (COLOR_MULT[c] ?? 1))
   return out
 }
-const barByColor = (b2200: number, b3000: number): BarByColor => {
-  const out: BarByColor = {}
-  for (const c of FINISH_IDS) out[c] = { 2200: Math.round(b2200 * (COLOR_MULT[c] ?? 1)), 3000: Math.round(b3000 * (COLOR_MULT[c] ?? 1)) }
-  return out
-}
+const barStocks = (pairs: [number, number][]): BarStock[] =>
+  pairs.map(([len, base]) => ({ len, prices: byColor(base) }))
 const piece = (key: string, base: number): PieceItem =>
   ({ key, name: HARDWARE_LABEL[key] ?? key, prices: byColor(base), qtyMode: 'auto' })
 
@@ -105,8 +102,8 @@ function defaultGroups(hw: Record<string, number>, prof: SeedBar, tube: SeedBar)
     { id: 'hinges', title: 'Петли', kind: 'piece', items: [piece('balge', hw.balge), piece('dessau', hw.dessau)] },
     { id: 'handles', title: 'Ручки', kind: 'piece', items: [piece('sd210', hw.sd210), piece('kupe', hw.kupe)] },
     { id: 'rollers', title: 'Ролики', kind: 'piece', items: [piece('roller', hw.roller)] },
-    { id: 'profiles', title: 'Профили', kind: 'bar', items: [{ key: 'profile', name: HARDWARE_LABEL.profile, bars: barByColor(prof.b2200, prof.b3000) }] },
-    { id: 'tubes', title: 'Трубы / штанги', kind: 'bar', items: [{ key: 'tube', name: HARDWARE_LABEL.tube, bars: barByColor(tube.b2200, tube.b3000) }] },
+    { id: 'profiles', title: 'Профили', kind: 'bar', items: [{ key: 'profile', name: HARDWARE_LABEL.profile, stocks: barStocks([[2200, prof.b2200], [3000, prof.b3000]]) }] },
+    { id: 'tubes', title: 'Трубы / штанги', kind: 'bar', items: [{ key: 'tube', name: HARDWARE_LABEL.tube, stocks: barStocks([[2200, tube.b2200], [3000, tube.b3000]]) }] },
     { id: 'mounts', title: 'Крепёж', kind: 'piece', items: [piece('kp006', hw.kp006), piece('kp002', hw.kp002), piece('kp001', hw.kp001), piece('connector', hw.connector)] },
     { id: 'caps', title: 'Заглушки', kind: 'piece', items: [piece('cap', hw.cap)] },
     { id: 'seals', title: 'Уплотнители', kind: 'piece', items: [piece('seal', hw.seal)] },
@@ -156,26 +153,48 @@ export function migrateUnitPrices(raw: unknown, tier: Tier): UnitPrices {
     deliveryMoscow: typeof r.deliveryMoscow === 'number' ? r.deliveryMoscow : def.deliveryMoscow,
     liftPerFloor: typeof r.liftPerFloor === 'number' ? r.liftPerFloor : def.liftPerFloor,
   }
-  // Уже новая схема — доверяем сохранённым подгруппам.
-  if (Array.isArray(r.groups)) { out.groups = r.groups; return out }
+  // Уже новая схема — доверяем сохранённым подгруппам, но нормализуем bar-позиции
+  // (ранняя версия хранила bars:{цвет→{2200,3000}} — приводим к stocks[]).
+  if (Array.isArray(r.groups)) {
+    out.groups = r.groups.map(g => g.kind === 'bar' ? { ...g, items: (g.items as unknown[]).map(normalizeBarItem) } : g)
+    return out
+  }
   // Старая плоская схема — переносим введённые цены на дефолтные подгруппы.
-  const stockPrice = (arr: { len: number; price: number }[] | undefined, len: number) => arr?.find(s => s.len === len)?.price
+  const stockScaled = (base: number): PriceByColor => byColorScaled(base)
   out.groups = def.groups.map(g => {
     if (g.kind === 'piece') return { ...g, items: g.items.map(it => r.hardware?.[it.key] ? { ...it, prices: { ...it.prices, ...r.hardware[it.key] } } : it) }
     return { ...g, items: g.items.map(it => {
       const src = it.key === 'profile' ? r.profileStock : it.key === 'tube' ? r.tubeStock : undefined
-      const p2200 = stockPrice(src, 2200), p3000 = stockPrice(src, 3000)
-      if (p2200 == null && p3000 == null) return it
-      // старая цена без цвета → в «хром», остальные цвета масштабируем множителем
-      const bars: BarByColor = {}
-      for (const c of FINISH_IDS) bars[c] = {
-        2200: p2200 != null ? Math.round(p2200 * (COLOR_MULT[c] ?? 1)) : it.bars[c]?.[2200] ?? 0,
-        3000: p3000 != null ? Math.round(p3000 * (COLOR_MULT[c] ?? 1)) : it.bars[c]?.[3000] ?? 0,
-      }
-      return { ...it, bars }
+      if (!src?.length) return it
+      // старая цена без цвета → в «хром» как есть, остальные цвета масштабируем множителем
+      return { ...it, stocks: src.map(s => ({ len: s.len, prices: stockScaled(s.price) })) }
     }) }
   })
   return out
+}
+
+// «хром» = базовая цена как есть, остальные цвета — по множителю.
+function byColorScaled(base: number): PriceByColor {
+  const out: PriceByColor = {}
+  for (const c of FINISH_IDS) out[c] = Math.round(base * (COLOR_MULT[c] ?? 1))
+  return out
+}
+
+// Приводит bar-позицию к схеме stocks[] (терпит старое поле bars и пустоту).
+function normalizeBarItem(raw: unknown): BarItem {
+  const it = (raw ?? {}) as { key?: string; name?: string; stocks?: BarStock[]; bars?: Record<string, Record<number, number>> }
+  const key = it.key ?? 'bar', name = it.name ?? 'Хлыст'
+  if (Array.isArray(it.stocks)) return { key, name, stocks: it.stocks }
+  const bars = it.bars ?? {}
+  const lens = new Set<number>()
+  for (const c of Object.keys(bars)) for (const l of Object.keys(bars[c] ?? {})) lens.add(Number(l))
+  if (lens.size === 0) { lens.add(2200); lens.add(3000) }
+  const stocks = [...lens].sort((a, b) => a - b).map(len => {
+    const prices: PriceByColor = {}
+    for (const c of FINISH_IDS) prices[c] = bars[c]?.[len] ?? 0
+    return { len, prices }
+  })
+  return { key, name, stocks }
 }
 
 // ── Хлысты: кусок → наименьший хлыст ≥ длины (или самый длинный, если кусок больше) ──
@@ -247,8 +266,10 @@ export function computePrice(
       for (const it of g.items) {
         const pieces = it.key === 'profile' ? q.profilePieces : it.key === 'tube' ? q.tubePieces : []
         if (pieces.length === 0) continue
-        const colorBars = it.bars[finishId] ?? it.bars.chrome ?? {}
-        const stocks: Stock[] = STOCK_LENS.map(len => ({ len, price: colorBars[len] ?? 0 }))
+        const stocks: Stock[] = (it.stocks ?? [])
+          .map(s => ({ len: s.len, price: s.prices[finishId] ?? s.prices.chrome ?? 0 }))
+          .filter(s => s.len > 0)
+        if (stocks.length === 0) continue
         const { cost, bars } = barsCost(pieces, stocks)
         lines.push({ key: it.key, label: it.name, qty: totalMeters(pieces), unit: 'м.п.', unitPrice: 0, total: cost, bars })
         if (it.key === 'profile') { profileCost += cost; profileBars = bars }

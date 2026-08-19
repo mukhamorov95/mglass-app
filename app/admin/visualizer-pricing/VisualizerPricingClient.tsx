@@ -6,7 +6,7 @@ import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
 import {
-  computeQuantities, computePrice, STOCK_LENS,
+  computeQuantities, computePrice,
   GLASS_TYPE_IDS, DEFAULT_FINANCE,
   type Tier, type UnitPrices, type HardwareGroup, type PieceItem, type BarItem,
 } from '@/lib/configurator/pricing'
@@ -88,7 +88,7 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
   const addItem = (gi: number) => edit(u => {
     const g = u.groups[gi]
     if (g.kind === 'piece') g.items.push({ key: uid('it'), name: 'Новая позиция', prices: {}, qtyMode: 'manual', fixedQty: 1 })
-    else g.items.push({ key: uid('it'), name: 'Новый хлыст', bars: {} })
+    else g.items.push({ key: uid('it'), name: 'Новый профиль/штанга', stocks: [{ len: 2200, prices: {} }] })
   })
   const removeItem = (gi: number, ii: number) => edit(u => { (u.groups[gi].items as unknown[]).splice(ii, 1) })
   const setItemName = (gi: number, ii: number, name: string) => edit(u => { u.groups[gi].items[ii].name = name })
@@ -98,10 +98,12 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
   const setPieceQty = (gi: number, ii: number, v: number) => edit(u => {
     const it = u.groups[gi].items[ii] as PieceItem; it.fixedQty = v
   })
-  const setBarPrice = (gi: number, ii: number, len: number, v: number) => edit(u => {
-    const it = u.groups[gi].items[ii] as BarItem
-    it.bars = { ...it.bars, [finishId]: { ...(it.bars[finishId] ?? {}), [len]: v } }
+  const setBarLen = (gi: number, ii: number, si: number, v: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks[si].len = v })
+  const setBarPrice = (gi: number, ii: number, si: number, v: number) => edit(u => {
+    const st = (u.groups[gi].items[ii] as BarItem).stocks[si]; st.prices = { ...st.prices, [finishId]: v }
   })
+  const addBarStock = (gi: number, ii: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.push({ len: 0, prices: {} }) })
+  const removeBarStock = (gi: number, ii: number, si: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.splice(si, 1) })
 
   async function save() {
     setSaving(true); setMsg(null)
@@ -218,16 +220,21 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
                   <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
                 </div>
               )) : (g.items as BarItem[]).map((it, ii) => (
-                <div key={it.key} className="flex items-center gap-1.5 py-0.5 flex-wrap">
-                  <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
-                    className="flex-1 min-w-[120px] text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
-                  {STOCK_LENS.map(len => (
-                    <span key={len} className="flex items-center gap-1">
-                      <span className="text-[11px] text-[#9a9a95]">{len}</span>
-                      <NumInput value={it.bars[finishId]?.[len] ?? 0} onChange={v => setBarPrice(gi, ii, len, v)} w={72} />
-                    </span>
+                <div key={it.key} className="py-1 border-b border-[#f4f4f0] last:border-0">
+                  <div className="flex items-center gap-1.5">
+                    <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
+                      className="flex-1 min-w-0 text-[13px] font-medium text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+                    <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                  </div>
+                  {it.stocks.map((s, si) => (
+                    <div key={si} className="flex items-center gap-1.5 py-0.5 pl-2">
+                      <span className="text-[11px] text-[#9a9a95] w-10">Хлыст</span>
+                      <NumInput value={s.len} onChange={v => setBarLen(gi, ii, si, v)} w={64} suffix="мм" />
+                      <NumInput value={s.prices[finishId] ?? 0} onChange={v => setBarPrice(gi, ii, si, v)} w={80} />
+                      <button onClick={() => removeBarStock(gi, ii, si)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                    </div>
                   ))}
-                  <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                  <button onClick={() => addBarStock(gi, ii)} className="text-[12px] text-[#4b6ea9] hover:underline ml-2 mt-0.5">+ хлыст</button>
                 </div>
               ))}
               <button onClick={() => addItem(gi)} className="text-[12px] text-[#4b6ea9] hover:underline mt-1.5">+ позиция</button>
