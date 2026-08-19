@@ -5,7 +5,7 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type MDims, type GlassTint } from '@/components/configurator/scene/assembly'
-import { computeQuantities, computePrice, clientPriceFrom } from '@/lib/configurator/pricing'
+import { computeQuantities, computePrice, clientPriceFrom, unitPricesFor, totalMeters, DEFAULT_FINANCE } from '@/lib/configurator/pricing'
 
 const THICKNESS = 8   // душевые — только 8 мм закалённое
 
@@ -108,7 +108,10 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
 
   const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS), [model, dims])
   const quantities = useMemo(() => computeQuantities(assembly, THICKNESS), [assembly])
-  const price = useMemo(() => computePrice(quantities), [quantities])
+  const price = useMemo(
+    () => computePrice(quantities, unitPricesFor(tier), DEFAULT_FINANCE, { glassType: glassId, finishId }),
+    [quantities, tier, glassId, finishId],
+  )
   const clientFrom = clientPriceFrom(price.total)
   const att = doorAttachment(model)
   const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
@@ -241,8 +244,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           <Section title="Спецификация">
             <Row label="Секции (полотна)" value={`${quantities.sections}`} />
             <Row label="Стекло 8 мм" value={`${quantities.glassM2} м²`} />
-            {(quantities.profileM + quantities.tubeM) > 0 && (
-              <Row label="Профиль + штанга" value={`${(quantities.profileM + quantities.tubeM).toFixed(2)} м.п.`} />
+            {(quantities.profilePieces.length + quantities.tubePieces.length) > 0 && (
+              <Row label="Профиль + штанга" value={`${(totalMeters(quantities.profilePieces) + totalMeters(quantities.tubePieces)).toFixed(2)} м.п.`} />
             )}
             {price.hardwareLines.map(l => (
               <Row key={l.key} label={l.label} value={`${l.qty} ${l.unit}`} />
