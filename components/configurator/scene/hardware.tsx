@@ -6,7 +6,7 @@ import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurato
 
 const M = 0.001
 
-export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe'
+export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe' | 'cap'
 
 export function hingeSpecByModel(model: string): HingeSpec {
   return model === 'dessau' ? DESSAU_103 : BALGE_004
@@ -122,10 +122,21 @@ function KupeHandle({ material }: { material: THREE.Material }) {
   )
 }
 
+// Заглушка штанги 30×10: торцевой колпачок на конце штанги. Штанга вдоль X —
+// колпачок закрывает торец (в ±X), чуть крупнее сечения бруса.
+function TubeCap({ material }: { material: THREE.Material }) {
+  return (
+    <mesh material={material} castShadow>
+      <boxGeometry args={[16 * M, 36 * M, 16 * M]} />
+    </mesh>
+  )
+}
+
 export function Hardware({ model, material }: { model: HardwareModel; material: THREE.Material }) {
   if (model === 'roller') return <SlidingRoller material={material} />
   if (model === 'holder') return <TubeHolder material={material} />
   if (model === 'kupe') return <KupeHandle material={material} />
+  if (model === 'cap') return <TubeCap material={material} />
   if (model === 'sd210') return <HandleSD210 material={material} />
   if (model === 'dessau') return <Hinge model="dessau" material={material} />
   return <Hinge model="balge" material={material} />

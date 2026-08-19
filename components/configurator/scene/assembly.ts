@@ -33,7 +33,7 @@ export type MetalPart = {
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
 export type HardwarePlacement = {
   key: string
-  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe'
+  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe' | 'cap'
   pos: [number, number, number]
   rotY: number
 }
@@ -164,7 +164,8 @@ export function buildAssembly(config: Configuration): Assembly {
 // (в сторону outward-нормали рана); петля на своей стороне (к стеклу/стене).
 export type MDims = { width: number; height: number; width2?: number; doorWidth?: number }
 
-const DOOR_OPEN_DEG = 26
+const DOOR_OPEN_DEG = 32       // распашная приоткрыта заметнее (визуальное разведение со стационаром)
+const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
 type P = [number, number]   // точка плана [x, z], метры
 
 export function buildFromModel(model: MModel, dims: MDims, thickness: number): Assembly {
@@ -227,6 +228,12 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
       hardware.push({ key: `${key}-hold${i}`, model: 'holder', rotY, pos: [A[0] + ux * L * f, tubeY, A[1] + uz * L * f] })
     })
   }
+  // Заглушки-колпачки на торцах штанги раздвижного рана.
+  const addTubeCaps = (kp: string, A: P, B: P) => {
+    const { rotY } = seg2(A, B)
+    hardware.push({ key: `${kp}-capA`, model: 'cap', rotY, pos: [A[0], tubeY, A[1]] })
+    hardware.push({ key: `${kp}-capB`, model: 'cap', rotY, pos: [B[0], tubeY, B[1]] })
+  }
 
   // Дверь: открыта наружу вокруг петлевой кромки Ph; ставит петли и ручку.
   const addDoor = (key: string, Ph: P, Pf: P, outward: P) => {
@@ -257,7 +264,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   const side = model.runs.find(r => r.edge === 'side')
 
   if (model.shape === 'walkin') {
-    depth = 0.6; walls = { back: false, left: true, right: false }
+    depth = 0.9; walls = { back: true, left: true, right: false }   // задняя+левая стена — панель стоит в углу, не «в воздухе»
     const part = front?.part ?? 0.62
     runs.push({ kp: 'w', A: [0, 0], B: [W * part, 0], out: [0, -1], segs: front!.segs })
   } else if (model.shape === 'niche') {
@@ -280,14 +287,23 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     const n = run.segs.length
     const sliding = run.segs.some(s => s.t === 'slide')
     addRails(run.kp, run.A, run.B, sliding)
+    if (sliding) addTubeCaps(run.kp, run.A, run.B)   // заглушки на торцах штанги
+    const rL = Math.hypot(run.B[0] - run.A[0], run.B[1] - run.A[1])
+    const rux = rL ? (run.B[0] - run.A[0]) / rL : 0, ruz = rL ? (run.B[1] - run.A[1]) / rL : 0
     for (let i = 0; i < n; i++) {
       const sa: P = [run.A[0] + (run.B[0] - run.A[0]) * i / n, run.A[1] + (run.B[1] - run.A[1]) * i / n]
       const sb: P = [run.A[0] + (run.B[0] - run.A[0]) * (i + 1) / n, run.A[1] + (run.B[1] - run.A[1]) * (i + 1) / n]
       const sg = run.segs[i]
       const key = run.kp + i
       if (sg.t === 'fixed') { addGlass(key, sa, sb, 'fixed'); if (sliding) addTubeHolders(key, sa, sb) }  // держатели штанги на стационаре
-      else if (sg.t === 'slide') { addGlass(key, sa, sb, 'door', SLIDE_GAP); addSlideDoor(key, sa, sb) }  // створка на рельсе + 4 ролика + купе
-      else {
+      else if (sg.t === 'slide') {
+        // приоткрываем створку вдоль штанги к началу рана: перекрывает соседний
+        // стационар (спереди) и открывает проём — читается как раздвижная.
+        const shift = (rL / n) * SLIDE_OPEN
+        const oa: P = [sa[0] - rux * shift, sa[1] - ruz * shift]
+        const ob: P = [sb[0] - rux * shift, sb[1] - ruz * shift]
+        addGlass(key, oa, ob, 'door', SLIDE_GAP); addSlideDoor(key, oa, ob)
+      } else {
         const Ph = sg.hinge === 'a' ? sa : sb
         const Pf = sg.hinge === 'a' ? sb : sa
         addDoor(key, Ph, Pf, run.out)
