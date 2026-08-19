@@ -75,6 +75,18 @@ function getProductDescription(calc: Calc): string {
     return [`Душевая перегородка ${dims}`, glass && `стекло ${thick} ${glass}`, color && `фурнитура ${color}`].filter(Boolean).join('\n')
   }
 
+  if (calc.product_type === 'railing') {
+    const fixingLabel: Record<string, string> = { points: 'на точках', posts: 'на стойках', profile: 'на профиле' }
+    const fixing = fixingLabel[d.fixing as string] ?? ''
+    const glass  = (d.glass as string) || ''
+    const thick  = d.thickness ? `${d.thickness} мм` : ''
+    const spans  = (d.segCount as number) ?? (Array.isArray(d.segments) ? (d.segments as unknown[]).length : 0)
+    const pog    = d.alongSlopeTotalM ? `${d.alongSlopeTotalM} пог.м` : ''
+    const head   = `Стеклянное ограждение${spans ? `, ${spans} ${spans === 1 ? 'пролёт' : 'пролётов'}` : ''}${pog ? `, ${pog}` : ''}`
+    const line2  = [glass && `стекло ${thick} ${glass}`.trim(), fixing, d.heightMm && `высота ${d.heightMm} мм`].filter(Boolean).join(', ')
+    return [head, line2].filter(Boolean).join('\n')
+  }
+
   return 'Изделие из стекла'
 }
 
