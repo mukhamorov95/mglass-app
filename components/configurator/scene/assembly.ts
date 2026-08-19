@@ -177,8 +177,10 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   const hardware: HardwarePlacement[] = []
   const hingeModel: 'balge' | 'dessau' = /trap/.test(model.shape) ? 'dessau' : 'balge'
 
-  const bottomY = TRAY_H + 0.0125 / 2 + 0.002   // П-профиль Pr-002 18×12.5 у поддона
-  const topY = H - 0.006                          // штанга 30×10 у верха
+  // Координаты — локальные (сборка потом поднимается на поддон group[y=trayH]),
+  // поэтому НЕ прибавляем TRAY_H (иначе профиль всплывал на ~60 мм над стеклом).
+  const bottomY = 0.0125 / 2                       // нижний П-профиль Pr-002 18×12.5 — на поддоне, у низа стекла
+  const topY = H - 0.006                           // штанга 30×10 у верха
 
   // Вертикальная стеклянная панель вдоль отрезка плана A→B.
   const addGlass = (key: string, A: P, B: P, role: GlassPart['role'], zOff = 0) => {
