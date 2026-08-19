@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { SupplierImport } from './SupplierImport'
 
 type Source = { supplier: string; title: string; discount_percent: number; site_url: string }
 type Cat = { category: string; cnt: number }
@@ -22,6 +23,7 @@ export function SupplierCatalogClient() {
   const [loading, setLoading] = useState(false)
   const [discEdit, setDiscEdit] = useState<string>('')
   const [savingDisc, setSavingDisc] = useState(false)
+  const [importing, setImporting] = useState(false)
 
   useEffect(() => { const t = setTimeout(() => setQDebounced(q), 300); return () => clearTimeout(t) }, [q])
   useEffect(() => { setPage(0) }, [supplier, category, qDebounced])
@@ -56,9 +58,12 @@ export function SupplierCatalogClient() {
 
   return (
     <div className="max-w-[1240px] mx-auto px-6 py-6">
-      <div className="mb-4">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Справочник поставщиков</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">Общий прайс с разных поставщиков. Скидка → себестоимость. Единый источник цен для расчётов.</p>
+      <div className="mb-4 flex items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Справочник поставщиков</h1>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">Общий прайс с разных поставщиков. Скидка → себестоимость. Единый источник цен для расчётов.</p>
+        </div>
+        <button onClick={() => setImporting(true)} className="shrink-0 text-[13px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28]">↑ Импорт прайса</button>
       </div>
 
       {/* Поставщики + скидка */}
@@ -145,6 +150,14 @@ export function SupplierCatalogClient() {
           </div>
         </div>
       </div>
+
+      {importing && (
+        <SupplierImport
+          sources={data?.sources ?? []}
+          onClose={() => setImporting(false)}
+          onDone={() => { setImporting(false); load() }}
+        />
+      )}
     </div>
   )
 }
