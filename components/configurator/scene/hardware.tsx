@@ -6,7 +6,7 @@ import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurato
 
 const M = 0.001
 
-export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002'
+export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001'
 
 export function hingeSpecByModel(model: string): HingeSpec {
   return model === 'dessau' ? DESSAU_103 : BALGE_004
@@ -77,14 +77,14 @@ function HandleSD210({ material }: { material: THREE.Material }) {
 function SlidingRoller({ material }: { material: THREE.Material }) {
   return (
     <group>
-      {[15 * M, -15 * M].map((y, i) => (
+      {[8 * M, -8 * M].map((y, i) => (
         <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
-          <cylinderGeometry args={[11 * M, 11 * M, 11 * M, 24]} />
+          <cylinderGeometry args={[9 * M, 9 * M, 12 * M, 24]} />
         </mesh>
       ))}
       {/* планка каретки к стеклу */}
       <mesh position={[0, 0, 0]} material={material} castShadow>
-        <boxGeometry args={[15 * M, 42 * M, 9 * M]} />
+        <boxGeometry args={[15 * M, 30 * M, 9 * M]} />
       </mesh>
     </group>
   )
@@ -125,6 +125,26 @@ function KP002({ material }: { material: THREE.Material }) {
   )
 }
 
+// КП-001 — крепёж угла (М7): труба приходит перпендикулярно к боковому стеклу.
+// Блок 36×32 с пазом под трубу 30×11 + U-скоба снизу, одевается на кромку
+// перпендикулярного стекла. По чертежу.
+function KP001({ material }: { material: THREE.Material }) {
+  return (
+    <group>
+      {/* тело блока (принимает трубу перпендикулярно) */}
+      <mesh position={[0, 5 * M, 0]} material={material} castShadow>
+        <boxGeometry args={[36 * M, 32 * M, 22 * M]} />
+      </mesh>
+      {/* U-скоба снизу — на кромку бокового стекла (две щеки по граням) */}
+      {[-6 * M, 6 * M].map((x, i) => (
+        <mesh key={i} position={[x, -16 * M, 0]} material={material} castShadow>
+          <boxGeometry args={[4 * M, 22 * M, 22 * M]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 // Ручка-купе КУ-002: круглая утопленная чаша заподлицо со стеклом двери. Диск
 // смотрит наружу (плоскость ⊥ нормали двери → после rotY это ±Z-local).
 function KupeHandle({ material }: { material: THREE.Material }) {
@@ -154,6 +174,7 @@ export function Hardware({ model, material }: { model: HardwareModel; material: 
   if (model === 'roller') return <SlidingRoller material={material} />
   if (model === 'kp006') return <KP006 material={material} />
   if (model === 'kp002') return <KP002 material={material} />
+  if (model === 'kp001') return <KP001 material={material} />
   if (model === 'kupe') return <KupeHandle material={material} />
   if (model === 'cap') return <TubeCap material={material} />
   if (model === 'sd210') return <HandleSD210 material={material} />

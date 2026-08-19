@@ -53,6 +53,11 @@ describe('buildFromModel — все 9 моделей строятся', () => {
       expect(a.hardware.some(h => h.model === 'kp006')).toBe(true)
       expect(a.hardware.some(h => h.model === 'kp002')).toBe(true)
     }
+    // М7 — угловой крепёж КП-001 (труба перпендикулярно боковому стеклу)
+    const m7 = buildFromModel(getModel('М7'), dimsFor('М7'), 8)
+    expect(m7.hardware.some(h => h.model === 'kp001')).toBe(true)
+    // над большим боковым стационаром трубы нет: только один верхний рельс (фронт)
+    expect(m7.metal.filter(x => x.key.endsWith('-top')).length).toBe(1)
   })
 
   it('угловая М7: глубина сцены = боковой размер', () => {
