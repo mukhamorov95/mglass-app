@@ -399,6 +399,8 @@ function optimizePack(
 
 // ─── Public API ────────────────────────────────────────────────────────────────
 
+export type SheetFormat = { width: number; height: number }
+
 export type PieceGroup = {
   pieces: CuttingPiece[]
   materialLabel: string
@@ -406,21 +408,59 @@ export type PieceGroup = {
   sheetWidth: number
   sheetHeight: number
   patternDirection: 'none' | 'along_length' | 'along_width'
+  // Доступные форматы листа (b2b_material_sheet_variants). Если заданы — раскрой
+  // перебирает их и выбирает оптимальный; иначе кроит на sheetWidth×sheetHeight.
+  sheetFormats?: SheetFormat[]
+}
+
+// Кандидаты форматов листа для группы: заданные варианты или единственный дефолт.
+// Дедуп по W×H, отбрасываем некорректные размеры.
+function candidateFormats(group: PieceGroup): SheetFormat[] {
+  const raw = (group.sheetFormats && group.sheetFormats.length)
+    ? group.sheetFormats
+    : [{ width: group.sheetWidth, height: group.sheetHeight }]
+  const seen = new Set<string>()
+  const out: SheetFormat[] = []
+  for (const f of raw) {
+    if (!(f.width > 0) || !(f.height > 0)) continue
+    const k = `${f.width}x${f.height}`
+    if (seen.has(k)) continue
+    seen.add(k); out.push({ width: f.width, height: f.height })
+  }
+  return out.length ? out : [{ width: group.sheetWidth, height: group.sheetHeight }]
+}
+
+type FormatTrial = { width: number; height: number; sheets: CuttingSheet[]; unplaced: CuttingPiece[] }
+
+// Лучший формат: сначала меньше нераскроенных (деталь может не влезть в мелкий
+// лист), затем меньше листов, затем меньше суммарная площадь листов (меньше
+// закупки/отходов), затем выше средний КПД.
+function pickBestFormat(trials: FormatTrial[]): FormatTrial {
+  return trials.reduce((best, c) => {
+    if (c.unplaced.length !== best.unplaced.length) return c.unplaced.length < best.unplaced.length ? c : best
+    if (c.sheets.length !== best.sheets.length) return c.sheets.length < best.sheets.length ? c : best
+    const ca = c.sheets.length * c.width * c.height
+    const ba = best.sheets.length * best.width * best.height
+    if (ca !== ba) return ca < ba ? c : best
+    return scoreSheets(c.sheets)[1] < scoreSheets(best.sheets)[1] ? c : best
+  })
 }
 
 function buildResult(
   materialKey: string,
   group: PieceGroup,
+  sheetWidth: number,
+  sheetHeight: number,
   sheets: CuttingSheet[],
   unplacedPieces: CuttingPiece[],
   strategiesChecked?: number,
 ): MaterialCuttingResult {
   const totalUsedArea  = sheets.reduce((s, sh) => s + sh.usedArea, 0)
-  const totalSheetArea = sheets.length * group.sheetWidth * group.sheetHeight
+  const totalSheetArea = sheets.length * sheetWidth * sheetHeight
   const avgEfficiency  = totalSheetArea > 0 ? Math.round(totalUsedArea / totalSheetArea * 100) : 0
   return {
     materialKey, materialLabel: group.materialLabel, category: group.category,
-    sheetWidth: group.sheetWidth, sheetHeight: group.sheetHeight, patternDirection: group.patternDirection,
+    sheetWidth, sheetHeight, patternDirection: group.patternDirection,
     sheets, totalPieces: group.pieces.length, sheetsNeeded: sheets.length,
     totalUsedArea, totalSheetArea, avgEfficiency, strategiesChecked,
     unplacedPieces, unplacedCount: unplacedPieces.length,
@@ -444,14 +484,18 @@ export function runCuttingOptimizer(
     const { settings: eff, pieces } = effectiveSettings(group, settings)
     const byArea   = [...pieces].sort((a, b) => b.width * b.height - a.width * a.height)
     const byHeight = [...pieces].sort((a, b) => b.height - a.height)
-    const guillotine  = packWithOrder(byArea, group.sheetWidth, group.sheetHeight, eff)
-    const stripNormal = packStrip(byHeight, group.sheetWidth, group.sheetHeight, eff, false)
-    const stripShort  = packStrip(byHeight, group.sheetWidth, group.sheetHeight, eff, true)
-    const best = [stripNormal, stripShort].reduce(
-      (b, s) => isBetter(s.sheets, b.sheets) ? s : b,
-      guillotine,
-    )
-    results.push(buildResult(materialKey, group, best.sheets, best.unplaced))
+    const trials: FormatTrial[] = candidateFormats(group).map(f => {
+      const guillotine  = packWithOrder(byArea, f.width, f.height, eff)
+      const stripNormal = packStrip(byHeight, f.width, f.height, eff, false)
+      const stripShort  = packStrip(byHeight, f.width, f.height, eff, true)
+      const best = [stripNormal, stripShort].reduce(
+        (b, s) => isBetter(s.sheets, b.sheets) ? s : b,
+        guillotine,
+      )
+      return { width: f.width, height: f.height, sheets: best.sheets, unplaced: best.unplaced }
+    })
+    const chosen = pickBestFormat(trials)
+    results.push(buildResult(materialKey, group, chosen.width, chosen.height, chosen.sheets, chosen.unplaced))
   }
 
   return results.sort((a, b) => a.materialLabel.localeCompare(b.materialLabel))
@@ -467,8 +511,14 @@ export function runCuttingOptimizerOptimized(
 
   for (const [materialKey, group] of groups) {
     const { settings: eff, pieces } = effectiveSettings(group, settings)
-    const { sheets, unplaced, strategiesChecked } = optimizePack(pieces, group.sheetWidth, group.sheetHeight, eff, timeLimitPerGroupMs)
-    results.push(buildResult(materialKey, group, sheets, unplaced, strategiesChecked))
+    const formats = candidateFormats(group)
+    const trials = formats.map(f => {
+      const { sheets, unplaced, strategiesChecked } = optimizePack(pieces, f.width, f.height, eff, timeLimitPerGroupMs)
+      return { width: f.width, height: f.height, sheets, unplaced, strategiesChecked }
+    })
+    const chosen = pickBestFormat(trials)
+    const checked = trials.reduce((s, t) => s + (t.strategiesChecked ?? 0), 0)
+    results.push(buildResult(materialKey, group, chosen.width, chosen.height, chosen.sheets, chosen.unplaced, checked))
   }
 
   return results.sort((a, b) => a.materialLabel.localeCompare(b.materialLabel))
