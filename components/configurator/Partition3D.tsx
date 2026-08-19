@@ -8,7 +8,7 @@ import {
 } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
-import { buildFromModel, type Assembly, type Niche, type MDims } from './scene/assembly'
+import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint } from './scene/assembly'
 import { Hardware } from './scene/hardware'
 
 // Матовые финиши — выше шероховатость (меньше зеркальность).
@@ -106,7 +106,7 @@ function NicheMesh({ niche }: { niche: Niche }) {
   )
 }
 
-function Assembly3D({ assembly, metalMat }: { assembly: Assembly; metalMat: THREE.Material }) {
+function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint }) {
   // Кабина поднята на поддон.
   return (
     <group position={[0, assembly.niche.trayH, 0]}>
@@ -124,9 +124,9 @@ function Assembly3D({ assembly, metalMat }: { assembly: Assembly; metalMat: THRE
             temporalDistortion={0}
             samples={5}
             resolution={384}
-            color="#e6eef0"
-            attenuationColor="#cfe0dc"
-            attenuationDistance={1.8}
+            color={glassTint.color}
+            attenuationColor={glassTint.attenuation}
+            attenuationDistance={glassTint.distance}
             clearcoat={0.7}
             clearcoatRoughness={0.05}
           />
@@ -163,8 +163,8 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string },
+  { model, dims, thickness, finishHex, finishId, glassTint }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint },
 ) {
   const assembly = useMemo(() => buildFromModel(model, dims, thickness), [model, dims, thickness])
   const roughness = MATTE.has(finishId) ? 0.42 : 0.06
@@ -197,7 +197,7 @@ export default function Partition3D(
             shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} />
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.5} color="#eaf0ff" />
           <NicheMesh niche={assembly.niche} />
-          <Assembly3D assembly={assembly} metalMat={metalMat} />
+          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
           <ContactShadows position={[cx, 0.002, cz]} opacity={0.42} scale={span * 3.2} blur={2.2} far={span * 1.2} resolution={1024} />
           <Studio />
           <OrbitControls

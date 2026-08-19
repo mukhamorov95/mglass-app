@@ -164,6 +164,9 @@ export function buildAssembly(config: Configuration): Assembly {
 // (в сторону outward-нормали рана); петля на своей стороне (к стеклу/стене).
 export type MDims = { width: number; height: number; width2?: number; doorWidth?: number }
 
+// Тон стекла (тип/цвет): прозрачное / осветлённое / тонированное бронза/графит.
+export type GlassTint = { color: string; attenuation: string; distance: number }
+
 const DOOR_OPEN_DEG = 32       // распашная приоткрыта заметнее (визуальное разведение со стационаром)
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
 type P = [number, number]   // точка плана [x, z], метры

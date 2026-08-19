@@ -4,10 +4,22 @@ import { useMemo, useState } from 'react'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
-import { buildFromModel, type MDims } from '@/components/configurator/scene/assembly'
+import { buildFromModel, type MDims, type GlassTint } from '@/components/configurator/scene/assembly'
 import { computeQuantities, computePrice, clientPriceFrom } from '@/lib/configurator/pricing'
 
+const THICKNESS = 8   // душевые — только 8 мм закалённое
+
+// Тип/цвет стекла (тон в 3D через MeshTransmissionMaterial).
+type GlassType = { id: string; label: string; swatch: string; tint: GlassTint }
+const GLASS_TYPES: GlassType[] = [
+  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#e6efe9', tint: { color: '#eef4f1', attenuation: '#d6e7df', distance: 2.8 } },
+  { id: 'crystal',  label: 'Осветлённое Crystal Vision', swatch: '#eef7f4', tint: { color: '#f6fbf9', attenuation: '#e9f4ef', distance: 5.0 } },
+  { id: 'bronze',   label: 'Тонированная бронза',        swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
+  { id: 'graphite', label: 'Тонированная графит',        swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
+]
+
 const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
+const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
 function defaultsFor(m: MModel): MDims {
   return {
@@ -18,14 +30,20 @@ function defaultsFor(m: MModel): MDims {
   }
 }
 
+// Размер: слайдер + ручной ввод в мм.
 function Field({ label, value, min, max, step = 10, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void
 }) {
   return (
     <div>
-      <div className="flex justify-between items-baseline mb-1">
+      <div className="flex justify-between items-center mb-1.5">
         <label className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">{label}</label>
-        <span className="text-[12px] font-mono text-[#111110]">{value} мм</span>
+        <div className="flex items-center gap-1">
+          <input type="number" value={value} min={min} max={max} step={step}
+            onChange={e => onChange(clamp(Number(e.target.value) || 0, min, max))}
+            className="w-[68px] text-right text-[13px] font-mono text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+          <span className="text-[11px] text-[#9a9a95]">мм</span>
+        </div>
       </div>
       <input type="range" min={min} max={max} step={step} value={value}
         onChange={e => onChange(Number(e.target.value))} className="w-full accent-[#111110]" />
@@ -42,39 +60,52 @@ function Row({ label, value, muted }: { label: string; value: string; muted?: bo
   )
 }
 
-// Клиентский конфигуратор на 9 моделях М1–М12 (раскладка — lib/configurator/arrangement).
-// variant='embed' — публичный виджет для сайта: без себестоимости, заявка через postMessage.
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-3">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+// Клиентский визуализатор на 9 моделях М1–М12 (раскладка — lib/configurator/arrangement).
+// Раскладка экрана: модель (сворачивается) слева · 3D по центру (sticky, всегда виден) ·
+// габариты/стекло/цвет + спецификация + цена справа. variant='embed' — публичный виджет.
 export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'internal' | 'embed' }) {
   const embed = variant === 'embed'
   const [code, setCode] = useState<string>('М7')
   const [dims, setDims] = useState<MDims>(() => defaultsFor(getModel('М7')))
-  const [thickness, setThickness] = useState(8)
   const [finishId, setFinishId] = useState<FinishId>('chrome')
+  const [glassId, setGlassId] = useState<string>('clear')
+  const [modelOpen, setModelOpen] = useState(true)
   const [sent, setSent] = useState(false)
 
   const model = getModel(code)
   const finish = FINISHES.find(f => f.id === finishId) ?? FINISHES[0]
+  const glass = GLASS_TYPES.find(g => g.id === glassId) ?? GLASS_TYPES[0]
 
   function changeModel(c: string) {
     setCode(c)
-    const m = getModel(c)
-    setDims(defaultsFor(m))
-    if (!m.thickness.includes(thickness)) setThickness(m.thickness[0])
+    setDims(defaultsFor(getModel(c)))
+    setModelOpen(false)   // выбрал → сворачиваем список, освобождаем экран
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
 
-  const assembly = useMemo(() => buildFromModel(model, dims, thickness), [model, dims, thickness])
-  const quantities = useMemo(() => computeQuantities(assembly, thickness), [assembly, thickness])
+  const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS), [model, dims])
+  const quantities = useMemo(() => computeQuantities(assembly, THICKNESS), [assembly])
   const price = useMemo(() => computePrice(quantities), [quantities])
   const clientFrom = clientPriceFrom(price.total)
   const att = doorAttachment(model)
   const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
+  const c = model.constraints
 
   function sendLead() {
     const payload = {
       type: 'mglass-shower-config' as const,
       config: {
-        model: model.code, name: model.name, dims, thickness,
+        model: model.code, name: model.name, dims, thickness: THICKNESS,
+        glass: { id: glass.id, label: glass.label },
         finish: { id: finish.id, label: finish.label },
         glassAreaM2: quantities.glassM2, sections: quantities.sections,
         priceFrom: clientFrom,
@@ -85,59 +116,90 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     setSent(true)
   }
 
-  const c = model.constraints
   return (
-    <div className={embed ? 'w-full px-4 py-5' : 'max-w-[1200px] mx-auto px-6 py-8'}>
+    <div className={embed ? 'w-full px-4 py-5' : 'max-w-[1280px] mx-auto px-6 py-6'}>
       {!embed && (
-        <div className="mb-6">
+        <div className="mb-5">
           <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Визуализатор 3D</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Модель → размеры → стекло → финиш. 3D-душевая — вживую.</p>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">Модель → размеры → стекло → цвет. 3D-душевая — вживую.</p>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr_300px] gap-6">
-        {/* Модель + параметры */}
-        <div className="space-y-5">
-          <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Модель</label>
-            <div className="grid gap-1.5">
-              {M_MODELS.map(m => (
-                <button key={m.code} onClick={() => changeModel(m.code)}
-                  className={`text-left px-3 py-2 rounded-lg text-[13px] border transition-colors ${
-                    code === m.code ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:border-[#c4c4be]'
+      <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr_330px] gap-5 items-start">
+        {/* ── Модель (сворачивается) ── */}
+        <div className="lg:sticky lg:top-4">
+          {modelOpen ? (
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">Модель</label>
+              </div>
+              <div className="grid gap-1.5">
+                {M_MODELS.map(m => (
+                  <button key={m.code} onClick={() => changeModel(m.code)}
+                    className={`text-left px-3 py-2 rounded-lg text-[13px] border transition-colors ${
+                      code === m.code ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0] hover:border-[#c4c4be]'
+                    }`}>
+                    <span className="font-mono">{m.code}</span> · {m.name}
+                    <span className={`block text-[11px] ${code === m.code ? 'text-white/60' : 'text-[#9a9a95]'}`}>{m.desc}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-1">Модель</p>
+              <p className="text-[14px] font-semibold text-[#111110]"><span className="font-mono">{model.code}</span> · {model.name}</p>
+              <p className="text-[12px] text-[#9a9a95] mt-0.5">{model.desc}</p>
+              <button onClick={() => setModelOpen(true)}
+                className="mt-3 w-full text-[13px] font-medium border border-[#e4e4e0] rounded-lg py-2 hover:border-[#111110]">
+                Сменить модель
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* ── 3D (всегда виден) ── */}
+        <div className="min-w-0 lg:sticky lg:top-4 space-y-2">
+          <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
+            <Partition3DView model={model} dims={dims} thickness={THICKNESS}
+              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} />
+          </div>
+          <p className="text-[12px] text-[#9a9a95] text-center">
+            {model.code} · {model.name}{att ? ` · дверь на ${att === 'стена' ? 'стене' : 'стекле'}, наружу` : ''}
+          </p>
+        </div>
+
+        {/* ── Параметры + спецификация + цена ── */}
+        <div className="space-y-4">
+          <Section title="Габариты">
+            <div className="space-y-3.5">
+              <Field label="Ширина" value={dims.width} min={c.width[0]} max={c.width[1]} onChange={v => setD('width', v)} />
+              {c.needsWidth2 && c.width2 && (
+                <Field label={model.shape === 'corner' ? 'Боковая' : 'Ширина 2'} value={dims.width2 ?? 0} min={c.width2[0]} max={c.width2[1]} onChange={v => setD('width2', v)} />
+              )}
+              <Field label="Высота" value={dims.height} min={c.height[0]} max={c.height[1]} onChange={v => setD('height', v)} />
+              {c.doorWidth && (
+                <Field label="Дверь" value={dims.doorWidth ?? 600} min={c.doorWidth[0]} max={c.doorWidth[1]} onChange={v => setD('doorWidth', v)} />
+              )}
+            </div>
+          </Section>
+
+          <Section title="Стекло">
+            <div className="grid grid-cols-2 gap-1.5">
+              {GLASS_TYPES.map(g => (
+                <button key={g.id} onClick={() => setGlassId(g.id)}
+                  className={`flex items-center gap-2 px-2.5 py-2 rounded-lg border text-left text-[12px] ${
+                    glassId === g.id ? 'border-[#111110] bg-[#fafafa]' : 'border-[#e4e4e0] hover:border-[#c4c4be]'
                   }`}>
-                  <span className="font-mono">{m.code}</span> · {m.name}
-                  <span className={`block text-[11px] ${code === m.code ? 'text-white/60' : 'text-[#9a9a95]'}`}>{m.desc}</span>
+                  <span className="w-5 h-5 rounded-full flex-none border border-black/10" style={{ background: g.swatch }} />
+                  <span className="text-[#4b4b47] leading-tight">{g.label}</span>
                 </button>
               ))}
             </div>
-          </div>
+            <p className="text-[11px] text-[#9a9a95] mt-2">Закалённое 8 мм</p>
+          </Section>
 
-          <div className="space-y-3.5 bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <Field label="Ширина" value={dims.width} min={c.width[0]} max={c.width[1]} onChange={v => setD('width', v)} />
-            {c.needsWidth2 && c.width2 && (
-              <Field label={model.shape === 'corner' ? 'Боковая' : 'Ширина 2'} value={dims.width2 ?? 0} min={c.width2[0]} max={c.width2[1]} onChange={v => setD('width2', v)} />
-            )}
-            <Field label="Высота" value={dims.height} min={c.height[0]} max={c.height[1]} onChange={v => setD('height', v)} />
-            {c.doorWidth && (
-              <Field label="Дверь" value={dims.doorWidth ?? 600} min={c.doorWidth[0]} max={c.doorWidth[1]} onChange={v => setD('doorWidth', v)} />
-            )}
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Стекло, мм</label>
-            <div className="flex gap-1.5">
-              {model.thickness.map(tk => (
-                <button key={tk} onClick={() => setThickness(tk)}
-                  className={`px-4 py-1.5 rounded-lg text-[13px] border ${thickness === tk ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0]'}`}>
-                  {tk}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Финиш фурнитуры</label>
+          <Section title="Цвет фурнитуры">
             <div className="grid grid-cols-5 gap-1.5">
               {FINISHES.map(f => (
                 <button key={f.id} onClick={() => setFinishId(f.id)} title={f.label}
@@ -146,32 +208,18 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
               ))}
             </div>
             <p className="text-[12px] text-[#6b6b66] mt-1.5">{finish.label}</p>
-          </div>
-        </div>
+          </Section>
 
-        {/* 3D */}
-        <div className="min-w-0 space-y-3">
-          <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-4">
-            <Partition3DView model={model} dims={dims} thickness={thickness} finishHex={finish.hex} finishId={finish.id} />
-          </div>
-          <p className="text-[12px] text-[#9a9a95] text-center">
-            {model.code} · {model.name}{att ? ` · дверь на ${att === 'стена' ? 'стене' : 'стекле'}, открывается наружу` : ''}
-          </p>
-        </div>
-
-        {/* Спецификация + цена */}
-        <div className="space-y-4">
-          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-2">Спецификация</p>
+          <Section title="Спецификация">
             <Row label="Секции (полотна)" value={`${quantities.sections}`} />
-            <Row label={`Стекло ${thickness} мм`} value={`${quantities.glassM2} м²`} />
+            <Row label="Стекло 8 мм" value={`${quantities.glassM2} м²`} />
             {(quantities.profileM + quantities.tubeM) > 0 && (
               <Row label="Профиль + штанга" value={`${(quantities.profileM + quantities.tubeM).toFixed(2)} м.п.`} />
             )}
             {price.hardwareLines.map(l => (
               <Row key={l.key} label={l.label} value={`${l.qty} ${l.unit}`} />
             ))}
-          </div>
+          </Section>
 
           {embed ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">

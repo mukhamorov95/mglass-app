@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import type { MModel } from '@/lib/configurator/arrangement'
-import type { MDims } from './scene/assembly'
+import type { MDims, GlassTint } from './scene/assembly'
 
 // Canvas (WebGL) нельзя рендерить на сервере — грузим только на клиенте.
 const Partition3D = dynamic(() => import('./Partition3D'), {
@@ -15,7 +15,7 @@ const Partition3D = dynamic(() => import('./Partition3D'), {
 })
 
 export function Partition3DView(props: {
-  model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string
+  model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint
 }) {
   return <Partition3D {...props} />
 }
