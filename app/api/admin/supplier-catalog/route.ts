@@ -1,17 +1,18 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireOwner } from '@/lib/apiAuth'
+import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
 
 // Общий справочник цен поставщиков: поиск/фильтр строк + правка скидки поставщика.
-// Только owner-tier. Запись — сервис-role (RLS на таблице только на чтение).
+// Доступ — owner-tier + логист-закупщик (buyer). Запись — сервис-role (RLS: только чтение).
 
 const PAGE = 50
+const ALLOWED = ['admin', 'ceo', 'buyer'] as const
 
 export async function GET(req: NextRequest) {
-  const guard = await requireOwner()
+  const guard = await requireRole([...ALLOWED])
   if (guard instanceof NextResponse) return guard
   const sp = req.nextUrl.searchParams
-  const supplier = sp.get('supplier') || 'vetro'
+  const supplier = sp.get('supplier') || 'vetro'   // 'all' — по всем поставщикам
   const category = sp.get('category') || ''
   const q = (sp.get('q') || '').trim()
   const page = Math.max(0, Number(sp.get('page') || 0))
@@ -19,12 +20,12 @@ export async function GET(req: NextRequest) {
   const supa = createServiceClient()
   const [{ data: sources }, { data: cats }] = await Promise.all([
     supa.from('supplier_price_sources').select('*').order('title'),
-    supa.rpc('supplier_price_categories', { sup: supplier }),
+    supplier === 'all' ? Promise.resolve({ data: [] }) : supa.rpc('supplier_price_categories', { sup: supplier }),
   ])
 
   let query = supa.from('supplier_price_rows')
-    .select('id,category,article,name,color,unit,retail_price,discount_percent,cost_price,url', { count: 'exact' })
-    .eq('supplier', supplier)
+    .select('id,supplier,category,article,name,color,unit,retail_price,discount_percent,cost_price,url', { count: 'exact' })
+  if (supplier !== 'all') query = query.eq('supplier', supplier)
   if (category) query = query.eq('category', category)
   if (q) query = query.or(`name.ilike.%${q}%,article.ilike.%${q}%`)
   query = query.order('category').order('name').range(page * PAGE, page * PAGE + PAGE - 1)
@@ -41,7 +42,7 @@ export async function GET(req: NextRequest) {
 
 // Правка скидки поставщика → пересчёт себестоимости всех его строк.
 export async function PATCH(req: NextRequest) {
-  const guard = await requireOwner()
+  const guard = await requireRole([...ALLOWED])
   if (guard instanceof NextResponse) return guard
   const body = await req.json().catch(() => null) as { supplier?: string; discount_percent?: number } | null
   if (!body?.supplier || typeof body.discount_percent !== 'number') {

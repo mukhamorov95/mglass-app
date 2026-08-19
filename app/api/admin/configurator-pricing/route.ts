@@ -1,13 +1,15 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireOwner } from '@/lib/apiAuth'
+import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
 import { getPricing, savePricing } from '@/lib/configurator/pricingStore'
 import type { Tier, UnitPrices } from '@/lib/configurator/pricing'
 
 const isTier = (t: string | null): t is Tier => t === 'budget' || t === 'premium'
+// Себестоимость визуализатора ведут владелец и логист-закупщик (buyer).
+const ALLOWED = ['admin', 'ceo', 'buyer'] as const
 
 export async function GET(req: NextRequest) {
-  const guard = await requireOwner()
+  const guard = await requireRole([...ALLOWED])
   if (guard instanceof NextResponse) return guard
   const tier = req.nextUrl.searchParams.get('tier')
   if (!isTier(tier)) return NextResponse.json({ error: 'tier: budget|premium' }, { status: 400 })
@@ -15,7 +17,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function PUT(req: NextRequest) {
-  const guard = await requireOwner()
+  const guard = await requireRole([...ALLOWED])
   if (guard instanceof NextResponse) return guard
   const body = await req.json().catch(() => null) as { tier?: string; data?: UnitPrices } | null
   if (!body || !isTier(body.tier ?? null) || !body.data) {

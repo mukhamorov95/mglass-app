@@ -44,12 +44,15 @@ export function computeQuantities(assembly: Assembly, thickness: number): Quanti
 export type PriceByColor = Record<string, number>           // finishId → ₽/шт
 export type BarStock = { len: number; prices: PriceByColor } // хлыст: длина мм + цена по цвету
 
+export type CatalogRef = { supplier: string; base: string; label?: string }  // связь со справочником поставщиков
+
 export type PieceItem = {
   key: string
   name: string
   prices: PriceByColor
   qtyMode: 'auto' | 'manual'      // auto — кол-во из геометрии по key; manual — фикс. кол-во
   fixedQty?: number
+  ref?: CatalogRef                // если цена взята из справочника — провенанс (на расчёт не влияет)
 }
 export type BarItem = {
   key: string                     // 'profile' | 'tube' — привязка к геометрии; иначе кол-ва нет
@@ -66,6 +69,24 @@ export type UnitPrices = {
   installPerSection: number            // монтаж за секцию
   deliveryMoscow: number               // доставка по Москве
   liftPerFloor: number                 // подъём за этаж
+}
+
+// Маппинг свободного текста цвета поставщика (Ветро: «Cp (хром полированный)», АВ24:
+// «…/матовый», «…/черный») → finishId визуализатора. Порядок проверок важен
+// (роза/золото/бронза/оружейка/белый/чёрный — раньше «матовый»/«хром»).
+export function supplierColorToFinish(text: string): string | null {
+  const t = (text || '').toLowerCase()
+  const has = (...w: string[]) => w.some(x => t.includes(x))
+  const brushed = has('браш', 'brush', 'brushed', 'br ', 'brgold', 'brrose', 'brbronze')
+  if (has('роз', 'rose')) return brushed ? 'brrose' : 'rose'
+  if (has('золот', 'gold', '/tp', ' tp')) return brushed ? 'brgold' : 'gold'
+  if (has('бронз', 'bronze', '/bz')) return 'bronze'
+  if (has('оружейн', 'gun metal', 'gunmetal', 'gun', '/gg')) return 'gunmetal'
+  if (has('бел', 'white', '/mw')) return 'white'
+  if (has('чёрн', 'черн', 'black', '/bl')) return 'black'
+  if (has('матов', 'satin', 'sss', 'brushed nickel')) return 'satin'
+  if (has('хром', 'chrome', ' cp', '/cp', 'pss', 'полированн', 'нерж')) return 'chrome'
+  return null
 }
 
 export const GLASS_TYPE_IDS = ['clear', 'crystal', 'bronze', 'graphite'] as const

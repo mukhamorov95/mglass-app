@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeQuantities, computePrice, unitPricesFor, pickStock, barsCost, DEFAULT_FINANCE, migrateUnitPrices, buildDefaultUnitPrices } from '@/lib/configurator/pricing'
+import { computeQuantities, computePrice, unitPricesFor, pickStock, barsCost, DEFAULT_FINANCE, migrateUnitPrices, buildDefaultUnitPrices, supplierColorToFinish } from '@/lib/configurator/pricing'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
 import { getModel } from '@/lib/configurator/arrangement'
 
@@ -117,6 +117,27 @@ describe('pricing — cut-list + хлысты + цвет', () => {
     expect(p.tubeCost).toBeGreaterThan(0)
     // каждый кусок штанги подобран в один из заданных хлыстов → стоимость кратна 3000/4200
     expect(Object.keys(p.tubeBars).every(len => len === '2500' || len === '3200')).toBe(true)
+  })
+
+  it('маппинг цветов поставщика → цвет визуализатора (Ветро и АВ24)', () => {
+    // Ветро
+    expect(supplierColorToFinish('Cp (хром полированный)')).toBe('chrome')
+    expect(supplierColorToFinish('Satin Nickel (матовый хром)')).toBe('satin')
+    expect(supplierColorToFinish('Black (чёрный матовый)')).toBe('black')       // чёрный раньше «матовый»
+    expect(supplierColorToFinish('Gun Metal (матовый)')).toBe('gunmetal')       // оружейка раньше «матовый»
+    expect(supplierColorToFinish('Bronze (античная бронза)')).toBe('bronze')
+    expect(supplierColorToFinish('Gold (золото глянцевое)')).toBe('gold')
+    expect(supplierColorToFinish('BrGold (брашированное золото)')).toBe('brgold')
+    expect(supplierColorToFinish('White (белый матовый)')).toBe('white')
+    expect(supplierColorToFinish('Polish Rose gold (полированное розовое золото)')).toBe('rose')
+    expect(supplierColorToFinish('BrRose gold (брашированное розовое золото)')).toBe('brrose')
+    // АВ24 (рус. суффикс из названия)
+    expect(supplierColorToFinish('полированный')).toBe('chrome')
+    expect(supplierColorToFinish('матовый')).toBe('satin')
+    expect(supplierColorToFinish('черный')).toBe('black')
+    expect(supplierColorToFinish('оружейная сталь')).toBe('gunmetal')
+    expect(supplierColorToFinish('брашированное золото')).toBe('brgold')
+    expect(supplierColorToFinish('')).toBeNull()
   })
 
   it('миграция: новая схема с подгруппами возвращается как есть', () => {

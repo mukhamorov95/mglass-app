@@ -1,15 +1,78 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
 import {
-  computeQuantities, computePrice,
+  computeQuantities, computePrice, supplierColorToFinish,
   GLASS_TYPE_IDS, DEFAULT_FINANCE,
   type Tier, type UnitPrices, type HardwareGroup, type PieceItem, type BarItem,
 } from '@/lib/configurator/pricing'
+
+// ── Пикер из справочника поставщиков ──────────────────────────────
+type PickRow = { id: number; supplier: string; category: string; name: string; color: string; cost_price: number; retail_price: number }
+type PickSource = { supplier: string; title: string; discount_percent: number }
+
+function CatalogPicker({ onPick, onClose }: { onPick: (id: number) => void; onClose: () => void }) {
+  const [supplier, setSupplier] = useState('all')
+  const [q, setQ] = useState('')
+  const [qd, setQd] = useState('')
+  const [rows, setRows] = useState<PickRow[]>([])
+  const [sources, setSources] = useState<PickSource[]>([])
+  const [total, setTotal] = useState(0)
+  const [loading, setLoading] = useState(false)
+
+  useEffect(() => { const t = setTimeout(() => setQd(q), 300); return () => clearTimeout(t) }, [q])
+  useEffect(() => {
+    setLoading(true)
+    const p = new URLSearchParams({ supplier, q: qd, page: '0' })
+    fetch(`/api/admin/supplier-catalog?${p}`).then(r => r.ok ? r.json() : null).then(d => {
+      if (d) { setRows(d.rows); setSources(d.sources); setTotal(d.total) }
+    }).finally(() => setLoading(false))
+  }, [supplier, qd])
+
+  const title = (s: string) => sources.find(x => x.supplier === s)?.title ?? s
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 pt-16" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-[720px] max-h-[80vh] flex flex-col shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="p-4 border-b border-[#e4e4e0]">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[15px] font-semibold text-[#111110]">Из справочника поставщиков</p>
+            <button onClick={onClose} className="text-[#9a9a95] hover:text-[#111110] text-[18px] leading-none">×</button>
+          </div>
+          <div className="flex gap-1.5 mb-2">
+            <button onClick={() => setSupplier('all')} className={`px-3 py-1 rounded-md text-[12px] font-medium border ${supplier === 'all' ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0]'}`}>Все</button>
+            {sources.map(s => (
+              <button key={s.supplier} onClick={() => setSupplier(s.supplier)} className={`px-3 py-1 rounded-md text-[12px] font-medium border ${supplier === s.supplier ? 'bg-[#111110] text-white border-[#111110]' : 'bg-white text-[#4b4b47] border-[#e4e4e0]'}`}>{s.title} −{s.discount_percent}%</button>
+            ))}
+          </div>
+          <input autoFocus value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск: название или артикул (напр. «петля 180», «труба 30х10»)…"
+            className="w-full text-[13px] border border-[#e4e4e0] rounded-lg px-3 py-2 focus:border-[#111110] outline-none" />
+        </div>
+        <div className="overflow-auto p-2">
+          {loading && <p className="text-[13px] text-[#9a9a95] px-2 py-3">Загрузка…</p>}
+          {!loading && rows.length === 0 && <p className="text-[13px] text-[#9a9a95] px-2 py-3">Ничего не найдено</p>}
+          {rows.map(r => (
+            <button key={r.id} onClick={() => onPick(r.id)}
+              className="w-full text-left px-3 py-2 rounded-lg hover:bg-[#f5f5f3] flex items-center gap-3">
+              <span className="flex-1 min-w-0">
+                <span className="block text-[13px] text-[#111110] truncate">{r.name}</span>
+                <span className="block text-[11px] text-[#9a9a95]">{title(r.supplier)} · {r.color || '—'}</span>
+              </span>
+              <span className="font-mono text-[13px] font-semibold text-[#111110] shrink-0">{Math.round(r.cost_price).toLocaleString('ru-RU')} ₽</span>
+            </button>
+          ))}
+          {!loading && total > rows.length && <p className="text-[11px] text-[#9a9a95] px-3 py-2">Показаны первые {rows.length} из {total} — уточни поиск</p>}
+        </div>
+        <div className="p-3 border-t border-[#e4e4e0] text-[11px] text-[#9a9a95]">
+          Выбор позиции заполнит себестоимость по всем цветам (маппинг цветов поставщика → цвета визуализатора). Скидка уже учтена.
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const GLASS_LABEL: Record<string, string> = {
   clear: 'Прозрачное М1', crystal: 'Осветлённое Crystal Vision', bronze: 'Тонированная бронза', graphite: 'Тонированная графит',
@@ -104,6 +167,37 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
   })
   const addBarStock = (gi: number, ii: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.push({ len: 0, prices: {} }) })
   const removeBarStock = (gi: number, ii: number, si: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.splice(si, 1) })
+
+  // ── Пикер справочника: выбрал позицию → тянем все цвета → заполняем цены ──
+  type Target = { kind: 'piece'; gi: number; ii: number } | { kind: 'bar'; gi: number; ii: number; si: number }
+  const [picker, setPicker] = useState<Target | null>(null)
+  async function applyPick(rowId: number) {
+    const target = picker
+    setPicker(null)
+    if (!target) return
+    const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
+    if (!res.ok) return
+    const { variants, name, supplier, base } = await res.json() as {
+      variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+    }
+    const byFinish: Record<string, number> = {}
+    for (const v of variants) {
+      const f = supplierColorToFinish(v.color)
+      if (f && !(f in byFinish)) byFinish[f] = Math.round(v.cost_price)
+    }
+    // ни один цвет не распознан → кладём в текущий цвет цену выбранной строки
+    if (Object.keys(byFinish).length === 0 && variants.length) byFinish[finishId] = Math.round(variants[0].cost_price)
+    edit(u => {
+      if (target.kind === 'piece') {
+        const it = u.groups[target.gi].items[target.ii] as PieceItem
+        it.prices = { ...it.prices, ...byFinish }
+        it.ref = { supplier, base, label: name.length > 60 ? name.slice(0, 60) + '…' : name }
+      } else {
+        const st = (u.groups[target.gi].items[target.ii] as BarItem).stocks[target.si]
+        st.prices = { ...st.prices, ...byFinish }
+      }
+    })
+  }
 
   async function save() {
     setSaving(true); setMsg(null)
@@ -212,12 +306,16 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
                 <span className="text-[10px] text-[#9a9a95] uppercase">{g.kind === 'bar' ? 'хлысты' : 'шт'}</span>
               </div>
               {g.kind === 'piece' ? (g.items as PieceItem[]).map((it, ii) => (
-                <div key={it.key} className="flex items-center gap-1.5 py-0.5">
-                  <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
-                    className="flex-1 min-w-0 text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
-                  {it.qtyMode === 'manual' && <NumInput value={it.fixedQty ?? 0} onChange={v => setPieceQty(gi, ii, v)} w={44} suffix="шт" />}
-                  <NumInput value={it.prices[finishId] ?? 0} onChange={v => setPiecePrice(gi, ii, v)} w={80} />
-                  <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                <div key={it.key} className="py-0.5">
+                  <div className="flex items-center gap-1.5">
+                    <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
+                      className="flex-1 min-w-0 text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+                    {it.qtyMode === 'manual' && <NumInput value={it.fixedQty ?? 0} onChange={v => setPieceQty(gi, ii, v)} w={44} suffix="шт" />}
+                    <NumInput value={it.prices[finishId] ?? 0} onChange={v => setPiecePrice(gi, ii, v)} w={80} />
+                    <button onClick={() => setPicker({ kind: 'piece', gi, ii })} title="Из справочника поставщиков" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
+                    <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                  </div>
+                  {it.ref && <p className="text-[10px] text-[#8a9a7a] pl-1.5 truncate">🔗 {it.ref.label ?? it.ref.base}</p>}
                 </div>
               )) : (g.items as BarItem[]).map((it, ii) => (
                 <div key={it.key} className="py-1 border-b border-[#f4f4f0] last:border-0">
@@ -231,6 +329,7 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
                       <span className="text-[11px] text-[#9a9a95] w-10">Хлыст</span>
                       <NumInput value={s.len} onChange={v => setBarLen(gi, ii, si, v)} w={64} suffix="мм" />
                       <NumInput value={s.prices[finishId] ?? 0} onChange={v => setBarPrice(gi, ii, si, v)} w={80} />
+                      <button onClick={() => setPicker({ kind: 'bar', gi, ii, si })} title="Из справочника поставщиков" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
                       <button onClick={() => removeBarStock(gi, ii, si)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
                     </div>
                   ))}
@@ -253,6 +352,8 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
           </Card>
         </div>
       </div>
+
+      {picker && <CatalogPicker onPick={applyPick} onClose={() => setPicker(null)} />}
     </div>
   )
 }
