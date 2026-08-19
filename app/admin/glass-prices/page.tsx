@@ -44,7 +44,13 @@ interface GlassRow {
 }
 
 type RowSupplier = { supplier_id: string | null; supplier_material_name: string | null }
-type B2bMatRow = { id: number; name: string; thickness: number; category: string; active: boolean }
+type PatternDir = 'none' | 'along_length' | 'along_width'
+const PATTERN_OPTIONS: { value: PatternDir; label: string }[] = [
+  { value: 'none',         label: 'Нет (обычное стекло — можно крутить)' },
+  { value: 'along_length', label: 'Вдоль длины (большего размера)' },
+  { value: 'along_width',  label: 'Вдоль ширины (меньшего размера)' },
+]
+type B2bMatRow = { id: number; name: string; thickness: number; category: string; active: boolean; pattern_direction: PatternDir }
 type SheetVariant = { id: number; material_id: number; sheet_width: number; sheet_height: number; supplier_id: string | null; supplier_material_name: string | null; is_default: boolean; active: boolean; sort_order: number }
 
 interface MarginInfo {
@@ -175,7 +181,7 @@ export default function GlassPricesPage() {
     try {
       const supabase = createClient()
       const [{ data: matData }, { data: varData }] = await Promise.all([
-        supabase.from('b2b_materials').select('id, name, category, thickness, active'),
+        supabase.from('b2b_materials').select('id, name, category, thickness, active, pattern_direction'),
         supabase.from('b2b_material_sheet_variants').select('*').order('sort_order').order('id'),
       ])
       setB2bMaterials((matData ?? []) as B2bMatRow[])
@@ -511,6 +517,17 @@ export default function GlassPricesPage() {
     setVariantsModal({ name, thickness, materialId: mat?.id ?? null })
   }
 
+  async function setMaterialPattern(materialId: number, dir: PatternDir) {
+    const res = await fetch('/api/admin/b2b-materials/pattern', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ materialId, pattern_direction: dir }),
+    })
+    const json = await res.json().catch(() => ({ ok: false, error: 'сеть' }))
+    if (!json.ok) { showToast(`Ошибка: ${json.error}`); return }
+    setB2bMaterials(ms => ms.map(m => m.id === materialId ? { ...m, pattern_direction: dir } : m))
+  }
+
   async function addSheetVariantFromModal(materialId: number) {
     if (!newVarWidth || !newVarHeight) return
     const existing = sheetVariants[materialId] ?? []
@@ -818,6 +835,8 @@ export default function GlassPricesPage() {
             matName={variantsModal.name}
             thickness={variantsModal.thickness}
             materialId={matId}
+            patternDirection={matId !== null ? (b2bMaterials.find(m => m.id === matId)?.pattern_direction ?? 'none') : 'none'}
+            onPatternChange={matId !== null ? (dir) => setMaterialPattern(matId, dir) : undefined}
             variants={matId !== null ? (sheetVariants[matId] ?? []) : []}
             suppliers={suppliers}
             newVarWidth={newVarWidth}
@@ -1384,7 +1403,7 @@ function CalcRow({ label, value, sub, bold, separator }: {
 // ─── SheetVariantsModal ───────────────────────────────────────────────────────
 
 function SheetVariantsModal({
-  matName, thickness, materialId, variants, suppliers,
+  matName, thickness, materialId, variants, suppliers, patternDirection, onPatternChange,
   newVarWidth, newVarHeight, newVarSupplierId, newVarSupplierMatName,
   onWidthChange, onHeightChange, onSupplierChange, onSupplierMatNameChange,
   onAdd, onSetDefault, onToggleActive, onClose,
@@ -1394,6 +1413,8 @@ function SheetVariantsModal({
   materialId: number | null
   variants: SheetVariant[]
   suppliers: { id: string; name: string }[]
+  patternDirection: PatternDir
+  onPatternChange?: (dir: PatternDir) => void
   newVarWidth: number
   newVarHeight: number
   newVarSupplierId: string | null
@@ -1422,9 +1443,28 @@ function SheetVariantsModal({
         </div>
 
         <div className="px-4 py-4 space-y-3">
+          {/* Направление рисунка (фактурное/рифлёное стекло) — материал-уровень */}
+          {materialId !== null && onPatternChange && (
+            <div className="px-3 py-2.5 bg-white border border-[#e4e4e0] rounded-lg">
+              <label className="block text-[12px] font-semibold text-[#111110] mb-1">Направление рисунка</label>
+              <select
+                className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] text-[#111110] outline-none focus:border-[#111110] bg-white"
+                value={patternDirection}
+                onChange={e => onPatternChange(e.target.value as PatternDir)}
+              >
+                {PATTERN_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+              <p className="text-[11px] text-[#8a8a85] mt-1.5">
+                {patternDirection === 'none'
+                  ? 'Обычное стекло — при раскрое деталь можно поворачивать.'
+                  : `Фактурное: в раскрое деталь НЕ поворачивается, рисунок идёт вдоль ${patternDirection === 'along_length' ? 'длины (большего размера)' : 'ширины (меньшего размера)'}.`}
+              </p>
+            </div>
+          )}
+
           {/* Warning */}
           <div className="px-3 py-2 bg-amber-50 border border-amber-200 rounded-lg text-[11px] text-amber-700">
-            Пока расчёт потребности материала ещё не использует эти варианты. Подключение к расчёту будет следующим этапом.
+            Размеры форматов листов пока не идут в расчёт (подключение — следующим этапом). Направление рисунка ниже уже учитывается в раскрое.
           </div>
 
           {/* No material found */}
