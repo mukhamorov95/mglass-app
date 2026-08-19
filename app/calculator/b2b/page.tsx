@@ -271,8 +271,18 @@ export default function B2BCalculatorPage() {
       try {
         const sb = createClient()
 
-        // Auth + role check first — lightweight, before the heavy 8-query Promise.all
-        const { data: { user } } = await sb.auth.getUser()
+        // Auth + role check first — lightweight, before the heavy 8-query Promise.all.
+        // getUser() иногда виснет (гонка token-refresh при многих открытых вкладках
+        // приложения) — ограничиваем по времени и падаем на локальный getSession (без сети).
+        const authRes = await Promise.race([
+          sb.auth.getUser(),
+          new Promise<null>(res => setTimeout(() => res(null), 6000)),
+        ])
+        let user = authRes?.data?.user ?? null
+        if (!user) {
+          const { data: { session } } = await sb.auth.getSession()
+          user = session?.user ?? null
+        }
         if (user?.email) setManagerEmail(user.email)
         if (user?.id) setManagerId(user.id)
 
@@ -382,7 +392,16 @@ export default function B2BCalculatorPage() {
         setLoading(false)
       }
     }
-    load().catch(() => setLoading(false))
+    // Страховочный таймаут: если что-то в load() зависло (сетевой вызов без
+    // рекавери) — не крутим «Загрузка…» вечно, а показываем ошибку с «Повторить».
+    let finished = false
+    load().catch(() => setLoading(false)).finally(() => { finished = true })
+    const guard = setTimeout(() => {
+      if (finished) return
+      setLoadError('Не удалось загрузить данные — превышено время ожидания. Проверьте связь и нажмите «Повторить». Если повторяется — закройте лишние вкладки приложения или перезайдите в аккаунт.')
+      setLoading(false)
+    }, 12000)
+    return () => clearTimeout(guard)
   }, [])
 
   // ── Check draft / orderId after data loads ──
