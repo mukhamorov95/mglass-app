@@ -31,16 +31,22 @@ describe('computeBe — факт из break-even', () => {
     expect(p.marginPct).toBe(44.8)
   })
 
-  it('постоянные = сумма всех статей', () => {
+  it('постоянные: всё, без долга, долг', () => {
     expect(p.fixedTotal).toBe(3_584_717)
+    expect(p.debtTotal).toBe(690_000) // кредит 290к + лизинг 400к
+    expect(p.fixedNoDebt).toBe(3_584_717 - 690_000)
   })
 
-  it('EBITDA = маржа − постоянные', () => {
-    expect(p.ebitda).toBe(6_500_000 - 3_584_717)
+  it('EBITDA = маржа − постоянные БЕЗ долга (до кредита/лизинга)', () => {
+    expect(p.ebitda).toBe(6_500_000 - (3_584_717 - 690_000))
   })
 
-  it('остаток = маржа − фонды − постоянные', () => {
-    expect(p.remainder).toBe(6_500_000 - 526_400 - 3_584_717)
+  it('прибыль после долга = маржа − все постоянные', () => {
+    expect(p.operating).toBe(6_500_000 - 3_584_717)
+  })
+
+  it('остаток = прибыль после долга − фонды', () => {
+    expect(p.remainder).toBe((6_500_000 - 3_584_717) - 526_400)
   })
 
   it('ТБ-0 положительна и ниже планового дохода', () => {
@@ -62,8 +68,13 @@ describe('computeBe — сценарий без кредита и лизинга
     expect(base.fixedTotal - scen.fixedTotal).toBe(290_000 + 400_000)
   })
 
-  it('EBITDA растёт на ту же сумму долга', () => {
-    expect(scen.ebitda - base.ebitda).toBe(690_000)
+  it('прибыль после долга растёт на сумму долга, долг обнуляется', () => {
+    expect(scen.operating - base.operating).toBe(690_000)
+    expect(scen.debtTotal).toBe(0)
+  })
+
+  it('без долга прибыль после долга = EBITDA', () => {
+    expect(scen.operating).toBe(scen.ebitda)
   })
 })
 
