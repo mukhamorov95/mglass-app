@@ -6,7 +6,7 @@ import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurato
 
 const M = 0.001
 
-export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe' | 'cap'
+export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002'
 
 export function hingeSpecByModel(model: string): HingeSpec {
   return model === 'dessau' ? DESSAU_103 : BALGE_004
@@ -90,20 +90,38 @@ function SlidingRoller({ material }: { material: THREE.Material }) {
   )
 }
 
-// Держатель штанги на стационарном стекле: обойма вокруг штанги 30×10 + зажим на
-// стекле. Ставится по центру и ближе к свободному краю стационара.
-function TubeHolder({ material }: { material: THREE.Material }) {
+// КП-006 — крепёж трубы к СТЕКЛУ (L-кронштейн 87×40×18.5 по чертежу). П-зажим на
+// верхнюю кромку стекла (у z=0) + вынос к трубе (+Z), который смещает трубу от
+// стекла. Ширина 18.5 мм вдоль трубы (X).
+function KP006({ material }: { material: THREE.Material }) {
+  const w = 18.5 * M
+  const arm = 44 * M
   return (
     <group>
-      {/* обойма вокруг штанги */}
-      <mesh material={material} castShadow>
-        <boxGeometry args={[20 * M, 30 * M, 26 * M]} />
+      {/* вынос-планка к трубе (вдоль +Z, сверху) */}
+      <mesh position={[0, 8 * M, arm / 2]} material={material} castShadow>
+        <boxGeometry args={[w, 16 * M, arm]} />
       </mesh>
-      {/* зажим-планка на стекле (стекло позади штанги, к центру ниши) */}
-      <mesh position={[0, 0, -15 * M]} material={material} castShadow>
-        <boxGeometry args={[28 * M, 34 * M, 8 * M]} />
+      {/* П-зажим на кромке стекла: две щеки по граням стекла (у z=0) */}
+      {[-6 * M, 6 * M].map((z, i) => (
+        <mesh key={i} position={[0, -6 * M, z]} material={material} castShadow>
+          <boxGeometry args={[w, 26 * M, 4 * M]} />
+        </mesh>
+      ))}
+      <mesh position={[0, 6 * M, 0]} material={material} castShadow>
+        <boxGeometry args={[w, 8 * M, 14 * M]} />
       </mesh>
     </group>
+  )
+}
+
+// КП-002 — крепёж трубы к СТЕНЕ (блок 31×40×18 по чертежу). Труба входит в паз,
+// блок винтом к стене. X — вдоль трубы, +Z — к стене.
+function KP002({ material }: { material: THREE.Material }) {
+  return (
+    <mesh material={material} castShadow>
+      <boxGeometry args={[18 * M, 40 * M, 31 * M]} />
+    </mesh>
   )
 }
 
@@ -134,7 +152,8 @@ function TubeCap({ material }: { material: THREE.Material }) {
 
 export function Hardware({ model, material }: { model: HardwareModel; material: THREE.Material }) {
   if (model === 'roller') return <SlidingRoller material={material} />
-  if (model === 'holder') return <TubeHolder material={material} />
+  if (model === 'kp006') return <KP006 material={material} />
+  if (model === 'kp002') return <KP002 material={material} />
   if (model === 'kupe') return <KupeHandle material={material} />
   if (model === 'cap') return <TubeCap material={material} />
   if (model === 'sd210') return <HandleSD210 material={material} />

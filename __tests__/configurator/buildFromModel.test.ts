@@ -42,7 +42,16 @@ describe('buildFromModel — все 9 моделей строятся', () => {
       expect(a.hardware.filter(h => h.model === 'balge').length).toBe(0)
       expect(a.hardware.filter(h => h.model === 'roller').length).toBeGreaterThanOrEqual(2)  // 2 каретки на створку (сверху)
       expect(a.hardware.some(h => h.model === 'kupe')).toBe(true)
-      expect(a.hardware.some(h => h.model === 'holder')).toBe(true)
+      expect(a.hardware.some(h => h.model === 'kp006')).toBe(true)  // труба→стекло
+      expect(a.hardware.some(h => h.model === 'kp002')).toBe(true)  // труба→стена
+    }
+  })
+
+  it('распашные (М2, М4, М7) — труба смещена + КП-006 на стекло + КП-002 на стену', () => {
+    for (const code of ['М2', 'М4', 'М7']) {
+      const a = buildFromModel(getModel(code), dimsFor(code), 8)
+      expect(a.hardware.some(h => h.model === 'kp006')).toBe(true)
+      expect(a.hardware.some(h => h.model === 'kp002')).toBe(true)
     }
   })
 

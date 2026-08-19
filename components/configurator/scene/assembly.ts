@@ -33,7 +33,7 @@ export type MetalPart = {
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
 export type HardwarePlacement = {
   key: string
-  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'holder' | 'kupe' | 'cap'
+  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002'
   pos: [number, number, number]
   rotY: number
 }
@@ -194,13 +194,16 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   }
   const tubeY = H - TUBE_DROP   // ось штанги 30×10 у раздвижных (отступ от верха)
 
-  // Нижний П-профиль Pr-002 всегда; верх — распашные/стационар: штанга у верха;
-  // раздвижные: штанга 30×10 с отступом от верха (по ней ездят ролики).
-  const addRails = (kp: string, A: P, B: P, sliding: boolean) => {
+  // Нижний П-профиль Pr-002 всегда. Верх: у прямых распашных И раздвижных — труба
+  // 30×10 с отступом от верха, смещённая от стекла на SLIDE_GAP (её держат КП-006).
+  // У стационара (М1) — штанга у верха, без смещения.
+  const addRails = (kp: string, A: P, B: P, offsetTop: boolean) => {
     const cx = (A[0] + B[0]) / 2, cz = (A[1] + B[1]) / 2
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz), rotY = Math.atan2(-dz, dx)
+    const nx = L ? -dz / L : 0, nz = L ? dx / L : 0
+    const g = offsetTop ? SLIDE_GAP : 0
     metal.push({ key: kp + '-bot', kind: 'profile', rotY, pos: [cx, bottomY, cz], size: [L, 0.0125, 0.018] })  // Pr-002 18×12.5
-    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx, sliding ? tubeY : topY, cz], size: [L, 0.030, 0.010] })  // штанга 30×10
+    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx + nx * g, offsetTop ? tubeY : topY, cz + nz * g], size: [L, 0.030, 0.010] })  // труба 30×10
   }
   const addPost = (key: string, p: P) =>
     metal.push({ key, kind: 'post', rotY: 0, pos: [p[0], H / 2, p[1]], size: [PROFILE * 0.55, H, PROFILE * 0.55] })
@@ -209,30 +212,29 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz)
     return { ux: dx / L, uz: dz / L, nx: -dz / L, nz: dx / L, L, rotY: Math.atan2(-dz, dx) }
   }
-  // Раздвижная створка РД-001: две каретки по штанге СВЕРХУ (по 2 колеса = «4 ролика»,
+  // Раздвижная створка РД-001: две каретки по трубе СВЕРХУ (по 2 колеса = «4 ролика»,
   // снизу креплений нет) + ручка-купе. Всё крепление вверху.
   const addSlideDoor = (key: string, A: P, B: P) => {
     const { ux, uz, nx, nz, L, rotY } = seg2(A, B)
     if (!L) return
     const at = (f: number, y: number) => [A[0] + ux * L * f + nx * SLIDE_GAP, y, A[1] + uz * L * f + nz * SLIDE_GAP] as [number, number, number]
     ;[0.24, 0.76].forEach((f, i) => {
-      hardware.push({ key: `${key}-r${i}`, model: 'roller', rotY, pos: at(f, tubeY) })  // каретки по штанге
+      hardware.push({ key: `${key}-r${i}`, model: 'roller', rotY, pos: at(f, tubeY) })  // каретки по трубе
     })
     hardware.push({ key: `${key}-kupe`, model: 'kupe', rotY, pos: at(0.82, H / 2) })    // ручка-купе у кромки
   }
-  // Держатели штанги на стационарном стекле: по центру и ближе к свободному краю.
-  const addTubeHolders = (key: string, A: P, B: P) => {
+  // КП-006 — крепёж трубы к стеклу, на стационаре ближе к двери (frac вдоль сегмента).
+  // Ставится в плоскости стекла (без смещения), вынос сам достаёт до смещённой трубы.
+  const addKP006 = (key: string, A: P, B: P, frac: number) => {
     const { ux, uz, L, rotY } = seg2(A, B)
     if (!L) return
-    ;[0.32, 0.72].forEach((f, i) => {
-      hardware.push({ key: `${key}-hold${i}`, model: 'holder', rotY, pos: [A[0] + ux * L * f, tubeY, A[1] + uz * L * f] })
-    })
+    hardware.push({ key: `${key}-kp006`, model: 'kp006', rotY, pos: [A[0] + ux * L * frac, tubeY, A[1] + uz * L * frac] })
   }
-  // Заглушки-колпачки на торцах штанги раздвижного рана.
-  const addTubeCaps = (kp: string, A: P, B: P) => {
-    const { rotY } = seg2(A, B)
-    hardware.push({ key: `${kp}-capA`, model: 'cap', rotY, pos: [A[0], tubeY, A[1]] })
-    hardware.push({ key: `${kp}-capB`, model: 'cap', rotY, pos: [B[0], tubeY, B[1]] })
+  // КП-002 — крепёж трубы к стене, на торцах рана (в плоскости смещённой трубы).
+  const addWallMounts = (kp: string, A: P, B: P) => {
+    const { nx, nz, rotY } = seg2(A, B)
+    hardware.push({ key: `${kp}-kp002A`, model: 'kp002', rotY, pos: [A[0] + nx * SLIDE_GAP, tubeY, A[1] + nz * SLIDE_GAP] })
+    hardware.push({ key: `${kp}-kp002B`, model: 'kp002', rotY, pos: [B[0] + nx * SLIDE_GAP, tubeY, B[1] + nz * SLIDE_GAP] })
   }
 
   // Дверь: открыта наружу вокруг петлевой кромки Ph; ставит петли и ручку.
@@ -286,8 +288,10 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   for (const run of runs) {
     const n = run.segs.length
     const sliding = run.segs.some(s => s.t === 'slide')
-    addRails(run.kp, run.A, run.B, sliding)
-    if (sliding) addTubeCaps(run.kp, run.A, run.B)   // заглушки на торцах штанги
+    const swing = run.segs.some(s => s.t === 'door')
+    const offsetTop = sliding || swing            // прямые/угловые распашные и раздвижные — труба 30×10 смещена, КП-006/КП-002
+    addRails(run.kp, run.A, run.B, offsetTop)
+    if (offsetTop) addWallMounts(run.kp, run.A, run.B)   // КП-002 труба→стена на торцах
     const rL = Math.hypot(run.B[0] - run.A[0], run.B[1] - run.A[1])
     const rux = rL ? (run.B[0] - run.A[0]) / rL : 0, ruz = rL ? (run.B[1] - run.A[1]) / rL : 0
     for (let i = 0; i < n; i++) {
@@ -295,7 +299,14 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
       const sb: P = [run.A[0] + (run.B[0] - run.A[0]) * (i + 1) / n, run.A[1] + (run.B[1] - run.A[1]) * (i + 1) / n]
       const sg = run.segs[i]
       const key = run.kp + i
-      if (sg.t === 'fixed') { addGlass(key, sa, sb, 'fixed'); if (sliding) addTubeHolders(key, sa, sb) }  // держатели штанги на стационаре
+      if (sg.t === 'fixed') {
+        addGlass(key, sa, sb, 'fixed')
+        if (offsetTop) {   // КП-006 труба→стекло, ближе к двери/створке
+          const frac = (i < n - 1 && run.segs[i + 1].t !== 'fixed') ? 0.82
+            : (i > 0 && run.segs[i - 1].t !== 'fixed') ? 0.18 : 0.5
+          addKP006(key, sa, sb, frac)
+        }
+      }
       else if (sg.t === 'slide') {
         // приоткрываем створку вдоль штанги к началу рана: перекрывает соседний
         // стационар (спереди) и открывает проём — читается как раздвижная.
