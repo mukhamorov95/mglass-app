@@ -6,7 +6,7 @@ import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurato
 
 const M = 0.001
 
-export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001'
+export type HardwareModel = 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001' | 'connector'
 
 export function hingeSpecByModel(model: string): HingeSpec {
   return model === 'dessau' ? DESSAU_103 : BALGE_004
@@ -77,14 +77,14 @@ function HandleSD210({ material }: { material: THREE.Material }) {
 function SlidingRoller({ material }: { material: THREE.Material }) {
   return (
     <group>
-      {[8 * M, -8 * M].map((y, i) => (
+      {[16 * M, -16 * M].map((y, i) => (
         <mesh key={i} position={[0, y, 0]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
-          <cylinderGeometry args={[9 * M, 9 * M, 12 * M, 24]} />
+          <cylinderGeometry args={[20 * M, 20 * M, 12 * M, 28]} />
         </mesh>
       ))}
       {/* планка каретки к стеклу */}
       <mesh position={[0, 0, 0]} material={material} castShadow>
-        <boxGeometry args={[15 * M, 30 * M, 9 * M]} />
+        <boxGeometry args={[15 * M, 36 * M, 9 * M]} />
       </mesh>
     </group>
   )
@@ -170,8 +170,25 @@ function TubeCap({ material }: { material: THREE.Material }) {
   )
 }
 
+// Соединитель труб (45×17) — стыкует два отрезка трубы под углом (углы трапеции).
+// Хром, V-образный: два плеча под ~135°, лежит на стыке труб сверху.
+function TubeConnector({ material }: { material: THREE.Material }) {
+  const arm = 24 * M, w = 17 * M, h = 12 * M
+  const half = (135 * Math.PI / 180) / 2
+  return (
+    <group>
+      {[half, -half].map((a, i) => (
+        <mesh key={i} position={[Math.sin(a) * arm / 2, 0, Math.cos(a) * arm / 2]} rotation={[0, a, 0]} material={material} castShadow>
+          <boxGeometry args={[w, h, arm]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 export function Hardware({ model, material }: { model: HardwareModel; material: THREE.Material }) {
   if (model === 'roller') return <SlidingRoller material={material} />
+  if (model === 'connector') return <TubeConnector material={material} />
   if (model === 'kp006') return <KP006 material={material} />
   if (model === 'kp002') return <KP002 material={material} />
   if (model === 'kp001') return <KP001 material={material} />

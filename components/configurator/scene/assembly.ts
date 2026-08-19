@@ -33,7 +33,7 @@ export type MetalPart = {
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
 export type HardwarePlacement = {
   key: string
-  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001'
+  model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001' | 'connector'
   pos: [number, number, number]
   rotY: number
 }
@@ -183,13 +183,15 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   const bottomY = 0.0125 / 2                       // нижний П-профиль Pr-002 18×12.5 — на поддоне, у низа стекла
   const topY = H - 0.006                           // штанга 30×10 у верха
 
-  // Вертикальная стеклянная панель вдоль отрезка плана A→B.
-  const addGlass = (key: string, A: P, B: P, role: GlassPart['role'], zOff = 0) => {
+  // Вертикальная стеклянная панель вдоль отрезка плана A→B. При zOff (створка)
+  // смещаем внутрь: если задан out — по −out, иначе по нормали сегмента.
+  const addGlass = (key: string, A: P, B: P, role: GlassPart['role'], zOff = 0, out?: P) => {
     const cx = (A[0] + B[0]) / 2, cz = (A[1] + B[1]) / 2
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz)
     const rotY = Math.atan2(-dz, dx)
     const nx = L ? -dz / L : 0, nz = L ? dx / L : 0   // нормаль панели
-    glass.push({ key, role, rotY, pos: [cx + nx * zOff, H / 2, cz + nz * zOff], size: [L, H, t] })
+    const ox = out ? -out[0] * zOff : nx * zOff, oz = out ? -out[1] * zOff : nz * zOff
+    glass.push({ key, role, rotY, pos: [cx + ox, H / 2, cz + oz], size: [L, H, t] })
     return { cx, cz, L, rotY }
   }
   const tubeYSlide = H - TUBE_DROP   // раздвижная — труба на ~60 мм ниже верха (шапка над трубой)
@@ -199,16 +201,18 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   // ролики); 'swing' — труба почти вровень с верхом; 'flush' — штанга у верха (стационар
   // М1); 'none' — верха нет (большой боковой стационар М7). Труба лежит «на пузе»:
   // 10 высота, 30 глубина; смещена внутрь на SLIDE_GAP (её держат КП-006/002/001).
-  const addRails = (kp: string, A: P, B: P, topKind: 'slide' | 'swing' | 'flush' | 'none') => {
+  const addRails = (kp: string, A: P, B: P, topKind: 'slide' | 'swing' | 'flush' | 'none', out: P) => {
     const cx = (A[0] + B[0]) / 2, cz = (A[1] + B[1]) / 2
     const dx = B[0] - A[0], dz = B[1] - A[1], L = Math.hypot(dx, dz), rotY = Math.atan2(-dz, dx)
-    const nx = L ? -dz / L : 0, nz = L ? dx / L : 0
     metal.push({ key: kp + '-bot', kind: 'profile', rotY, pos: [cx, bottomY, cz], size: [L, 0.0125, 0.018] })  // Pr-002 18×12.5
     if (topKind === 'none') return
     const offset = topKind !== 'flush'
     const y = topKind === 'slide' ? tubeYSlide : topKind === 'swing' ? tubeYSwing : topY
-    const g = offset ? SLIDE_GAP : 0
-    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx + nx * g, y, cz + nz * g], size: [L, 0.010, 0.030] })  // труба 30×10 на пузе
+    const ox = offset ? -out[0] * SLIDE_GAP : 0, oz = offset ? -out[1] * SLIDE_GAP : 0   // труба смещена внутрь
+    // раздвижная: труба 30 высота × 10 глубина (по ней ролики); распашная/трапеция:
+    // «на пузе» — 10 высота × 30 глубина.
+    const size: [number, number, number] = topKind === 'slide' ? [L, 0.030, 0.010] : [L, 0.010, 0.030]
+    metal.push({ key: kp + '-top', kind: 'rail', rotY, pos: [cx + ox, y, cz + oz], size })
   }
   const addPost = (key: string, p: P) =>
     metal.push({ key, kind: 'post', rotY: 0, pos: [p[0], H / 2, p[1]], size: [PROFILE * 0.55, H, PROFILE * 0.55] })
@@ -218,27 +222,31 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     return { ux: dx / L, uz: dz / L, nx: -dz / L, nz: dx / L, L, rotY: Math.atan2(-dz, dx) }
   }
   // Раздвижная створка РД-001: две каретки по трубе СВЕРХУ + ручка-купе.
-  const addSlideDoor = (key: string, A: P, B: P) => {
-    const { ux, uz, nx, nz, L, rotY } = seg2(A, B)
+  // Смещение — строго внутрь душевой (−out).
+  const addSlideDoor = (key: string, A: P, B: P, out: P) => {
+    const { ux, uz, L, rotY } = seg2(A, B)
     if (!L) return
-    const at = (f: number, y: number) => [A[0] + ux * L * f + nx * SLIDE_GAP, y, A[1] + uz * L * f + nz * SLIDE_GAP] as [number, number, number]
+    const ox = -out[0] * SLIDE_GAP, oz = -out[1] * SLIDE_GAP
+    const at = (f: number, y: number) => [A[0] + ux * L * f + ox, y, A[1] + uz * L * f + oz] as [number, number, number]
     ;[0.24, 0.76].forEach((f, i) => {
       hardware.push({ key: `${key}-r${i}`, model: 'roller', rotY, pos: at(f, tubeYSlide) })
     })
     hardware.push({ key: `${key}-kupe`, model: 'kupe', rotY, pos: at(0.82, H / 2) })
   }
-  // КП-006 — крепёж трубы к стеклу, на стационаре ближе к двери (frac вдоль сегмента).
-  const addKP006 = (key: string, A: P, B: P, frac: number, y: number) => {
-    const { ux, uz, L, rotY } = seg2(A, B)
+  // КП-006 — крепёж трубы к стеклу, на стационаре ближе к двери. Вынос — к трубе
+  // (внутрь); если +нормаль сегмента смотрит наружу, разворот кронштейна на π.
+  const addKP006 = (key: string, A: P, B: P, frac: number, y: number, out: P) => {
+    const { ux, uz, nx, nz, L, rotY } = seg2(A, B)
     if (!L) return
-    hardware.push({ key: `${key}-kp006`, model: 'kp006', rotY, pos: [A[0] + ux * L * frac, y, A[1] + uz * L * frac] })
+    const flip = (nx * -out[0] + nz * -out[1]) < 0 ? Math.PI : 0
+    hardware.push({ key: `${key}-kp006`, model: 'kp006', rotY: rotY + flip, pos: [A[0] + ux * L * frac, y, A[1] + uz * L * frac] })
   }
-  // Торцы трубы: у A — КП-002 (к стене); у B — КП-002, либо КП-001 (угол М7: труба
-  // приходит перпендикулярно к боковому стеклу).
-  const addTubeEnds = (kp: string, A: P, B: P, y: number, bModel: 'kp002' | 'kp001') => {
-    const { nx, nz, rotY } = seg2(A, B)
-    hardware.push({ key: `${kp}-endA`, model: 'kp002', rotY, pos: [A[0] + nx * SLIDE_GAP, y, A[1] + nz * SLIDE_GAP] })
-    hardware.push({ key: `${kp}-endB`, model: bModel, rotY, pos: [B[0] + nx * SLIDE_GAP, y, B[1] + nz * SLIDE_GAP] })
+  // Торцы трубы: у A — КП-002 (к стене); у B — КП-002 либо КП-001 (угол М7). Смещение внутрь.
+  const addTubeEnds = (kp: string, A: P, B: P, y: number, bModel: 'kp002' | 'kp001', out: P) => {
+    const { rotY } = seg2(A, B)
+    const ox = -out[0] * SLIDE_GAP, oz = -out[1] * SLIDE_GAP
+    hardware.push({ key: `${kp}-endA`, model: 'kp002', rotY, pos: [A[0] + ox, y, A[1] + oz] })
+    hardware.push({ key: `${kp}-endB`, model: bModel, rotY, pos: [B[0] + ox, y, B[1] + oz] })
   }
 
   // Дверь: открыта наружу вокруг петлевой кромки Ph; ставит петли и ручку.
@@ -298,11 +306,13 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     const isM7 = model.shape === 'corner' && model.group === 'swing'
     const isM7Side = isM7 && run.kp === 's'
     const isM7Front = isM7 && run.kp === 'f'
-    const topKind: 'slide' | 'swing' | 'flush' | 'none' = isM7Side ? 'none' : sliding ? 'slide' : swing ? 'swing' : 'flush'
-    addRails(run.kp, run.A, run.B, topKind)
+    const isTrap = model.shape === 'trap'   // все раны — со смещённой трубой (на пузе)
+    const topKind: 'slide' | 'swing' | 'flush' | 'none' = isM7Side ? 'none' : sliding ? 'slide' : (swing || isTrap) ? 'swing' : 'flush'
+    addRails(run.kp, run.A, run.B, topKind, run.out)
     const hasTube = topKind === 'slide' || topKind === 'swing'
     const runY = sliding ? tubeYSlide : tubeYSwing
-    if (hasTube) addTubeEnds(run.kp, run.A, run.B, runY, isM7Front ? 'kp001' : 'kp002')
+    // Торцы трубы: у трапеции стыки закрывает соединитель (ниже), КП-002 не ставим.
+    if (hasTube && !isTrap) addTubeEnds(run.kp, run.A, run.B, runY, isM7Front ? 'kp001' : 'kp002', run.out)
     const rL = Math.hypot(run.B[0] - run.A[0], run.B[1] - run.A[1])
     const rux = rL ? (run.B[0] - run.A[0]) / rL : 0, ruz = rL ? (run.B[1] - run.A[1]) / rL : 0
     for (let i = 0; i < n; i++) {
@@ -315,7 +325,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
         if (hasTube) {   // КП-006 труба→стекло, ближе к двери/створке
           const frac = (i < n - 1 && run.segs[i + 1].t !== 'fixed') ? 0.82
             : (i > 0 && run.segs[i - 1].t !== 'fixed') ? 0.18 : 0.5
-          addKP006(key, sa, sb, frac, runY)
+          addKP006(key, sa, sb, frac, runY, run.out)
         }
       }
       else if (sg.t === 'slide') {
@@ -324,7 +334,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
         const shift = (rL / n) * SLIDE_OPEN
         const oa: P = [sa[0] - rux * shift, sa[1] - ruz * shift]
         const ob: P = [sb[0] - rux * shift, sb[1] - ruz * shift]
-        addGlass(key, oa, ob, 'door', SLIDE_GAP); addSlideDoor(key, oa, ob)
+        addGlass(key, oa, ob, 'door', SLIDE_GAP, run.out); addSlideDoor(key, oa, ob, run.out)
       } else {
         const Ph = sg.hinge === 'a' ? sa : sb
         const Pf = sg.hinge === 'a' ? sb : sa
@@ -332,6 +342,23 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
       }
     }
   }
+  // Трапеция: соединители труб на углах + КП-002 на внешних торцах (у стен).
+  if (model.shape === 'trap') {
+    const c = Math.min(W, W2) * 0.5
+    const dir = (a: P, b: P): P => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L] }
+    const rotOf = (d: P) => Math.atan2(-d[1], d[0])
+    const outs: Record<string, P> = { r: [1, 0], d: [0.707, -0.707], g: [0, -1] }
+    const dR = dir([W, W2], [W, c]), dD = dir([W, c], [W - c, 0]), dG = dir([W - c, 0], [0, 0])
+    const conn = (p: P, outA: P, outB: P, dA: P, dB: P, key: string) => {
+      const ox = -(outA[0] + outB[0]), oz = -(outA[1] + outB[1]), ol = Math.hypot(ox, oz) || 1
+      hardware.push({ key, model: 'connector', rotY: (rotOf(dA) + rotOf(dB)) / 2, pos: [p[0] + ox / ol * SLIDE_GAP, tubeYSwing, p[1] + oz / ol * SLIDE_GAP] })
+    }
+    conn([W, c], outs.r, outs.d, dR, dD, 'conn1')
+    conn([W - c, 0], outs.d, outs.g, dD, dG, 'conn2')
+    hardware.push({ key: 'trap-endR', model: 'kp002', rotY: rotOf(dR), pos: [W - outs.r[0] * SLIDE_GAP, tubeYSwing, W2 - outs.r[1] * SLIDE_GAP] })
+    hardware.push({ key: 'trap-endG', model: 'kp002', rotY: rotOf(dG), pos: [0 - outs.g[0] * SLIDE_GAP, tubeYSwing, 0 - outs.g[1] * SLIDE_GAP] })
+  }
+
   // Стойки на стыках стекло-стена/угол.
   addPost('p-corner', [0, 0])
   if (model.shape === 'niche') addPost('p-right', [W, 0])

@@ -58,6 +58,11 @@ describe('buildFromModel — все 9 моделей строятся', () => {
     expect(m7.hardware.some(h => h.model === 'kp001')).toBe(true)
     // над большим боковым стационаром трубы нет: только один верхний рельс (фронт)
     expect(m7.metal.filter(x => x.key.endsWith('-top')).length).toBe(1)
+    // М11 трапеция — соединители труб на углах + КП-006 на стационарах
+    const m11 = buildFromModel(getModel('М11'), dimsFor('М11'), 8)
+    expect(m11.hardware.filter(h => h.model === 'connector').length).toBe(2)
+    expect(m11.hardware.some(h => h.model === 'kp006')).toBe(true)
+    expect(m11.metal.filter(x => x.key.endsWith('-top')).length).toBe(3)  // труба над всеми 3 ранами
   })
 
   it('угловая М7: глубина сцены = боковой размер', () => {
