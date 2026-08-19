@@ -1034,7 +1034,19 @@ export default function B2BCalculatorPage() {
         g.pieces.push({ id: `item-${item.materialId}-${i}`, width: item.width, height: item.height, label: `${item.width}×${item.height}`, orderId: 0, orderClientName: '', materialKey: key, canRotate: true })
       }
     }
-    return runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+    const optimal = runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+    // База для сравнения: тот же раскрой на ОДНОМ дефолтном формате (как было до
+    // выбора формата). Экономия = насколько выбор оптимального формата уменьшил
+    // число листов. Считаем только если у материала есть >1 формата.
+    const baseGroups = new Map([...groups].map(([k, g]) => [k, { ...g, sheetFormats: undefined }]))
+    const baseByKey = new Map(runCuttingOptimizer(baseGroups, DEFAULT_CUTTING_SETTINGS).map(r => [r.materialKey, r]))
+    return optimal.map(r => {
+      const b = baseByKey.get(r.materialKey)
+      const multiFormat = (groups.get(r.materialKey)?.sheetFormats?.length ?? 0) > 1
+      const chosenNonDefault = !!b && (b.sheetWidth !== r.sheetWidth || b.sheetHeight !== r.sheetHeight)
+      const savedSheets = b ? Math.max(0, b.sheetsNeeded - r.sheetsNeeded) : 0
+      return { ...r, baseSheetWidth: b?.sheetWidth, baseSheetHeight: b?.sheetHeight, multiFormat, chosenNonDefault, savedSheets }
+    })
   }, [items, materials])
 
   const kpText = useMemo(() => {
@@ -2568,7 +2580,25 @@ export default function B2BCalculatorPage() {
                         <tbody>
                           {cuttingResults.map(r => (
                             <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
-                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
+                              <td className="py-2 font-semibold text-[#111110]">
+                                {r.materialLabel}
+                                {r.patternDirection !== 'none' && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold align-middle">
+                                    рисунок вдоль {r.patternDirection === 'along_length' ? 'длины' : 'ширины'}
+                                  </span>
+                                )}
+                                {r.savedSheets > 0 && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold align-middle"
+                                    title={`Оптимальный формат сэкономил ${r.savedSheets} лист(ов) против ${r.baseSheetWidth}×${r.baseSheetHeight}`}>
+                                    −{r.savedSheets} {r.savedSheets === 1 ? 'лист' : r.savedSheets < 5 ? 'листа' : 'листов'} vs {r.baseSheetWidth}×{r.baseSheetHeight}
+                                  </span>
+                                )}
+                                {r.savedSheets === 0 && r.chosenNonDefault && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-[#eef0ee] text-[#6b6b66] text-[10px] font-medium align-middle">
+                                    оптимальный формат
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
                               <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
@@ -2580,9 +2610,16 @@ export default function B2BCalculatorPage() {
                           ))}
                         </tbody>
                       </table>
+                      {cuttingResults.reduce((s, r) => s + r.savedSheets, 0) > 0 && (
+                        <p className="text-[11px] text-emerald-700 font-medium">
+                          Экономия за счёт выбора формата листа: −{cuttingResults.reduce((s, r) => s + r.savedSheets, 0)} лист(ов) против дефолтного формата.
+                        </p>
+                      )}
                       <p className="text-[11px] text-[#9a9a95]">
-                        Зазор 2 мм · Кромка 2 мм · Поворот разрешён
-                        {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
+                        Зазор 2 мм · Кромка 2 мм
+                        {cuttingResults.some(r => r.patternDirection !== 'none')
+                          ? ' · ⚠ У фактурных листов поворот детали запрещён (рисунок направлен)'
+                          : ' · Поворот разрешён'}
                       </p>
                     </div>
                   </details>
