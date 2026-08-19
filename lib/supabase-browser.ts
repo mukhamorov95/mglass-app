@@ -6,11 +6,13 @@ import { createBrowserClient } from '@supabase/ssr'
 // крутит «Загрузка…». Здесь lock с таймаутом ТОЛЬКО на ЗАХВАТ: если за отведённое
 // время не взяли — выполняем операцию без блокировки (лучше редкая гонка рефреша,
 // чем вечное зависание). Когда lock свободен — работает как обычно (fn ровно один раз).
+const LOCK_ACQUIRE_MAX_MS = 2500   // supabase шлёт 10с — слишком близко к таймауту страницы; жёстко режем
 async function safeLock<R>(name: string, acquireTimeout: number, fn: () => Promise<R>): Promise<R> {
   const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined
   if (!locks) return fn()
   const ac = new AbortController()
-  const timer = setTimeout(() => ac.abort(), acquireTimeout > 0 ? acquireTimeout : 5000)
+  const wait = Math.min(acquireTimeout > 0 ? acquireTimeout : LOCK_ACQUIRE_MAX_MS, LOCK_ACQUIRE_MAX_MS)
+  const timer = setTimeout(() => ac.abort(), wait)
   try {
     return await locks.request(name, { signal: ac.signal }, async () => fn())
   } catch {
