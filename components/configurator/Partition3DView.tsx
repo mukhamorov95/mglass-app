@@ -15,7 +15,7 @@ const Partition3D = dynamic(() => import('./Partition3D'), {
 })
 
 export function Partition3DView(props: {
-  model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint
+  model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean
 }) {
   return <Partition3D {...props} />
 }

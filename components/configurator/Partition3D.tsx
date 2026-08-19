@@ -163,10 +163,10 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean },
 ) {
-  const assembly = useMemo(() => buildFromModel(model, dims, thickness), [model, dims, thickness])
+  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen), [model, dims, thickness, doorOpen])
   const roughness = MATTE.has(finishId) ? 0.42 : 0.06
   // Единый металл финиша для профилей и фурнитуры (цвет из hex финиша).
   const metalMat = useMemo(

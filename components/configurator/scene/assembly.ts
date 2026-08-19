@@ -171,7 +171,7 @@ const DOOR_OPEN_DEG = 32       // распашная приоткрыта зам
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
 type P = [number, number]   // точка плана [x, z], метры
 
-export function buildFromModel(model: MModel, dims: MDims, thickness: number): Assembly {
+export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true): Assembly {
   const t = thickness * M
   const H = dims.height * M
   const W = dims.width * M
@@ -256,7 +256,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
   const addDoor = (key: string, Ph: P, Pf: P, outward: P) => {
     const L = Math.hypot(Pf[0] - Ph[0], Pf[1] - Ph[1])
     const dc: P = [(Pf[0] - Ph[0]) / L, (Pf[1] - Ph[1]) / L]
-    const phi = (DOOR_OPEN_DEG * Math.PI) / 180, ca = Math.cos(phi), sa = Math.sin(phi)
+    const phi = ((doorOpen ? DOOR_OPEN_DEG : 0) * Math.PI) / 180, ca = Math.cos(phi), sa = Math.sin(phi)
     const od: P = [dc[0] * ca + outward[0] * sa, dc[1] * ca + outward[1] * sa]  // открытое направление
     const Pfo: P = [Ph[0] + L * od[0], Ph[1] + L * od[1]]
     const cx = (Ph[0] + Pfo[0]) / 2, cz = (Ph[1] + Pfo[1]) / 2
@@ -318,9 +318,21 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number): A
     if (hasTube && !isTrap) addTubeEnds(run.kp, run.A, run.B, runY, isM7Front ? 'kp001' : 'kp002', run.out)
     const rL = Math.hypot(run.B[0] - run.A[0], run.B[1] - run.A[1])
     const rux = rL ? (run.B[0] - run.A[0]) / rL : 0, ruz = rL ? (run.B[1] - run.A[1]) / rL : 0
+    // Длины сегментов вдоль рана: дверь = ширине двери (≤85% рана), стационары/створки
+    // делят остаток. Так ширина двери реально меняет геометрию (больше дверь → уже стационар).
+    const doorW0 = dims.doorWidth ? dims.doorWidth * M : 0
+    const doorMask = run.segs.map(s => s.t === 'door' && doorW0 > 0)
+    const doorCount = doorMask.filter(Boolean).length
+    const flexCount = n - doorCount
+    const doorW = doorCount > 0 ? Math.min(doorW0, (rL * 0.85) / doorCount) : 0
+    const flexEach = flexCount > 0 ? (rL - doorW * doorCount) / flexCount : rL
+    const segLen = doorMask.map(u => (u ? doorW : flexEach))
+    let segAcc = 0
+    const segStart = segLen.map(l => { const s = segAcc; segAcc += l; return s })
     for (let i = 0; i < n; i++) {
-      const sa: P = [run.A[0] + (run.B[0] - run.A[0]) * i / n, run.A[1] + (run.B[1] - run.A[1]) * i / n]
-      const sb: P = [run.A[0] + (run.B[0] - run.A[0]) * (i + 1) / n, run.A[1] + (run.B[1] - run.A[1]) * (i + 1) / n]
+      const f0 = rL ? segStart[i] / rL : 0, f1 = rL ? (segStart[i] + segLen[i]) / rL : 1
+      const sa: P = [run.A[0] + (run.B[0] - run.A[0]) * f0, run.A[1] + (run.B[1] - run.A[1]) * f0]
+      const sb: P = [run.A[0] + (run.B[0] - run.A[0]) * f1, run.A[1] + (run.B[1] - run.A[1]) * f1]
       const sg = run.segs[i]
       const key = run.kp + i
       if (sg.t === 'fixed') {

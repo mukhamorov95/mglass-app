@@ -85,6 +85,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [finishId, setFinishId] = useState<FinishId>('chrome')
   const [glassId, setGlassId] = useState<string>('clear')
   const [modelOpen, setModelOpen] = useState(true)
+  const [doorOpen, setDoorOpen] = useState(true)
   const [sent, setSent] = useState(false)
 
   const finishOptions = finishesFor(tier)
@@ -181,11 +182,19 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
         <div className="min-w-0 lg:sticky lg:top-4 space-y-2">
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
-              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} />
+              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} />
           </div>
-          <p className="text-[12px] text-[#9a9a95] text-center">
-            {model.code} · {model.name}{att ? ` · дверь на ${att === 'стена' ? 'стене' : 'стекле'}, наружу` : ''}
-          </p>
+          <div className="flex items-center justify-center gap-3">
+            <p className="text-[12px] text-[#9a9a95]">
+              {model.code} · {model.name}{att ? ` · дверь на ${att === 'стена' ? 'стене' : 'стекле'}` : ''}
+            </p>
+            {att && (
+              <button onClick={() => setDoorOpen(v => !v)}
+                className="text-[12px] font-medium border border-[#e4e4e0] rounded-lg px-3 py-1 hover:border-[#111110]">
+                {doorOpen ? 'Закрыть дверь' : 'Открыть дверь'}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* ── Параметры + спецификация + цена ── */}

@@ -29,7 +29,7 @@ export type MModel = {
   constraints: MConstraints
 }
 
-const H: [number, number] = [1800, 2100]
+const H: [number, number] = [1800, 2200]
 
 export const M_MODELS: MModel[] = [
   {
