@@ -25,12 +25,39 @@ async function safeLock<R>(name: string, acquireTimeout: number, fn: () => Promi
 
 // Standard client — RLS on the database enforces tenant isolation automatically
 // via the auth.org_id() function. Use this for auth and non-tenant queries.
+//
+// SINGLETON на вкладку: раньше каждый вызов создавал НОВЫЙ GoTrueClient со своим
+// авто-рефрешем токена. Десятки экземпляров на странице → десятки таймеров рефреша,
+// грызущихся за один auth-lock (navigator.locks) → повышенный риск дедлока и зависаний
+// «Загрузка…». Один клиент на вкладку — один рефреш, минимум борьбы за замок.
+let browserClient: ReturnType<typeof createBrowserClient> | undefined
+
+// Прокси через свой домен: у части сотрудников провайдер режет *.supabase.co
+// (ERR_CONNECTION_RESET). Клиент оставляем на РЕАЛЬНОМ Supabase-URL (чтобы ключи
+// сессий/куки не менялись), но каждый сетевой запрос перенаправляем на
+// same-origin /supabase/* — его Vercel проксирует на Supabase (см. next.config
+// rewrites). Так браузер вообще не обращается к supabase.co напрямую.
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
+
+function proxiedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+  if (typeof window !== 'undefined') {
+    const orig = input instanceof Request ? input.url : input instanceof URL ? input.href : String(input)
+    if (orig.startsWith(SUPABASE_URL)) {
+      const proxied = window.location.origin + '/supabase' + orig.slice(SUPABASE_URL.length)
+      return input instanceof Request ? fetch(new Request(proxied, input)) : fetch(proxied, init)
+    }
+  }
+  return fetch(input as RequestInfo, init)
+}
+
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+  if (browserClient) return browserClient
+  browserClient = createBrowserClient(
+    SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { lock: safeLock } }
+    { auth: { lock: safeLock }, global: { fetch: proxiedFetch } }
   )
+  return browserClient
 }
 
 // Org-scoped wrapper — returns helpers that automatically add organization_id
