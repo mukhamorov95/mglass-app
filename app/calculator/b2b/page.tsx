@@ -833,21 +833,26 @@ export default function B2BCalculatorPage() {
   function clearSel() { setSelIds(new Set()) }
 
   // Пересчёт позиции под новый материал — сохраняем геометрию, кол-во, услуги, флаги.
-  function recomputeWithMaterial(item: B2BOrderItem, mat: B2BMaterial): B2BOrderItem {
+  // Пересчёт позиции: под новый материал (mat) и/или с оверрайдами флагов
+  // (закалка). Геометрия, кол-во, услуги, фацет, триплекс, договорная цена — как у
+  // исходной позиции. mat=null → берём текущий материал позиции (для смены только флага).
+  function recomputeItem(item: B2BOrderItem, mat: B2BMaterial | null, over?: { hasTempering?: boolean }): B2BOrderItem {
+    const m = mat ?? materials.find(x => x.id === item.materialId)
+    if (!m) return item
     const layers = item.triplexLayers === 3 ? 3 : 2
     // Услуги позиции хранятся резолвнутыми (ItemService) — восстанавливаем исходные
-    // B2BService из справочника по id, чтобы пересчитать под новый материал.
+    // B2BService из справочника по id, чтобы пересчитать.
     const svcIds = new Set(item.services.filter(s => s.id > 0).map(s => s.id))
     const rawSvcs = services.filter(s => svcIds.has(s.id))
     const calc = computeQuoteItem({
-      material: mat, width: item.width, height: item.height, quantity: item.quantity,
-      wastePercent: mat.passthrough ? 10 : mat.waste_percent, hasTempering: item.hasTempering,
+      material: m, width: item.width, height: item.height, quantity: item.quantity,
+      wastePercent: m.passthrough ? 10 : m.waste_percent, hasTempering: over?.hasTempering ?? item.hasTempering,
       resolvedServices: resolveSvcs(rawSvcs, fTierSel, fFilmSel),
       hasFacet: item.hasFacet ?? false, facetTypeMm: item.hasFacet ? (item.facetTypeMm ?? 10) : null,
       hasHoles: item.hasHoles ?? false, shape: item.shape === 'curved' ? 'curved' : 'rect',
       hasTriplex: item.hasTriplex ?? false, triplexLayers: layers, triplexPrice,
       triplexExtraGlasses: item.hasTriplex
-        ? triplexExtras(mat, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
+        ? triplexExtras(m, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
@@ -858,9 +863,18 @@ export default function B2BCalculatorPage() {
   function applyBulkMaterial() {
     const mat = materials.find(m => m.id === bulkMatId)
     if (!mat || selIds.size === 0) return
-    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeWithMaterial(i, mat) : i))
+    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem(i, mat) : i))
     setSavedOrderId(null)
     clearSel()
+  }
+  // Массовое переключение закалки у выбранных (зеркало закалку не поддерживает — пропускаем).
+  function applyBulkTempering(on: boolean) {
+    if (selIds.size === 0) return
+    setItems(prev => prev.map(i =>
+      selIds.has(i.localId) && i.category !== 'зеркало' && i.category !== 'изделие'
+        ? recomputeItem(i, null, { hasTempering: on })
+        : i))
+    setSavedOrderId(null)
   }
   function bulkDelete() {
     if (selIds.size === 0) return
@@ -2045,6 +2059,16 @@ export default function B2BCalculatorPage() {
                   <button onClick={applyBulkMaterial} disabled={bulkMatId === null}
                     className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
                     Применить
+                  </button>
+                  <span className="w-px h-4 bg-[#c9d4f0]" />
+                  <span className="text-[11px] text-[#6b6b66]">Закалка:</span>
+                  <button onClick={() => applyBulkTempering(true)}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                    вкл
+                  </button>
+                  <button onClick={() => applyBulkTempering(false)}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    выкл
                   </button>
                   <span className="w-px h-4 bg-[#c9d4f0]" />
                   <button onClick={bulkDelete}
