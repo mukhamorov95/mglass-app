@@ -180,6 +180,10 @@ export default function B2BCalculatorPage() {
   const [items, setItems]           = useState<B2BOrderItem[]>([])
   // Инлайн-редактирование «Итого» позиции (договорная цена): localId редактируемой строки
   const [editTotalId, setEditTotalId] = useState<string | null>(null)
+  // Мультивыбор позиций + массовая смена материала/толщины/типа.
+  const [selIds, setSelIds]           = useState<Set<string>>(new Set())
+  const [bulkThickness, setBulkThickness] = useState<number | null>(null)
+  const [bulkMatId, setBulkMatId]     = useState<number | null>(null)
 
   const [fSuperCat, setFSuperCat]     = useState<SuperCat>('стекло')
 
@@ -717,9 +721,22 @@ export default function B2BCalculatorPage() {
       const h = Number(it.height_mm) || 0
       if (w <= 0 || h <= 0) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: размер не распознан — добавьте вручную`); continue }
       const drawTh = Number(it.thickness_mm) || 0
-      const th = drawTh > 0 ? drawTh : (Number(fThickness) || 8)
-      const hint = (it.material && it.material.trim()) ? it.material : (selectedMaterial?.name ?? '')
-      const mat = matchDrawingMaterial(materials, th, hint, it.is_mirror) ?? selectedMaterial
+      const ocrMat = (it.material && it.material.trim()) ? it.material.trim() : ''
+      const th = drawTh > 0 ? drawTh : (selectedMaterial?.thickness || Number(fThickness) || 8)
+      let mat: B2BMaterial | null
+      if (ocrMat) {
+        // Чертёж ЯВНО назвал материал (напр. «сатин», «бронза») — матчим по нему.
+        mat = matchDrawingMaterial(materials, th, ocrMat, it.is_mirror) ?? selectedMaterial
+      } else if (selectedMaterial) {
+        // Материал на чертеже не указан → берём ВЫБРАННЫЙ менеджером в форме (а не
+        // угадываем «Прозрачное М1»). Если чертёж дал другую толщину и есть строка
+        // того же материала на этой толщине — берём её, иначе выбранный как есть.
+        mat = (drawTh > 0 && drawTh !== selectedMaterial.thickness
+          ? materials.find(m => m.name === selectedMaterial.name && m.thickness === drawTh)
+          : null) ?? selectedMaterial
+      } else {
+        mat = matchDrawingMaterial(materials, th, '', it.is_mirror)
+      }
       if (!mat) { skipped++; warnings.push(`«${it.label ?? 'деталь'}»: материал не найден — добавьте вручную`); continue }
       const cutW = Math.max(w, Number(it.cut_width_mm) || 0)
       const cutH = Math.max(h, Number(it.cut_height_mm) || 0)
@@ -771,6 +788,7 @@ export default function B2BCalculatorPage() {
 
   function removeItem(localId: string) {
     setItems(prev => prev.filter(i => i.localId !== localId))
+    setSelIds(prev => { if (!prev.has(localId)) return prev; const n = new Set(prev); n.delete(localId); return n })
     setSavedOrderId(null)
   }
 
@@ -781,6 +799,63 @@ export default function B2BCalculatorPage() {
       return [...prev, { ...item, localId: crypto.randomUUID() }]
     })
     setSavedOrderId(null)
+  }
+
+  // ── Мультивыбор + массовая смена материала ──────────────────────────────────
+  const bulkThicknesses = useMemo(
+    () => [...new Set(materials.map(m => m.thickness))].sort((a, b) => a - b),
+    [materials])
+  const bulkMaterials = useMemo(
+    () => sortByPriority(materials.filter(m => m.thickness === bulkThickness)),
+    [materials, bulkThickness])
+
+  function toggleSel(localId: string) {
+    setSelIds(prev => {
+      const next = new Set(prev)
+      if (next.has(localId)) next.delete(localId); else next.add(localId)
+      return next
+    })
+  }
+  function toggleSelAll() {
+    setSelIds(prev => prev.size === items.length ? new Set() : new Set(items.map(i => i.localId)))
+  }
+  function clearSel() { setSelIds(new Set()) }
+
+  // Пересчёт позиции под новый материал — сохраняем геометрию, кол-во, услуги, флаги.
+  function recomputeWithMaterial(item: B2BOrderItem, mat: B2BMaterial): B2BOrderItem {
+    const layers = item.triplexLayers === 3 ? 3 : 2
+    // Услуги позиции хранятся резолвнутыми (ItemService) — восстанавливаем исходные
+    // B2BService из справочника по id, чтобы пересчитать под новый материал.
+    const svcIds = new Set(item.services.filter(s => s.id > 0).map(s => s.id))
+    const rawSvcs = services.filter(s => svcIds.has(s.id))
+    const calc = computeQuoteItem({
+      material: mat, width: item.width, height: item.height, quantity: item.quantity,
+      wastePercent: mat.passthrough ? 10 : mat.waste_percent, hasTempering: item.hasTempering,
+      resolvedServices: resolveSvcs(rawSvcs, fTierSel, fFilmSel),
+      hasFacet: item.hasFacet ?? false, facetTypeMm: item.hasFacet ? (item.facetTypeMm ?? 10) : null,
+      hasHoles: item.hasHoles ?? false, shape: item.shape === 'curved' ? 'curved' : 'rect',
+      hasTriplex: item.hasTriplex ?? false, triplexLayers: layers, triplexPrice,
+      triplexExtraGlasses: item.hasTriplex
+        ? triplexExtras(mat, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
+        : [],
+      applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
+      dismissedSurcharges: new Set<number>(),
+    }, { facetPrices, surchargeRules })
+    return { ...calc, localId: item.localId, manualTotal: item.manualTotal ?? null }
+  }
+
+  function applyBulkMaterial() {
+    const mat = materials.find(m => m.id === bulkMatId)
+    if (!mat || selIds.size === 0) return
+    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeWithMaterial(i, mat) : i))
+    setSavedOrderId(null)
+    clearSel()
+  }
+  function bulkDelete() {
+    if (selIds.size === 0) return
+    setItems(prev => prev.filter(i => !selIds.has(i.localId)))
+    setSavedOrderId(null)
+    clearSel()
   }
 
   const [eComment, setEComment] = useState('')
@@ -1929,12 +2004,47 @@ export default function B2BCalculatorPage() {
                 {items.length > 0 && (
                   <div className="flex items-center gap-3">
                     <span className="text-[11px] text-[#9a9a95] hidden sm:inline">✎ нажмите на позицию, чтобы изменить</span>
-                    <button onClick={() => setItems([])} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                    <button onClick={() => { setItems([]); clearSel() }} className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
                       Очистить всё
                     </button>
                   </div>
                 )}
               </div>
+
+              {selIds.size > 0 && (
+                <div className="mb-2 flex flex-wrap items-center gap-2 px-3 py-2 bg-[#f0f4ff] border border-[#d6e0ff] rounded-lg">
+                  <span className="text-[12px] font-semibold text-[#111110]">Выбрано: {selIds.size}</span>
+                  <span className="text-[11px] text-[#6b6b66]">Сменить материал →</span>
+                  <select
+                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none"
+                    value={bulkThickness ?? ''}
+                    onChange={e => { setBulkThickness(Number(e.target.value)); setBulkMatId(null) }}>
+                    <option value="">толщина</option>
+                    {bulkThicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
+                  </select>
+                  <select
+                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] text-[#111110] outline-none min-w-[160px]"
+                    value={bulkMatId ?? ''}
+                    disabled={bulkThickness === null}
+                    onChange={e => setBulkMatId(e.target.value ? Number(e.target.value) : null)}>
+                    <option value="">{bulkThickness === null ? 'сначала толщина' : 'тип / материал'}</option>
+                    {bulkMaterials.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
+                  </select>
+                  <button onClick={applyBulkMaterial} disabled={bulkMatId === null}
+                    className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
+                    Применить
+                  </button>
+                  <span className="w-px h-4 bg-[#c9d4f0]" />
+                  <button onClick={bulkDelete}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-red-500 hover:bg-red-50 transition-colors">
+                    Удалить выбранные
+                  </button>
+                  <button onClick={clearSel}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-[#6b6b66] hover:bg-white transition-colors ml-auto">
+                    Снять выбор
+                  </button>
+                </div>
+              )}
 
               {items.length === 0 ? (
                 <div className="py-16 text-center text-[13px] text-[#c4c4be]">Добавьте первую позицию</div>
@@ -1943,6 +2053,13 @@ export default function B2BCalculatorPage() {
                   <table className="w-full text-[12px]">
                     <thead>
                       <tr className="border-b border-[#f0f0ec] bg-[#fafaf9] text-[13px] font-medium text-[#6e6e73] whitespace-nowrap">
+                        <th className="pl-3 pr-1 py-2.5 text-center w-6">
+                          <input type="checkbox" title="Выбрать все"
+                            checked={items.length > 0 && selIds.size === items.length}
+                            ref={el => { if (el) el.indeterminate = selIds.size > 0 && selIds.size < items.length }}
+                            onChange={toggleSelAll}
+                            className="align-middle cursor-pointer accent-[#111110]" />
+                        </th>
                         <th className="px-3 py-2.5 text-center w-8">#</th>
                         <th className="px-3 py-2.5 text-left min-w-[140px]">Материал</th>
                         <th className="px-3 py-2.5 text-left min-w-[80px]">Тип</th>
@@ -1968,7 +2085,12 @@ export default function B2BCalculatorPage() {
                         return (
                           <tr key={item.localId} onClick={() => openEdit(item)}
                             title="Нажмите, чтобы изменить позицию"
-                            className="hover:bg-[#f0f0ec] transition-colors cursor-pointer">
+                            className={`transition-colors cursor-pointer ${selIds.has(item.localId) ? 'bg-[#f0f4ff] hover:bg-[#e7eeff]' : 'hover:bg-[#f0f0ec]'}`}>
+                            <td className="pl-3 pr-1 py-2.5 text-center" onClick={e => e.stopPropagation()}>
+                              <input type="checkbox" checked={selIds.has(item.localId)}
+                                onChange={() => toggleSel(item.localId)}
+                                className="align-middle cursor-pointer accent-[#111110]" />
+                            </td>
                             <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#c4c4be]">{idx + 1}</td>
                             <td className="px-3 py-2.5">
                               <div className="font-medium text-[#111110]">{item.materialName}</div>
@@ -2071,6 +2193,7 @@ export default function B2BCalculatorPage() {
                     {totals && (
                       <tfoot>
                         <tr className="border-t-2 border-[#e4e4e0] bg-[#fafaf9] font-semibold text-[#111110]">
+                          <td></td>
                           <td className="px-3 py-2.5 text-center text-[10px] font-bold text-[#9a9a95]">∑</td>
                           <td className="px-3 py-2.5 text-[11px] text-[#6b6b66]">{items.length} позиций</td>
                           <td></td>
@@ -2409,14 +2532,7 @@ export default function B2BCalculatorPage() {
                         <tbody>
                           {cuttingResults.map(r => (
                             <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
-                              <td className="py-2 font-semibold text-[#111110]">
-                                {r.materialLabel}
-                                {r.patternDirection !== 'none' && (
-                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold align-middle">
-                                    рисунок вдоль {r.patternDirection === 'along_length' ? 'длины' : 'ширины'}
-                                  </span>
-                                )}
-                              </td>
+                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
                               <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
                               <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
@@ -2429,10 +2545,8 @@ export default function B2BCalculatorPage() {
                         </tbody>
                       </table>
                       <p className="text-[11px] text-[#9a9a95]">
-                        Зазор 2 мм · Кромка 2 мм
-                        {cuttingResults.some(r => r.patternDirection !== 'none')
-                          ? ' · ⚠ У фактурных листов поворот детали запрещён (рисунок направлен)'
-                          : ' · Поворот разрешён'}
+                        Зазор 2 мм · Кромка 2 мм · Поворот разрешён
+                        {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
                       </p>
                     </div>
                   </details>
