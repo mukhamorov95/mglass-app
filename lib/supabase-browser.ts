@@ -30,7 +30,6 @@ async function safeLock<R>(name: string, acquireTimeout: number, fn: () => Promi
 // авто-рефрешем токена. Десятки экземпляров на странице → десятки таймеров рефреша,
 // грызущихся за один auth-lock (navigator.locks) → повышенный риск дедлока и зависаний
 // «Загрузка…». Один клиент на вкладку — один рефреш, минимум борьбы за замок.
-let browserClient: ReturnType<typeof createBrowserClient> | undefined
 
 // Прокси через свой домен: у части сотрудников провайдер режет *.supabase.co
 // (ERR_CONNECTION_RESET). Клиент оставляем на РЕАЛЬНОМ Supabase-URL (чтобы ключи
@@ -50,13 +49,22 @@ function proxiedFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   return fetch(input as RequestInfo, init)
 }
 
-export function createClient() {
-  if (browserClient) return browserClient
-  browserClient = createBrowserClient(
+// Тип клиента выводим из фактического вызова (makeBrowserClient), а НЕ из
+// `ReturnType<typeof createBrowserClient>` — последнее разрешается в широкий
+// перегруз, из-за чего auth.getUser() терял типы и деструктуризация { user }
+// падала как implicit-any на сборке.
+function makeBrowserClient() {
+  return createBrowserClient(
     SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { auth: { lock: safeLock }, global: { fetch: proxiedFetch } }
   )
+}
+
+let browserClient: ReturnType<typeof makeBrowserClient> | undefined
+
+export function createClient() {
+  if (!browserClient) browserClient = makeBrowserClient()
   return browserClient
 }
 
