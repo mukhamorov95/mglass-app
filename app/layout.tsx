@@ -38,11 +38,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   let orgId = 1
   let orgRole: OrgRole = 'manager'
   if (user) {
+    // maybeSingle (не single): у внутренних пользователей (telegram_users) строки
+    // в profiles нет — single() отдавал 406 на КАЖДОМ рендере корневого layout.
     const { data: profile } = await supabase
       .from('profiles')
       .select('organization_id, role')
       .eq('user_id', user.id)
-      .single()
+      .maybeSingle()
     if (profile) {
       orgId = profile.organization_id
       orgRole = (profile.role as OrgRole) ?? 'manager'
