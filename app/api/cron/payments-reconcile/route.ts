@@ -86,7 +86,10 @@ export async function GET(req: NextRequest) {
         const saleId = await upsertSaleFromB2B(svc, o, { paidAt, manager: o.created_by_name })
         if (saleId) {
           await svc.from('crm_sales').update({
-            prepayment: prepay || null, prepayment_paid: prepay > 0,
+            // prepayment — NOT NULL (default 0): при полной оплате без предоплаты
+            // пишем 0, а не null (иначе 23502 → 400, который глотал try/catch —
+            // ~98 обновлений/ночь молча падали).
+            prepayment: prepay || 0, prepayment_paid: prepay > 0,
             remainder_paid: true, paid_remainder_at: paidAt,
           }).eq('id', saleId)
           stat.sales++
