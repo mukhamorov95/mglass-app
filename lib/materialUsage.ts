@@ -23,7 +23,7 @@
 
 import {
   runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS,
-  type PieceGroup, type CuttingSettings,
+  type PieceGroup, type CuttingSettings, type SheetFormat,
 } from './cuttingOptimizer'
 
 export const DEFAULT_SHEET = { width: 3210, height: 2250 }
@@ -46,6 +46,7 @@ export type UsageItem = {
   costPerM2: number
   sheetWidth?: number
   sheetHeight?: number
+  sheetFormats?: SheetFormat[]
   patternDirection?: 'none' | 'along_length' | 'along_width'
 }
 
@@ -78,6 +79,7 @@ function buildGroups(items: UsageItem[]): Map<string, PieceGroup> {
       category: it.category ?? '',
       sheetWidth: it.sheetWidth ?? DEFAULT_SHEET.width,
       sheetHeight: it.sheetHeight ?? DEFAULT_SHEET.height,
+      sheetFormats: it.sheetFormats,
       patternDirection: it.patternDirection ?? 'none',
     })
     const g = groups.get(key)!

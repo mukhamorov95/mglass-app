@@ -31,7 +31,9 @@ function marginColor(m: number) {
 type RawItem = Record<string, unknown>
 function num(x: unknown): number { return Number(x) || 0 }
 
-function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: string }>): EcoItem {
+type SheetInfo = { w: number; h: number; pat: string; fmts?: { width: number; height: number }[] }
+
+function toEcoItem(it: RawItem, sheet: Map<string, SheetInfo>): EcoItem {
   const billed = num(it.totalAreaBilled)
   const costPerM2 = billed > 0 ? num(it.costMaterial) / billed : 0
   const name = String(it.materialName ?? '')
@@ -44,7 +46,7 @@ function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: 
     wastePercent: num(it.wastePercent), costPerM2,
     hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles,
     perimeterM: num(it.perimeterM),
-    sheetWidth: s?.w, sheetHeight: s?.h,
+    sheetWidth: s?.w, sheetHeight: s?.h, sheetFormats: s?.fmts,
     patternDirection: (s?.pat ?? 'none') as EcoItem['patternDirection'],
     servicesCostPrice: svc.reduce((a, x) => a + num(x.costPrice), 0) + num(it.costFacet) + num(it.costTriplex),
     servicesSale: svc.reduce((a, x) => a + num(x.cost), 0) + num(it.saleFacet) + num(it.saleTriplex),
@@ -63,7 +65,7 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
   const from = `${monthStr}-01`
   const to = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
 
-  const [{ data: ordersRaw }, { data: mats }] = await Promise.all([
+  const [{ data: ordersRaw }, { data: mats }, { data: variants }] = await Promise.all([
     // launched_at IS NOT NULL обеспечивается самим .gte (NULL не проходит сравнение),
     // поэтому .not() не нужен — заодно обходим взрыв типов в next build на .not().
     svc.from('b2b_orders')
@@ -71,14 +73,23 @@ export default async function OrderEconomicsPage({ searchParams }: { searchParam
       .is('archived_at', null)
       .gte('launched_at', from).lt('launched_at', to)
       .order('launched_at'),
-    svc.from('b2b_materials').select('name, thickness, sheet_width, sheet_height, pattern_direction'),
+    svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, pattern_direction'),
+    svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
   ])
 
-  const sheet = new Map<string, { w: number; h: number; pat: string }>()
+  const fmtById = new Map<number, { width: number; height: number }[]>()
+  for (const v of (variants ?? []) as Record<string, unknown>[]) {
+    const w = Number(v.sheet_width) || 0, h = Number(v.sheet_height) || 0
+    if (w <= 0 || h <= 0) continue
+    const mid = Number(v.material_id)
+    const arr = fmtById.get(mid) ?? []
+    arr.push({ width: w, height: h }); fmtById.set(mid, arr)
+  }
+  const sheet = new Map<string, SheetInfo>()
   for (const mt of (mats ?? []) as Record<string, unknown>[]) {
     sheet.set(`${mt.name}|${Number(mt.thickness)}`, {
       w: Number(mt.sheet_width) || 3210, h: Number(mt.sheet_height) || 2250,
-      pat: String(mt.pattern_direction ?? 'none'),
+      pat: String(mt.pattern_direction ?? 'none'), fmts: fmtById.get(Number(mt.id)),
     })
   }
 

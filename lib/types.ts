@@ -394,6 +394,9 @@ export type B2BMaterial = {
   // Раскрой
   sheet_width: number            // мм, default 3210
   sheet_height: number           // мм, default 2250
+  // Доступные форматы листа (b2b_material_sheet_variants). Раскрой перебирает их и
+  // выбирает оптимальный; если пусто — кроит на sheet_width×sheet_height.
+  sheet_formats?: { width: number; height: number }[]
   pattern_direction: PatternDirection  // направление рисунка для рифлёного стекла
   supplier_id?: string | null
   supplier_material_name?: string | null

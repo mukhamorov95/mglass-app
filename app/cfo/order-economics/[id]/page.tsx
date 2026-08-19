@@ -15,7 +15,9 @@ const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU')
 function marginColor(m: number) { return m < 25 ? 'text-red-600' : m < 35 ? 'text-amber-600' : 'text-emerald-600' }
 
 type RawItem = Record<string, unknown>
-function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: string }>): EcoItem {
+type SheetInfo = { w: number; h: number; pat: string; fmts?: { width: number; height: number }[] }
+
+function toEcoItem(it: RawItem, sheet: Map<string, SheetInfo>): EcoItem {
   const billed = num(it.totalAreaBilled)
   const name = String(it.materialName ?? ''); const thk = num(it.thickness)
   const s = sheet.get(`${name}|${thk}`)
@@ -27,7 +29,7 @@ function toEcoItem(it: RawItem, sheet: Map<string, { w: number; h: number; pat: 
     width: num(it.width), height: num(it.height), quantity: num(it.quantity),
     wastePercent: num(it.wastePercent), costPerM2: billed > 0 ? num(it.costMaterial) / billed : 0,
     hasTempering: !!it.hasTempering, hasHoles: !!it.hasHoles, perimeterM: num(it.perimeterM),
-    sheetWidth: s?.w, sheetHeight: s?.h, patternDirection: (s?.pat ?? 'none') as EcoItem['patternDirection'],
+    sheetWidth: s?.w, sheetHeight: s?.h, sheetFormats: s?.fmts, patternDirection: (s?.pat ?? 'none') as EcoItem['patternDirection'],
     servicesCostPrice, servicesSale,
   }
 }
@@ -49,13 +51,23 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
   const [y, m] = month.split('-').map(Number)
   const to = m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`
 
-  const [{ data: mats }, { data: monthRaw }] = await Promise.all([
-    svc.from('b2b_materials').select('name, thickness, sheet_width, sheet_height, pattern_direction'),
+  const [{ data: mats }, { data: monthRaw }, { data: variants }] = await Promise.all([
+    svc.from('b2b_materials').select('id, name, thickness, sheet_width, sheet_height, pattern_direction'),
     svc.from('b2b_orders').select('items').is('archived_at', null).gte('launched_at', from).lt('launched_at', to),
+    svc.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
   ])
-  const sheet = new Map<string, { w: number; h: number; pat: string }>()
+  // Форматы листов по material_id (дефолт первым).
+  const fmtById = new Map<number, { width: number; height: number }[]>()
+  for (const v of (variants ?? []) as Record<string, unknown>[]) {
+    const w = num(v.sheet_width), h = num(v.sheet_height)
+    if (!(w > 0) || !(h > 0)) continue
+    const mid = Number(v.material_id)
+    const arr = fmtById.get(mid) ?? []
+    arr.push({ width: w, height: h }); fmtById.set(mid, arr)
+  }
+  const sheet = new Map<string, SheetInfo>()
   for (const mt of (mats ?? []) as Record<string, unknown>[])
-    sheet.set(`${mt.name}|${Number(mt.thickness)}`, { w: num(mt.sheet_width) || 3210, h: num(mt.sheet_height) || 2250, pat: String(mt.pattern_direction ?? 'none') })
+    sheet.set(`${mt.name}|${Number(mt.thickness)}`, { w: num(mt.sheet_width) || 3210, h: num(mt.sheet_height) || 2250, pat: String(mt.pattern_direction ?? 'none'), fmts: fmtById.get(Number(mt.id)) })
 
   // Пропускная способность цеха за месяц запуска — знаменатель ставок труда.
   let thNet = 0, thEdge = 0, thDrilled = 0
@@ -81,7 +93,7 @@ export default async function OrderEconomicsDetail({ params }: { params: Promise
   const usage = computeMaterialUsage(items.filter(i => i.width > 0 && i.height > 0 && i.quantity > 0).map(i => ({
     materialName: i.materialName, thickness: i.thickness, category: i.category,
     width: i.width, height: i.height, quantity: i.quantity, costPerM2: i.costPerM2,
-    sheetWidth: i.sheetWidth, sheetHeight: i.sheetHeight, patternDirection: i.patternDirection,
+    sheetWidth: i.sheetWidth, sheetHeight: i.sheetHeight, sheetFormats: i.sheetFormats, patternDirection: i.patternDirection,
   } as UsageItem)), DEFAULT_REUSE_RATE)
 
   const numLabel = o.custom_number ?? `#${o.id}`
