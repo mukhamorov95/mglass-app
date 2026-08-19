@@ -168,9 +168,17 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
   const addBarStock = (gi: number, ii: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.push({ len: 0, prices: {} }) })
   const removeBarStock = (gi: number, ii: number, si: number) => edit(u => { (u.groups[gi].items[ii] as BarItem).stocks.splice(si, 1) })
 
-  // ── Пикер справочника: выбрал позицию → тянем все цвета → заполняем цены ──
-  type Target = { kind: 'piece'; gi: number; ii: number } | { kind: 'bar'; gi: number; ii: number; si: number }
+  // ── Пикер справочника: выбрал позицию → тянем все цвета → заполняем/добавляем ──
+  type Target =
+    | { mode: 'fill-piece'; gi: number; ii: number }
+    | { mode: 'fill-bar'; gi: number; ii: number; si: number }
+    | { mode: 'add-piece'; gi: number }
+    | { mode: 'add-bar'; gi: number }
   const [picker, setPicker] = useState<Target | null>(null)
+  const parseBarLen = (name: string): number => {
+    const m = name.replace(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яё])/i)  // «3 м», «2.2 м»
+    return m ? Math.round(parseFloat(m[1]) * 1000) : 3000
+  }
   async function applyPick(rowId: number) {
     const target = picker
     setPicker(null)
@@ -185,16 +193,22 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
       const f = supplierColorToFinish(v.color)
       if (f && !(f in byFinish)) byFinish[f] = Math.round(v.cost_price)
     }
-    // ни один цвет не распознан → кладём в текущий цвет цену выбранной строки
     if (Object.keys(byFinish).length === 0 && variants.length) byFinish[finishId] = Math.round(variants[0].cost_price)
+    const label = name.length > 60 ? name.slice(0, 60) + '…' : name
+    const shortName = name.split('.')[0].slice(0, 48)
     edit(u => {
-      if (target.kind === 'piece') {
-        const it = u.groups[target.gi].items[target.ii] as PieceItem
-        it.prices = { ...it.prices, ...byFinish }
-        it.ref = { supplier, base, label: name.length > 60 ? name.slice(0, 60) + '…' : name }
-      } else {
-        const st = (u.groups[target.gi].items[target.ii] as BarItem).stocks[target.si]
+      const g = u.groups[target.gi]
+      if (target.mode === 'fill-piece') {
+        const it = g.items[target.ii] as PieceItem
+        it.prices = { ...it.prices, ...byFinish }; it.ref = { supplier, base, label }
+      } else if (target.mode === 'fill-bar') {
+        const st = (g.items[target.ii] as BarItem).stocks[target.si]
         st.prices = { ...st.prices, ...byFinish }
+      } else if (target.mode === 'add-piece' && g.kind === 'piece') {
+        g.items.push({ key: uid('it'), name: shortName, prices: byFinish, qtyMode: 'auto', ref: { supplier, base, label } })
+      } else if (target.mode === 'add-bar' && g.kind === 'bar') {
+        // ключ = роль подгруппы (profile/tube) — чтобы длины кусков пришли из геометрии
+        g.items.push({ key: g.role ?? uid('it'), name: shortName, stocks: [{ len: parseBarLen(name), prices: byFinish }] })
       }
     })
   }
@@ -296,23 +310,32 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
             <p className="text-[12px] text-[#6b6b66] mt-1.5">Цены ниже — для цвета <b className="text-[#111110]">{colorLabel}</b>.</p>
           </Card>
 
-          {/* Подгруппы фурнитуры */}
-          {up.groups.map((g: HardwareGroup, gi: number) => (
+          {/* Подгруппы фурнитуры — позиции тянутся из справочника, кол-во из модели */}
+          {up.groups.map((g: HardwareGroup, gi: number) => {
+            const roleQty = g.role ? (q.roles[g.role] ?? 0) : 0
+            return (
             <Card key={g.id}
               right={<button onClick={() => removeGroup(gi)} className="text-[11px] text-[#b04a3f] hover:underline">удалить</button>}>
               <div className="flex items-center gap-2 mb-2 -mt-1">
                 <input value={g.title} onChange={e => setGroupTitle(gi, e.target.value)}
                   className="flex-1 text-[13px] font-semibold text-[#111110] border-b border-transparent hover:border-[#e4e4e0] focus:border-[#111110] outline-none py-0.5" />
-                <span className="text-[10px] text-[#9a9a95] uppercase">{g.kind === 'bar' ? 'хлысты' : 'шт'}</span>
+                {g.kind === 'piece' && g.role
+                  ? <span className="text-[10px] text-[#8a9a7a]">×{roleQty} из модели</span>
+                  : <span className="text-[10px] text-[#9a9a95] uppercase">{g.kind === 'bar' ? 'хлысты' : 'шт'}</span>}
               </div>
+              {g.items.length === 0 && (
+                <p className="text-[12px] text-[#b0b0aa] italic py-1">Пусто — добавь позицию из справочника ↓</p>
+              )}
               {g.kind === 'piece' ? (g.items as PieceItem[]).map((it, ii) => (
                 <div key={it.key} className="py-0.5">
                   <div className="flex items-center gap-1.5">
                     <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
                       className="flex-1 min-w-0 text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
-                    {it.qtyMode === 'manual' && <NumInput value={it.fixedQty ?? 0} onChange={v => setPieceQty(gi, ii, v)} w={44} suffix="шт" />}
+                    {it.qtyMode === 'manual'
+                      ? <NumInput value={it.fixedQty ?? 0} onChange={v => setPieceQty(gi, ii, v)} w={44} suffix="шт" />
+                      : <span className="text-[11px] text-[#9a9a95] w-12 text-right">{ii === 0 ? `×${roleQty}` : 'запас'}</span>}
                     <NumInput value={it.prices[finishId] ?? 0} onChange={v => setPiecePrice(gi, ii, v)} w={80} />
-                    <button onClick={() => setPicker({ kind: 'piece', gi, ii })} title="Из справочника поставщиков" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
+                    <button onClick={() => setPicker({ mode: 'fill-piece', gi, ii })} title="Обновить цену из справочника" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
                     <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
                   </div>
                   {it.ref && <p className="text-[10px] text-[#8a9a7a] pl-1.5 truncate">🔗 {it.ref.label ?? it.ref.base}</p>}
@@ -329,16 +352,20 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
                       <span className="text-[11px] text-[#9a9a95] w-10">Хлыст</span>
                       <NumInput value={s.len} onChange={v => setBarLen(gi, ii, si, v)} w={64} suffix="мм" />
                       <NumInput value={s.prices[finishId] ?? 0} onChange={v => setBarPrice(gi, ii, si, v)} w={80} />
-                      <button onClick={() => setPicker({ kind: 'bar', gi, ii, si })} title="Из справочника поставщиков" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
+                      <button onClick={() => setPicker({ mode: 'fill-bar', gi, ii, si })} title="Цена из справочника" className="text-[13px] leading-none px-0.5 hover:opacity-70">📗</button>
                       <button onClick={() => removeBarStock(gi, ii, si)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
                     </div>
                   ))}
                   <button onClick={() => addBarStock(gi, ii)} className="text-[12px] text-[#4b6ea9] hover:underline ml-2 mt-0.5">+ хлыст</button>
                 </div>
               ))}
-              <button onClick={() => addItem(gi)} className="text-[12px] text-[#4b6ea9] hover:underline mt-1.5">+ позиция</button>
+              <div className="flex gap-3 mt-1.5">
+                <button onClick={() => setPicker(g.kind === 'piece' ? { mode: 'add-piece', gi } : { mode: 'add-bar', gi })}
+                  className="text-[12px] font-medium text-[#256029] hover:underline">📗 из справочника</button>
+                <button onClick={() => addItem(gi)} className="text-[12px] text-[#9a9a95] hover:underline">+ вручную</button>
+              </div>
             </Card>
-          ))}
+          )})}
 
           <div className="flex gap-2">
             <button onClick={() => addGroup('piece')} className="flex-1 text-[13px] font-medium border border-dashed border-[#c4c4be] rounded-lg py-2 text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">+ Подгруппа</button>

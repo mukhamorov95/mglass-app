@@ -17,7 +17,25 @@ export type Quantities = {
   glassM2: number                     // площадь стекла, м²
   profilePieces: number[]             // куски П-профиля Pr-002, мм (для хлыстов)
   tubePieces: number[]                // куски штанги 30×10, мм (для хлыстов)
-  hardware: Record<string, number>    // штуки по ключу: {balge:3, sd210:1, roller:4, cap:6, seal:1, ...}
+  hardware: Record<string, number>    // штуки по ключу геометрии: {balge:3, sd210:1, roller:4, cap:6, seal:1}
+  roles: Record<string, number>       // штуки по РОЛИ подгруппы: {hinge, handle, roller, mount, cap, seal}
+}
+
+// Роль подгруппы → количество берётся из модели независимо от того, какую именно
+// позицию (петлю/ручку) выбрали из справочника. Ролей столько, сколько нужно модели.
+export const ROLE_LABEL: Record<string, string> = {
+  hinge: 'петли', handle: 'ручки', roller: 'ролики', mount: 'крепёж', cap: 'заглушки', seal: 'уплотнитель',
+}
+function rolesFrom(hardware: Record<string, number>): Record<string, number> {
+  const g = (k: string) => hardware[k] ?? 0
+  return {
+    hinge: g('balge') + g('dessau'),
+    handle: g('sd210') + g('kupe'),
+    roller: g('roller'),
+    mount: g('kp006') + g('kp002') + g('kp001') + g('connector'),
+    cap: g('cap'),
+    seal: g('seal'),
+  }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -37,7 +55,7 @@ export function computeQuantities(assembly: Assembly, thickness: number): Quanti
   // Заглушки на профиль: 2 на каждый кусок (верх/низ). Магнитный уплотнитель: на каждую распашную створку.
   if (profilePieces.length > 0) hardware.cap = (hardware.cap ?? 0) + profilePieces.length * 2
   if ((hardware.sd210 ?? 0) > 0) hardware.seal = (hardware.seal ?? 0) + hardware.sd210
-  return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, hardware }
+  return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, hardware, roles: rolesFrom(hardware) }
 }
 
 // ── Справочник цен (СЕБЕСТОИМОСТЬ) — подгруппы фурнитуры ────────────
@@ -60,8 +78,8 @@ export type BarItem = {
   stocks: BarStock[]              // хлысты: длина у профиля/штанги РАЗНАЯ, редактируется в админке
 }
 export type HardwareGroup =
-  | { id: string; title: string; kind: 'piece'; items: PieceItem[] }
-  | { id: string; title: string; kind: 'bar'; items: BarItem[] }
+  | { id: string; title: string; kind: 'piece'; role?: string; items: PieceItem[] }
+  | { id: string; title: string; kind: 'bar'; role?: string; items: BarItem[] }
 
 export type UnitPrices = {
   glassPerM2: Record<string, number>   // тип стекла → ₽/м² (8 мм)
@@ -106,48 +124,26 @@ const COLOR_MULT: Record<string, number> = {
   gold: 1.45, brgold: 1.4, white: 1.15, rose: 1.5, brrose: 1.45,
 }
 
-const byColor = (base: number): PriceByColor => {
-  const out: PriceByColor = {}
-  for (const c of FINISH_IDS) out[c] = Math.round(base * (COLOR_MULT[c] ?? 1))
-  return out
-}
-const barStocks = (pairs: [number, number][]): BarStock[] =>
-  pairs.map(([len, base]) => ({ len, prices: byColor(base) }))
-const piece = (key: string, base: number): PieceItem =>
-  ({ key, name: HARDWARE_LABEL[key] ?? key, prices: byColor(base), qtyMode: 'auto' })
-
-// ── Дефолтные подгруппы (сид). Порядок = поток заполнения владельца ──
-type SeedBar = { key: string; b2200: number; b3000: number }
-function defaultGroups(hw: Record<string, number>, prof: SeedBar, tube: SeedBar): HardwareGroup[] {
+// ── Дефолтные подгруппы: ПУСТЫЕ (позиции тянутся из справочника поставщиков).
+// role → количество берётся из модели (геометрии). Порядок = поток заполнения.
+function emptyGroups(): HardwareGroup[] {
   return [
-    { id: 'hinges', title: 'Петли', kind: 'piece', items: [piece('balge', hw.balge), piece('dessau', hw.dessau)] },
-    { id: 'handles', title: 'Ручки', kind: 'piece', items: [piece('sd210', hw.sd210), piece('kupe', hw.kupe)] },
-    { id: 'rollers', title: 'Ролики', kind: 'piece', items: [piece('roller', hw.roller)] },
-    { id: 'profiles', title: 'Профили', kind: 'bar', items: [{ key: 'profile', name: HARDWARE_LABEL.profile, stocks: barStocks([[2200, prof.b2200], [3000, prof.b3000]]) }] },
-    { id: 'tubes', title: 'Трубы / штанги', kind: 'bar', items: [{ key: 'tube', name: HARDWARE_LABEL.tube, stocks: barStocks([[2200, tube.b2200], [3000, tube.b3000]]) }] },
-    { id: 'mounts', title: 'Крепёж', kind: 'piece', items: [piece('kp006', hw.kp006), piece('kp002', hw.kp002), piece('kp001', hw.kp001), piece('connector', hw.connector)] },
-    { id: 'caps', title: 'Заглушки', kind: 'piece', items: [piece('cap', hw.cap)] },
-    { id: 'seals', title: 'Уплотнители', kind: 'piece', items: [piece('seal', hw.seal)] },
+    { id: 'hinges', title: 'Петли', kind: 'piece', role: 'hinge', items: [] },
+    { id: 'handles', title: 'Ручки', kind: 'piece', role: 'handle', items: [] },
+    { id: 'rollers', title: 'Ролики', kind: 'piece', role: 'roller', items: [] },
+    { id: 'profiles', title: 'Профили', kind: 'bar', role: 'profile', items: [] },
+    { id: 'tubes', title: 'Трубы / штанги', kind: 'bar', role: 'tube', items: [] },
+    { id: 'mounts', title: 'Крепёж', kind: 'piece', role: 'mount', items: [] },
+    { id: 'caps', title: 'Заглушки', kind: 'piece', role: 'cap', items: [] },
+    { id: 'seals', title: 'Уплотнители', kind: 'piece', role: 'seal', items: [] },
   ]
 }
 
 export function buildDefaultUnitPrices(tier: Tier): UnitPrices {
-  if (tier === 'premium') return {
-    glassPerM2: { clear: 3800, crystal: 4600, bronze: 5400, graphite: 5400 },
-    groups: defaultGroups(
-      { balge: 3600, dessau: 6900, sd210: 2200, kupe: 900, roller: 1100, kp006: 560, kp002: 480, kp001: 700, connector: 560, cap: 140, seal: 450 },
-      { key: 'profile', b2200: 620, b3000: 820 }, { key: 'tube', b2200: 1100, b3000: 1450 },
-    ),
-    installPerSection: 6500, deliveryMoscow: 5000, liftPerFloor: 0,
-  }
-  return {
-    glassPerM2: { clear: 3200, crystal: 3900, bronze: 4600, graphite: 4600 },
-    groups: defaultGroups(
-      { balge: 2500, dessau: 4000, sd210: 1500, kupe: 600, roller: 800, kp006: 400, kp002: 350, kp001: 500, connector: 400, cap: 100, seal: 300 },
-      { key: 'profile', b2200: 520, b3000: 690 }, { key: 'tube', b2200: 900, b3000: 1180 },
-    ),
-    installPerSection: 6500, deliveryMoscow: 5000, liftPerFloor: 0,
-  }
+  const glassPerM2 = tier === 'premium'
+    ? { clear: 3800, crystal: 4600, bronze: 5400, graphite: 5400 }
+    : { clear: 3200, crystal: 3900, bronze: 4600, graphite: 4600 }
+  return { glassPerM2, groups: emptyGroups(), installPerSection: 6500, deliveryMoscow: 5000, liftPerFloor: 0 }
 }
 
 export const PRICES: Record<Tier, UnitPrices> = { budget: buildDefaultUnitPrices('budget'), premium: buildDefaultUnitPrices('premium') }
@@ -174,10 +170,17 @@ export function migrateUnitPrices(raw: unknown, tier: Tier): UnitPrices {
     deliveryMoscow: typeof r.deliveryMoscow === 'number' ? r.deliveryMoscow : def.deliveryMoscow,
     liftPerFloor: typeof r.liftPerFloor === 'number' ? r.liftPerFloor : def.liftPerFloor,
   }
-  // Уже новая схема — доверяем сохранённым подгруппам, но нормализуем bar-позиции
-  // (ранняя версия хранила bars:{цвет→{2200,3000}} — приводим к stocks[]).
+  // Уже новая схема — доверяем сохранённым подгруппам, но (1) нормализуем bar-позиции
+  // (ранняя версия хранила bars:{цвет→{2200,3000}} — приводим к stocks[]); (2) бэкфиллим
+  // role по id (в ранней версии подгруппы были без роли).
   if (Array.isArray(r.groups)) {
-    out.groups = r.groups.map(g => g.kind === 'bar' ? { ...g, items: (g.items as unknown[]).map(normalizeBarItem) } : g)
+    const defRole = new Map(def.groups.map(g => [g.id, g.role]))
+    out.groups = r.groups.map(g => {
+      const role = g.role ?? defRole.get(g.id)
+      return g.kind === 'bar'
+        ? { ...g, role, items: (g.items as unknown[]).map(normalizeBarItem) }
+        : { ...g, role }
+    })
     return out
   }
   // Старая плоская схема — переносим введённые цены на дефолтные подгруппы.
@@ -276,8 +279,14 @@ export function computePrice(
   for (const g of up.groups ?? []) {
     const lines: PriceLine[] = []
     if (g.kind === 'piece') {
+      // Кол-во auto-позиции = сколько нужно модели по РОЛИ подгруппы (петли/ручки/…).
+      // Первая auto-позиция получает это кол-во; остальные auto — 0 (запасные варианты).
+      const roleQty = g.role ? (q.roles[g.role] ?? 0) : 0
+      let autoUsed = false
       for (const it of g.items) {
-        const qty = it.qtyMode === 'manual' ? (it.fixedQty ?? 0) : (q.hardware[it.key] ?? 0)
+        let qty: number
+        if (it.qtyMode === 'manual') qty = it.fixedQty ?? 0
+        else { qty = autoUsed ? 0 : roleQty; autoUsed = true }
         if (qty <= 0) continue
         const unitPrice = it.prices[finishId] ?? it.prices.chrome ?? 0
         const line: PriceLine = { key: it.key, label: it.name, qty, unit: 'шт', unitPrice, total: Math.round(qty * unitPrice) }
