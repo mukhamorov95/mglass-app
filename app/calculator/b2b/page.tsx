@@ -317,7 +317,7 @@ export default function B2BCalculatorPage() {
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -327,7 +327,16 @@ export default function B2BCalculatorPage() {
           sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
           sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
+          sb.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
         ])
+        // Форматы листов по материалу (для раскроя): дефолт первым.
+        const formatsByMat = new Map<number, { width: number; height: number }[]>()
+        for (const v of (sheetVariants ?? []) as { material_id: number; sheet_width: number; sheet_height: number }[]) {
+          if (!(v.sheet_width > 0) || !(v.sheet_height > 0)) continue
+          const arr = formatsByMat.get(v.material_id) ?? []
+          arr.push({ width: v.sheet_width, height: v.sheet_height })
+          formatsByMat.set(v.material_id, arr)
+        }
         if (psData) setProdSettings(psData as ProductionSettings)
         setFilms((filmsData ?? []) as B2BFilm[])
         setFacetPrices((facetData ?? []) as FacetPrice[])
@@ -364,11 +373,13 @@ export default function B2BCalculatorPage() {
           const matrixPrice = matrixSale ? (matrixSale as Record<string, unknown>)[`t${mm}`] as number | null : null
           // waste_pct lives on cost rows — single source of truth
           const matrixWaste = (matrixCost as Record<string, unknown> | undefined)?.waste_pct as number | null ?? null
+          const fmts = formatsByMat.get(m.id)
           return {
             ...base,
             ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
             // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
             ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
+            ...(fmts && fmts.length ? { sheet_formats: fmts } : {}),
           }
         })
         // Дедуп: одна запись на (name|category|thickness). Защита от дублей в
@@ -998,9 +1009,10 @@ export default function B2BCalculatorPage() {
           pieces: [],
           materialLabel: `${item.materialName} ${item.thickness} мм`,
           category: item.category,
-          sheetWidth:  (mat as (B2BMaterial & { sheet_width?: number }) | undefined)?.sheet_width  ?? 3210,
-          sheetHeight: (mat as (B2BMaterial & { sheet_height?: number }) | undefined)?.sheet_height ?? 2250,
-          patternDirection: ((mat as (B2BMaterial & { pattern_direction?: string }) | undefined)?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
+          sheetWidth:  mat?.sheet_width  ?? 3210,
+          sheetHeight: mat?.sheet_height ?? 2250,
+          sheetFormats: mat?.sheet_formats,
+          patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
         })
       }
       const g = groups.get(key)!
