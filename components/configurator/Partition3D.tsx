@@ -1,7 +1,7 @@
 'use client'
 
 import * as THREE from 'three'
-import { Canvas } from '@react-three/fiber'
+import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
   MeshTransmissionMaterial,
@@ -13,6 +13,15 @@ import { Hardware } from './scene/hardware'
 
 // Матовые финиши — выше шероховатость (меньше зеркальность).
 const MATTE = new Set(['satin', 'black', 'gunmetal', 'brgold', 'brrose'])
+
+// Dev-хук съёмки: при создании сцены кладём в window.__r3fRender() синхронный
+// кадр (gl.render, минуя rAF) — чтобы снимать превью, когда вкладка «скрыта» под
+// автоматизацией (браузер глушит requestAnimationFrame). Только вне прода.
+function onCanvasCreated(state: RootState) {
+  if (process.env.NODE_ENV === 'production') return
+  const w = window as unknown as { __r3fRender?: () => void }
+  w.__r3fRender = () => state.gl.render(state.scene, state.camera)
+}
 
 // Процедурная плитка ниши: одна крупная плитка с тонким швом (CanvasTexture,
 // офлайн). Repeat тиражирует её в аккуратную сетку — без резкой «шахматки».
@@ -179,6 +188,7 @@ export default function Partition3D(
         resize={{ debounce: 0 }}
         camera={{ position: [cx - camDist * 0.58, ty + h * 0.26, cz - camDist * 1.05], fov: 33 }}
         gl={{ antialias: true, preserveDrawingBuffer: true }}
+        onCreated={onCanvasCreated}
       >
         <Suspense fallback={null}>
           <color attach="background" args={['#eef0ee']} />
