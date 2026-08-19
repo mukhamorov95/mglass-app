@@ -1,6 +1,6 @@
 import OrdersView from '../OrdersView'
 
-// «Мои заказы» — запущенные в работу и отгруженные.
+// «Заказы в работе» — отправленные в работу и в производстве (с % готовности и сроком).
 export default function PartnerOrdersPage() {
-  return <OrdersView view="orders" />
+  return <OrdersView view="inwork" />
 }
