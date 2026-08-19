@@ -63,11 +63,44 @@ export default async function CfoModelPage() {
 
   const hasData = incomes.length > 0
 
+  // Реальный факт с начала месяца.
+  // Производство (B2B стекло) работает по 100% предоплате: запущенный заказ
+  // (launched_at) = оплачен = реальный оборот. Берём запущенные за месяц.
+  // Розница (M-Glass) в базе пока не собирается надёжно (crm_sales мусорный) —
+  // помечаем captured=false.
+  const now = new Date()
+  const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
+  const daysElapsed = now.getDate()
+  const monthLabel = now.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+
+  let productionActual = 0
+  try {
+    const { data: launched } = await supabase
+      .from('b2b_orders')
+      .select('total_after_discount, total_sale_inc_vat')
+      .gte('launched_at', monthStart)
+      .not('launched_at', 'is', null)
+      .is('archived_at', null)
+    for (const o of (launched ?? [])) {
+      productionActual += (o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
+    }
+  } catch {
+    // b2b_orders может быть недоступна — оставим 0
+  }
+
+  const factByUnit: Record<string, { revenue: number; captured: boolean }> = {
+    'Производство': { revenue: Math.round(productionActual), captured: true },
+    'M-Glass': { revenue: 0, captured: false },
+  }
+
   return (
     <ModelClient
       incomes={incomes}
       fixed={fixed}
       fundsRubByUnit={fundsRubByUnit}
+      factByUnit={factByUnit}
+      daysElapsed={daysElapsed}
+      monthLabel={monthLabel}
       hasData={hasData}
       updatedAt={updatedAt}
     />

@@ -9,10 +9,15 @@ import {
   type BePnl,
 } from '@/lib/cfo/factModel'
 
+type FactInfo = { revenue: number; captured: boolean }
+
 type Props = {
   incomes: IncomeLine[]
   fixed: FixedLine[]
   fundsRubByUnit: Record<string, number>
+  factByUnit: Record<string, FactInfo>
+  daysElapsed: number
+  monthLabel: string
   hasData: boolean
   updatedAt: string | null
 }
@@ -27,7 +32,7 @@ function fmt(n: number) {
 function posColor(n: number) { return n >= 0 ? '#1f9d57' : '#d04a3b' }
 function marginColor(pct: number) { return pct >= 35 ? '#1f9d57' : pct >= 25 ? '#c98a12' : '#d04a3b' }
 
-export default function ModelClient({ incomes, fixed, fundsRubByUnit, hasData, updatedAt }: Props) {
+export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit, daysElapsed, monthLabel, hasData, updatedAt }: Props) {
   const [tab, setTab] = useState<Tab>('fact')
   const [excluded, setExcluded] = useState<string[]>([])
   const [unit, setUnit] = useState<string>('all') // 'all' | название юнита
@@ -106,7 +111,7 @@ export default function ModelClient({ incomes, fixed, fundsRubByUnit, hasData, u
               ))}
             </div>
 
-            {tab === 'fact' && <FactTab pnl={base} incomes={selIncomes} fixed={selFixed} />}
+            {tab === 'fact' && <FactTab pnl={base} incomes={selIncomes} fixed={selFixed} factByUnit={factByUnit} daysElapsed={daysElapsed} monthLabel={monthLabel} />}
             {tab === 'scen' && (
               <ScenTab base={base} scen={scen} fixed={selFixed} excluded={excluded} presets={presets} toggle={toggle} setExcluded={setExcluded} />
             )}
@@ -144,8 +149,17 @@ function Kpi({ label, value, valueColor, note }: { label: string; value: string;
   )
 }
 
-function FactTab({ pnl, incomes, fixed }: { pnl: BePnl; incomes: IncomeLine[]; fixed: FixedLine[] }) {
+function FactTab({ pnl, incomes, fixed, factByUnit, daysElapsed, monthLabel }: {
+  pnl: BePnl; incomes: IncomeLine[]; fixed: FixedLine[]
+  factByUnit: Record<string, { revenue: number; captured: boolean }>; daysElapsed: number; monthLabel: string
+}) {
   const units = Array.from(new Set(fixed.map((f) => f.unit)))
+  // План по юнитам (из incomes) и реальный факт с начала месяца (factByUnit)
+  const planByUnit: Record<string, number> = {}
+  incomes.forEach((i) => { planByUnit[i.unit] = (planByUnit[i.unit] ?? 0) + i.plan })
+  const factUnits = Array.from(new Set([...Object.keys(planByUnit), ...units]))
+  const factTotal = factUnits.reduce((s, u) => s + (factByUnit[u]?.captured ? factByUnit[u].revenue : 0), 0)
+  const planTotal = factUnits.reduce((s, u) => s + (planByUnit[u] ?? 0), 0)
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 mb-3.5">
@@ -154,6 +168,50 @@ function FactTab({ pnl, incomes, fixed }: { pnl: BePnl; incomes: IncomeLine[]; f
         <Kpi label="EBITDA / мес" value={fmt(pnl.ebitda)} valueColor={posColor(pnl.ebitda)} note="прибыль от операций ДО кредита и лизинга" />
         <Kpi label="Прибыль после долга" value={fmt(pnl.operating)} valueColor={posColor(pnl.operating)} note="EBITDA минус кредит и лизинг" />
       </div>
+
+      <Card title="План vs Факт — реальные продажи" hint={`${monthLabel} · за ${daysElapsed} дн.`}>
+        <table className="w-full text-[13px] border-collapse">
+          <thead>
+            <tr className="text-[10px] uppercase tracking-wide text-[#9a9a95]">
+              <th className="text-left font-semibold py-1.5">Юнит</th>
+              <th className="text-right font-semibold py-1.5">План / мес</th>
+              <th className="text-right font-semibold py-1.5">Факт (с нач. месяца)</th>
+              <th className="text-right font-semibold py-1.5">Выполнение</th>
+            </tr>
+          </thead>
+          <tbody>
+            {factUnits.map((u) => {
+              const plan = planByUnit[u] ?? 0
+              const f = factByUnit[u]
+              const captured = f?.captured
+              const pct = plan > 0 && captured ? Math.round((f.revenue / plan) * 100) : null
+              return (
+                <tr key={u} className="border-t border-[#e4e4e0]">
+                  <td className="text-left text-[#4a4a46] py-1.5 font-semibold">{u}</td>
+                  <td className="text-right font-mono tabular-nums py-1.5">{fmt(plan)}</td>
+                  <td className="text-right font-mono tabular-nums py-1.5">
+                    {captured ? fmt(f.revenue) : <span className="text-[#c98a12] text-[11px]">не собирается</span>}
+                  </td>
+                  <td className="text-right font-mono tabular-nums py-1.5" style={pct != null ? { color: marginColor(pct) } : { color: '#9a9a95' }}>
+                    {pct != null ? pct + '%' : '—'}
+                  </td>
+                </tr>
+              )
+            })}
+            <tr className="border-t-2 border-[#d3d3ce] font-semibold">
+              <td className="text-left py-1.5">Итого (где есть факт)</td>
+              <td className="text-right font-mono tabular-nums py-1.5">{fmt(planTotal)}</td>
+              <td className="text-right font-mono tabular-nums py-1.5">{fmt(factTotal)}</td>
+              <td className="text-right font-mono tabular-nums py-1.5">{planTotal > 0 ? Math.round((factTotal / planTotal) * 100) + '%' : '—'}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p className="text-[11px] text-[#9a9a95] mt-2.5 leading-relaxed">
+          <b className="text-[#4a4a46]">Производство</b> — запущенные заказы B2B за месяц (100% предоплата → запуск = оплата = реальный оборот).{' '}
+          <b className="text-[#4a4a46]">M-Glass (розница)</b> пока <b>не собирается</b> в базе надёжно — розничные продажи не заносятся, поэтому факт по ней не показать.
+          Факт — с 1-го числа по сегодня (неполный месяц), план — на весь месяц; проценты сравнивай с поправкой на дни.
+        </p>
+      </Card>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 items-start">
         <Card title="Доходы → маржинальная прибыль" hint="по юнитам, ₽/мес">
