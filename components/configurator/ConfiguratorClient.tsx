@@ -75,8 +75,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     <div className={embed ? 'w-full px-4 py-5' : 'max-w-[1200px] mx-auto px-6 py-8'}>
       {!embed && (
         <div className="mb-6">
-          <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Конфигуратор душевых</h1>
-          <p className="text-[13px] text-[#8a8a85] mt-0.5">Модель → размеры → стекло → финиш. 3D — вживую.</p>
+          <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Визуализатор 3D</h1>
+          <p className="text-[13px] text-[#8a8a85] mt-0.5">Модель → размеры → стекло → финиш. 3D-душевая — вживую.</p>
         </div>
       )}
 

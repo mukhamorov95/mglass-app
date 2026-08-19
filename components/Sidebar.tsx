@@ -33,6 +33,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/design-scan',       label: 'Скан дизайн-проекта', icon: '🔍' },
   { href: '/calculator/mirror', label: 'Зеркало',          icon: '🪞' },
   { href: '/calculator/shower', label: 'Душевая',          icon: '🚿' },
+  { href: '/configurator',      label: 'Визуализатор 3D',  icon: '🧊' },
   { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
   { href: '/calculator/railing', label: 'Лестн. ограждение', icon: '🪜' },
   { groupLabel: 'Продажи' },

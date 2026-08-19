@@ -140,6 +140,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/design-scan',
     '/calculator/mirror',
     '/calculator/shower',
+    '/configurator',
     '/calculator/loft',
     '/calculator/railing',
     '/calculations',
