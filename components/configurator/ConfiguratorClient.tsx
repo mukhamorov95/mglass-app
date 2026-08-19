@@ -18,6 +18,11 @@ const GLASS_TYPES: GlassType[] = [
   { id: 'graphite', label: 'Тонированная графит',        swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
 ]
 
+// Тариф: бюджет — узкий набор цветов фурнитуры; премиум — все.
+type Tier = 'budget' | 'premium'
+const BUDGET_FINISHES = new Set(['chrome', 'black', 'white'])
+const finishesFor = (t: Tier) => t === 'budget' ? FINISHES.filter(f => BUDGET_FINISHES.has(f.id)) : FINISHES
+
 const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
 const clamp = (v: number, min: number, max: number) => Math.max(min, Math.min(max, v))
 
@@ -76,10 +81,18 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const embed = variant === 'embed'
   const [code, setCode] = useState<string>('М7')
   const [dims, setDims] = useState<MDims>(() => defaultsFor(getModel('М7')))
+  const [tier, setTier] = useState<Tier>('budget')
   const [finishId, setFinishId] = useState<FinishId>('chrome')
   const [glassId, setGlassId] = useState<string>('clear')
   const [modelOpen, setModelOpen] = useState(true)
   const [sent, setSent] = useState(false)
+
+  const finishOptions = finishesFor(tier)
+  function changeTier(t: Tier) {
+    setTier(t)
+    const opts = finishesFor(t)
+    if (!opts.some(f => f.id === finishId)) setFinishId(opts[0].id as FinishId)
+  }
 
   const model = getModel(code)
   const finish = FINISHES.find(f => f.id === finishId) ?? FINISHES[0]
@@ -104,7 +117,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     const payload = {
       type: 'mglass-shower-config' as const,
       config: {
-        model: model.code, name: model.name, dims, thickness: THICKNESS,
+        model: model.code, name: model.name, dims, thickness: THICKNESS, tier,
         glass: { id: glass.id, label: glass.label },
         finish: { id: finish.id, label: finish.label },
         glassAreaM2: quantities.glassM2, sections: quantities.sections,
@@ -126,8 +139,14 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr_330px] gap-5 items-start">
-        {/* ── Модель (сворачивается) ── */}
-        <div className="lg:sticky lg:top-4">
+        {/* ── Тариф + Модель (сворачивается) ── */}
+        <div className="lg:sticky lg:top-4 space-y-3">
+          <div className="inline-flex w-full rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
+            <button onClick={() => changeTier('budget')}
+              className={`flex-1 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
+            <button onClick={() => changeTier('premium')}
+              className={`flex-1 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+          </div>
           {modelOpen ? (
             <div>
               <div className="flex items-center justify-between mb-2">
@@ -201,13 +220,13 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
 
           <Section title="Цвет фурнитуры">
             <div className="grid grid-cols-5 gap-1.5">
-              {FINISHES.map(f => (
+              {finishOptions.map(f => (
                 <button key={f.id} onClick={() => setFinishId(f.id)} title={f.label}
                   className={`h-9 rounded-lg border-2 ${finishId === f.id ? 'border-[#111110]' : 'border-[#e4e4e0]'}`}
                   style={{ background: f.hex }} />
               ))}
             </div>
-            <p className="text-[12px] text-[#6b6b66] mt-1.5">{finish.label}</p>
+            <p className="text-[12px] text-[#6b6b66] mt-1.5">{finish.label}{tier === 'budget' ? ' · бюджет' : ' · премиум'}</p>
           </Section>
 
           <Section title="Спецификация">
