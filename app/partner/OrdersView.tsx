@@ -4,37 +4,42 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase-browser'
 
-// Списки кабинета (дизайн из прототипа, .pcab). Один компонент под два меню:
-//   view='quotes' → просчёты (quote + submitted)   (/partner/quotes)
-//   view='orders' → заказы (в работе + отгружены)   (/partner/orders)
-// Табло (view='all') вынесено в отдельный Dashboard. Только цена клиента.
+// Списки кабинета (дизайн .pcab). Три пункта меню:
+//   view='quotes'  → просчёты (черновики). Разбиты на Недавние + Архив (>2 недель).
+//   view='inwork'  → заказы в работе (отправлены + в производстве)
+//   view='shipped' → отгруженные заказы
+// Табло — отдельный Dashboard. Только цена клиента, никакой себестоимости.
 
 type Lane = 'quote' | 'submitted' | 'in_work' | 'shipped'
 type Order = {
-  id: number; number: string; clientOrderNumber: string | null; created_at: string
+  id: number; number: string; clientOrderNumber: string | null; created_at: string; updatedAt: string
   amount: number; lane: Lane; progressPct: number; stage: string
   shipped: boolean; ready: boolean; deadline: string; recalcNote: string | null
+  summary: string; positions: number
 }
 type Resp = { linked: boolean; client: { name: string } | null; orders: Order[] }
+type View = 'quotes' | 'inwork' | 'shipped'
 
+const ARCHIVE_DAYS = 14
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
 const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const ageDays = (s: string) => (Date.now() - new Date(s).getTime()) / 86400000
 
 const LANE_LABEL: Record<Lane, string> = {
   quote: 'Просчёты', submitted: 'Отправлены в работу', in_work: 'В работе', shipped: 'Отгружены',
 }
-const VIEW_LANES: Record<'all' | 'quotes' | 'orders', Lane[]> = {
-  all: ['quote', 'submitted', 'in_work', 'shipped'],
-  quotes: ['quote', 'submitted'],
-  orders: ['in_work', 'shipped'],
+const VIEW_LANES: Record<View, Lane[]> = {
+  quotes: ['quote'],
+  inwork: ['submitted', 'in_work'],
+  shipped: ['shipped'],
 }
-const VIEW_META: Record<'all' | 'quotes' | 'orders', { title: string; cap: string; empty: string }> = {
-  all: { title: 'Мои заказы', cap: 'Все ваши просчёты и заказы', empty: 'Пока нет заказов' },
-  quotes: { title: 'Мои просчёты', cap: 'Сохранённые расчёты — продолжить или отправить в работу', empty: 'Пока нет просчётов. Создайте новый в разделе «Калькулятор».' },
-  orders: { title: 'Мои заказы', cap: 'Запущенные в производство и отгруженные', empty: 'Пока нет заказов в работе.' },
+const VIEW_META: Record<View, { title: string; cap: string; empty: string }> = {
+  quotes: { title: 'Мои просчёты', cap: 'Сохранённые расчёты — недавние и архив', empty: 'Пока нет просчётов. Создайте новый в разделе «Калькулятор».' },
+  inwork: { title: 'Заказы в работе', cap: 'Отправленные и в производстве — с % готовности и сроком', empty: 'Пока нет заказов в работе.' },
+  shipped: { title: 'Отгруженные заказы', cap: 'Завершённые заказы', empty: 'Пока нет отгруженных заказов.' },
 }
 
-export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' | 'orders' }) {
+export default function OrdersView({ view }: { view: View }) {
   const [data, setData] = useState<Resp | null>(null)
   const [loading, setLoading] = useState(true)
   const [showPwd, setShowPwd] = useState(false)
@@ -43,6 +48,7 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
   const [pwdSaving, setPwdSaving] = useState(false)
   const [pwdMsg, setPwdMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [submittingId, setSubmittingId] = useState<number | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
 
   function load() {
     return fetch('/api/partner/orders').then(r => r.json()).then((d: Resp) => setData(d)).catch(() => setData({ linked: false, client: null, orders: [] }))
@@ -75,6 +81,21 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
   const orders = data?.orders ?? []
   const lanes = VIEW_LANES[view]
   const visible = orders.filter(o => lanes.includes(o.lane))
+  // Для просчётов: недавние (≤2 недель по последней активности) и архив.
+  const recent = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) <= ARCHIVE_DAYS) : visible
+  const archived = view === 'quotes' ? visible.filter(o => ageDays(o.updatedAt) > ARCHIVE_DAYS) : []
+
+  const card = (o: Order) => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />
+  const lanesOf = (list: Order[]) => lanes.map(lane => {
+    const l = list.filter(o => o.lane === lane)
+    if (l.length === 0) return null
+    return (
+      <div key={lane}>
+        {view !== 'quotes' && <div className="lane-lbl">{LANE_LABEL[lane]} <span className="n">{l.length}</span></div>}
+        {l.map(card)}
+      </div>
+    )
+  })
 
   return (
     <>
@@ -127,25 +148,36 @@ export default function OrdersView({ view = 'all' }: { view?: 'all' | 'quotes' |
           <div className="note"><div className="s">{meta.empty}</div></div>
         )}
 
-        {!loading && data?.linked && lanes.map(lane => {
-          const list = visible.filter(o => o.lane === lane)
-          if (list.length === 0) return null
-          return (
-            <div key={lane}>
-              <div className="lane-lbl">{LANE_LABEL[lane]} <span className="n">{list.length}</span></div>
-              {list.map(o => <OrderCard key={o.id} o={o} onSubmit={submitQuote} submitting={submittingId === o.id} />)}
-            </div>
-          )
-        })}
+        {!loading && data?.linked && view === 'quotes' && recent.length > 0 && (
+          <div>
+            <div className="lane-lbl">Недавние <span className="n">{recent.length}</span></div>
+            {recent.map(card)}
+          </div>
+        )}
+        {!loading && data?.linked && view !== 'quotes' && lanesOf(recent)}
+
+        {!loading && data?.linked && view === 'quotes' && archived.length > 0 && (
+          <div style={{ marginTop: 14 }}>
+            <button className="lane-lbl" onClick={() => setArchiveOpen(v => !v)}
+              style={{ background: 'none', border: 0, cursor: 'pointer', color: 'var(--muted)', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ transform: archiveOpen ? '' : 'rotate(-90deg)', transition: '.15s' }}>▾</span>
+              Архив · старше 2 недель <span className="n">{archived.length}</span>
+            </button>
+            {archiveOpen && (
+              <>
+                <div className="cap" style={{ margin: '4px 0 8px' }}>Откройте просчёт, чтобы восстановить — измените и сохраните, он вернётся в «Недавние».</div>
+                {archived.map(card)}
+              </>
+            )}
+          </div>
+        )}
       </div>
     </>
   )
 }
 
 function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: number) => void; submitting: boolean }) {
-  // Просчёт → клик открывает его на редактирование в калькуляторе (состав + правка).
-  // Заказ (в работе/отгружен) → карточка заказа. «Отправить в работу» внутри
-  // просчёта делает preventDefault, поэтому не навигирует.
+  // Просчёт → клик открывает на редактирование (состав + правка). Заказ → карточка заказа.
   const clickable = o.lane !== 'quote'
   const body = (
     <>
@@ -153,6 +185,7 @@ function OrderCard({ o, onSubmit, submitting }: { o: Order; onSubmit: (id: numbe
         <div>
           <div className="num">{o.number}{o.clientOrderNumber && <span className="yr"> · ваш № {o.clientOrderNumber}</span>}</div>
           <div className="meta">от {fmtDate(o.created_at)}{o.lane === 'in_work' ? ` · срок ${fmtDate(o.deadline)}` : o.lane === 'submitted' ? ' · ждём подтверждения менеджера' : ''}</div>
+          {o.summary && <div className="meta" style={{ marginTop: 2, color: 'var(--ink-2)' }}>{o.summary}{o.positions ? ` · ${o.positions} поз.` : ''}</div>}
         </div>
         <div className="amt tnum">{fmtMoney(o.amount)}</div>
       </div>

@@ -45,7 +45,7 @@ export async function GET() {
   // Партнёр видит и просчёты, которые мы сделали для него.
   const { data } = await svc
     .from('b2b_orders')
-    .select('id,custom_number,client_order_number,created_at,launched_at,total_after_discount,total_sale_inc_vat,notes')
+    .select('id,custom_number,client_order_number,created_at,updated_at,launched_at,total_after_discount,total_sale_inc_vat,notes,items')
     .eq('client_id', client.id)
     .is('archived_at', null)
     .order('created_at', { ascending: false })
@@ -77,11 +77,21 @@ export async function GET() {
     const history = Array.isArray(pn.status_history) ? pn.status_history : []
     const lastComment = (pn.status_comment as string | undefined) || null
 
+    // Что внутри — материалы + толщины (кратко) и число позиций.
+    const items = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
+    const matLabels = [...new Set(items.map(it => {
+      const nm = String(it.materialName ?? '').trim()
+      const th = it.thickness ? `${it.thickness}мм` : ''
+      return [nm, th].filter(Boolean).join(' ')
+    }).filter(Boolean))]
+    const summary = matLabels.slice(0, 2).join(' · ') + (matLabels.length > 2 ? ` +${matLabels.length - 2}` : '')
+
     return {
       id: o.id as number,
       number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
       clientOrderNumber: (o.client_order_number as string | null) ?? null,
       created_at: o.created_at as string,
+      updatedAt: (o.updated_at as string | null) ?? (o.created_at as string),
       amount: (o.total_after_discount as number | null) ?? (o.total_sale_inc_vat as number | null) ?? 0,
       lane,
       progressPct: lane === 'in_work' || lane === 'shipped' ? Math.round((doneN / LANE.length) * 100) : 0,
@@ -90,6 +100,8 @@ export async function GET() {
       ready: packed && !shipped,
       deadline: deadline(pn, o.created_at as string),
       recalcNote: history.length > 0 ? lastComment : null,
+      summary,
+      positions: items.length,
     }
   })
 
