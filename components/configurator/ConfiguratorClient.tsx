@@ -262,7 +262,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             </div>
           ) : (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <Row label="Себестоимость (стекло+фурнитура)" value={rub(price.materialsCost)} muted />
+              <Row label="Себестоимость стекла" value={rub(price.glassCost)} muted />
+              <Row label="Себестоимость фурнитуры" value={rub(price.hardwareCost + price.profileCost + price.tubeCost)} muted />
               <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />
               <Row label={`Монтаж (${quantities.sections}×${(price.installCost / Math.max(1, quantities.sections)).toLocaleString('ru-RU')} ₽)`} value={rub(price.installCost)} muted />
               <Row label="Доставка (Москва)" value={rub(price.deliveryCost)} muted />

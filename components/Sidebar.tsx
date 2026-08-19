@@ -277,6 +277,7 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { href: '/admin/pricing-v2',      label: 'Маржа / финмодель зеркал', icon: '📈', indent: true },
   { groupLabel: 'Фурнитура' },
   { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
+  { href: '/admin/visualizer-pricing', label: 'Себестоимость визуализатора', icon: '🧊', indent: true },
   { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
   { href: '/admin/loft-rates',      label: 'Лофт — ставки цеха', icon: '🏗️', indent: true },
   { href: '/admin/mirror-frame-rates', label: 'Зеркало в раме — ставки', icon: '🖼️', indent: true },
