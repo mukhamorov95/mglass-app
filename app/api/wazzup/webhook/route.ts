@@ -25,8 +25,21 @@ function db() {
   )
 }
 
+// В БД avito_messages_raw.message_type CHECK разрешает только этот набор. Wazzup
+// же шлёт свои типы (image/document/sticker/location/contact/…). Раньше сырой
+// msg.type уходил в insert как есть → CHECK violation → 400 → сообщение молча
+// терялось (continue в приёмнике). Нормализуем в разрешённый набор.
+const ALLOWED_MSG_TYPES = new Set(['text', 'photo', 'audio', 'file', 'video', 'system', 'unknown'])
+function normalizeMessageType(raw: string): string {
+  const k = raw.toLowerCase()
+  if (k === 'image' || k === 'picture' || k === 'sticker') return 'photo'
+  if (k === 'voice' || k === 'ptt') return 'audio'
+  if (k === 'document') return 'file'
+  if (ALLOWED_MSG_TYPES.has(k)) return k
+  return 'unknown'
+}
 function detectMessageType(msg: Record<string, unknown>): string {
-  if (msg.type && msg.type !== 'text') return String(msg.type)
+  if (msg.type && msg.type !== 'text') return normalizeMessageType(String(msg.type))
   const attachments = msg.attachments as Array<Record<string, unknown>> | undefined
   if (attachments?.length) {
     const kind = String(attachments[0].type ?? '')
