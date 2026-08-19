@@ -6,8 +6,9 @@ import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
 import {
-  computeQuantities, computePrice, totalMeters, HARDWARE_LABEL, HARDWARE_MODELS,
-  GLASS_TYPE_IDS, DEFAULT_FINANCE, type Tier, type UnitPrices,
+  computeQuantities, computePrice, STOCK_LENS,
+  GLASS_TYPE_IDS, DEFAULT_FINANCE,
+  type Tier, type UnitPrices, type HardwareGroup, type PieceItem, type BarItem,
 } from '@/lib/configurator/pricing'
 
 const GLASS_LABEL: Record<string, string> = {
@@ -20,24 +21,23 @@ const TINT: Record<string, GlassTint> = {
   graphite: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 },
 }
 const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
+const uid = (p: string) => `${p}-${Math.round(Math.random() * 1e9).toString(36)}`
 
-function Num({ label, value, onChange, suffix = '₽' }: { label: string; value: number; onChange: (v: number) => void; suffix?: string }) {
+function NumInput({ value, onChange, w = 96, suffix = '₽' }: { value: number; onChange: (v: number) => void; w?: number; suffix?: string }) {
   return (
-    <label className="flex items-center justify-between gap-2 text-[13px] py-0.5">
-      <span className="text-[#4b4b47]">{label}</span>
-      <span className="flex items-center gap-1">
-        <input type="number" value={value} onChange={e => onChange(Number(e.target.value) || 0)}
-          className="w-[96px] text-right font-mono text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
-        <span className="text-[11px] text-[#9a9a95] w-8">{suffix}</span>
-      </span>
-    </label>
+    <span className="flex items-center gap-1">
+      <input type="number" value={value} onChange={e => onChange(Number(e.target.value) || 0)} style={{ width: w }}
+        className="text-right font-mono text-[13px] text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+      <span className="text-[11px] text-[#9a9a95]">{suffix}</span>
+    </span>
   )
 }
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
+function Card({ title, right, children }: { title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-      <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-2">{title}</p>
+      {title && <div className="flex items-center justify-between mb-2">
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">{title}</p>{right}
+      </div>}
       {children}
     </div>
   )
@@ -78,6 +78,31 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
     setDirty(true); setMsg(null)
   }
 
+  // ── мутаторы подгрупп/позиций ──
+  const setGroupTitle = (gi: number, title: string) => edit(u => { u.groups[gi].title = title })
+  const removeGroup = (gi: number) => edit(u => { u.groups.splice(gi, 1) })
+  const addGroup = (kind: 'piece' | 'bar') => edit(u => {
+    if (kind === 'piece') u.groups.push({ id: uid('grp'), title: 'Новая подгруппа', kind: 'piece', items: [] })
+    else u.groups.push({ id: uid('grp'), title: 'Новая подгруппа (хлысты)', kind: 'bar', items: [] })
+  })
+  const addItem = (gi: number) => edit(u => {
+    const g = u.groups[gi]
+    if (g.kind === 'piece') g.items.push({ key: uid('it'), name: 'Новая позиция', prices: {}, qtyMode: 'manual', fixedQty: 1 })
+    else g.items.push({ key: uid('it'), name: 'Новый хлыст', bars: {} })
+  })
+  const removeItem = (gi: number, ii: number) => edit(u => { (u.groups[gi].items as unknown[]).splice(ii, 1) })
+  const setItemName = (gi: number, ii: number, name: string) => edit(u => { u.groups[gi].items[ii].name = name })
+  const setPiecePrice = (gi: number, ii: number, v: number) => edit(u => {
+    const it = u.groups[gi].items[ii] as PieceItem; it.prices = { ...it.prices, [finishId]: v }
+  })
+  const setPieceQty = (gi: number, ii: number, v: number) => edit(u => {
+    const it = u.groups[gi].items[ii] as PieceItem; it.fixedQty = v
+  })
+  const setBarPrice = (gi: number, ii: number, len: number, v: number) => edit(u => {
+    const it = u.groups[gi].items[ii] as BarItem
+    it.bars = { ...it.bars, [finishId]: { ...(it.bars[finishId] ?? {}), [len]: v } }
+  })
+
   async function save() {
     setSaving(true); setMsg(null)
     try {
@@ -91,8 +116,10 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
     finally { setSaving(false) }
   }
 
+  const colorLabel = FINISHES.find(f => f.id === finishId)?.label ?? finishId
+
   return (
-    <div className="max-w-[1280px] mx-auto px-6 py-6">
+    <div className="max-w-[1320px] mx-auto px-6 py-6">
       <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Себестоимость визуализатора</h1>
@@ -112,7 +139,7 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
         <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr_360px] gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-[210px_1fr_380px] gap-5 items-start">
         {/* Модели */}
         <div className="grid gap-1.5 lg:sticky lg:top-4">
           {M_MODELS.map(m => (
@@ -128,12 +155,18 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={8} finishHex={FINISHES.find(f => f.id === finishId)?.hex ?? '#c9ccd0'} finishId={finishId} glassTint={TINT[glassType]} />
           </div>
-          <Card title={`Спецификация ${model.code} и себестоимость`}>
+          <Card title={`Спецификация ${model.code} · ${colorLabel}`}>
             <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Стекло {GLASS_LABEL[glassType]}</span><span className="font-mono">{q.glassM2} м² · {rub(price.glassCost)}</span></div>
-            <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Профиль Pr-002 (хлысты)</span><span className="font-mono">{totalMeters(q.profilePieces)} м.п. · {rub(price.profileCost)}</span></div>
-            <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Штанга 30×10 (хлысты)</span><span className="font-mono">{totalMeters(q.tubePieces)} м.п. · {rub(price.tubeCost)}</span></div>
-            {price.hardwareLines.map(l => (
-              <div key={l.key} className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">{l.label}</span><span className="font-mono">{l.qty}×{rub(l.unitPrice)} = {rub(l.total)}</span></div>
+            {price.groupedLines.map(g => (
+              <div key={g.id} className="mt-1.5">
+                <p className="text-[11px] uppercase tracking-wide text-[#a0a09a]">{g.title}</p>
+                {g.lines.map(l => (
+                  <div key={l.key} className="flex justify-between text-[13px] py-0.5">
+                    <span className="text-[#4b4b47]">{l.label}</span>
+                    <span className="font-mono">{l.unit === 'м.п.' ? `${l.qty} м.п.` : `${l.qty}×${rub(l.unitPrice)}`} = {rub(l.total)}</span>
+                  </div>
+                ))}
+              </div>
             ))}
             <div className="flex justify-between text-[13px] pt-2 mt-1 border-t border-[#f0f0ec]"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono">{rub(price.materialsCost)}</span></div>
             <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Цена изделия ({price.marginPct}/{price.taxPct}%)</span><span className="font-mono">{rub(price.itemPrice)}</span></div>
@@ -146,42 +179,70 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
         <div className="space-y-3">
           <Card title="Стекло · ₽/м²">
             {GLASS_TYPE_IDS.map(g => (
-              <Num key={g} label={GLASS_LABEL[g]} value={up.glassPerM2[g] ?? 0} onChange={v => edit(u => { u.glassPerM2[g] = v })} suffix="₽/м²" />
+              <label key={g} className="flex items-center justify-between gap-2 text-[13px] py-0.5">
+                <span className="text-[#4b4b47]">{GLASS_LABEL[g]}</span>
+                <NumInput value={up.glassPerM2[g] ?? 0} onChange={v => edit(u => { u.glassPerM2[g] = v })} suffix="₽/м²" />
+              </label>
             ))}
             <p className="text-[11px] text-[#9a9a95] mt-1">Тип для превью: {GLASS_TYPE_IDS.map(g => (
               <button key={g} onClick={() => setGlassType(g)} className={`ml-1 underline ${glassType === g ? 'text-[#111110] font-semibold' : ''}`}>{GLASS_LABEL[g].split(' ')[0]}</button>
             ))}</p>
           </Card>
 
-          <Card title="Профиль Pr-002 · хлысты">
-            {up.profileStock.map((s, i) => (
-              <Num key={s.len} label={`Хлыст ${s.len} мм`} value={s.price} onChange={v => edit(u => { u.profileStock[i].price = v })} />
-            ))}
-          </Card>
-          <Card title="Штанга 30×10 · хлысты">
-            {up.tubeStock.map((s, i) => (
-              <Num key={s.len} label={`Хлыст ${s.len} мм`} value={s.price} onChange={v => edit(u => { u.tubeStock[i].price = v })} />
-            ))}
-          </Card>
-
-          <Card title="Фурнитура · ₽/шт по цвету">
-            <div className="flex flex-wrap gap-1 mb-2">
+          {/* Цвет фурнитуры — общий для всех подгрупп */}
+          <Card title="Цвет фурнитуры">
+            <div className="flex flex-wrap gap-1.5">
               {FINISHES.map(f => (
                 <button key={f.id} onClick={() => setFinishId(f.id)} title={f.label}
-                  className={`w-6 h-6 rounded border-2 ${finishId === f.id ? 'border-[#111110]' : 'border-[#e4e4e0]'}`} style={{ background: f.hex }} />
+                  className={`w-7 h-7 rounded-md border-2 ${finishId === f.id ? 'border-[#111110]' : 'border-[#e4e4e0]'}`} style={{ background: f.hex }} />
               ))}
             </div>
-            <p className="text-[11px] text-[#9a9a95] mb-1">Цвет: {FINISHES.find(f => f.id === finishId)?.label}</p>
-            {HARDWARE_MODELS.map(m => (
-              <Num key={m} label={HARDWARE_LABEL[m] ?? m} value={up.hardware[m]?.[finishId] ?? 0}
-                onChange={v => edit(u => { u.hardware[m] = { ...(u.hardware[m] ?? {}), [finishId]: v } })} />
-            ))}
+            <p className="text-[12px] text-[#6b6b66] mt-1.5">Цены ниже — для цвета <b className="text-[#111110]">{colorLabel}</b>.</p>
           </Card>
 
+          {/* Подгруппы фурнитуры */}
+          {up.groups.map((g: HardwareGroup, gi: number) => (
+            <Card key={g.id}
+              right={<button onClick={() => removeGroup(gi)} className="text-[11px] text-[#b04a3f] hover:underline">удалить</button>}>
+              <div className="flex items-center gap-2 mb-2 -mt-1">
+                <input value={g.title} onChange={e => setGroupTitle(gi, e.target.value)}
+                  className="flex-1 text-[13px] font-semibold text-[#111110] border-b border-transparent hover:border-[#e4e4e0] focus:border-[#111110] outline-none py-0.5" />
+                <span className="text-[10px] text-[#9a9a95] uppercase">{g.kind === 'bar' ? 'хлысты' : 'шт'}</span>
+              </div>
+              {g.kind === 'piece' ? (g.items as PieceItem[]).map((it, ii) => (
+                <div key={it.key} className="flex items-center gap-1.5 py-0.5">
+                  <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
+                    className="flex-1 min-w-0 text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+                  {it.qtyMode === 'manual' && <NumInput value={it.fixedQty ?? 0} onChange={v => setPieceQty(gi, ii, v)} w={44} suffix="шт" />}
+                  <NumInput value={it.prices[finishId] ?? 0} onChange={v => setPiecePrice(gi, ii, v)} w={80} />
+                  <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                </div>
+              )) : (g.items as BarItem[]).map((it, ii) => (
+                <div key={it.key} className="flex items-center gap-1.5 py-0.5 flex-wrap">
+                  <input value={it.name} onChange={e => setItemName(gi, ii, e.target.value)}
+                    className="flex-1 min-w-[120px] text-[13px] text-[#4b4b47] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
+                  {STOCK_LENS.map(len => (
+                    <span key={len} className="flex items-center gap-1">
+                      <span className="text-[11px] text-[#9a9a95]">{len}</span>
+                      <NumInput value={it.bars[finishId]?.[len] ?? 0} onChange={v => setBarPrice(gi, ii, len, v)} w={72} />
+                    </span>
+                  ))}
+                  <button onClick={() => removeItem(gi, ii)} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+                </div>
+              ))}
+              <button onClick={() => addItem(gi)} className="text-[12px] text-[#4b6ea9] hover:underline mt-1.5">+ позиция</button>
+            </Card>
+          ))}
+
+          <div className="flex gap-2">
+            <button onClick={() => addGroup('piece')} className="flex-1 text-[13px] font-medium border border-dashed border-[#c4c4be] rounded-lg py-2 text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">+ Подгруппа</button>
+            <button onClick={() => addGroup('bar')} className="flex-1 text-[13px] font-medium border border-dashed border-[#c4c4be] rounded-lg py-2 text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]">+ Подгруппа (хлысты)</button>
+          </div>
+
           <Card title="Работы и логистика">
-            <Num label="Монтаж за секцию" value={up.installPerSection} onChange={v => edit(u => { u.installPerSection = v })} />
-            <Num label="Доставка Москва" value={up.deliveryMoscow} onChange={v => edit(u => { u.deliveryMoscow = v })} />
-            <Num label="Подъём за этаж" value={up.liftPerFloor} onChange={v => edit(u => { u.liftPerFloor = v })} />
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Монтаж за секцию</span><NumInput value={up.installPerSection} onChange={v => edit(u => { u.installPerSection = v })} /></label>
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Доставка Москва</span><NumInput value={up.deliveryMoscow} onChange={v => edit(u => { u.deliveryMoscow = v })} /></label>
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Подъём за этаж</span><NumInput value={up.liftPerFloor} onChange={v => edit(u => { u.liftPerFloor = v })} /></label>
           </Card>
         </div>
       </div>

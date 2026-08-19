@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { computeQuantities, computePrice, unitPricesFor, pickStock, barsCost, DEFAULT_FINANCE } from '@/lib/configurator/pricing'
+import { computeQuantities, computePrice, unitPricesFor, pickStock, barsCost, DEFAULT_FINANCE, migrateUnitPrices, buildDefaultUnitPrices } from '@/lib/configurator/pricing'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
 import { getModel } from '@/lib/configurator/arrangement'
 
@@ -63,5 +63,48 @@ describe('pricing — cut-list + хлысты + цвет', () => {
     const q = computeQuantities(a, 8)
     const p = computePrice(q, unitPricesFor('budget'), DEFAULT_FINANCE, { withDelivery: false })
     expect(p.deliveryCost).toBe(0)
+  })
+
+  it('авто-количества: заглушки = 2×кусков профиля, уплотнитель = число распашных створок', () => {
+    const a = buildFromModel(getModel('М7'), { width: 1100, height: 2000, width2: 900, doorWidth: 600 }, 8)
+    const q = computeQuantities(a, 8)
+    expect(q.hardware.cap).toBe(q.profilePieces.length * 2)
+    expect(q.hardware.seal).toBe(q.hardware.sd210)   // 1 магнитный уплотнитель на распашную створку
+  })
+
+  it('подгруппы: цена группируется, себестоимость = стекло + все piece + профиль + штанга', () => {
+    const a = buildFromModel(getModel('М7'), { width: 1100, height: 2000, width2: 900, doorWidth: 600 }, 8)
+    const q = computeQuantities(a, 8)
+    const p = computePrice(q, unitPricesFor('budget'), DEFAULT_FINANCE, {})
+    expect(p.groupedLines.length).toBeGreaterThan(0)
+    const grouped = p.groupedLines.reduce((s, g) => s + g.total, 0)
+    expect(grouped).toBe(p.hardwareCost + p.profileCost + p.tubeCost)
+    expect(p.materialsCost).toBe(p.glassCost + p.hardwareCost + p.profileCost + p.tubeCost)
+  })
+
+  it('миграция: старая плоская схема → подгруппы без потери введённых цен', () => {
+    const legacy = {
+      glassPerM2: { clear: 9999 },
+      hardware: { balge: { chrome: 7777 } },
+      profileStock: [{ len: 2200, price: 1000 }, { len: 3000, price: 1200 }],
+      tubeStock: [{ len: 2200, price: 2500 }, { len: 3000, price: 4000 }],
+      installPerSection: 6500, deliveryMoscow: 5000, liftPerFloor: 0,
+    }
+    const up = migrateUnitPrices(legacy, 'budget')
+    expect(up.groups.length).toBeGreaterThan(0)
+    expect(up.glassPerM2.clear).toBe(9999)
+    const hinges = up.groups.find(g => g.id === 'hinges')!
+    const balge = (hinges.items as { key: string; prices: Record<string, number> }[]).find(i => i.key === 'balge')!
+    expect(balge.prices.chrome).toBe(7777)
+    const profiles = up.groups.find(g => g.id === 'profiles')!
+    const prof = (profiles.items as { key: string; bars: Record<string, Record<number, number>> }[])[0]
+    expect(prof.bars.chrome[2200]).toBe(1000)   // хром = введённое значение, без наценки
+    expect(prof.bars.chrome[3000]).toBe(1200)
+  })
+
+  it('миграция: новая схема с подгруппами возвращается как есть', () => {
+    const fresh = buildDefaultUnitPrices('premium')
+    const up = migrateUnitPrices(fresh, 'premium')
+    expect(up.groups).toEqual(fresh.groups)
   })
 })
