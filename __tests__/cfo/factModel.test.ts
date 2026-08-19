@@ -1,80 +1,76 @@
 import { describe, it, expect } from 'vitest'
-import { computePnl, scenarioPresets, type PnlInput } from '@/lib/cfo/factModel'
+import { computeBe, scenarioPresets, isDebtRow, type BeInput } from '@/lib/cfo/factModel'
 
-const input: PnlInput = {
-  revenueLines: [
-    { id: 'b2c_mirror',   label: 'Зеркала',  vcPct: 62, revenue: 1_500_000, isActual: false },
-    { id: 'b2c_shower',   label: 'Душевые',  vcPct: 62, revenue: 2_000_000, isActual: false },
-    { id: 'b2c_loft',     label: 'Лофт',     vcPct: 62, revenue: 1_500_000, isActual: false },
-    { id: 'b2c_services', label: 'Монтаж',   vcPct: 25, revenue: 1_300_000, isActual: false },
-    { id: 'b2b_glass',    label: 'B2B',      vcPct: 49, revenue: 2_400_000, isActual: false },
-    { id: 'other',        label: 'Прочие',   vcPct: 40, revenue: 0,         isActual: false },
+// Реальная структура из «Точки безубыточности» (finplan_models):
+// M-Glass 10 млн @ 62% VC, Производство 4.5 млн @ 40% VC.
+// Постоянные суммарно 3 584 717, из них долг (кредит 290к + лизинг 400к) = 690к.
+const input: BeInput = {
+  incomes: [
+    { id: 'mglass_0', label: 'M-Glass — изделия', unit: 'M-Glass', plan: 10_000_000, vcPct: 62 },
+    { id: 'production_0', label: 'Производство — стекло', unit: 'Производство', plan: 4_500_000, vcPct: 40 },
   ],
-  fixedCosts: [
-    { key: 'rent',        label: 'Аренда',     amount: 475_000, isFinancing: false },
-    { key: 'utilities',   label: 'Коммуналка', amount: 20_000,  isFinancing: false },
-    { key: 'payroll',     label: 'ФОТ',        amount: 800_000, isFinancing: false },
-    { key: 'payroll_tax', label: 'Налоги ФОТ', amount: 181_000, isFinancing: false },
-    { key: 'leasing',     label: 'Лизинг',     amount: 505_200, isFinancing: true },
-    { key: 'credit',      label: 'Кредит',     amount: 344_980, isFinancing: true },
-    { key: 'marketing',   label: 'Маркетинг',  amount: 290_000, isFinancing: false },
-    { key: 'outsource',   label: 'Аутсорс',    amount: 190_000, isFinancing: false },
-    { key: 'other',       label: 'Прочее',     amount: 62_710,  isFinancing: false },
+  fixed: [
+    { key: 'm0', label: 'Аренда + оклады + прочее', unit: 'M-Glass', amount: 1_124_710, isDebt: false },
+    { key: 'm1', label: 'Кредит и проценты', unit: 'M-Glass', amount: 290_000, isDebt: true },
+    { key: 'p0', label: 'Аренда + оклады + прочее', unit: 'Производство', amount: 1_770_007, isDebt: false },
+    { key: 'p1', label: 'Лизинг', unit: 'Производство', amount: 400_000, isDebt: true },
   ],
-  taxSystem: 'usn_6',
-  profitSplit: { owner: 20, education: 5, reserve: 5 },
-  insuranceMonthly: 4_125,
+  fundsRub: 526_400,
 }
 
-describe('computePnl — факт', () => {
-  const p = computePnl(input)
+describe('computeBe — факт из break-even', () => {
+  const p = computeBe(input)
 
-  it('выручка = сумма направлений', () => {
-    expect(p.revenue).toBe(8_700_000)
+  it('доход = сумма планов юнитов', () => {
+    expect(p.revenue).toBe(14_500_000)
   })
 
-  it('маржинальная прибыль = выручка − переменные', () => {
-    expect(p.variableCost).toBe(4_601_000)
-    expect(p.contribution).toBe(4_099_000)
+  it('переменные и маржа', () => {
+    expect(p.variableCost).toBe(8_000_000) // 10м×62% + 4.5м×40%
+    expect(p.margin).toBe(6_500_000)
+    expect(p.marginPct).toBe(44.8)
   })
 
   it('постоянные = сумма всех статей', () => {
-    expect(p.fixedTotal).toBe(2_868_890)
+    expect(p.fixedTotal).toBe(3_584_717)
   })
 
-  it('EBITDA = маржинальная − постоянные', () => {
-    expect(p.ebitda).toBe(4_099_000 - 2_868_890)
+  it('EBITDA = маржа − постоянные', () => {
+    expect(p.ebitda).toBe(6_500_000 - 3_584_717)
   })
 
-  it('точка безубыточности TB0 положительна и ниже текущей выручки', () => {
+  it('остаток = маржа − фонды − постоянные', () => {
+    expect(p.remainder).toBe(6_500_000 - 526_400 - 3_584_717)
+  })
+
+  it('ТБ-0 положительна и ниже планового дохода', () => {
     expect(p.tb0).toBeGreaterThan(0)
     expect(p.tb0!).toBeLessThan(p.revenue)
   })
+})
 
-  it('владельцу = 20% чистой прибыли', () => {
-    expect(p.fundsOwner).toBe(Math.round(p.netProfit * 0.2))
+describe('computeBe — сценарий без кредита и лизинга', () => {
+  const base = computeBe(input)
+  const nodebt = scenarioPresets(input.fixed).find((x) => x.id === 'nodebt')!
+  const scen = computeBe(input, nodebt.excluded)
+
+  it('пресет исключает обе долговые статьи', () => {
+    expect([...nodebt.excluded].sort()).toEqual(['m1', 'p1'])
+  })
+
+  it('постоянные падают ровно на кредит + лизинг', () => {
+    expect(base.fixedTotal - scen.fixedTotal).toBe(290_000 + 400_000)
+  })
+
+  it('EBITDA растёт на ту же сумму долга', () => {
+    expect(scen.ebitda - base.ebitda).toBe(690_000)
   })
 })
 
-describe('computePnl — сценарий без лизинга и кредита', () => {
-  const base = computePnl(input)
-  const presets = scenarioPresets(input.fixedCosts)
-  const nodebt = presets.find((x) => x.id === 'nodebt')!
-  const scen = computePnl(input, nodebt.excluded)
-
-  it('пресет исключает обе долговые статьи', () => {
-    expect([...nodebt.excluded].sort()).toEqual(['credit', 'leasing'])
-  })
-
-  it('постоянные падают ровно на лизинг + кредит', () => {
-    expect(base.fixedTotal - scen.fixedTotal).toBe(505_200 + 344_980)
-  })
-
-  it('EBITDA растёт на ту же сумму (выручка не меняется)', () => {
-    expect(scen.ebitda - base.ebitda).toBe(850_180)
-  })
-
-  it('операционная прибыльность заметно выше', () => {
-    expect(scen.ebitdaPct).toBeGreaterThan(base.ebitdaPct)
+describe('isDebtRow', () => {
+  it('ловит кредит и лизинг по названию', () => {
+    expect(isDebtRow('Кредит и проценты (кредит MGlass)')).toBe(true)
+    expect(isDebtRow('Лизинг (относится к производству)')).toBe(true)
+    expect(isDebtRow('Аренда помещения')).toBe(false)
   })
 })
