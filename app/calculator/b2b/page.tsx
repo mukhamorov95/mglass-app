@@ -2409,7 +2409,14 @@ export default function B2BCalculatorPage() {
                         <tbody>
                           {cuttingResults.map(r => (
                             <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
-                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
+                              <td className="py-2 font-semibold text-[#111110]">
+                                {r.materialLabel}
+                                {r.patternDirection !== 'none' && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold align-middle">
+                                    рисунок вдоль {r.patternDirection === 'along_length' ? 'длины' : 'ширины'}
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
                               <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
@@ -2422,8 +2429,10 @@ export default function B2BCalculatorPage() {
                         </tbody>
                       </table>
                       <p className="text-[11px] text-[#9a9a95]">
-                        Зазор 2 мм · Кромка 2 мм · Поворот разрешён
-                        {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
+                        Зазор 2 мм · Кромка 2 мм
+                        {cuttingResults.some(r => r.patternDirection !== 'none')
+                          ? ' · ⚠ У фактурных листов поворот детали запрещён (рисунок направлен)'
+                          : ' · Поворот разрешён'}
                       </p>
                     </div>
                   </details>
