@@ -5,6 +5,7 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type MDims } from '@/components/configurator/scene/assembly'
+import { computeQuantities, computePrice, clientPriceFrom } from '@/lib/configurator/pricing'
 
 const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
 
@@ -32,6 +33,15 @@ function Field({ label, value, min, max, step = 10, onChange }: {
   )
 }
 
+function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {
+  return (
+    <div className="text-[13px] flex justify-between py-1">
+      <span className={muted ? 'text-[#9a9a95]' : 'text-[#4b4b47]'}>{label}</span>
+      <span className={`font-mono ${muted ? 'text-[#6b6b66]' : 'text-[#111110]'}`}>{value}</span>
+    </div>
+  )
+}
+
 // Клиентский конфигуратор на 9 моделях М1–М12 (раскладка — lib/configurator/arrangement).
 // variant='embed' — публичный виджет для сайта: без себестоимости, заявка через postMessage.
 export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'internal' | 'embed' }) {
@@ -54,16 +64,21 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
 
   const assembly = useMemo(() => buildFromModel(model, dims, thickness), [model, dims, thickness])
-  const glassAreaM2 = Number(assembly.glass.reduce((s, g) => s + g.size[0] * g.size[1], 0).toFixed(2))
-  const hinges = assembly.hardware.filter(h => h.model === 'balge' || h.model === 'dessau').length
-  const handles = assembly.hardware.filter(h => h.model === 'sd210').length
-  const slides = assembly.glass.filter(g => g.role === 'door' && !assembly.hardware.some(h => h.key.startsWith(g.key))).length
+  const quantities = useMemo(() => computeQuantities(assembly, thickness), [assembly, thickness])
+  const price = useMemo(() => computePrice(quantities), [quantities])
+  const clientFrom = clientPriceFrom(price.total)
   const att = doorAttachment(model)
+  const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
 
   function sendLead() {
     const payload = {
       type: 'mglass-shower-config' as const,
-      config: { model: model.code, name: model.name, dims, thickness, finish: { id: finish.id, label: finish.label }, glassAreaM2 },
+      config: {
+        model: model.code, name: model.name, dims, thickness,
+        finish: { id: finish.id, label: finish.label },
+        glassAreaM2: quantities.glassM2, sections: quantities.sections,
+        priceFrom: clientFrom,
+      },
     }
     const origin = process.env.NEXT_PUBLIC_EMBED_PARENT_ORIGIN || '*'
     try { window.parent?.postMessage(payload, origin) } catch { /* not embedded */ }
@@ -144,45 +159,54 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           </p>
         </div>
 
-        {/* Спецификация */}
+        {/* Спецификация + цена */}
         <div className="space-y-4">
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-3">Спецификация</p>
-            <div className="text-[13px] flex justify-between py-1.5 border-b border-[#f0f0ec]">
-              <span className="text-[#4b4b47]">Стекло {thickness} мм</span>
-              <span className="font-mono text-[#111110]">{glassAreaM2} м²</span>
-            </div>
-            {hinges > 0 && (
-              <div className="text-[13px] flex justify-between py-1.5 border-b border-[#f8f8f7]">
-                <span className="text-[#4b4b47]">Петли ({finish.label})</span><span className="font-mono">{hinges} шт</span>
-              </div>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85] mb-2">Спецификация</p>
+            <Row label="Секции (полотна)" value={`${quantities.sections}`} />
+            <Row label={`Стекло ${thickness} мм`} value={`${quantities.glassM2} м²`} />
+            {(quantities.profileM + quantities.tubeM) > 0 && (
+              <Row label="Профиль + штанга" value={`${(quantities.profileM + quantities.tubeM).toFixed(2)} м.п.`} />
             )}
-            {handles > 0 && (
-              <div className="text-[13px] flex justify-between py-1.5 border-b border-[#f8f8f7]">
-                <span className="text-[#4b4b47]">Ручка-скоба SD-210</span><span className="font-mono">{handles} шт</span>
-              </div>
-            )}
-            {slides > 0 && (
-              <div className="text-[13px] flex justify-between py-1.5">
-                <span className="text-[#4b4b47]">Раздвижная система РД-001</span><span className="font-mono">{slides} компл.</span>
-              </div>
-            )}
+            {price.hardwareLines.map(l => (
+              <Row key={l.key} label={l.label} value={`${l.qty} ${l.unit}`} />
+            ))}
           </div>
 
           {embed ? (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <div className="flex items-baseline justify-between">
+                <span className="text-[13px] text-[#6b6b66]">Цена</span>
+                <span className="text-[22px] font-semibold text-[#111110] font-mono">от {rub(clientFrom)}</span>
+              </div>
+              <p className="text-[11px] text-[#9a9a95] mt-1">Предварительно. Точную цену рассчитает менеджер.</p>
+            </div>
+          ) : (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <Row label="Себестоимость (стекло+фурнитура)" value={rub(price.materialsCost)} muted />
+              <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />
+              <Row label={`Монтаж (${quantities.sections}×${(price.installCost / Math.max(1, quantities.sections)).toLocaleString('ru-RU')} ₽)`} value={rub(price.installCost)} muted />
+              <Row label="Доставка (Москва)" value={rub(price.deliveryCost)} muted />
+              <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-[#e4e4e0]">
+                <span className="text-[13px] font-semibold text-[#111110]">Сумма изделия</span>
+                <span className="text-[19px] font-semibold text-[#111110] font-mono">{rub(price.total)}</span>
+              </div>
+              <p className="text-[11px] text-[#9a9a95] pt-1">Ставки себестоимости — дефолтные, настройка появится в админке.</p>
+            </div>
+          )}
+
+          {embed && (
             sent ? (
               <div className="bg-[#f0f7f0] border border-[#cfe6cf] rounded-xl p-4 text-center">
                 <p className="text-[14px] font-semibold text-[#256029]">Заявка отправлена</p>
-                <p className="text-[12px] text-[#4b6b4b] mt-1">Менеджер рассчитает точную цену и свяжется с вами.</p>
+                <p className="text-[12px] text-[#4b6b4b] mt-1">Менеджер свяжется с вами.</p>
               </div>
             ) : (
               <button onClick={sendLead}
                 className="w-full bg-[#111110] text-white text-[14px] font-medium py-3 rounded-lg hover:bg-[#2a2a28]">
-                Оставить заявку — рассчитаем точную цену
+                Оставить заявку
               </button>
             )
-          ) : (
-            <p className="text-[12px] text-[#9a9a95]">Внутренний вид. Цена и КП — через основной калькулятор.</p>
           )}
         </div>
       </div>
