@@ -317,7 +317,7 @@ export default function B2BCalculatorPage() {
         setManagerCode(userManagerCode)
         setMglassOnly(userMGlassOnly)
 
-        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }] = await Promise.all([
+        const [{ data: cls }, { data: mats }, { data: svcs }, { data: orders }, { data: glassMatrix }, { data: psData }, { data: filmsData }, { data: facetData }, { data: surchargeData }, { data: sheetVariants }] = await Promise.all([
           sb.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,created_at,manager_id,manager_code').eq('active', true).order('name'),
           sb.from('b2b_materials').select('*').eq('active', true).order('category').order('name'),
           sb.from('b2b_services').select('*').eq('active', true).order('sort_order').order('name'),
@@ -327,7 +327,16 @@ export default function B2BCalculatorPage() {
           sb.from('b2b_films').select('*').eq('active', true).order('sort_order').order('name'),
           sb.from('facet_prices').select('*').eq('active', true).order('type_mm'),
           sb.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
+          sb.from('b2b_material_sheet_variants').select('material_id, sheet_width, sheet_height, is_default, sort_order').eq('active', true).order('material_id').order('is_default', { ascending: false }).order('sort_order'),
         ])
+        // Форматы листов по материалу (для раскроя): дефолт первым.
+        const formatsByMat = new Map<number, { width: number; height: number }[]>()
+        for (const v of (sheetVariants ?? []) as { material_id: number; sheet_width: number; sheet_height: number }[]) {
+          if (!(v.sheet_width > 0) || !(v.sheet_height > 0)) continue
+          const arr = formatsByMat.get(v.material_id) ?? []
+          arr.push({ width: v.sheet_width, height: v.sheet_height })
+          formatsByMat.set(v.material_id, arr)
+        }
         if (psData) setProdSettings(psData as ProductionSettings)
         setFilms((filmsData ?? []) as B2BFilm[])
         setFacetPrices((facetData ?? []) as FacetPrice[])
@@ -364,11 +373,13 @@ export default function B2BCalculatorPage() {
           const matrixPrice = matrixSale ? (matrixSale as Record<string, unknown>)[`t${mm}`] as number | null : null
           // waste_pct lives on cost rows — single source of truth
           const matrixWaste = (matrixCost as Record<string, unknown> | undefined)?.waste_pct as number | null ?? null
+          const fmts = formatsByMat.get(m.id)
           return {
             ...base,
             ...(matrixPrice != null && matrixPrice > 0 ? { sale_price: matrixPrice } : {}),
             // Справочник — первоисточник: его waste_pct всегда победает, passthrough снимается
             ...(matrixWaste != null && matrixWaste > 0 ? { waste_percent: matrixWaste, passthrough: false } : {}),
+            ...(fmts && fmts.length ? { sheet_formats: fmts } : {}),
           }
         })
         // Дедуп: одна запись на (name|category|thickness). Защита от дублей в
@@ -822,21 +833,26 @@ export default function B2BCalculatorPage() {
   function clearSel() { setSelIds(new Set()) }
 
   // Пересчёт позиции под новый материал — сохраняем геометрию, кол-во, услуги, флаги.
-  function recomputeWithMaterial(item: B2BOrderItem, mat: B2BMaterial): B2BOrderItem {
+  // Пересчёт позиции: под новый материал (mat) и/или с оверрайдами флагов
+  // (закалка). Геометрия, кол-во, услуги, фацет, триплекс, договорная цена — как у
+  // исходной позиции. mat=null → берём текущий материал позиции (для смены только флага).
+  function recomputeItem(item: B2BOrderItem, mat: B2BMaterial | null, over?: { hasTempering?: boolean }): B2BOrderItem {
+    const m = mat ?? materials.find(x => x.id === item.materialId)
+    if (!m) return item
     const layers = item.triplexLayers === 3 ? 3 : 2
     // Услуги позиции хранятся резолвнутыми (ItemService) — восстанавливаем исходные
-    // B2BService из справочника по id, чтобы пересчитать под новый материал.
+    // B2BService из справочника по id, чтобы пересчитать.
     const svcIds = new Set(item.services.filter(s => s.id > 0).map(s => s.id))
     const rawSvcs = services.filter(s => svcIds.has(s.id))
     const calc = computeQuoteItem({
-      material: mat, width: item.width, height: item.height, quantity: item.quantity,
-      wastePercent: mat.passthrough ? 10 : mat.waste_percent, hasTempering: item.hasTempering,
+      material: m, width: item.width, height: item.height, quantity: item.quantity,
+      wastePercent: m.passthrough ? 10 : m.waste_percent, hasTempering: over?.hasTempering ?? item.hasTempering,
       resolvedServices: resolveSvcs(rawSvcs, fTierSel, fFilmSel),
       hasFacet: item.hasFacet ?? false, facetTypeMm: item.hasFacet ? (item.facetTypeMm ?? 10) : null,
       hasHoles: item.hasHoles ?? false, shape: item.shape === 'curved' ? 'curved' : 'rect',
       hasTriplex: item.hasTriplex ?? false, triplexLayers: layers, triplexPrice,
       triplexExtraGlasses: item.hasTriplex
-        ? triplexExtras(mat, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
+        ? triplexExtras(m, layers, item.triplexGlasses?.[0]?.materialId ?? null, item.triplexGlasses?.[1]?.materialId ?? null)
         : [],
       applyMinPrice: item.applyMinPrice !== false, comment: item.comment || undefined,
       dismissedSurcharges: new Set<number>(),
@@ -847,9 +863,18 @@ export default function B2BCalculatorPage() {
   function applyBulkMaterial() {
     const mat = materials.find(m => m.id === bulkMatId)
     if (!mat || selIds.size === 0) return
-    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeWithMaterial(i, mat) : i))
+    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem(i, mat) : i))
     setSavedOrderId(null)
     clearSel()
+  }
+  // Массовое переключение закалки у выбранных (зеркало закалку не поддерживает — пропускаем).
+  function applyBulkTempering(on: boolean) {
+    if (selIds.size === 0) return
+    setItems(prev => prev.map(i =>
+      selIds.has(i.localId) && i.category !== 'зеркало' && i.category !== 'изделие'
+        ? recomputeItem(i, null, { hasTempering: on })
+        : i))
+    setSavedOrderId(null)
   }
   function bulkDelete() {
     if (selIds.size === 0) return
@@ -998,9 +1023,10 @@ export default function B2BCalculatorPage() {
           pieces: [],
           materialLabel: `${item.materialName} ${item.thickness} мм`,
           category: item.category,
-          sheetWidth:  (mat as (B2BMaterial & { sheet_width?: number }) | undefined)?.sheet_width  ?? 3210,
-          sheetHeight: (mat as (B2BMaterial & { sheet_height?: number }) | undefined)?.sheet_height ?? 2250,
-          patternDirection: ((mat as (B2BMaterial & { pattern_direction?: string }) | undefined)?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
+          sheetWidth:  mat?.sheet_width  ?? 3210,
+          sheetHeight: mat?.sheet_height ?? 2250,
+          sheetFormats: mat?.sheet_formats,
+          patternDirection: (mat?.pattern_direction ?? 'none') as 'none' | 'along_length' | 'along_width',
         })
       }
       const g = groups.get(key)!
@@ -1008,7 +1034,19 @@ export default function B2BCalculatorPage() {
         g.pieces.push({ id: `item-${item.materialId}-${i}`, width: item.width, height: item.height, label: `${item.width}×${item.height}`, orderId: 0, orderClientName: '', materialKey: key, canRotate: true })
       }
     }
-    return runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+    const optimal = runCuttingOptimizer(groups, DEFAULT_CUTTING_SETTINGS)
+    // База для сравнения: тот же раскрой на ОДНОМ дефолтном формате (как было до
+    // выбора формата). Экономия = насколько выбор оптимального формата уменьшил
+    // число листов. Считаем только если у материала есть >1 формата.
+    const baseGroups = new Map([...groups].map(([k, g]) => [k, { ...g, sheetFormats: undefined }]))
+    const baseByKey = new Map(runCuttingOptimizer(baseGroups, DEFAULT_CUTTING_SETTINGS).map(r => [r.materialKey, r]))
+    return optimal.map(r => {
+      const b = baseByKey.get(r.materialKey)
+      const multiFormat = (groups.get(r.materialKey)?.sheetFormats?.length ?? 0) > 1
+      const chosenNonDefault = !!b && (b.sheetWidth !== r.sheetWidth || b.sheetHeight !== r.sheetHeight)
+      const savedSheets = b ? Math.max(0, b.sheetsNeeded - r.sheetsNeeded) : 0
+      return { ...r, baseSheetWidth: b?.sheetWidth, baseSheetHeight: b?.sheetHeight, multiFormat, chosenNonDefault, savedSheets }
+    })
   }, [items, materials])
 
   const kpText = useMemo(() => {
@@ -2035,6 +2073,16 @@ export default function B2BCalculatorPage() {
                     Применить
                   </button>
                   <span className="w-px h-4 bg-[#c9d4f0]" />
+                  <span className="text-[11px] text-[#6b6b66]">Закалка:</span>
+                  <button onClick={() => applyBulkTempering(true)}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-orange-600 border border-orange-200 hover:bg-orange-50 transition-colors">
+                    вкл
+                  </button>
+                  <button onClick={() => applyBulkTempering(false)}
+                    className="px-2.5 py-1 rounded-lg text-[12px] text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    выкл
+                  </button>
+                  <span className="w-px h-4 bg-[#c9d4f0]" />
                   <button onClick={bulkDelete}
                     className="px-2.5 py-1 rounded-lg text-[12px] text-red-500 hover:bg-red-50 transition-colors">
                     Удалить выбранные
@@ -2532,7 +2580,25 @@ export default function B2BCalculatorPage() {
                         <tbody>
                           {cuttingResults.map(r => (
                             <tr key={r.materialKey} className="border-b border-[#f0f0ec] last:border-0">
-                              <td className="py-2 font-semibold text-[#111110]">{r.materialLabel}</td>
+                              <td className="py-2 font-semibold text-[#111110]">
+                                {r.materialLabel}
+                                {r.patternDirection !== 'none' && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-[10px] font-semibold align-middle">
+                                    рисунок вдоль {r.patternDirection === 'along_length' ? 'длины' : 'ширины'}
+                                  </span>
+                                )}
+                                {r.savedSheets > 0 && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 text-[10px] font-semibold align-middle"
+                                    title={`Оптимальный формат сэкономил ${r.savedSheets} лист(ов) против ${r.baseSheetWidth}×${r.baseSheetHeight}`}>
+                                    −{r.savedSheets} {r.savedSheets === 1 ? 'лист' : r.savedSheets < 5 ? 'листа' : 'листов'} vs {r.baseSheetWidth}×{r.baseSheetHeight}
+                                  </span>
+                                )}
+                                {r.savedSheets === 0 && r.chosenNonDefault && (
+                                  <span className="ml-2 inline-block px-1.5 py-0.5 rounded bg-[#eef0ee] text-[#6b6b66] text-[10px] font-medium align-middle">
+                                    оптимальный формат
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
                               <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
@@ -2544,9 +2610,16 @@ export default function B2BCalculatorPage() {
                           ))}
                         </tbody>
                       </table>
+                      {cuttingResults.reduce((s, r) => s + r.savedSheets, 0) > 0 && (
+                        <p className="text-[11px] text-emerald-700 font-medium">
+                          Экономия за счёт выбора формата листа: −{cuttingResults.reduce((s, r) => s + r.savedSheets, 0)} лист(ов) против дефолтного формата.
+                        </p>
+                      )}
                       <p className="text-[11px] text-[#9a9a95]">
-                        Зазор 2 мм · Кромка 2 мм · Поворот разрешён
-                        {cuttingResults.some(r => r.patternDirection !== 'none') && ' · ⚠ Рифлёное — поворот запрещён'}
+                        Зазор 2 мм · Кромка 2 мм
+                        {cuttingResults.some(r => r.patternDirection !== 'none')
+                          ? ' · ⚠ У фактурных листов поворот детали запрещён (рисунок направлен)'
+                          : ' · Поворот разрешён'}
                       </p>
                     </div>
                   </details>

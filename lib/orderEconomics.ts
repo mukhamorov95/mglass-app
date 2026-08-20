@@ -11,6 +11,7 @@
 //      операции по живым ставкам (зарплата ÷ объём периода, lib/laborModel).
 
 import { computeMaterialUsage, DEFAULT_REUSE_RATE, type UsageItem } from './materialUsage'
+import type { SheetFormat } from './cuttingOptimizer'
 import { laborRates, pieceLaborCost, type ShopSalaries, type ShopThroughput } from './laborModel'
 import { TEMPERING_COST, EDGE_COST_PER_M, PACKAGING_PER_M2, TRANSPORT_PER_PIECE } from './b2bCalculator'
 
@@ -28,6 +29,7 @@ export type EcoItem = {
   perimeterM?: number        // периметр одной детали, м (если нет — считаем из габаритов)
   sheetWidth?: number
   sheetHeight?: number
+  sheetFormats?: SheetFormat[]
   patternDirection?: 'none' | 'along_length' | 'along_width'
   servicesCostPrice?: number // себестоимость доп-услуг позиции (пескоструй, макет, плёнка…)
   servicesSale?: number      // продажа доп-услуг позиции (для показа разрыва)
@@ -99,7 +101,8 @@ export function computeOrderEconomics(
       .map(it => ({
         materialName: it.materialName, thickness: it.thickness, category: it.category,
         width: it.width, height: it.height, quantity: it.quantity, costPerM2: it.costPerM2,
-        sheetWidth: it.sheetWidth, sheetHeight: it.sheetHeight, patternDirection: it.patternDirection,
+        sheetWidth: it.sheetWidth, sheetHeight: it.sheetHeight, sheetFormats: it.sheetFormats,
+        patternDirection: it.patternDirection,
       }))
     const usage = computeMaterialUsage(usageItems, reuseRate)
     honestMaterial = usage.reduce((s, u) => s + u.honestCost, 0)

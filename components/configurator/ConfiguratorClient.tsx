@@ -1,11 +1,13 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type MDims, type GlassTint } from '@/components/configurator/scene/assembly'
-import { computeQuantities, computePrice, clientPriceFrom } from '@/lib/configurator/pricing'
+import { computeQuantities, totalMeters, HARDWARE_LABEL, type PriceResult } from '@/lib/configurator/pricing'
+
+type Quote = { full: boolean; price?: PriceResult; total?: number; clientFrom?: number }
 
 const THICKNESS = 8   // душевые — только 8 мм закалённое
 
@@ -108,8 +110,20 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
 
   const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS), [model, dims])
   const quantities = useMemo(() => computeQuantities(assembly, THICKNESS), [assembly])
-  const price = useMemo(() => computePrice(quantities), [quantities])
-  const clientFrom = clientPriceFrom(price.total)
+  // Цена — с СЕРВЕРА (себестоимость не уходит в браузер). Спецификация — мгновенно на клиенте.
+  const [quote, setQuote] = useState<Quote | null>(null)
+  useEffect(() => {
+    const ctrl = new AbortController()
+    const id = setTimeout(() => {
+      fetch('/api/configurator/quote', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, glassType: glassId, finishId }),
+      }).then(r => (r.ok ? r.json() : null)).then(q => { if (q) setQuote(q) }).catch(() => {})
+    }, 250)
+    return () => { clearTimeout(id); ctrl.abort() }
+  }, [code, dims, tier, glassId, finishId])
+  const price = quote?.price ?? null
+  const clientFrom = quote?.clientFrom ?? (price ? Math.floor(price.total / 100) * 100 : null)
   const att = doorAttachment(model)
   const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
   const c = model.constraints
@@ -122,7 +136,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
         glass: { id: glass.id, label: glass.label },
         finish: { id: finish.id, label: finish.label },
         glassAreaM2: quantities.glassM2, sections: quantities.sections,
-        priceFrom: clientFrom,
+        priceFrom: clientFrom ?? 0,
       },
     }
     const origin = process.env.NEXT_PUBLIC_EMBED_PARENT_ORIGIN || '*'
@@ -241,11 +255,11 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           <Section title="Спецификация">
             <Row label="Секции (полотна)" value={`${quantities.sections}`} />
             <Row label="Стекло 8 мм" value={`${quantities.glassM2} м²`} />
-            {(quantities.profileM + quantities.tubeM) > 0 && (
-              <Row label="Профиль + штанга" value={`${(quantities.profileM + quantities.tubeM).toFixed(2)} м.п.`} />
+            {(quantities.profilePieces.length + quantities.tubePieces.length) > 0 && (
+              <Row label="Профиль + штанга" value={`${(totalMeters(quantities.profilePieces) + totalMeters(quantities.tubePieces)).toFixed(2)} м.п.`} />
             )}
-            {price.hardwareLines.map(l => (
-              <Row key={l.key} label={l.label} value={`${l.qty} ${l.unit}`} />
+            {Object.entries(quantities.hardware).map(([m, qty]) => (
+              <Row key={m} label={HARDWARE_LABEL[m] ?? m} value={`${qty} шт`} />
             ))}
           </Section>
 
@@ -253,13 +267,14 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-[#6b6b66]">Цена</span>
-                <span className="text-[22px] font-semibold text-[#111110] font-mono">от {rub(clientFrom)}</span>
+                <span className="text-[22px] font-semibold text-[#111110] font-mono">{clientFrom != null ? `от ${rub(clientFrom)}` : '…'}</span>
               </div>
               <p className="text-[11px] text-[#9a9a95] mt-1">Предварительно. Точную цену рассчитает менеджер.</p>
             </div>
-          ) : (
+          ) : price ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-              <Row label="Себестоимость (стекло+фурнитура)" value={rub(price.materialsCost)} muted />
+              <Row label="Себестоимость стекла" value={rub(price.glassCost)} muted />
+              <Row label="Себестоимость фурнитуры" value={rub(price.hardwareCost + price.profileCost + price.tubeCost)} muted />
               <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />
               <Row label={`Монтаж (${quantities.sections}×${(price.installCost / Math.max(1, quantities.sections)).toLocaleString('ru-RU')} ₽)`} value={rub(price.installCost)} muted />
               <Row label="Доставка (Москва)" value={rub(price.deliveryCost)} muted />
@@ -267,8 +282,10 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
                 <span className="text-[13px] font-semibold text-[#111110]">Сумма изделия</span>
                 <span className="text-[19px] font-semibold text-[#111110] font-mono">{rub(price.total)}</span>
               </div>
-              <p className="text-[11px] text-[#9a9a95] pt-1">Ставки себестоимости — дефолтные, настройка появится в админке.</p>
+              <p className="text-[11px] text-[#9a9a95] pt-1">Ставки — из «Себестоимость визуализатора» (админка).</p>
             </div>
+          ) : (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-[13px] text-[#9a9a95]">Считаем цену…</div>
           )}
 
           {embed && (
