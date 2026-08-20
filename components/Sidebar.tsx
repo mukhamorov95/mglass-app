@@ -74,6 +74,7 @@ const BUYER_ZAKUPKI: NavItem[] = [
   { href: '/accounting',            label: 'Заявки на оплату',  icon: '💸', indent: true },
   { href: '/admin/suppliers',       label: 'Поставщики',        icon: '🏭', indent: true },
   { href: '/admin/supplier-catalog', label: 'Справочник цен',   icon: '📗', indent: true },
+  { href: '/admin/visualizer-pricing', label: 'Себестоимость визуализатора', icon: '🧊', indent: true },
   { href: '/admin/shower-hardware', label: 'Фурнитура душевых', icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Фурнитура лофт',   icon: '🔩', indent: true },
 ]
@@ -402,7 +403,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   if (role === 'cfo') return open
   if (role === 'buyer') {
     if (inSection(pathname, ['/admin/stock-control'])) open.push('buyer_sklad')
-    if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/supplier-catalog', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
+    if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/supplier-catalog', '/admin/visualizer-pricing', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
     if (inSection(pathname, ['/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')
     if (inSection(pathname, ['/admin/guide'])) open.push('buyer_pomosh')
