@@ -2,6 +2,7 @@
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import QRCode from 'qrcode'
+import { renderDocCanvas } from '@/lib/pdfCapture'
 import { SELLER_B2B } from '@/lib/companyRequisites'
 import { paymentQrStringFor } from '@/lib/paymentQr'
 import { rublesInWords } from '@/lib/numToWords'
@@ -156,8 +157,9 @@ export default function BatchInvoicePage() {
   async function downloadPdf() {
     if (!docRef.current) return
     try {
-      const [h2c, jspdf] = await Promise.all([import('html2canvas-pro'), import('jspdf')])
-      const canvas = await h2c.default(docRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      // Снимок при десктопной ширине (renderDocCanvas) → PDF одинаков с телефона и ПК.
+      const jspdf = await import('jspdf')
+      const canvas = await renderDocCanvas(docRef.current)
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       const pw = 210, ph = 297
       const imgH = pw * canvas.height / canvas.width
