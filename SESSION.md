@@ -62,8 +62,19 @@
 ## Фаза 3 (СДЕЛАНО, грузится прод bzzqig70k): самостоятельная загрузка прайса в UI
 Кнопка «↑ Импорт прайса» на /admin/supplier-catalog → модалка SupplierImport: выбрать существующего поставщика ИЛИ создать нового (ключ/название/скидка/сайт); пресеты формата (Ветро / АВ24 / свой с маппингом колонок); файл xlsx парсится В БРАУЗЕРЕ (dynamic import 'xlsx' SheetJS — обход лимита тела Vercel ~4.5МБ), превью первых строк, режим «заменить весь прайс / добавить-обновить»; строки шлются батчами по 700 в /api/admin/supplier-catalog/import (requireRole admin/ceo/buyer; себест из скидки поставщика; reset на первом батче удаляет старые строки; upsert onConflict supplier,article,color). Доступ у владельца и Веры(buyer). tsc чисто.
 
+## Шаг 9 (грузится прод biy76oez4): выбор фурнитуры клиентом → меняет цену И 3D
+Реализовано послойно, без слома архитектуры:
+- lib/configurator/hardwareShapes.ts (НОВЫЙ, pure — без three/'use client'): HardwareShape, shapeForModel(model), inferShape(name), SELECTABLE_ROLES=['hinge','handle']. Общий для рендера и сервера.
+- hardware.tsx: новые меши HingeWall (петля стекло-стена), HandleKnob (кноб); Hardware({model,shape}) диспетчер по shape (фолбэк shapeForModel — обратная совместимость).
+- assembly.ts: HardwarePlacement.shape?; HardwareChoice={hinge?,handle?}; buildFromModel(...,choice) ставит shape на петлю/ручку в addDoor.
+- Partition3D/View: прокинут choice → buildFromModel (в deps).
+- pricing.ts: PieceItem.shape?; computePrice opts.choice (role→key) — выбранная позиция получает roleQty; selectableOptions(up) отдаёт per-role {key,name,shape} БЕЗ себеста.
+- /api/configurator/options (публичный): опции петля/ручка по тарифу (embed-safe). /api/configurator/quote принимает choice.
+- ConfiguratorClient: fetch options по тарифу, choice state (дефолт первая), селекторы Петля/Ручка (показываются если вариантов ≥2 И roles[role]>0), hwChoice(shape)→3D, choice(keys)→quote.
+- Тесты 35/35. Активируется когда логист положит ≥2 петли/ручки в подгруппу тарифа; пока опций <2 — 3D дефолт, селекторов нет.
+
 ## Дальше по дорожной карте
-Выноски с фото фурнитуры, экспорт эскиза (PDF), лид→CRM с Tilda, голый embed-layout, доп. модели.
+Визуал: реализм сцены (PBR по цвету, тени/отражения, ниша), выноски с фото из справочника + размеры в 3D. Финмодель: пресеты комплектов, проверка полноты, сравнение поставщиков/дешевле в пикере, клиентская детализация без себеста. Плюс: лид с составом→CRM, PDF-КП.
 
 ## (архив) 3D-конфигуратор — базовый визуал
 3D-конфигуратор душевых для сайта (встраиваемый виджет). Изолированная ветка feat/shower-3d-configurator от чистого main. Клиент выбирает тип → размеры → стекло/финиш/петля → видит НАСТОЯЩУЮ 3D-модель (WebGL), которая масштабируется вживую. Референс UX — privetmaket.ru/shkaf.

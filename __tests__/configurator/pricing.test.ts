@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeQuantities, computePrice, unitPricesFor, pickStock, barsCost, DEFAULT_FINANCE,
-  migrateUnitPrices, buildDefaultUnitPrices, supplierColorToFinish,
+  migrateUnitPrices, buildDefaultUnitPrices, supplierColorToFinish, selectableOptions,
   type UnitPrices, type PieceItem, type BarItem,
 } from '@/lib/configurator/pricing'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
@@ -158,6 +158,29 @@ describe('pricing — роли, хлысты, цвет, справочник', (
     expect(up.glassPerM2.clear).toBe(9999)                         // стекло владельца сохранено
     expect(up.groups.find(g => g.id === 'hinges')!.items.length).toBe(0)   // фейковые сиды исчезли
     expect(up.groups.find(g => g.id === 'hinges')!.role).toBe('hinge')     // роль на месте
+  })
+
+  it('выбор клиента (choice) определяет, какая петля идёт в цену', () => {
+    const a = buildFromModel(getModel('М7'), { width: 1100, height: 2000, width2: 900, doorWidth: 600 }, 8)
+    const q = computeQuantities(a, 8)
+    const up = priced('budget')
+    const hinges = up.groups.find(g => g.id === 'hinges')!
+    ;(hinges.items as PieceItem[]).push({ key: 'h2', name: 'Петля Y', qtyMode: 'auto', prices: { chrome: 5000 } })
+    const pDefault = computePrice(q, up, DEFAULT_FINANCE, { finishId: 'chrome' })
+    const pChosen = computePrice(q, up, DEFAULT_FINANCE, { finishId: 'chrome', choice: { hinge: 'h2' } })
+    expect(pDefault.groupedLines.find(g => g.id === 'hinges')!.lines[0].total).toBe(q.roles.hinge * 2000)  // первая
+    expect(pChosen.groupedLines.find(g => g.id === 'hinges')!.lines[0].total).toBe(q.roles.hinge * 5000)   // выбранная h2
+  })
+
+  it('selectableOptions: петли/ручки с формой (shape), без себестоимости', () => {
+    const up = priced('budget')
+    ;(up.groups.find(g => g.id === 'handles')!.items as PieceItem[]).push({ key: 'kn', name: 'Ручка-кноб KN-1', qtyMode: 'auto', prices: { chrome: 900 } })
+    const opts = selectableOptions(up)
+    expect(opts.hinge?.length).toBe(1)
+    expect(opts.handle?.length).toBe(2)
+    expect(opts.handle?.find(o => o.key === 'kn')?.shape).toBe('handle-knob')   // «кноб» → форма
+    // себестоимость не утекает
+    expect(JSON.stringify(opts)).not.toMatch(/price|prices|cost/)
   })
 
   it('миграция: новая схема с подгруппами возвращается как есть', () => {

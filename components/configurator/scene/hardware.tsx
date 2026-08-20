@@ -3,6 +3,7 @@
 import * as THREE from 'three'
 import { RoundedBox } from '@react-three/drei'
 import { BALGE_004, DESSAU_103, SD_210, type HingeSpec } from '@/lib/configurator/hardwareSpecs'
+import { shapeForModel, type HardwareShape } from '@/lib/configurator/hardwareShapes'
 
 const M = 0.001
 
@@ -42,6 +43,40 @@ function Hinge({ model, material }: { model: 'balge' | 'dessau'; material: THREE
       {plate(dx)}
       <mesh material={material} castShadow>
         <cylinderGeometry args={[barrelR, barrelR, bodyH, 20]} />
+      </mesh>
+    </group>
+  )
+}
+
+// Петля стекло-СТЕНА: пятка на стекле двери + ось + кронштейн, уходящий к стене (−Z).
+function HingeWall({ model, material }: { model: 'balge' | 'dessau'; material: THREE.Material }) {
+  const s = hingeSpecByModel(model)
+  const plateW = s.plateW * M, bodyH = s.bodyH * M, thk = s.plateThk * M
+  const barrelR = (s.gap / 2 + 2) * M
+  return (
+    <group>
+      <RoundedBox args={[plateW, bodyH, thk]} radius={Math.min(plateW, bodyH) * 0.18} smoothness={3}
+        position={[plateW / 2 + barrelR, 0, 0]} material={material} castShadow />
+      <mesh material={material} castShadow>
+        <cylinderGeometry args={[barrelR, barrelR, bodyH, 20]} />
+      </mesh>
+      {/* кронштейн к стене (за петлёй) */}
+      <mesh position={[0, 0, -(plateW * 0.55 + barrelR)]} material={material} castShadow>
+        <boxGeometry args={[bodyH * 0.9, bodyH * 0.9, plateW * 1.1]} />
+      </mesh>
+    </group>
+  )
+}
+
+// Ручка-кноб: круглая ручка-набалдашник, выступает наружу двери (−Z local).
+function HandleKnob({ material }: { material: THREE.Material }) {
+  return (
+    <group>
+      <mesh position={[0, 0, -9 * M]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
+        <cylinderGeometry args={[5 * M, 5 * M, 18 * M, 18]} />
+      </mesh>
+      <mesh position={[0, 0, -20 * M]} material={material} castShadow>
+        <sphereGeometry args={[13 * M, 22, 16]} />
       </mesh>
     </group>
   )
@@ -186,15 +221,20 @@ function TubeConnector({ material }: { material: THREE.Material }) {
   )
 }
 
-export function Hardware({ model, material }: { model: HardwareModel; material: THREE.Material }) {
-  if (model === 'roller') return <SlidingRoller material={material} />
-  if (model === 'connector') return <TubeConnector material={material} />
-  if (model === 'kp006') return <KP006 material={material} />
-  if (model === 'kp002') return <KP002 material={material} />
-  if (model === 'kp001') return <KP001 material={material} />
-  if (model === 'kupe') return <KupeHandle material={material} />
-  if (model === 'cap') return <TubeCap material={material} />
-  if (model === 'sd210') return <HandleSD210 material={material} />
-  if (model === 'dessau') return <Hinge model="dessau" material={material} />
-  return <Hinge model="balge" material={material} />
+export function Hardware({ model, shape, material }: { model: HardwareModel; shape?: string; material: THREE.Material }) {
+  const sh = (shape as HardwareShape) || shapeForModel(model)
+  const hingePlate = model === 'dessau' ? 'dessau' : 'balge'
+  switch (sh) {
+    case 'hinge-wall': return <HingeWall model={hingePlate} material={material} />
+    case 'handle-bar': return <HandleSD210 material={material} />
+    case 'handle-knob': return <HandleKnob material={material} />
+    case 'handle-inset': return <KupeHandle material={material} />
+    case 'roller': return <SlidingRoller material={material} />
+    case 'mount-glass': return <KP006 material={material} />
+    case 'mount-wall': return <KP002 material={material} />
+    case 'mount-corner': return <KP001 material={material} />
+    case 'connector': return <TubeConnector material={material} />
+    case 'cap': return <TubeCap material={material} />
+    case 'hinge-glass': default: return <Hinge model={hingePlate} material={material} />
+  }
 }

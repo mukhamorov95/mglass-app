@@ -8,7 +8,7 @@ import {
 } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
-import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint } from './scene/assembly'
+import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice } from './scene/assembly'
 import { Hardware } from './scene/hardware'
 
 // Матовые финиши — выше шероховатость (меньше зеркальность).
@@ -139,7 +139,7 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
       ))}
       {assembly.hardware.map(h => (
         <group key={h.key} position={h.pos} rotation={[0, h.rotY, 0]}>
-          <Hardware model={h.model} material={metalMat} />
+          <Hardware model={h.model} shape={h.shape} material={metalMat} />
         </group>
       ))}
     </group>
@@ -163,10 +163,10 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice },
 ) {
-  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen), [model, dims, thickness, doorOpen])
+  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice), [model, dims, thickness, doorOpen, choice])
   const roughness = MATTE.has(finishId) ? 0.42 : 0.06
   // Единый металл финиша для профилей и фурнитуры (цвет из hex финиша).
   const metalMat = useMemo(

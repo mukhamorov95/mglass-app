@@ -34,9 +34,13 @@ export type MetalPart = {
 export type HardwarePlacement = {
   key: string
   model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001' | 'connector'
+  shape?: string                 // форма для 3D (выбор клиента); нет → берётся по model
   pos: [number, number, number]
   rotY: number
 }
+
+// Выбор внешнего вида фурнитуры клиентом: shape петли/ручки. Пусто → дефолт модели.
+export type HardwareChoice = { hinge?: string; handle?: string }
 
 // Облицованная ниша вокруг кабины (Фаза 1): стёкла закрывают открытые стороны,
 // плиткой облицованы остальные. Угловая — глухие стены сзади и справа; прямая —
@@ -171,7 +175,7 @@ const DOOR_OPEN_DEG = 32       // распашная приоткрыта зам
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
 type P = [number, number]   // точка плана [x, z], метры
 
-export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true): Assembly {
+export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true, choice: HardwareChoice = {}): Assembly {
   const t = thickness * M
   const H = dims.height * M
   const W = dims.width * M
@@ -266,11 +270,11 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const n = L > 0.7 || H > 2.2 ? 3 : 2
     const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
     for (let i = 0; i < ys.length; i++)
-      hardware.push({ key: `${key}-h${i}`, model: hingeModel, rotY, pos: [Ph[0], ys[i], Ph[1]] })
+      hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, rotY, pos: [Ph[0], ys[i], Ph[1]] })
     // ручка у внешней кромки, с наружной стороны двери
     const hx = Ph[0] + od[0] * L * 0.82, hz = Ph[1] + od[1] * L * 0.82
     const nx = -od[1], nz = od[0]
-    hardware.push({ key: `${key}-handle`, model: 'sd210', rotY, pos: [hx + nx * outward[0] * 0.02, H / 2, hz + nz * 0] })
+    hardware.push({ key: `${key}-handle`, model: 'sd210', shape: choice.handle, rotY, pos: [hx + nx * outward[0] * 0.02, H / 2, hz + nz * 0] })
   }
 
   // Раны плана по форме модели.

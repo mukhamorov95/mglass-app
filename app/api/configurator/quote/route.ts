@@ -10,7 +10,7 @@ import { computeQuantities, computePrice, clientPriceFrom, DEFAULT_FINANCE, type
 // менеджеру/владельцу — полную разбивку. Цены — из Supabase (админка), фолбэк — дефолты.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null) as {
-    model?: string; dims?: MDims; thickness?: number; tier?: string; glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number
+    model?: string; dims?: MDims; thickness?: number; tier?: string; glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number; choice?: Record<string, string>
   } | null
   if (!body?.model || !body.dims || !M_MODELS.some(m => m.code === body.model)) {
     return NextResponse.json({ error: 'model + dims обязательны' }, { status: 400 })
@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const assembly = buildFromModel(getModel(body.model), body.dims, thickness)
   const q = computeQuantities(assembly, thickness)
   const price = computePrice(q, prices, DEFAULT_FINANCE, {
-    glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors,
+    glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors, choice: body.choice,
   })
 
   const { data: { user } } = await (await createClient()).auth.getUser()

@@ -1,5 +1,6 @@
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import type { Assembly } from '@/components/configurator/scene/assembly'
+import { inferShape, SELECTABLE_ROLES } from '@/lib/configurator/hardwareShapes'
 
 // Расчёт цены изделия для визуализатора. Переиспользует движок «Быстрого расчёта»:
 // себестоимость (стекло + фурнитура + профиль) → Цена = Себест / (1 − маржа − налог)
@@ -71,6 +72,7 @@ export type PieceItem = {
   qtyMode: 'auto' | 'manual'      // auto — кол-во из геометрии по key; manual — фикс. кол-во
   fixedQty?: number
   ref?: CatalogRef                // если цена взята из справочника — провенанс (на расчёт не влияет)
+  shape?: string                  // форма для 3D (переопределяет авто по названию)
 }
 export type BarItem = {
   key: string                     // 'profile' | 'tube' — привязка к геометрии; иначе кол-ва нет
@@ -257,7 +259,7 @@ export type PriceResult = {
   taxPct: number
 }
 
-export type PriceOptions = { glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number }
+export type PriceOptions = { glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number; choice?: Record<string, string> }
 
 export function computePrice(
   q: Quantities,
@@ -280,12 +282,16 @@ export function computePrice(
     const lines: PriceLine[] = []
     if (g.kind === 'piece') {
       // Кол-во auto-позиции = сколько нужно модели по РОЛИ подгруппы (петли/ручки/…).
-      // Первая auto-позиция получает это кол-во; остальные auto — 0 (запасные варианты).
+      // Клиент мог выбрать конкретную позицию (opts.choice[role]) — она и получает кол-во;
+      // иначе первая auto-позиция. Остальные auto — 0 (запасные варианты).
       const roleQty = g.role ? (q.roles[g.role] ?? 0) : 0
+      const chosenKey = g.role ? opts.choice?.[g.role] : undefined
+      const hasChosen = chosenKey != null && g.items.some(it => it.key === chosenKey)
       let autoUsed = false
       for (const it of g.items) {
         let qty: number
         if (it.qtyMode === 'manual') qty = it.fixedQty ?? 0
+        else if (hasChosen) qty = it.key === chosenKey ? roleQty : 0
         else { qty = autoUsed ? 0 : roleQty; autoUsed = true }
         if (qty <= 0) continue
         const unitPrice = it.prices[finishId] ?? it.prices.chrome ?? 0
@@ -335,3 +341,17 @@ export function clientPriceFrom(total: number): number {
 
 // Суммарный погонаж (для показа в спецификации).
 export const totalMeters = (pieces: number[]) => round2(pieces.reduce((s, p) => s + p, 0) / 1000)
+
+// Варианты фурнитуры для ВЫБОРА клиентом (петля/ручка) — БЕЗ себестоимости.
+// Отдаём только key/name/shape, чтобы клиент показал селектор и менял 3D.
+export type HardwareOption = { key: string; name: string; shape: string }
+export function selectableOptions(up: UnitPrices): Record<string, HardwareOption[]> {
+  const out: Record<string, HardwareOption[]> = {}
+  for (const role of SELECTABLE_ROLES) {
+    const g = up.groups.find(gr => gr.kind === 'piece' && gr.role === role)
+    if (!g || g.kind !== 'piece') continue
+    const opts = g.items.map(it => ({ key: it.key, name: it.name, shape: it.shape || inferShape(it.name) }))
+    if (opts.length) out[role] = opts
+  }
+  return out
+}
