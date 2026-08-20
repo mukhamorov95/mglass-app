@@ -6,7 +6,7 @@ export type CostLine = { name: string; qty: number; unit: string; price: number;
 
 export type CartItem = {
   localId: string
-  product_type: 'mirror' | 'loft' | 'shower'
+  product_type: 'mirror' | 'loft' | 'shower' | 'railing'
   label: string
   input_data: Record<string, unknown>
   cost_breakdown: { lines: CostLine[]; totalCost: number }
