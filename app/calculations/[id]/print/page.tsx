@@ -139,6 +139,18 @@ function getKomplektaciya(calc: Calc): KomponentItem[] {
     if (color) items.push({ label: 'Фурнитура', value: color })
   }
 
+  if (calc.product_type === 'railing') {
+    const fixingLabel: Record<string, string> = { points: 'на точках', posts: 'на стойках', profile: 'на зажимном профиле' }
+    const spans = (d.segCount as number) ?? (Array.isArray(d.segments) ? (d.segments as unknown[]).length : 0)
+    items.push({ label: 'Стеклянное ограждение', value: `${spans} ${spans === 1 ? 'пролёт' : 'пролётов'}${d.alongSlopeTotalM ? `, ${d.alongSlopeTotalM} пог.м` : ''}` })
+    const glass = (d.glass as string || '').trim()
+    const thick = d.thickness ? `${d.thickness} мм` : ''
+    if (glass || thick) items.push({ label: 'Стекло', value: [thick, glass].filter(Boolean).join(', ') })
+    if (d.fixing) items.push({ label: 'Крепление', value: fixingLabel[d.fixing as string] ?? '' })
+    if (d.heightMm) items.push({ label: 'Высота', value: `${d.heightMm} мм` })
+    // Кол-во крепежа (точек/стоек/профиля) клиенту НЕ показываем — только менеджеру.
+  }
+
   return items.filter(it => it.label || it.value)
 }
 
@@ -156,6 +168,10 @@ function getProductTitle(calc: Calc): string {
   if (calc.product_type.startsWith('shower')) {
     const dims = (d.dimStr as string) || `${d.width}×${d.height} мм`
     return `Душевая перегородка · ${dims}`
+  }
+  if (calc.product_type === 'railing') {
+    const spans = (d.segCount as number) ?? (Array.isArray(d.segments) ? (d.segments as unknown[]).length : 0)
+    return `Стеклянное ограждение${spans ? ` · ${spans} ${spans === 1 ? 'пролёт' : 'пролётов'}` : ''}`
   }
   return 'Изделие из стекла'
 }

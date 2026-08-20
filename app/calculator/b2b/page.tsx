@@ -1045,7 +1045,11 @@ export default function B2BCalculatorPage() {
       const multiFormat = (groups.get(r.materialKey)?.sheetFormats?.length ?? 0) > 1
       const chosenNonDefault = !!b && (b.sheetWidth !== r.sheetWidth || b.sheetHeight !== r.sheetHeight)
       const savedSheets = b ? Math.max(0, b.sheetsNeeded - r.sheetsNeeded) : 0
-      return { ...r, baseSheetWidth: b?.sheetWidth, baseSheetHeight: b?.sheetHeight, multiFormat, chosenNonDefault, savedSheets }
+      // Сверка со складом: остаток листов материала и сколько докупить (как на /b2b-cutting).
+      const [nm, th] = r.materialKey.split('|')
+      const stockSheets = Math.max(0, Math.round(Number(matLookup.get(`${nm}|${th}`)?.stock_sheets ?? 0)))
+      const toBuy = Math.max(0, r.sheetsNeeded - stockSheets)
+      return { ...r, baseSheetWidth: b?.sheetWidth, baseSheetHeight: b?.sheetHeight, multiFormat, chosenNonDefault, savedSheets, stockSheets, toBuy }
     })
   }, [items, materials])
 
@@ -2573,6 +2577,7 @@ export default function B2BCalculatorPage() {
                           <tr className="border-b border-[#f0f0ec]">
                             <th className="text-left py-1.5 text-[#9a9a95] font-medium">Материал</th>
                             <th className="text-center py-1.5 text-[#9a9a95] font-medium w-20">Листов</th>
+                            <th className="text-center py-1.5 text-[#9a9a95] font-medium w-28">Склад</th>
                             <th className="text-center py-1.5 text-[#9a9a95] font-medium w-24">Лист</th>
                             <th className="text-center py-1.5 text-[#9a9a95] font-medium w-16">КПД</th>
                           </tr>
@@ -2600,6 +2605,21 @@ export default function B2BCalculatorPage() {
                                 )}
                               </td>
                               <td className="py-2 text-center font-bold text-blue-700">{r.sheetsNeeded}</td>
+                              <td className="py-2 text-center">
+                                {r.stockSheets <= 0 ? (
+                                  <span className="text-[#c4c4be] text-[11px]" title="Остаток на складе не задан в справочнике">—</span>
+                                ) : r.toBuy > 0 ? (
+                                  <span className="inline-block px-1.5 py-0.5 rounded bg-red-100 text-red-700 text-[10px] font-semibold"
+                                    title={`На складе ${r.stockSheets}, нужно ${r.sheetsNeeded} — докупить ${r.toBuy}`}>
+                                    докупить {r.toBuy} <span className="font-normal">(склад {r.stockSheets})</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-block px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-700 text-[10px] font-medium"
+                                    title={`На складе ${r.stockSheets} — хватает на ${r.sheetsNeeded}`}>
+                                    склад {r.stockSheets} ✓
+                                  </span>
+                                )}
+                              </td>
                               <td className="py-2 text-center text-[#6b6b66] font-mono text-[11px]">{r.sheetWidth}×{r.sheetHeight}</td>
                               <td className="py-2 text-center">
                                 <span className={`text-[11px] font-semibold ${r.avgEfficiency >= 70 ? 'text-emerald-600' : r.avgEfficiency >= 50 ? 'text-amber-600' : 'text-red-500'}`}>
@@ -2610,6 +2630,11 @@ export default function B2BCalculatorPage() {
                           ))}
                         </tbody>
                       </table>
+                      {cuttingResults.reduce((s, r) => s + (r.stockSheets > 0 ? r.toBuy : 0), 0) > 0 && (
+                        <p className="text-[11px] text-red-600 font-medium">
+                          Не хватает на складе: докупить {cuttingResults.reduce((s, r) => s + (r.stockSheets > 0 ? r.toBuy : 0), 0)} лист(ов) по материалам с дефицитом.
+                        </p>
+                      )}
                       {cuttingResults.reduce((s, r) => s + r.savedSheets, 0) > 0 && (
                         <p className="text-[11px] text-emerald-700 font-medium">
                           Экономия за счёт выбора формата листа: −{cuttingResults.reduce((s, r) => s + r.savedSheets, 0)} лист(ов) против дефолтного формата.
