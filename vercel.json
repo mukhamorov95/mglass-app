@@ -25,6 +25,10 @@
       "schedule": "45 4 * * *"
     },
     {
+      "path": "/api/cron/partner-notify",
+      "schedule": "0 8-21 * * *"
+    },
+    {
       "path": "/api/cron/avito-followup",
       "schedule": "0 11 * * 1-6"
     },
@@ -59,6 +63,10 @@
     {
       "path": "/api/cron/agent-production",
       "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/agent-catalog",
+      "schedule": "30 8 * * *"
     },
     {
       "path": "/api/cron/agent-ceo",

@@ -130,6 +130,22 @@ export async function GET(req: Request) {
     lines.push('')
     lines.push(`Подробно: /cfo/receivables · /cfo/cashflow`)
 
+    // Воркер задач владельца: если не отмечался >30 мин, а в очереди есть задачи —
+    // они не выполняются, предупреждаем (раньше это было видно только из терминала).
+    try {
+      const [{ data: w }, { count: qCount }] = await Promise.all([
+        sb.from('owner_task_workers').select('last_seen, machine').order('last_seen', { ascending: false }).limit(1),
+        sb.from('owner_tasks').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
+      ])
+      const lastSeen = w?.[0]?.last_seen ? new Date(w[0].last_seen).getTime() : 0
+      const staleMin = lastSeen ? Math.round((Date.now() - lastSeen) / 60000) : Infinity
+      const queued = qCount ?? 0
+      if (staleMin > 30 && queued > 0) {
+        lines.push('')
+        lines.push(`🟠 <b>Воркер задач не активен</b> (${lastSeen ? `${staleMin} мин` : 'ни разу'}), а в очереди ${queued} задач(и) — не выполняются. Запустите: node scripts/owner-tasks.mjs heartbeat · /admin/owner-tasks`)
+      }
+    } catch { /* не валим дайджест из-за проверки воркера */ }
+
     await notifyAdmins(lines.join('\n'))
     return NextResponse.json({ ok: true, debtSum, debtors: debtors.length, cash, cash7 })
   } catch (err) {

@@ -41,16 +41,23 @@ async function amoGet(path: string): Promise<unknown> {
     headers: { Authorization: `Bearer ${AMO_TOKEN}` },
     cache: 'no-store',
   })
-  if (!res.ok || res.status === 204) return null
+  // 204/404 — ресурс реально отсутствует (нет контакта/лида) → null, это НЕ ошибка.
+  if (res.status === 204 || res.status === 404) return null
+  // 401/429/5xx — временный сбой AMO. НЕ считаем «лид не найден» (иначе нота молча
+  // не доставится, а элемент пометится synced). Бросаем → уходит в retry_scheduled.
+  if (!res.ok) throw new Error(`AMO GET ${path} → HTTP ${res.status}`)
   return res.json()
 }
 
 async function addAmoNote(leadId: number, text: string): Promise<void> {
-  await fetch(`${AMO_BASE}/leads/${leadId}/notes`, {
+  const res = await fetch(`${AMO_BASE}/leads/${leadId}/notes`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${AMO_TOKEN}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([{ note_type: 'common', params: { text } }]),
   })
+  // Раньше результат не проверялся: неудачный POST (429/401/5xx) молча терял ноту,
+  // а элемент помечался synced_to_amocrm. Теперь бросаем → ретрай.
+  if (!res.ok) throw new Error(`AMO addNote lead ${leadId} → HTTP ${res.status}`)
 }
 
 async function findLeadByPhone(phone: string): Promise<{ id: number; responsible_user_id: number } | null> {
@@ -162,14 +169,18 @@ interface QueueItem {
 }
 
 // ── Process a single queue item ────────────────────────────────────────────────
-async function processItem(item: QueueItem): Promise<void> {
+async function processItem(item: QueueItem): Promise<'claimed' | 'skipped'> {
   const supabase = db()
   const newAttempts = item.attempts + 1
 
-  // Mark as processing
-  await supabase.from('message_queue').update({
+  // Атомарный клейм: помечаем processing ТОЛЬКО если строка ещё в исходном статусе.
+  // Конвейер дёргается и инлайн из вебхука, и кроном — без этого две параллельные
+  // обработки берут одни строки и постят дубли нот в AMO. Пустой результат =
+  // строку уже забрал другой обработчик → выходим.
+  const { data: claimed } = await supabase.from('message_queue').update({
     status: 'processing', attempts: newAttempts, updated_at: new Date().toISOString(),
-  }).eq('id', item.id)
+  }).eq('id', item.id).in('status', ['pending', 'retry_scheduled']).select('id')
+  if (!claimed || claimed.length === 0) return 'skipped'
 
   // Fetch raw message
   const { data: raw, error: rawErr } = await supabase
@@ -184,7 +195,7 @@ async function processItem(item: QueueItem): Promise<void> {
       last_error: 'Raw message not found',
       updated_at: new Date().toISOString(),
     }).eq('id', item.id)
-    return
+    return 'claimed'
   }
 
   // ── Step 1: AmoCRM sync ─────────────────────────────────────────────────────
@@ -215,7 +226,7 @@ async function processItem(item: QueueItem): Promise<void> {
       await supabase.from('avito_messages_raw').update({ processing_status: 'failed', error_message: errMsg }).eq('id', raw.id)
     }
     console.error(`[process-queue] AMO sync failed for item ${item.id}:`, errMsg)
-    return
+    return 'claimed'
   }
 
   // Доставка в CRM выполнена — на этом работа конвейера закончена.
@@ -236,6 +247,7 @@ async function processItem(item: QueueItem): Promise<void> {
   }
 
   await supabase.from('avito_messages_raw').update({ processing_status: 'done' }).eq('id', raw.id)
+  return 'claimed'
 }
 
 // ── Cron entry point ──────────────────────────────────────────────────────────
@@ -281,8 +293,8 @@ export async function GET(req: Request) {
 
   for (const item of items as QueueItem[]) {
     try {
-      await processItem(item)
-      results.push({ id: item.id, status: 'ok' })
+      const outcome = await processItem(item)
+      results.push({ id: item.id, status: outcome === 'skipped' ? 'skipped' : 'ok' })
     } catch (err) {
       console.error(`[process-queue] unhandled error for item ${item.id}:`, err)
       results.push({ id: item.id, status: 'error', error: String(err) })

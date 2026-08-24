@@ -105,6 +105,7 @@ export const INITIAL_CHECKS: Omit<CheckResult, 'status'>[] = [
   { id: 'api_strategy',     module: 'API',           name: 'GET /api/admin/owner-strategy' },
   { id: 'api_pricing',      module: 'API',           name: 'GET /api/admin/pricing-formula' },
   { id: 'api_glass',        module: 'API',           name: 'GET /api/admin/glass-prices' },
+  { id: 'agents_fresh',     module: 'Агенты',        name: 'Включённые AI-агенты отрабатывают' },
 ]
 
 // ── Issue metadata ────────────────────────────────────────────────────────────
@@ -592,5 +593,21 @@ export async function runChecks(
     const r = await fetch('/api/admin/glass-prices')
     if (!r.ok) return { status: 'error', detail: `HTTP ${r.status}` }
     return { status: 'ok', detail: `HTTP ${r.status}` }
+  })
+  // Слепая зона: health проверял таблицы/API, но не то, что ВКЛючённые AI-агенты
+  // реально отрабатывают. Агент мог тихо встать (нет крона, ошибка) — а health зелёный.
+  await check('agents_fresh', async () => {
+    const { data, error } = await sb.from('agent_settings').select('agent_key, enabled, last_run_at')
+    if (error) return { status: 'error', detail: error.message }
+    const enabled = (data ?? []).filter(a => a.enabled)
+    if (!enabled.length) return { status: 'ok', detail: 'Нет включённых агентов' }
+    const STALE_MS = 2 * 24 * 60 * 60 * 1000
+    const stale = enabled.filter(a => !a.last_run_at || Date.now() - new Date(a.last_run_at as string).getTime() > STALE_MS)
+    if (stale.length) return {
+      status: 'warn',
+      detail: `Не отрабатывали >2 дней: ${stale.map(a => a.agent_key).join(', ')}`,
+      hint: 'Проверьте расписание в vercel.json и логи агента (/admin/agents)',
+    }
+    return { status: 'ok', detail: `${enabled.length} включённых, все свежие` }
   })
 }

@@ -17,6 +17,7 @@ export default function B2BAccessPage() {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [link, setLink] = useState<string | null>(null)
+  const [emailed, setEmailed] = useState(false)
   const [copied, setCopied] = useState(false)
 
   function load() {
@@ -35,7 +36,7 @@ export default function B2BAccessPage() {
       })
       const d = await res.json()
       if (!res.ok) { setErr(d.error || 'Ошибка'); return }
-      setLink(d.link); setGrantId(null); setEmail('')
+      setLink(d.link); setEmailed(!!d.emailed); setGrantId(null); setEmail('')
       await load()
     } catch { setErr('Сеть недоступна') } finally { setBusy(false) }
   }
@@ -67,7 +68,7 @@ export default function B2BAccessPage() {
       <div className="max-w-[820px] mx-auto px-4 pt-4">
         {link && (
           <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 mb-3">
-            <p className="text-[13px] font-semibold text-emerald-800">Доступ выдан. Отправьте клиенту ссылку для установки пароля:</p>
+            <p className="text-[13px] font-semibold text-emerald-800">Доступ выдан.{emailed ? ' Клиенту отправлено письмо со ссылкой на пароль.' : ' Отправьте клиенту ссылку для установки пароля:'}</p>
             <div className="flex items-center gap-2 mt-2">
               <input readOnly value={link} className="flex-1 bg-white border border-emerald-200 rounded-lg px-2.5 py-2 text-[12px] font-mono text-[#111110]" />
               <button onClick={() => copy(link)} className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-semibold hover:bg-emerald-700">{copied ? 'Скопировано ✓' : 'Копировать'}</button>
