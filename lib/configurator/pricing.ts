@@ -257,6 +257,8 @@ export type PriceResult = {
   total: number
   marginPct: number
   taxPct: number
+  missing: { id: string; title: string }[]  // подгруппы, которые модель требует, а цена не заполнена
+  complete: boolean                          // комплект полный (можно показывать клиенту как финальный)
 }
 
 export type PriceOptions = { glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number; choice?: Record<string, string> }
@@ -315,6 +317,27 @@ export function computePrice(
     if (lines.length) groupedLines.push({ id: g.id, title: g.title, kind: g.kind, lines, total: lines.reduce((s, l) => s + l.total, 0) })
   }
 
+  // Полнота комплекта: подгруппа «требуется», если модель по её роли даёт кол-во>0
+  // (piece — q.roles[role]>0; bar — есть куски профиля/штанги). Если требуется, а
+  // цена для текущего цвета не заполнена — в missing. Клиенту такой расчёт — «предварительно».
+  const missing: { id: string; title: string }[] = []
+  for (const g of up.groups ?? []) {
+    if (g.kind === 'piece') {
+      const roleQty = g.role ? (q.roles[g.role] ?? 0) : 0
+      if (roleQty <= 0) continue
+      const paid = g.items.some(it => {
+        const qty = it.qtyMode === 'manual' ? (it.fixedQty ?? 0) : roleQty
+        return qty > 0 && (it.prices[finishId] ?? it.prices.chrome ?? 0) > 0
+      })
+      if (!paid) missing.push({ id: g.id, title: g.title })
+    } else {
+      const pieces = g.role === 'profile' ? q.profilePieces : g.role === 'tube' ? q.tubePieces : []
+      if (pieces.length === 0) continue
+      const paid = g.items.some(it => (it.stocks ?? []).some(s => s.len > 0 && (s.prices[finishId] ?? s.prices.chrome ?? 0) > 0))
+      if (!paid) missing.push({ id: g.id, title: g.title })
+    }
+  }
+
   const hardwareCost = hardwareLines.reduce((s, l) => s + l.total, 0)
   const materialsCost = glassCost + hardwareCost + profileCost + tubeCost
 
@@ -331,6 +354,7 @@ export function computePrice(
     profileCost, profileBars, tubeCost, tubeBars,
     materialsCost, itemPrice, sections: q.sections, installCost, deliveryCost, liftCost, total,
     marginPct: finance.marginPct, taxPct: finance.taxPct,
+    missing, complete: missing.length === 0,
   }
 }
 

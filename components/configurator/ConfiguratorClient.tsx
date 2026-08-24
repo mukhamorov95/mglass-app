@@ -7,7 +7,7 @@ import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configura
 import { buildFromModel, type MDims, type GlassTint, type HardwareChoice } from '@/components/configurator/scene/assembly'
 import { computeQuantities, totalMeters, HARDWARE_LABEL, type PriceResult, type HardwareOption } from '@/lib/configurator/pricing'
 
-type Quote = { full: boolean; price?: PriceResult; total?: number; clientFrom?: number }
+type Quote = { full: boolean; price?: PriceResult; total?: number; clientFrom?: number; complete?: boolean }
 const ROLE_TITLE: Record<string, string> = { hinge: 'Петля', handle: 'Ручка' }
 
 const THICKNESS = 8   // душевые — только 8 мм закалённое
@@ -310,12 +310,21 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               <div className="flex items-baseline justify-between">
                 <span className="text-[13px] text-[#6b6b66]">Цена</span>
-                <span className="text-[22px] font-semibold text-[#111110] font-mono">{clientFrom != null ? `от ${rub(clientFrom)}` : '…'}</span>
+                <span className="text-[22px] font-semibold text-[#111110] font-mono">
+                  {quote?.complete === false ? 'по запросу' : clientFrom != null ? `от ${rub(clientFrom)}` : '…'}
+                </span>
               </div>
-              <p className="text-[11px] text-[#9a9a95] mt-1">Предварительно. Точную цену рассчитает менеджер.</p>
+              <p className="text-[11px] text-[#9a9a95] mt-1">
+                {quote?.complete === false ? 'Точную цену рассчитает менеджер под вашу комплектацию.' : 'Предварительно. Точную цену рассчитает менеджер.'}
+              </p>
             </div>
           ) : price ? (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              {!price.complete && price.missing.length > 0 && (
+                <div className="mb-2 rounded-lg bg-[#fdf3ec] border border-[#f0d9c4] px-3 py-2 text-[12px] text-[#9a5a2a]">
+                  ⚠️ Предварительно — не заполнено в «Себестоимость визуализатора»: <b>{price.missing.map(m => m.title).join(', ')}</b>
+                </div>
+              )}
               <Row label="Себестоимость стекла" value={rub(price.glassCost)} muted />
               <Row label="Себестоимость фурнитуры" value={rub(price.hardwareCost + price.profileCost + price.tubeCost)} muted />
               <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />

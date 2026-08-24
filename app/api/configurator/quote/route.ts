@@ -30,6 +30,6 @@ export async function POST(req: NextRequest) {
     // Авторизованный (менеджер/владелец) — полная разбивка себестоимости.
     return NextResponse.json({ full: true, price })
   }
-  // Публичный embed — только клиентская цена, без себестоимости.
-  return NextResponse.json({ full: false, total: price.total, clientFrom: clientPriceFrom(price.total) })
+  // Публичный embed — только клиентская цена + флаг полноты (без себестоимости и без списка).
+  return NextResponse.json({ full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete })
 }

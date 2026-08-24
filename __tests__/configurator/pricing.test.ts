@@ -62,13 +62,29 @@ describe('pricing — роли, хлысты, цвет, справочник', (
     expect(hingeLine.total).toBe(q.roles.hinge * 2000)
   })
 
-  it('пустые подгруппы (без позиций) → себестоимость = только стекло', () => {
+  it('пустые подгруппы (без позиций) → себестоимость = только стекло, комплект НЕ полный', () => {
     const a = buildFromModel(getModel('М7'), { width: 1100, height: 2000, width2: 900, doorWidth: 600 }, 8)
     const q = computeQuantities(a, 8)
     const p = computePrice(q, buildDefaultUnitPrices('budget'), DEFAULT_FINANCE, {})
     expect(p.hardwareCost).toBe(0)
     expect(p.profileCost).toBe(0)
     expect(p.materialsCost).toBe(p.glassCost)
+    expect(p.complete).toBe(false)
+    expect(p.missing.some(m => m.id === 'hinges')).toBe(true)   // распашной нужны петли
+    expect(p.missing.some(m => m.id === 'profiles')).toBe(true) // и профиль
+  })
+
+  it('полнота: заполненная требуемая подгруппа не в missing; нулевая цена → в missing', () => {
+    const a = buildFromModel(getModel('М7'), { width: 1100, height: 2000, width2: 900, doorWidth: 600 }, 8)
+    const q = computeQuantities(a, 8)
+    const p = computePrice(q, priced('budget'), DEFAULT_FINANCE, { finishId: 'chrome' })
+    expect(p.missing.some(m => m.id === 'hinges')).toBe(false)
+    expect(p.missing.some(m => m.id === 'profiles')).toBe(false)
+    // обнулим цену петли (нет цены ни для одного цвета) → hinges снова в missing
+    const up2 = priced('budget')
+    ;(up2.groups.find(g => g.id === 'hinges')!.items as PieceItem[])[0].prices = {}
+    const p2 = computePrice(q, up2, DEFAULT_FINANCE, { finishId: 'chrome' })
+    expect(p2.missing.some(m => m.id === 'hinges')).toBe(true)
   })
 
   it('две auto-позиции в подгруппе: кол-во получает только первая (вторая — запасная, 0)', () => {

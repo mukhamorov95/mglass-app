@@ -141,6 +141,17 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
     setDirty(true); setMsg(null)
   }
 
+  // Заполнить текущий тариф группами из другого (стартовая точка, дальше правишь цены).
+  function copyFromOtherTier() {
+    const other: Tier = tier === 'budget' ? 'premium' : 'budget'
+    setPrices(prev => {
+      const next = structuredClone(prev)
+      next[tier] = { ...next[tier], groups: structuredClone(prev[other].groups) }
+      return next
+    })
+    setDirty(true); setMsg(null)
+  }
+
   // ── мутаторы подгрупп/позиций ──
   const setGroupTitle = (gi: number, title: string) => edit(u => { u.groups[gi].title = title })
   const removeGroup = (gi: number) => edit(u => { u.groups.splice(gi, 1) })
@@ -244,9 +255,13 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
         </div>
       </div>
 
-      <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium mb-5">
-        <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
-        <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
+          <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
+          <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+        </div>
+        <button onClick={() => copyFromOtherTier()}
+          className="text-[12px] text-[#4b6ea9] hover:underline">↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}»</button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[210px_1fr_380px] gap-5 items-start">
@@ -266,6 +281,13 @@ export function VisualizerPricingClient({ initial }: { initial: Record<Tier, Uni
             <Partition3DView model={model} dims={dims} thickness={8} finishHex={FINISHES.find(f => f.id === finishId)?.hex ?? '#c9ccd0'} finishId={finishId} glassTint={TINT[glassType]} />
           </div>
           <Card title={`Спецификация ${model.code} · ${colorLabel}`}>
+            {price.missing.length > 0 ? (
+              <div className="mb-2 rounded-lg bg-[#fdf3ec] border border-[#f0d9c4] px-3 py-2 text-[12px] text-[#9a5a2a]">
+                ⚠️ Для {model.code} не заполнено: <b>{price.missing.map(m => m.title).join(', ')}</b>. Добавь позицию в подгруппу → расчёт станет полным.
+              </div>
+            ) : (
+              <div className="mb-2 rounded-lg bg-[#f0f7f0] border border-[#cfe6cf] px-3 py-2 text-[12px] text-[#256029]">✅ Комплект полный для {model.code} · {colorLabel}</div>
+            )}
             <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Стекло {GLASS_LABEL[glassType]}</span><span className="font-mono">{q.glassM2} м² · {rub(price.glassCost)}</span></div>
             {price.groupedLines.map(g => (
               <div key={g.id} className="mt-1.5">
