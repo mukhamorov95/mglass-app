@@ -665,18 +665,18 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             <div className="flex items-center gap-1.5 flex-wrap ml-auto" onClick={e => e.stopPropagation()}>
               {startable.length > 0 && (
                 <button onClick={() => onStartAll(startable)} title="Взял весь заказ в работу"
-                  className="px-2.5 py-1 rounded-lg border border-emerald-300 text-emerald-700 text-[11px] font-medium hover:bg-emerald-50">
+                  className="px-3 py-2 rounded-lg border border-emerald-300 text-emerald-700 text-[12px] font-medium hover:bg-emerald-50">
                   Взял весь ({startable.length})
                 </button>
               )}
               {doneable.length > 0 && (
                 <button onClick={() => onDoneAll(doneable)} title="Весь заказ готов"
-                  className="px-2.5 py-1 rounded-lg bg-emerald-600 text-white text-[11px] font-medium hover:opacity-90">
+                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
                   ✅ Готов весь ({doneable.length})
                 </button>
               )}
               <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
-                className={`px-2.5 py-1 rounded-lg text-[11px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
+                className={`px-3 py-2 rounded-lg text-[12px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
                 {noMatOrder ? '✅ Пришёл' : '🛒 Нет мат.'}
               </button>
             </div>
