@@ -364,6 +364,13 @@ export default function CalculationDetailPage() {
     origRef.current = updated
   }
 
+  // Отправка КП (копирование текста / клик WhatsApp) авто-переводит черновик в
+  // «Отправлено». Иначе менеджер, отправивший КП, но не тронувший дропдаун статуса,
+  // не получает follow-up-напоминаний (крон followup срабатывает только на 'sent').
+  function markSentOnSend() {
+    if (calc?.status === 'draft') void updateStatus('sent')
+  }
+
   // ── Auto-save notes on blur ───────────────────────────────────────────────
   const notesTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   function handleNotesChange(val: string) {
@@ -552,7 +559,7 @@ export default function CalculationDetailPage() {
             {/* WhatsApp */}
             {(editClientPhone || calc.client_phone) && (
               <a href={`https://wa.me/${(editClientPhone || calc.client_phone || '').replace(/\D/g, '')}`}
-                target="_blank" rel="noopener noreferrer"
+                target="_blank" rel="noopener noreferrer" onClick={markSentOnSend}
                 className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 text-emerald-700 text-[13px] font-medium rounded-xl hover:bg-emerald-100 transition-colors">
                 WhatsApp
               </a>
@@ -731,6 +738,7 @@ export default function CalculationDetailPage() {
                 <button onClick={async () => {
                   await navigator.clipboard.writeText(editClientText)
                   setCopied(true)
+                  markSentOnSend()
                   setTimeout(() => setCopied(false), 2000)
                 }} className="text-[12px] px-3 py-1.5 bg-[#f5f5f7] hover:bg-[#e8e8ed] rounded-lg text-[#6e6e73] transition-colors">
                   {copied ? 'Скопировано ✓' : 'Копировать'}
