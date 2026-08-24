@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import ProductionTabs from '@/components/ProductionTabs'
+import { SheetSVG } from '@/components/SheetSVG'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import {
   runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS,
@@ -215,7 +216,19 @@ export default function StationBatchesPage() {
                 </button>
               </div>
               {isOpen && (
-                <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
+                <div className="border-t border-[#f0f0ec]">
+                  {isCutting && b.result && b.result.sheets.length > 0 && (
+                    <div className="px-4 py-3 space-y-3 bg-[#fafaf9] border-b border-[#f0f0ec]">
+                      <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Карта раскроя · {b.result.sheetsNeeded} лист(ов)</p>
+                      {b.result.sheets.map((sheet, si) => (
+                        <div key={si}>
+                          <p className="text-[11px] text-[#6b6b66] mb-1">Лист {si + 1} · КПД {sheet.efficiency}%</p>
+                          <SheetSVG sheet={sheet} sheetW={b.result!.sheetWidth} sheetH={b.result!.sheetHeight} edgeMargin={DEFAULT_CUTTING_SETTINGS.edge_margin} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="divide-y divide-[#f8f8f7]">
                   {b.orders.map((o, i) => {
                     const waitMat = matPending.has(o.orderId)
                     return (
@@ -231,6 +244,7 @@ export default function StationBatchesPage() {
                       </button>
                     </div>
                   )})}
+                  </div>
                 </div>
               )}
             </div>
