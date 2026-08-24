@@ -1,11 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { calculateMirror } from '@/lib/mirrorCalculator'
+import type { MirrorInputs } from '@/lib/mirrorCalculator'
 import {
   mockMirrorMaterial,
   mockInstallService,
   mockDeliveryService,
-  mockFinancialSettings,
 } from './fixtures'
+
+// calculateMirror(inputs, materials, services) → MirrorResult | null.
+// Хелпер гардит null (при валидных входных данных результат всегда есть).
+function calc(inputs: MirrorInputs, services: Parameters<typeof calculateMirror>[2] = []) {
+  const r = calculateMirror(inputs, [], services)
+  if (!r) throw new Error('calculateMirror вернул null на валидных входных данных')
+  return r
+}
 
 const baseInputs = {
   width:  600,
@@ -42,8 +50,7 @@ const baseInputs = {
 
 describe('calculateMirror', () => {
   it('возвращает результат для базового зеркала', () => {
-    const result = calculateMirror(baseInputs, [], [], mockFinancialSettings)
-    expect(result).not.toBeNull()
+    const result = calc(baseInputs)
     expect(result.finalPrice).toBeGreaterThan(0)
     expect(result.grandTotal).toBeGreaterThan(0)
     expect(result.totalCost).toBeGreaterThan(0)
@@ -51,47 +58,45 @@ describe('calculateMirror', () => {
 
   // INV-1: final_price === grandTotal без услуг
   it('INV-1: grandTotal === finalPrice когда нет доп. услуг', () => {
-    const result = calculateMirror(baseInputs, [], [], mockFinancialSettings)
+    const result = calc(baseInputs)
     expect(result.grandTotal).toBe(result.finalPrice)
   })
 
   // INV-1: grandTotal включает услуги
   it('INV-1: grandTotal = finalPrice + стоимость услуг', () => {
-    const inputs = { ...baseInputs, hasInstallation: true, hasDelivery: true }
-    const result = calculateMirror(inputs, [], [mockInstallService, mockDeliveryService], mockFinancialSettings)
+    const result = calc({ ...baseInputs, hasInstallation: true, hasDelivery: true }, [mockInstallService, mockDeliveryService])
     expect(result.grandTotal).toBe(result.finalPrice + result.servicesTotal)
     expect(result.servicesTotal).toBeGreaterThan(0)
   })
 
   // INV-4: profit считается от finalPrice, не grandTotal
   it('INV-4: profit не включает стоимость услуг', () => {
-    const inputs = { ...baseInputs, hasInstallation: true, hasDelivery: true }
-    const result = calculateMirror(inputs, [], [mockInstallService, mockDeliveryService], mockFinancialSettings)
-    // profit = finalPrice - totalCost - tax. grandTotal > finalPrice, поэтому profit должен быть меньше grandTotal - totalCost
+    const result = calc({ ...baseInputs, hasInstallation: true, hasDelivery: true }, [mockInstallService, mockDeliveryService])
+    // profit = finalPrice - totalCost - tax. grandTotal > finalPrice, поэтому profit меньше grandTotal - totalCost
     expect(result.profit).toBeLessThan(result.grandTotal - result.totalCost)
   })
 
-  it('скидка 0% — цена без изменений', () => {
-    const r0 = calculateMirror(baseInputs, [], [], mockFinancialSettings)
-    const r20 = calculateMirror({ ...baseInputs, discount: 20 }, [], [], mockFinancialSettings)
+  it('скидка снижает цену', () => {
+    const r0 = calc(baseInputs)
+    const r20 = calc({ ...baseInputs, discount: 20 })
     expect(r20.finalPrice).toBeLessThan(r0.finalPrice)
     expect(r20.discountAmount).toBeGreaterThan(0)
   })
 
-  it('нулевые размеры — возможен нулевой результат или очень маленькая цена', () => {
-    const result = calculateMirror({ ...baseInputs, width: 1, height: 1 }, [], [], mockFinancialSettings)
+  it('минимальные размеры — неотрицательная цена', () => {
+    const result = calc({ ...baseInputs, width: 1, height: 1 })
     expect(result.finalPrice).toBeGreaterThanOrEqual(0)
   })
 
   it('маржа влияет на итоговую цену', () => {
-    const r30 = calculateMirror(baseInputs, [], [], mockFinancialSettings)
-    const r50 = calculateMirror({ ...baseInputs, margin: 50 }, [], [], mockFinancialSettings)
+    const r30 = calc(baseInputs)
+    const r50 = calc({ ...baseInputs, margin: 50 })
     expect(r50.finalPrice).toBeGreaterThan(r30.finalPrice)
   })
 
   it('партнёрский % увеличивает цену', () => {
-    const r0  = calculateMirror(baseInputs, [], [], mockFinancialSettings)
-    const r10 = calculateMirror({ ...baseInputs, partnerPercent: 10 }, [], [], mockFinancialSettings)
+    const r0  = calc(baseInputs)
+    const r10 = calc({ ...baseInputs, partnerPercent: 10 })
     expect(r10.finalPrice).toBeGreaterThanOrEqual(r0.finalPrice)
   })
 })
