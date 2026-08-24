@@ -30,6 +30,7 @@ export default function PartnerNav() {
   const [open, setOpen] = useState(true)
   const [client, setClient] = useState<string | null>(null)
   const [counts, setCounts] = useState<{ quotes: number; inwork: number; shipped: number }>({ quotes: 0, inwork: 0, shipped: 0 })
+  const [unread, setUnread] = useState(0)
 
   useEffect(() => {
     fetch('/api/partner/orders').then(r => r.json()).then((d: { client?: { name: string } | null; orders?: OrderLite[] }) => {
@@ -41,6 +42,7 @@ export default function PartnerNav() {
         shipped: os.filter(o => o.lane === 'shipped').length,
       })
     }).catch(() => {})
+    fetch('/api/partner/notifications').then(r => r.json()).then((d: { unread?: number }) => setUnread(d.unread ?? 0)).catch(() => {})
   }, [])
 
   const item = (active: boolean, extra = '') => `it${active ? ' on' : ''}${extra ? ' ' + extra : ''}`
@@ -67,6 +69,12 @@ export default function PartnerNav() {
           <span className="tx">Табло</span>
         </Link>
 
+        <Link href="/partner/notifications" className={item(path.startsWith('/partner/notifications'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 8a4 4 0 0 1 8 0c0 4 1.5 5 1.5 5h-11S6 12 6 8Z" /><path d="M8.5 16a1.5 1.5 0 0 0 3 0" /></svg></span>
+          <span className="tx">Уведомления</span>
+          {unread > 0 && !path.startsWith('/partner/notifications') && <span className="badge">{unread}</span>}
+        </Link>
+
         <div className={`grp${open || inCalc ? ' open' : ''}`}>
           <button className="it" onClick={() => setOpen(o => !o)}>
             <span className="ic"><svg viewBox="0 0 20 20"><rect x="4.5" y="2.5" width="11" height="15" rx="2" /><line x1="7.2" y1="6" x2="12.8" y2="6" /><line x1="7.2" y1="10.5" x2="12.8" y2="10.5" /><line x1="7.2" y1="14" x2="12.8" y2="14" /></svg></span>
@@ -84,6 +92,11 @@ export default function PartnerNav() {
             })}
           </div>
         </div>
+
+        <Link href="/partner/documents" className={item(path.startsWith('/partner/documents'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M6 2.5h5l3 3V17a.5.5 0 0 1-.5.5h-7A.5.5 0 0 1 6 17Z" /><path d="M11 2.5V6h3" /></svg></span>
+          <span className="tx">Документы</span>
+        </Link>
 
         <Link href="/partner/catalog" className={item(path.startsWith('/partner/catalog'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><path d="M5 6h10l-1 11H6z" /><path d="M7.5 6a2.5 2.5 0 0 1 5 0" /></svg></span>

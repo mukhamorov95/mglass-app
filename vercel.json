@@ -25,6 +25,10 @@
       "schedule": "45 4 * * *"
     },
     {
+      "path": "/api/cron/partner-notify",
+      "schedule": "0 8-21 * * *"
+    },
+    {
       "path": "/api/cron/avito-followup",
       "schedule": "0 11 * * 1-6"
     },
