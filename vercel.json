@@ -65,6 +65,10 @@
       "schedule": "0 7 * * *"
     },
     {
+      "path": "/api/cron/agent-catalog",
+      "schedule": "30 8 * * *"
+    },
+    {
       "path": "/api/cron/agent-ceo",
       "schedule": "0 8 * * *"
     },
