@@ -14,6 +14,23 @@ import { Hardware } from './scene/hardware'
 // Матовые финиши — выше шероховатость (меньше зеркальность).
 const MATTE = new Set(['satin', 'black', 'gunmetal', 'brgold', 'brrose'])
 
+// PBR-профиль на каждый цвет фурнитуры: полированные (хром/золото/роза) —
+// зеркальные с лаком (clearcoat); матовые (сатин/оружейка/браш) — шершавые;
+// чёрный/белый — крашеные (metalness ниже). Ближе к каталожному эскизу.
+type FinishMat = { color: string; metalness: number; roughness: number; clearcoat: number; clearcoatRoughness: number; env: number }
+const FINISH_MATERIAL: Record<string, FinishMat> = {
+  chrome:   { color: '#e2e6e9', metalness: 1,   roughness: 0.05, clearcoat: 1,   clearcoatRoughness: 0.03, env: 1.9 },
+  satin:    { color: '#c6ccd0', metalness: 1,   roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.3,  env: 1.3 },
+  black:    { color: '#212428', metalness: 0.6, roughness: 0.5,  clearcoat: 0.35,clearcoatRoughness: 0.4,  env: 0.9 },
+  gunmetal: { color: '#3b4045', metalness: 0.92,roughness: 0.34, clearcoat: 0.5, clearcoatRoughness: 0.3,  env: 1.1 },
+  bronze:   { color: '#7d5a3a', metalness: 1,   roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3,  env: 1.1 },
+  gold:     { color: '#caa42a', metalness: 1,   roughness: 0.13, clearcoat: 0.8, clearcoatRoughness: 0.06, env: 1.7 },
+  brgold:   { color: '#b8974a', metalness: 1,   roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.35, env: 1.2 },
+  white:    { color: '#eceae4', metalness: 0.2, roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.5,  env: 0.8 },
+  rose:     { color: '#c98f78', metalness: 1,   roughness: 0.15, clearcoat: 0.7, clearcoatRoughness: 0.08, env: 1.6 },
+  brrose:   { color: '#b98a78', metalness: 1,   roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.35, env: 1.2 },
+}
+
 // Dev-хук съёмки: при создании сцены кладём в window.__r3fRender() синхронный
 // кадр (gl.render, минуя rAF) — чтобы снимать превью, когда вкладка «скрыта» под
 // автоматизацией (браузер глушит requestAnimationFrame). Только вне прода.
@@ -167,12 +184,17 @@ export default function Partition3D(
   { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice },
 ) {
   const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice), [model, dims, thickness, doorOpen, choice])
-  const roughness = MATTE.has(finishId) ? 0.42 : 0.06
-  // Единый металл финиша для профилей и фурнитуры (цвет из hex финиша).
-  const metalMat = useMemo(
-    () => new THREE.MeshStandardMaterial({ color: finishHex, metalness: 1, roughness, envMapIntensity: 1.45 }),
-    [finishHex, roughness],
-  )
+  // PBR-материал финиша для профилей и фурнитуры. Профиль цвета → MeshPhysicalMaterial
+  // с clearcoat (реалистичный лак/зеркало); фолбэк на hex, если цвет неизвестен.
+  const metalMat = useMemo(() => {
+    const f = FINISH_MATERIAL[finishId]
+    if (!f) return new THREE.MeshStandardMaterial({ color: finishHex, metalness: 1, roughness: MATTE.has(finishId) ? 0.42 : 0.06, envMapIntensity: 1.45 })
+    const m = new THREE.MeshPhysicalMaterial({
+      color: f.color, metalness: f.metalness, roughness: f.roughness,
+      clearcoat: f.clearcoat, clearcoatRoughness: f.clearcoatRoughness, envMapIntensity: f.env,
+    })
+    return m
+  }, [finishId, finishHex])
   const { w, h, d } = assembly.bounds
   const span = Math.max(w, h, d)
   const camDist = span * 1.7 + 0.9
