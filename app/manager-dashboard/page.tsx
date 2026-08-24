@@ -43,12 +43,30 @@ const typeIcon = (v: string) => B2B_INTERACTION_TYPES.find(t => t.value === v)?.
 
 const LS_KEY = 'mglass_dashboard_myOnly'
 
+type TaskRow = {
+  id: number; lead_id: number; title: string; kind: string; due_at: string; done: boolean
+  crm_leads?: { name: string | null; phone: string | null; manager: string | null } | null
+}
+const KIND_LABEL: Record<string, string> = { call: '📞 Звонок', meeting: '🤝 Встреча', measure: '📐 Замер', followup: '↩️ Напомнить', other: '•' }
+// Date вынесен в модульные функции (react-покомпонентная чистота не любит new Date() в теле).
+function dueTodayOrOverdue(tasks: TaskRow[]): TaskRow[] {
+  const end = new Date(); end.setHours(23, 59, 59, 999)
+  const cutoff = end.getTime()
+  return tasks.filter(t => !t.done && new Date(t.due_at).getTime() <= cutoff)
+    .sort((a, b) => new Date(a.due_at).getTime() - new Date(b.due_at).getTime())
+}
+function isOverdue(dueAt: string): boolean {
+  const start = new Date(); start.setHours(0, 0, 0, 0)
+  return new Date(dueAt).getTime() < start.getTime()
+}
+
 export default function ManagerDashboardPage() {
   const router = useRouter()
   const [quotes, setQuotes]   = useState<Quote[]>([])
   const [clients, setClients] = useState<ClientWithMeta[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [tasks, setTasks] = useState<TaskRow[]>([])
 
   const [myEmail, setMyEmail]       = useState<string | null>(null)
   const [myUserId, setMyUserId]     = useState<string | null>(null)
@@ -96,6 +114,11 @@ export default function ManagerDashboardPage() {
     }
 
     const localCanSeeAll = localRole === 'admin' || localSeeAll
+
+    // Задачи CRM (свои открытые) — раньше жили только в /crm, менеджер не видел их
+    // на дашборде. Грузим фоном (не блокируем основные данные).
+    fetch('/api/crm/tasks').then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.tasks) setTasks(d.tasks as TaskRow[]) }).catch(() => {})
 
     const now = new Date()
     const CRM_COLS = 'id,name,contact,phone,discount_percent,active,notes,created_at,crm_segment,crm_status,crm_score,crm_city,crm_manager,crm_next_contact,crm_notes'
@@ -317,6 +340,35 @@ export default function ManagerDashboardPage() {
             </div>
           ))}
         </div>
+
+        {/* Задачи CRM на сегодня */}
+        {(() => {
+          const due = dueTodayOrOverdue(tasks)
+          if (due.length === 0) return null
+          return (
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 mb-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">Задачи на сегодня · {due.length}</span>
+                <Link href="/crm" className="text-[11px] text-[#6b6b66] hover:text-[#111110]">все в CRM →</Link>
+              </div>
+              <div className="space-y-1.5">
+                {due.slice(0, 8).map(t => {
+                  const od = isOverdue(t.due_at)
+                  return (
+                    <Link key={t.id} href={`/crm/${t.lead_id}`}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[#f0f0ec] transition-colors">
+                      <span className="text-[12px] w-24 shrink-0 text-[#6b6b66]">{KIND_LABEL[t.kind] ?? t.kind}</span>
+                      <span className="text-[13px] text-[#111110] flex-1 truncate">{t.title}{t.crm_leads?.name ? ` · ${t.crm_leads.name}` : ''}</span>
+                      <span className={`text-[11px] shrink-0 ${od ? 'text-red-600 font-semibold' : 'text-[#9a9a95]'}`}>
+                        {od ? 'просрочено' : new Date(t.due_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </Link>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
