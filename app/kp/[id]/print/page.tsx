@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { renderDocCanvas } from '@/lib/pdfCapture'
 import KpDocument, { type KpContent } from './KpDocument'
 
 const CSS = `
@@ -141,8 +142,7 @@ async function waitImages(root: ParentNode) {
 async function generatePdf(number: string, setBusy?: (v: boolean) => void) {
   try {
     setBusy?.(true)
-    const [h2cMod, jspdfMod] = await Promise.all([import('html2canvas'), import('jspdf')])
-    const html2canvas = h2cMod.default
+    const jspdfMod = await import('jspdf')
     const jsPDF = jspdfMod.jsPDF
     await waitImages(document.querySelector('.kp-scope') ?? document)
     await new Promise(r => setTimeout(r, 120))
@@ -150,7 +150,7 @@ async function generatePdf(number: string, setBusy?: (v: boolean) => void) {
     const pdf = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
     const A4W = 210, A4H = 297
     for (let i = 0; i < pages.length; i++) {
-      const canvas = await html2canvas(pages[i], { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const canvas = await renderDocCanvas(pages[i])
       const img = canvas.toDataURL('image/jpeg', 0.94)
       // Вписываем снимок листа в A4: по ширине; если выше — ужимаем по высоте (без обрезки).
       let w = A4W, h = A4W * canvas.height / canvas.width

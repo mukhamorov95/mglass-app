@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
+import { renderDocCanvas } from '@/lib/pdfCapture'
 import QRCode from 'qrcode'
 import { paymentQrString } from '@/lib/paymentQr'
 import { ContractDocument, InvoiceDocument, type ContractContent } from './documents'
@@ -104,8 +105,8 @@ export default function ContractPrintPage() {
     if (!invoiceRef.current) return
     setBusy(true)
     try {
-      const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const canvas = await h2c.default(invoiceRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const jspdf = await import('jspdf')
+      const canvas = await renderDocCanvas(invoiceRef.current)
       const pdf = new jspdf.jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
       let w = 210, h = 210 * canvas.height / canvas.width
       if (h > 297) { h = 297; w = 297 * canvas.width / canvas.height }
@@ -118,8 +119,8 @@ export default function ContractPrintPage() {
     if (!contractRef.current) return
     setBusy(true)
     try {
-      const [h2c, jspdf] = await Promise.all([import('html2canvas'), import('jspdf')])
-      const canvas = await h2c.default(contractRef.current, { scale: 2, useCORS: true, backgroundColor: '#ffffff' })
+      const jspdf = await import('jspdf')
+      const canvas = await renderDocCanvas(contractRef.current)
       const W = canvas.width, H = canvas.height
       const pxPerMm = W / 210
       const pageHpx = 297 * pxPerMm
