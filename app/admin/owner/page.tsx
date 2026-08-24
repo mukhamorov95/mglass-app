@@ -29,6 +29,7 @@ const SECTIONS = [
     items: [
       { href: '/admin/org',     emoji: '🏗️', label: 'Оргструктура',     desc: '17 ролей, регламенты, KPI, функции, PDF' },
       { href: '/admin/roadmap', emoji: '🗺️', label: 'Roadmap',           desc: 'Чек-лист внедрения, прогресс по фазам' },
+      { href: '/admin/owner-tasks', emoji: '📋', label: 'Задачи владельца', desc: 'Очередь из Telegram-бота + статус воркера' },
       { href: '/admin/users',   emoji: '👥', label: 'Пользователи',      desc: 'Менеджеры, роли, доступ к платформе' },
     ],
   },
