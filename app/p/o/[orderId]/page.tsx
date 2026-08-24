@@ -318,6 +318,7 @@ export default function MobileOrderWorkPage() {
     const now        = new Date().toISOString()
     const newStages: DetailStages = { ...existingDs }
     const syncUpdates: { item_index: number; stage_key: string; action: 'done' }[] = []
+    const rpcUpdates: { item: string; stage: string; entry: DetailStageState }[] = []
 
     for (const stageKey of selectedStages) {
       // Tempering: only items that actually need it (non-mirror with hasTempering=true)
@@ -326,25 +327,26 @@ export default function MobileOrderWorkPage() {
         : [...selectedItems]
 
       for (const idx of effectiveItems) {
-        newStages[String(idx)] = {
-          ...newStages[String(idx)],
-          [stageKey]: {
-            status:           'done',
-            updated_at:       now,
-            updated_by:       currentUser.id,
-            updated_by_email: currentUser.email,
-          } satisfies DetailStageState,
+        const entry: DetailStageState = {
+          status:           'done',
+          updated_at:       now,
+          updated_by:       currentUser.id,
+          updated_by_email: currentUser.email,
         }
+        newStages[String(idx)] = { ...newStages[String(idx)], [stageKey]: entry }
         syncUpdates.push({ item_index: idx, stage_key: stageKey, action: 'done' })
+        rpcUpdates.push({ item: String(idx), stage: stageKey, entry })
       }
     }
 
     const updatedNotes = { ...notesObj, detail_stages: newStages }
     const sb = createClient()
-    const { error: updateErr } = await sb
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(updatedNotes) })
-      .eq('id', order.id)
+    // АТОМАРНО через mark_detail_stages (правка под блокировкой строки): два
+    // работника, сканирующих один заказ, не затрут друг друга (раньше писали весь
+    // notes целиком из устаревшего слепка — last-write-wins, урок #4960).
+    const { error: updateErr } = await sb.rpc('mark_detail_stages', {
+      p_order_id: order.id, p_updates: rpcUpdates,
+    })
 
     if (updateErr) {
       showToast('Ошибка сохранения', false)
@@ -386,25 +388,25 @@ export default function MobileOrderWorkPage() {
     const existingDs = (notesObj.detail_stages ?? {}) as DetailStages
     const now        = new Date().toISOString()
     const newStages: DetailStages = { ...existingDs }
+    const rpcUpdates: { item: string; stage: string; entry: DetailStageState }[] = []
 
     for (const idx of selectedItems) {
-      newStages[String(idx)] = {
-        ...newStages[String(idx)],
-        problem: {
-          status:           'problem',
-          updated_at:       now,
-          updated_by:       currentUser.id,
-          updated_by_email: currentUser.email,
-        } satisfies DetailStageState,
+      const entry: DetailStageState = {
+        status:           'problem',
+        updated_at:       now,
+        updated_by:       currentUser.id,
+        updated_by_email: currentUser.email,
       }
+      newStages[String(idx)] = { ...newStages[String(idx)], problem: entry }
+      rpcUpdates.push({ item: String(idx), stage: 'problem', entry })
     }
 
     const updatedNotes = { ...notesObj, detail_stages: newStages }
     const sb = createClient()
-    const { error: updateErr } = await sb
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(updatedNotes) })
-      .eq('id', order.id)
+    // АТОМАРНО (mark_detail_stages) — без перезаписи всего notes из устаревшего слепка.
+    const { error: updateErr } = await sb.rpc('mark_detail_stages', {
+      p_order_id: order.id, p_updates: rpcUpdates,
+    })
 
     if (updateErr) {
       showToast('Ошибка сохранения', false)
