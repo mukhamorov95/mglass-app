@@ -103,7 +103,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
-        <Link className="primary" href="/partner/new">Повторить заказ</Link>
+        <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
       </div>
     </div>
   )

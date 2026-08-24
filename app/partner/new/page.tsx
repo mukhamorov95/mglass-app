@@ -100,11 +100,21 @@ export default function PartnerNewQuotePage() {
       const sel = firstSel(mats, 'стекло')
       setThickness(sel.thickness); setMatId(sel.matId)
       // Режим редактирования: /partner/new?edit=<id> — грузим позиции просчёта.
-      const editParam = new URLSearchParams(window.location.search).get('edit')
+      // Повтор заказа: /partner/new?reorder=<id> — грузим те же позиции, но как
+      // НОВЫЙ просчёт (editingId не ставим → сохранение создаёт новый, а не правит).
+      const params = new URLSearchParams(window.location.search)
+      const editParam = params.get('edit')
+      const reorderParam = params.get('reorder')
       if (editParam) {
         fetch(`/api/partner/quote/${editParam}`).then(r => r.ok ? r.json() : Promise.reject())
           .then((q: { id: number; comment: string; specs: Spec[] }) => {
             setEditingId(q.id); setComment(q.comment || ''); setList(q.specs)
+            void recompute(q.specs, false)
+          }).catch(() => {})
+      } else if (reorderParam) {
+        fetch(`/api/partner/quote/${reorderParam}?reorder=1`).then(r => r.ok ? r.json() : Promise.reject())
+          .then((q: { specs: Spec[] }) => {
+            setList(q.specs)
             void recompute(q.specs, false)
           }).catch(() => {})
       }

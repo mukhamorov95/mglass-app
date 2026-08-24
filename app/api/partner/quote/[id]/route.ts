@@ -10,6 +10,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const { id } = await params
   const oid = Number(id)
   if (!oid) return NextResponse.json({ error: 'Плохой id' }, { status: 400 })
+  // reorder=1 — «Повторить заказ»: только КЛОНИРУЕМ позиции в новый черновик, сам
+  // заказ-источник не правим, поэтому гарды «запущен/не-quote» тут не применяются.
+  const isReorder = new URL(_req.url).searchParams.get('reorder') === '1'
 
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -23,11 +26,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .select('id,client_id,launched_at,notes,items').eq('id', oid).maybeSingle()
   const o = order as { client_id: number | null; launched_at: string | null; notes: string | null; items: unknown } | null
   if (!o || o.client_id !== (client as { id: number }).id) return NextResponse.json({ error: 'Просчёт не найден' }, { status: 404 })
-  if (o.launched_at) return NextResponse.json({ error: 'Заказ уже в работе — редактирование недоступно' }, { status: 400 })
+  if (!isReorder && o.launched_at) return NextResponse.json({ error: 'Заказ уже в работе — редактирование недоступно' }, { status: 400 })
 
   let notes: Record<string, unknown> = {}
   try { notes = o.notes ? JSON.parse(o.notes) : {} } catch {}
-  if (notes.status && notes.status !== 'quote') return NextResponse.json({ error: 'Просчёт нельзя редактировать' }, { status: 400 })
+  if (!isReorder && notes.status && notes.status !== 'quote') return NextResponse.json({ error: 'Просчёт нельзя редактировать' }, { status: 400 })
 
   const rawItems = Array.isArray(o.items) ? (o.items as Record<string, unknown>[]) : []
   const specs = rawItems.map(it => {
