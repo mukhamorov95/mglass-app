@@ -386,8 +386,11 @@ export default function PartnerNewQuotePage() {
               {savedId ? (
                 <div className="note" style={{ padding: 18, background: 'var(--green-bg)', borderColor: 'var(--green-bd)' }}>
                   <div className="t" style={{ color: 'var(--green)' }}>{submitted ? 'Отправлено в работу ✓' : editingId ? 'Просчёт обновлён ✓' : 'Просчёт сохранён ✓'}</div>
-                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
-                  <Link href="/partner/quotes" className="s" style={{ display: 'inline-block', marginTop: 8, color: 'var(--blue)' }}>→ Мои просчёты</Link>
+                  <div className="s">{submitted ? 'Менеджер подтвердит и запустит производство. Счёт-спецификацию для оплаты пришлёт ваш менеджер M-Glass.' : editingId ? 'Изменения сохранены в вашем просчёте.' : 'Он появился в разделе «Мои просчёты».'}</div>
+                  <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    <Link href={`/partner/order/${savedId}/kp`} className="ghost">↓ Скачать КП</Link>
+                    <Link href="/partner/quotes" className="primary">Мои просчёты</Link>
+                  </div>
                 </div>
               ) : (
                 <div className="sum">

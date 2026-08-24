@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { reviewPartnerQuote, type ReviewItem } from '@/lib/ai-tools/reviewPartnerQuote'
 import { notifyAdmins } from '@/lib/telegram'
+import { pushNotification } from '@/lib/partnerNotify'
 
 // Партнёр отправляет свой просчёт в заявку (на проверку менеджеру).
 // Просчёт → status='pending_approval'. Только свой просчёт, только если не запущен.
@@ -57,6 +58,14 @@ export async function POST(req: NextRequest) {
     user_id: user.id, event: 'partner_quote_submitted',
     meta: { orderId: quoteId, clientId: client.id },
   }).then(() => {}, () => {})
+
+  // Подтверждение партнёру в кабинет: заявка получена (best-effort).
+  await pushNotification(svc, {
+    clientId: client.id, orderId: quoteId, kind: 'submitted',
+    title: `Заявка отправлена · №${quoteId}`,
+    body: 'Менеджер проверит просчёт и запустит в работу. Статус появится здесь.',
+    link: `/partner/order/${quoteId}`,
+  }).catch(() => {})
 
   // Уведомление менеджерам/владельцу в Telegram (best-effort).
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? '').replace(/\/$/, '')

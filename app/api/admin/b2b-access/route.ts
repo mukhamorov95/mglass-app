@@ -2,6 +2,8 @@ import { NextResponse } from 'next/server'
 import { createClient as createAdmin } from '@supabase/supabase-js'
 import { requireOwner } from '@/lib/apiAuth'
 import { createSetupToken } from '@/lib/setupToken'
+import { notifyPartnerAccessGranted } from '@/lib/notify'
+import { pushNotification } from '@/lib/partnerNotify'
 
 // Выдача доступа в кабинет заказчику (роль partner). Владелец:
 //  • видит список B2B-клиентов и кто из них уже привязан к учётке;
@@ -82,5 +84,14 @@ export async function POST(req: Request) {
 
   const token = await createSetupToken(userId)
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
-  return NextResponse.json({ ok: true, link: `${base}/set-password?token=${token}` })
+  const setupLink = `${base}/set-password?token=${token}`
+
+  // Приветственное уведомление в кабинет + письмо со ссылкой на пароль (best-effort).
+  await pushNotification(a, {
+    clientId, kind: 'access', title: 'Добро пожаловать в кабинет заказчика',
+    body: 'Доступ открыт. Считайте по своим ценам и отправляйте заказы в работу.', link: '/partner',
+  }).catch(() => {})
+  const emailed = await notifyPartnerAccessGranted({ to: email, clientName: client.name, setupLink }).catch(() => false)
+
+  return NextResponse.json({ ok: true, link: setupLink, emailed })
 }
