@@ -343,6 +343,16 @@ export async function POST(req: NextRequest) {
     catch (e) {
       await service.from('crm_lead_events').insert({ lead_id: leadId, kind: 'system', text: `Не отправлено в Авито: ${e instanceof Error ? e.message : e}`, author: 'AI' })
     }
+  } else {
+    // Раньше это молчаливо ничего не отправляло: ответ бота зафиксирован «БОТ:»,
+    // но в Авито не ушёл (нет user_id в payload или Авито не сконфигурирован) —
+    // клиент без ответа, никто не видит. Оставляем видимую системную пометку.
+    await service.from('crm_lead_events').insert({
+      lead_id: leadId, kind: 'system', author: 'AI',
+      text: !isAvitoConfigured()
+        ? '⚠️ Ответ не отправлен: интеграция Avito не настроена (нет ключей) — нужен человек'
+        : '⚠️ Ответ не отправлен: в вебхуке нет user_id канала — нужен человек',
+    })
   }
 
   // Закрыт на замер / горячий лид / нужен человек → Telegram
