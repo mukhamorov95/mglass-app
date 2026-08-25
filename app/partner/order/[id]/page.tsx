@@ -10,6 +10,7 @@ type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null
   paymentStatus?: 'paid' | 'awaiting' | null
+  canInvoice?: boolean
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
 
@@ -115,6 +116,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
+        {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
         <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
       </div>
     </div>

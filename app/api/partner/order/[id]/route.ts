@@ -33,7 +33,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
   const { data: client } = await svc.from('b2b_clients')
-    .select('id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account')
+    .select('id, name, full_name, inn, kpp, ogrn, legal_address, bank_account, bank_name, bik, corr_account, can_self_invoice')
     .eq('user_id', user.id).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
@@ -107,6 +107,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
     deadline,
     paymentStatus,
+    canInvoice: !!client.can_self_invoice && launched,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
     timeline,
