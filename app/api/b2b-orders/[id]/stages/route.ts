@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseNotes } from '@/lib/b2b/publicQuote'
+import { createClient as createServerClient } from '@/lib/supabase-server'
+import { consumeForOrder } from '@/lib/inventory/consumeHook'
 
 // Единственный писатель notes.stages из менеджерского контура.
 //
@@ -77,6 +79,34 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (Object.keys(patch).length > 0) {
     const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: patch })
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+
+  // A25: ручная отметка «упаковано» списывает материал со склада так же, как
+  // автосписание при закрытии упаковки в цехе — иначе заказы, упакованные мимо
+  // цеха (треть за 60 дней), давали систематический недоучёт расхода → мнимая
+  // недостача на инвентаризации. Единая точка consumeForOrder (её же зовёт цех):
+  //   • origin='plan' — списываем по резерву, не выдаём за подтверждённый факт;
+  //   • best-effort — функция не бросает, ошибка склада не роняет отметку этапа;
+  //   • идемпотентность в БД — если цех уже списал, придёт alreadyConsumed без дубля,
+  //     поэтому «кто первый» не проверяем.
+  // ТОЛЬКО на переходе packaged в дату (установка флага); снятие (null) не списывает.
+  if (typeof stages.packaged === 'string' && stages.packaged) {
+    // Атрибуция движения: реальный менеджер, отметивший упаковку. Без живого
+    // актора (сервис-ключ/крон) — честный системный ярлык, не выдуманный человек.
+    let by: { userId?: string; name?: string } = { name: 'b2b-orders (авто)' }
+    try {
+      const server = await createServerClient()
+      const { data: { user } } = await server.auth.getUser()
+      if (user?.id) {
+        const { data: prof } = await server.from('users').select('name').eq('id', user.id).maybeSingle()
+        by = { userId: user.id, name: (prof?.name as string | null) ?? user.email ?? undefined }
+      }
+    } catch { /* атрибуция не критична — списание всё равно выполняем */ }
+
+    const consume = await consumeForOrder('b2b_order', String(orderId), by, 'plan')
+    if (!consume.ok) {
+      console.error(`[stages] consume failed order=${orderId}: ${consume.error}`)
+    }
   }
 
   const { data: fresh } = await svc.from('b2b_orders').select('notes').eq('id', orderId).maybeSingle()
