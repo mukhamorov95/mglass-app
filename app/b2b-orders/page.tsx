@@ -619,6 +619,26 @@ export default function B2BOrdersPage() {
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
 
+  // А16: логистика отгрузки. Способ получения партнёр может выбрать сам в кабинете —
+  // пишем в тот же notes.delivery, чтобы запись была одна.
+  const [deliverySaving, setDeliverySaving] = useState<number | null>(null)
+  const [deliveryAddr, setDeliveryAddr] = useState<Record<number, string>>({})
+  async function saveDelivery(orderId: number, patch: { method?: 'pickup' | 'delivery'; status?: string; address?: string; date?: string }) {
+    setDeliverySaving(orderId)
+    try {
+      const r = await fetch(`/api/b2b-orders/${orderId}/delivery`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setToastError(true); setToastMsg(j.error || 'Не удалось сохранить'); return }
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, parsedNotes: { ...o.parsedNotes, delivery: j.delivery } as typeof o.parsedNotes }
+        : o))
+      setToastError(false); setToastMsg('Логистика обновлена')
+    } finally { setDeliverySaving(null) }
+  }
+
   // А3: повтор заказа — новый просчёт с теми же позициями и ценами, которые клиент
   // уже согласовал. Номера, оплаты и следы запуска не тащим: это новый черновик.
   const [repeating, setRepeating] = useState<number | null>(null)
@@ -1532,6 +1552,9 @@ export default function B2BOrdersPage() {
           {/* А7: УПД — тот же документ, что в кабинете партнёра */}
           <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
+          {/* А16: упаковочный лист на отгрузку */}
+          <Link href={`/b2b-orders/${order.id}/packing`} target="_blank"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📦 Упаковочный лист</Link>
           {/* А3: повторить заказ — те же позиции новым просчётом */}
           <button onClick={() => repeatOrder(order)} disabled={repeating === order.id}
             title="Создать новый просчёт с этими же позициями"
@@ -1557,6 +1580,40 @@ export default function B2BOrdersPage() {
               className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
           ))}
         </div>
+
+        {/* А16: способ получения и статус отгрузки */}
+        {(() => {
+          const d = (order.parsedNotes as unknown as { delivery?: { method?: string; address?: string | null; comment?: string | null; status?: string; date?: string; by?: string } }).delivery
+          const busy = deliverySaving === order.id
+          const STATUS_LABEL: Record<string, string> = { packed: 'Собрана', in_transit: 'В пути', delivered: 'Вручена' }
+          return (
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Отгрузка</span>
+              <button onClick={() => saveDelivery(order.id, { method: 'pickup' })} disabled={busy}
+                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'pickup' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                Самовывоз
+              </button>
+              <input
+                value={deliveryAddr[order.id] ?? d?.address ?? ''}
+                onChange={e => setDeliveryAddr(p => ({ ...p, [order.id]: e.target.value }))}
+                placeholder="адрес доставки"
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] w-56" />
+              <button onClick={() => saveDelivery(order.id, { method: 'delivery', address: deliveryAddr[order.id] ?? d?.address ?? '' })} disabled={busy}
+                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'delivery' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                Доставка
+              </button>
+              <span className="text-[#c4c4be]">·</span>
+              {(['packed', 'in_transit', 'delivered'] as const).map(st => (
+                <button key={st} onClick={() => saveDelivery(order.id, { status: st })} disabled={busy}
+                  title={st === 'delivered' ? 'Проставит дату отгрузки заказа' : undefined}
+                  className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.status === st ? 'bg-emerald-600 text-white border-emerald-600' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                  {STATUS_LABEL[st]}
+                </button>
+              ))}
+              {d?.by && <span className="text-[10px] text-[#9a9a95]">указал: {d.by}</span>}
+            </div>
+          )
+        })()}
 
         {/* Номера заказа */}
         {editNumId === order.id ? (
