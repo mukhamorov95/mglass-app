@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createServiceClient } from '@/lib/supabase-service'
 import { collectAudit } from '@/lib/accounting/collectAudit'
 
 // Б14: сводка расхождений в кабинете. Дата приходит от клиента (у бухгалтера
 // свой часовой пояс), но проверяется — иначе кривой параметр даст кривой аудит.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole([...FIN_ROLES])

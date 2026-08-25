@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 
@@ -9,7 +10,6 @@ import { createServiceClient } from '@/lib/supabase-service'
 // Договоры читаем service-role: их RLS заточена под менеджеров, а бухгалтеру
 // нужен только заголовок документа — без спецификации и себестоимости.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 type Customer = { name?: string; full_name?: string; fio?: string; company?: string }
 

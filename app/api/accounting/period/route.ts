@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES, UNLOCK_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 
@@ -8,8 +9,6 @@ import { createServiceClient } from '@/lib/supabase-service'
 // Сам запрет живёт в триггере БД (см. миграцию), здесь только управление замком
 // и чтение журнала правок.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
-const UNLOCK_ROLES = ['cfo', 'admin', 'ceo']
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole([...FIN_ROLES])
@@ -60,7 +59,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient()
 
   if (!lock) {
-    if (!UNLOCK_ROLES.includes(role)) {
+    if (!(UNLOCK_ROLES as readonly string[]).includes(role)) {
       return NextResponse.json({ error: 'Открыть закрытый месяц может только финансовый директор или владелец' }, { status: 403 })
     }
     const { error } = await svc.from('cashflow_period_locks').delete().eq('unit', unit).eq('month', month)

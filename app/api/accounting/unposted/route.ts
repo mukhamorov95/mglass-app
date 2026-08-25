@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 
@@ -9,7 +10,6 @@ import { createServiceClient } from '@/lib/supabase-service'
 // себестоимость. Проведение рождает cashflow_entries со ссылкой payment_id;
 // уникальный индекс не даст провести один платёж дважды.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 type Doc = { kind: 'b2b' | 'b2c' | 'sale'; number: string | null; client: string | null }
 
