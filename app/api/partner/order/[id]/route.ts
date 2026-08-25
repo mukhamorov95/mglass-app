@@ -87,6 +87,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const drawingApproval = da && (da.status === 'approved' || da.status === 'rework')
     ? { status: da.status as 'approved' | 'rework', comment: da.comment ?? null, at: da.at ?? null }
     : null
+  const dl = pn.delivery as { method?: string; address?: string | null; comment?: string | null; status?: string | null } | undefined
+  const delivery = dl && (dl.method === 'pickup' || dl.method === 'delivery')
+    ? { method: dl.method as 'pickup' | 'delivery', address: dl.address ?? null, comment: dl.comment ?? null, status: dl.status ?? null }
+    : null
 
   // Статус оплаты для партнёра: paid — оплачен (payment_status или этап invoice_paid);
   // awaiting — заказ в работе/отгружен, но оплата ещё не отмечена; null — просчёт.
@@ -117,6 +121,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     timeline,
     drawingUrl,
     drawingApproval,
+    delivery,
     recalcNote: history.length > 0 ? ((pn.status_comment as string) || null) : null,
   })
 }

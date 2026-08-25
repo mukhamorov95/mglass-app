@@ -12,6 +12,7 @@ type Order = {
   paymentStatus?: 'paid' | 'awaiting' | null
   canInvoice?: boolean
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
+  delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
 
@@ -28,6 +29,11 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
   const [reworkOpen, setReworkOpen] = useState(false)
   const [reworkText, setReworkText] = useState('')
   const [deciding, setDeciding] = useState(false)
+  const [delivOpen, setDelivOpen] = useState(false)
+  const [dMethod, setDMethod] = useState<'pickup' | 'delivery'>('delivery')
+  const [dAddr, setDAddr] = useState('')
+  const [dComment, setDComment] = useState('')
+  const [dSaving, setDSaving] = useState(false)
 
   useEffect(() => {
     fetch(`/api/partner/order/${id}`).then(r => r.ok ? r.json() : Promise.reject())
@@ -47,6 +53,27 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         setReworkOpen(false); setReworkText('')
       }
     } finally { setDeciding(false) }
+  }
+
+  function openDelivery() {
+    setDMethod(o?.delivery?.method ?? 'delivery')
+    setDAddr(o?.delivery?.address ?? '')
+    setDComment(o?.delivery?.comment ?? '')
+    setDelivOpen(true)
+  }
+  async function saveDelivery() {
+    setDSaving(true)
+    try {
+      const r = await fetch(`/api/partner/order/${id}/delivery`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ method: dMethod, address: dAddr, comment: dComment }),
+      })
+      const d = await r.json()
+      if (r.ok && d.delivery) {
+        setO(prev => prev ? { ...prev, delivery: { method: d.delivery.method, address: d.delivery.address ?? null, comment: d.delivery.comment ?? null, status: d.delivery.status ?? null } } : prev)
+        setDelivOpen(false)
+      }
+    } finally { setDSaving(false) }
   }
 
   if (loading) return <div className="wrap"><div className="note"><div className="s">Загрузка…</div></div></div>
@@ -155,6 +182,50 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
                 <div><div className="ln">{t.label}</div><div className="dt">{t.state === 'now' ? 'сейчас' : t.date ? fmtDate(t.date) : 'ожидается'}</div></div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {o.lane !== 'quote' && (
+        <div className="card" style={{ marginTop: 14 }}>
+          <div className="card-h"><h3>Получение</h3>
+            {o.delivery?.status && <span className="pill p-work" style={{ fontSize: 11 }}>{o.delivery.status}</span>}
+          </div>
+          <div style={{ padding: 14 }}>
+            {!delivOpen && o.delivery && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontWeight: 600 }}>{o.delivery.method === 'delivery' ? '🚚 Доставка' : '📦 Самовывоз'}</div>
+                  {o.delivery.method === 'delivery' && o.delivery.address && <div className="cap" style={{ marginTop: 2 }}>{o.delivery.address}</div>}
+                  {o.delivery.comment && <div className="cap" style={{ marginTop: 2 }}>{o.delivery.comment}</div>}
+                </div>
+                <button className="ghost" onClick={openDelivery}>Изменить</button>
+              </div>
+            )}
+            {!delivOpen && !o.delivery && (
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div className="cap">Как удобнее получить заказ — доставка или самовывоз?</div>
+                <button className="primary" onClick={openDelivery}>Указать</button>
+              </div>
+            )}
+            {delivOpen && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <div className="seg">
+                  <button className={dMethod === 'delivery' ? 'on' : ''} onClick={() => setDMethod('delivery')}>🚚 Доставка</button>
+                  <button className={dMethod === 'pickup' ? 'on' : ''} onClick={() => setDMethod('pickup')}>📦 Самовывоз</button>
+                </div>
+                {dMethod === 'delivery' && (
+                  <input value={dAddr} onChange={e => setDAddr(e.target.value)} placeholder="Адрес доставки"
+                    style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 10, fontSize: 13, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none' }} />
+                )}
+                <input value={dComment} onChange={e => setDComment(e.target.value)} placeholder="Комментарий (необязательно)"
+                  style={{ background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 10, padding: 10, fontSize: 13, color: 'var(--ink)', fontFamily: 'inherit', outline: 'none' }} />
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button className="primary" style={{ flex: 1 }} disabled={dSaving || (dMethod === 'delivery' && !dAddr.trim())} onClick={saveDelivery}>{dSaving ? 'Сохраняю…' : 'Сохранить'}</button>
+                  <button className="ghost" onClick={() => setDelivOpen(false)}>Отмена</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
