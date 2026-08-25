@@ -46,10 +46,16 @@ export function buildStartPatch(
   via:   StartVia,
 ): Record<string, unknown> {
   return {
-    status:      'in_progress',
-    started_at:  task.started_at ?? now,
-    assigned_to: task.assigned_to ?? actor.id,
-    started_via: via,
+    status:          'in_progress',
+    started_at:      task.started_at ?? now,
+    started_by:      actor.id,
+    started_by_name: actor.name,
+    started_via:     via,
+    // assigned_to трогает ТОЛЬКО явное «Взял». Автостарт по раскрытию карточки
+    // не должен уводить работу из общего пула станции: assigned_to питает фильтр
+    // очереди (`assigned_to = я ИЛИ assigned_to пуст И станция моя`), и стоило бы
+    // его проставить — второй рабочий этой задачи уже не увидел бы.
+    ...(via === 'button' ? { assigned_to: task.assigned_to ?? actor.id } : {}),
   }
 }
 
@@ -68,7 +74,11 @@ export function pickAutoRelease(
 // Возврат в очередь: снимаем и время начала, иначе брошенная задача принесёт
 // в статистику часы, которых не было.
 export const RELEASE_TASK_PATCH: Record<string, unknown> = Object.freeze({
-  status:      'queued',
-  started_at:  null,
-  started_via: null,
+  status:          'queued',
+  started_at:      null,
+  started_by:      null,
+  started_by_name: null,
+  started_via:     null,
+  // assigned_to НЕ снимаем: если задача была за человеком по явному «Взял»,
+  // снятие автостарта не отменяет его решения.
 })

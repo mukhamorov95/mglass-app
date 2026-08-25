@@ -42,7 +42,7 @@ export async function PATCH(
   // лишний последовательный round-trip тут стоит дороже, чем выглядит.
   const [{ data: task, error: tErr }, { data: prof }] = await Promise.all([
     svc.from('production_tasks')
-      .select('id, order_id, item_index, stage_key, status, started_at, sequence_order, assigned_to')
+      .select('id, order_id, item_index, stage_key, status, started_at, sequence_order, assigned_to, started_by')
       .eq('id', taskId)
       .single(),
     supabase.from('users').select('name').eq('id', user.id).maybeSingle(),

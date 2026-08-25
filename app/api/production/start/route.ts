@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireRole } from '@/lib/apiAuth'
+import { actorName } from '@/lib/production/executor'
 import {
   buildStartPatch, pickAutoRelease, pickStartable,
   RELEASE_TASK_PATCH, type StartCandidate, type StartVia,
@@ -33,7 +34,8 @@ export async function POST(req: NextRequest) {
 
   const svc = createServiceClient()
   const now = new Date().toISOString()
-  const actor = { id: user.id, name: null }
+  const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle()
+  const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
 
   let started = 0
   if (ids.length > 0) {
@@ -72,12 +74,14 @@ export async function POST(req: NextRequest) {
   }
 
   // Рабочий делает один заказ за раз: раскрыл другой — прежний автостарт снимаем.
+  // Ищем по started_by, а не по assigned_to: автостарт assigned_to не трогает,
+  // чтобы просмотр заказа не уводил работу из общего пула станции.
   // Явный «Взял» не трогаем никогда, это его осознанное решение.
   let released = 0
   if (via === 'open') {
     const { data: mine } = await svc.from('production_tasks')
       .select('id, order_id, status, blocked_by_task_id, started_at, assigned_to, started_via')
-      .eq('assigned_to', user.id).eq('status', 'in_progress').eq('started_via', 'open')
+      .eq('started_by', user.id).eq('status', 'in_progress').eq('started_via', 'open')
     const releaseIds = pickAutoRelease((mine ?? []) as StartCandidate[], keepOrderId)
     if (releaseIds.length) {
       const { error } = await svc.from('production_tasks').update({ ...RELEASE_TASK_PATCH }).in('id', releaseIds)

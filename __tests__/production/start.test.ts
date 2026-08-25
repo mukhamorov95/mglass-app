@@ -37,15 +37,22 @@ describe('buildStartPatch', () => {
     expect(p.status).toBe('in_progress')
     expect(p.started_via).toBe('open')
     expect(p.started_at).toBe(NOW)
+    expect(p.started_by).toBe('u-1')
+    expect(p.started_by_name).toBe('Никита')
+  })
+
+  it('АВТОСТАРТ НЕ ТРОГАЕТ assigned_to: просмотр заказа не уводит работу из пула станции', () => {
+    expect(buildStartPatch(actor, task(), NOW, 'open').assigned_to).toBeUndefined()
+  })
+
+  it('явное «Взял» — сильный сигнал и настоящая заявка на задачу', () => {
+    const p = buildStartPatch(actor, task(), NOW, 'button')
+    expect(p.started_via).toBe('button')
     expect(p.assigned_to).toBe('u-1')
   })
 
-  it('явное «Взял» помечено как сильный сигнал', () => {
-    expect(buildStartPatch(actor, task(), NOW, 'button').started_via).toBe('button')
-  })
-
-  it('не перетирает чужое назначение и уже начатое время', () => {
-    const p = buildStartPatch(actor, task({ assigned_to: 'u-2', started_at: '2026-08-26T07:00:00.000Z' }), NOW, 'open')
+  it('«Взял» не перетирает чужое назначение и уже начатое время', () => {
+    const p = buildStartPatch(actor, task({ assigned_to: 'u-2', started_at: '2026-08-26T07:00:00.000Z' }), NOW, 'button')
     expect(p.assigned_to).toBe('u-2')
     expect(p.started_at).toBe('2026-08-26T07:00:00.000Z')
   })
@@ -75,7 +82,13 @@ describe('pickAutoRelease — рабочий делает один заказ з
 
   it('возврат в очередь стирает время начала — брошенная задача не принесёт часов, которых не было', () => {
     expect(RELEASE_TASK_PATCH.started_at).toBeNull()
+    expect(RELEASE_TASK_PATCH.started_by).toBeNull()
+    expect(RELEASE_TASK_PATCH.started_by_name).toBeNull()
     expect(RELEASE_TASK_PATCH.started_via).toBeNull()
     expect(RELEASE_TASK_PATCH.status).toBe('queued')
+  })
+
+  it('снятие автостарта НЕ отменяет прежнее явное «Взял» — assigned_to остаётся', () => {
+    expect('assigned_to' in RELEASE_TASK_PATCH).toBe(false)
   })
 })
