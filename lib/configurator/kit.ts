@@ -200,7 +200,31 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 // Ищем набор хлыстов минимальной СТОИМОСТИ (не минимального метража — хлысты разной цены).
 export type Stock = { len: number; price: number }
 export type BarPlan = { len: number; price: number; pieces: number[]; rest: number }
-export type BarResult = { cost: number; plan: BarPlan[]; bars: Record<number, number> }
+export type BarResult = { cost: number; plan: BarPlan[]; bars: Record<number, number>; oversize: number[] }
+
+// Погонные материалы (заглушка, уплотнитель) можно набрать из нескольких хлыстов —
+// стык не виден и не мешает. Жёсткие профиль и труба стыковать нельзя: если кусок
+// длиннее любого хлыста, это ошибка комплектации, а не повод молча посчитать один.
+const SPLICEABLE: RoleId[] = ['cap', 'seal-magnet', 'seal-bottom', 'seal-hinge']
+export const canSplice = (role: RoleId) => SPLICEABLE.includes(role)
+
+// Кусок длиннее самого длинного хлыста → набираем несколькими: пока остаток не
+// перекрыт, берём самый выгодный по цене за миллиметр, последним — самый дешёвый
+// из тех, что закрывают остаток.
+function spliceCover(piece: number, stocks: Stock[], kerf: number): Stock[] {
+  const out: Stock[] = []
+  let rest = piece
+  let guard = 0
+  while (rest > 0 && guard++ < 100) {
+    const fits = stocks.filter(s => s.len >= rest)
+    const s = fits.length
+      ? fits.reduce((a, b) => (b.price < a.price ? b : a))
+      : stocks.reduce((a, b) => (b.price / b.len < a.price / a.len ? b : a))
+    out.push(s)
+    rest -= s.len - (rest > s.len ? kerf : 0)
+  }
+  return out
+}
 
 function packWith(pieces: number[], stocks: Stock[], kerf: number, pick: (need: number) => Stock | undefined): BarPlan[] | null {
   const plan: BarPlan[] = []
@@ -219,10 +243,22 @@ function packWith(pieces: number[], stocks: Stock[], kerf: number, pick: (need: 
   return plan
 }
 
-export function planBars(pieces: number[], stocks: Stock[], kerf = 0): BarResult {
-  const empty: BarResult = { cost: 0, plan: [], bars: {} }
+export function planBars(pieces: number[], stocks: Stock[], kerf = 0, splice = false): BarResult {
+  const empty: BarResult = { cost: 0, plan: [], bars: {}, oversize: [] }
   const usable = stocks.filter(s => s.len > 0 && s.price > 0).sort((a, b) => a.len - b.len)
   if (pieces.length === 0 || usable.length === 0) return empty
+
+  const longest = usable[usable.length - 1].len
+  const oversize = pieces.filter(p => p > longest)
+  if (oversize.length > 0 && splice) {
+    // Длинные куски набираем стыковкой, короткие — обычным раскроем.
+    const spliced = oversize.flatMap(p => spliceCover(p, usable, kerf))
+    const rest = planBars(pieces.filter(p => p <= longest), usable, kerf)
+    const plan = [...spliced.map(s => ({ len: s.len, price: s.price, pieces: [s.len], rest: 0 })), ...rest.plan]
+    const bars: Record<number, number> = {}
+    for (const b of plan) bars[b.len] = (bars[b.len] ?? 0) + 1
+    return { cost: cost(plan), plan, bars, oversize: [] }
+  }
 
   const candidates: BarPlan[][] = []
   // (а) только один тип хлыста — по каждому типу отдельно
@@ -246,7 +282,7 @@ export function planBars(pieces: number[], stocks: Stock[], kerf = 0): BarResult
   const best = candidates.reduce((a, b) => (cost(b) < cost(a) ? b : a))
   const bars: Record<number, number> = {}
   for (const b of best) bars[b.len] = (bars[b.len] ?? 0) + 1
-  return { cost: cost(best), plan: best, bars }
+  return { cost: cost(best), plan: best, bars, oversize }
 }
 const cost = (plan: BarPlan[]) => plan.reduce((s, b) => s + b.price, 0)
 
@@ -275,7 +311,7 @@ export type KitPriceResult = {
   total: number
   marginPct: number
   taxPct: number
-  missing: { role: RoleId; label: string; reason: 'нет позиции' | 'нет цены' }[]
+  missing: { role: RoleId; label: string; reason: 'нет позиции' | 'нет цены' | 'кусок длиннее хлыста' }[]
   complete: boolean
 }
 
@@ -351,9 +387,10 @@ export function computeKitPrice(
           .map(s => ({ len: s.len, price: s.prices?.[finishId] ?? s.prices?.chrome ?? 0 }))
           .filter(s => s.len > 0 && s.price > 0)
         if (stocks.length === 0 || pieces.length === 0) continue
-        const r = planBars(pieces, stocks, rates.kerf ?? 0)
+        const r = planBars(pieces, stocks, rates.kerf ?? 0, canSplice(slot.role))
         if (r.cost <= 0) continue
         paid = true
+        if (r.oversize.length) missing.push({ role: slot.role, label: meta.label, reason: 'кусок длиннее хлыста' })
         lines.push({
           role: slot.role, itemId: it.id, label: it.name, qty: r.plan.length, unit: 'хлыст',
           unitPrice: Math.round(r.cost / Math.max(1, r.plan.length)), total: r.cost, plan: r.plan,

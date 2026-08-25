@@ -104,9 +104,18 @@ describe('kit — раскрой хлыстов', () => {
     expect(planBars([1500, 1500], stocks, 5).plan.length).toBe(2)
   })
 
-  it('кусок длиннее любого хлыста — считаем по самому длинному, деньги не теряем', () => {
+  it('жёсткий профиль: кусок длиннее хлыста — считаем по самому длинному и помечаем негабарит', () => {
     const r = planBars([3500], stocks)
     expect(r.cost).toBe(900)
+    expect(r.oversize).toEqual([3500])
+  })
+
+  it('погонный материал стыкуется: заглушка 2000 мм из метровых хлыстов = 2 хлыста', () => {
+    const meter = [{ len: 1000, price: 158 }]
+    const r = planBars([2000], meter, 0, true)
+    expect(r.plan.length).toBe(2)
+    expect(r.cost).toBe(316)
+    expect(r.oversize).toEqual([])
   })
 
   it('нет цен или нет кусков — ноль', () => {
@@ -149,6 +158,13 @@ describe('kit — расчёт по комплекту модели', () => {
     const q = computeKitQuantities(m7(), 8, getModel('М7'))
     const p = computeKitPrice(q, LIB, kitM7(), RATES, FIN, { finishId: 'chrome' })
     expect(p.missing.some(m => m.role === 'roller')).toBe(false)
+  })
+
+  it('негабаритный кусок жёсткого профиля виден в missing, а не молча дешевеет', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    const lib: Library = { items: LIB.items.map(i => i.id === 'profile' ? { ...i, stocks: [{ len: 1200, prices: { chrome: 400 } }] } : i) }
+    const p = computeKitPrice(q, lib, kitM7(), RATES, FIN, { finishId: 'chrome' })
+    expect(p.missing.some(m => m.role === 'profile' && m.reason === 'кусок длиннее хлыста')).toBe(true)
   })
 
   it('роль модели нужна, а слота нет — попадает в missing (не уедет дешевле себестоимости)', () => {
