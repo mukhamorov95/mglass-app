@@ -1170,6 +1170,12 @@ export default function B2BQuotesPage() {
                         className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
                         {copiedId === quote.id ? '✓' : 'ТГ'}
                       </button>
+                      {/* А4: одна карточка сделки */}
+                      <Link href={`/b2b-deal/${quote.id}`}
+                        title="Карточка сделки: документы, деньги, производство, клиент"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        🗂
+                      </Link>
                       {/* А2: ссылка клиенту с согласованием */}
                       <button onClick={() => shareQuote(quote)} disabled={sharing === quote.id}
                         title="Ссылка на КП для клиента: он видит цены и может согласовать"
