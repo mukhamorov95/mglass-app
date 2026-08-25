@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
-  MeshTransmissionMaterial, MeshReflectorMaterial,
+  MeshTransmissionMaterial,
 } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
@@ -106,20 +106,10 @@ function NicheMesh({ niche }: { niche: Niche }) {
       {/* большой облицованный пол — полированный керамогранит, слабо зеркалит кабину */}
       <mesh position={[w / 2, 0, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[FW, FD]} />
-        <MeshReflectorMaterial
-          map={floorMat}
-          resolution={512}
-          mixBlur={10}
-          mixStrength={0.5}
-          blur={[400, 120]}
-          mirror={0}
-          roughness={0.85}
-          depthScale={1.1}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.3}
-          color="#f2f0ea"
-          metalness={0.04}
-        />
+        {/* Глянцевая плитка (полированный керамогранит): отражение окружения через
+            envMap — без off-screen прохода MeshReflectorMaterial, который конфликтовал
+            с MeshTransmissionMaterial стекла и давал чёрный артефакт на части GPU. */}
+        <meshStandardMaterial map={floorMat} color="#f1efe9" roughness={0.5} metalness={0.05} envMapIntensity={0.85} />
       </mesh>
       {walls.back && (
         <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
