@@ -113,7 +113,7 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                 <p className="text-[12px] text-[#9a9a95] mt-0.5">
                   {DD(r.op_date)}{r.doc_no ? ` · док. ${r.doc_no}` : ''}
                   {r.request ? ' · есть заявка' : ''}
-                  {r.invoice ? ` · счёт ${r.invoice.no}${r.invoice.payer ? `, ${r.invoice.payer}` : ''}` : ''}
+                  {r.invoice ? ` · счёт ${r.invoice.no}${r.invoice.payer ? `, ${r.invoice.payer}` : ''}${r.invoice.orders.length > 1 ? ` (заказов ${r.invoice.orders.length})` : ''}` : ''}
                   {r.suggest ? ` · фонд из: ${r.suggest.from}` : ''}
                 </p>
                 {r.purpose && <p className="text-[12px] text-[#6b6b66] mt-1 line-clamp-2">{r.purpose}</p>}

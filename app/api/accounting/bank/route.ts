@@ -193,17 +193,18 @@ export async function PATCH(req: NextRequest) {
   if (invoiceId && row.direction === 'in') {
     const { data: inv } = await svc.from('invoices').select('id,order_ids,amount').eq('id', invoiceId).maybeSingle()
     const orders = ((inv?.order_ids as number[]) ?? []).map(Number).filter(n => n > 0)
-    if (orders.length === 1) {
-      const p = await recordPayment(svc, {
-        externalKey: `bank:${row.unit}:${row.external_key}`,
-        amount: Number(row.amount), paidAt: String(row.op_date), kind: 'full',
-        source: 'bank_statement_import', method: 'Перевод',
-        b2bOrderId: orders[0], enteredByName: me.name, note: `Счёт ${invoiceId} из выписки`,
-      }).catch(() => null)
-      paymentId = p?.id ?? null
-    }
-    // Мульти-заказный счёт: ядру нужен якорь invoice_id (миграция backbone) —
-    // до неё платёж не пишем, чтобы не привязать деньги к произвольному заказу.
+    // Платёж всегда якорится на счёт (invoice_id). b2b_order_id ставим только
+    // когда счёт покрывает ровно один заказ — иначе деньги привязались бы к
+    // произвольному из нескольких. Разбивку мульти-заказного счёта по заказам
+    // считает производная backbone (сумма невойднутых платежей по счёту).
+    const p = await recordPayment(svc, {
+      externalKey: `bank:${row.unit}:${row.external_key}`,
+      amount: Number(row.amount), paidAt: String(row.op_date), kind: 'full',
+      source: 'bank_statement_import', method: 'Перевод',
+      invoiceId, b2bOrderId: orders.length === 1 ? orders[0] : null,
+      enteredByName: me.name, note: `Счёт ${invoiceId} из выписки`,
+    }).catch(() => null)
+    paymentId = p?.id ?? null
     await svc.from('invoices').update({
       status: 'paid', paid_at: String(row.op_date), updated_at: new Date().toISOString(),
     }).eq('id', invoiceId)

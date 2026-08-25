@@ -16,6 +16,7 @@ export type PaymentInput = {
   b2bOrderId?: number | null
   orderId?: string | null           // uuid розничного заказа
   crmSaleId?: number | null
+  invoiceId?: number | null         // счёт (invoices.id) — якорь для мульти-заказных счетов
   enteredBy?: string | null         // uuid users
   enteredByName?: string | null
   note?: string | null
@@ -54,8 +55,8 @@ export const gsheetPaymentKey = (orderNo: string) => `gsheet:${orderNo.trim()}`
 export function buildPaymentRow(input: PaymentInput) {
   if (!(input.amount > 0)) throw new Error(`Платёж должен быть > 0, получено: ${input.amount}`)
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.paidAt)) throw new Error(`paid_at не дата: ${input.paidAt}`)
-  if (!input.b2bOrderId && !input.orderId && !input.crmSaleId) {
-    throw new Error('Платёж без документа: нужна хотя бы одна ссылка (b2b/розница/продажа)')
+  if (!input.b2bOrderId && !input.orderId && !input.crmSaleId && !input.invoiceId) {
+    throw new Error('Платёж без документа: нужна хотя бы одна ссылка (b2b/розница/продажа/счёт)')
   }
   return {
     external_key: input.externalKey,
@@ -67,6 +68,7 @@ export function buildPaymentRow(input: PaymentInput) {
     b2b_order_id: input.b2bOrderId ?? null,
     order_id: input.orderId ?? null,
     crm_sale_id: input.crmSaleId ?? null,
+    invoice_id: input.invoiceId ?? null,
     entered_by: input.enteredBy ?? null,
     entered_by_name: input.enteredByName ?? null,
     note: input.note ?? null,
