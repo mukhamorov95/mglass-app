@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import type { B2BMaterial } from '@/lib/types'
 import { resolvePartnerClient } from '@/lib/partnerClient'
@@ -30,7 +31,10 @@ export async function GET() {
   const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
 
   // deny-by-default: наружу только безопасные поля
-  const materials = priced
+  // А12: в справочнике кабинета показываем цены этого клиента, если они заданы —
+  // иначе партнёр увидел бы одну цену в списке, а в расчёте другую.
+  const withClientPrices = applyClientPrices(priced, await loadClientPrices(svc, client.id))
+  const materials = withClientPrices
     .filter(m => (m.sale_price ?? 0) > 0)          // без цены — клиенту не показываем
     .map(m => ({ id: m.id, name: m.name, category: m.category, thickness: m.thickness, salePrice: m.sale_price }))
 

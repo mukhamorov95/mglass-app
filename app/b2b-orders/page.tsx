@@ -619,6 +619,54 @@ export default function B2BOrdersPage() {
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
 
+  // А17: рекламация по заказу — состояние заказа (notes.claim), не отдельный документ.
+  const [claimOpenId, setClaimOpenId] = useState<number | null>(null)
+  const [claimReason, setClaimReason] = useState('бой')
+  const [claimFault, setClaimFault]   = useState('unknown')
+  const [claimComment, setClaimComment] = useState('')
+  const [claimCost, setClaimCost] = useState('')
+  const [claimSaving, setClaimSaving] = useState(false)
+  async function saveClaim(orderId: number, action: 'open' | 'close') {
+    setClaimSaving(true)
+    try {
+      const r = await fetch(`/api/b2b-orders/${orderId}/claim`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action, reason: claimReason, fault: claimFault,
+          comment: claimComment.trim() || null, cost: Number(claimCost) || 0,
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setToastError(true); setToastMsg(j.error || 'Не удалось сохранить'); return }
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, parsedNotes: { ...o.parsedNotes, claim: j.claim } as typeof o.parsedNotes }
+        : o))
+      setClaimOpenId(null); setClaimComment(''); setClaimCost('')
+      setToastError(false)
+      setToastMsg(action === 'close' ? 'Рекламация закрыта' : 'Рекламация зафиксирована')
+    } finally { setClaimSaving(false) }
+  }
+
+  // А16: логистика отгрузки. Способ получения партнёр может выбрать сам в кабинете —
+  // пишем в тот же notes.delivery, чтобы запись была одна.
+  const [deliverySaving, setDeliverySaving] = useState<number | null>(null)
+  const [deliveryAddr, setDeliveryAddr] = useState<Record<number, string>>({})
+  async function saveDelivery(orderId: number, patch: { method?: 'pickup' | 'delivery'; status?: string; address?: string; date?: string }) {
+    setDeliverySaving(orderId)
+    try {
+      const r = await fetch(`/api/b2b-orders/${orderId}/delivery`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patch),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setToastError(true); setToastMsg(j.error || 'Не удалось сохранить'); return }
+      setOrders(prev => prev.map(o => o.id === orderId
+        ? { ...o, parsedNotes: { ...o.parsedNotes, delivery: j.delivery } as typeof o.parsedNotes }
+        : o))
+      setToastError(false); setToastMsg('Логистика обновлена')
+    } finally { setDeliverySaving(null) }
+  }
+
   // А3: повтор заказа — новый просчёт с теми же позициями и ценами, которые клиент
   // уже согласовал. Номера, оплаты и следы запуска не тащим: это новый черновик.
   const [repeating, setRepeating] = useState<number | null>(null)
@@ -1532,6 +1580,9 @@ export default function B2BOrdersPage() {
           {/* А7: УПД — тот же документ, что в кабинете партнёра */}
           <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
+          {/* А16: упаковочный лист на отгрузку */}
+          <Link href={`/b2b-orders/${order.id}/packing`} target="_blank"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📦 Упаковочный лист</Link>
           {/* А3: повторить заказ — те же позиции новым просчётом */}
           <button onClick={() => repeatOrder(order)} disabled={repeating === order.id}
             title="Создать новый просчёт с этими же позициями"
@@ -1557,6 +1608,91 @@ export default function B2BOrdersPage() {
               className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
           ))}
         </div>
+
+        {/* А17: рекламация */}
+        {(() => {
+          const claim = (order.parsedNotes as unknown as { claim?: { status?: string; reason?: string; comment?: string | null; cost?: number; fault?: string; opened_by?: string | null } }).claim
+          const open = claimOpenId === order.id
+          const FAULT: Record<string, string> = { production: 'производство', manager: 'менеджер', supplier: 'поставщик', client: 'клиент', unknown: 'не определена' }
+          return (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Рекламация</span>
+                {claim ? (
+                  <span className={`px-2 py-0.5 rounded-full font-semibold ${claim.status === 'open' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-700'}`}>
+                    {claim.status === 'open' ? 'открыта' : 'закрыта'} · {claim.reason}
+                    {(claim.cost ?? 0) > 0 && ` · переделка ${Number(claim.cost).toLocaleString('ru-RU')} ₽`}
+                    {claim.fault && claim.fault !== 'unknown' && ` · вина: ${FAULT[claim.fault]}`}
+                  </span>
+                ) : (
+                  <span className="text-[#9a9a95]">нет</span>
+                )}
+                <button onClick={() => { setClaimOpenId(open ? null : order.id); setClaimReason(claim?.reason ?? 'бой'); setClaimFault(claim?.fault ?? 'unknown'); setClaimComment(claim?.comment ?? ''); setClaimCost(String(claim?.cost ?? '')) }}
+                  className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">
+                  {claim ? 'Изменить' : '+ Зафиксировать'}
+                </button>
+              </div>
+              {open && (
+                <div className="flex items-end gap-2 flex-wrap bg-white border border-[#e4e4e0] rounded-xl px-3 py-2">
+                  <select value={claimReason} onChange={e => setClaimReason(e.target.value)}
+                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
+                    {['бой', 'размер', 'обработка', 'закалка', 'комплектность', 'сроки', 'другое'].map(r => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <select value={claimFault} onChange={e => setClaimFault(e.target.value)}
+                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110]">
+                    <option value="unknown">вина не определена</option>
+                    <option value="production">производство</option>
+                    <option value="manager">менеджер</option>
+                    <option value="supplier">поставщик</option>
+                    <option value="client">клиент</option>
+                  </select>
+                  <input value={claimComment} onChange={e => setClaimComment(e.target.value)} placeholder="что случилось"
+                    className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] flex-1 min-w-[180px]" />
+                  <input value={claimCost} onChange={e => setClaimCost(e.target.value)} placeholder="переделка, ₽" inputMode="numeric"
+                    className="w-28 border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] font-mono text-right bg-white outline-none focus:border-[#111110]" />
+                  <button onClick={() => saveClaim(order.id, 'open')} disabled={claimSaving}
+                    className="text-[11px] font-semibold px-3 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">Сохранить</button>
+                  <button onClick={() => saveClaim(order.id, 'close')} disabled={claimSaving}
+                    className="text-[11px] font-medium px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">Закрыть</button>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        {/* А16: способ получения и статус отгрузки */}
+        {(() => {
+          const d = (order.parsedNotes as unknown as { delivery?: { method?: string; address?: string | null; comment?: string | null; status?: string; date?: string; by?: string } }).delivery
+          const busy = deliverySaving === order.id
+          const STATUS_LABEL: Record<string, string> = { packed: 'Собрана', in_transit: 'В пути', delivered: 'Вручена' }
+          return (
+            <div className="flex items-center gap-2 flex-wrap text-[11px]">
+              <span className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Отгрузка</span>
+              <button onClick={() => saveDelivery(order.id, { method: 'pickup' })} disabled={busy}
+                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'pickup' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                Самовывоз
+              </button>
+              <input
+                value={deliveryAddr[order.id] ?? d?.address ?? ''}
+                onChange={e => setDeliveryAddr(p => ({ ...p, [order.id]: e.target.value }))}
+                placeholder="адрес доставки"
+                className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[11px] bg-white outline-none focus:border-[#111110] w-56" />
+              <button onClick={() => saveDelivery(order.id, { method: 'delivery', address: deliveryAddr[order.id] ?? d?.address ?? '' })} disabled={busy}
+                className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.method === 'delivery' ? 'bg-[#111110] text-white border-[#111110]' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                Доставка
+              </button>
+              <span className="text-[#c4c4be]">·</span>
+              {(['packed', 'in_transit', 'delivered'] as const).map(st => (
+                <button key={st} onClick={() => saveDelivery(order.id, { status: st })} disabled={busy}
+                  title={st === 'delivered' ? 'Проставит дату отгрузки заказа' : undefined}
+                  className={`px-2.5 py-1 rounded-lg border transition-colors ${d?.status === st ? 'bg-emerald-600 text-white border-emerald-600' : 'border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110]'}`}>
+                  {STATUS_LABEL[st]}
+                </button>
+              ))}
+              {d?.by && <span className="text-[10px] text-[#9a9a95]">указал: {d.by}</span>}
+            </div>
+          )
+        })()}
 
         {/* Номера заказа */}
         {editNumId === order.id ? (
