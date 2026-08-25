@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
-  MeshTransmissionMaterial,
+  MeshTransmissionMaterial, MeshReflectorMaterial,
 } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
@@ -91,10 +91,23 @@ function NicheMesh({ niche }: { niche: Niche }) {
 
   return (
     <group>
-      {/* большой облицованный пол — кабина стоит в углу санузла */}
+      {/* большой облицованный пол — полированный керамогранит, слабо зеркалит кабину */}
       <mesh position={[w / 2, 0, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[FW, FD]} />
-        {tile(floorMat)}
+        <MeshReflectorMaterial
+          map={floorMat}
+          resolution={512}
+          mixBlur={10}
+          mixStrength={0.5}
+          blur={[400, 120]}
+          mirror={0}
+          roughness={0.85}
+          depthScale={1.1}
+          minDepthThreshold={0.4}
+          maxDepthThreshold={1.3}
+          color="#f2f0ea"
+          metalness={0.04}
+        />
       </mesh>
       {walls.back && (
         <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
@@ -175,6 +188,9 @@ function Studio() {
       {/* контровой сзади — блики на кромках хрома и стекла */}
       <Lightformer form="rect" intensity={2.4} position={[0, 3, -5]} scale={[7, 4, 1]} color="#ffffff" />
       <Lightformer form="ring" intensity={1.4} position={[3, 2, 4]} scale={2.2} color="#ffffff" />
+      {/* вертикальные софт-боксы — вытянутые «студийные» блики-полосы на хроме и стекле */}
+      <Lightformer form="rect" intensity={2.2} position={[-2.2, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.35, 5, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={2.0} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.3, 5, 1]} color="#f4f8ff" />
     </Environment>
   )
 }
@@ -209,7 +225,7 @@ export default function Partition3D(
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
         camera={{ position: [cx - camDist * 0.58, ty + h * 0.26, cz - camDist * 1.05], fov: 33 }}
-        gl={{ antialias: true, preserveDrawingBuffer: true }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.06 }}
         onCreated={onCanvasCreated}
       >
         <Suspense fallback={null}>
