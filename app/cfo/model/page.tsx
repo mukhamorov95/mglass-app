@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation'
 import { createServiceClient } from '@/lib/supabase-service'
 import ModelClient from './ModelClient'
 import { isDebtRow, type IncomeLine, type FixedLine } from '@/lib/cfo/factModel'
+import { collectSourceDiagnostics, factForUnit, type SourceDiag } from '@/lib/cfo/sourceDiagnostics'
 
 // Источник правды — «Точка безубыточности» (finplan_models): юниты 'mglass' и
 // 'production'. Каждая строка: { unit, data: { incomes[], fixed[], funds } }.
@@ -63,34 +64,26 @@ export default async function CfoModelPage() {
 
   const hasData = incomes.length > 0
 
-  // Реальный факт с начала месяца.
-  // Производство (B2B стекло) работает по 100% предоплате: запущенный заказ
-  // (launched_at) = оплачен = реальный оборот. Берём запущенные за месяц.
-  // Розница (M-Glass) в базе пока не собирается надёжно (crm_sales мусорный) —
-  // помечаем captured=false.
+  // Реальный факт с начала месяца — через диагностику источников.
+  // Факт показываем ТОЛЬКО из доверенного источника (verdict='trust'); иначе
+  // «данных нет» (без молчаливого нуля). Производство = запущенные заказы B2B
+  // (100% предоплата → запуск = оплата). Розница пока без доверенного источника.
   const now = new Date()
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const daysElapsed = now.getDate()
   const monthLabel = now.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
 
-  let productionActual = 0
+  let diagnostics: SourceDiag[] = []
   try {
-    const { data: launched } = await supabase
-      .from('b2b_orders')
-      .select('total_after_discount, total_sale_inc_vat')
-      .gte('launched_at', monthStart)
-      .not('launched_at', 'is', null)
-      .is('archived_at', null)
-    for (const o of (launched ?? [])) {
-      productionActual += (o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
-    }
+    diagnostics = await collectSourceDiagnostics(supabase, monthStart)
   } catch {
-    // b2b_orders может быть недоступна — оставим 0
+    // источники могут быть недоступны — экран покажет пустую диагностику
   }
 
-  const factByUnit: Record<string, { revenue: number; captured: boolean }> = {
-    'Производство': { revenue: Math.round(productionActual), captured: true },
-    'M-Glass': { revenue: 0, captured: false },
+  const factByUnit: Record<string, { revenue: number; captured: boolean }> = {}
+  for (const u of UNITS) {
+    const f = factForUnit(diagnostics, u.label)
+    factByUnit[u.label] = { revenue: f.revenue ?? 0, captured: f.captured }
   }
 
   return (
@@ -99,6 +92,7 @@ export default async function CfoModelPage() {
       fixed={fixed}
       fundsRubByUnit={fundsRubByUnit}
       factByUnit={factByUnit}
+      diagnostics={diagnostics}
       daysElapsed={daysElapsed}
       monthLabel={monthLabel}
       hasData={hasData}
