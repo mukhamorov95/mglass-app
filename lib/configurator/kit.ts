@@ -51,6 +51,48 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
 }
 export const isRole = (v: string): v is RoleId => (ROLES as readonly string[]).includes(v)
 
+// Крупные блоки комплекта: владелец мыслит «труба», «крепление трубы», «уплотнители»,
+// а роль — это уже подгруппа внутри блока (крепление к стене / к стеклу / угловое).
+export const ROLE_GROUPS: { id: string; title: string; roles: RoleId[] }[] = [
+  { id: 'glass-hw', title: 'Петли и ручки', roles: ['hinge', 'handle', 'handle-slide', 'roller'] },
+  { id: 'tube', title: 'Труба / штанга', roles: ['tube', 'tube-diag45', 'tube-stabilizer'] },
+  { id: 'mounts', title: 'Крепление трубы', roles: ['mount-wall', 'mount-glass', 'mount-corner', 'mount-diag45', 'mount-stabilizer', 'connector'] },
+  { id: 'profile', title: 'Профиль', roles: ['profile', 'profile-wall', 'profile-floor', 'profile-top', 'profile-vertical'] },
+  { id: 'caps', title: 'Заглушки', roles: ['cap', 'cap-end'] },
+  { id: 'seals', title: 'Уплотнители', roles: ['seal-magnet', 'seal-hinge', 'seal-bottom'] },
+]
+// П-профиль у нас один и тот же на все стороны — по стене, по полу, по верху.
+// Поэтому по умолчанию в комплекте ОДИН слот «Профиль», и все куски сторон уходят
+// в общий раскрой (из одного хлыста кроятся и стойка, и низ). Развести стороны по
+// разным артикулам можно — достаточно завести отдельный слот стороны.
+export const PROFILE_SIDES: RoleId[] = ['profile-wall', 'profile-floor', 'profile-top', 'profile-vertical']
+
+// Куски для bar-роли: общий «Профиль» собирает стороны, у которых нет своего слота.
+export function piecesForRole(q: KitQuantities, kit: ModelKit, role: RoleId): number[] {
+  const own = q.barPieces[role] ?? []
+  if (role !== 'profile') return own
+  const sides = PROFILE_SIDES.filter(r => !kit.slots.some(sl => sl.role === r))
+  return [...own, ...sides.flatMap(r => q.barPieces[r] ?? [])]
+}
+
+export const groupOfRole = (role: RoleId) => ROLE_GROUPS.find(g => g.roles.includes(role)) ?? ROLE_GROUPS[0]
+
+// Форма для 3D по роли — чтобы у крепления не подставлялась петля просто потому,
+// что название не разобралось.
+const ROLE_SHAPE: Partial<Record<RoleId, string>> = {
+  hinge: 'hinge-glass', handle: 'handle-bar', 'handle-slide': 'handle-inset', roller: 'roller',
+  'mount-wall': 'mount-wall', 'mount-glass': 'mount-glass', 'mount-corner': 'mount-corner',
+  'mount-diag45': 'mount-corner', 'mount-stabilizer': 'mount-wall', connector: 'connector',
+  cap: 'cap', 'cap-end': 'cap',
+}
+export const autoShapeForRole = (name: string, role: RoleId): string => {
+  const byName = inferShape(name)
+  // inferShape по умолчанию отдаёт петлю — для не-петлевой роли это враньё, берём роль.
+  const fallback = ROLE_SHAPE[role]
+  if (byName === 'hinge-glass' && fallback && role !== 'hinge') return fallback
+  return byName
+}
+
 // Точка установки из геометрии → роль. Геометрия называет фурнитуру артикулами,
 // прайс мыслит ролями; эта таблица — единственный переводчик между контурами.
 const PLACEMENT_ROLE: Record<string, RoleId> = {
@@ -377,7 +419,7 @@ export function computeKitPrice(
 
   for (const slot of kit.slots) {
     const meta = ROLE_META[slot.role]
-    const need = q.roleQty[slot.role] ?? 0
+    const need = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
     const entries = slot.entries.filter(e => byId.has(e.itemId))
     // Слот не нужен этой модели (геометрия не даёт количества) — молча пропускаем.
     if (need <= 0 && !slot.entries.some(e => e.qty.mode === 'fixed')) continue
@@ -394,7 +436,7 @@ export function computeKitPrice(
       const qty = resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
-        const pieces = q.barPieces[slot.role] ?? []
+        const pieces = piecesForRole(q, kit, slot.role)
         const stocks: Stock[] = (it.stocks ?? [])
           .map(s => ({ len: s.len, price: s.prices?.[finishId] ?? s.prices?.chrome ?? 0 }))
           .filter(s => s.len > 0 && s.price > 0)
@@ -423,9 +465,11 @@ export function computeKitPrice(
 
   // Роль нужна модели, а слота под неё в комплекте вообще нет — это дыра, а не «удалил намеренно»:
   // молчать нельзя, иначе изделие уедет клиенту дешевле себестоимости.
+  const hasCommonProfile = kit.slots.some(s => s.role === 'profile')
   for (const role of ROLES) {
     if ((q.roleQty[role] ?? 0) <= 0) continue
     if (kit.slots.some(s => s.role === role)) continue
+    if (hasCommonProfile && PROFILE_SIDES.includes(role)) continue   // сторона идёт общим профилем
     missing.push({ role, label: ROLE_META[role].label, reason: 'нет позиции' })
   }
 
@@ -447,7 +491,7 @@ export function computeKitPrice(
 }
 
 // ── Что показать клиенту как ВЫБОР (без себестоимости) ────────────
-export const inferShapeOf = (it: LibraryItem) => it.shape || inferShape(it.name)
+export const inferShapeOf = (it: LibraryItem) => it.shape || autoShapeForRole(it.name, it.role)
 
 export type KitChoiceOption = { itemId: string; name: string; shape: string; primary: boolean }
 export type KitChoices = {
@@ -497,8 +541,9 @@ export function requiredRoles(model: MModel): RoleId[] {
 // Комплект по умолчанию: слот на каждую требуемую роль, внутри — позиции библиотеки
 // с этой ролью (первая ★). Роль без позиций даёт пустой слот — владелец увидит дыру.
 export function defaultKitFor(model: MModel, lib: Library): ModelKit {
+  const roles = requiredRoles(model).map(r => (PROFILE_SIDES.includes(r) ? 'profile' : r))
   return {
-    slots: requiredRoles(model).map(role => ({
+    slots: [...new Set(roles)].map(role => ({
       role,
       select: 'one' as const,
       entries: lib.items.filter(i => i.role === role).map((i, idx) => ({
