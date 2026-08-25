@@ -206,6 +206,7 @@ const CEO_SYSTEM: NavItem[] = [
   { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
   { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
+  { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
 ]
 
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
@@ -267,6 +268,7 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
   { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
+  { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
