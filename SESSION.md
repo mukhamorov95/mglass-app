@@ -7,12 +7,14 @@
 - Движок прайса по моделям → lib/configurator/kit.ts (роли, комплект, правила количества, раскрой хлыстов), 20 тестов
 - Хранилище → supabase/migrations/20260825_configurator_model_kits.sql (ПРИМЕНЕНА) + lib/configurator/kitStore.ts
 - API комплектов → app/api/admin/configurator-kits/route.ts (GET/PUT, гейт admin/ceo/buyer)
-- Черри-пик 12e3725 от 3D-сессии — линт в моих файлах зелёный (0 ошибок, 366/366 тестов)
+- Черри-пик 12e3725 от 3D-сессии — линт зелёный (0 ошибок, 366/366 тестов)
+- Админка комплекта модели → app/admin/visualizer-pricing/KitPricingClient.tsx + CatalogPicker.tsx
+  (старый VisualizerPricingClient удалён, page.tsx читает getKitStore)
 
 ## Следующий шаг
-Перестроить app/admin/visualizer-pricing/VisualizerPricingClient.tsx: слева модели → справа КОМПЛЕКТ
-выбранной модели (слоты ролей, ★ по умолчанию, порядок, удаление роли, добавление своей, правило количества).
-Заодно убрать eslint-disable set-state-in-effect (перенести сброс страницы/синх скидки в обработчики).
+Клиентская часть: /api/configurator/options отдаёт варианты и количества по ролям для модели (без себестоимости),
+/api/configurator/quote принимает choice+qtyChoice. Формат согласован с 3D-сессией до правок ConfiguratorClient.
+Затем — перевод уплотнителей и заглушки из штук в погонные хлысты.
 
 ## Контекст
 Два уровня: библиотека позиций на тариф (цена вбивается ОДИН раз) + комплект модели (ссылки на позиции).
