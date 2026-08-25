@@ -5,7 +5,8 @@ import type {
 import { sheetArea, INCOMING } from './units'
 import { normalizeUnit } from './match'
 import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type BomLike } from './plan'
-import type { InventoryActor } from './auth'
+// Для записи движения нужна только атрибуция «кто инициировал» — не вся роль.
+export type MoveActor = { userId?: string; name?: string }
 import { markReservationConsumed, listReservations } from './reserve'
 
 const svc = () => createServiceClient()
@@ -132,7 +133,7 @@ export type NewMove = {
   note?:     string
 }
 
-export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<{ inserted: number; skipped: number }> {
+export async function addMoves(rows: NewMove[], actor: MoveActor): Promise<{ inserted: number; skipped: number }> {
   const clean = rows.filter(r => r.item_id && Number(r.qty) !== 0)
   if (!clean.length) return { inserted: 0, skipped: rows.length }
 
@@ -146,8 +147,8 @@ export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<
     doc_type:  r.doc_type ?? null,
     doc_id:    r.doc_id ?? null,
     note:      r.note ?? '',
-    created_by:      actor.userId,
-    created_by_name: actor.name,
+    created_by:      actor.userId ?? null,
+    created_by_name: actor.name ?? '',
   }))
 
   // Повтор по документу отсекает уникальный индекс — считаем это «уже списано»,
@@ -162,7 +163,7 @@ export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<
 
 // Инвентаризация: вводим ФАКТ, система сама пишет разницу движением.
 export async function applyCount(
-  rows: { item_id: number; actual: number; note?: string }[], actor: InventoryActor,
+  rows: { item_id: number; actual: number; note?: string }[], actor: MoveActor,
 ): Promise<{ adjusted: number; unchanged: number }> {
   const ids = rows.map(r => r.item_id)
   if (!ids.length) return { adjusted: 0, unchanged: 0 }
@@ -357,7 +358,7 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
 }
 
 export async function applyConsume(
-  plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[], origin: MoveOrigin = 'fact',
+  plan: ConsumePlan, actor: MoveActor, rows?: PlanRow[], origin: MoveOrigin = 'fact',
 ): Promise<{ inserted: number; skipped: number; released: number }> {
   const use = (rows ?? plan.rows).filter(r => r.item_id !== null && r.qty > 0)
 
