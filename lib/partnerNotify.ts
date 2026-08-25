@@ -11,7 +11,7 @@ const RECENT_DAYS = 45
 const isRecent = (iso: string | null | undefined): boolean =>
   !!iso && (Date.now() - new Date(iso).getTime()) / 86_400_000 <= RECENT_DAYS
 
-export type NotifyKind = 'access' | 'submitted' | 'in_work' | 'ready' | 'shipped' | 'recalc'
+export type NotifyKind = 'access' | 'submitted' | 'in_work' | 'ready' | 'shipped' | 'recalc' | 'drawing_approved' | 'drawing_rework'
 
 function parseNotes(n: unknown): Record<string, unknown> {
   if (!n) return {}

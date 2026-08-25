@@ -13,7 +13,7 @@ type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   amount: number; lane: Lane; progressPct: number; stage: string; ready: boolean
 }
-type Stats = { linked: boolean; year: number; ordersCount: number; sumYear: number; avgCheck: number; inWork: number; readyToShip: number; byMonth: number[] }
+type Stats = { linked: boolean; year: number; ordersCount: number; sumYear: number; avgCheck: number; inWork: number; readyToShip: number; savingsYear: number; byMonth: number[]; topMaterials: { name: string; amount: number }[] }
 
 const MONTHS = ['Я', 'Ф', 'М', 'А', 'М', 'И', 'И', 'А', 'С', 'О', 'Н', 'Д']
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '0 ₽'
@@ -141,6 +141,33 @@ export default function Dashboard() {
             ))}
           </div>
         </div>
+
+        {(stats.topMaterials.length > 0 || stats.savingsYear > 0) && (
+          <div className="split" style={{ marginTop: 14 }}>
+            <div className="card">
+              <div className="card-h"><h3>Топ материалов за {year}</h3><span className="mut">по расходам</span></div>
+              {stats.topMaterials.length === 0
+                ? <div className="srow first"><span className="mut" style={{ fontSize: 13 }}>Пока нет данных.</span></div>
+                : stats.topMaterials.map((m, i) => {
+                    const max = Math.max(...stats.topMaterials.map(x => x.amount), 1)
+                    return (
+                      <div className={`srow${i === 0 ? ' first' : ''}`} key={m.name}>
+                        <span className="snm" title={m.name} style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.name}</span>
+                        <span className="track"><span className="tk" style={{ width: `${Math.round((m.amount / max) * 100)}%`, background: 'var(--blue)' }} /></span>
+                        <span className="ct tnum" style={{ width: 'auto', whiteSpace: 'nowrap' }}>{fmtMoney(m.amount)}</span>
+                      </div>
+                    )
+                  })}
+            </div>
+            <div className="card" style={{ display: 'flex', flexDirection: 'column' }}>
+              <div className="card-h"><h3>Ваша экономия</h3><span className="mut">{year}</span></div>
+              <div style={{ padding: 18, flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div className="v tnum" style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-.02em', color: 'var(--green)' }}>{fmtMoney(stats.savingsYear)}</div>
+                <div className="cap" style={{ marginTop: 6 }}>сэкономлено за год благодаря вашей договорной скидке — по сравнению с базовым прайсом.</div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h"><h3>Последнее движение</h3><span className="mut">обновляется автоматически</span></div>
