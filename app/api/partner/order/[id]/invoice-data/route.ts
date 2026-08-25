@@ -50,5 +50,35 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .order('is_default', { ascending: false })
     .order('id', { ascending: true })
 
-  return NextResponse.json({ order, client, entities: ents ?? [] })
+  // САНИТАЙЗ: наружу партнёру — только клиентское. Сырые items несут costExVat/
+  // costWithVat/margin, а notes — внутренние поля (ai_review, история и т.п.).
+  // Отдаём только то, что рисует счёт/УПД: цена продажи, габариты, обработка.
+  const rawItems = Array.isArray(order.items) ? (order.items as Record<string, unknown>[]) : []
+  const safeItems = rawItems.map(it => ({
+    materialName: it.materialName as string | undefined,
+    category: it.category as string | undefined,
+    thickness: Number(it.thickness) || undefined,
+    width: Number(it.width) || undefined,
+    height: Number(it.height) || undefined,
+    quantity: Number(it.quantity) || undefined,
+    saleIncVat: Number(it.saleIncVat) || 0,
+    hasTempering: !!it.hasTempering,
+    hasFacet: !!it.hasFacet,
+    facetTypeMm: it.facetTypeMm != null ? Number(it.facetTypeMm) : undefined,
+    shape: it.shape as string | undefined,
+    comment: it.comment as string | undefined,
+    services: Array.isArray(it.services) ? (it.services as Record<string, unknown>[]).map(s => ({ id: Number(s.id) || 0, name: String(s.name ?? ''), cost: 0 })) : undefined,
+    manualTotal: it.manualTotal != null ? Number(it.manualTotal) : null,
+  }))
+  const safeOrder = {
+    id: order.id, custom_number: order.custom_number, client_name: order.client_name,
+    client_order_number: order.client_order_number, discount_percent: Number(order.discount_percent) || 0,
+    items: safeItems,
+    total_sale_inc_vat: Number(order.total_sale_inc_vat) || 0,
+    total_after_discount: Number(order.total_after_discount) || 0,
+    notes: JSON.stringify({ quote_date: pn.quote_date ?? null, production_days: pn.production_days ?? null }),
+    created_at: order.created_at,
+  }
+
+  return NextResponse.json({ order: safeOrder, client, entities: ents ?? [] })
 }
