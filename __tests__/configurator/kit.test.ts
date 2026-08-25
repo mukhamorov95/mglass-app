@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, planBars, inferRole, resolveQty,
+  libraryFromUnitPrices, parseLengthMm,
   type Library, type ModelKit, type KitRates,
 } from '@/lib/configurator/kit'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
@@ -20,10 +21,11 @@ const LIB: Library = { items: [
   { id: 'mount-wall', name: 'FDC-30 труба к стене', role: 'mount-wall', prices: { chrome: 352 } },
   { id: 'mount-glass', name: 'FDC-35 держатель стекла', role: 'mount-glass', prices: { chrome: 622 } },
   { id: 'mount-corner', name: 'FDC-34 труба к стеклу', role: 'mount-corner', prices: { chrome: 570 } },
-  { id: 'cap', name: 'Заглушка FDPA-500', role: 'cap', prices: { chrome: 158 } },
-  { id: 'seal-mag', name: 'Уплотнитель магнитный', role: 'seal-magnet', prices: { chrome: 1028 } },
-  { id: 'seal-bot', name: 'Уплотнитель нижний', role: 'seal-bottom', prices: { chrome: 262 } },
-  { id: 'seal-hin', name: 'Уплотнитель Ч-образный', role: 'seal-hinge', prices: { chrome: 202 } },
+  { id: 'cap', name: 'Заглушка FDPA-500.1, 1 м', role: 'cap', stocks: [{ len: 1000, prices: { chrome: 158 } }] },
+  { id: 'cap-end', name: 'Заглушка торцевая FDPA-501', role: 'cap-end', prices: { chrome: 142 } },
+  { id: 'seal-mag', name: 'Уплотнитель магнитный 2.2 м', role: 'seal-magnet', stocks: [{ len: 2200, prices: { chrome: 1028 } }] },
+  { id: 'seal-bot', name: 'Уплотнитель нижний 2.2 м', role: 'seal-bottom', stocks: [{ len: 2200, prices: { chrome: 262 } }] },
+  { id: 'seal-hin', name: 'Уплотнитель Ч-образный 2.2 м', role: 'seal-hinge', stocks: [{ len: 2200, prices: { chrome: 202 } }] },
   { id: 'profile', name: 'Профиль FDPA-51', role: 'profile', stocks: [{ len: 2200, prices: { chrome: 712 } }, { len: 3000, prices: { chrome: 900 } }] },
   { id: 'tube', name: 'Труба FDT-352 30×10', role: 'tube', stocks: [{ len: 3000, prices: { chrome: 2175 } }] },
 ] }
@@ -38,6 +40,7 @@ const kitM7 = (): ModelKit => ({ slots: [
   { role: 'mount-glass', select: 'all', entries: [{ itemId: 'mount-glass', qty: { mode: 'role' } }] },
   { role: 'mount-corner', select: 'all', entries: [{ itemId: 'mount-corner', qty: { mode: 'role' } }] },
   { role: 'cap', select: 'all', entries: [{ itemId: 'cap', qty: { mode: 'role' } }] },
+  { role: 'cap-end', select: 'all', entries: [{ itemId: 'cap-end', qty: { mode: 'role' } }] },
   { role: 'seal-magnet', select: 'all', entries: [{ itemId: 'seal-mag', qty: { mode: 'role' } }] },
   { role: 'seal-bottom', select: 'all', entries: [{ itemId: 'seal-bot', qty: { mode: 'role' } }] },
   { role: 'seal-hinge', select: 'all', entries: [{ itemId: 'seal-hin', qty: { mode: 'role' } }] },
@@ -53,16 +56,17 @@ describe('kit — количества из геометрии', () => {
     expect(q.roleQty['mount-wall']).toBeGreaterThan(0)
     expect(q.roleQty['mount-glass']).toBeGreaterThan(0)
     expect(q.roleQty['mount-corner']).toBeGreaterThan(0)
-    expect(q.roleQty.cap).toBe(q.profilePieces.length * 2)
+    expect(q.roleQty['cap-end']).toBe(q.profilePieces.length * 2)   // торцевые — штуками
+    expect(q.barPieces.cap).toEqual(q.profilePieces)                // погонная — по кускам профиля
     expect(q.roleQty.roller).toBe(0)          // распашная — роликов нет
   })
 
-  it('М7: три уплотнителя работают одновременно (магнит, низ, петлевой стык)', () => {
+  it('М7: три уплотнителя одновременно, погонно — вертикальные по высоте, нижний по ширине', () => {
     const q = computeKitQuantities(m7(), 8, getModel('М7'))
     expect(q.swingDoors).toBe(1)
-    expect(q.roleQty['seal-magnet']).toBe(1)
-    expect(q.roleQty['seal-hinge']).toBe(1)
-    expect(q.roleQty['seal-bottom']).toBe(1)
+    expect(q.barPieces['seal-magnet']).toEqual([2000])   // высота двери
+    expect(q.barPieces['seal-hinge']).toEqual([2000])
+    expect(q.barPieces['seal-bottom']).toEqual([600])    // ширина двери
   })
 
   it('М10 (раздвижная): ролики есть, петель нет', () => {
@@ -138,6 +142,7 @@ describe('kit — расчёт по комплекту модели', () => {
     const p = computeKitPrice(q, LIB, kitM7(), RATES, FIN, { finishId: 'chrome' })
     expect(p.lines.filter(l => l.role.startsWith('mount-')).length).toBe(3)
     expect(p.lines.filter(l => l.role.startsWith('seal-')).length).toBe(3)
+    expect(p.lines.filter(l => l.role.startsWith('seal-')).every(l => l.unit === 'хлыст')).toBe(true)
   })
 
   it('удалённая роль, которая модели НЕ нужна (ролики у М7) — не ошибка', () => {
@@ -265,5 +270,38 @@ describe('kit — варианты одной модели (М1: труба 90°
     const q = computeKitQuantities(asm('', 1.1), 8)
     expect(q.barPieces['tube']).toEqual([1100])
     expect(q.tubePieces).toEqual([1100])
+  })
+})
+
+describe('kit — перенос погонных позиций из старой штучной схемы', () => {
+  it('уплотнитель и заглушка становятся хлыстами, длина берётся из названия поставщика', () => {
+    const lib = libraryFromUnitPrices({ groups: [
+      { id: 'seals', kind: 'piece', items: [
+        { key: 's1', name: 'Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачн', prices: { chrome: 1028 },
+          ref: { supplier: 'av24', base: 'FDPP-502.8', label: 'Уплотнитель ПРЕМИУМ магнитный 90°, 180° прозрачный 2.2 м' } },
+      ] },
+      { id: 'caps', kind: 'piece', items: [
+        { key: 'c1', name: 'Заглушка верхняя FDPA-500', prices: { chrome: 158 },
+          ref: { supplier: 'av24', base: 'FDPA-500.1', label: 'Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м, для п-образного' } },
+      ] },
+    ] } as never)
+    const seal = lib.items.find(i => i.id === 's1')!
+    expect(seal.role).toBe('seal-magnet')
+    expect(seal.stocks).toEqual([{ len: 2200, prices: { chrome: 1028 } }])
+    const cap = lib.items.find(i => i.id === 'c1')!
+    expect(cap.role).toBe('cap')
+    expect(cap.stocks).toEqual([{ len: 1000, prices: { chrome: 158 } }])
+  })
+
+  it('длина из названия: «2.2 м», «1 м», «3 м»; «30х10х1.5 мм» длиной не считается', () => {
+    expect(parseLengthMm('Уплотнитель прозрачный 2.2 м, ус 18 мм')).toBe(2200)
+    expect(parseLengthMm('Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м')).toBe(1000)
+    expect(parseLengthMm('Профиль FDPA-51.3, длина 3 м')).toBe(3000)
+    expect(parseLengthMm('Крепление трубы 30х10 к стене')).toBe(0)
+  })
+
+  it('торцевая заглушка распознаётся отдельно от погонной', () => {
+    expect(inferRole('Заглушка торцевая FDPA-501 для п-образного профиля')).toBe('cap-end')
+    expect(inferRole('Заглушка верхняя FDPA-500.1, 1 м')).toBe('cap')
   })
 })

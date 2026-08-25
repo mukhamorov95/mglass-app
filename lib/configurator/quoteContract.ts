@@ -26,9 +26,10 @@ export type QuotePublic = { full: false; total: number; clientFrom: number; comp
 export type QuoteResponse = QuoteFull | QuotePublic
 
 // Вариант приходит от геометрии и уходит в геометрию — прайс его только передаёт.
-// Пока билдер не принимает variant, лишний аргумент игнорируется; когда примет —
-// адаптер исчезнет вместе с этим комментарием.
-type Builder = (model: MModel, dims: MDims, thickness: number, doorOpen?: boolean, choice?: unknown, variant?: Record<string, string>) => Assembly
+// Сигнатура геометрии: (model, dims, thickness, doorOpen=true, choice={}, variant={}) —
+// variant СТРОГО шестой, иначе он попадёт в doorOpen. dims несёт trayDepth/ceilingHeight,
+// прокидываются как есть: длину куска трубы считает геометрия, цену — прайс.
+type Builder = (model: MModel, dims: MDims, thickness: number, doorOpen: boolean, choice: Record<string, string>, variant: Record<string, string>) => Assembly
 export function buildWithVariant(model: MModel, dims: MDims, thickness: number, variant?: Record<string, string>): Assembly {
-  return (buildFromModel as Builder)(model, dims, thickness, undefined, undefined, variant)
+  return (buildFromModel as unknown as Builder)(model, dims, thickness, true, {}, variant ?? {})
 }

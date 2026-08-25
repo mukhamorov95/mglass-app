@@ -17,7 +17,7 @@ import type { PriceByColor, BarStock, CatalogRef, Tier } from '@/lib/configurato
 export const ROLES = [
   'hinge', 'handle', 'handle-slide', 'roller',
   'mount-wall', 'mount-glass', 'mount-corner', 'mount-diag45', 'mount-stabilizer', 'connector',
-  'cap', 'seal-magnet', 'seal-bottom', 'seal-hinge',
+  'cap', 'cap-end', 'seal-magnet', 'seal-bottom', 'seal-hinge',
   'profile', 'profile-wall', 'profile-floor', 'profile-top', 'profile-vertical',
   'tube', 'tube-diag45', 'tube-stabilizer',
 ] as const
@@ -35,10 +35,11 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-diag45': { label: 'Крепление 45°',         kind: 'piece', hint: 'штанга «люкс» под 45° — два крепления' },
   'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
-  'cap':          { label: 'Заглушки',              kind: 'piece', hint: '2 на каждый кусок профиля' },
-  'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'piece', hint: 'притвор двери' },
-  'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'piece', hint: 'низ двери / створки' },
-  'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'piece', hint: 'стык двери и стационара' },
+  'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная, по длине каждого куска профиля' },
+  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'на срез профиля — 2 на кусок' },
+  'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'bar',   hint: 'притвор двери — по высоте двери' },
+  'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'bar',   hint: 'низ створки — по ширине двери' },
+  'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'bar',   hint: 'стык со стационаром — по высоте двери' },
   'profile':      { label: 'Профиль',               kind: 'bar',   hint: 'по стене и по полу — хлысты' },
   'profile-wall': { label: 'Профиль по стене',      kind: 'bar',   hint: 'вертикаль у стены' },
   'profile-floor':{ label: 'Профиль по полу',       kind: 'bar',   hint: 'нижняя обвязка' },
@@ -71,7 +72,7 @@ export function inferRole(text: string): RoleId | null {
     if (/нижн|низ |порог/.test(t)) return 'seal-bottom'
     return 'seal-hinge'
   }
-  if (/заглушк|колпач/.test(t)) return 'cap'
+  if (/заглушк|колпач/.test(t)) return /торцев|торец|заглушка на срез/.test(t) ? 'cap-end' : 'cap'
   if (/ролик|каретк/.test(t)) return 'roller'
   if (/соедин|коннектор/.test(t)) return 'connector'
   if (/петл|навес|hinge/.test(t)) return 'hinge'
@@ -87,6 +88,13 @@ export function inferRole(text: string): RoleId | null {
   if (/труб|штанг/.test(t)) return 'tube'
   if (/профил/.test(t)) return 'profile'
   return null
+}
+
+// Длина хлыста из названия поставщика: «…прозрачный 2.2 м», «…, 1 м, для п-образного…».
+// Уплотнители и заглушка продаются погонно — считать их штуками значит врать себе в цене.
+export function parseLengthMm(text: string): number {
+  const m = (text || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яёa-z])/i)
+  return m ? Math.round(parseFloat(m[1]) * 1000) : 0
 }
 
 // ── Библиотека позиций (на тариф) ─────────────────────────────────
@@ -169,18 +177,20 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
     if (!spec && !fallback) continue
     roleQty[specRole(spec, fallback)] += 1
   }
-  // Заглушки — по 2 на каждый кусок профиля (верх/низ), сколько бы ролей профиля ни было.
-  roleQty.cap = profilePieces.length * 2
-  for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
-
-  // Уплотнители: магнитный и петлевой — на каждую распашную дверь (притвор и стык
-  // со стационаром), нижний — на каждую подвижную створку (распашную и раздвижную).
+  // Погонные позиции меряются длиной, а не штуками: заглушка идёт по каждому куску
+  // профиля, уплотнители — по двери (вертикальные по высоте, нижний по ширине).
+  const doors = assembly.glass.filter(g => g.role === 'door')
   const { swing, slide } = doorCounts(model)
   const swingDoors = swing || (roleQty.hinge > 0 ? 1 : 0)
   const slideDoors = slide || (roleQty.roller > 0 ? 1 : 0)
-  roleQty['seal-magnet'] = swingDoors
-  roleQty['seal-hinge'] = swingDoors
-  roleQty['seal-bottom'] = swingDoors + slideDoors
+  if (profilePieces.length) barPieces.cap = [...profilePieces]
+  if (doors.length) {
+    const vertical = doors.slice(0, swingDoors).map(d => mm(d.size[1]))
+    if (vertical.length) { barPieces['seal-magnet'] = vertical; barPieces['seal-hinge'] = [...vertical] }
+    barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
+  }
+  roleQty['cap-end'] = profilePieces.length * 2
+  for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
   return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
 }
@@ -466,9 +476,15 @@ export function libraryFromUnitPrices(up: UnitPricesLike): Library {
       const role = guessed && ROLE_META[guessed].kind === ROLE_META[fallback].kind ? guessed : fallback
       const piece = it as { key: string; name: string; prices?: PriceByColor; ref?: CatalogRef; shape?: string }
       const bar = it as { key: string; name: string; stocks?: BarStock[] }
+      // Позиция была штучной, а роль оказалась погонной (уплотнители, заглушка профиля):
+      // цена превращается в хлыст, длина — из полного названия поставщика.
+      const toBar = ROLE_META[role].kind === 'bar' && g.kind === 'piece'
+      const len = toBar ? (parseLengthMm(piece.ref?.label ?? '') || parseLengthMm(it.name)) : 0
       items.push({
         id: piece.key, name: it.name, role,
-        ...(g.kind === 'bar' ? { stocks: bar.stocks ?? [] } : { prices: piece.prices ?? {} }),
+        ...(g.kind === 'bar' ? { stocks: bar.stocks ?? [] }
+          : toBar ? { stocks: [{ len, prices: piece.prices ?? {} }] }
+          : { prices: piece.prices ?? {} }),
         ...(piece.ref ? { ref: piece.ref } : {}),
         ...(piece.shape ? { shape: piece.shape } : {}),
       })
