@@ -167,6 +167,15 @@ describe('kit — расчёт по комплекту модели', () => {
     expect(p.missing.some(m => m.role === 'profile' && m.reason === 'кусок длиннее хлыста')).toBe(true)
   })
 
+  it('роль помечена «не используется» — предупреждения нет', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    const kit = kitM7()
+    kit.slots = kit.slots.filter(s => s.role !== 'cap-end')
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(true)
+    kit.excluded = ['cap-end']
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(false)
+  })
+
   it('роль модели нужна, а слота нет — попадает в missing (не уедет дешевле себестоимости)', () => {
     const q = computeKitQuantities(m7(), 8, getModel('М7'))
     const kit = kitM7()

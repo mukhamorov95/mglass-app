@@ -166,7 +166,12 @@ export type KitSlot = {
   select: 'one' | 'all'      // 'one' — клиент выбирает вариант; 'all' — работают все записи
   entries: KitEntry[]
 }
-export type ModelKit = { slots: KitSlot[] }
+export type ModelKit = {
+  slots: KitSlot[]
+  // Роли, которые геометрия требует, а в изделии их осознанно НЕТ (владелец так собирает).
+  // Без этого списка удалённая роль вечно висела бы предупреждением «нет позиции».
+  excluded?: RoleId[]
+}
 
 export const DEFAULT_QTY: QtyRule = { mode: 'role' }
 export const emptyKit = (): ModelKit => ({ slots: [] })
@@ -471,6 +476,7 @@ export function computeKitPrice(
   for (const role of ROLES) {
     if ((q.roleQty[role] ?? 0) <= 0) continue
     if (kit.slots.some(s => s.role === role)) continue
+    if (kit.excluded?.includes(role)) continue                      // владелец сказал: в этой модели не используется
     if (hasCommonProfile && PROFILE_SIDES.includes(role)) continue   // сторона идёт общим профилем
     missing.push({ role, label: ROLE_META[role].label, reason: 'нет позиции' })
   }

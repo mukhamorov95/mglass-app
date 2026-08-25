@@ -9,6 +9,7 @@ import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } fro
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
   ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
+  PROFILE_SIDES as PROFILE_SIDES_UI,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
 import { CatalogPicker } from './CatalogPicker'
@@ -149,6 +150,11 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const removeEntry = (si: number, ei: number) => editKit(k => { k.slots[si].entries.splice(ei, 1) })
   const setQtyRule = (si: number, ei: number, qty: QtyRule) => editKit(k => { k.slots[si].entries[ei].qty = qty })
   const resetKit = () => edit(s => { s.kits[code] = defaultKitFor(model, s.library) })
+  const excludeRole = (role: RoleId) => editKit(k => {
+    k.slots = k.slots.filter(sl => sl.role !== role)
+    k.excluded = [...new Set([...(k.excluded ?? []), role])]
+  })
+  const unexcludeRole = (role: RoleId) => editKit(k => { k.excluded = (k.excluded ?? []).filter(r => r !== role) })
   const setShape = (id: string, shape: string) => editItem(id, i => { if (shape) i.shape = shape; else delete i.shape })
 
   // Позиция нужна не одной модели: добавляем её в комплект всех моделей, где эта роль есть.
@@ -538,6 +544,31 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
               </div>
             )
           })}
+
+          {(() => {
+            const gaps = needed.filter(r => !kit.slots.some(sl => sl.role === r)
+              && !(kit.excluded ?? []).includes(r)
+              && !(PROFILE_SIDES_UI.includes(r) && kit.slots.some(sl => sl.role === 'profile')))
+            const excluded = kit.excluded ?? []
+            if (gaps.length === 0 && excluded.length === 0) return null
+            return (
+              <Card title="Модель требует, а в комплекте нет">
+                {gaps.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px]">
+                    <span className="text-[#9a5a2a]">⚠️ {ROLE_META[r].label}</span>
+                    <button onClick={() => addSlot(r)} className="ml-auto text-[12px] text-[#256029] hover:underline">добавить</button>
+                    <button onClick={() => excludeRole(r)} className="text-[12px] text-[#9a9a95] hover:underline" title="В этой модели такая позиция не используется">не используется</button>
+                  </div>
+                ))}
+                {excluded.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px] text-[#9a9a95]">
+                    <span>— {ROLE_META[r].label}: не используется</span>
+                    <button onClick={() => unexcludeRole(r)} className="ml-auto text-[12px] text-[#4b6ea9] hover:underline">вернуть</button>
+                  </div>
+                ))}
+              </Card>
+            )
+          })()}
 
           <Card title="Добавить роль">
             <div className="flex items-center gap-2">
