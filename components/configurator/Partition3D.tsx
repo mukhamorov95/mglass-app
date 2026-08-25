@@ -144,21 +144,21 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
         <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
           <boxGeometry args={g.size} />
           <MeshTransmissionMaterial
-            transmission={0.9}
-            thickness={0.012}
-            roughness={0.05}
-            ior={1.5}
-            chromaticAberration={0.012}
+            transmission={0.96}
+            thickness={0.008}
+            roughness={0.03}
+            ior={1.52}
+            chromaticAberration={0.02}
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
-            samples={5}
-            resolution={384}
+            samples={6}
+            resolution={512}
             color={glassTint.color}
             attenuationColor={glassTint.attenuation}
             attenuationDistance={glassTint.distance}
-            clearcoat={0.7}
-            clearcoatRoughness={0.05}
+            clearcoat={0.9}
+            clearcoatRoughness={0.04}
           />
         </mesh>
       ))}
@@ -236,7 +236,7 @@ export default function Partition3D(
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.5} color="#eaf0ff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
-          <ContactShadows position={[cx, 0.002, cz]} opacity={0.42} scale={span * 3.2} blur={2.2} far={span * 1.2} resolution={1024} />
+          <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
           <Studio />
           <OrbitControls
             makeDefault

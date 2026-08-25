@@ -15,7 +15,7 @@ const THICKNESS = 8   // душевые — только 8 мм закалённ
 // Тип/цвет стекла (тон в 3D через MeshTransmissionMaterial).
 type GlassType = { id: string; label: string; swatch: string; tint: GlassTint }
 const GLASS_TYPES: GlassType[] = [
-  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#dcebe0', attenuation: '#a3c6ab', distance: 1.35 } },
+  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#e8f2ec', attenuation: '#c2ddca', distance: 2.4 } },
   { id: 'crystal',  label: 'Осветлённое Crystal Vision', swatch: '#dfeaf6', tint: { color: '#e9f2fb', attenuation: '#c4daef', distance: 3.2 } },
   { id: 'bronze',   label: 'Тонированная бронза',        swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Тонированная графит',        swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
