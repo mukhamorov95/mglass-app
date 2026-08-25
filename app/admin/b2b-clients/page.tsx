@@ -12,7 +12,7 @@ type Row = {
   id: number; name: string; contact: string | null; phone: string | null
   discount: number; active: boolean; notes: string | null
   ordersCount: number; sumTotal: number; sumYear: number; lastOrderAt: string | null
-  linked: boolean; email: string | null
+  linked: boolean; email: string | null; canSelfInvoice: boolean
 }
 type SortKey = 'sum' | 'count' | 'name' | 'last' | 'discount'
 type MonthStats = { [clientId: number]: { [month: number]: number } }
@@ -156,6 +156,15 @@ export default function B2BClientsPage() {
     })
     loadOverview()
   }
+  // Разрешить/запретить клиенту самому скачивать счёт-спецификацию (после проверки паритета).
+  async function toggleSelfInvoice(r: Row) {
+    if (!r.canSelfInvoice && !confirm(`Разрешить «${r.name}» самому скачивать счёт-спецификацию из кабинета?\n\nВключайте, когда убедились, что расчёты клиента совпадают с нашими.`)) return
+    setRows(prev => prev.map(x => x.id === r.id ? { ...x, canSelfInvoice: !x.canSelfInvoice } : x))
+    await fetch('/api/admin/b2b-access', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'set_self_invoice', clientId: r.id, value: !r.canSelfInvoice }),
+    }).catch(() => loadOverview())
+  }
 
   const statIds = Object.keys(stats).map(Number)
     .filter(id => Object.values(stats[id]).some(v => v > 0))
@@ -271,9 +280,16 @@ export default function B2BClientsPage() {
                         <td className="px-4 py-3 text-center">{c.discount > 0 ? <span className="font-mono font-semibold text-emerald-600">{c.discount}%</span> : <span className="text-[#c4c4be]">—</span>}</td>
                         <td className="px-4 py-3">
                           {c.linked ? (
-                            <div className="flex items-center gap-2">
-                              <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">✓ {c.email ?? 'выдан'}</span>
-                              <button onClick={() => revoke(c)} className="text-[11px] text-[#9a9a95] hover:text-red-500">Отозвать</button>
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2">
+                                <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">✓ {c.email ?? 'выдан'}</span>
+                                <button onClick={() => revoke(c)} className="text-[11px] text-[#9a9a95] hover:text-red-500">Отозвать</button>
+                              </div>
+                              <button onClick={() => toggleSelfInvoice(c)}
+                                className={`text-[11px] self-start rounded-full px-2 py-0.5 border transition-colors ${c.canSelfInvoice ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100' : 'text-[#9a9a95] bg-[#f8f8f7] border-[#e4e4e0] hover:border-[#c4c4be]'}`}
+                                title="Клиент может сам скачивать счёт-спецификацию из кабинета">
+                                {c.canSelfInvoice ? '📄 Счёт клиенту: вкл' : '📄 Счёт клиенту: выкл'}
+                              </button>
                             </div>
                           ) : grantId === c.id ? (
                             <div>

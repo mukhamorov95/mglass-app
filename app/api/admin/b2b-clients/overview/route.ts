@@ -19,7 +19,7 @@ export async function GET() {
   const a = admin()
 
   const [{ data: clients }, { data: orders }] = await Promise.all([
-    a.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,user_id'),
+    a.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,user_id,can_self_invoice'),
     a.from('b2b_orders').select('client_id,total_after_discount,created_at').not('launched_at', 'is', null),
   ])
 
@@ -51,6 +51,7 @@ export async function GET() {
       discount: Number(c.discount_percent) || 0, active: c.active, notes: c.notes,
       ordersCount: g.count, sumTotal: g.sum, sumYear: g.sumYear, lastOrderAt: g.last,
       linked: !!c.user_id, email: c.user_id ? (emails[c.user_id as string] ?? null) : null,
+      canSelfInvoice: !!c.can_self_invoice,
     }
   })
 
