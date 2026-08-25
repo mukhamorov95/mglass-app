@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Данные счёта-спецификации для кабинета партнёра. Строго по своему клиенту.
 // Открывается ТОЛЬКО если владелец включил самообслуживание (b2b_clients.can_self_invoice)
@@ -25,10 +26,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc
-    .from('b2b_clients')
-    .select('id,name,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,can_self_invoice')
-    .eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string; can_self_invoice: boolean | null }>(
+    svc, user.id, 'id,name,full_name,inn,kpp,ogrn,legal_address,bank_account,bank_name,bik,corr_account,supply_contract_no,supply_contract_date,can_self_invoice')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
   if (!client.can_self_invoice) return NextResponse.json({ error: 'Счёт выставляет менеджер' }, { status: 403 })
 

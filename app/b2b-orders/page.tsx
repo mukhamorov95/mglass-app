@@ -7,6 +7,7 @@ import { computeProductionSummary, type MatLight } from '@/lib/productionSummary
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
 import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -212,7 +213,7 @@ function parseNotes(notes: string | null): NotesData {
 }
 
 function getFinalPrice(order: Order): number {
-  return (order.discount_percent ?? 0) > 0 ? order.total_after_discount : order.total_sale_inc_vat
+  return finalTotalOf(order)
 }
 
 function getDeadline(launched_at: string | undefined, production_days: number | undefined): Date | null {

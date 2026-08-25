@@ -18,9 +18,10 @@ export async function GET() {
   if (guard instanceof NextResponse) return guard
   const a = admin()
 
-  const [{ data: clients }, { data: orders }] = await Promise.all([
+  const [{ data: clients }, { data: orders }, { data: members }] = await Promise.all([
     a.from('b2b_clients').select('id,name,contact,phone,discount_percent,active,notes,user_id,can_self_invoice'),
     a.from('b2b_orders').select('client_id,total_after_discount,created_at').not('launched_at', 'is', null),
+    a.from('b2b_client_members').select('client_id,user_id'),
   ])
 
   const year = new Date().getFullYear()
@@ -37,11 +38,20 @@ export async function GET() {
     agg.set(o.client_id, g)
   }
 
-  const linkedIds = (clients ?? []).map(c => c.user_id).filter(Boolean) as string[]
+  const allIds = [
+    ...(clients ?? []).map(c => c.user_id).filter(Boolean) as string[],
+    ...(members ?? []).map(m => m.user_id as string),
+  ]
   let emails: Record<string, string> = {}
-  if (linkedIds.length) {
-    const { data: us } = await a.from('users').select('id,email').in('id', linkedIds)
+  if (allIds.length) {
+    const { data: us } = await a.from('users').select('id,email').in('id', [...new Set(allIds)])
     emails = Object.fromEntries((us ?? []).map(u => [u.id as string, u.email as string]))
+  }
+  const membersByClient = new Map<number, { userId: string; email: string | null }[]>()
+  for (const m of members ?? []) {
+    const list = membersByClient.get(m.client_id as number) ?? []
+    list.push({ userId: m.user_id as string, email: emails[m.user_id as string] ?? null })
+    membersByClient.set(m.client_id as number, list)
   }
 
   const rows = (clients ?? []).map(c => {
@@ -52,6 +62,7 @@ export async function GET() {
       ordersCount: g.count, sumTotal: g.sum, sumYear: g.sumYear, lastOrderAt: g.last,
       linked: !!c.user_id, email: c.user_id ? (emails[c.user_id as string] ?? null) : null,
       canSelfInvoice: !!c.can_self_invoice,
+      members: membersByClient.get(c.id) ?? [],
     }
   })
 

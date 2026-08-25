@@ -159,6 +159,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-crm',
     '/b2b-cutting',
     '/production-app',
+    '/inventory',
   ],
 
   production: [
@@ -166,6 +167,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-production',
     '/b2b-cutting',
     '/production-app',
+    '/inventory',
     '/p/o',
   ],
 
@@ -202,6 +204,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/route-sheet',
     '/admin/stock-control',
     '/admin/procurement',
+    '/inventory',
     '/admin/cutting-settings',
     '/accounting',
   ],
@@ -209,6 +212,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   commercial: [
     '/',
     '/commercial',
+    '/inventory',
     '/b2b-growth',
     '/installations',
     '/crm',
@@ -222,6 +226,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   cfo: [
     '/',
     '/cfo',
+    '/inventory',
     '/accounting',
     '/admin/cfo',
     '/admin/pnl',
