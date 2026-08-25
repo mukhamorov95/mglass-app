@@ -35,6 +35,8 @@ export default function AccountingPage() {
   const sb = createClient()
   const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'docs' | 'requests' | 'committee' | 'notes'>('odds')
   const [unposted, setUnposted] = useState(0)
+  const [locked, setLocked] = useState(false)
+  const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
   const [myRole, setMyRole] = useState('')
   const [myName, setMyName] = useState('')
   const [unit, setUnit] = useState<'ip' | 'ooo'>('ip')
@@ -97,6 +99,31 @@ export default function AccountingPage() {
   }, [sb, month])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+
+  const loadPeriod = useCallback(async () => {
+    if (!month) return
+    const r = await fetch(`/api/accounting/period?unit=${unit}&month=${month}`)
+    if (!r.ok) return
+    const j = await r.json()
+    setLocked(!!j.locked)
+    setLog(j.log ?? [])
+  }, [unit, month])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadPeriod().catch(() => {}) }, [loadPeriod])
+
+  async function togglePeriod() {
+    const action = locked ? 'unlock' : 'lock'
+    if (!confirm(locked
+      ? 'Открыть месяц заново? Правки снова станут возможны.'
+      : 'Закрыть месяц? После этого операции этого месяца нельзя будет ни добавить, ни изменить.')) return
+    const r = await fetch('/api/accounting/period', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit, month, action }),
+    })
+    const j = await r.json().catch(() => ({}))
+    flash(r.ok ? (j.locked ? 'Месяц закрыт' : 'Месяц открыт') : (j.error ?? 'Не получилось'))
+    await loadPeriod()
+  }
 
   const loadUnposted = useCallback(async () => {
     if (!month) return
@@ -266,7 +293,14 @@ export default function AccountingPage() {
                 <span className="text-[14px] font-semibold text-[#111110] capitalize min-w-[120px] text-center">{month && monthLabel(month)}</span>
                 <button onClick={() => setMonth(shiftMonth(month, 1))} className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[13px]">→</button>
               </div>
-              <button onClick={addFund} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>
+              <div className="flex items-center gap-2">
+                <button onClick={togglePeriod}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
+                    locked ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                  {locked ? '🔒 месяц закрыт' : 'Закрыть месяц'}
+                </button>
+                {!locked && <button onClick={addFund} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>}
+              </div>
             </div>
 
             {unitFunds.filter(f => f.fund_class === 'income').map(fundRow)}
@@ -289,6 +323,23 @@ export default function AccountingPage() {
               <span className="font-semibold">Остаток за месяц</span>
               <span className="font-mono font-semibold">{RUB(income - variable - fixedAndFunds)}</span>
             </div>
+
+            {log.length > 0 && (
+              <details className="mt-4 bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
+                <summary className="text-[13px] text-[#6b6b66] cursor-pointer">Журнал правок · {log.length}</summary>
+                <div className="mt-2 space-y-1">
+                  {log.slice(0, 40).map(l => (
+                    <div key={l.id} className="flex justify-between text-[12px] text-[#6b6b66]">
+                      <span>
+                        {l.at.slice(8, 10)}.{l.at.slice(5, 7)} {l.at.slice(11, 16)} · {l.actor ?? '—'} ·{' '}
+                        {l.action === 'insert' ? 'добавил' : l.action === 'update' ? 'изменил' : 'удалил'} операцию от {l.entry_date.slice(8, 10)}.{l.entry_date.slice(5, 7)}
+                      </span>
+                      <span className="font-mono">{RUB(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
 
