@@ -10,10 +10,10 @@ import { createClient } from '@/lib/supabase-browser'
 // На узком экране сайдбар сжимается в колонку иконок (см. PartnerTheme).
 
 const CALC_CHILDREN = [
-  { href: '/partner/new', label: 'Новый просчёт' },
-  { href: '/partner/quotes', label: 'Мои просчёты', badge: 'quotes' as const },
-  { href: '/partner/orders', label: 'Заказы в работе', badge: 'inwork' as const },
-  { href: '/partner/shipped', label: 'Отгруженные', badge: 'shipped' as const },
+  { href: '/partner/new', label: 'Новый просчёт', emo: '➕' },
+  { href: '/partner/quotes', label: 'Мои просчёты', badge: 'quotes' as const, emo: '📄' },
+  { href: '/partner/orders', label: 'Заказы в работе', badge: 'inwork' as const, emo: '🔧' },
+  { href: '/partner/shipped', label: 'Отгруженные', badge: 'shipped' as const, emo: '📦' },
 ]
 
 type OrderLite = { lane: 'quote' | 'submitted' | 'in_work' | 'shipped' }
@@ -85,6 +85,7 @@ export default function PartnerNav() {
               const n = badgeFor(c.badge)
               return (
                 <Link key={c.href} href={c.href} className={item(path.startsWith(c.href))}>
+                  <span className="emo" aria-hidden>{c.emo}</span>
                   <span className="tx">{c.label}</span>
                   {n > 0 && <span className="badge">{n}</span>}
                 </Link>
@@ -104,6 +105,10 @@ export default function PartnerNav() {
         </Link>
 
         <div className="lbl">Помощь</div>
+        <Link href="/partner/profile" className={item(path.startsWith('/partner/profile'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.2" /><path d="M4.5 16.5a5.5 5.5 0 0 1 11 0" /></svg></span>
+          <span className="tx">Профиль</span>
+        </Link>
         <Link href="/partner/guide" className={item(path.startsWith('/partner/guide'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" /><path d="M7.9 7.6a2.2 2.2 0 1 1 3 2c-.8.5-1 1-1 1.9" /><line x1="10" y1="14.3" x2="10" y2="14.35" /></svg></span>
           <span className="tx">Как пользоваться</span>
