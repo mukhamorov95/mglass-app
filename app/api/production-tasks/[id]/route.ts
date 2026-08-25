@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireRole } from '@/lib/apiAuth'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 import { cascadePriorStages } from '@/lib/productionCascade'
+import { actorName, buildTaskUpdate, type TaskAction } from '@/lib/production/executor'
 
 // Действия цеха доступны рабочим производства и владельцу (+ закупщик Вера,
 // надзор за цехом). Проверка на СЕРВЕРЕ, не только скрытием кнопок в UI (№3).
@@ -14,6 +15,7 @@ const SHOP_ROLES = ['production', 'admin', 'ceo', 'buyer'] as const
 // (старая модель прогресса на уровне заказа), чтобы прогресс в /b2b-orders
 // оставался правдивым в переходный период.
 // «Готово» на этапе закрывает и все предыдущие этапы детали (см. productionCascade).
+// Исполнитель (completed_by) берётся из сессии — рабочий не делает лишних действий (П1).
 export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -29,19 +31,25 @@ export async function PATCH(
   if (!taskId) return NextResponse.json({ error: 'Неверный id' }, { status: 400 })
 
   const body = await req.json().catch(() => ({}))
-  const action = body.action as 'done' | 'problem' | 'start' | undefined
+  const action = body.action as TaskAction | undefined
   if (!action || !['done', 'problem', 'start'].includes(action)) {
     return NextResponse.json({ error: 'action: done|problem|start' }, { status: 400 })
   }
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  const { data: task, error: tErr } = await svc
-    .from('production_tasks')
-    .select('id, order_id, item_index, stage_key, status, started_at, sequence_order')
-    .eq('id', taskId)
-    .single()
+  // Профиль тянем параллельно с задачей — «Готово» жмут сотни раз за смену,
+  // лишний последовательный round-trip тут стоит дороже, чем выглядит.
+  const [{ data: task, error: tErr }, { data: prof }] = await Promise.all([
+    svc.from('production_tasks')
+      .select('id, order_id, item_index, stage_key, status, started_at, sequence_order, assigned_to')
+      .eq('id', taskId)
+      .single(),
+    supabase.from('users').select('name').eq('id', user.id).maybeSingle(),
+  ])
   if (tErr || !task) return NextResponse.json({ error: 'Задача не найдена' }, { status: 404 })
+
+  const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
 
   // Материал резку НЕ блокирует (решение владельца 14.07): мастер режет сразу,
   // «материала нет» — только подсветка заказа на закупку, без задержек.
@@ -49,26 +57,15 @@ export async function PATCH(
   const now = new Date().toISOString()
 
   // 1) production_tasks
-  const upd: Record<string, unknown> = {}
-  if (action === 'start') {
-    upd.status = 'in_progress'
-    upd.started_at = task.started_at ?? now
-  } else if (action === 'done') {
-    upd.status = 'done'
-    upd.completed_at = now
-    upd.started_at = task.started_at ?? now
-    upd.problem_resolved_at = now   // снимаем андон, если был
-  } else {
-    upd.status = 'problem'
-    upd.problem_reason_code = body.reason_code ?? 'other'
-    upd.problem_comment = body.comment ?? null
-    upd.problem_at = now
-    upd.problem_resolved_at = null
-  }
+  const upd = buildTaskUpdate(action, actor, task, now, {
+    reasonCode: body.reason_code ?? 'other',
+    comment:    body.comment ?? null,
+  })
   const { error: uErr } = await svc.from('production_tasks').update(upd).eq('id', taskId)
   if (uErr) return NextResponse.json({ error: uErr.message }, { status: 500 })
 
-  // 1а) каскад: закрытый этап означает, что все предыдущие этапы детали пройдены
+  // 1а) каскад: закрытый этап означает, что все предыдущие этапы детали пройдены.
+  // Исполнителя каскадным задачам НЕ ставим — их физически никто не отмечал (см. productionCascade).
   const cascaded = action === 'done'
     ? await cascadePriorStages(svc, task.order_id, task.item_index, task.sequence_order, now)
     : []
