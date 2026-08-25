@@ -21,11 +21,19 @@ function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}
   try { const p = JSON.parse(n); return typeof p === 'object' && p ? p as Record<string, unknown> : {} } catch { return {} }
 }
+// Рабочие дни (пропуская сб/вс) — согласованно с А1/А4 (расчёт срока при запуске
+// и сортировка цеха). Раньше запущенный заказ без явного срока показывал фабрикованные
+// +7 дней; теперь честный ориентир — запуск + 15 рабочих дней (сварное правит менеджер).
+function addWorkingDays(from: Date, days: number): Date {
+  const d = new Date(from); let left = days
+  while (left > 0) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) left-- }
+  return d
+}
 function deadline(pn: Record<string, unknown>, createdAt: string): string {
   const dl = pn.deadline_date ? new Date(pn.deadline_date as string)
     : pn.launched_at && pn.production_days ? (() => { const d = new Date(pn.launched_at as string); d.setDate(d.getDate() + (pn.production_days as number)); return d })()
-    : pn.launched_at ? (() => { const d = new Date(pn.launched_at as string); d.setDate(d.getDate() + 7); return d })()
-    : (() => { const d = new Date(createdAt); d.setDate(d.getDate() + 10); return d })()
+    : pn.launched_at ? addWorkingDays(new Date(pn.launched_at as string), 15)
+    : addWorkingDays(new Date(createdAt), 15)
   return dl.toISOString()
 }
 
