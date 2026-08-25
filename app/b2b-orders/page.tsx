@@ -1086,13 +1086,22 @@ export default function B2BOrdersPage() {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: (d.notes ?? o.parsedNotes) as NotesData } : o))
       return
     }
-    stages[stageKey] = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
+    const next = stages[stageKey] ? null : new Date().toISOString().slice(0, 10)
+    stages[stageKey] = next
     const newParsed: NotesData = { ...order.parsedNotes, stages }
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
-    const { error } = await createClient().from('b2b_orders').update({ notes: JSON.stringify(newParsed) }).eq('id', orderId)
-    if (error) {
+    // Пишем точечно через /stages: раньше экран клал весь notes блобом и две
+    // одновременные отметки затирали друг друга (и заодно оплату/доставку).
+    const r = await fetch(`/api/b2b-orders/${orderId}/stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stages: { [stageKey]: next } }),
+    })
+    if (!r.ok) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
+      return
     }
+    const d = await r.json().catch(() => ({}))
+    if (d?.notes) setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: d.notes as NotesData } : o))
   }
 
   async function updateMaterialStatus(orderId: number, newStatus: MaterialStatus) {
@@ -1116,10 +1125,20 @@ export default function B2BOrdersPage() {
 
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: newParsed } : o))
 
-    const { error } = await createClient()
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(newParsed) })
-      .eq('id', orderId)
+    const res = await fetch(`/api/b2b-orders/${orderId}/stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stages: MATERIAL_STATUS_TRIGGERS_ORDERED.has(newStatus) && !currentStages.material_ordered
+          ? { material_ordered: now.slice(0, 10) }
+          : {},
+        patch: {
+          material_status: newStatus,
+          material_status_updated_at: now,
+          material_status_updated_by: currentUserId ?? null,
+        },
+      }),
+    })
+    const error = res.ok ? null : new Error('stage write failed')
 
     if (error) {
       setOrders(prev => prev.map(o => o.id === orderId ? { ...o, parsedNotes: order.parsedNotes } : o))
@@ -1143,10 +1162,13 @@ export default function B2BOrdersPage() {
       updated_at: new Date().toISOString(),
     }
     const newParsed: NotesData = { ...order.parsedNotes, deadline_control: merged }
-    const { error } = await createClient()
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(newParsed) })
-      .eq('id', orderId)
+    // Тем же точечным роутом: deadline_control — верхнеуровневый ключ notes,
+    // писать ради него весь блоб значит снова ловить гонку с отметками этапов.
+    const res = await fetch(`/api/b2b-orders/${orderId}/stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch: { deadline_control: merged } }),
+    })
+    const error = res.ok ? null : new Error('deadline_control write failed')
     setDcSaving(null)
     if (error) {
       setToastError(true)
@@ -1170,10 +1192,13 @@ export default function B2BOrdersPage() {
       updated_at: new Date().toISOString(),
     }
     const newParsed: NotesData = { ...order.parsedNotes, deadline_control: merged }
-    const { error } = await createClient()
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(newParsed) })
-      .eq('id', orderId)
+    // Тем же точечным роутом: deadline_control — верхнеуровневый ключ notes,
+    // писать ради него весь блоб значит снова ловить гонку с отметками этапов.
+    const res = await fetch(`/api/b2b-orders/${orderId}/stages`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patch: { deadline_control: merged } }),
+    })
+    const error = res.ok ? null : new Error('deadline_control write failed')
     setDcSaving(null)
     if (error) {
       setToastError(true)
@@ -1189,6 +1214,7 @@ export default function B2BOrdersPage() {
   async function bulkMarkMonthAsShipped(monthKey: string, ordersToUpdate: Order[]) {
     setBulkActionLoading(monthKey)
     const now = new Date().toISOString()
+    const today = now.slice(0, 10)
     let updatedCount = 0
 
     for (const order of ordersToUpdate) {
@@ -1199,8 +1225,10 @@ export default function B2BOrdersPage() {
         ...currentNotes,
         stages: {
           ...(currentNotes.stages || {}),
-          packaged: currentNotes.stages?.packaged || now,
-          shipped: now,
+          // Дата отгрузки — календарная, как у ручного тумблера. Раньше здесь
+          // писался полный ISO, и два формата в одном поле ломали сравнения дат.
+          packaged: currentNotes.stages?.packaged || today,
+          shipped: today,
         },
         bulk_actions: [
           ...(Array.isArray(currentNotes.bulk_actions) ? currentNotes.bulk_actions : []),
@@ -1216,10 +1244,14 @@ export default function B2BOrdersPage() {
         ],
       }
 
-      const { error } = await createClient()
-        .from('b2b_orders')
-        .update({ notes: JSON.stringify(nextNotes) })
-        .eq('id', order.id)
+      const r = await fetch(`/api/b2b-orders/${order.id}/stages`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          stages: { packaged: currentNotes.stages?.packaged || today, shipped: today },
+          patch: { bulk_actions: nextNotes.bulk_actions },
+        }),
+      })
+      const error = r.ok ? null : new Error('bulk stage write failed')
 
       if (error) {
         setBulkActionLoading(null)
