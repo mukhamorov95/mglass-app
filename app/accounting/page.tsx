@@ -11,11 +11,12 @@ import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 import { FinweekTab } from '@/components/accounting/FinweekTab'
 import { NotesTab } from '@/components/accounting/NotesTab'
 import { UnpostedTab } from '@/components/accounting/UnpostedTab'
+import { DocumentsTab } from '@/components/accounting/DocumentsTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
 type Account = { id: number; unit: string; name: string; sort: number }
-type Entry = { id: number; entry_date: string; unit: string; kind: string; fund_id: number; subfund_id: number | null; amount: number; account: string | null; counterparty: string | null; comment: string | null; entered_by_name: string | null }
+type Entry = { id: number; entry_date: string; unit: string; kind: string; fund_id: number; subfund_id: number | null; amount: number; account: string | null; counterparty: string | null; comment: string | null; entered_by_name: string | null; attachment_path: string | null }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const CLASS_LABEL: Record<string, string> = { variable: 'Переменные расходы', fixed: 'Постоянные расходы', fund: 'Фонды' }
@@ -31,7 +32,7 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'requests' | 'committee' | 'notes'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'docs' | 'requests' | 'committee' | 'notes'>('odds')
   const [unposted, setUnposted] = useState(0)
   const [myRole, setMyRole] = useState('')
   const [myName, setMyName] = useState('')
@@ -154,6 +155,16 @@ export default function AccountingPage() {
     await load()
   }
 
+  async function attach(entryId: number, file: File) {
+    const body = new FormData()
+    body.append('entry_id', String(entryId))
+    body.append('file', file)
+    const r = await fetch('/api/accounting/entry-attachment', { method: 'POST', body })
+    const j = await r.json().catch(() => ({}))
+    flash(r.ok ? 'Вложение сохранено ✓' : (j.error ?? 'Не загрузилось'))
+    if (r.ok) await load()
+  }
+
   async function saveEntry() {
     const amount = Number(fAmount.replace(/\s/g, '').replace(',', '.'))
     if (!fFund || !(amount > 0)) { flash('Выбери фонд и сумму'); return }
@@ -231,7 +242,7 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['docs', 'Документы'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
@@ -361,8 +372,22 @@ export default function AccountingPage() {
                       <span className="text-[#111110]">{fund?.name}{sub ? ` → ${sub.name}` : ''}</span>
                       {e.counterparty && <span className="text-[#9a9a95]"> · {e.counterparty}</span>}
                     </div>
-                    <span className={`font-mono flex-shrink-0 ml-3 ${e.kind === 'in' ? 'text-emerald-700' : 'text-[#111110]'}`}>
-                      {e.kind === 'in' ? '+' : '−'}{RUB(Number(e.amount))}
+                    <span className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      {e.attachment_path ? (
+                        <a href={`/api/accounting/entry-attachment?id=${e.id}`} target="_blank" rel="noreferrer"
+                          className="text-[13px] text-blue-600" title="Открыть вложение">📎</a>
+                      ) : (
+                        <label className="text-[13px] text-[#c9c9c4] cursor-pointer" title="Приложить скан">
+                          📎
+                          <input type="file" className="hidden" onChange={ev => {
+                            const f = ev.target.files?.[0]
+                            if (f) attach(e.id, f)
+                          }} />
+                        </label>
+                      )}
+                      <span className={`font-mono ${e.kind === 'in' ? 'text-emerald-700' : 'text-[#111110]'}`}>
+                        {e.kind === 'in' ? '+' : '−'}{RUB(Number(e.amount))}
+                      </span>
                     </span>
                   </div>
                 )
@@ -375,6 +400,7 @@ export default function AccountingPage() {
           <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
             onPosted={() => { load(); loadUnposted() }} />
         )}
+        {tab === 'docs' && !isBuyer && <DocumentsTab />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
