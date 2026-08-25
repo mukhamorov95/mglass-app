@@ -3,6 +3,27 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { buildProductionTasks } from '@/lib/productionRouting'
+import { parseNotes } from '@/lib/orderFlags'
+import { deadlineFor } from '@/lib/contractDeadlines'
+
+// Рабочие дни от даты (пропуская сб/вс) → календарная дата дедлайна.
+function addWorkingDays(from: Date, days: number): Date {
+  const d = new Date(from)
+  let left = days
+  while (left > 0) {
+    d.setDate(d.getDate() + 1)
+    const wd = d.getDay()
+    if (wd !== 0 && wd !== 6) left--
+  }
+  return d
+}
+// Сварное изделие в спецификации (лофт/рама/каркас) → срок 25 р.дн. вместо 15.
+function hasWelded(items: unknown[]): boolean {
+  return items.some(it => {
+    const s = `${(it as Record<string, unknown>)?.category ?? ''} ${(it as Record<string, unknown>)?.materialName ?? ''}`.toLowerCase()
+    return /сварн|лофт|каркас|рама|welded/.test(s)
+  })
+}
 
 // POST — generates production_tasks rows for a B2B order's items when it's
 // launched into production. Called best-effort from app/b2b-quotes/page.tsx
@@ -31,12 +52,29 @@ export async function POST(
 
   const { data: order, error: orderErr } = await svc
     .from('b2b_orders')
-    .select('id, items')
+    .select('id, items, notes, launched_at')
     .eq('id', orderId)
     .single()
   if (orderErr || !order) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const items = Array.isArray(order.items) ? order.items : []
+
+  // А1: гарантируем срок отгрузки. Раньше deadline_date ставился (или нет) только на
+  // клиенте — у 61% заказов его не было → цех не мог сортировать по сроку, партнёр
+  // видел «уточняется». Если пусто — считаем от даты запуска: 15 р.дн. (сварное — 25),
+  // пропуская выходные. Не перетираем уже заданный менеджером срок.
+  const notes = parseNotes(order.notes)
+  if (!notes.deadline_date) {
+    const makeDays = deadlineFor('shower', hasWelded(items)).make
+    const from = order.launched_at ? new Date(order.launched_at as string) : new Date()
+    const deadline = addWorkingDays(from, makeDays)
+    // Атомарный shallow-patch (не перезапись всего notes) — заказ уже в проде,
+    // рядом могут идти правки стадий.
+    await svc.rpc('patch_order_notes_shallow', {
+      p_order_id: orderId,
+      p_patch: { deadline_date: deadline.toISOString().slice(0, 10), production_days: (notes.production_days as number) || makeDays },
+    })
+  }
   const rows = buildProductionTasks(orderId, items)
   if (rows.length === 0) return NextResponse.json({ created: 0, skipped: 0 })
 
