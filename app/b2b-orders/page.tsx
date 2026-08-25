@@ -1581,6 +1581,9 @@ export default function B2BOrdersPage() {
           {/* А7: УПД — тот же документ, что в кабинете партнёра */}
           <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
+          {/* А4: одна карточка сделки */}
+          <Link href={`/b2b-deal/${order.id}`}
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#111110] bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">🗂 Карточка сделки</Link>
           {/* А16: упаковочный лист на отгрузку */}
           <Link href={`/b2b-orders/${order.id}/packing`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📦 Упаковочный лист</Link>
