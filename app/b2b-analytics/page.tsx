@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { liveOrders } from '@/lib/liveOrders'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 type Order = {
   id: number
@@ -37,7 +38,7 @@ function parseNotes(notes: string | null): Record<string, unknown> {
 }
 
 function getPrice(o: Order) {
-  return (o.discount_percent ?? 0) > 0 ? (o.total_after_discount ?? 0) : (o.total_sale_inc_vat ?? 0)
+  return finalTotalOf(o)
 }
 
 type Tab = 'clients' | 'season' | 'funnel' | 'conversion'
