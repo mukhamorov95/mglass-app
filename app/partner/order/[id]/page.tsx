@@ -10,6 +10,7 @@ type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null
   paymentStatus?: 'paid' | 'awaiting' | null
+  onlinePayEnabled?: boolean
   canInvoice?: boolean
   drawingApproval?: { status: 'approved' | 'rework'; comment: string | null; at: string | null } | null
   delivery?: { method: 'pickup' | 'delivery'; address: string | null; comment: string | null; status: string | null } | null
@@ -53,6 +54,17 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         setReworkOpen(false); setReworkText('')
       }
     } finally { setDeciding(false) }
+  }
+
+  const [paying, setPaying] = useState(false)
+  async function payOnline() {
+    setPaying(true)
+    try {
+      const r = await fetch(`/api/partner/order/${id}/pay`, { method: 'POST' })
+      const d = await r.json()
+      if (r.ok && d.url) { window.location.href = d.url; return }
+      alert(d.error || 'Оплата онлайн недоступна')
+    } finally { setPaying(false) }
   }
 
   function openDelivery() {
@@ -231,6 +243,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
       )}
 
       <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap' }}>
+        {o.onlinePayEnabled && <button className="primary" onClick={payOnline} disabled={paying}>{paying ? 'Открываю оплату…' : '💳 Оплатить онлайн'}</button>}
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
         <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>

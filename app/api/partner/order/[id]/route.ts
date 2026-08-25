@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { paymentsEnabled } from '@/lib/payments/provider'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
 // клиентское: позиции (материал/размер/кол-во/цена), стадии производства,
@@ -115,6 +116,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
     deadline,
     paymentStatus,
+    onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
     canInvoice: !!client.can_self_invoice && launched,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
