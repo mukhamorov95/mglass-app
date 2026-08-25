@@ -43,6 +43,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
   { href: '/calculations',  label: 'История расчётов', icon: '📋' },
   { href: '/orders',        label: 'Заказы',           icon: '📦' },
+  { href: '/inventory',     label: 'Склад (остатки)',  icon: '🏬' },
   { href: '/clients',       label: 'Клиенты',          icon: '👤' },
   { href: '/calendar',      label: 'Календарь',        icon: '📅' },
   { href: '/measure-requests', label: 'Заявки на замер', icon: '📐' },
@@ -66,7 +67,7 @@ const MANAGER_B2B: NavItem[] = [
 // ─── Buyer role ───────────────────────────────────────────────────────────────
 
 const BUYER_SKLAD: NavItem[] = [
-  { href: '/admin/stock-control', label: 'Критические остатки', icon: '📊', indent: true },
+  { href: '/inventory',           label: 'Склад — остатки',     icon: '🏬', indent: true },
 ]
 
 const BUYER_ZAKUPKI: NavItem[] = [
@@ -311,7 +312,7 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/measure-calendar',    label: 'Календарь замеров', icon: '🗓️' },
   { href: '/measurer-cabinet',    label: 'Замерщики (календарь/деньги)', icon: '📏' },
   { href: '/admin/installations', label: 'Монтажи',          icon: '🔧' },
-  { href: '/admin/stock-control',  label: 'Остатки склада',  icon: '📦' },
+  { href: '/inventory',            label: 'Склад',           icon: '🏬' },
   { href: '/admin/route-sheet',    label: 'Маршрутный лист', icon: '🚚' },
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
@@ -339,6 +340,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
 // Материал и документы: ежедневная проверка материала выше, документы реже.
 const PRODUCTION_NAV_SUPPLY: NavItem[] = [
   { href: '/production-app/material', label: 'Материал',         icon: '📦' },
+  { href: '/inventory',               label: 'Склад — остатки',  icon: '🏬' },
   { href: '/b2b-cutting',             label: 'Раскрой стекла',   icon: '✂️' },
   { href: '/production-app/buy',      label: 'Необходимо купить', icon: '🛒' },
   { href: '/production-app/docs',     label: 'Документы',        icon: '📄' },
@@ -394,7 +396,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
   }
   return open
 }
@@ -403,7 +405,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
   const open: string[] = []
   if (role === 'cfo') return open
   if (role === 'buyer') {
-    if (inSection(pathname, ['/admin/stock-control'])) open.push('buyer_sklad')
+    if (inSection(pathname, ['/inventory', '/admin/stock-control'])) open.push('buyer_sklad')
     if (inSection(pathname, ['/admin/procurement', '/admin/suppliers', '/admin/supplier-catalog', '/admin/visualizer-pricing', '/admin/shower-hardware', '/admin/hardware'])) open.push('buyer_zakupki')
     if (inSection(pathname, ['/admin/route-sheet', '/orders', '/b2b-orders'])) open.push('buyer_logistika')
     if (inSection(pathname, ['/admin/glass-prices', '/admin/facet', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/services', '/admin/cutting-settings'])) open.push('buyer_spravochniki')

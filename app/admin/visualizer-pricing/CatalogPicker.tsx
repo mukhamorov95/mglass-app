@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 
 // ── Пикер из справочника поставщиков ──────────────────────────────
-type PickRow = { id: number; supplier: string; category: string; name: string; color: string; cost_price: number; retail_price: number; is_favorite: boolean }
+type PickRow = { id: number; supplier: string; category: string; name: string; color: string; cost_price: number; retail_price: number; is_favorite: boolean; image_url?: string }
 type PickSource = { supplier: string; title: string; discount_percent: number }
 type CompareRow = { id: number; supplier: string; name: string; color: string; cost_price: number }
 
@@ -76,6 +76,9 @@ export function CatalogPicker({ onPick, onClose }: { onPick: (id: number) => voi
               <div className="w-full px-2 py-2 rounded-lg hover:bg-[#f5f5f3] flex items-center gap-2">
                 <button onClick={() => toggleFav(r)} title={r.is_favorite ? 'Убрать из наших позиций' : 'Отметить как нашу позицию'}
                   className={`text-[15px] leading-none shrink-0 ${r.is_favorite ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{r.is_favorite ? '★' : '☆'}</button>
+                {r.image_url
+                  ? <img src={r.image_url} alt="" className="w-8 h-8 rounded object-cover border border-[#eeece5] shrink-0" />
+                  : <span className="w-8 h-8 rounded bg-[#f2f1ec] border border-[#eeece5] shrink-0" />}
                 <button onClick={() => onPick(r.id)} className="flex-1 min-w-0 text-left">
                   <span className="block text-[13px] text-[#111110] truncate">{r.name}</span>
                   <span className="block text-[11px] text-[#9a9a95]">{title(r.supplier)} · {r.color || '—'}</span>

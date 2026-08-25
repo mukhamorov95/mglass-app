@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 // Архив расчётов B2B — полная история просчётов, сделанных людьми (created_by задан;
 // импорт из таблицы сюда не попадает). Группировка по месяцам (новые сверху, текущий
@@ -33,7 +34,7 @@ function parseNotes(n: string | null): Record<string, unknown> {
   try { const p = JSON.parse(n); return typeof p === 'object' && p ? p : {} } catch { return {} }
 }
 const authorOf = (r: Row) => r.created_by_name || (parseNotes(r.notes).manager_name as string | undefined) || '—'
-const priceOf = (r: Row) => (r.discount_percent ?? 0) > 0 ? (r.total_after_discount ?? 0) : (r.total_sale_inc_vat ?? 0)
+const priceOf = (r: Row) => finalTotalOf(r)
 const statusOf = (r: Row) => (parseNotes(r.notes).status as string | undefined) || 'quote'
 const STATUS_LABEL: Record<string, string> = { quote: 'Черновик', pending_approval: 'На согласовании', agreed: 'Согласован', rejected: 'Отказ', sent: 'В работе', confirmed: 'Запущен' }
 const STATUS_STYLE: Record<string, string> = {
