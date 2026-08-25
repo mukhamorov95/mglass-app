@@ -8,6 +8,7 @@ import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '
 import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTION_STAGES, calcOrderProgress } from '@/lib/productionStages'
 import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
+import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -1608,6 +1609,29 @@ export default function B2BOrdersPage() {
               className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
           ))}
         </div>
+
+        {/* А20: что видел и делал клиент — сквозной контур с его кабинетом */}
+        {(() => {
+          const events = buildClientTimeline(order.parsedNotes as unknown as Record<string, unknown>)
+          if (events.length === 0) return null
+          return (
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Клиент</p>
+              <div className="flex flex-wrap gap-1.5">
+                {events.map((e, i) => (
+                  <span key={i}
+                    title={e.at ? new Date(e.at).toLocaleString('ru-RU') : undefined}
+                    className={`text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                      e.tone === 'good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      : e.tone === 'warn' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                      : 'bg-white text-[#6b6b66] border-[#e4e4e0]'}`}>
+                    {e.icon} {e.text}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )
+        })()}
 
         {/* А17: рекламация */}
         {(() => {
