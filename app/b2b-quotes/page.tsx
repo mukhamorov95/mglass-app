@@ -287,6 +287,9 @@ export default function B2BQuotesPage() {
   const [workNumber, setWorkNumber]   = useState('')
   const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
   const [queueCount, setQueueCount] = useState<number | null>(null)  // А6: заказов в работе
+  // А13: свободный остаток стекла по названию материала (м²). Склад читаем через
+  // /api/inventory/items — напрямую к таблицам браузер не ходит (там RLS deny-by-default).
+  const [stock, setStock] = useState<Map<string, number>>(new Map())
   const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
   const workDateRef = useRef<HTMLInputElement>(null)
 
@@ -563,6 +566,22 @@ export default function B2BQuotesPage() {
       // Owners are never scope-restricted.
       setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
       const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
+
+      // А13: остатки склада — справочно, ошибка загрузки не ломает список просчётов.
+      fetch('/api/inventory/items?contour=all')
+        .then(r => r.ok ? r.json() : null)
+        .then((j: { items?: { name: string; qty: number; qty_reserved: number; unit: string }[] } | null) => {
+          if (!j?.items) return
+          const m = new Map<string, number>()
+          for (const it of j.items) {
+            if (it.unit !== 'м2') continue
+            const free = Number(it.qty ?? 0) - Number(it.qty_reserved ?? 0)
+            const key = it.name.trim().toLowerCase()
+            m.set(key, (m.get(key) ?? 0) + free)
+          }
+          setStock(m)
+        })
+        .catch(() => {})
 
       // А6: очередь производства — сколько заказов уже запущено и ещё не отгружено.
       // Нужна как честный контекст при выборе срока сдачи (мощность цеха в системе
@@ -1468,6 +1487,7 @@ export default function B2BQuotesPage() {
                             <th className="px-2 py-1.5 text-right w-10">Кол.</th>
                             <th className="px-2 py-1.5 text-right w-14">Кв.м</th>
                             <th className="px-2 py-1.5 text-right w-14">Вес, кг</th>
+                            <th className="px-2 py-1.5 text-right w-16" title="Свободный остаток на складе">Склад</th>
                             <th className="px-2 py-1.5 text-right w-18">Цена/м²</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#111110]">Итого</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#9a9a95]">Себест.</th>
@@ -1500,6 +1520,18 @@ export default function B2BQuotesPage() {
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.quantity ?? ''}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#6b6b66]">{Number(item.totalWeight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
+                                {(() => {
+                                  const free = stock.get(String(item.materialName ?? '').trim().toLowerCase())
+                                  const need = Number(item.totalAreaNet ?? 0)
+                                  if (free == null) return <td className="px-2 py-1 text-right text-[#c4c4be]">—</td>
+                                  const enough = free >= need
+                                  return (
+                                    <td className={`px-2 py-1 text-right font-mono whitespace-nowrap ${enough ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}
+                                      title={enough ? 'Хватает на эту позицию' : `Не хватает ${(need - free).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`}>
+                                      {free.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}
+                                    </td>
+                                  )
+                                })()}
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.pricePerM2 ?? 0).toLocaleString('ru-RU')}</td>
                                 <td className="px-2 py-1 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemFull.toLocaleString('ru-RU')} ₽</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#9a9a95] whitespace-nowrap">{Number(item.costExVat ?? 0).toLocaleString('ru-RU')} ₽</td>
@@ -1513,12 +1545,13 @@ export default function B2BQuotesPage() {
                             <td className="px-2 py-1.5 text-right font-mono text-[11px]">{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                             <td className="px-2 py-1.5 text-right font-mono text-[11px] text-[#6b6b66]">{(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
                             <td />
+                            <td />
                             <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap text-[11px] text-[#6b6b66]">{fmt(quote.total_sale_inc_vat)}</td>
                             <td />
                           </tr>
                           {(quote.discount_percent ?? 0) > 0 && (
                             <tr className="bg-[#fafaf9]">
-                              <td colSpan={10} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
+                              <td colSpan={11} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
                                 Скидка {quote.discount_percent}%
                               </td>
                               <td className="px-2 py-0.5 text-right font-mono text-[11px] text-emerald-600 whitespace-nowrap">
@@ -1528,7 +1561,7 @@ export default function B2BQuotesPage() {
                             </tr>
                           )}
                           <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
-                            <td colSpan={10} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
+                            <td colSpan={11} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
                             <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
                             <td />
                           </tr>
