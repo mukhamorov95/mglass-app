@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import InstallButton from '../InstallButton'
 
 // «Как пользоваться» — онбординг партнёра (дизайн из прототипа, .pcab).
 export default function PartnerGuidePage() {
@@ -36,6 +37,7 @@ export default function PartnerGuidePage() {
         <div className="guide-hero">
           <h2>Ваш кабинет заказчика M-Glass</h2>
           <p>Считайте стоимость сами, отправляйте просчёты в работу и следите за производством — без звонков и переписок. Всё по вашим ценам.</p>
+          <InstallButton />
         </div>
 
         <div className="card">
