@@ -28,6 +28,7 @@ export type MetalPart = {
   size: [number, number, number]
   rotY: number
   kind: 'profile' | 'rail' | 'post'
+  spec?: string                  // код узла для прайса (хлысты): tube-perp90/tube-diag45/tube-stabilizer/profile-wall/profile-floor/profile-top/profile-vertical
 }
 
 // Реальная фурнитура-модель (точки установки; геометрия — в scene/hardware.tsx).
@@ -35,12 +36,20 @@ export type HardwarePlacement = {
   key: string
   model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001' | 'connector'
   shape?: string                 // форма для 3D (выбор клиента); нет → берётся по model
+  spec?: string                  // код узла для прайса (штучное): mount-wall/mount-corner/mount-glass/mount-diag45/mount-stabilizer
   pos: [number, number, number]
   rotY: number
 }
 
 // Выбор внешнего вида фурнитуры клиентом: shape петли/ручки. Пусто → дефолт модели.
 export type HardwareChoice = { hinge?: string; handle?: string }
+
+// Выбор варианта модели клиентом (M1): крепление штанги + обвязка профилем.
+// Ключи — мои; прайс принимает их как есть и не интерпретирует. Пусто → дефолт.
+export type MVariant = {
+  mount?: 'perp90' | 'diag45' | 'stabilizer' | 'ceiling'
+  profileFrame?: 'partial' | 'perimeter'
+}
 
 // Облицованная ниша вокруг кабины (Фаза 1): стёкла закрывают открытые стороны,
 // плиткой облицованы остальные. Угловая — глухие стены сзади и справа; прямая —
@@ -166,7 +175,8 @@ export function buildAssembly(config: Configuration): Assembly {
 // Плоскость XZ — план (вид сверху): фронт вдоль X, глубина вдоль Z, высота Y.
 // Стёкла — вертикальные панели вдоль «ранов»; распашная дверь открывается НАРУЖУ
 // (в сторону outward-нормали рана); петля на своей стороне (к стеклу/стене).
-export type MDims = { width: number; height: number; width2?: number; doorWidth?: number }
+export type MDims = { width: number; height: number; width2?: number; doorWidth?: number; trayDepth?: number; ceilingHeight?: number }
+export const M1_TRAY_DEPTH_DEFAULT = 1000   // стандарт глубины поддона (мм) для perp90, если клиент не ввёл
 
 // Тон стекла (тип/цвет): прозрачное / осветлённое / тонированное бронза/графит.
 export type GlassTint = { color: string; attenuation: string; distance: number }
@@ -175,11 +185,17 @@ const DOOR_OPEN_DEG = 32       // распашная приоткрыта зам
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
 type P = [number, number]   // точка плана [x, z], метры
 
-export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true, choice: HardwareChoice = {}): Assembly {
+export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true, choice: HardwareChoice = {}, variant: MVariant = {}): Assembly {
+  const isM1 = model.shape === 'walkin'
+  const mount = isM1 ? (variant.mount ?? 'perp90') : undefined
+  const profileFrame = isM1 ? (variant.profileFrame ?? 'partial') : undefined
   const t = thickness * M
-  const H = dims.height * M
+  // Вариант «в потолок»: стекло тянется до высоты потолка (ввод клиента), иначе — заданная высота.
+  const Hraw = mount === 'ceiling' ? (dims.ceilingHeight ?? dims.height) : dims.height
+  const H = Hraw * M
   const W = dims.width * M
   const W2 = (dims.width2 ?? 900) * M
+  const trayDepth = (dims.trayDepth ?? M1_TRAY_DEPTH_DEFAULT) * M   // глубина поддона (perp90 → длина трубы)
   const glass: GlassPart[] = []
   const metal: MetalPart[] = []
   const hardware: HardwarePlacement[] = []
@@ -285,9 +301,9 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
   const side = model.runs.find(r => r.edge === 'side')
 
   if (model.shape === 'walkin') {
-    depth = 0.9; walls = { back: true, left: true, right: false }   // задняя+левая стена — панель стоит в углу, не «в воздухе»
-    const part = front?.part ?? 0.62
-    runs.push({ kp: 'w', A: [0, 0], B: [W * part, 0], out: [0, -1], segs: front!.segs })
+    // M1 собирается отдельным блоком ниже (варианты крепления/обвязки), общий цикл не трогает.
+    depth = mount === 'perp90' ? trayDepth : Math.min(trayDepth, 0.9)   // перп-труба тянется до задней стены = глубина поддона
+    walls = { back: true, left: true, right: false }
   } else if (model.shape === 'niche') {
     depth = NICHE_DEFAULT_DEPTH; walls = { back: true, left: true, right: true }
     runs.push({ kp: 'f', A: [0, 0], B: [W, 0], out: [0, -1], segs: front!.segs })
@@ -378,8 +394,48 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     hardware.push({ key: 'trap-endG', model: 'kp002', rotY: rotOf(dG), pos: [0 - outs.g[0] * SLIDE_GAP, tubeYSwing, 0 - outs.g[1] * SLIDE_GAP] })
   }
 
+  // ── M1 «Стационарная»: стекло + обвязка профилем + крепление штанги по варианту ──
+  if (isM1) {
+    const Lg = W * (front?.part ?? 0.62)               // длина стеклянной панели (у стены x=0 → +x)
+    addGlass('w0', [0, 0], [Lg, 0], 'fixed')
+    const PW = 0.02                                    // видимая ширина П-профиля, м
+    const topProfile = profileFrame === 'perimeter' || mount === 'ceiling'
+    const freeVertical = profileFrame === 'perimeter'
+    // profile-wall — вертикаль у стены (x=0)
+    metal.push({ key: 'm1-pf-wall', kind: 'post', rotY: 0, spec: 'profile-wall', pos: [0, H / 2, 0], size: [PW, H, 0.018] })
+    // profile-floor — низ стекла
+    metal.push({ key: 'm1-pf-floor', kind: 'profile', rotY: 0, spec: 'profile-floor', pos: [Lg / 2, bottomY, 0], size: [Lg, 0.0125, 0.018] })
+    if (topProfile)
+      metal.push({ key: 'm1-pf-top', kind: 'profile', rotY: 0, spec: 'profile-top', pos: [Lg / 2, H - 0.006, 0], size: [Lg, 0.0125, 0.018] })
+    if (freeVertical)
+      metal.push({ key: 'm1-pf-vert', kind: 'post', rotY: 0, spec: 'profile-vertical', pos: [Lg, H / 2, 0], size: [PW, H, 0.018] })
+
+    const yTop = H - 0.02
+    if (mount === 'perp90') {
+      // Труба 30×10 перпендикулярно от стекла (свободный край) до задней стены; длина = глубина поддона.
+      const L = trayDepth
+      metal.push({ key: 'm1-tube', kind: 'rail', rotY: Math.PI / 2, spec: 'tube-perp90', pos: [Lg, yTop, L / 2], size: [L, 0.010, 0.030] })
+      hardware.push({ key: 'm1-mnt-glass', model: 'kp006', spec: 'mount-glass', rotY: 0, pos: [Lg, yTop, 0.02] })
+      hardware.push({ key: 'm1-mnt-wall', model: 'kp002', spec: 'mount-wall', rotY: Math.PI / 2, pos: [Lg, yTop, L] })
+    } else if (mount === 'diag45') {
+      // Труба под 45° к стене крепления (в плане): равные смещения по x (к стене) и z (внутрь).
+      const d = Math.min(trayDepth, Lg * 0.8)
+      const ax = Lg, az = 0, bx = Lg - d, bz = d
+      const L = Math.hypot(bx - ax, bz - az), rotY = Math.atan2(-(bz - az), bx - ax)
+      metal.push({ key: 'm1-tube', kind: 'rail', rotY, spec: 'tube-diag45', pos: [(ax + bx) / 2, yTop, (az + bz) / 2], size: [L, 0.010, 0.030] })
+      hardware.push({ key: 'm1-mnt-d45a', model: 'kp006', spec: 'mount-diag45', rotY, pos: [ax, yTop, az] })
+      hardware.push({ key: 'm1-mnt-d45b', model: 'kp002', spec: 'mount-diag45', rotY, pos: [bx, yTop, bz] })
+    } else if (mount === 'stabilizer') {
+      // Короткая стабилизационная штанга от свободного края к задней стене.
+      const L = Math.min(0.35, trayDepth)
+      metal.push({ key: 'm1-tube', kind: 'rail', rotY: Math.PI / 2, spec: 'tube-stabilizer', pos: [Lg, yTop, L / 2], size: [L, 0.010, 0.030] })
+      hardware.push({ key: 'm1-mnt-stab', model: 'kp002', spec: 'mount-stabilizer', rotY: Math.PI / 2, pos: [Lg, yTop, L] })
+    }
+    // mount === 'ceiling' — трубы нет; стекло до потолка (H), профиль сверху добавлен выше.
+  }
+
   // Стойки на стыках стекло-стена/угол.
-  addPost('p-corner', [0, 0])
+  if (!isM1) addPost('p-corner', [0, 0])
   if (model.shape === 'niche') addPost('p-right', [W, 0])
   if (model.shape === 'corner' || model.shape === 'trap') addPost('p-back', [W, depth])
 

@@ -16,19 +16,24 @@ export async function GET(req: NextRequest) {
   const category = sp.get('category') || ''
   const q = (sp.get('q') || '').trim()
   const page = Math.max(0, Number(sp.get('page') || 0))
+  const favOnly = sp.get('favorites') === '1'      // только «наши позиции»
 
   const supa = createServiceClient()
-  const [{ data: sources }, { data: cats }] = await Promise.all([
+  const [{ data: sources }, { data: cats }, { count: favTotal }] = await Promise.all([
     supa.from('supplier_price_sources').select('*').order('title'),
     supplier === 'all' ? Promise.resolve({ data: [] }) : supa.rpc('supplier_price_categories', { sup: supplier }),
+    supa.from('supplier_price_rows').select('id', { count: 'exact', head: true }).eq('is_favorite', true),
   ])
 
   let query = supa.from('supplier_price_rows')
-    .select('id,supplier,category,article,name,color,unit,retail_price,discount_percent,cost_price,url', { count: 'exact' })
+    .select('id,supplier,category,article,name,color,unit,retail_price,discount_percent,cost_price,url,is_favorite', { count: 'exact' })
   if (supplier !== 'all') query = query.eq('supplier', supplier)
   if (category) query = query.eq('category', category)
+  if (favOnly) query = query.eq('is_favorite', true)
   if (q) query = query.or(`name.ilike.%${q}%,article.ilike.%${q}%`)
-  query = query.order('category').order('name').range(page * PAGE, page * PAGE + PAGE - 1)
+  // Избранное («наши позиции») всегда наверху списка.
+  query = query.order('is_favorite', { ascending: false }).order('category').order('name')
+    .range(page * PAGE, page * PAGE + PAGE - 1)
   const { data: rows, count } = await query
 
   return NextResponse.json({
@@ -36,6 +41,7 @@ export async function GET(req: NextRequest) {
     categories: cats ?? [],
     rows: rows ?? [],
     total: count ?? 0,
+    favTotal: favTotal ?? 0,
     page, pageSize: PAGE,
   })
 }
