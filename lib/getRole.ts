@@ -154,6 +154,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
+    '/b2b-today',
     '/b2b-quotes',
     '/b2b-orders',
     '/b2b-invoices',

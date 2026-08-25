@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { PUBLIC_QUOTE_COLS, toPublicQuote, parseNotes } from '@/lib/b2b/publicQuote'
+import { notifyOrderManager } from '@/lib/b2b/notifyManager'
 
 // А5: публичное КП по токену. Логина нет — доступ даёт только сам токен, поэтому:
 //   • наружу уходит только whitelist полей (toPublicQuote), без себестоимости;
@@ -70,6 +71,17 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   const svc = createServiceClient()
   const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(next) }).eq('id', order.id)
   if (error) return NextResponse.json({ error: 'Не удалось сохранить' }, { status: 500 })
+
+  // А14: менеджеру в Telegram — клиент ответил по КП. Best effort, ответ клиента
+  // уже сохранён и от доставки уведомления не зависит.
+  const number = String(order.custom_number ?? order.id)
+  await notifyOrderManager(
+    order.id,
+    action === 'approve'
+      ? `✅ Клиент согласовал КП <b>№ ${number}</b>${comment ? `\n${comment}` : ''}`
+      : `❓ Вопрос по КП <b>№ ${number}</b>${comment ? `\n${comment}` : ''}`,
+    '/b2b-quotes',
+  )
 
   return NextResponse.json({ ok: true, status: action === 'approve' && !launched ? 'agreed' : current })
 }
