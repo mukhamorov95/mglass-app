@@ -333,6 +333,11 @@ export default function MaterialsAdminPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Отчёт «подозрение на дубль» — картина для владельца, ничего не правит */}
+          <a href="/admin/materials/duplicates"
+            className="h-8 px-3 rounded-lg text-[12px] border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] hover:text-[#111110] transition-colors flex items-center">
+            🔍 Дубли
+          </a>
           <button
             onClick={() => toggleClearGroup(allVisibleIds, selectedForClear.size < allVisibleIds.length)}
             className="h-8 px-3 rounded-lg text-[12px] border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f3] transition-colors">
