@@ -10,6 +10,7 @@ export type MatchTarget = {
   ref_table:   string | null
   ref_id:      string | null
   bom_aliases: string[]
+  qty_reserved?: number
 }
 
 // Позиция B2B-заказа (b2b_orders.items): totalAreaBilled — уже м² с учётом

@@ -6,6 +6,7 @@ import { sheetArea, INCOMING } from './units'
 import { normalizeUnit } from './match'
 import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type BomLike } from './plan'
 import type { InventoryActor } from './auth'
+import { markReservationConsumed } from './reserve'
 
 const svc = () => createServiceClient()
 
@@ -342,6 +343,11 @@ export async function applyConsume(
   plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[],
 ): Promise<{ inserted: number; skipped: number }> {
   const use = (rows ?? plan.rows).filter(r => r.item_id !== null && r.qty > 0)
+  // Списание закрывает резерв заказа: резерв → consumed, дальше остаток двигают
+  // сами движения. Иначе материал был бы учтён дважды (в резерве и в расходе).
+  if (plan.doc_type === 'b2b_order' || plan.doc_type === 'order') {
+    await markReservationConsumed(plan.doc_type, plan.doc_id).catch(() => 0)
+  }
   return addMoves(use.map(r => ({
     item_id: r.item_id as number,
     qty:     -Math.abs(r.qty),
