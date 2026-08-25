@@ -146,6 +146,21 @@ export async function GET(req: Request) {
       }
     } catch { /* не валим дайджест из-за проверки воркера */ }
 
+    // Здоровье очереди сообщений (WhatsApp→AmoCRM): если копятся ошибки доставки —
+    // лиды тихо не попадают в CRM. Раньше это было видно только при заходе в
+    // /admin/integrations. Порог 5, чтобы не шуметь на единичных сбоях.
+    try {
+      const [{ count: failedC }, { count: retryC }] = await Promise.all([
+        sb.from('message_queue').select('id', { count: 'exact', head: true }).eq('status', 'failed'),
+        sb.from('message_queue').select('id', { count: 'exact', head: true }).eq('status', 'retry_scheduled'),
+      ])
+      const failed = failedC ?? 0, retry = retryC ?? 0
+      if (failed + retry >= 5) {
+        lines.push('')
+        lines.push(`🟠 <b>Очередь сообщений буксует:</b> ${failed} ошибок, ${retry} в ретрае — часть входящих может не доходить в CRM. Проверьте /admin/integrations (AmoCRM: баланс/токен).`)
+      }
+    } catch { /* не валим дайджест */ }
+
     await notifyAdmins(lines.join('\n'))
     return NextResponse.json({ ok: true, debtSum, debtors: debtors.length, cash, cash7 })
   } catch (err) {
