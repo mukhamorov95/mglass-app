@@ -66,6 +66,7 @@ const CSS = `
   padding-left:10px;border-left:1px solid var(--border)}
 .pcab .grp.open .sub{display:flex}
 .pcab .sub .it{padding:8px 10px;border-radius:9px;font-size:13px}
+.pcab .sub .it .emo{display:none}
 .pcab .sub .it .badge{background:var(--surface-2);color:var(--muted);border:1px solid var(--border);font-size:10px}
 .pcab .sub .it.on .badge{background:rgba(255,255,255,.2);color:#fff;border-color:transparent}
 .pcab .who{border-top:1px solid var(--border);padding:12px;display:flex;align-items:center;gap:10px}
@@ -273,9 +274,13 @@ const CSS = `
   .pcab .nav .it{justify-content:center;padding:12px 0;width:44px;position:relative}
   .pcab .nav .it .tx{display:none}
   .pcab .nav .badge{position:absolute;transform:translate(14px,-12px);margin:0;padding:0 5px}
-  .pcab .grp.open .sub{display:none}
+  .pcab .grp.open .sub{display:flex}
   .pcab .grp .chev{display:none}
-  .pcab .sub .it{width:44px}
+  .pcab .sub{margin:0;align-items:center}
+  .pcab .sub .it{width:44px;justify-content:center;padding:10px 0}
+  .pcab .sub .it .tx{display:none}
+  .pcab .sub .it .emo{display:inline;font-size:16px;line-height:1}
+  .pcab .sub .it .badge{position:absolute;transform:translate(14px,-12px);margin:0;padding:0 5px}
   .pcab .who{justify-content:center;padding:12px 0}
   .pcab .who .nm,.pcab .who .rl,.pcab .who .out{display:none}
   .pcab .top h1{font-size:18px}
