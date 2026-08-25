@@ -1,16 +1,12 @@
 import Link from 'next/link'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import LegalEntities from './LegalEntities'
 
-// Профиль партнёра (read-only): контакты, скидка, юрлица. Правки — через менеджера
-// (партнёр не редактирует реквизиты сам). Доступ гейтит app/partner/layout.
+// Профиль партнёра: контакты/скидка (read-only) + свои юрлица (партнёр ведёт сам, A7).
+// Доступ гейтит app/partner/layout.
 
 export const dynamic = 'force-dynamic'
-
-type Entity = {
-  id: number; full_name: string | null; inn: string | null; kpp: string | null
-  legal_address: string | null; is_default: boolean
-}
 
 export default async function PartnerProfilePage() {
   const supabase = await createServerClient()
@@ -28,11 +24,6 @@ export default async function PartnerProfilePage() {
     </div></div>
   )
 
-  const { data: ent } = await svc.from('b2b_client_legal_entities')
-    .select('id, full_name, inn, kpp, legal_address, is_default')
-    .eq('client_id', client.id).eq('active', true)
-    .order('is_default', { ascending: false })
-  const entities = (ent ?? []) as Entity[]
   const discount = Number(client.discount_percent) || 0
 
   const row = (label: string, value: string | null) => (
@@ -45,7 +36,7 @@ export default async function PartnerProfilePage() {
   return (
     <div className="wrap">
       <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em', marginBottom: 4 }}>Профиль</div>
-      <div className="cap" style={{ marginBottom: 16 }}>Ваши данные. Изменить контакты или реквизиты — напишите вашему менеджеру.</div>
+      <div className="cap" style={{ marginBottom: 16 }}>Ваши данные. Контакты и скидку меняет менеджер; юрлица для счёта вы ведёте сами.</div>
 
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-h"><h3>Контакты</h3></div>
@@ -60,27 +51,7 @@ export default async function PartnerProfilePage() {
         </div>
       </div>
 
-      <div className="card">
-        <div className="card-h"><h3>Юридические лица</h3><span className="mut">{entities.length}</span></div>
-        {entities.length === 0 ? (
-          <div className="cap" style={{ padding: '4px 2px' }}>Реквизиты не заданы. Для счёта/договора передайте их менеджеру.</div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {entities.map(e => (
-              <div key={e.id} style={{ border: '1px solid var(--border)', borderRadius: 12, padding: '12px 14px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span style={{ fontWeight: 600 }}>{e.full_name || 'Без названия'}</span>
-                  {e.is_default && <span className="pill p-quote" style={{ fontSize: 11, padding: '2px 8px' }}>основное</span>}
-                </div>
-                <div className="cap" style={{ marginTop: 4 }}>
-                  {[e.inn ? `ИНН ${e.inn}` : '', e.kpp ? `КПП ${e.kpp}` : ''].filter(Boolean).join(' · ')}
-                </div>
-                {e.legal_address && <div className="cap" style={{ marginTop: 2 }}>{e.legal_address}</div>}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+      <LegalEntities />
     </div>
   )
 }
