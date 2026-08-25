@@ -234,6 +234,11 @@ export default function B2BCalculatorPage() {
   const [fHoles, setFHoles]           = useState(false)
   const [fCurved, setFCurved]         = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
+  // А19: распознавание файла клиента
+  type ParsedItem = { id: string; width: number | null; height: number | null; quantity: number; label: string; comment: string; confidence: string; needsReview: boolean }
+  const [parsed, setParsed] = useState<ParsedItem[]>([])
+  const [parseBusy, setParseBusy] = useState(false)
+  const [parseError, setParseError] = useState<string | null>(null)
   const [fTriplex, setFTriplex]       = useState(false)
   const [fTriplexLayers, setFTriplexLayers] = useState<2 | 3>(2)
   const [fTriplexMat2, setFTriplexMat2] = useState<number | null>(null)  // null = как основное
@@ -703,6 +708,49 @@ export default function B2BCalculatorPage() {
     if (layers === 2) return [g2]
     const g3 = materials.find(m => m.id === mat3) ?? main
     return [g2, g3]
+  }
+
+  // А19: разбор файла клиента (PDF/фото чертежа) в позиции. Движок разбора уже был
+  // (/api/b2b/parse-pdf), но его никто не вызывал из интерфейса. Модель только
+  // распознаёт размеры — цену считает калькулятор, как и для ручного ввода.
+  async function parseClientFile(file: File) {
+    setParseBusy(true); setParseError(null)
+    try {
+      const fd = new FormData()
+      fd.append('file', file)
+      const r = await fetch('/api/b2b/parse-pdf', { method: 'POST', body: fd })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setParseError(j.error || 'Не удалось разобрать файл'); return }
+      const items = (j.items ?? []) as ParsedItem[]
+      if (items.length === 0) { setParseError('В файле не нашлось размеров'); return }
+      setParsed(items.filter(i => i.width && i.height))
+    } catch {
+      setParseError('Ошибка сети при разборе файла')
+    } finally { setParseBusy(false) }
+  }
+
+  // Добавляем распознанное текущим материалом и текущими настройками позиции —
+  // размеры от модели, всё остальное решает менеджер.
+  function addParsedItems() {
+    if (!selectedMaterial || parsed.length === 0) return
+    const added = parsed.map(p => {
+      const calc = computeQuoteItem({
+        material: selectedMaterial,
+        width: Number(p.width) || 0, height: Number(p.height) || 0,
+        quantity: Math.max(1, Number(p.quantity) || 1),
+        wastePercent: fWaste, hasTempering: fTempering,
+        resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
+        hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
+        hasHoles: false, shape: 'rect',
+        hasTriplex: false, triplexLayers: 2, triplexPrice, triplexExtraGlasses: [],
+        applyMinPrice: fMinPrice,
+        comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
+        dismissedSurcharges: new Set<number>(),
+      }, { facetPrices, surchargeRules })
+      return { ...calc, localId: crypto.randomUUID() }
+    })
+    setItems(prev => [...prev, ...added])
+    setParsed([])
   }
 
   function handleAddItem() {
@@ -1873,6 +1921,46 @@ export default function B2BCalculatorPage() {
               className="w-full bg-[#1d1d1f] text-white text-[14px] font-semibold py-2.5 rounded-lg hover:bg-black disabled:opacity-40 transition-colors">
               + Добавить позицию
             </button>
+
+            {/* А19: файл клиента → позиции */}
+            <div className="space-y-1.5">
+              <label className={`block text-center text-[12px] font-medium py-2 rounded-lg border border-dashed cursor-pointer transition-colors ${
+                parseBusy ? 'border-[#e4e4e0] text-[#c4c4be]' : 'border-[#d4d4cf] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]'}`}>
+                {parseBusy ? 'Распознаю…' : '📎 Файл клиента (PDF/фото) → позиции'}
+                <input type="file" accept="application/pdf,image/png,image/jpeg" className="hidden"
+                  disabled={parseBusy}
+                  onChange={e => { const f = e.target.files?.[0]; if (f) parseClientFile(f); e.target.value = '' }} />
+              </label>
+              {parseError && <p className="text-[11px] text-red-600">{parseError}</p>}
+              {parsed.length > 0 && (
+                <div className="border border-[#e4e4e0] rounded-lg bg-white overflow-hidden">
+                  <div className="px-3 py-1.5 bg-[#fafaf9] border-b border-[#f0f0ec] flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#111110]">Распознано: {parsed.length}</span>
+                    <button onClick={() => setParsed([])} className="text-[11px] text-[#9a9a95] hover:text-[#111110]">Отменить</button>
+                  </div>
+                  <div className="max-h-44 overflow-y-auto divide-y divide-[#f8f8f7]">
+                    {parsed.map((p, i) => (
+                      <div key={p.id} className="px-3 py-1.5 flex items-center gap-2 text-[11px]">
+                        <span className="text-[#c4c4be] w-4">{i + 1}</span>
+                        <span className="font-mono text-[#111110]">{p.width}×{p.height}</span>
+                        <span className="text-[#6b6b66]">×{p.quantity}</span>
+                        <span className="text-[#9a9a95] truncate flex-1">{p.label || p.comment}</span>
+                        {p.needsReview && <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 whitespace-nowrap">проверить</span>}
+                        <button onClick={() => setParsed(prev => prev.filter(x => x.id !== p.id))}
+                          className="text-[#c4c4be] hover:text-red-500">✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <button onClick={addParsedItems} disabled={!selectedMaterial}
+                    className="w-full text-[12px] font-semibold py-2 bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
+                    Добавить {parsed.length} поз. материалом «{selectedMaterial?.name ?? '—'}»
+                  </button>
+                  <p className="px-3 py-1.5 text-[10px] text-[#9a9a95]">
+                    Модель распознаёт только размеры. Цену считает калькулятор — как при ручном вводе.
+                  </p>
+                </div>
+              )}
+            </div>
 
             {/* Доп. услуги */}
             {services.length > 0 && (
