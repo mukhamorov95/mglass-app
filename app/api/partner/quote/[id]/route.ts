@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Загрузка просчёта партнёра для РЕДАКТИРОВАНИЯ. Отдаём спецификации позиций
 // (входные параметры калькулятора), реконструированные из items — строго свой
@@ -19,7 +20,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc.from('b2b_clients').select('id').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const { data: order } = await svc.from('b2b_orders')

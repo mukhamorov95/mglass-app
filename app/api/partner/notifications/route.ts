@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { reconcileClientOrders } from '@/lib/partnerNotify'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Колокольчик кабинета партнёра. GET — список своих уведомлений (+ опортунистическая
 // сверка транзиций заказов, чтобы лента была свежей и без крона). POST — отметить
@@ -17,7 +18,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = svcClient()
-  const { data: client } = await svc.from('b2b_clients').select('id,name,user_id').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string; user_id: string | null }>(svc, user.id, 'id,name,user_id')
   if (!client) return NextResponse.json({ linked: false, items: [], unread: 0 })
 
   // Свежая сверка статусов (best-effort, не роняет ленту).
@@ -41,7 +42,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = svcClient()
-  const { data: client } = await svc.from('b2b_clients').select('id').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
   if (!client) return NextResponse.json({ error: 'Не привязан' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

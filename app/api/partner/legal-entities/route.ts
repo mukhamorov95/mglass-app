@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // A7: партнёр сам ведёт свои юрлица (реквизиты для счёта/договора). Строго свои.
 // Эти же реквизиты подставляются в счёт-спецификацию (A1). Основное юрлицо
@@ -13,8 +14,7 @@ function svcClient() {
   return createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 }
 async function ownClient(svc: ReturnType<typeof svcClient>, userId: string) {
-  const { data } = await svc.from('b2b_clients').select('id,organization_id').eq('user_id', userId).maybeSingle()
-  return data
+  return resolvePartnerClient<{ id: number; organization_id: number | null }>(svc, userId, 'id,organization_id')
 }
 function pick(body: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {}

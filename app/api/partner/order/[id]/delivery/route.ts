@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { notifyAdmins } from '@/lib/telegram'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // A8: партнёр указывает способ получения (самовывоз / доставка) и адрес по своему
 // заказу. Пишем в notes.delivery; логистику дальше ведёт менеджер (лист рейса).
@@ -17,7 +18,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc.from('b2b_clients').select('id,name').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

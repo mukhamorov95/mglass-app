@@ -13,6 +13,7 @@ type Row = {
   discount: number; active: boolean; notes: string | null
   ordersCount: number; sumTotal: number; sumYear: number; lastOrderAt: string | null
   linked: boolean; email: string | null; canSelfInvoice: boolean
+  members: { userId: string; email: string | null }[]
 }
 type SortKey = 'sum' | 'count' | 'name' | 'last' | 'discount'
 type MonthStats = { [clientId: number]: { [month: number]: number } }
@@ -156,6 +157,15 @@ export default function B2BClientsPage() {
     })
     loadOverview()
   }
+  // A6: убрать сотрудника из команды компании (первичный владелец — через «Отозвать»).
+  async function removeMember(clientId: number, userId: string) {
+    if (!confirm('Убрать этого сотрудника из доступа к кабинету?')) return
+    await fetch('/api/admin/b2b-access', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'remove_member', clientId, userId }),
+    })
+    loadOverview()
+  }
   // Разрешить/запретить клиенту самому скачивать счёт-спецификацию (после проверки паритета).
   async function toggleSelfInvoice(r: Row) {
     if (!r.canSelfInvoice && !confirm(`Разрешить «${r.name}» самому скачивать счёт-спецификацию из кабинета?\n\nВключайте, когда убедились, что расчёты клиента совпадают с нашими.`)) return
@@ -281,10 +291,30 @@ export default function B2BClientsPage() {
                         <td className="px-4 py-3">
                           {c.linked ? (
                             <div className="flex flex-col gap-1.5">
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-2 py-0.5">✓ {c.email ?? 'выдан'}</span>
+                                {c.members.map(m => (
+                                  <span key={m.userId} className="text-[11px] text-[#4b4b47] bg-[#f0f0ec] border border-[#e4e4e0] rounded-full px-2 py-0.5 flex items-center gap-1">
+                                    {m.email ?? 'сотрудник'}
+                                    <button onClick={() => removeMember(c.id, m.userId)} className="text-[#9a9a95] hover:text-red-500" title="Убрать сотрудника">✕</button>
+                                  </span>
+                                ))}
                                 <button onClick={() => revoke(c)} className="text-[11px] text-[#9a9a95] hover:text-red-500">Отозвать</button>
                               </div>
+                              {grantId === c.id ? (
+                                <div>
+                                  <div className="flex items-center gap-1.5">
+                                    <input value={grantEmail} onChange={e => { setGrantEmail(e.target.value); setGrantErr(null) }} autoFocus placeholder="email сотрудника"
+                                      onKeyDown={e => { if (e.key === 'Enter') grant(c) }}
+                                      className="bg-white border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] w-44" />
+                                    <button onClick={() => grant(c)} disabled={grantBusy} className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">{grantBusy ? '…' : 'Добавить'}</button>
+                                    <button onClick={() => { setGrantId(null); setGrantEmail(''); setGrantErr(null) }} className="text-[12px] text-[#9a9a95] px-1">✕</button>
+                                  </div>
+                                  {grantErr && <p className="text-[11px] text-red-500 mt-1">{grantErr}</p>}
+                                </div>
+                              ) : (
+                                <button onClick={() => { setGrantId(c.id); setGrantEmail(''); setGrantErr(null) }} className="text-[11px] text-blue-600 hover:text-blue-800 self-start">＋ сотрудник</button>
+                              )}
                               <button onClick={() => toggleSelfInvoice(c)}
                                 className={`text-[11px] self-start rounded-full px-2 py-0.5 border transition-colors ${c.canSelfInvoice ? 'text-emerald-700 bg-emerald-50 border-emerald-200 hover:bg-emerald-100' : 'text-[#9a9a95] bg-[#f8f8f7] border-[#e4e4e0] hover:border-[#c4c4be]'}`}
                                 title="Клиент может сам скачивать счёт-спецификацию из кабинета">
