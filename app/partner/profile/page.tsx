@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 import LegalEntities from './LegalEntities'
 
 // Профиль партнёра: контакты/скидка (read-only) + свои юрлица (партнёр ведёт сам, A7).
@@ -14,9 +15,8 @@ export default async function PartnerProfilePage() {
   if (!user) return <div className="wrap"><div className="note"><div className="s">Не авторизован</div></div></div>
 
   const svc = createServiceClient()
-  const { data: client } = await svc.from('b2b_clients')
-    .select('id, name, contact, phone, discount_percent')
-    .eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string; contact: string | null; phone: string | null; discount_percent: number | null }>(
+    svc, user.id, 'id, name, contact, phone, discount_percent')
   if (!client) return (
     <div className="wrap"><div className="note">
       <div className="t">Аккаунт не привязан</div>

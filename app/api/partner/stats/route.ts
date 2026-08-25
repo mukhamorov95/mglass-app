@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Табло кабинета: сводка по заказам клиента за текущий год. Строго по своему
 // client_id (b2b_clients.user_id = auth.uid()). Только клиентские суммы — никакой
@@ -18,7 +19,7 @@ export async function GET() {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc.from('b2b_clients').select('id').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number }>(svc, user.id)
   if (!client) return NextResponse.json({ linked: false })
 
   const { data } = await svc.from('b2b_orders')
