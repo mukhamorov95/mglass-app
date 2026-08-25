@@ -1,26 +1,33 @@
 ## Текущая задача
-Маршрут A1 — счёт-спецификация для партнёра (единый документ с менеджерским), за флагом владельца.
+Менеджерский контур (вкладка «Менеджер: InGlass + B2B»). Сделана ручная корректировка ИТОГА
+просчёта прямо в списке /b2b-quotes: менеджер вписывает конечную сумму → скидка раскладывается
+по всем позициям и фиксируется.
 
 ## Что сделано (эта сессия)
-- Флаг self-invoice → supabase/migrations/20260825_b2b_clients_self_invoice.sql (b2b_clients.can_self_invoice, ПРИМЕНИТЬ)
-- Единый компонент счёта → components/InvoiceDocument.tsx (forwardRef, сам считает итоги+QR)
-- Рефактор менеджерского счёта на общий компонент → app/b2b-quotes/[id]/invoice/page.tsx (редактор реквизитов сохранён)
-- Партнёрский endpoint счёта (гейт can_self_invoice + запущен) → app/api/partner/order/[id]/invoice-data/route.ts
-- Страница счёта в кабинете → app/partner/order/[id]/invoice/page.tsx (read-only реквизиты, выбор юрлица, PDF)
-- Гейт-кнопка на карточке заказа → app/api/partner/order/[id]/route.ts (canInvoice) + app/partner/order/[id]/page.tsx
-- Тумблер владельца «Счёт клиенту: вкл/выкл» → app/admin/b2b-clients + overview API + b2b-access action set_self_invoice
-- Фазз-паритет (офлайн, CI) → __tests__/audit/quote-engine-fuzz.test.ts (детерминизм движка, менеджер==клиент, надбавки реальны)
+- Движок распределения (чистый, с тестами) → lib/b2b/priceOverride.ts + __tests__/b2b/priceOverride.test.ts (10 тестов)
+- Флаг авто-цены позиции → lib/b2bCalculator.ts (B2BOrderItem.manualAuto, только тип)
+- API корректировки просчёта (POST применить / DELETE вернуть прайс) → app/api/b2b-quotes/[id]/adjust-total/route.ts
+- Клик по цене в списке + панель «итог ⇄ скидка» + бейдж «✏️ ручная корректировка» → app/b2b-quotes/page.tsx
+- Счёт: строки идут по договорной цене (manualTotal), процент скидки считается построчно → components/InvoiceDocument.tsx
+- Единый хелпер итога finalTotalOf() вместо «discount>0 ? after : base» → b2b-orders, b2b-pipeline, b2b-analytics, admin/archive
 
 ## Следующий шаг
-Владельцу: применить миграцию 20260825; прогнать боевой аудит паритета на первых реальных просчётах;
-включить «Счёт клиенту» нужному партнёру в /admin/b2b-clients. Дальше по маршруту — A2 (статус оплаты уже есть #206;
-остаётся онлайн-оплата) или A3 (согласование чертежа).
+Владельцу: посмотреть PR и решить про мерж. Дальше по этому контуру — прайсы и счета
+(вкладка «Менеджер»), см. docs/MANAGER_CONTOUR.md.
 
 ## Контекст
-Ветка feat/partner-a1-invoice от origin/main (main ушёл вперёд: профиль #207, оплата-статус #206, reorder #197).
-Паритет цифр гарантирован конструктивно: счёт читает тот же b2b_orders, что менеджер; движок один (computeQuoteItem).
-Счёт партнёру доступен ТОЛЬКО при can_self_invoice=true И запущенном заказе; иначе «счёт выставляет менеджер».
-Проверки: tsc 0, eslint 0, 346/346 тестов.
+Ветка claude/b2b-quote-price-adjustment-9dd210 (worktree b2b-quote-price-adjustment-9dd210).
+Алгоритм: прайсовая база позиции (saleIncVat) НЕ перезаписывается — корректировка живёт наложением
+manualTotal + manualAuto=true, поэтому обратима и не копится при повторном редактировании.
+Σ manualTotal == введённой сумме до рубля (метод наибольших остатков). История — notes.total_history,
+текущее состояние — notes.price_override. Запущенные заказы сюда не пускаются (409): у них своя
+ручка /api/b2b-orders/[id]/adjust-total (только владелец).
+Проверки: tsc 0, eslint 0 ошибок, 356/356 тестов. next build падает только на отсутствии .env.local
+в worktree (сбор page data для /api/ai/generate-kp), компиляция и типы зелёные.
+Соседняя сессия «Прайс B2B» (claude/b2b-price-system-glass-5ea95a) наши файлы не трогает — согласовано.
 
 ## Открытые вопросы
-- В «Документы» пока не выведен счёт (только КП) — можно добавить, когда orders API отдаст canInvoice по-заказно.
+- Лимит скидки менеджера (users.max_discount_percent) пока НЕ enforce-ится — только предупреждение
+  «маржа ниже 25%». Включать жёсткий гейт — решение владельца.
+- app/api/partner/order/[id]/invoice-data отдаёт items как есть, вместе с costExVat — партнёр видит
+  нашу себестоимость в ответе API. Отдельная задача.

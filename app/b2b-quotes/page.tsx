@@ -11,6 +11,7 @@ import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bS
 import { computeOrderEconomics, type EcoOrder, type EcoItem } from '@/lib/orderEconomics'
 import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
 import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
+import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -35,6 +36,9 @@ type OrderItem = {
   wastePercent?: number
   comment?: string
   services?: { id: number; name: string; cost: number }[]
+  // Ручная цена позиции: договорная (manualTotal) или разложенная из корректировки итога.
+  manualTotal?: number | null
+  manualAuto?: boolean
 }
 
 type Attachment = {
@@ -239,7 +243,7 @@ function buildTelegramPositionLines(quote: Quote): string[] {
 function buildTelegramWorkText(quote: Quote): string {
   const quoteNumber = quote.custom_number?.trim() || `00${quote.id}`
   const clientName  = formatTelegramClientName(quote.client_name ?? '')
-  const finalPrice  = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+  const finalPrice  = finalTotalOf(quote)
   const lines       = [quoteNumber, clientName, ...buildTelegramPositionLines(quote)]
   lines.push('', `🥝${formatTelegramRub(finalPrice)}`)
   return lines.join('\n')
@@ -306,14 +310,38 @@ export default function B2BQuotesPage() {
     if (payEditId !== null) setTimeout(() => payAmountRef.current?.focus(), 50)
   }, [payEditId])
 
-  // ── Discount edit ──────────────────────────────────────────────────────────
+  // ── Правка цены: итог ⇄ скидка (одна панель, два способа думать) ───────────
+  // Источник правды — целевой ИТОГ. Скидка выводится из него и раскладывается по
+  // позициям на сервере (/api/b2b-quotes/[id]/adjust-total), чтобы КП, счёт и
+  // производство видели ту же цену построчно.
   const [discountEditId, setDiscountEditId] = useState<number | null>(null)
   const [discountInput, setDiscountInput]   = useState('')
-  const discountInputRef = useRef<HTMLInputElement>(null)
+  const [totalInput, setTotalInput]         = useState('')
+  const [priceSaving, setPriceSaving]       = useState(false)
+  const totalInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (discountEditId !== null) setTimeout(() => discountInputRef.current?.focus(), 50)
+    if (discountEditId !== null) setTimeout(() => { totalInputRef.current?.focus(); totalInputRef.current?.select() }, 50)
   }, [discountEditId])
+
+  function openPriceEditor(q: Quote) {
+    if (discountEditId === q.id) { setDiscountEditId(null); return }
+    setDiscountEditId(q.id)
+    setTotalInput(String(finalTotalOf(q)))
+    setDiscountInput(String(q.discount_percent ?? 0))
+  }
+
+  // Инпуты связаны: правишь сумму — пересчитывается %, правишь % — сумма.
+  function onTotalTyped(v: string, base: number) {
+    setTotalInput(v)
+    const t = Number(v.replace(/[^\d.]/g, ''))
+    setDiscountInput(base > 0 && Number.isFinite(t) ? String(Math.round((1 - t / base) * 1000) / 1000) : '0')
+  }
+  function onDiscountTyped(v: string, base: number) {
+    setDiscountInput(v)
+    const d = Number(v.replace(/[^\d.-]/g, ''))
+    setTotalInput(Number.isFinite(d) ? String(Math.round(base * (1 - d / 100))) : String(base))
+  }
 
   // Оплата пишется только через /api/b2b-orders/[id]/payment — там же
   // наполняются денежное ядро и ведомость продаж (Д2).
@@ -610,38 +638,48 @@ export default function B2BQuotesPage() {
     showToast('Просчёт архивирован')
   }
 
-  async function saveDiscount(id: number) {
-    const q = quotes.find(x => x.id === id)
-    if (!q) return
-    const newDiscount = Math.min(50, Math.max(0, Number(discountInput) || 0))
-    const baseTotal   = q.total_sale_inc_vat
-    const newTotal    = Math.round(baseTotal * (1 - newDiscount / 100))
-    const parsed      = parseNotes(q.notes)
-    const history     = Array.isArray(parsed.discount_history) ? [...(parsed.discount_history as unknown[])] : []
-    history.push({
-      old_discount: q.discount_percent,
-      new_discount: newDiscount,
-      old_total:    q.total_after_discount ?? q.total_sale_inc_vat,
-      new_total:    newTotal,
-      changed_at:   new Date().toISOString(),
-      changed_by:   currentUserId ?? undefined,
-    })
-    const newNotes = JSON.stringify({ ...parsed, discount_history: history })
-    const { error } = await createClient().from('b2b_orders').update({
-      discount_percent:     newDiscount,
-      total_after_discount: newTotal,
-      notes:                newNotes,
-      ...buildUpdateMeta(),   // фиксируем, кто и когда менял скидку (как в остальных мутациях)
-    }).eq('id', id)
-    if (error) { showToast('Ошибка сохранения скидки'); return }
+  // Ручная корректировка итога: сумму раскидывает сервер (общий алгоритм +
+  // история в notes.total_history), фронт только показывает результат.
+  async function savePriceOverride(id: number) {
+    const target = Math.round(Number(totalInput.replace(/[^\d.]/g, '')) || 0)
+    if (target <= 0) { showToast('Укажите итоговую сумму'); return }
+    setPriceSaving(true)
+    try {
+      const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newTotal: target }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(json.error || 'Не удалось сохранить сумму'); return }
+      applyPriceResult(id, json)
+      setDiscountEditId(null)
+      showToast(json.discountPercent > 0
+        ? `Итог ${fmt(json.newTotal)} · скидка ${json.discountPercent}% разложена по позициям`
+        : `Итог ${fmt(json.newTotal)} разложен по позициям`)
+    } finally { setPriceSaving(false) }
+  }
+
+  async function resetPriceOverride(id: number) {
+    setPriceSaving(true)
+    try {
+      const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(json.error || 'Не удалось вернуть прайс'); return }
+      applyPriceResult(id, json)
+      setDiscountEditId(null)
+      showToast('Цены возвращены к прайсу')
+    } finally { setPriceSaving(false) }
+  }
+
+  function applyPriceResult(id: number, json: { newTotal: number; discountPercent: number; marginPercent?: number; items?: OrderItem[]; notes?: string }) {
     setQuotes(prev => prev.map(x => x.id === id ? {
       ...x,
-      discount_percent:     newDiscount,
-      total_after_discount: newTotal,
-      notes:                newNotes,
+      items:                (json.items as OrderItem[]) ?? x.items,
+      discount_percent:     json.discountPercent,
+      total_after_discount: json.newTotal,
+      margin_percent:       json.marginPercent ?? x.margin_percent,
+      notes:                json.notes ?? x.notes,
     } : x))
-    setDiscountEditId(null)
-    showToast(`Скидка обновлена: ${newDiscount}%`)
   }
 
   // Shared "who changed this, when" payload — column-level authorship.
@@ -798,7 +836,7 @@ export default function B2BQuotesPage() {
               : new Date(quote.created_at)
             const dateStr   = quoteDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
             const timeStr   = quoteDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-            const finalPrice = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+            const finalPrice = finalTotalOf(quote)
             const userNotes  = typeof parsed.user_notes === 'string' ? parsed.user_notes : null
             const statusComment = typeof parsed.status_comment === 'string' ? parsed.status_comment : null
             const hasAttach  = attachments.some(a => a.order_id === quote.id)
@@ -813,13 +851,19 @@ export default function B2BQuotesPage() {
               ? parsed.ai_review as { issues?: { severity?: string; text?: string }[]; summary?: string }
               : null
 
-            // Discount preview — computed once per row, cheap arithmetic
+            // Превью корректировки — считается один раз на строку, арифметика дешёвая.
+            // Источник — введённый ИТОГ; скидка/маржа выводятся из него.
             const discBase      = quote.total_sale_inc_vat
-            const discNewPct    = Math.min(50, Math.max(0, Number(discountInput) || 0))
-            const discNewTotal  = Math.round(discBase * (1 - discNewPct / 100))
+            const discNewTotal  = Math.max(0, Math.round(Number(totalInput.replace(/[^\d.]/g, '')) || 0))
+            const discNewPct    = discBase > 0 ? Math.round((1 - discNewTotal / discBase) * 1000) / 10 : 0
             const discCost      = quote.total_cost_net ?? 0
-            const discProfit    = discNewTotal - discCost
-            const discMargin    = discNewTotal > 0 ? (discProfit / discNewTotal * 100) : 0
+            const discRevExVat  = discNewTotal * 100 / (100 + 22)
+            const discProfit    = discRevExVat - discCost
+            const discMargin    = discRevExVat > 0 ? (discProfit / discRevExVat * 100) : 0
+            const isOverridden  = hasAutoOverride(quote.items) || !!parsed.price_override
+            const overrideMeta  = (parsed.price_override && typeof parsed.price_override === 'object')
+              ? parsed.price_override as { base?: number; target?: number; discount_percent?: number; at?: string; by_name?: string | null }
+              : null
 
             return (
               <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
@@ -852,6 +896,18 @@ export default function B2BQuotesPage() {
                           </span>
                         )}
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                        {isOverridden && (
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
+                            title={overrideMeta
+                              ? `Итог задан вручную: ${fmt(overrideMeta.base ?? quote.total_sale_inc_vat)} → ${fmt(overrideMeta.target ?? finalPrice)}`
+                                + `${overrideMeta.discount_percent ? ` (скидка ${overrideMeta.discount_percent}%)` : ''}`
+                                + `${overrideMeta.by_name ? ` · ${overrideMeta.by_name}` : ''}`
+                                + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU')}` : ''}`
+                              : 'Цены позиций заданы вручную'}>
+                            ✏️ ручная корректировка
+                          </span>
+                        )}
                         {looksLikeOrder(quote) && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200" title="У просчёта есть признаки заказа — перенесите в B2B-заказы">
                             Похоже, это уже заказ
@@ -899,16 +955,18 @@ export default function B2BQuotesPage() {
                       </span>
                     )}
 
-                    {/* Price */}
+                    {/* Цена — кликабельная: правится прямо в списке */}
                     <div className="text-right min-w-[80px]">
-                      <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
                       <button
-                        onClick={() => {
-                          setDiscountEditId(isDiscountEditThis ? null : quote.id)
-                          setDiscountInput(String(quote.discount_percent ?? 0))
-                        }}
-                        className="text-[10px] leading-tight text-emerald-600 hover:text-emerald-800 hover:underline">
-                        {(quote.discount_percent ?? 0) > 0 ? `−${quote.discount_percent}% · изм.` : '% скидка'}
+                        onClick={() => openPriceEditor(quote)}
+                        title="Изменить итоговую сумму — скидка разложится по всем позициям"
+                        className={`text-[13px] font-semibold text-[#111110] hover:text-emerald-700 hover:underline decoration-dotted underline-offset-2 transition-colors ${isDiscountEditThis ? 'text-emerald-700 underline' : ''}`}>
+                        {fmt(finalPrice)}
+                      </button>
+                      <button
+                        onClick={() => openPriceEditor(quote)}
+                        className="block ml-auto text-[10px] leading-tight text-emerald-600 hover:text-emerald-800 hover:underline">
+                        {(quote.discount_percent ?? 0) > 0 ? `−${quote.discount_percent}% · изм.` : '✏️ изм. цену'}
                       </button>
                     </div>
 
@@ -1024,56 +1082,80 @@ export default function B2BQuotesPage() {
                   </div>
                 )}
 
-                {/* ── Discount edit panel ────────────────────────────────── */}
+                {/* ── Правка цены: итог ⇄ скидка ─────────────────────────── */}
                 {isDiscountEditThis && (
                   <div className="px-4 py-3 border-t border-[#f0f0ec] bg-[#fafaf9] space-y-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Скидка по просчёту</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+                      Итоговая сумма клиенту · {quote.items.length} поз.
+                    </p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] text-[#6b6b66]">
-                        Текущая: <span className="font-semibold">{quote.discount_percent ?? 0}%</span>
+                        Прайс: <span className="font-mono">{fmt(discBase)}</span>
                       </span>
                       <span className="text-[#c4c4be] select-none">→</span>
-                      <span className="text-[11px] text-[#6b6b66]">Новая:</span>
+                      <span className="text-[11px] text-[#6b6b66]">Итог:</span>
+                      <input
+                        ref={totalInputRef}
+                        type="text" inputMode="numeric"
+                        className="w-32 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[13px] font-mono text-right outline-none focus:border-[#111110] transition-colors"
+                        value={totalInput}
+                        onChange={e => onTotalTyped(e.target.value, discBase)}
+                        onKeyDown={e => e.key === 'Enter' && savePriceOverride(quote.id)}
+                      />
+                      <span className="text-[12px] text-[#6b6b66]">₽</span>
+                      <span className="text-[#c4c4be] select-none">или скидка</span>
                       <div className="flex items-center gap-1">
                         <input
-                          ref={discountInputRef}
-                          type="number" min="0" max="50" step="1"
+                          type="number" step="0.5"
                           className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none focus:border-[#111110] transition-colors"
                           value={discountInput}
-                          onChange={e => setDiscountInput(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && saveDiscount(quote.id)}
+                          onChange={e => onDiscountTyped(e.target.value, discBase)}
+                          onKeyDown={e => e.key === 'Enter' && savePriceOverride(quote.id)}
                         />
                         <span className="text-[12px] text-[#6b6b66]">%</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[220px]">
+                    <p className="text-[11px] text-[#9a9a95]">
+                      Сумма разложится по всем позициям пропорционально прайсу — КП, счёт и производство увидят те же цены.
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[240px]">
                       <span className="text-[#9a9a95]">Было к оплате</span>
                       <span className="font-mono text-right text-[#6b6b66]">{finalPrice.toLocaleString('ru-RU')} ₽</span>
                       <span className="text-[#9a9a95]">Станет к оплате</span>
-                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : 'text-[#111110]'}`}>
+                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : discNewTotal > finalPrice ? 'text-amber-600' : 'text-[#111110]'}`}>
                         {discNewTotal.toLocaleString('ru-RU')} ₽
                       </span>
+                      <span className="text-[#9a9a95]">{discNewPct >= 0 ? 'Скидка от прайса' : 'Надбавка к прайсу'}</span>
+                      <span className="font-mono text-right text-[#6b6b66]">{Math.abs(discNewPct).toFixed(1)}%</span>
                       <span className="text-[#9a9a95]">Себестоимость</span>
                       <span className="font-mono text-right text-[#6b6b66]">{discCost.toLocaleString('ru-RU')} ₽</span>
                       <span className="text-[#9a9a95]">Прибыль</span>
                       <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
-                        {discProfit.toLocaleString('ru-RU')} ₽
+                        {Math.round(discProfit).toLocaleString('ru-RU')} ₽
                       </span>
                       <span className="text-[#9a9a95]">Маржа</span>
-                      <span className={`font-mono text-right font-semibold ${discMargin < 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      <span className={`font-mono text-right font-semibold ${discMargin < 25 ? 'text-red-500' : discMargin < 35 ? 'text-amber-600' : 'text-emerald-600'}`}>
                         {discMargin.toFixed(1)}%
                       </span>
                     </div>
-                    {discMargin < 20 && discNewTotal > 0 && (
-                      <p className="text-[11px] text-amber-600 font-medium">⚠️ Внимание: маржа ниже 20%</p>
+                    {discNewTotal > 0 && discMargin < 25 && (
+                      <p className="text-[11px] text-red-600 font-medium">⚠️ Маржа ниже 25% — согласуйте с владельцем</p>
                     )}
                     <div className="flex items-center gap-2">
                       <button
-                        onClick={() => saveDiscount(quote.id)}
-                        disabled={discNewPct < 0 || discNewPct > 50}
+                        onClick={() => savePriceOverride(quote.id)}
+                        disabled={priceSaving || discNewTotal <= 0}
                         className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
-                        Сохранить
+                        {priceSaving ? 'Сохраняю…' : 'Зафиксировать цену'}
                       </button>
+                      {isOverridden && (
+                        <button
+                          onClick={() => resetPriceOverride(quote.id)}
+                          disabled={priceSaving}
+                          className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-white disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Вернуть прайс
+                        </button>
+                      )}
                       <button
                         onClick={() => setDiscountEditId(null)}
                         className="text-[#9a9a95] hover:text-[#111110] transition-colors text-sm px-1">
