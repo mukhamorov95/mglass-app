@@ -8,10 +8,10 @@ import { buildFromModel, type GlassTint } from '@/components/configurator/scene/
 import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
-  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm,
+  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
+  PROFILE_SIDES as PROFILE_SIDES_UI,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
-import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { CatalogPicker } from './CatalogPicker'
 
 // Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
@@ -48,15 +48,35 @@ const TINT: Record<string, GlassTint> = {
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const uid = (p: string) => `${p}-${Math.round(Math.random() * 1e9).toString(36)}`
 
-function NumInput({ value, onChange, w = 88, suffix = '₽' }: { value: number; onChange: (v: number) => void; w?: number; suffix?: string }) {
+// Числовое поле с черновиком: пока владелец печатает, значение НЕ трогаем и НЕ зажимаем
+// в диапазон. Иначе на «600» после первой цифры прилетает clamp(6)→500, курсор скачет,
+// и в поле оказывается что угодно, кроме введённого. Границы применяем на blur/Enter.
+function NumInput({ value, onChange, w = 88, suffix = '₽', range }: {
+  value: number; onChange: (v: number) => void; w?: number; suffix?: string; range?: [number, number]
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const raw = Number(draft.replace(',', '.'))
+    const n = Number.isFinite(raw) ? raw : value
+    const fixed = range ? Math.min(range[1], Math.max(range[0], n)) : Math.max(0, n)
+    setDraft(null)
+    if (fixed !== value) onChange(fixed)
+  }
   return (
     <span className="flex items-center gap-1">
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value) || 0)} style={{ width: w }}
+      <input type="text" inputMode="decimal" value={draft ?? String(value)} style={{ width: w }}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={e => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); e.currentTarget.blur() } if (e.key === 'Escape') setDraft(null) }}
+        title={range ? `от ${range[0]} до ${range[1]}` : undefined}
         className="text-right font-mono text-[13px] text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
       <span className="text-[11px] text-[#9a9a95]">{suffix}</span>
     </span>
   )
 }
+
 function Card({ title, right, children }: { title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
@@ -80,6 +100,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   const cur = store[tier]
   const model = getModel(code)
@@ -129,6 +150,11 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const removeEntry = (si: number, ei: number) => editKit(k => { k.slots[si].entries.splice(ei, 1) })
   const setQtyRule = (si: number, ei: number, qty: QtyRule) => editKit(k => { k.slots[si].entries[ei].qty = qty })
   const resetKit = () => edit(s => { s.kits[code] = defaultKitFor(model, s.library) })
+  const excludeRole = (role: RoleId) => editKit(k => {
+    k.slots = k.slots.filter(sl => sl.role !== role)
+    k.excluded = [...new Set([...(k.excluded ?? []), role])]
+  })
+  const unexcludeRole = (role: RoleId) => editKit(k => { k.excluded = (k.excluded ?? []).filter(r => r !== role) })
   const setShape = (id: string, shape: string) => editItem(id, i => { if (shape) i.shape = shape; else delete i.shape })
 
   // Позиция нужна не одной модели: добавляем её в комплект всех моделей, где эта роль есть.
@@ -163,10 +189,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     const target = picker
     setPicker(null)
     if (!target) return
+    // Сначала подтягиваем карточку с сайта поставщика (ссылка, фото, характеристики),
+    // потом читаем варианты — так позиция сразу приезжает с фото.
+    await fetch('/api/admin/supplier-catalog/enrich', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [rowId] }),
+    }).catch(() => {})
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
-    const { variants, name, supplier, base } = await res.json() as {
+    const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
       variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+      imageUrl?: string; specs?: Record<string, string>
     }
     const byFinish: Record<string, number> = {}
     for (const v of variants) {
@@ -187,11 +219,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
         if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
         else it.prices = { ...it.prices, ...byFinish }
         it.ref = { supplier, base, label }
+        if (imageUrl) it.image = imageUrl
+        if (specs && Object.keys(specs).length) it.specs = specs
         return
       }
       const id = uid('it')
       s.library.items.push({
         id, name: shortName, role: slot.role, ref: { supplier, base, label },
+        ...(imageUrl ? { image: imageUrl } : {}),
+        ...(specs && Object.keys(specs).length ? { specs } : {}),
         ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
       })
       const k = s.kits[code]!
@@ -282,16 +318,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           <Card title="Размеры для проверки">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Ширина
-                <NumInput value={dims.width} onChange={v => setDims(d => ({ ...d, width: clamp(v, c.width) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.width} range={c.width} onChange={v => setDims(d => ({ ...d, width: v }))} w={70} suffix="мм" /></label>
               {c.needsWidth2 && c.width2 && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Вторая
-                  <NumInput value={dims.width2 ?? 0} onChange={v => setDims(d => ({ ...d, width2: clamp(v, c.width2!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.width2 ?? 0} range={c.width2!} onChange={v => setDims(d => ({ ...d, width2: v }))} w={70} suffix="мм" /></label>
               )}
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Высота
-                <NumInput value={dims.height} onChange={v => setDims(d => ({ ...d, height: clamp(v, c.height) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.height} range={c.height} onChange={v => setDims(d => ({ ...d, height: v }))} w={70} suffix="мм" /></label>
               {c.doorWidth && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Дверь
-                  <NumInput value={dims.doorWidth ?? 0} onChange={v => setDims(d => ({ ...d, doorWidth: clamp(v, c.doorWidth!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.doorWidth ?? 0} range={c.doorWidth!} onChange={v => setDims(d => ({ ...d, doorWidth: v }))} w={70} suffix="мм" /></label>
               )}
             </div>
             <p className="text-[11px] text-[#9a9a95] mt-2">
@@ -390,15 +426,33 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
             <Card><p className="text-[13px] text-[#b0b0aa] italic">Комплект пуст — добавь роль ниже или собери заново по геометрии.</p></Card>
           )}
 
-          {kit.slots.map((slot, si) => {
+          {ROLE_GROUPS.map(grp => {
+            const inGroup = kit.slots.map((slot, si) => ({ slot, si })).filter(x => grp.roles.includes(x.slot.role))
+            if (inGroup.length === 0) return null
+            const filled = inGroup.filter(x => x.slot.entries.length > 0).length
+            const isOpen = !collapsed[grp.id]
+            return (
+              <div key={grp.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <button onClick={() => setCollapsed(c => ({ ...c, [grp.id]: !c[grp.id] }))}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-[#faf9f6] border-b border-[#eeece5] text-left hover:bg-[#f5f4ef]">
+                  <span className={`text-[10px] text-[#9a9a95] transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                  <span className="text-[13px] font-semibold text-[#111110]">{grp.title}</span>
+                  <span className={`text-[11px] ${filled === inGroup.length ? 'text-[#5a8a5a]' : 'text-[#b09a6a]'}`}>
+                    {filled} из {inGroup.length}
+                  </span>
+                  <span className="ml-auto text-[11px] text-[#9a9a95]">
+                    {inGroup.map(x => ROLE_META[x.slot.role].label).join(' · ')}
+                  </span>
+                </button>
+                {isOpen && <div className="p-2 space-y-2">
+                {inGroup.map(({ slot, si }) => {
             const meta = ROLE_META[slot.role]
-            const qty = q.roleQty[slot.role] ?? 0
+            const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
             const unneeded = qty === 0
             return (
-              <Card key={slot.role}
-                right={<button onClick={() => removeSlot(si)} className="text-[11px] text-[#b04a3f] hover:underline">удалить роль</button>}>
-                <div className="flex items-center gap-2 mb-0.5 -mt-1">
-                  <p className="text-[13px] font-semibold text-[#111110]">{meta.label}</p>
+              <div key={slot.role} className="rounded-lg border border-[#eeece5] bg-white pl-3 pr-3 py-2.5 border-l-[3px] border-l-[#e0ddd2]">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[13px] font-medium text-[#111110]">{meta.label}</p>
                   {unneeded
                     ? <span className="text-[10px] text-[#b09a6a]">модели не нужна</span>
                     : <span className="text-[10px] text-[#8a9a7a]">×{qty} из геометрии</span>}
@@ -406,6 +460,8 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                     <button onClick={() => setSelect(si, 'one')} className={`px-2 py-0.5 ${slot.select === 'one' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>одна из списка</button>
                     <button onClick={() => setSelect(si, 'all')} className={`px-2 py-0.5 ${slot.select === 'all' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>все сразу</button>
                   </span>
+                  <button onClick={() => removeSlot(si)} title="Убрать эту подгруппу из модели"
+                    className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-0.5">×</button>
                 </div>
                 <p className="text-[11px] text-[#9a9a95] mb-2">{meta.hint}</p>
 
@@ -418,6 +474,9 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   return (
                     <div key={e.itemId} className="py-1 border-b border-[#f4f4f0] last:border-0">
                       <div className="flex items-center gap-1">
+                        {it.image
+                          ? <img src={it.image} alt="" className="w-7 h-7 rounded object-cover border border-[#eeece5] shrink-0" />
+                          : <span className="w-7 h-7 rounded bg-[#f6f5f1] border border-[#eeece5] shrink-0" />}
                         {slot.select === 'one' && (
                           <button onClick={() => setPrimary(si, ei)} title={e.primary ? 'Показывается клиенту первой' : 'Сделать вариантом по умолчанию'}
                             className={`text-[14px] leading-none shrink-0 ${e.primary ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{e.primary ? '★' : '☆'}</button>
@@ -456,13 +515,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                           <select value={it.shape ?? ''} onChange={ev => setShape(it.id, ev.target.value)}
                             title="Как позиция выглядит в 3D у клиента"
                             className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
-                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === inferShape(it.name))?.label ?? 'по названию'})</option>
+                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === autoShapeForRole(it.name, it.role))?.label ?? 'по названию'})</option>
                             {SHAPES.map(sh => <option key={sh.id} value={sh.id}>вид: {sh.label}</option>)}
                           </select>
                         )}
                         <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
                           className="text-[11px] text-[#4b6ea9] hover:underline">во все модели</button>
                         {used > 1 && <span className="text-[10px] text-[#b09a6a]" title="Цена общая для всех моделей">в {used} моделях</span>}
+                        {it.specs && Object.keys(it.specs).length > 0 && (
+                          <span className="text-[10px] text-[#6b6b66]" title="Характеристики с сайта поставщика">
+                            {Object.entries(it.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                          </span>
+                        )}
                         {it.ref && <span className="text-[10px] text-[#8a9a7a] truncate">🔗 {it.ref.label ?? it.ref.base}</span>}
                       </div>
                     </div>
@@ -473,18 +537,53 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   <button onClick={() => setPicker({ si })} className="text-[12px] font-medium text-[#256029] hover:underline">📗 из справочника</button>
                   <button onClick={() => addManual(si)} className="text-[12px] text-[#9a9a95] hover:underline">+ вручную</button>
                 </div>
-              </Card>
+              </div>
             )
           })}
+                </div>}
+              </div>
+            )
+          })}
+
+          {(() => {
+            const gaps = needed.filter(r => !kit.slots.some(sl => sl.role === r)
+              && !(kit.excluded ?? []).includes(r)
+              && !(PROFILE_SIDES_UI.includes(r) && kit.slots.some(sl => sl.role === 'profile')))
+            const excluded = kit.excluded ?? []
+            if (gaps.length === 0 && excluded.length === 0) return null
+            return (
+              <Card title="Модель требует, а в комплекте нет">
+                {gaps.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px]">
+                    <span className="text-[#9a5a2a]">⚠️ {ROLE_META[r].label}</span>
+                    <button onClick={() => addSlot(r)} className="ml-auto text-[12px] text-[#256029] hover:underline">добавить</button>
+                    <button onClick={() => excludeRole(r)} className="text-[12px] text-[#9a9a95] hover:underline" title="В этой модели такая позиция не используется">не используется</button>
+                  </div>
+                ))}
+                {excluded.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px] text-[#9a9a95]">
+                    <span>— {ROLE_META[r].label}: не используется</span>
+                    <button onClick={() => unexcludeRole(r)} className="ml-auto text-[12px] text-[#4b6ea9] hover:underline">вернуть</button>
+                  </div>
+                ))}
+              </Card>
+            )
+          })()}
 
           <Card title="Добавить роль">
             <div className="flex items-center gap-2">
               <select value={addRole} onChange={e => setAddRole(e.target.value as RoleId | '')}
                 className="flex-1 text-[13px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 outline-none focus:border-[#111110]">
                 <option value="">— выбери, что ещё есть в модели —</option>
-                {freeRoles.map(r => (
-                  <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>
-                ))}
+                {ROLE_GROUPS.map(g => {
+                  const free = g.roles.filter(r => freeRoles.includes(r))
+                  if (free.length === 0) return null
+                  return (
+                    <optgroup key={g.id} label={g.title}>
+                      {free.map(r => <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>)}
+                    </optgroup>
+                  )
+                })}
               </select>
               <button onClick={() => { if (addRole) { addSlot(addRole); setAddRole('') } }} disabled={!addRole}
                 className={`text-[13px] font-medium px-3 py-1.5 rounded-lg ${addRole ? 'bg-[#111110] text-white' : 'bg-[#eee] text-[#9a9a95]'}`}>Добавить</button>
@@ -522,7 +621,7 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
         <option value="client">выбор клиента</option>
       </select>
       {rule.mode === 'fixed' && (
-        <input type="number" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value) || 0 })}
+        <input type="text" inputMode="numeric" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value.replace(/\D/g, '')) || 0 })}
           className="w-12 text-right font-mono text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]" />
       )}
       {rule.mode === 'client' && (
@@ -536,7 +635,6 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
   )
 }
 
-const clamp = (v: number, [a, b]: [number, number]) => Math.min(b, Math.max(a, v))
 function defaultDims(code: string) {
   const c = getModel(code).constraints
   const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
