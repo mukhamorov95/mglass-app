@@ -16,9 +16,9 @@ export async function POST(req: NextRequest) {
   const thickness = body.thickness ?? 8
   const model = getModel(body.model)
 
-  const { library, kits } = await getKitStore(tier)
+  const { library, rates, kits } = await getKitStore(tier)
   const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
-  const q = computeKitQuantities(assembly, thickness, model)
+  const q = computeKitQuantities(assembly, thickness, model, rates.capMargin)
   const res: OptionsResponse = kitChoices(library, kits[body.model] ?? { slots: [] }, q)
   return NextResponse.json(res)
 }

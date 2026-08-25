@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
 
   const { library, rates, kits } = await getKitStore(tier)
   const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
-  const q = computeKitQuantities(assembly, thickness, model)
+  const q = computeKitQuantities(assembly, thickness, model, rates.capMargin)
   const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, DEFAULT_FINANCE, {
     glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors,
     choice: body.choice as Partial<Record<RoleId, string>> | undefined,

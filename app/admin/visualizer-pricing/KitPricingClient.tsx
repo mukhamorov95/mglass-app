@@ -8,7 +8,7 @@ import { buildFromModel, type GlassTint } from '@/components/configurator/scene/
 import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
-  ROLES, ROLE_META,
+  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
 import { CatalogPicker } from './CatalogPicker'
@@ -72,7 +72,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const setModelCode = (c: string) => { setCode(c); setDims(defaultDims(c)); setChoice({}); setQtyChoice({}) }
 
   const assembly = useMemo(() => buildFromModel(model, dims, 8), [model, dims])
-  const q = useMemo(() => computeKitQuantities(assembly, 8, model), [assembly, model])
+  const q = useMemo(() => computeKitQuantities(assembly, 8, model, cur.rates.capMargin), [assembly, model, cur.rates.capMargin])
   const price = useMemo(
     () => computeKitPrice(q, cur.library, kit, cur.rates, DEFAULT_FINANCE, { glassType, finishId, choice, qtyChoice }),
     [q, cur.library, kit, cur.rates, glassType, finishId, choice, qtyChoice],
@@ -115,10 +115,8 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
 
   // ── пикер справочника: позиция уезжает в библиотеку с ролью слота ──
   const [picker, setPicker] = useState<{ si: number; itemId?: string } | null>(null)
-  const parseBarLen = (name: string): number => {
-    const m = name.replace(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яё])/i)
-    return m ? Math.round(parseFloat(m[1]) * 1000) : 3000
-  }
+  // Длину хлыста берём из полного названия поставщика («…длина 2,2 м»): гадать нельзя —
+  // ошибка в длине тихо ломает раскрой. Не распозналось — 0, владелец увидит пустое поле.
   async function applyPick(rowId: number) {
     const target = picker
     setPicker(null)
@@ -144,7 +142,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
       if (target.itemId) {          // обновляем цены существующей позиции
         const it = s.library.items.find(x => x.id === target.itemId)
         if (!it) return
-        if (isBar) it.stocks = [{ len: parseBarLen(name), prices: byFinish }, ...(it.stocks ?? [])]
+        if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
         else it.prices = { ...it.prices, ...byFinish }
         it.ref = { supplier, base, label }
         return
@@ -152,7 +150,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
       const id = uid('it')
       s.library.items.push({
         id, name: shortName, role: slot.role, ref: { supplier, base, label },
-        ...(isBar ? { stocks: [{ len: parseBarLen(name), prices: byFinish }] } : { prices: byFinish }),
+        ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
       })
       const k = s.kits[code]!
       const sl = k.slots[target.si]
@@ -444,6 +442,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Доставка Москва</span><NumInput value={cur.rates.deliveryMoscow} onChange={v => edit(s => { s.rates.deliveryMoscow = v })} /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Подъём за этаж</span><NumInput value={cur.rates.liftPerFloor} onChange={v => edit(s => { s.rates.liftPerFloor = v })} /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Пропил (отход на рез)</span><NumInput value={cur.rates.kerf ?? 0} onChange={v => edit(s => { s.rates.kerf = v })} suffix="мм" /></label>
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Запас заглушки по двери</span><NumInput value={cur.rates.capMargin ?? CAP_MARGIN_MM} onChange={v => edit(s => { s.rates.capMargin = v })} suffix="мм" /></label>
           </Card>
         </div>
       </div>

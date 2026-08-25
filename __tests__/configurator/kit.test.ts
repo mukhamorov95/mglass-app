@@ -57,7 +57,7 @@ describe('kit — количества из геометрии', () => {
     expect(q.roleQty['mount-glass']).toBeGreaterThan(0)
     expect(q.roleQty['mount-corner']).toBeGreaterThan(0)
     expect(q.roleQty['cap-end']).toBe(q.profilePieces.length * 2)   // торцевые — штуками
-    expect(q.barPieces.cap).toEqual(q.profilePieces)                // погонная — по кускам профиля
+    expect(q.barPieces.cap).toEqual([650])                          // погонная — только проём двери 600 + запас
     expect(q.roleQty.roller).toBe(0)          // распашная — роликов нет
   })
 
@@ -319,5 +319,34 @@ describe('kit — перенос погонных позиций из старо
   it('торцевая заглушка распознаётся отдельно от погонной', () => {
     expect(inferRole('Заглушка торцевая FDPA-501 для п-образного профиля')).toBe('cap-end')
     expect(inferRole('Заглушка верхняя FDPA-500.1, 1 м')).toBe('cap')
+  })
+})
+
+describe('kit — заглушка ставится только в проёме двери', () => {
+  it('стационар закрывает полость профиля стеклом — заглушки под ним нет', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    expect(q.profilePieces).toEqual([900, 1100, 2000, 2000])   // профиля много
+    expect(q.barPieces.cap).toEqual([650])                     // а заглушка одна — по двери
+    expect(q.doorWidths).toEqual([600])
+  })
+
+  it('модель без двери (М1 стационарная) — погонной заглушки нет вовсе', () => {
+    const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 900, height: 2000 }, 8), 8, getModel('М1'))
+    expect(q.doorWidths).toEqual([])
+    expect(q.barPieces.cap).toBeUndefined()
+    expect(q.roleQty.cap).toBe(0)
+  })
+
+  it('запас по ширине двери настраивается', () => {
+    expect(computeKitQuantities(m7(), 8, getModel('М7'), 0).barPieces.cap).toEqual([600])
+    expect(computeKitQuantities(m7(), 8, getModel('М7'), 120).barPieces.cap).toEqual([720])
+  })
+
+  it('заглушка по двери дешевле, чем по всей длине профиля', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    const lib: Library = { items: [{ id: 'cp', name: 'Заглушка 1 м', role: 'cap', stocks: [{ len: 1000, prices: { chrome: 158 } }] }] }
+    const kit: ModelKit = { slots: [{ role: 'cap', select: 'one', entries: [{ itemId: 'cp', qty: { mode: 'role' }, primary: true }] }] }
+    const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
+    expect(p.lines.find(l => l.role === 'cap')!.total).toBe(158)   // один метровый хлыст вместо четырёх кусков
   })
 })

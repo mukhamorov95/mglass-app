@@ -35,7 +35,7 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-diag45': { label: 'Крепление 45°',         kind: 'piece', hint: 'штанга «люкс» под 45° — два крепления' },
   'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
-  'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная, по длине каждого куска профиля' },
+  'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная — только в проёме двери (стационар закрывает полость стеклом)' },
   'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'на срез профиля — 2 на кусок' },
   'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'bar',   hint: 'притвор двери — по высоте двери' },
   'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'bar',   hint: 'низ створки — по ширине двери' },
@@ -129,10 +129,15 @@ export const emptyKit = (): ModelKit => ({ slots: [] })
 export const emptyLibrary = (): Library => ({ items: [] })
 
 // ── Количества из геометрии ───────────────────────────────────────
+// Запас заглушки по ширине двери: полость профиля в проёме перекрывается с небольшим
+// напуском, чтобы не было щели по краям.
+export const CAP_MARGIN_MM = 50
+
 export type KitQuantities = {
   thickness: number
   sections: number
   glassM2: number
+  doorWidths: number[]           // ширины проёмов — по ним считается погонная заглушка
   profilePieces: number[]        // куски профиля, мм (сводно — для раскроя и совместимости)
   tubePieces: number[]
   barPieces: Record<string, number[]>   // куски по КАЖДОЙ bar-роли
@@ -154,7 +159,7 @@ function doorCounts(model?: MModel): { swing: number; slide: number } {
   return { swing, slide }
 }
 
-export function computeKitQuantities(assembly: Assembly, thickness: number, model?: MModel): KitQuantities {
+export function computeKitQuantities(assembly: Assembly, thickness: number, model?: MModel, capMargin = CAP_MARGIN_MM): KitQuantities {
   const glassM2 = round2(assembly.glass.reduce((s, g) => s + g.size[0] * g.size[1], 0))
 
   // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
@@ -177,13 +182,19 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
     if (!spec && !fallback) continue
     roleQty[specRole(spec, fallback)] += 1
   }
-  // Погонные позиции меряются длиной, а не штуками: заглушка идёт по каждому куску
-  // профиля, уплотнители — по двери (вертикальные по высоте, нижний по ширине).
+  // Погонные позиции меряются длиной, а не штуками.
+  // Заглушка — НЕ по всей длине профиля: под стационаром полость закрыта самим стеклом,
+  // заглушка нужна только в проёме двери (ширина двери с запасом), снизу и, если есть
+  // верхний профиль, сверху. У стационарной модели без двери заглушка не нужна вовсе.
   const doors = assembly.glass.filter(g => g.role === 'door')
   const { swing, slide } = doorCounts(model)
   const swingDoors = swing || (roleQty.hinge > 0 ? 1 : 0)
   const slideDoors = slide || (roleQty.roller > 0 ? 1 : 0)
-  if (profilePieces.length) barPieces.cap = [...profilePieces]
+  const doorWidths = doors.map(d => mm(d.size[0]))
+  const hasTopProfile = (barPieces['profile-top']?.length ?? 0) > 0
+  if (doorWidths.length && profilePieces.length) {
+    barPieces.cap = doorWidths.flatMap(w => hasTopProfile ? [w + capMargin, w + capMargin] : [w + capMargin])
+  }
   if (doors.length) {
     const vertical = doors.slice(0, swingDoors).map(d => mm(d.size[1]))
     if (vertical.length) { barPieces['seal-magnet'] = vertical; barPieces['seal-hinge'] = [...vertical] }
@@ -192,7 +203,7 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   roleQty['cap-end'] = profilePieces.length * 2
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
-  return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
+  return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
 }
 
 // ── Раскрой хлыстов ───────────────────────────────────────────────
@@ -321,6 +332,7 @@ export type KitRates = {
   deliveryMoscow: number
   liftPerFloor: number
   kerf?: number             // ширина пропила, мм
+  capMargin?: number        // запас заглушки по ширине двери, мм
 }
 export type KitOptions = {
   glassType?: string
