@@ -27,6 +27,7 @@ export function SupplierCatalogClient() {
   const [favOnly, setFavOnly] = useState(false)
 
   useEffect(() => { const t = setTimeout(() => setQDebounced(q), 300); return () => clearTimeout(t) }, [q])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- сброс страницы при смене фильтров
   useEffect(() => { setPage(0) }, [supplier, category, qDebounced, favOnly])
 
   const load = useCallback(async () => {
@@ -38,6 +39,7 @@ export function SupplierCatalogClient() {
       if (res.ok) setData(await res.json())
     } finally { setLoading(false) }
   }, [supplier, category, qDebounced, page, favOnly])
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- загрузка списка из справочника
   useEffect(() => { load() }, [load])
 
   const toggleFav = async (r: Row) => {
@@ -51,6 +53,7 @@ export function SupplierCatalogClient() {
   }
 
   const src = data?.sources.find(s => s.supplier === supplier)
+  // eslint-disable-next-line react-hooks/set-state-in-effect -- синхронизация поля правки со скидкой поставщика
   useEffect(() => { if (src) setDiscEdit(String(src.discount_percent)) }, [src?.supplier, src?.discount_percent])
 
   async function saveDiscount() {

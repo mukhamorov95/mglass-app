@@ -31,6 +31,7 @@ function CatalogPicker({ onPick, onClose }: { onPick: (id: number) => void; onCl
 
   useEffect(() => { const t = setTimeout(() => setQd(q), 300); return () => clearTimeout(t) }, [q])
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- загрузка позиций справочника в пикер
     setLoading(true)
     const p = new URLSearchParams({ supplier, q: qd, page: '0' })
     if (favOnly) p.set('favorites', '1')
