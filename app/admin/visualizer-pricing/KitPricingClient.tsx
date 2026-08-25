@@ -110,6 +110,11 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [diffs, setDiffs] = useState<Diff[] | null>(null)
   const [checking, setChecking] = useState(false)
   const [picked, setPicked] = useState<Set<string>>(new Set())
+  type Saving = { itemId: string; name: string; roleLabel: string; supplier: string; cost: number
+    savePerUnit: number; usedInModels: string[]
+    best: { supplier: string; name: string; cost: number; url: string; imageUrl: string; match: number } }
+  const [savings, setSavings] = useState<{ rows: Saving[]; totalPerItem: number; checked: number } | null>(null)
+  const [seeking, setSeeking] = useState(false)
 
   const cur = store[tier]
   const model = getModel(code)
@@ -159,6 +164,14 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
       })
       if (r.ok) { setMsg(`Цены обновлены: ${(await r.json()).applied}`); setDiffs(null); location.reload() }
     } finally { setChecking(false) }
+  }
+
+  async function findSavings() {
+    setSeeking(true)
+    try {
+      const r = await fetch(`/api/admin/supplier-catalog/savings?tier=${tier}`)
+      if (r.ok) setSavings(await r.json())
+    } finally { setSeeking(false) }
   }
 
   function edit(mutate: (s: TierStore) => void) {
@@ -374,6 +387,44 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             <p className="text-[11px] text-[#9a9a95] mt-2">
               Автоматически ничего не переписывается: цена изделия не должна меняться без твоего ведома.
               История цен пишется при каждом импорте прайса.
+            </p>
+          </Card>
+
+          <Card title="Где мы переплачиваем">
+            <div className="flex items-center gap-3">
+              <button onClick={findSavings} disabled={seeking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {seeking ? 'Ищу…' : 'Найти дешевле у поставщиков'}
+              </button>
+              {savings && (
+                <span className="text-[13px] text-[#6b6b66]">
+                  {savings.rows.length === 0
+                    ? `Проверено позиций: ${savings.checked}. Дешевле не нашлось — берём по лучшей цене`
+                    : `Нашлось ${savings.rows.length} из ${savings.checked}: до ${rub(savings.totalPerItem)} на изделии`}
+                </span>
+              )}
+            </div>
+            {savings?.rows.map(r => (
+              <div key={r.itemId} className="py-2 mt-1 border-t border-[#f4f4f0]">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="text-[10px] uppercase text-[#a0a09a] w-[120px] shrink-0">{r.roleLabel}</span>
+                  <span className="text-[#111110] truncate flex-1">{r.name}</span>
+                  <span className="font-mono text-[#6b6b66] shrink-0">{rub(r.cost)}</span>
+                  <span className="text-[#256029] font-semibold shrink-0">−{rub(r.savePerUnit)}</span>
+                </div>
+                <div className="flex items-center gap-2 pl-[128px] text-[12px] text-[#6b6b66]">
+                  {r.best.imageUrl && <img src={r.best.imageUrl} alt="" className="w-6 h-6 rounded object-cover border border-[#eeece5]" />}
+                  <span className="truncate flex-1">
+                    {r.best.supplier}: {r.best.name} — {rub(r.best.cost)}
+                    {r.best.url && <a href={r.best.url} target="_blank" rel="noreferrer" className="ml-1 text-[#4b6ea9] hover:underline">карточка</a>}
+                  </span>
+                  <span className="text-[#9a9a95] shrink-0">стоит в {r.usedInModels.length} моделях</span>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Сравниваются только позиции из комплектов и только в базовом цвете, чтобы не сравнить хром с золотом.
+              Брак и «эконом» исключены. Замена — решение закупщика: у дешёвой позиции может быть другое качество.
             </p>
           </Card>
 
