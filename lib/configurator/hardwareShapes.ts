@@ -6,6 +6,7 @@ export type HardwareShape =
   | 'hinge-glass' | 'hinge-wall'                    // петли: стекло-стекло / стекло-стена
   | 'handle-bar' | 'handle-knob' | 'handle-inset'   // ручки: скоба / кноб / купе (врезная)
   | 'roller' | 'mount-glass' | 'mount-wall' | 'mount-corner' | 'connector' | 'cap'
+  | 'mount-diag45' | 'mount-stabilizer'             // крепления штанги M1: 45°-коннектор / стабилизатор
 
 // Код модели геометрии → форма по умолчанию (обратная совместимость со старым рендером).
 export function shapeForModel(model: string): HardwareShape {
