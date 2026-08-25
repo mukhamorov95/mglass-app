@@ -5,7 +5,7 @@ import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
-import { ANDON_REASONS } from '@/lib/productionRouting'
+import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
@@ -26,6 +26,7 @@ type TaskRow = {
   blocked_by_task_id: number | null
   production_day: string | null
   layer_note: string | null
+  rework_count: number | null
 }
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
 type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
@@ -61,9 +62,9 @@ export default function MyQueuePage() {
   const [doneOrders, setDoneOrders] = useState<Map<number, OrderLite>>(new Map())
   const [orders, setOrders] = useState<Map<number, OrderLite>>(new Map())
   const [blockers, setBlockers] = useState<Map<number, BlockerLite>>(new Map())
-  const [andonFor, setAndonFor] = useState<number | null>(null)
-  const [andonReason, setAndonReason] = useState<string>(ANDON_REASONS[0].code)
-  const [andonComment, setAndonComment] = useState('')
+  // П3: вместо андона — «Переделать». Хранится задача, на которой рабочий нашёл брак.
+  const [reworkFor, setReworkFor] = useState<number | null>(null)
+  const [reworkBusy, setReworkBusy] = useState(false)
   const [myStations, setMyStations] = useState<string[]>([])
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
@@ -109,7 +110,7 @@ export default function MyQueuePage() {
       // Берём и закрытые задачи: в обычном списке они не показываются, но
       // нужны поиску — иначе отмеченный заказ пропадает и его не найти.
       sb.from('production_tasks')
-        .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note')
+        .select('id,order_id,item_index,stage_key,sequence_order,station,status,blocked_by_task_id,production_day,layer_note,rework_count')
         .or(orFilter)
         .in('status', ['queued', 'in_progress', 'done', 'problem'])
         .order('sequence_order', { ascending: true }),
@@ -280,14 +281,17 @@ export default function MyQueuePage() {
     load()
   }
 
-  async function submitAndon() {
-    if (andonFor == null) return
-    await fetch(`/api/production-tasks/${andonFor}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'problem', reason_code: andonReason, comment: andonComment || null }),
+  // Тап по причине И ЕСТЬ подтверждение — ни модалки с «Отправить», ни обязательного
+  // комментария. Два тапа вместо четырёх, и второй несёт причину.
+  async function submitRework(reason: ReworkReason) {
+    if (reworkFor == null || reworkBusy) return
+    setReworkBusy(true)
+    await fetch('/api/production/rework', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_id: reworkFor, reason }),
     }).catch(() => {})
-    setAndonFor(null)
-    setAndonComment('')
+    setReworkFor(null)
+    setReworkBusy(false)
     load()
   }
 
@@ -567,7 +571,7 @@ export default function MyQueuePage() {
                   onStartAll={markStartOrder}
                   onDone={markDone}
                   onDoneAll={markDoneOrder}
-                  onAndon={setAndonFor}
+                  onRework={setReworkFor}
                   onNoMatOrder={toggleNoMaterialOrder}
                   onNoMatItem={toggleNoMaterialItem}
                   matReq={matReq}
@@ -578,30 +582,21 @@ export default function MyQueuePage() {
         ))}
       </div>
 
-      {/* Andon modal */}
-      {andonFor != null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => setAndonFor(null)}>
+      {/* Лист причин переделки. Кнопки крупные — цех работает с телефона и в перчатках. */}
+      {reworkFor != null && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => setReworkFor(null)}>
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5" onClick={e => e.stopPropagation()}>
-            <h2 className="text-[15px] font-bold text-[#111110] mb-3">Что случилось?</h2>
-            <div className="space-y-1.5 mb-3">
-              {ANDON_REASONS.map(r => (
-                <label key={r.code} className={`flex items-center gap-2 px-3 py-2 border rounded-lg cursor-pointer transition-colors ${andonReason === r.code ? 'border-red-400 bg-red-50' : 'border-[#e4e4e0]'}`}>
-                  <input type="radio" name="andon" checked={andonReason === r.code} onChange={() => setAndonReason(r.code)} className="accent-[#111110]" />
-                  <span className="text-[13px] text-[#111110]">{r.label}</span>
-                </label>
+            <h2 className="text-[15px] font-bold text-[#111110]">Что случилось?</h2>
+            <p className="text-[12px] text-[#9a9a95] mt-1 mb-3">Деталь вернётся в работу, этап переоткроется</p>
+            <div className="space-y-2">
+              {REWORK_REASONS.map(r => (
+                <button key={r.code} disabled={reworkBusy} onClick={() => submitRework(r.code)}
+                  className="w-full px-4 py-3.5 rounded-xl border border-[#e4e4e0] text-[15px] font-medium text-[#111110] text-left active:scale-[0.99] hover:border-red-300 hover:bg-red-50 disabled:opacity-50">
+                  {r.label}
+                </button>
               ))}
             </div>
-            <textarea
-              value={andonComment}
-              onChange={e => setAndonComment(e.target.value)}
-              placeholder="Комментарий (необязательно)"
-              className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] mb-3"
-              rows={2}
-            />
-            <div className="flex gap-2">
-              <button onClick={() => setAndonFor(null)} className="flex-1 py-2.5 rounded-lg border border-[#e4e4e0] text-[13px] font-medium text-[#6b6b66]">Отмена</button>
-              <button onClick={submitAndon} className="flex-1 py-2.5 rounded-lg bg-red-600 text-white text-[13px] font-medium">Сообщить</button>
-            </div>
+            <button onClick={() => setReworkFor(null)} className="w-full mt-3 py-2.5 rounded-lg text-[13px] font-medium text-[#9a9a95]">Отмена</button>
           </div>
         </div>
       )}
@@ -611,7 +606,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onAndon, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -623,7 +618,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
   onDoneAll: (ids: number[]) => void
-  onAndon: (id: number) => void
+  onRework: (id: number) => void
   onNoMatOrder: (orderId: number) => void
   onNoMatItem: (orderId: number, itemIndex: number) => void
   matReq: Map<string, { status: string; expected: string | null }>
@@ -786,11 +781,18 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                           <span className="text-[11px] text-[#111110]">
                             {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
                             {t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                            {(t.rework_count ?? 0) > 0 && (
+                              <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600"
+                                title="Этот этап уже переделывали">
+                                переделка{(t.rework_count ?? 0) > 1 ? ` ×${t.rework_count}` : ''}
+                              </span>
+                            )}
                           </span>
                           <div className="flex gap-1.5 flex-shrink-0">
                             {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
                             <button onClick={() => onDone(t.id)} className="px-3.5 py-1 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
-                            <button onClick={() => onAndon(t.id)} className="px-2.5 py-1 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Проблема</button>
+                            <button onClick={() => onRework(t.id)} title="Брак — деталь надо изготовить заново"
+                              className="px-2.5 py-1 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Переделать</button>
                           </div>
                         </div>
                       )
