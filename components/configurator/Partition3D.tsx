@@ -8,7 +8,7 @@ import {
 } from '@react-three/drei'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
-import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice } from './scene/assembly'
+import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
 import { Hardware } from './scene/hardware'
 
 // Матовые финиши — выше шероховатость (меньше зеркальность).
@@ -196,10 +196,10 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant },
 ) {
-  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice), [model, dims, thickness, doorOpen, choice])
+  const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice, variant), [model, dims, thickness, doorOpen, choice, variant])
   // PBR-материал финиша для профилей и фурнитуры. Профиль цвета → MeshPhysicalMaterial
   // с clearcoat (реалистичный лак/зеркало); фолбэк на hex, если цвет неизвестен.
   const metalMat = useMemo(() => {

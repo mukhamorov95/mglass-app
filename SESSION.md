@@ -1,21 +1,25 @@
 ## Текущая задача
-A2 «Боевые данные» конфигуратора — избранное «наши позиции» + сравнение поставщиков в подборе себестоимости.
+Маршрут A3→A10 конфигуратора (вкладка «Сайт + 3D»). Сделаны A3 (реализм сцены) и A4 v1 (конфигурируемость M1).
 
 ## Что сделано (эта сессия)
-- Миграция supplier_price_favorites → колонка is_favorite + частичный индекс (применена)
-- GET справочника: фильтр favorites=1, is_favorite в выдаче, избранные наверху, favTotal
-- POST /api/admin/supplier-catalog/favorite → отметка «наша позиция»
-- GET /api/admin/supplier-catalog/compare → похожие позиции у всех поставщиков по словам названия, дешёвый флагом
-- Пикер (себест. визуализатора): фильтр ★ Наши, звезда-переключатель, ⇄ сравнение inline
-- Страница справочника: фильтр ★ Наши + колонка-звезда
+- A2 (избранное «наши позиции» + сравнение поставщиков) → PR #217 (территория Прайса, уедет в main через их ветку)
+- Координация 2 сессий → docs/CONFIGURATOR_COORDINATION.md (файловая граница, контракт, лог)
+- ТЗ M1 → docs/configurator/M1_CONFIG_SPEC.md
+- A3 сцена как рендер → components/configurator/Partition3D.tsx (отражающий пол, ACES, блики)
+- A4 M1 конфигурируемость:
+  - spec? в MetalPart/HardwarePlacement; variant (6-й арг) в buildFromModel; MDims += trayDepth/ceilingHeight → components/configurator/scene/assembly.ts
+  - Геометрия 4 креплений (perp90/diag45/stabilizer/ceiling) + 2 обвязок (partial/perimeter) со spec-кодами
+  - UI M1 (выбор крепления/обвязки + поддон/потолок) + проброс variant в 3D и quote → ConfiguratorClient.tsx, Partition3D(View).tsx
 
 ## Следующий шаг
-Задеплоить (мерж в main). Дальше — наполнение «наших позиций» за Верой (данные, не код).
-Затем следующий шаг маршрута: A3 «Сцена как рендер» или A4 «Фурнитура как в жизни».
+Продолжить маршрут: доработать визуал креплений M1 (труба/кронштейны как в жизни, отдельные 3D-формы вместо плейсхолдеров kp002/kp006), затем A5 «Клиентский UX». Прайс (A9) не трогаю.
+При переходе на POST /api/configurator/options+/quote — мигрировать полную разбивку ConfiguratorClient под KitPriceResult (пингнуть Прайс, они уберут GET).
 
 ## Контекст
-Ветка feat/shower-3d-configurator. tsc 0. Новых lint-ошибок нет (3 set-state-in-effect в SupplierCatalogClient — предсуществующие).
-Себестоимость не утекает клиенту — всё на сервере. Роуты под requireRole(['admin','ceo','buyer']).
+Ветка feat/shower-3d-configurator. tsc 0, lint по изменённым чист.
+Контракт с Прайсом: variant Record<string,string> (mount∈{perp90,diag45,stabilizer,ceiling}, profileFrame∈{partial,perimeter}); spec-коды tube-*/profile-*/mount-*. trayDepth по умолчанию 1000 → длина трубы perp90 (важно для FDT-351/352). Верифицировано в /embed/shower.
+Себестоимость не в клиенте — цена с сервера.
 
 ## Открытые вопросы
-- Сравнение матчит по 3 значимым словам названия (ilike AND) — эвристика; артикулы у поставщиков разные.
+- Плейсхолдеры 3D-форм для mount-diag45/mount-stabilizer (сейчас kp002). Уточнить визуал креплений с владельцем.
+- Точная геометрия diag45 (угол/длина) — приближение, показать владельцу.
