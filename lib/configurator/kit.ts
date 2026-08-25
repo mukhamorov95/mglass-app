@@ -36,7 +36,7 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
   'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная — только в проёме двери (стационар закрывает полость стеклом)' },
-  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'на срез профиля — 2 на кусок' },
+  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'открытый торец напольного профиля — со стороны входа' },
   'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'bar',   hint: 'притвор двери — по высоте двери' },
   'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'bar',   hint: 'низ створки — по ширине двери' },
   'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'bar',   hint: 'стык со стационаром — по высоте двери' },
@@ -213,12 +213,14 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 
   // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
   const barPieces: Record<string, number[]> = {}
+  let floorRuns = 0
   for (const m of assembly.metal) {
     const spec = (m as { spec?: string }).spec
     const fallback: RoleId = m.kind === 'rail' ? 'tube' : 'profile'
     const role = specRole(spec, fallback)
     const len = mm(m.kind === 'post' ? m.size[1] : m.size[0])
     if (len <= 0) continue
+    if (m.kind === 'profile' || role === 'profile-floor') floorRuns += 1
     ;(barPieces[role] ??= []).push(len)
   }
   const profilePieces = ROLES.filter(r => r.startsWith('profile')).flatMap(r => barPieces[r] ?? [])
@@ -249,7 +251,9 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
     if (vertical.length) { barPieces['seal-magnet'] = vertical; barPieces['seal-hinge'] = [...vertical] }
     barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
   }
-  roleQty['cap-end'] = profilePieces.length * 2
+  // Торцевая заглушка закрывает открытый торец НАПОЛЬНОГО профиля — тот, что видно
+  // со стороны входа. По одной на напольный ран; стойки у стены торцом не смотрят.
+  roleQty['cap-end'] = floorRuns
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
   return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
@@ -440,7 +444,10 @@ export function computeKitPrice(
     let paid = false
     for (const e of active) {
       const it = byId.get(e.itemId)!
-      const qty = resolveQty(e.qty, slot.role, q, opts)
+      // У хлыстовой роли «количество» — это куски раскроя. Считать их через roleQty нельзя:
+      // общий слот «Профиль» собирает куски сторон (profile-wall/floor), а под своим
+      // ключом у него пусто — позиция молча выпадала из спецификации как «нет цены».
+      const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
         const pieces = piecesForRole(q, kit, slot.role)

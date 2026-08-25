@@ -56,7 +56,7 @@ describe('kit — количества из геометрии', () => {
     expect(q.roleQty['mount-wall']).toBeGreaterThan(0)
     expect(q.roleQty['mount-glass']).toBeGreaterThan(0)
     expect(q.roleQty['mount-corner']).toBeGreaterThan(0)
-    expect(q.roleQty['cap-end']).toBe(q.profilePieces.length * 2)   // торцевые — штуками
+    expect(q.roleQty['cap-end']).toBe(2)                            // торцевые — по открытому торцу напольного профиля
     expect(q.barPieces.cap).toEqual([650])                          // погонная — только проём двери 600 + запас
     expect(q.roleQty.roller).toBe(0)          // распашная — роликов нет
   })
@@ -359,5 +359,25 @@ describe('kit — заглушка ставится только в проёме
     const kit: ModelKit = { slots: [{ role: 'cap', select: 'one', entries: [{ itemId: 'cp', qty: { mode: 'role' }, primary: true }] }] }
     const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
     expect(p.lines.find(l => l.role === 'cap')!.total).toBe(158)   // один метровый хлыст вместо четырёх кусков
+  })
+})
+
+describe('kit — профиль одним слотом и торцевая заглушка', () => {
+  it('М1: общий слот «Профиль» считает куски сторон, а не выпадает из спецификации', () => {
+    const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 1000, height: 2000 }, 8), 8, getModel('М1'))
+    // геометрия отдаёт куски под сторонами, под своим ключом у «profile» пусто
+    expect(q.barPieces['profile']).toBeUndefined()
+    const lib: Library = { items: [{ id: 'p', name: 'Профиль FDPA-51.22', role: 'profile', stocks: [{ len: 2200, prices: { chrome: 712 } }] }] }
+    const kit: ModelKit = { slots: [{ role: 'profile', select: 'one', entries: [{ itemId: 'p', qty: { mode: 'role' }, primary: true }] }] }
+    const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
+    const line = p.lines.find(l => l.role === 'profile')
+    expect(line).toBeDefined()
+    expect(line!.total).toBeGreaterThan(0)
+    expect(p.missing.some(m => m.role === 'profile')).toBe(false)
+  })
+
+  it('М1: торцевая заглушка одна — на открытый торец напольного профиля', () => {
+    const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 1000, height: 2000 }, 8), 8, getModel('М1'))
+    expect(q.roleQty['cap-end']).toBe(1)
   })
 })
