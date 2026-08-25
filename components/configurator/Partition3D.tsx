@@ -6,6 +6,7 @@ import {
   OrbitControls, Environment, Lightformer, ContactShadows,
   MeshTransmissionMaterial,
 } from '@react-three/drei'
+import { EffectComposer, N8AO } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
@@ -249,6 +250,10 @@ export default function Partition3D(
             maxDistance={span * 3.5}
             target={[cx, ty, cz]}
           />
+          {/* V1: мягкое затенение контактов (AO) — тени в углах/стыках, объём */}
+          <EffectComposer enableNormalPass multisampling={4}>
+            <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes quality="medium" />
+          </EffectComposer>
         </Suspense>
       </Canvas>
     </div>
