@@ -1,31 +1,26 @@
 ## Текущая задача
-Кабинет заказчика B2B — раунд 2: закрыты все 6 пунктов роадмапа (уведомления, документы, КП из просчёта, регламент, логин, аудит паритета).
+Маршрут A1 — счёт-спецификация для партнёра (единый документ с менеджерским), за флагом владельца.
 
 ## Что сделано (эта сессия)
-- Аудит паритета прогнан → __tests__/audit/partner-parity.test.ts (0 расхождений)
-- Таблица уведомлений → supabase/migrations/20260824_partner_notifications.sql (ПРИМЕНИТЬ владельцу)
-- E-mail-слой партнёра (Resend) → lib/notify.ts (sendEmail, notifyPartnerAccessGranted, notifyPartnerOrderStatus)
-- Оркестрация bell+email + сверка транзиций → lib/partnerNotify.ts
-- API колокольчика → app/api/partner/notifications/route.ts (GET+POST, опортунистич. сверка)
-- Пуш по расписанию → app/api/cron/partner-notify/route.ts + vercel.json (0 8-21 * * *)
-- Приглашение письмом при выдаче доступа → app/api/admin/b2b-access/route.ts (+ баннер emailed)
-- Подтверждение «заявка получена» → app/api/partner/submit/route.ts
-- Страница «Уведомления» → app/partner/notifications/page.tsx (+ пункт меню, unread-бейдж)
-- Страница «Документы» (КП по заказам) → app/partner/documents/page.tsx (+ пункт меню)
-- КП из просчёта + пометка про счёт → app/partner/new/page.tsx
-- Регламент + FAQ про счёт/уведомления → app/partner/guide/page.tsx
-- Премиальный тёмо-адаптивный логин + лого → app/login/page.tsx
+- Флаг self-invoice → supabase/migrations/20260825_b2b_clients_self_invoice.sql (b2b_clients.can_self_invoice, ПРИМЕНИТЬ)
+- Единый компонент счёта → components/InvoiceDocument.tsx (forwardRef, сам считает итоги+QR)
+- Рефактор менеджерского счёта на общий компонент → app/b2b-quotes/[id]/invoice/page.tsx (редактор реквизитов сохранён)
+- Партнёрский endpoint счёта (гейт can_self_invoice + запущен) → app/api/partner/order/[id]/invoice-data/route.ts
+- Страница счёта в кабинете → app/partner/order/[id]/invoice/page.tsx (read-only реквизиты, выбор юрлица, PDF)
+- Гейт-кнопка на карточке заказа → app/api/partner/order/[id]/route.ts (canInvoice) + app/partner/order/[id]/page.tsx
+- Тумблер владельца «Счёт клиенту: вкл/выкл» → app/admin/b2b-clients + overview API + b2b-access action set_self_invoice
+- Фазз-паритет (офлайн, CI) → __tests__/audit/quote-engine-fuzz.test.ts (детерминизм движка, менеджер==клиент, надбавки реальны)
 
 ## Следующий шаг
-Владельцу применить миграцию 20260824_partner_notifications.sql в Supabase → фича активируется.
-Проверить под mrglass: колокольчик, документы, письма (нужен RESEND_API_KEY в проде).
+Владельцу: применить миграцию 20260825; прогнать боевой аудит паритета на первых реальных просчётах;
+включить «Счёт клиенту» нужному партнёру в /admin/b2b-clients. Дальше по маршруту — A2 (статус оплаты уже есть #206;
+остаётся онлайн-оплата) или A3 (согласование чертежа).
 
 ## Контекст
-Ветка feat/partner-cabinet-round2 (worktree mglass-b2b-cabinet) от origin/main.
-E-mail через Resend — RESEND_API_KEY уже в .env.example; без ключа всё gracefully no-op.
-Уведомления дедуп по (client_id, order_id, kind); исторические заказы не выстреливают (окно 45 дней).
-Проверки: tsc 0, eslint 0, 342/342 тестов.
+Ветка feat/partner-a1-invoice от origin/main (main ушёл вперёд: профиль #207, оплата-статус #206, reorder #197).
+Паритет цифр гарантирован конструктивно: счёт читает тот же b2b_orders, что менеджер; движок один (computeQuoteItem).
+Счёт партнёру доступен ТОЛЬКО при can_self_invoice=true И запущенном заказе; иначе «счёт выставляет менеджер».
+Проверки: tsc 0, eslint 0, 346/346 тестов.
 
 ## Открытые вопросы
-- /admin/b2b-access оставлен в светлой админ-теме (тёмная там бы конфликтовала с остальным /admin) — по согласованию.
-- Реальный растровый логотип можно подставить позже; сейчас единый inline-SVG glass-знак.
+- В «Документы» пока не выведен счёт (только КП) — можно добавить, когда orders API отдаст canInvoice по-заказно.

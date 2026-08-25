@@ -56,6 +56,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  // Разрешить/запретить клиенту самому скачивать счёт-спецификацию (после проверки паритета).
+  if (body.action === 'set_self_invoice') {
+    const clientId = Number(body.clientId)
+    if (!clientId) return NextResponse.json({ error: 'Нужен клиент' }, { status: 400 })
+    const { error } = await a.from('b2b_clients').update({ can_self_invoice: !!body.value }).eq('id', clientId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, value: !!body.value })
+  }
+
   const clientId = Number(body.clientId)
   const email = String(body.email ?? '').trim().toLowerCase()
   if (!clientId || !email) return NextResponse.json({ error: 'Нужны клиент и email' }, { status: 400 })
