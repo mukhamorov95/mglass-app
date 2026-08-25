@@ -5,6 +5,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 import { isCuttingBlocked } from '@/lib/materialGate'
 import { cascadePriorStages, type CascadedStage } from '@/lib/productionCascade'
+import { actorName, buildSyncDonePatch, UNSET_TASK_PATCH } from '@/lib/production/executor'
 
 // Обратное зеркало: отметка этапа со «старых» экранов (orders/[id], /p/o) → production_tasks.
 // Прямое зеркало (production_tasks → notes.detail_stages) живёт в /api/production-tasks/[id].
@@ -35,6 +36,11 @@ export async function POST(
   const now = new Date().toISOString()
   let updated = 0
 
+  // П1: отметка с карточки заказа / QR — такой же факт исполнения, как из очереди цеха.
+  // Без этого исполнитель был бы известен только у половины отметок.
+  const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle()
+  const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
+
   // Материал-гейт для резки: если среди updates есть закрытие cutting, проверяем материал (один раз).
   const cuttingDone = updates.some(u => u?.stage_key === 'cutting' && u.action === 'done')
   let cuttingBlocked = false
@@ -52,8 +58,8 @@ export async function POST(
     if (u.stage_key === 'cutting' && u.action === 'done' && cuttingBlocked) { blocked.push(u.item_index); continue }
 
     const patch: Record<string, unknown> = u.action === 'unset'
-      ? { status: 'queued', completed_at: null, started_at: null, problem_at: null, problem_resolved_at: null, problem_reason_code: null, problem_comment: null }
-      : { status: 'done', completed_at: now, problem_resolved_at: now }
+      ? { ...UNSET_TASK_PATCH }
+      : buildSyncDonePatch(actor, now)
 
     const { data, error } = await svc
       .from('production_tasks')
