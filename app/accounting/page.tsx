@@ -10,6 +10,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 import { FinweekTab } from '@/components/accounting/FinweekTab'
 import { NotesTab } from '@/components/accounting/NotesTab'
+import { UnpostedTab } from '@/components/accounting/UnpostedTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -30,7 +31,8 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'requests' | 'committee' | 'notes'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'requests' | 'committee' | 'notes'>('odds')
+  const [unposted, setUnposted] = useState(0)
   const [myRole, setMyRole] = useState('')
   const [myName, setMyName] = useState('')
   const [unit, setUnit] = useState<'ip' | 'ooo'>('ip')
@@ -93,6 +95,18 @@ export default function AccountingPage() {
   }, [sb, month])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+
+  const loadUnposted = useCallback(async () => {
+    if (!month) return
+    const [y, m] = month.split('-').map(Number)
+    const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    const r = await fetch(`/api/accounting/unposted?from=${month}-01&to=${to}`)
+    if (!r.ok) return
+    const j = await r.json()
+    setUnposted((j.items as { skipped: boolean }[]).filter(i => !i.skipped).length)
+  }, [month])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadUnposted().catch(() => {}) }, [loadUnposted])
 
   const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
   const isBuyer = myRole === 'buyer'
@@ -217,11 +231,14 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
                 {label}
+                {k === 'unposted' && unposted > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
+                )}
               </button>
             ))}
           </div>
@@ -354,6 +371,10 @@ export default function AccountingPage() {
           </div>
         )}
 
+        {tab === 'unposted' && !isBuyer && (
+          <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
+            onPosted={() => { load(); loadUnposted() }} />
+        )}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
