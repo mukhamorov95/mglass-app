@@ -372,8 +372,11 @@ export type KitPriceResult = {
   materialsCost: number
   itemPrice: number
   sections: number
-  installCost: number
+  installBase: number       // монтаж по секциям без надбавок
+  installExtra: number      // надбавки монтажа
+  installCost: number       // база + надбавки
   deliveryCost: number
+  deliveryZone: string      // какая зона применена
   liftCost: number
   total: number
   marginPct: number
@@ -384,6 +387,13 @@ export type KitPriceResult = {
   complete: boolean
 }
 
+// Зона доставки: базовая цена + добавка за километр за МКАД. Выбор зоны у менеджера;
+// клиенту по умолчанию Москва. Первая зона, чей maxKm ≥ введённого километража, и берётся.
+export type DeliveryZone = { id: string; label: string; base: number; perKm?: number; maxKm?: number }
+// Надбавка за монтаж: за секцию (сложная стена — плитка/камень) или разовая за заказ
+// (подъём по лестнице, нестандарт). Не зашиты — владелец правит в админке.
+export type InstallSurcharge = { id: string; label: string; kind: 'per-section' | 'per-order'; amount: number }
+
 export type KitRates = {
   glassPerM2: Record<string, number>
   installPerSection: number
@@ -391,6 +401,8 @@ export type KitRates = {
   liftPerFloor: number
   kerf?: number             // ширина пропила, мм
   capMargin?: number        // запас заглушки по ширине двери, мм
+  deliveryZones?: DeliveryZone[]      // зоны доставки; пусто → только Москва (deliveryMoscow)
+  installSurcharges?: InstallSurcharge[]  // надбавки монтажа
 }
 export type KitOptions = {
   glassType?: string
@@ -399,6 +411,9 @@ export type KitOptions = {
   floors?: number
   choice?: Partial<Record<RoleId, string>>   // выбранная клиентом позиция в слоте
   qtyChoice?: Partial<Record<RoleId, number>> // выбранное клиентом количество (петли 2/3)
+  zoneId?: string          // зона доставки; нет → Москва
+  km?: number              // километраж за МКАД — уточняет цену внутри зоны
+  installFactors?: string[] // id выбранных надбавок монтажа (сложная стена, лестница, нестандарт)
 }
 
 const priceOf = (it: LibraryItem, finishId: string) => it.prices?.[finishId] ?? it.prices?.chrome ?? 0
@@ -499,13 +514,33 @@ export function computeKitPrice(
   const marginPct = Number.isFinite(kit.margin) && (kit.margin as number) > 0 ? (kit.margin as number) : finance.marginPct
   const fm = calcFinancialModel({ directCost: materialsCost, marginPercent: marginPct, taxPercent: finance.taxPct })
   const itemPrice = fm?.finalPrice ?? 0
-  const installCost = rates.installPerSection * q.sections
-  const deliveryCost = opts.withDelivery === false ? 0 : rates.deliveryMoscow
+  const installBase = rates.installPerSection * q.sections
+  const surcharges = rates.installSurcharges ?? []
+  const chosen = new Set(opts.installFactors ?? [])
+  const installExtra = surcharges
+    .filter(s => chosen.has(s.id))
+    .reduce((sum, s) => sum + (s.kind === 'per-section' ? s.amount * q.sections : s.amount), 0)
+  const installCost = installBase + installExtra
+
+  // Доставка: зона по id (внутри — база + добавка за км за МКАД), иначе Москва.
+  const zones = rates.deliveryZones ?? []
+  const zone = zones.find(z => z.id === opts.zoneId)
+  let deliveryCost = 0
+  let deliveryZone = 'Москва'
+  if (opts.withDelivery !== false) {
+    if (zone) {
+      const km = Math.max(0, opts.km ?? 0)
+      deliveryCost = Math.round(zone.base + (zone.perKm ? zone.perKm * km : 0))
+      deliveryZone = zone.label
+    } else {
+      deliveryCost = rates.deliveryMoscow
+    }
+  }
   const liftCost = (opts.floors ?? 0) * rates.liftPerFloor
 
   return {
     glassCost, lines, hardwareCost, materialsCost, itemPrice,
-    sections: q.sections, installCost, deliveryCost, liftCost,
+    sections: q.sections, installBase, installExtra, installCost, deliveryCost, deliveryZone, liftCost,
     total: itemPrice + installCost + deliveryCost + liftCost,
     marginPct, taxPct: finance.taxPct,
     marginSource: marginPct === finance.marginPct ? 'тариф' : 'модель',

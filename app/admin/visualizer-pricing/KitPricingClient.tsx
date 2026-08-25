@@ -104,6 +104,10 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [zoneId, setZoneId] = useState('')
+  const [km, setKm] = useState(0)
+  const [floors, setFloors] = useState(0)
+  const [installFactors, setInstallFactors] = useState<string[]>([])
   const [view, setView] = useState<'kit' | 'audit' | 'versions'>('kit')
   type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
     changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
@@ -132,8 +136,8 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const q = useMemo(() => computeKitQuantities(assembly, 8, model, cur.rates.capMargin), [assembly, model, cur.rates.capMargin])
   const fin = finance[tier]
   const price = useMemo(
-    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice }),
-    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice],
+    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice, zoneId, km, floors, installFactors }),
+    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice, zoneId, km, floors, installFactors],
   )
   const clientView = useMemo(() => kitChoices(cur.library, kit, q), [cur.library, kit, q])
   const byId = useMemo(() => new Map(cur.library.items.map(i => [i.id, i])), [cur.library])
@@ -612,8 +616,32 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             {price.belowMin && (
               <p className="text-[11px] text-[#b04a3f] py-0.5">⚠️ Маржа ниже минимальной {fin.minMarginPct}% — так продавать нельзя</p>
             )}
-            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)} + доставка</span><span className="font-mono">{rub(price.installCost + price.deliveryCost)}</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)}{price.installExtra > 0 ? ` + надбавки ${rub(price.installExtra)}` : ''}</span><span className="font-mono">{rub(price.installCost)}</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Доставка · {price.deliveryZone}</span><span className="font-mono">{rub(price.deliveryCost)}</span></div>
+            {price.liftCost > 0 && <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Подъём {floors} эт.</span><span className="font-mono">{rub(price.liftCost)}</span></div>}
             <div className="flex justify-between text-[14px] font-semibold pt-1"><span>Сумма изделия</span><span className="font-mono">{rub(price.total)}</span></div>
+            {((cur.rates.deliveryZones ?? []).length > 0 || (cur.rates.installSurcharges ?? []).length > 0) && (
+              <div className="mt-2 pt-2 border-t border-[#f0f0ec] space-y-1.5">
+                {(cur.rates.deliveryZones ?? []).length > 0 && (
+                  <div className="flex items-center gap-1.5 text-[12px]">
+                    <span className="text-[#9a9a95] w-14">Зона</span>
+                    <select value={zoneId} onChange={e => setZoneId(e.target.value)} className="text-[12px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]">
+                      <option value="">Москва</option>
+                      {(cur.rates.deliveryZones ?? []).map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+                    </select>
+                    <NumInput value={km} onChange={setKm} w={54} suffix="км" />
+                    <span className="text-[#9a9a95] ml-1">этаж</span><NumInput value={floors} onChange={setFloors} w={40} suffix="" />
+                  </div>
+                )}
+                {(cur.rates.installSurcharges ?? []).map(f => (
+                  <label key={f.id} className="flex items-center gap-1.5 text-[12px] text-[#4b4b47]">
+                    <input type="checkbox" checked={installFactors.includes(f.id)}
+                      onChange={e => setInstallFactors(v => e.target.checked ? [...v, f.id] : v.filter(x => x !== f.id))} />
+                    {f.label} <span className="text-[#9a9a95]">({f.kind === 'per-section' ? 'за секцию' : 'разово'} {rub(f.amount)})</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </Card>
 
           {(clientView.variants.length > 0 || clientView.quantities.length > 0) && (
@@ -869,6 +897,41 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Подъём за этаж</span><NumInput value={cur.rates.liftPerFloor} onChange={v => edit(s => { s.rates.liftPerFloor = v })} /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Пропил (отход на рез)</span><NumInput value={cur.rates.kerf ?? 0} onChange={v => edit(s => { s.rates.kerf = v })} suffix="мм" /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Запас заглушки по двери</span><NumInput value={cur.rates.capMargin ?? CAP_MARGIN_MM} onChange={v => edit(s => { s.rates.capMargin = v })} suffix="мм" /></label>
+          </Card>
+
+          <Card title="Зоны доставки">
+            <p className="text-[12px] text-[#9a9a95] mb-2">Первая зона, чей лимит км ≥ введённого, и берётся. Пусто — только Москва по ставке выше.</p>
+            {(cur.rates.deliveryZones ?? []).map((z, zi) => (
+              <div key={zi} className="flex items-center gap-1.5 py-1 border-b border-[#f4f4f0] last:border-0">
+                <input value={z.label} onChange={e => edit(s => { s.rates.deliveryZones![zi].label = e.target.value })}
+                  className="flex-1 min-w-0 text-[13px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 outline-none focus:border-[#111110]" />
+                <NumInput value={z.base} onChange={v => edit(s => { s.rates.deliveryZones![zi].base = v })} w={72} />
+                <NumInput value={z.perKm ?? 0} onChange={v => edit(s => { s.rates.deliveryZones![zi].perKm = v })} w={56} suffix="₽/км" />
+                <NumInput value={z.maxKm ?? 0} onChange={v => edit(s => { s.rates.deliveryZones![zi].maxKm = v || undefined })} w={56} suffix="км" />
+                <button onClick={() => edit(s => { s.rates.deliveryZones!.splice(zi, 1) })} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+              </div>
+            ))}
+            <button onClick={() => edit(s => { s.rates.deliveryZones = [...(s.rates.deliveryZones ?? []), { id: uid('z'), label: 'Новая зона', base: 0 }] })}
+              className="text-[12px] text-[#4b6ea9] hover:underline mt-1">+ зона</button>
+          </Card>
+
+          <Card title="Надбавки за монтаж">
+            <p className="text-[12px] text-[#9a9a95] mb-2">Сложная стена — за секцию, разовые (лестница, нестандарт) — за заказ. Менеджер отмечает при просчёте.</p>
+            {(cur.rates.installSurcharges ?? []).map((f, fi) => (
+              <div key={fi} className="flex items-center gap-1.5 py-1 border-b border-[#f4f4f0] last:border-0">
+                <input value={f.label} onChange={e => edit(s => { s.rates.installSurcharges![fi].label = e.target.value })}
+                  className="flex-1 min-w-0 text-[13px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 outline-none focus:border-[#111110]" />
+                <select value={f.kind} onChange={e => edit(s => { s.rates.installSurcharges![fi].kind = e.target.value as 'per-section' | 'per-order' })}
+                  className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
+                  <option value="per-section">за секцию</option>
+                  <option value="per-order">за заказ</option>
+                </select>
+                <NumInput value={f.amount} onChange={v => edit(s => { s.rates.installSurcharges![fi].amount = v })} w={72} />
+                <button onClick={() => edit(s => { s.rates.installSurcharges!.splice(fi, 1) })} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+              </div>
+            ))}
+            <button onClick={() => edit(s => { s.rates.installSurcharges = [...(s.rates.installSurcharges ?? []), { id: uid('f'), label: 'Новая надбавка', kind: 'per-order', amount: 0 }] })}
+              className="text-[12px] text-[#4b6ea9] hover:underline mt-1">+ надбавка</button>
           </Card>
         </div>
       </div>
