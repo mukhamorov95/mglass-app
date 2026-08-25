@@ -26,6 +26,7 @@ function CatalogPicker({ onPick, onClose }: { onPick: (id: number) => void; onCl
 
   useEffect(() => { const t = setTimeout(() => setQd(q), 300); return () => clearTimeout(t) }, [q])
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true)
     const p = new URLSearchParams({ supplier, q: qd, page: '0' })
     fetch(`/api/admin/supplier-catalog?${p}`).then(r => r.ok ? r.json() : null).then(d => {
