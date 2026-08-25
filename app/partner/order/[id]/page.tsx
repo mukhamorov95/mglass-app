@@ -9,6 +9,7 @@ type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
   lane: string; ready: boolean; progressPct: number; deadline: string | null
+  paymentStatus?: 'paid' | 'awaiting' | null
   total: number; items: Item[]; timeline: TL[]; drawingUrl: string | null; recalcNote: string | null
 }
 
@@ -49,7 +50,18 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           </div>
           <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : ''}</div>
         </div>
-        <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+          {o.paymentStatus && (
+            <span style={{
+              fontSize: 12.5, padding: '6px 13px', borderRadius: 999, fontWeight: 600,
+              background: o.paymentStatus === 'paid' ? 'rgba(16,185,129,.12)' : 'rgba(245,158,11,.14)',
+              color: o.paymentStatus === 'paid' ? '#0f766e' : '#b45309',
+            }}>
+              {o.paymentStatus === 'paid' ? '✓ Оплачен' : 'Ожидает оплаты'}
+            </span>
+          )}
+          <span className={`pill ${pillCls}`} style={{ fontSize: 12.5, padding: '6px 13px' }}>{statusText}</span>
+        </div>
       </div>
 
       {o.recalcNote && <div className="ord" style={{ boxShadow: 'none' }}><div className="recalc" style={{ marginTop: 0 }}>✎ Пересчитано менеджером: {o.recalcNote}</div></div>}
