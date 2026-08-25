@@ -10,11 +10,18 @@ import { createClient } from '@/lib/supabase-browser'
 import { RequestsTab, CommitteeTab } from '@/components/accounting/RequestsTabs'
 import { FinweekTab } from '@/components/accounting/FinweekTab'
 import { NotesTab } from '@/components/accounting/NotesTab'
+import { UnpostedTab } from '@/components/accounting/UnpostedTab'
+import { DocumentsTab } from '@/components/accounting/DocumentsTab'
+import { BankTab } from '@/components/accounting/BankTab'
+import { PayrollTab } from '@/components/accounting/PayrollTab'
+import { TaxesTab } from '@/components/accounting/TaxesTab'
+import { CounterpartiesTab } from '@/components/accounting/CounterpartiesTab'
+import { AuditTab } from '@/components/accounting/AuditTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
 type Account = { id: number; unit: string; name: string; sort: number }
-type Entry = { id: number; entry_date: string; unit: string; kind: string; fund_id: number; subfund_id: number | null; amount: number; account: string | null; counterparty: string | null; comment: string | null; entered_by_name: string | null }
+type Entry = { id: number; entry_date: string; unit: string; kind: string; fund_id: number; subfund_id: number | null; amount: number; account: string | null; counterparty: string | null; comment: string | null; entered_by_name: string | null; attachment_path: string | null }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 const CLASS_LABEL: Record<string, string> = { variable: 'Переменные расходы', fixed: 'Постоянные расходы', fund: 'Фонды' }
@@ -30,7 +37,10 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'requests' | 'committee' | 'notes'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('odds')
+  const [unposted, setUnposted] = useState(0)
+  const [locked, setLocked] = useState(false)
+  const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
   const [myRole, setMyRole] = useState('')
   const [myName, setMyName] = useState('')
   const [unit, setUnit] = useState<'ip' | 'ooo'>('ip')
@@ -94,6 +104,43 @@ export default function AccountingPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
 
+  const loadPeriod = useCallback(async () => {
+    if (!month) return
+    const r = await fetch(`/api/accounting/period?unit=${unit}&month=${month}`)
+    if (!r.ok) return
+    const j = await r.json()
+    setLocked(!!j.locked)
+    setLog(j.log ?? [])
+  }, [unit, month])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadPeriod().catch(() => {}) }, [loadPeriod])
+
+  async function togglePeriod() {
+    const action = locked ? 'unlock' : 'lock'
+    if (!confirm(locked
+      ? 'Открыть месяц заново? Правки снова станут возможны.'
+      : 'Закрыть месяц? После этого операции этого месяца нельзя будет ни добавить, ни изменить.')) return
+    const r = await fetch('/api/accounting/period', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ unit, month, action }),
+    })
+    const j = await r.json().catch(() => ({}))
+    flash(r.ok ? (j.locked ? 'Месяц закрыт' : 'Месяц открыт') : (j.error ?? 'Не получилось'))
+    await loadPeriod()
+  }
+
+  const loadUnposted = useCallback(async () => {
+    if (!month) return
+    const [y, m] = month.split('-').map(Number)
+    const to = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10)
+    const r = await fetch(`/api/accounting/unposted?from=${month}-01&to=${to}`)
+    if (!r.ok) return
+    const j = await r.json()
+    setUnposted((j.items as { skipped: boolean }[]).filter(i => !i.skipped).length)
+  }, [month])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { loadUnposted().catch(() => {}) }, [loadUnposted])
+
   const isFin = ['accountant', 'cfo', 'admin', 'ceo'].includes(myRole)
   const isBuyer = myRole === 'buyer'
   const unitFunds = useMemo(() => funds.filter(f => f.unit === unit), [funds, unit])
@@ -138,6 +185,16 @@ export default function AccountingPage() {
     const { error } = await sb.from('cashflow_funds').insert({ unit, flow: 'out', fund_class, name, sort: 98 })
     if (error) { flash('Не добавилось: ' + error.message); return }
     await load()
+  }
+
+  async function attach(entryId: number, file: File) {
+    const body = new FormData()
+    body.append('entry_id', String(entryId))
+    body.append('file', file)
+    const r = await fetch('/api/accounting/entry-attachment', { method: 'POST', body })
+    const j = await r.json().catch(() => ({}))
+    flash(r.ok ? 'Вложение сохранено ✓' : (j.error ?? 'Не загрузилось'))
+    if (r.ok) await load()
   }
 
   async function saveEntry() {
@@ -217,11 +274,14 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['audit', '✅ Проверка'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
                 {label}
+                {k === 'unposted' && unposted > 0 && (
+                  <span className="ml-1.5 px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[11px] font-semibold">{unposted}</span>
+                )}
               </button>
             ))}
           </div>
@@ -237,7 +297,14 @@ export default function AccountingPage() {
                 <span className="text-[14px] font-semibold text-[#111110] capitalize min-w-[120px] text-center">{month && monthLabel(month)}</span>
                 <button onClick={() => setMonth(shiftMonth(month, 1))} className="px-2.5 py-1 rounded-md border border-[#e4e4e0] text-[13px]">→</button>
               </div>
-              <button onClick={addFund} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>
+              <div className="flex items-center gap-2">
+                <button onClick={togglePeriod}
+                  className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border ${
+                    locked ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#e4e4e0] text-[#6b6b66]'}`}>
+                  {locked ? '🔒 месяц закрыт' : 'Закрыть месяц'}
+                </button>
+                {!locked && <button onClick={addFund} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">＋ Фонд</button>}
+              </div>
             </div>
 
             {unitFunds.filter(f => f.fund_class === 'income').map(fundRow)}
@@ -260,6 +327,23 @@ export default function AccountingPage() {
               <span className="font-semibold">Остаток за месяц</span>
               <span className="font-mono font-semibold">{RUB(income - variable - fixedAndFunds)}</span>
             </div>
+
+            {log.length > 0 && (
+              <details className="mt-4 bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
+                <summary className="text-[13px] text-[#6b6b66] cursor-pointer">Журнал правок · {log.length}</summary>
+                <div className="mt-2 space-y-1">
+                  {log.slice(0, 40).map(l => (
+                    <div key={l.id} className="flex justify-between text-[12px] text-[#6b6b66]">
+                      <span>
+                        {l.at.slice(8, 10)}.{l.at.slice(5, 7)} {l.at.slice(11, 16)} · {l.actor ?? '—'} ·{' '}
+                        {l.action === 'insert' ? 'добавил' : l.action === 'update' ? 'изменил' : 'удалил'} операцию от {l.entry_date.slice(8, 10)}.{l.entry_date.slice(5, 7)}
+                      </span>
+                      <span className="font-mono">{RUB(l.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            )}
           </div>
         )}
 
@@ -344,8 +428,22 @@ export default function AccountingPage() {
                       <span className="text-[#111110]">{fund?.name}{sub ? ` → ${sub.name}` : ''}</span>
                       {e.counterparty && <span className="text-[#9a9a95]"> · {e.counterparty}</span>}
                     </div>
-                    <span className={`font-mono flex-shrink-0 ml-3 ${e.kind === 'in' ? 'text-emerald-700' : 'text-[#111110]'}`}>
-                      {e.kind === 'in' ? '+' : '−'}{RUB(Number(e.amount))}
+                    <span className="flex items-center gap-2 flex-shrink-0 ml-3">
+                      {e.attachment_path ? (
+                        <a href={`/api/accounting/entry-attachment?id=${e.id}`} target="_blank" rel="noreferrer"
+                          className="text-[13px] text-blue-600" title="Открыть вложение">📎</a>
+                      ) : (
+                        <label className="text-[13px] text-[#c9c9c4] cursor-pointer" title="Приложить скан">
+                          📎
+                          <input type="file" className="hidden" onChange={ev => {
+                            const f = ev.target.files?.[0]
+                            if (f) attach(e.id, f)
+                          }} />
+                        </label>
+                      )}
+                      <span className={`font-mono ${e.kind === 'in' ? 'text-emerald-700' : 'text-[#111110]'}`}>
+                        {e.kind === 'in' ? '+' : '−'}{RUB(Number(e.amount))}
+                      </span>
                     </span>
                   </div>
                 )
@@ -354,10 +452,28 @@ export default function AccountingPage() {
           </div>
         )}
 
+        {tab === 'unposted' && !isBuyer && (
+          <UnpostedTab unit={unit} funds={funds} subfunds={subfunds} month={month}
+            onPosted={() => { load(); loadUnposted() }} />
+        )}
+        {tab === 'bank' && !isBuyer && (
+          <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => load()} />
+        )}
+        {tab === 'payroll' && !isBuyer && (
+          <PayrollTab unit={unit} month={month} onChanged={() => load()} />
+        )}
+        {tab === 'taxes' && !isBuyer && (
+          <TaxesTab unit={unit} subfunds={subfunds} today={fDate} onPaid={() => load()} />
+        )}
+        {tab === 'partners' && !isBuyer && (
+          <CounterpartiesTab unit={unit} from={`${month.slice(0, 4)}-01-01`} />
+        )}
+        {tab === 'docs' && !isBuyer && <DocumentsTab />}
+        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
-        {tab === 'notes' && !isBuyer && <NotesTab unit={unit} myName={myName} />}
+        {tab === 'notes' && !isBuyer && <NotesTab unit={unit} />}
       </div>
     </div>
   )

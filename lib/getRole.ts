@@ -200,6 +200,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/services',
     '/admin/glass-prices',
     '/admin/glass-price-lists',
+    '/admin/margin-audit',
     '/admin/mirror-lighting',
     '/admin/mirror-frames',
     '/admin/facet',

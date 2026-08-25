@@ -87,6 +87,10 @@
     {
       "path": "/api/cron/agent-vlad",
       "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/accounting-digest",
+      "schedule": "0 6 * * 1-5"
     }
   ]
 }

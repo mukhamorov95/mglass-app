@@ -9,6 +9,7 @@ import { type DetailStageKey, type DetailStageState, type DetailStages, PRODUCTI
 import { materialLabel, materialLabelShort } from '@/lib/materialLabel'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
+import { remainderStatus } from '@/lib/b2b/orderPayments'
 
 const STAGES = [
   { key: 'invoice_sent',     label: 'Счёт' },
@@ -619,6 +620,10 @@ export default function B2BOrdersPage() {
   const [productionDayMode, setProductionDayMode] = useState(false)
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
+  // A23: оплачено по заказам — из payments (деньги, не notes). Пусто, пока не загрузилось.
+  const [paidByOrderId, setPaidByOrderId] = useState<Record<number, number>>({})
+  // Подтверждение отгрузки при неоплаченном остатке (не блок, второй клик).
+  const [shipConfirmId, setShipConfirmId] = useState<number | null>(null)
 
   // А17: рекламация по заказу — состояние заказа (notes.claim), не отдельный документ.
   const [claimOpenId, setClaimOpenId] = useState<number | null>(null)
@@ -887,6 +892,16 @@ export default function B2BOrdersPage() {
       })) as Order[]
       setOrders(parsed)
 
+      // A23: оплата по заказам отдельным лёгким запросом — деньги из payments.
+      // Ошибка не мешает списку: без данных признак просто молчит.
+      const orderIds = parsed.map(o => o.id)
+      if (orderIds.length) {
+        fetch(`/api/b2b-orders/payments?ids=${orderIds.slice(0, 2000).join(',')}`)
+          .then(r => r.ok ? r.json() : null)
+          .then((j: { paid?: Record<number, number> } | null) => { if (j?.paid) setPaidByOrderId(j.paid) })
+          .catch(() => {})
+      }
+
       // По умолчанию раскрыт ТОЛЬКО текущий месяц (и его год); все остальные свёрнуты.
       const now = new Date()
       const currentKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
@@ -1070,10 +1085,30 @@ export default function B2BOrdersPage() {
     })
   }
 
+  // A23: остаток по заказу из payments (деньги), с учётом наложенного manualTotal
+  // (finalTotalOf уже отдаёт total_after_discount). Долг показываем только при
+  // частичной оплате — ноль платежей это «нет данных», а не долг.
+  function orderRemainder(order: Order) {
+    return remainderStatus(getFinalPrice(order), paidByOrderId[order.id] ?? 0)
+  }
+
   async function toggleStage(orderId: number, stageKey: StageKey) {
     const order = orders.find(o => o.id === orderId)
     if (!order) return
     const stages = { ...(order.parsedNotes.stages ?? {}) } as Partial<Record<StageKey, string | null>>
+    // A23: отмечаем отгрузку при неоплаченном остатке — предупреждаем, не блокируем.
+    // Первый клик по «Отгружен» с остатком просит подтверждения; повторный отмечает.
+    if (stageKey === 'shipped' && !stages.shipped) {
+      const rem = orderRemainder(order)
+      if (rem.outstanding && shipConfirmId !== orderId) {
+        setShipConfirmId(orderId)
+        setToastError(true)
+        setToastMsg(`⚠️ Остаток ${fmt(rem.remainder)} не оплачен. Нажмите «Отгружен» ещё раз, чтобы отгрузить всё равно`)
+        setTimeout(() => setToastMsg(null), 4000)
+        return
+      }
+      setShipConfirmId(null)
+    }
     // «Счёт оплачен» — событие денег, пишется единым роутом (Д2), не напрямую.
     if (stageKey === 'invoice_paid') {
       const willBePaid = !stages.invoice_paid
@@ -1715,6 +1750,30 @@ export default function B2BOrdersPage() {
                     className="text-[11px] font-medium px-3 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40">Закрыть</button>
                 </div>
               )}
+            </div>
+          )
+        })()}
+
+        {/* A23: остаток по заказу — из payments. Молчит, если платежей нет вовсе. */}
+        {(() => {
+          const rem = orderRemainder(order)
+          if (!rem.hasPayment) return null
+          const isShipped = !!order.parsedNotes.stages?.shipped
+          if (rem.outstanding) {
+            return (
+              <div className="flex items-center gap-2 flex-wrap text-[11px]">
+                <span className={`px-2 py-0.5 rounded-full font-semibold border ${isShipped ? 'bg-red-50 text-red-600 border-red-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
+                  {isShipped ? '⚠️ Отгружен с неоплаченным остатком' : 'Остаток не оплачен'} · {fmt(rem.remainder)}
+                </span>
+                <span className="text-[10px] text-[#9a9a95]">оплачено {fmt(rem.paid)} из {fmt(rem.total)}</span>
+              </div>
+            )
+          }
+          return (
+            <div className="text-[11px]">
+              <span className="px-2 py-0.5 rounded-full font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                Оплачен{rem.overpaid ? ' (переплата)' : ''} · {fmt(rem.paid)}
+              </span>
             </div>
           )
         })()}
@@ -2545,6 +2604,17 @@ export default function B2BOrdersPage() {
                             {progress}%
                           </span>
                         )}
+                        {(() => {
+                          // A23: компактный признак долга в свёрнутой строке — молчит без платежей
+                          const rem = orderRemainder(order)
+                          if (!rem.outstanding) return null
+                          return (
+                            <span title={`Оплачено ${fmt(rem.paid)} из ${fmt(rem.total)}`}
+                              className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full whitespace-nowrap ${isShipped ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-700'}`}>
+                              {isShipped ? '⚠️' : ''} −{fmt(rem.remainder)}
+                            </span>
+                          )
+                        })()}
                         <span className="text-[13px] font-semibold text-[#111110] font-mono">{fmt(finalPrice)}</span>
                         {canDelete && (
                           <button

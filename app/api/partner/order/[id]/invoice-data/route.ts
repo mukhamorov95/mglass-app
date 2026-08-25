@@ -64,9 +64,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     supply_contract_no: c.supply_contract_no ?? null, supply_contract_date: c.supply_contract_date ?? null,
   }
 
-  return NextResponse.json({
-    order: documentSafeOrder(order as Record<string, unknown>),
-    client: safeClient,
-    entities: ents ?? [],
-  })
+  // documentSafeOrder теперь чистит и notes (белый список внутри хелпера) — здесь
+  // ничего затирать не нужно: cost из items и внутренние поля notes вырезаны по
+  // построению. УПД снова видит shipped_date/launched_at, счёт — quote_date/срок.
+  const safeOrder = documentSafeOrder(order as Record<string, unknown>)
+
+  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [] })
 }

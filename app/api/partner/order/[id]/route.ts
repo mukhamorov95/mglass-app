@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
 import { paymentsEnabled } from '@/lib/payments/provider'
+import { deadlineFor, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 // Карточка заказа для кабинета. СТРОГО по своему client_id. Отдаём только
 // клиентское: позиции (материал/размер/кол-во/цена), стадии производства,
@@ -78,9 +79,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     }
   })
 
-  const deadline = pn.deadline_date ? new Date(pn.deadline_date as string).toISOString()
-    : pn.launched_at && pn.production_days ? (() => { const d = new Date(pn.launched_at as string); d.setDate(d.getDate() + (pn.production_days as number)); return d.toISOString() })()
-    : null
+  // Срок — единый источник lib/b2b/deadline (та же норма, что launch-production).
+  // Для запущенных — реальная дата; для незапущенных отдаём null (в кабинете показываем
+  // ориентир «~N раб.дней после запуска» через estimateDays, а не фабрикованную дату).
+  const deadline = launched ? deadlineFor(pn, o.created_at as string).toISOString() : null
 
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
   const drawingUrl = typeof pn.drawing_url === 'string' && pn.drawing_url ? `/api/b2b/drawing/${o.id}` : null
@@ -115,6 +117,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ready: packed && !shipped,
     progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
     deadline,
+    estimateDays: DEFAULT_WORKING_DAYS,
     paymentStatus,
     onlinePayEnabled: paymentStatus === 'awaiting' && paymentsEnabled(),
     canInvoice: !!client.can_self_invoice && launched,

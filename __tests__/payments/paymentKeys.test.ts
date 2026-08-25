@@ -60,4 +60,17 @@ describe('buildPaymentRow', () => {
     expect(() => buildPaymentRow({ ...base, b2bOrderId: undefined })).toThrow(/без документа/)
     expect(() => buildPaymentRow({ ...base, paidAt: '20.07.2026' })).toThrow(/не дата/)
   })
+
+  it('якорит платёж на счёт: invoiceId — самостоятельный документ', () => {
+    // мульти-заказный счёт: b2b_order_id нет, но invoice_id есть — платёж валиден
+    const row = buildPaymentRow({ ...base, b2bOrderId: undefined, invoiceId: 42 })
+    expect(row.invoice_id).toBe(42)
+    expect(row.b2b_order_id).toBeNull()
+  })
+
+  it('одно-заказный счёт несёт и invoice_id, и b2b_order_id', () => {
+    const row = buildPaymentRow({ ...base, invoiceId: 42 })
+    expect(row.invoice_id).toBe(42)
+    expect(row.b2b_order_id).toBe(1)
+  })
 })

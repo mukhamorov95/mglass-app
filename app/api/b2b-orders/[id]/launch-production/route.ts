@@ -4,16 +4,8 @@ import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { buildProductionTasks } from '@/lib/productionRouting'
 import { parseNotes } from '@/lib/orderFlags'
-import { deadlineFor } from '@/lib/contractDeadlines'
+import { makeDaysFor } from '@/lib/contractDeadlines'
 import { addWorkingDays } from '@/lib/b2b/deadline'
-
-// Сварное изделие в спецификации (лофт/рама/каркас) → срок 25 р.дн. вместо 15.
-function hasWelded(items: unknown[]): boolean {
-  return items.some(it => {
-    const s = `${(it as Record<string, unknown>)?.category ?? ''} ${(it as Record<string, unknown>)?.materialName ?? ''}`.toLowerCase()
-    return /сварн|лофт|каркас|рама|welded/.test(s)
-  })
-}
 
 // POST — generates production_tasks rows for a B2B order's items when it's
 // launched into production. Called best-effort from app/b2b-quotes/page.tsx
@@ -55,7 +47,7 @@ export async function POST(
   // пропуская выходные. Не перетираем уже заданный менеджером срок.
   const notes = parseNotes(order.notes)
   if (!notes.deadline_date) {
-    const makeDays = deadlineFor('shower', hasWelded(items)).make
+    const makeDays = makeDaysFor(items)
     const from = order.launched_at ? new Date(order.launched_at as string) : new Date()
     const deadline = addWorkingDays(from, makeDays)
     // Атомарный shallow-patch (не перезапись всего notes) — заказ уже в проде,
