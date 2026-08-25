@@ -318,6 +318,8 @@ export default function B2BQuotesPage() {
   const [discountInput, setDiscountInput]   = useState('')
   const [totalInput, setTotalInput]         = useState('')
   const [priceSaving, setPriceSaving]       = useState(false)
+  // Второй клик по кнопке при тонкой марже: не запрещаем цену, но заставляем осознать доход.
+  const [priceConfirmId, setPriceConfirmId] = useState<number | null>(null)
   const totalInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -325,6 +327,7 @@ export default function B2BQuotesPage() {
   }, [discountEditId])
 
   function openPriceEditor(q: Quote) {
+    setPriceConfirmId(null)
     if (discountEditId === q.id) { setDiscountEditId(null); return }
     setDiscountEditId(q.id)
     setTotalInput(String(finalTotalOf(q)))
@@ -333,11 +336,13 @@ export default function B2BQuotesPage() {
 
   // Инпуты связаны: правишь сумму — пересчитывается %, правишь % — сумма.
   function onTotalTyped(v: string, base: number) {
+    setPriceConfirmId(null)
     setTotalInput(v)
     const t = Number(v.replace(/[^\d.]/g, ''))
     setDiscountInput(base > 0 && Number.isFinite(t) ? String(Math.round((1 - t / base) * 1000) / 1000) : '0')
   }
   function onDiscountTyped(v: string, base: number) {
+    setPriceConfirmId(null)
     setDiscountInput(v)
     const d = Number(v.replace(/[^\d.-]/g, ''))
     setTotalInput(Number.isFinite(d) ? String(Math.round(base * (1 - d / 100))) : String(base))
@@ -653,9 +658,11 @@ export default function B2BQuotesPage() {
       if (!res.ok) { showToast(json.error || 'Не удалось сохранить сумму'); return }
       applyPriceResult(id, json)
       setDiscountEditId(null)
+      setPriceConfirmId(null)
+      const marginPart = json.marginPercent != null ? ` · маржа ${json.marginPercent}%` : ''
       showToast(json.discountPercent > 0
-        ? `Итог ${fmt(json.newTotal)} · скидка ${json.discountPercent}% разложена по позициям`
-        : `Итог ${fmt(json.newTotal)} разложен по позициям`)
+        ? `Итог ${fmt(json.newTotal)} · скидка ${json.discountPercent}% разложена по позициям${marginPart}`
+        : `Итог ${fmt(json.newTotal)} разложен по позициям${marginPart}`)
     } finally { setPriceSaving(false) }
   }
 
@@ -1129,7 +1136,7 @@ export default function B2BQuotesPage() {
                       <span className="font-mono text-right text-[#6b6b66]">{Math.abs(discNewPct).toFixed(1)}%</span>
                       <span className="text-[#9a9a95]">Себестоимость</span>
                       <span className="font-mono text-right text-[#6b6b66]">{discCost.toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[#9a9a95]">Прибыль</span>
+                      <span className="text-[#9a9a95]">Заработок с заказа</span>
                       <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
                         {Math.round(discProfit).toLocaleString('ru-RU')} ₽
                       </span>
@@ -1138,16 +1145,47 @@ export default function B2BQuotesPage() {
                         {discMargin.toFixed(1)}%
                       </span>
                     </div>
-                    {discNewTotal > 0 && discMargin < 25 && (
-                      <p className="text-[11px] text-red-600 font-medium">⚠️ Маржа ниже 25% — согласуйте с владельцем</p>
+                    {/* Цену не запрещаем — но менеджер обязан увидеть, сколько он на ней зарабатывает */}
+                    {discNewTotal > 0 && (
+                      discProfit <= 0 ? (
+                        <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          🚨 Осторожно: при цене {fmt(discNewTotal)} заказ уходит в убыток — минус {fmt(Math.abs(Math.round(discProfit)))}.
+                          Это ниже себестоимости {fmt(discCost)}.
+                        </p>
+                      ) : discMargin < 25 ? (
+                        <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          ⚠️ Осторожно: при цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
+                          Это ниже нормы 25%.
+                        </p>
+                      ) : discMargin < 35 ? (
+                        <p className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          При цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%). Маржа тонковата.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                          При цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
+                        </p>
+                      )
                     )}
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => savePriceOverride(quote.id)}
-                        disabled={priceSaving || discNewTotal <= 0}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
-                        {priceSaving ? 'Сохраняю…' : 'Зафиксировать цену'}
-                      </button>
+                      {(() => {
+                        // Тонкая маржа не блокирует цену — но требует второго, осознанного клика.
+                        const risky   = discNewTotal > 0 && (discProfit <= 0 || discMargin < 25)
+                        const armed   = priceConfirmId === quote.id
+                        const confirm = risky && !armed
+                        return (
+                          <button
+                            onClick={() => confirm ? setPriceConfirmId(quote.id) : savePriceOverride(quote.id)}
+                            disabled={priceSaving || discNewTotal <= 0}
+                            className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40 transition-colors whitespace-nowrap ${
+                              risky ? 'bg-red-600 hover:bg-red-700' : 'bg-[#111110] hover:bg-[#2a2a28]'}`}>
+                            {priceSaving ? 'Сохраняю…'
+                              : confirm ? `Зафиксировать ${fmt(discNewTotal)}?`
+                              : armed   ? `Да, ${fmt(discNewTotal)} — я понимаю`
+                              : 'Зафиксировать цену'}
+                          </button>
+                        )
+                      })()}
                       {isOverridden && (
                         <button
                           onClick={() => resetPriceOverride(quote.id)}
