@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
     const human = res.status === 429
       ? 'Сервис фотовидов сейчас недоступен. Попробуйте позже.'
       : `Не удалось создать вид (${res.status})`
-    return NextResponse.json({ error: human, detail: detail.slice(0, 300) }, { status: 502 })
+    return NextResponse.json({ error: human, detail: detail.slice(0, 900) }, { status: 502 })
   }
 
   const json = await res.json().catch(() => null) as {
