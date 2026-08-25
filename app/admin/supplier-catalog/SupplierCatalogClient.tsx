@@ -26,6 +26,7 @@ export function SupplierCatalogClient() {
   const [importing, setImporting] = useState(false)
 
   useEffect(() => { const t = setTimeout(() => setQDebounced(q), 300); return () => clearTimeout(t) }, [q])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPage(0) }, [supplier, category, qDebounced])
 
   const load = useCallback(async () => {
@@ -36,9 +37,11 @@ export function SupplierCatalogClient() {
       if (res.ok) setData(await res.json())
     } finally { setLoading(false) }
   }, [supplier, category, qDebounced, page])
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
 
   const src = data?.sources.find(s => s.supplier === supplier)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (src) setDiscEdit(String(src.discount_percent)) }, [src?.supplier, src?.discount_percent])
 
   async function saveDiscount() {
