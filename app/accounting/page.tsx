@@ -13,6 +13,7 @@ import { NotesTab } from '@/components/accounting/NotesTab'
 import { UnpostedTab } from '@/components/accounting/UnpostedTab'
 import { DocumentsTab } from '@/components/accounting/DocumentsTab'
 import { BankTab } from '@/components/accounting/BankTab'
+import { PayrollTab } from '@/components/accounting/PayrollTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -33,7 +34,7 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'docs' | 'requests' | 'committee' | 'notes'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'docs' | 'requests' | 'committee' | 'notes'>('odds')
   const [unposted, setUnposted] = useState(0)
   const [locked, setLocked] = useState(false)
   const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
@@ -270,7 +271,7 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['docs', 'Документы'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['docs', 'Документы'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
@@ -454,6 +455,9 @@ export default function AccountingPage() {
         )}
         {tab === 'bank' && !isBuyer && (
           <BankTab unit={unit} funds={funds} subfunds={subfunds} onPosted={() => load()} />
+        )}
+        {tab === 'payroll' && !isBuyer && (
+          <PayrollTab unit={unit} month={month} onChanged={() => load()} />
         )}
         {tab === 'docs' && !isBuyer && <DocumentsTab />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
