@@ -20,6 +20,19 @@ function isShipped(notes: string | null): boolean {
 }
 const fmtRub = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
 
+// Норматив производства: 15 рабочих дней от запуска (обычное изделие). Нужен, чтобы
+// оценить «в срок» у заказов, отгруженных ДО того, как срок стал проставляться при
+// запуске: у них deadline_date нет, но есть launched_at и дата отгрузки.
+const NORM_MAKE_DAYS = 15
+function addWorkingDays(fromISO: string, days: number): string {
+  const d = new Date(fromISO)
+  let left = days
+  while (left > 0) { d.setDate(d.getDate() + 1); const w = d.getDay(); if (w !== 0 && w !== 6) left-- }
+  return d.toISOString().slice(0, 10)
+}
+const toneFor = (pct: number | null) =>
+  pct == null ? 'text-[#9a9a95]' : pct >= 95 ? 'text-emerald-600' : pct >= 80 ? 'text-amber-600' : 'text-red-600'
+
 export default async function B2BFlowPage() {
   const svc = createServiceClient()
   const { data } = await svc.from('b2b_orders')
@@ -42,18 +55,32 @@ export default async function B2BFlowPage() {
   }
   const avgCycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : null
 
-  // A2 «В срок %»: по отгруженным, у кого есть И дата отгрузки, И срок — успели ли к дедлайну.
-  // Сравниваем по дате (первые 10 символов): и дата отгрузки, и deadline_date лежат как YYYY-MM-DD.
-  let onTime = 0, late = 0, shippedNoDeadline = 0
-  for (const r of rows) {
+  // «В срок %» — отдельный широкий запрос (год), а не окно потока: срок при запуске
+  // проставляется недавно, а датированные отгрузки накоплены раньше, и в 84-дневном
+  // окне их пересечения почти нет.
+  const { data: otData } = await svc.from('b2b_orders')
+    .select('id, launched_at, notes')
+    .gte('launched_at', daysAgoISO(365)).limit(5000)
+
+  // Два измерения: точное — против обещанного срока; оценка — против норматива
+  // 15 рабочих дней от запуска (для заказов, отгруженных до внедрения сроков).
+  let onTime = 0, late = 0
+  let normOnTime = 0, normLate = 0
+  for (const r of (otData ?? []) as { launched_at: string | null; notes: string | null }[]) {
     const sd = shippedDate(r.notes); if (!sd) continue
+    const ship = sd.slice(0, 10)
     const dl = deadlineOf(r.notes)
-    if (!dl) { shippedNoDeadline++; continue }
-    if (sd.slice(0, 10) <= dl.slice(0, 10)) onTime++; else late++
+    if (dl) {
+      if (ship <= dl.slice(0, 10)) onTime++; else late++
+    } else if (r.launched_at) {
+      const norm = addWorkingDays(r.launched_at, NORM_MAKE_DAYS)
+      if (ship >= r.launched_at.slice(0, 10)) { if (ship <= norm) normOnTime++; else normLate++ }
+    }
   }
   const judged = onTime + late
   const onTimePct = judged ? Math.round(onTime / judged * 100) : null
-  const onTimeTone = onTimePct == null ? 'text-[#9a9a95]' : onTimePct >= 95 ? 'text-emerald-600' : onTimePct >= 80 ? 'text-amber-600' : 'text-red-600'
+  const normJudged = normOnTime + normLate
+  const normPct = normJudged ? Math.round(normOnTime / normJudged * 100) : null
 
   // Недельный поток: запущено vs отгружено (по дате отгрузки, где есть; иначе по launched-неделе флага).
   const weeks: { ms: number; launched: number; shipped: number }[] = []
@@ -89,17 +116,31 @@ export default async function B2BFlowPage() {
           {kpi('Ср. цикл', avgCycle != null ? `${avgCycle} дн` : '—', avgCycle != null ? `по ${cycles.length} с датой отгрузки` : 'нужны даты отгрузки')}
         </div>
 
-        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
-          <div className="flex items-baseline justify-between mb-1">
-            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Отгрузка в срок</p>
-            <p className={`text-[22px] font-bold font-mono leading-none ${onTimeTone}`}>{onTimePct != null ? `${onTimePct}%` : '—'}</p>
+        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 space-y-3">
+          <div>
+            <div className="flex items-baseline justify-between mb-1">
+              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Отгрузка в обещанный срок</p>
+              <p className={`text-[22px] font-bold font-mono leading-none ${toneFor(onTimePct)}`}>{onTimePct != null ? `${onTimePct}%` : '—'}</p>
+            </div>
+            <p className="text-[11px] text-[#9a9a95]">
+              {judged
+                ? `${onTime} в срок · ${late} с опозданием — из ${judged} заказов, где есть и дата отгрузки, и срок`
+                : 'копится: срок при запуске проставляется недавно, эти заказы ещё не отгружены'}
+            </p>
           </div>
-          <p className="text-[11px] text-[#9a9a95]">
-            {judged
-              ? `${onTime} в срок · ${late} с опозданием — из ${judged} заказов с датой отгрузки и сроком`
-              : 'пока нет заказов, у которых есть и дата отгрузки, и срок'}
-            {shippedNoDeadline ? ` · ещё ${shippedNoDeadline} отгружено без срока (в расчёт не берём)` : ''}
-          </p>
+
+          {normJudged > 0 && (
+            <div className="pt-3 border-t border-[#f0f0ec]">
+              <div className="flex items-baseline justify-between mb-1">
+                <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Оценка по нормативу · {NORM_MAKE_DAYS} р. дн</p>
+                <p className={`text-[22px] font-bold font-mono leading-none ${toneFor(normPct)}`}>{normPct != null ? `${normPct}%` : '—'}</p>
+              </div>
+              <p className="text-[11px] text-[#9a9a95]">
+                {normOnTime} уложились · {normLate} дольше норматива — из {normJudged} отгруженных без проставленного срока (за год).
+                Это оценка: сравниваем с нормативом производства, а не с обещанием клиенту.
+              </p>
+            </div>
+          )}
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
