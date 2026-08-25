@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
-  MeshTransmissionMaterial, Edges,
+  MeshTransmissionMaterial, Edges, RoundedBox,
 } from '@react-three/drei'
 import { EffectComposer, N8AO } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
@@ -99,8 +99,9 @@ function NicheMesh({ niche }: { niche: Niche }) {
   const floorMat = useMemo(() => tiledMaterial(base, FW, FD), [base, FW, FD])
   const backMat = useMemo(() => tiledMaterial(base, w + EXT, WH), [base, w, WH])
   const sideMat = useMemo(() => tiledMaterial(base, depth + EXT, WH), [base, depth, WH])
+  // V5: та же текстура как bump-карта — тёмная затирка утоплена → рельеф шва под светом.
   const tile = (map: THREE.Texture) =>
-    <meshStandardMaterial map={map} color="#f4f2ec" roughness={0.62} metalness={0.04} envMapIntensity={0.75} />
+    <meshStandardMaterial map={map} bumpMap={map} bumpScale={0.5} color="#f4f2ec" roughness={0.62} metalness={0.04} envMapIntensity={0.75} />
 
   return (
     <group>
@@ -130,11 +131,11 @@ function NicheMesh({ niche }: { niche: Niche }) {
           {tile(sideMat.clone())}
         </mesh>
       )}
-      {/* поддон */}
-      <mesh position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
-        <boxGeometry args={[w + 0.05, trayH, depth + 0.05]} />
-        <meshStandardMaterial color="#f1efea" roughness={0.3} metalness={0.05} envMapIntensity={0.8} />
-      </mesh>
+      {/* V4: поддон — акрил/камень со скруглёнными кромками и мокрым подблеском (clearcoat) */}
+      <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
+        position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
+        <meshPhysicalMaterial color="#f4f2ee" roughness={0.14} metalness={0.02} clearcoat={0.6} clearcoatRoughness={0.12} envMapIntensity={1.0} />
+      </RoundedBox>
     </group>
   )
 }
@@ -229,7 +230,7 @@ export default function Partition3D(
   return (
     <div className="w-full h-[420px] md:h-[480px] rounded-xl overflow-hidden bg-gradient-to-b from-[#f2f1ee] to-[#e4e2dd]">
       <Canvas
-        shadows
+        shadows="soft"
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
@@ -239,10 +240,12 @@ export default function Partition3D(
       >
         <Suspense fallback={null}>
           <color attach="background" args={['#eef0ee']} />
-          <ambientLight intensity={0.35} />
-          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.5} castShadow
-            shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} />
-          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.5} color="#eaf0ff" />
+          {/* V6: тёплый ключ + холодное заполнение + контровой; мягкие тени */}
+          <ambientLight intensity={0.28} />
+          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.75} color="#fff4e6" castShadow
+            shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} shadow-normalBias={0.02} shadow-radius={5} />
+          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.6} color="#e6eeff" />
+          <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.4} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
           <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
