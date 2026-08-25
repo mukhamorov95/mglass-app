@@ -59,6 +59,7 @@ const MANAGER_B2B: NavItem[] = [
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮' },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝' },
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
+  { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒' },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢' },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️' },
   { href: '/production-app', label: 'Production App',  icon: '📱' },
@@ -105,6 +106,7 @@ const BUYER_B2B_MGLASS: NavItem[] = [
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮', indent: true },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝', indent: true },
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦', indent: true },
+  { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒', indent: true },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
 ]
 
@@ -113,6 +115,7 @@ const BUYER_B2B_ALL: NavItem[] = [
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮', indent: true },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝', indent: true },
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦', indent: true },
+  { href: '/b2b-invoices',   label: 'Счета B2B',       icon: '📒', indent: true },
   { href: '/b2b-crm',        label: 'B2B Клиенты',     icon: '🏢', indent: true },
   { href: '/b2b-cutting',    label: 'Раскрой стекла',  icon: '✂️', indent: true },
 ]
