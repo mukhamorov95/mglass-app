@@ -378,7 +378,7 @@ export default function AccountingPage() {
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
-        {tab === 'notes' && !isBuyer && <NotesTab unit={unit} myName={myName} />}
+        {tab === 'notes' && !isBuyer && <NotesTab unit={unit} />}
       </div>
     </div>
   )
