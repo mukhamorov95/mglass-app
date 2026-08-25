@@ -6,7 +6,7 @@ import { sheetArea, INCOMING } from './units'
 import { normalizeUnit } from './match'
 import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type BomLike } from './plan'
 import type { InventoryActor } from './auth'
-import { markReservationConsumed } from './reserve'
+import { markReservationConsumed, listReservations } from './reserve'
 
 const svc = () => createServiceClient()
 
@@ -303,9 +303,24 @@ async function alreadyConsumed(docType: DocType, docId: string): Promise<boolean
   return !!(data && data.length)
 }
 
+// Резерв под заказ (active) — дефолт количества для списания по факту в цехе.
+async function reservedByItem(docType: DocType, docId: string): Promise<Map<number, number>> {
+  const active = (await listReservations(docType, docId)).filter(r => r.status === 'active')
+  const map = new Map<number, number>()
+  for (const r of active) map.set(r.item_id, (map.get(r.item_id) ?? 0) + Number(r.qty))
+  return map
+}
+
+export function attachReserved(rows: PlanRow[], reserved: Map<number, number>): PlanRow[] {
+  return rows.map(r => r.item_id !== null && reserved.has(r.item_id)
+    ? { ...r, reserved: reserved.get(r.item_id) }
+    : r)
+}
+
 export async function buildConsumePlan(docType: DocType, docId: string): Promise<ConsumePlan> {
   const db    = svc()
   const stock = await matchTargets()
+  const reserved = await reservedByItem(docType, docId)
 
   if (docType === 'b2b_order') {
     const { data, error } = await db.from('b2b_orders')
@@ -316,7 +331,7 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
     return {
       doc_type: 'b2b_order', doc_id: docId,
       title:   `B2B-заказ ${data?.custom_number ?? data?.id} · ${data?.client_name ?? ''}`.trim(),
-      rows:    planB2BOrder(list, stock),
+      rows:    attachReserved(planB2BOrder(list, stock), reserved),
       already: await alreadyConsumed('b2b_order', docId),
     }
   }
@@ -331,7 +346,7 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
     return {
       doc_type: 'order', doc_id: docId,
       title:   `Заказ ${data?.number ?? ''} · ${data?.client_name ?? ''}`.trim(),
-      rows:    planBomLines(lines, stock),
+      rows:    attachReserved(planBomLines(lines, stock), reserved),
       already: await alreadyConsumed('order', docId),
     }
   }
@@ -341,14 +356,13 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
 
 export async function applyConsume(
   plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[],
-): Promise<{ inserted: number; skipped: number }> {
+): Promise<{ inserted: number; skipped: number; released: number }> {
   const use = (rows ?? plan.rows).filter(r => r.item_id !== null && r.qty > 0)
-  // Списание закрывает резерв заказа: резерв → consumed, дальше остаток двигают
-  // сами движения. Иначе материал был бы учтён дважды (в резерве и в расходе).
-  if (plan.doc_type === 'b2b_order' || plan.doc_type === 'order') {
-    await markReservationConsumed(plan.doc_type, plan.doc_id).catch(() => 0)
-  }
-  return addMoves(use.map(r => ({
+
+  // Порядок важен: СНАЧАЛА списываем со склада, ПОТОМ закрываем резерв. Если
+  // упасть между — лучше «резерв ещё висит при списанном остатке» (видно и
+  // чинится), чем «резерв закрыт, а материал не списан» (тихая недостача).
+  const res = await addMoves(use.map(r => ({
     item_id: r.item_id as number,
     qty:     -Math.abs(r.qty),
     reason:  'order' as MoveReason,
@@ -356,4 +370,12 @@ export async function applyConsume(
     doc_id:   plan.doc_id,
     note:     plan.title,
   })), actor)
+
+  // Заказ закрыт по факту: остаток активных резервов (в т.ч. неиспользованный
+  // при частичном расходе) → consumed, поэтому лишнее возвращается в доступное.
+  let released = 0
+  if ((plan.doc_type === 'b2b_order' || plan.doc_type === 'order') && res.inserted > 0) {
+    released = await markReservationConsumed(plan.doc_type, plan.doc_id).catch(() => 0)
+  }
+  return { ...res, released }
 }
