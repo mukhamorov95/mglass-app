@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
+import { DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 // Партнёрский калькулятор (дизайн 1-в-1 из прототипа, .pcab). Форма и НАБОР полей —
 // как у менеджера (/calculator/b2b), данные из реальных справочников
@@ -419,6 +420,12 @@ export default function PartnerNewQuotePage() {
                     <span className="mut" style={{ color: 'var(--muted)' }}>{discount > 0 ? `Ваша скидка ${discount}% учтена` : 'Ваша цена'}</span>
                     <span className="big tnum">{preview ? fmt(preview.total) : (busy ? '…' : '—')}</span>
                   </div>
+                  {list.length > 0 && (
+                    <div className="info" style={{ marginTop: 0, marginBottom: 8 }}>
+                      <span>🗓️</span>
+                      <span>Срок изготовления — ориентировочно <b>{DEFAULT_WORKING_DAYS} рабочих дней</b> после запуска в работу. Точный срок подтвердит менеджер (сварные изделия — до 25 раб. дней).</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', gap: 10 }}>
                     <button className="ghost" style={{ flex: 1 }} onClick={save} disabled={busy || list.length === 0}>Сохранить просчёт</button>
                     <button className="primary" style={{ flex: 1 }} onClick={saveAndSubmit} disabled={busy || list.length === 0}>Отправить в работу</button>
