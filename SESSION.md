@@ -77,3 +77,12 @@
 - Контракт финал: POST /api/inventory/consume { type:'b2b_order', id, origin:'plan' }, best-effort, 200 на пустом/повторе
 - Открыто (к backbone): (a) ~270 старых заказов без задач — историю не догоняем; (б) packaged руками из /b2b-orders мимо цеха — точка вкладки b2b-orders; (в) «на руках» завышен на цикл (резка↔упаковка ~10 сут) — доступный остаток верен, вопрос точности к владельцу
 - Производство сначала чинит гонку notes (атомарный mark_order_stages), потом вешает вызов; П19 последняя волна
+
+## Обёртка автосписания consumeForOrder (ветка claude/inventory-consume-hook)
+- #307 (origin) в main; backbone одобрил server-only обёртку (не HTTP с секретом)
+- lib/inventory/consumeHook.ts: consumeForOrder(docType, docId, by, origin='plan')
+  import 'server-only' (клиентский импорт падает на сборке), best-effort (не бросает),
+  идемпотентно (alreadyConsumed), by → created_by_name (атрибуция проверена на боевой БД)
+- actor ослаблен до MoveActor {userId?,name?} — движению нужна только атрибуция, не роль
+- ОБА хука зовут одну функцию: производство (mirrorOrderStages/packaged) + b2b-orders (ручной packaged)
+- b2b-orders (…9dd210-94) откатил прямой вызов, ждёт сигнатуру; вешает из server-only /api/b2b-orders/[id]/stages
