@@ -7,9 +7,9 @@ type Source = { supplier: string; title: string; discount_percent: number; site_
 type Cat = { category: string; cnt: number }
 type Row = {
   id: number; category: string; article: string; name: string; color: string; unit: string
-  retail_price: number; discount_percent: number; cost_price: number; url: string
+  retail_price: number; discount_percent: number; cost_price: number; url: string; is_favorite: boolean
 }
-type Resp = { sources: Source[]; categories: Cat[]; rows: Row[]; total: number; page: number; pageSize: number }
+type Resp = { sources: Source[]; categories: Cat[]; rows: Row[]; total: number; favTotal: number; page: number; pageSize: number }
 
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 
@@ -24,19 +24,31 @@ export function SupplierCatalogClient() {
   const [discEdit, setDiscEdit] = useState<string>('')
   const [savingDisc, setSavingDisc] = useState(false)
   const [importing, setImporting] = useState(false)
+  const [favOnly, setFavOnly] = useState(false)
 
   useEffect(() => { const t = setTimeout(() => setQDebounced(q), 300); return () => clearTimeout(t) }, [q])
-  useEffect(() => { setPage(0) }, [supplier, category, qDebounced])
+  useEffect(() => { setPage(0) }, [supplier, category, qDebounced, favOnly])
 
   const load = useCallback(async () => {
     setLoading(true)
     try {
       const p = new URLSearchParams({ supplier, category, q: qDebounced, page: String(page) })
+      if (favOnly) p.set('favorites', '1')
       const res = await fetch(`/api/admin/supplier-catalog?${p}`)
       if (res.ok) setData(await res.json())
     } finally { setLoading(false) }
-  }, [supplier, category, qDebounced, page])
+  }, [supplier, category, qDebounced, page, favOnly])
   useEffect(() => { load() }, [load])
+
+  const toggleFav = async (r: Row) => {
+    const next = !r.is_favorite
+    setData(d => d ? { ...d, rows: d.rows.map(x => x.id === r.id ? { ...x, is_favorite: next } : x), favTotal: d.favTotal + (next ? 1 : -1) } : d)
+    await fetch('/api/admin/supplier-catalog/favorite', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: r.id, favorite: next }),
+    }).catch(() => {})
+    if (favOnly && !next) load()
+  }
 
   const src = data?.sources.find(s => s.supplier === supplier)
   useEffect(() => { if (src) setDiscEdit(String(src.discount_percent)) }, [src?.supplier, src?.discount_percent])
@@ -105,13 +117,20 @@ export function SupplierCatalogClient() {
 
         {/* Таблица */}
         <div className="min-w-0">
-          <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск по названию или артикулу…"
-            className="w-full text-[13px] border border-[#e4e4e0] rounded-lg px-3 py-2 mb-3 focus:border-[#111110] outline-none" />
+          <div className="flex items-center gap-2 mb-3">
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Поиск по названию или артикулу…"
+              className="flex-1 text-[13px] border border-[#e4e4e0] rounded-lg px-3 py-2 focus:border-[#111110] outline-none" />
+            <button onClick={() => setFavOnly(v => !v)} title="Позиции, которые компания реально закупает"
+              className={`shrink-0 text-[13px] font-medium px-3 py-2 rounded-lg border ${favOnly ? 'bg-[#a06a00] text-white border-[#a06a00]' : 'bg-white text-[#a06a00] border-[#e4d9c0] hover:border-[#d5c49c]'}`}>
+              ★ Наши{data?.favTotal ? ` (${data.favTotal})` : ''}
+            </button>
+          </div>
 
           <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-[11px] uppercase tracking-wide text-[#8a8a85] border-b border-[#e4e4e0]">
+                  <th className="w-8 px-2 py-2"></th>
                   <th className="text-left font-semibold px-3 py-2">Наименование</th>
                   <th className="text-left font-semibold px-2 py-2 hidden md:table-cell">Артикул</th>
                   <th className="text-left font-semibold px-2 py-2 hidden sm:table-cell">Цвет</th>
@@ -122,6 +141,10 @@ export function SupplierCatalogClient() {
               <tbody>
                 {data?.rows.map(r => (
                   <tr key={r.id} className="border-b border-[#f4f4f0] last:border-0 hover:bg-[#fafaf9]">
+                    <td className="px-2 py-1.5 text-center">
+                      <button onClick={() => toggleFav(r)} title={r.is_favorite ? 'Убрать из наших позиций' : 'Отметить как нашу позицию'}
+                        className={`text-[15px] leading-none ${r.is_favorite ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{r.is_favorite ? '★' : '☆'}</button>
+                    </td>
                     <td className="px-3 py-1.5 text-[#111110]">{r.name}</td>
                     <td className="px-2 py-1.5 font-mono text-[12px] text-[#6b6b66] hidden md:table-cell">{r.article}</td>
                     <td className="px-2 py-1.5 text-[#6b6b66] hidden sm:table-cell">{r.color}</td>
@@ -130,7 +153,7 @@ export function SupplierCatalogClient() {
                   </tr>
                 ))}
                 {!loading && data?.rows.length === 0 && (
-                  <tr><td colSpan={5} className="px-3 py-6 text-center text-[#9a9a95]">Ничего не найдено</td></tr>
+                  <tr><td colSpan={6} className="px-3 py-6 text-center text-[#9a9a95]">{favOnly ? 'В «наших позициях» пусто — отметь нужные звёздочкой' : 'Ничего не найдено'}</td></tr>
                 )}
               </tbody>
             </table>
