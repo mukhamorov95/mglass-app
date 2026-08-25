@@ -66,8 +66,15 @@ export default async function B2BFlowPage() {
   // 15 рабочих дней от запуска (для заказов, отгруженных до внедрения сроков).
   let onTime = 0, late = 0
   let normOnTime = 0, normLate = 0
+  // Покрытие: у скольких отгрузок вообще есть дата. Исторически этап писался как
+  // голое `true` без даты — такие заказы посчитать нельзя и восстановить неоткуда,
+  // поэтому долю честно показываем рядом с процентом, чтобы 100% по узкой выборке
+  // не читались как 100% по всем отгрузкам.
+  let shippedTotal = 0, shippedDated = 0
   for (const r of (otData ?? []) as { launched_at: string | null; notes: string | null }[]) {
+    if (isShipped(r.notes)) shippedTotal++
     const sd = shippedDate(r.notes); if (!sd) continue
+    shippedDated++
     const ship = sd.slice(0, 10)
     const dl = deadlineOf(r.notes)
     if (dl) {
@@ -81,6 +88,7 @@ export default async function B2BFlowPage() {
   const onTimePct = judged ? Math.round(onTime / judged * 100) : null
   const normJudged = normOnTime + normLate
   const normPct = normJudged ? Math.round(normOnTime / normJudged * 100) : null
+  const coveragePct = shippedTotal ? Math.round(shippedDated / shippedTotal * 100) : null
 
   // Недельный поток: запущено vs отгружено (по дате отгрузки, где есть; иначе по launched-неделе флага).
   const weeks: { ms: number; launched: number; shipped: number }[] = []
@@ -138,6 +146,16 @@ export default async function B2BFlowPage() {
               <p className="text-[11px] text-[#9a9a95]">
                 {normOnTime} уложились · {normLate} дольше норматива — из {normJudged} отгруженных без проставленного срока (за год).
                 Это оценка: сравниваем с нормативом производства, а не с обещанием клиенту.
+              </p>
+            </div>
+          )}
+
+          {coveragePct != null && (
+            <div className="pt-3 border-t border-[#f0f0ec]">
+              <p className="text-[11px] text-[#9a9a95]">
+                <span className="font-semibold text-[#8a8a85]">Покрытие: {coveragePct}%</span> отгрузок за год несут дату
+                ({shippedDated} из {shippedTotal}). Остальные отмечены как «отгружено» без даты — исторический формат,
+                восстановить её неоткуда. Проценты выше считаются только по заказам с датой, а не по всем отгрузкам.
               </p>
             </div>
           )}
