@@ -64,9 +64,15 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
     input.applyMinPrice ?? true,
   )
 
+  // А12: материал с индивидуальной ценой клиента помечает позицию — скидка к такой
+  // цене больше не применяется (см. effectiveItemTotal). Помечаем здесь, в единой
+  // точке расчёта, чтобы менеджер и кабинет клиента вели себя одинаково.
+  const clientPriced = (mat as { clientPriced?: boolean }).clientPriced === true
+
   return {
     ...calc,
     ...(input.comment ? { comment: input.comment } : {}),
+    ...(clientPriced ? { clientPriced: true } : {}),
     hasHoles: input.hasHoles ?? false,
     shape,
   }
