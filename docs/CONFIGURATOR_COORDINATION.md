@@ -62,9 +62,16 @@ kp006→к стеклу, kp001→угловое, connector→соедините�
 - `lib/configurator/pricing.ts` — типы делят обе сессии (геометрия сверху, математика снизу)
 - `lib/configurator/pricingStore.ts`, `app/api/configurator/quote/route.ts`
 
+## Конвенция по мержу (во избежание конфликтов)
+- **SESSION.md** трогает только та ветка, что идёт в main следующей. Иначе каждый мерж — конфликт.
+  Свой рабочий статус: Сайт+3D → этот файл; Прайс → `docs/pricing/README.md`.
+- `app/admin/visualizer-pricing/VisualizerPricingClient.tsx` **удалён** Прайсом → заменён на `KitPricingClient.tsx`
+  (комплекты моделей). При синхронизации main принимать удаление.
+
 ## Лог: кто что сделал (новое — сверху)
 | Дата | Сессия | Что |
 |---|---|---|
+| 2026-08-25 | Прайс | Влил 8f4bba5, шим снят. Геометрия M1 считается ценой: perp90 1000→FDT-351 825₽, diag45 2 крепления, stabilizer 350мм, ceiling без штанги, perimeter дороже. Ложных «дыр» нет. 381 тест зелёный. VisualizerPricingClient.tsx удалён → KitPricingClient.tsx. |
 | 2026-08-25 | Сайт+3D | A4 M1: `spec?` в MetalPart/HardwarePlacement, параметр `variant` (6-й!) в buildFromModel, MDims += trayDepth/ceilingHeight. Геометрия 4 креплений (perp90/diag45/stabilizer/ceiling) + 2 обвязок (partial/perimeter) со spec-кодами Прайса. UI M1: выбор крепления/обвязки + поддон/потолок. Верифицировано в браузере. `variant`+`dims.trayDepth`/`ceilingHeight` шлю в quote — Прайс прокидывает через buildWithVariant (6-я позиция!). |
 | 2026-08-25 | Сайт+3D | A3 сцена как рендер: отражающий пол (MeshReflectorMaterial), ACES-экспозиция, студийные блики. |
 | 2026-08-25 | Сайт+3D | Стартую маршрут A3→A10 (сцена/реализм → UX → сайт), прайс не трогаю (A9 «Деньги/закупки» — Прайс). Клиентский шов options/quote беру по типам от Прайса. |

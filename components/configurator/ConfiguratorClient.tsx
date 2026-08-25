@@ -5,10 +5,10 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, M1_TRAY_DEPTH_DEFAULT, type MDims, type GlassTint, type HardwareChoice, type MVariant } from '@/components/configurator/scene/assembly'
-import { computeQuantities, totalMeters, HARDWARE_LABEL, type PriceResult, type HardwareOption } from '@/lib/configurator/pricing'
+import { computeQuantities, totalMeters, HARDWARE_LABEL } from '@/lib/configurator/pricing'
+import type { KitPriceResult, KitChoices } from '@/lib/configurator/kit'
 
-type Quote = { full: boolean; price?: PriceResult; total?: number; clientFrom?: number; complete?: boolean }
-const ROLE_TITLE: Record<string, string> = { hinge: 'Петля', handle: 'Ручка' }
+type Quote = { full: boolean; price?: KitPriceResult; total?: number; clientFrom?: number; complete?: boolean }
 
 const THICKNESS = 8   // душевые — только 8 мм закалённое
 
@@ -38,17 +38,32 @@ function defaultsFor(m: MModel): MDims {
   }
 }
 
-// Размер: слайдер + ручной ввод в мм.
+// Размер: слайдер + ручной ввод в мм. Ввод — через ЧЕРНОВИК-строку: пока клиент печатает,
+// значение не зажимаем (иначе «600» после первой цифры становится clamp(6)=min). Зажим на
+// blur/Enter, Escape сбрасывает, focus выделяет всё. Слайдер сразу даёт валидное значение.
 function Field({ label, value, min, max, step = 10, onChange }: {
   label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void
 }) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const shown = draft ?? String(value)
+  const commit = (raw: string) => {
+    const n = Number(raw)
+    onChange(clamp(Number.isFinite(n) && raw.trim() !== '' ? n : value, min, max))
+    setDraft(null)
+  }
   return (
     <div>
       <div className="flex justify-between items-center mb-1.5">
         <label className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">{label}</label>
         <div className="flex items-center gap-1">
-          <input type="number" value={value} min={min} max={max} step={step}
-            onChange={e => onChange(clamp(Number(e.target.value) || 0, min, max))}
+          <input type="text" inputMode="decimal" value={shown}
+            onFocus={e => e.currentTarget.select()}
+            onChange={e => setDraft(e.target.value)}
+            onBlur={e => commit(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter') { commit(e.currentTarget.value); e.currentTarget.blur() }
+              else if (e.key === 'Escape') { setDraft(null); e.currentTarget.blur() }
+            }}
             className="w-[68px] text-right text-[13px] font-mono text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
           <span className="text-[11px] text-[#9a9a95]">мм</span>
         </div>
@@ -90,8 +105,9 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [modelOpen, setModelOpen] = useState(true)
   const [doorOpen, setDoorOpen] = useState(true)
   const [sent, setSent] = useState(false)
-  const [options, setOptions] = useState<Record<string, HardwareOption[]>>({})
-  const [choice, setChoice] = useState<Record<string, string>>({})
+  const [kitChoices, setKitChoices] = useState<KitChoices | null>(null)
+  const [choice, setChoice] = useState<Record<string, string>>({})       // роль → itemId позиции
+  const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({}) // роль → количество (петли 2/3)
   const [m1var, setM1var] = useState<MVariant>({ mount: 'perp90', profileFrame: 'partial' })
   const isM1 = code === 'М1'
   const mVariant = useMemo<MVariant>(() => (isM1 ? m1var : {}), [isM1, m1var])
@@ -118,24 +134,40 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS, true, {}, mVariant), [model, dims, mVariant])
   const quantities = useMemo(() => computeQuantities(assembly, THICKNESS), [assembly])
 
-  // Варианты фурнитуры (петля/ручка) из тарифа — для выбора клиентом (без себеста).
+  // Варианты по КОМПЛЕКТУ модели: позиции по ролям (★ первой) + допустимые количества.
+  // Себестоимости нет. Зависит от модели/тарифа/варианта/размеров (набор ролей от геометрии).
   useEffect(() => {
-    fetch(`/api/configurator/options?tier=${tier}`).then(r => (r.ok ? r.json() : null)).then(d => {
-      if (!d) return
-      const opts: Record<string, HardwareOption[]> = d.options ?? {}
-      setOptions(opts)
-      setChoice(prev => {
-        const next = { ...prev }
-        for (const role of Object.keys(opts)) if (!opts[role].some(o => o.key === next[role])) next[role] = opts[role][0]?.key
-        return next
-      })
-    }).catch(() => {})
-  }, [tier])
-  // выбранные ключи → shape для 3D
+    const ctrl = new AbortController()
+    const t = setTimeout(() => {
+      fetch('/api/configurator/options', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
+        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, variant: mVariant }),
+      }).then(r => (r.ok ? r.json() : null)).then((d: KitChoices | null) => {
+        if (!d) return
+        setKitChoices(d)
+        setChoice(prev => {
+          const next = { ...prev }
+          for (const v of d.variants) if (!v.options.some(o => o.itemId === next[v.role])) {
+            const primary = v.options.find(o => o.primary) ?? v.options[0]
+            if (primary) next[v.role] = primary.itemId
+          }
+          return next
+        })
+        setQtyChoice(prev => {
+          const next = { ...prev }
+          for (const qn of d.quantities) if (!qn.options.includes(next[qn.role])) next[qn.role] = qn.def
+          return next
+        })
+      }).catch(() => {})
+    }, 250)
+    return () => { clearTimeout(t); ctrl.abort() }
+  }, [code, tier, mVariant, dims])
+  // выбранная позиция → shape для 3D (петля/ручка)
   const hwChoice = useMemo<HardwareChoice>(() => {
-    const shapeOf = (role: string) => options[role]?.find(o => o.key === choice[role])?.shape
+    const shapeOf = (role: string) =>
+      kitChoices?.variants.find(v => v.role === role)?.options.find(o => o.itemId === choice[role])?.shape
     return { hinge: shapeOf('hinge'), handle: shapeOf('handle') }
-  }, [options, choice])
+  }, [kitChoices, choice])
 
   // Цена — с СЕРВЕРА (себестоимость не уходит в браузер). Спецификация — мгновенно на клиенте.
   const [quote, setQuote] = useState<Quote | null>(null)
@@ -144,11 +176,11 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     const id = setTimeout(() => {
       fetch('/api/configurator/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, glassType: glassId, finishId, choice, variant: mVariant }),
+        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, glassType: glassId, finishId, choice, qtyChoice, variant: mVariant }),
       }).then(r => (r.ok ? r.json() : null)).then(q => { if (q) setQuote(q) }).catch(() => {})
     }, 250)
     return () => { clearTimeout(id); ctrl.abort() }
-  }, [code, dims, tier, glassId, finishId, choice, mVariant])
+  }, [code, dims, tier, glassId, finishId, choice, qtyChoice, mVariant])
   const price = quote?.price ?? null
   const clientFrom = quote?.clientFrom ?? (price ? Math.floor(price.total / 100) * 100 : null)
   const att = doorAttachment(model)
@@ -324,25 +356,34 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             <p className="text-[12px] text-[#6b6b66] mt-1.5">{finish.label}{tier === 'budget' ? ' · бюджет' : ' · премиум'}</p>
           </Section>
 
-          {/* Выбор фурнитуры (петля/ручка) — если для модели роль есть и вариантов ≥2 */}
-          {['hinge', 'handle'].map(role => {
-            const opts = options[role]
-            if (!opts || opts.length < 2 || (quantities.roles[role] ?? 0) <= 0) return null
-            return (
-              <Section key={role} title={ROLE_TITLE[role] ?? role}>
-                <div className="grid grid-cols-1 gap-1.5">
-                  {opts.map(o => (
-                    <button key={o.key} onClick={() => setChoice(c => ({ ...c, [role]: o.key }))}
-                      className={`px-2.5 py-2 rounded-lg border text-left text-[12px] ${
-                        choice[role] === o.key ? 'border-[#111110] bg-[#fafafa]' : 'border-[#e4e4e0] hover:border-[#c4c4be]'
-                      }`}>
-                      <span className="text-[#4b4b47] leading-tight">{o.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </Section>
-            )
-          })}
+          {/* Выбор позиций по ролям комплекта модели (★ — по умолчанию) */}
+          {kitChoices?.variants.map(v => (
+            <Section key={v.role} title={v.label}>
+              <div className="grid grid-cols-1 gap-1.5">
+                {v.options.map(o => (
+                  <button key={o.itemId} onClick={() => setChoice(c => ({ ...c, [v.role]: o.itemId }))}
+                    className={`px-2.5 py-2 rounded-lg border text-left text-[12px] ${
+                      choice[v.role] === o.itemId ? 'border-[#111110] bg-[#fafafa]' : 'border-[#e4e4e0] hover:border-[#c4c4be]'
+                    }`}>
+                    <span className="text-[#4b4b47] leading-tight">{o.name}{o.primary ? ' · ★' : ''}</span>
+                  </button>
+                ))}
+              </div>
+            </Section>
+          ))}
+          {/* Выбор количества (например, петли 2 или 3) */}
+          {kitChoices?.quantities.map(qn => (
+            <Section key={qn.role} title={qn.label}>
+              <div className="flex gap-1.5">
+                {qn.options.map(n => (
+                  <button key={n} onClick={() => setQtyChoice(c => ({ ...c, [qn.role]: n }))}
+                    className={`flex-1 px-2.5 py-2 rounded-lg border text-[13px] font-mono ${
+                      (qtyChoice[qn.role] ?? qn.def) === n ? 'border-[#111110] bg-[#fafafa] text-[#111110]' : 'border-[#e4e4e0] text-[#4b4b47] hover:border-[#c4c4be]'
+                    }`}>{n}</button>
+                ))}
+              </div>
+            </Section>
+          ))}
 
           <Section title="Спецификация">
             <Row label="Секции (полотна)" value={`${quantities.sections}`} />
@@ -371,19 +412,22 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               {!price.complete && price.missing.length > 0 && (
                 <div className="mb-2 rounded-lg bg-[#fdf3ec] border border-[#f0d9c4] px-3 py-2 text-[12px] text-[#9a5a2a]">
-                  ⚠️ Предварительно — не заполнено в «Себестоимость визуализатора»: <b>{price.missing.map(m => m.title).join(', ')}</b>
+                  ⚠️ Предварительно — не заполнено в комплекте модели: <b>{price.missing.map(m => m.label).join(', ')}</b>
                 </div>
               )}
               <Row label="Себестоимость стекла" value={rub(price.glassCost)} muted />
-              <Row label="Себестоимость фурнитуры" value={rub(price.hardwareCost + price.profileCost + price.tubeCost)} muted />
+              {price.lines.map(l => (
+                <Row key={l.role + l.itemId} label={`${l.label} · ${l.qty} ${l.unit}${l.chosen ? ' · выбор' : ''}`} value={rub(l.total)} muted />
+              ))}
               <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />
-              <Row label={`Монтаж (${quantities.sections}×${(price.installCost / Math.max(1, quantities.sections)).toLocaleString('ru-RU')} ₽)`} value={rub(price.installCost)} muted />
+              <Row label={`Монтаж (${price.sections} секц.)`} value={rub(price.installCost)} muted />
               <Row label="Доставка (Москва)" value={rub(price.deliveryCost)} muted />
+              {price.liftCost > 0 && <Row label="Подъём на этаж" value={rub(price.liftCost)} muted />}
               <div className="flex justify-between items-baseline pt-2 mt-1 border-t border-[#e4e4e0]">
                 <span className="text-[13px] font-semibold text-[#111110]">Сумма изделия</span>
                 <span className="text-[19px] font-semibold text-[#111110] font-mono">{rub(price.total)}</span>
               </div>
-              <p className="text-[11px] text-[#9a9a95] pt-1">Ставки — из «Себестоимость визуализатора» (админка).</p>
+              <p className="text-[11px] text-[#9a9a95] pt-1">Ставки и позиции — из комплекта модели (админка «Себестоимость визуализатора»).</p>
             </div>
           ) : (
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4 text-[13px] text-[#9a9a95]">Считаем цену…</div>
