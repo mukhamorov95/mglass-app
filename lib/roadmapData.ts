@@ -5,7 +5,7 @@ export type RoadmapStatus = 'done' | 'progress' | 'queue' | 'waiting'
 export type RoadmapItem = { title: string; status: RoadmapStatus; note?: string; date?: string }
 export type RoadmapSection = { title: string; icon: string; items: RoadmapItem[] }
 
-export const ROADMAP_UPDATED = '20.07.2026, ночь'
+export const ROADMAP_UPDATED = '25.08.2026'
 
 export const ROADMAP: RoadmapSection[] = [
   {
@@ -28,6 +28,18 @@ export const ROADMAP: RoadmapSection[] = [
       { title: 'Б2 — заявки на расходы + четверговый комитет', status: 'done', date: '20.07' },
       { title: 'Б3 — финнеделя чт–ср: план/факт недель, waterfall фондов, точный комитет', status: 'done', date: '20.07' },
       { title: 'Б4 — голосовые предложения бухгалтеров + импорт истории ДДС (8 281 операция)', status: 'done', date: '20.07' },
+      { title: 'Догон книги за июль–август (566 операций) + повторяемый импортёр', status: 'done', date: '25.08' },
+      { title: 'Кабинетом не пользовались: 0 ручных операций с 20.07, бухгалтеры ни разу не входили', status: 'waiting', note: 'выданы ссылки установки пароля — отправить Алёне и Екатерине' },
+      { title: 'Б5 — мост «оплата → ДДС»: вкладка «К проведению», конец двойному вводу', status: 'progress' },
+      { title: 'Б6 — голос → задача владельца + ответ обратно в кабинет', status: 'queue' },
+      { title: 'Б7 — B2C-оплаты в ядро payments (сейчас там только B2B)', status: 'queue' },
+      { title: 'Б8 — реестр документов (счета B2B, УПД, акты) + вложение к операции', status: 'queue' },
+      { title: 'Б9 — импорт банковской выписки и автосопоставление', status: 'queue' },
+      { title: 'Б10 — закрытие месяца и журнал правок', status: 'queue' },
+      { title: 'Б11 — зарплатный контур (ФОТ по людям, НДФЛ, самозанятые)', status: 'queue' },
+      { title: 'Б12 — налоговый календарь', status: 'queue' },
+      { title: 'Б13 — поставщики: сальдо и взаиморасчёты', status: 'queue' },
+      { title: 'Б14 — помощник бухгалтера: сводка расхождений', status: 'queue' },
     ],
   },
   {
