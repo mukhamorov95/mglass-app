@@ -430,6 +430,36 @@ export function resolveQty(rule: QtyRule, role: RoleId, q: KitQuantities, opts: 
   }
 }
 
+// Резолв хлыстовых позиций комплекта: какая позиция играет каждую bar-роль, её хлысты
+// (цена в выбранном цвете) и куски раскроя. Один источник для computeKitPrice и для
+// общего раскроя на заказ (П7) — чтобы обе стороны кроили одинаково.
+export type BarConsumption = { role: RoleId; itemId: string; name: string; stocks: Stock[]; splice: boolean; pieces: number[] }
+export function barConsumption(
+  q: KitQuantities, lib: Library, kit: ModelKit, finishId: string, opts: KitOptions = {},
+): BarConsumption[] {
+  const byId = new Map(lib.items.map(i => [i.id, i]))
+  const out: BarConsumption[] = []
+  for (const slot of kit.slots) {
+    if (ROLE_META[slot.role].kind !== 'bar') continue
+    const entries = slot.entries.filter(e => byId.has(e.itemId))
+    if (entries.length === 0) continue
+    const active = slot.select === 'one'
+      ? [entries.find(e => e.itemId === opts.choice?.[slot.role]) ?? entries.find(e => e.primary) ?? entries[0]]
+      : entries
+    const pieces = piecesForRole(q, kit, slot.role)
+    if (pieces.length === 0) continue
+    for (const e of active) {
+      const it = byId.get(e.itemId)!
+      const stocks: Stock[] = (it.stocks ?? [])
+        .map(st => ({ len: st.len, price: st.prices?.[finishId] ?? st.prices?.chrome ?? 0 }))
+        .filter(st => st.len > 0 && st.price > 0)
+      if (stocks.length === 0) continue
+      out.push({ role: slot.role, itemId: it.id, name: it.name, stocks, splice: canSplice(slot.role), pieces })
+    }
+  }
+  return out
+}
+
 export function computeKitPrice(
   q: KitQuantities,
   lib: Library,
