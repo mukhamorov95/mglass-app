@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   ])
 
   let query = supa.from('supplier_price_rows')
-    .select('id,supplier,category,article,name,color,unit,retail_price,discount_percent,cost_price,url,is_favorite', { count: 'exact' })
+    .select('id,supplier,category,article,name,color,unit,retail_price,discount_percent,cost_price,url,is_favorite,image_url', { count: 'exact' })
   if (supplier !== 'all') query = query.eq('supplier', supplier)
   if (category) query = query.eq('category', category)
   if (favOnly) query = query.eq('is_favorite', true)

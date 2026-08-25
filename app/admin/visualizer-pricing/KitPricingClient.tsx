@@ -8,10 +8,9 @@ import { buildFromModel, type GlassTint } from '@/components/configurator/scene/
 import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
-  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm,
+  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
-import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { CatalogPicker } from './CatalogPicker'
 
 // Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
@@ -163,10 +162,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     const target = picker
     setPicker(null)
     if (!target) return
+    // Сначала подтягиваем карточку с сайта поставщика (ссылка, фото, характеристики),
+    // потом читаем варианты — так позиция сразу приезжает с фото.
+    await fetch('/api/admin/supplier-catalog/enrich', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [rowId] }),
+    }).catch(() => {})
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
-    const { variants, name, supplier, base } = await res.json() as {
+    const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
       variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+      imageUrl?: string; specs?: Record<string, string>
     }
     const byFinish: Record<string, number> = {}
     for (const v of variants) {
@@ -187,11 +192,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
         if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
         else it.prices = { ...it.prices, ...byFinish }
         it.ref = { supplier, base, label }
+        if (imageUrl) it.image = imageUrl
+        if (specs && Object.keys(specs).length) it.specs = specs
         return
       }
       const id = uid('it')
       s.library.items.push({
         id, name: shortName, role: slot.role, ref: { supplier, base, label },
+        ...(imageUrl ? { image: imageUrl } : {}),
+        ...(specs && Object.keys(specs).length ? { specs } : {}),
         ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
       })
       const k = s.kits[code]!
@@ -390,9 +399,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
             <Card><p className="text-[13px] text-[#b0b0aa] italic">Комплект пуст — добавь роль ниже или собери заново по геометрии.</p></Card>
           )}
 
-          {kit.slots.map((slot, si) => {
+          {ROLE_GROUPS.map(grp => {
+            const inGroup = kit.slots.map((slot, si) => ({ slot, si })).filter(x => grp.roles.includes(x.slot.role))
+            if (inGroup.length === 0) return null
+            return (
+              <div key={grp.id} className="space-y-2">
+                <p className="text-[12px] font-semibold text-[#111110] px-1 pt-1">{grp.title}</p>
+                {inGroup.map(({ slot, si }) => {
             const meta = ROLE_META[slot.role]
-            const qty = q.roleQty[slot.role] ?? 0
+            const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
             const unneeded = qty === 0
             return (
               <Card key={slot.role}
@@ -418,6 +433,9 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   return (
                     <div key={e.itemId} className="py-1 border-b border-[#f4f4f0] last:border-0">
                       <div className="flex items-center gap-1">
+                        {it.image
+                          ? <img src={it.image} alt="" className="w-7 h-7 rounded object-cover border border-[#eeece5] shrink-0" />
+                          : <span className="w-7 h-7 rounded bg-[#f6f5f1] border border-[#eeece5] shrink-0" />}
                         {slot.select === 'one' && (
                           <button onClick={() => setPrimary(si, ei)} title={e.primary ? 'Показывается клиенту первой' : 'Сделать вариантом по умолчанию'}
                             className={`text-[14px] leading-none shrink-0 ${e.primary ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{e.primary ? '★' : '☆'}</button>
@@ -456,13 +474,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                           <select value={it.shape ?? ''} onChange={ev => setShape(it.id, ev.target.value)}
                             title="Как позиция выглядит в 3D у клиента"
                             className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
-                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === inferShape(it.name))?.label ?? 'по названию'})</option>
+                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === autoShapeForRole(it.name, it.role))?.label ?? 'по названию'})</option>
                             {SHAPES.map(sh => <option key={sh.id} value={sh.id}>вид: {sh.label}</option>)}
                           </select>
                         )}
                         <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
                           className="text-[11px] text-[#4b6ea9] hover:underline">во все модели</button>
                         {used > 1 && <span className="text-[10px] text-[#b09a6a]" title="Цена общая для всех моделей">в {used} моделях</span>}
+                        {it.specs && Object.keys(it.specs).length > 0 && (
+                          <span className="text-[10px] text-[#6b6b66]" title="Характеристики с сайта поставщика">
+                            {Object.entries(it.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                          </span>
+                        )}
                         {it.ref && <span className="text-[10px] text-[#8a9a7a] truncate">🔗 {it.ref.label ?? it.ref.base}</span>}
                       </div>
                     </div>
@@ -476,15 +499,24 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
               </Card>
             )
           })}
+              </div>
+            )
+          })}
 
           <Card title="Добавить роль">
             <div className="flex items-center gap-2">
               <select value={addRole} onChange={e => setAddRole(e.target.value as RoleId | '')}
                 className="flex-1 text-[13px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 outline-none focus:border-[#111110]">
                 <option value="">— выбери, что ещё есть в модели —</option>
-                {freeRoles.map(r => (
-                  <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>
-                ))}
+                {ROLE_GROUPS.map(g => {
+                  const free = g.roles.filter(r => freeRoles.includes(r))
+                  if (free.length === 0) return null
+                  return (
+                    <optgroup key={g.id} label={g.title}>
+                      {free.map(r => <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>)}
+                    </optgroup>
+                  )
+                })}
               </select>
               <button onClick={() => { if (addRole) { addSlot(addRole); setAddRole('') } }} disabled={!addRole}
                 className={`text-[13px] font-medium px-3 py-1.5 rounded-lg ${addRole ? 'bg-[#111110] text-white' : 'bg-[#eee] text-[#9a9a95]'}`}>Добавить</button>
