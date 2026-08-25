@@ -1,5 +1,5 @@
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
-import type { Assembly } from '@/components/configurator/scene/assembly'
+import { buildFromModel, type Assembly } from '@/components/configurator/scene/assembly'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { inferShape } from '@/lib/configurator/hardwareShapes'
 import type { PriceByColor, BarStock, CatalogRef, Tier } from '@/lib/configurator/pricing'
@@ -60,9 +60,13 @@ export function inferRole(text: string): RoleId | null {
   if (/ролик|каретк/.test(t)) return 'roller'
   if (/соедин|коннектор/.test(t)) return 'connector'
   if (/петл|навес|hinge/.test(t)) return 'hinge'
+  // «держатель стекла» и «крепление трубы к стеклу» — РАЗНЫЕ узлы: первый держит
+  // полотно на трубе, второй пристыковывает трубу к перпендикулярному стеклу.
+  if (/держател.*стекл/.test(t)) return 'mount-glass'
+  if (/г-?образн|углов/.test(t)) return 'mount-corner'
+  if (/(крепл|крепёж|крепеж).*труб.*стекл/.test(t)) return 'mount-corner'
   if (/(держател|крепл|крепёж|крепеж).*(стекл)/.test(t)) return 'mount-glass'
   if (/(держател|крепл|крепёж|крепеж).*(стен)/.test(t)) return 'mount-wall'
-  if (/г-?образн|углов/.test(t)) return 'mount-corner'
   if (/купе|врезн|утоплен/.test(t)) return 'handle-slide'
   if (/ручк|скоб|кноб|поручень/.test(t)) return 'handle'
   if (/труб|штанг/.test(t)) return 'tube'
@@ -387,3 +391,63 @@ export function kitChoices(lib: Library, kit: ModelKit, q: KitQuantities): KitCh
 
 export type KitStore = { library: Library; kits: Record<string, ModelKit>; rates: KitRates }
 export const kitKey = (tier: Tier, code: string) => `${tier}:${code}`
+
+// ── Стартовое заполнение ──────────────────────────────────────────
+// Роли, которые модель реально требует: строим её в средних размерах и смотрим,
+// что даёт геометрия. Это же определяет набор слотов в новом комплекте.
+export function requiredRoles(model: MModel): RoleId[] {
+  const c = model.constraints
+  const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
+  const dims = {
+    width: mid(c.width), height: Math.min(2000, c.height[1]),
+    width2: c.needsWidth2 && c.width2 ? mid(c.width2) : undefined,
+    doorWidth: c.doorWidth ? mid(c.doorWidth) : undefined,
+  }
+  const q = computeKitQuantities(buildFromModel(model, dims, model.thickness[0] ?? 8), model.thickness[0] ?? 8, model)
+  return ROLES.filter(r => (q.roleQty[r] ?? 0) > 0)
+}
+
+// Комплект по умолчанию: слот на каждую требуемую роль, внутри — позиции библиотеки
+// с этой ролью (первая ★). Роль без позиций даёт пустой слот — владелец увидит дыру.
+export function defaultKitFor(model: MModel, lib: Library): ModelKit {
+  return {
+    slots: requiredRoles(model).map(role => ({
+      role,
+      select: 'one' as const,
+      entries: lib.items.filter(i => i.role === role).map((i, idx) => ({
+        itemId: i.id, qty: DEFAULT_QTY, ...(idx === 0 ? { primary: true } : {}),
+      })),
+    })),
+  }
+}
+
+// Перенос старой схемы (общие подгруппы на тариф) в библиотеку позиций.
+// Роль берём от подгруппы, уточняем по названию: старый общий «крепёж» распадается
+// на крепление к стене / к стеклу / угловое, «уплотнители» — на магнитный/нижний/петлевой.
+const LEGACY_GROUP_ROLE: Record<string, RoleId> = {
+  hinges: 'hinge', handles: 'handle', rollers: 'roller', profiles: 'profile',
+  tubes: 'tube', mounts: 'mount-wall', caps: 'cap', seals: 'seal-hinge',
+}
+export function libraryFromUnitPrices(up: UnitPricesLike): Library {
+  const items: LibraryItem[] = []
+  for (const g of up.groups ?? []) {
+    const fallback = LEGACY_GROUP_ROLE[g.id] ?? (g.kind === 'bar' ? 'profile' : 'cap')
+    for (const it of g.items ?? []) {
+      const guessed = inferRole(it.name)
+      // подсказка по названию побеждает только внутри того же вида (piece/bar)
+      const role = guessed && ROLE_META[guessed].kind === ROLE_META[fallback].kind ? guessed : fallback
+      const piece = it as { key: string; name: string; prices?: PriceByColor; ref?: CatalogRef; shape?: string }
+      const bar = it as { key: string; name: string; stocks?: BarStock[] }
+      items.push({
+        id: piece.key, name: it.name, role,
+        ...(g.kind === 'bar' ? { stocks: bar.stocks ?? [] } : { prices: piece.prices ?? {} }),
+        ...(piece.ref ? { ref: piece.ref } : {}),
+        ...(piece.shape ? { shape: piece.shape } : {}),
+      })
+    }
+  }
+  return { items }
+}
+type UnitPricesLike = {
+  groups?: { id: string; kind: 'piece' | 'bar'; items?: { key: string; name: string }[] }[]
+}
