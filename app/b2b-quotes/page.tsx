@@ -636,6 +636,28 @@ export default function B2BQuotesPage() {
     }
   }
 
+  // А2: ссылка на КП для клиента — выдаём и сразу кладём в буфер обмена.
+  const [sharing, setSharing] = useState<number | null>(null)
+  async function shareQuote(q: Quote) {
+    setSharing(q.id)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${q.id}/share`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { showToast(j.error || 'Не удалось создать ссылку'); return }
+      const parsed = parseNotes(q.notes)
+      if (!parsed.public_token) {
+        const newNotes = JSON.stringify({ ...parsed, public_token: j.token })
+        setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
+      }
+      try {
+        await navigator.clipboard.writeText(j.url)
+        showToast('Ссылка на КП скопирована — можно отправлять клиенту')
+      } catch {
+        window.prompt('Ссылка на КП для клиента:', j.url)
+      }
+    } finally { setSharing(null) }
+  }
+
   // А3: пометить/снять шаблон. Шаблон не мешается в активных вкладках и служит
   // заготовкой для повторяющихся заказов клиента.
   async function toggleTemplate(q: Quote) {
@@ -888,6 +910,12 @@ export default function B2BQuotesPage() {
             const discProfit    = discRevExVat - discCost
             const discMargin    = discRevExVat > 0 ? (discProfit / discRevExVat * 100) : 0
             const isOverridden  = hasAutoOverride(quote.items) || !!parsed.price_override
+            // А2/А5: состояние клиентской ссылки — отправлена, открыта, отвечено
+            const shareToken   = typeof parsed.public_token === 'string' ? parsed.public_token : null
+            const shareOpened  = typeof parsed.public_opened_at === 'string' ? parsed.public_opened_at : null
+            const clientAnswer = (parsed.client_response && typeof parsed.client_response === 'object')
+              ? parsed.client_response as { action?: string; comment?: string | null; at?: string }
+              : null
             const overrideMeta  = (parsed.price_override && typeof parsed.price_override === 'object')
               ? parsed.price_override as { base?: number; target?: number; discount_percent?: number; at?: string; by_name?: string | null }
               : null
@@ -933,6 +961,21 @@ export default function B2BQuotesPage() {
                                 + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU')}` : ''}`
                               : 'Цены позиций заданы вручную'}>
                             ✏️ ручная корректировка
+                          </span>
+                        )}
+                        {shareToken && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                              clientAnswer?.action === 'approve' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : clientAnswer?.action === 'question' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : shareOpened ? 'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]'
+                              : 'bg-white text-[#9a9a95] border-[#e4e4e0]'}`}
+                            title={clientAnswer?.comment
+                              ? `Клиент: ${clientAnswer.comment}`
+                              : shareOpened ? `Клиент открыл ${new Date(shareOpened).toLocaleString('ru-RU')}` : 'Ссылка выдана'}>
+                            {clientAnswer?.action === 'approve' ? '🔗 клиент согласовал'
+                              : clientAnswer?.action === 'question' ? '🔗 вопрос от клиента'
+                              : shareOpened ? '🔗 клиент открыл' : '🔗 ссылка выдана'}
                           </span>
                         )}
                         {looksLikeOrder(quote) && (
@@ -1036,6 +1079,12 @@ export default function B2BQuotesPage() {
                         title="Скопировать текст для Telegram"
                         className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
                         {copiedId === quote.id ? '✓' : 'ТГ'}
+                      </button>
+                      {/* А2: ссылка клиенту с согласованием */}
+                      <button onClick={() => shareQuote(quote)} disabled={sharing === quote.id}
+                        title="Ссылка на КП для клиента: он видит цены и может согласовать"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        {sharing === quote.id ? '…' : '🔗'}
                       </button>
                       {/* КП */}
                       <Link href={`/b2b-quotes/${quote.id}/kp`} target="_blank"
