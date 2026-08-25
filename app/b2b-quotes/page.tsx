@@ -12,6 +12,7 @@ import { computeOrderEconomics, type EcoOrder, type EcoItem } from '@/lib/orderE
 import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
 import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
+import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -276,6 +277,7 @@ export default function B2BQuotesPage() {
   const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
   const [workNumber, setWorkNumber]   = useState('')
   const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
+  const [queueCount, setQueueCount] = useState<number | null>(null)  // А6: заказов в работе
   const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
   const workDateRef = useRef<HTMLInputElement>(null)
 
@@ -552,6 +554,16 @@ export default function B2BQuotesPage() {
       // Owners are never scope-restricted.
       setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
       const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
+
+      // А6: очередь производства — сколько заказов уже запущено и ещё не отгружено.
+      // Нужна как честный контекст при выборе срока сдачи (мощность цеха в системе
+      // не описана, поэтому ничего не выдумываем — показываем факт очереди).
+      sb.from('b2b_orders')
+        .select('id', { count: 'exact', head: true })
+        .is('archived_at', null)
+        .not('launched_at', 'is', null)
+        .not('notes', 'ilike', '%shipped_date%')
+        .then(({ count }) => setQueueCount(count ?? null))
 
       // Запущенные в производство (launched_at выставлен) живут в /b2b-orders и в этом
       // списке не показываются ни в одной вкладке — не грузим их вовсе. Это режет выборку
@@ -1045,7 +1057,7 @@ export default function B2BQuotesPage() {
                       {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
                       {(status === 'quote' || status === 'agreed') && (
                         <button
-                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); const dl = new Date(); dl.setDate(dl.getDate() + 14); setWorkDeadline(dl.toISOString().slice(0, 10)) }}
+                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); setWorkDeadline(toDateInput(shipDateFrom(new Date(), Number(parseNotes(quote.notes).production_days) || null))) }}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
@@ -1301,6 +1313,9 @@ export default function B2BQuotesPage() {
                         onChange={e => setWorkDeadline(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
                       />
+                      <span className="text-[10px] text-blue-700/70 whitespace-nowrap">
+                        {DEFAULT_WORKING_DAYS} раб. дней{queueCount != null && ` · в работе сейчас: ${queueCount}`}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">№ заказа:</span>

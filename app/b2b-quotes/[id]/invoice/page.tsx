@@ -115,6 +115,23 @@ export default function InvoicePage() {
     }
   }
 
+  // А8: ссылка на оплату для клиента (в буфер обмена). Пока эквайринг не подключён —
+  // роут честно отвечает 501, и менеджер видит, чего не хватает.
+  const [payLoading, setPayLoading] = useState(false)
+  const [payMsg, setPayMsg] = useState<string | null>(null)
+  async function payLink() {
+    setPayLoading(true); setPayMsg(null)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${id}/pay-link`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setPayMsg(j.error || 'Не удалось получить ссылку'); return }
+      try {
+        await navigator.clipboard.writeText(j.url)
+        setPayMsg(`Ссылка на оплату ${Math.round(j.amount).toLocaleString('ru-RU')} ₽ скопирована`)
+      } catch { window.prompt('Ссылка на оплату:', j.url) }
+    } finally { setPayLoading(false) }
+  }
+
   async function save() {
     setSaving(true); setSaved(false)
     try {
@@ -251,6 +268,12 @@ export default function InvoicePage() {
         {/* А7: УПД по этому же заказу — реквизиты берутся отсюда же */}
         <a href={`/b2b-quotes/${id}/upd`} target="_blank" rel="noreferrer"
           className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">📑 УПД</a>
+        {/* А8: ссылка на онлайн-оплату — общий провайдер с кабинетом партнёра */}
+        <button onClick={payLink} disabled={payLoading}
+          className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white disabled:opacity-40">
+          {payLoading ? '…' : '💳 Ссылка на оплату'}
+        </button>
+        {payMsg && <span className="text-[12px] text-[#6b6b66] max-w-[420px]">{payMsg}</span>}
         <button onClick={() => setShowEditor(v => !v)} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white ml-auto">{showEditor ? 'Скрыть реквизиты' : 'Реквизиты покупателя'}</button>
       </div>
 
