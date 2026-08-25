@@ -64,9 +64,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     supply_contract_no: c.supply_contract_no ?? null, supply_contract_date: c.supply_contract_date ?? null,
   }
 
-  return NextResponse.json({
-    order: documentSafeOrder(order as Record<string, unknown>),
-    client: safeClient,
-    entities: ents ?? [],
-  })
+  // documentSafeOrder режет cost из items, но notes отдаёт сырыми — а там внутренние
+  // поля (ai_review, status_history, status_comment). Счёту/УПД нужны только дата и
+  // срок → сводим notes к белому списку прямо здесь, наружу больше ничего не идёт.
+  const safeOrder = documentSafeOrder(order as Record<string, unknown>)
+  safeOrder.notes = JSON.stringify({ quote_date: pn.quote_date ?? null, production_days: pn.production_days ?? null })
+
+  return NextResponse.json({ order: safeOrder, client: safeClient, entities: ents ?? [] })
 }
