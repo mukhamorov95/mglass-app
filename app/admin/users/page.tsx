@@ -23,6 +23,7 @@ type User = {
   can_view_money: boolean
   hired_at: string | null
   created_at: string
+  telegram_bound?: boolean   // привязан ли к боту — без этого уведомления не доходят
 }
 
 // Станции цеха — словарь совпадает с lib/productionStages.ts DetailStageKey (без 'problem').
@@ -596,9 +597,14 @@ export default function UsersPage() {
                                 const data = await res.json()
                                 if (data.code) setTelegramCode({ userId: u.id, code: data.code })
                               }}
-                              className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
-                              title="Создать Telegram-код">
-                              TG
+                              className={`text-[11px] px-2 py-1 rounded-full transition-colors ${
+                                u.telegram_bound
+                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                              title={u.telegram_bound
+                                ? 'Telegram привязан. Нажмите, чтобы выдать новый код (перепривязка)'
+                                : 'Не привязан к боту — уведомления не приходят. Нажмите, чтобы выдать код'}>
+                              {u.telegram_bound ? 'TG ✓' : 'TG'}
                             </button>
                           </div>
                         </td>
