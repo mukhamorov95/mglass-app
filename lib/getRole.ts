@@ -287,6 +287,23 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   ],
 }
 
+// Домашний экран роли: куда отправлять с корня «/», чтобы человек попадал сразу
+// в свой раздел, а не на менеджерскую панель. manager/admin/ceo не в карте —
+// они остаются на «/» (общая панель / Owner Center). Пути входят в ROLE_ALLOWED
+// соответствующей роли, поэтому canAccessRoute их не отбивает.
+export const ROLE_HOME: Partial<Record<Role, string>> = {
+  partner:    '/partner',
+  production: '/production-app',
+  buyer:      '/inventory',
+  office:     '/crm',
+  logist:     '/installations',
+  measurer:   '/measurer-cabinet',
+  accountant: '/accounting',
+  cfo:        '/cfo',
+  commercial: '/commercial',
+  seo:        '/marketing',
+}
+
 // Per-user B2B scope flag. `mglass_only` unlocks a narrow B2B subset for a
 // non-manager role (currently buyer) so a procurement worker can also do
 // internal M GLASS quotes without becoming a full manager.
