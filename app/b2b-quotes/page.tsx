@@ -13,6 +13,7 @@ import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
 import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import type { PriceApproval } from '@/lib/b2b/priceOverride'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -103,7 +104,7 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
   paid:    { label: 'Оплачен',     bg: 'bg-emerald-50', text: 'text-emerald-700', short: '🟢' },
 }
 
-type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today' | 'templates'
+type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today' | 'templates' | 'price_approval'
 
 // Запущенные в работу (sent/confirmed) — это уже заказы, они живут в /b2b-orders
 // и в просчётах не показываются. Здесь — только активные просчёты.
@@ -115,7 +116,15 @@ const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'agreed',           label: 'Согласовано' },
   { key: 'rejected',         label: 'Отказ' },
   { key: 'templates',        label: 'Шаблоны' },
+  { key: 'price_approval',   label: '⚠️ Согласовать цену' },
 ]
+
+// А11: цена с тонкой маржой ждёт решения владельца (не блокируется).
+const approvalOf = (q: { notes: string | null }): PriceApproval | null => {
+  const a = parseNotes(q.notes).price_approval
+  return a && typeof a === 'object' ? a as PriceApproval : null
+}
+const needsPriceApproval = (q: { notes: string | null }) => approvalOf(q)?.needed === true
 
 // А3: шаблон — обычный просчёт с notes.is_template. Отдельной таблицы не заводим:
 // шаблон должен считаться тем же движком и открываться тем же калькулятором.
@@ -670,6 +679,25 @@ export default function B2BQuotesPage() {
     } finally { setSharing(null) }
   }
 
+  // А11: решение владельца по цене с тонкой маржой. Цену не трогаем — решение
+  // снимает пометку и остаётся в истории просчёта.
+  const [approving, setApproving] = useState<number | null>(null)
+  async function resolvePriceApproval(id: number, resolution: 'approved' | 'rejected') {
+    setApproving(id)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${id}/price-approval`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { showToast(j.error || 'Не удалось сохранить решение'); return }
+      setQuotes(prev => prev.map(x => x.id === id
+        ? { ...x, notes: JSON.stringify({ ...parseNotes(x.notes), price_approval: j.approval }) }
+        : x))
+      showToast(resolution === 'approved' ? 'Цена согласована' : 'Цена отклонена — менеджер пересоберёт')
+    } finally { setApproving(null) }
+  }
+
   // А3: пометить/снять шаблон. Шаблон не мешается в активных вкладках и служит
   // заготовкой для повторяющихся заказов клиента.
   async function toggleTemplate(q: Quote) {
@@ -757,7 +785,8 @@ export default function B2BQuotesPage() {
 
   const visible = useMemo(() => {
     let list: Quote[]
-    if (tab === 'templates') list = quotes.filter(isTemplate)
+    if (tab === 'price_approval') list = quotes.filter(needsPriceApproval)
+    else if (tab === 'templates') list = quotes.filter(isTemplate)
     else if (tab === 'all') list = quotes.filter(q => notLaunched(q) && !isTemplate(q))
     else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && !isTemplate(q) && isToday(q.created_at))
     else if (tab === 'needs_transfer') list = quotes.filter(q => looksLikeOrder(q) && !isTemplate(q))
@@ -803,11 +832,13 @@ export default function B2BQuotesPage() {
   }, [visible, throughput])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0 }
+    const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0, templates: 0, price_approval: 0 }
     for (const q of quotes) {
+      if (isTemplate(q)) { c.templates++; continue }
       const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
       if (notLaunched(q)) { c.all++; if (isToday(q.created_at)) c.today++ }
       if (looksLikeOrder(q)) c.needs_transfer++
+      if (needsPriceApproval(q)) c.price_approval++
     }
     return c
   }, [quotes])
@@ -860,7 +891,8 @@ export default function B2BQuotesPage() {
 
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 flex-wrap">
-        {ALL_TABS.map(t => (
+        {/* А11: вкладка согласования цены появляется, только когда есть что решать */}
+        {ALL_TABS.filter(t => t.key !== 'price_approval' || (counts.price_approval ?? 0) > 0).map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }}
             className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors ${tab === t.key ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
             {t.label}
@@ -922,6 +954,7 @@ export default function B2BQuotesPage() {
             const discProfit    = discRevExVat - discCost
             const discMargin    = discRevExVat > 0 ? (discProfit / discRevExVat * 100) : 0
             const isOverridden  = hasAutoOverride(quote.items) || !!parsed.price_override
+            const approval      = approvalOf(quote)
             // А2/А5: состояние клиентской ссылки — отправлена, открыта, отвечено
             const shareToken   = typeof parsed.public_token === 'string' ? parsed.public_token : null
             const shareOpened  = typeof parsed.public_opened_at === 'string' ? parsed.public_opened_at : null
@@ -973,6 +1006,20 @@ export default function B2BQuotesPage() {
                                 + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU')}` : ''}`
                               : 'Цены позиций заданы вручную'}>
                             ✏️ ручная корректировка
+                          </span>
+                        )}
+                        {approval && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                              approval.needed ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : approval.resolution === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-red-50 text-red-600 border-red-200'}`}
+                            title={approval.needed
+                              ? `Маржа ${approval.margin}% при цене ${fmt(approval.total)} — ждёт решения владельца`
+                              : `${approval.resolution === 'approved' ? 'Согласовал' : 'Отклонил'}: ${approval.resolved_by_name ?? '—'}`}>
+                            {approval.needed ? `⚠️ цена на согласовании · ${approval.margin}%`
+                              : approval.resolution === 'approved' ? '✓ цена согласована'
+                              : '✕ цена отклонена'}
                           </span>
                         )}
                         {shareToken && (
@@ -1054,6 +1101,17 @@ export default function B2BQuotesPage() {
 
                     {/* Status actions */}
                     <div className="flex items-center gap-1">
+                      {isOwner && approval?.needed && (<>
+                        <button onClick={() => resolvePriceApproval(quote.id, 'approved')} disabled={approving === quote.id}
+                          title={`Маржа ${approval.margin}% — согласовать цену`}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Цена ок
+                        </button>
+                        <button onClick={() => resolvePriceApproval(quote.id, 'rejected')} disabled={approving === quote.id}
+                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Отклонить
+                        </button>
+                      </>)}
                       {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
                       {(status === 'quote' || status === 'agreed') && (
                         <button
@@ -1244,7 +1302,7 @@ export default function B2BQuotesPage() {
                       ) : discMargin < 25 ? (
                         <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                           ⚠️ Осторожно: при цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
-                          Это ниже нормы 25%.
+                          Это ниже нормы 25% — цена уйдёт на согласование владельцу.
                         </p>
                       ) : discMargin < 35 ? (
                         <p className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">

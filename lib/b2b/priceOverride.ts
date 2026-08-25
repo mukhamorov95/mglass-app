@@ -12,6 +12,25 @@ import { VAT, effectiveItemTotal, type B2BOrderItem } from '../b2bCalculator'
 //   • Σ manualTotal == целевой сумме до рубля (остаток округления раздаётся по методу
 //     наибольших остатков) — счёт и КП сходятся копейка-в-копейку.
 
+// А11: порог, ниже которого цена уходит на согласование владельцу. Не запрет —
+// менеджер ставит любую цену, но такая сделка отмечается и попадает владельцу в
+// отдельную вкладку. Одно число на всю систему (тот же порог, что в цветах маржи).
+export const MIN_MARGIN_PERCENT = 25
+
+export type PriceApproval = {
+  needed: boolean
+  margin: number
+  total: number
+  by: string | null
+  by_name: string | null
+  at: string
+  resolution?: 'approved' | 'rejected' | null
+  resolved_by?: string | null
+  resolved_by_name?: string | null
+  resolved_at?: string | null
+  comment?: string | null
+}
+
 export type OverrideMeta = {
   target: number
   base: number
