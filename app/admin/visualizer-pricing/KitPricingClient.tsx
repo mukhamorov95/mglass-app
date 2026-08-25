@@ -47,15 +47,35 @@ const TINT: Record<string, GlassTint> = {
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const uid = (p: string) => `${p}-${Math.round(Math.random() * 1e9).toString(36)}`
 
-function NumInput({ value, onChange, w = 88, suffix = '₽' }: { value: number; onChange: (v: number) => void; w?: number; suffix?: string }) {
+// Числовое поле с черновиком: пока владелец печатает, значение НЕ трогаем и НЕ зажимаем
+// в диапазон. Иначе на «600» после первой цифры прилетает clamp(6)→500, курсор скачет,
+// и в поле оказывается что угодно, кроме введённого. Границы применяем на blur/Enter.
+function NumInput({ value, onChange, w = 88, suffix = '₽', range }: {
+  value: number; onChange: (v: number) => void; w?: number; suffix?: string; range?: [number, number]
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const raw = Number(draft.replace(',', '.'))
+    const n = Number.isFinite(raw) ? raw : value
+    const fixed = range ? Math.min(range[1], Math.max(range[0], n)) : Math.max(0, n)
+    setDraft(null)
+    if (fixed !== value) onChange(fixed)
+  }
   return (
     <span className="flex items-center gap-1">
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value) || 0)} style={{ width: w }}
+      <input type="text" inputMode="decimal" value={draft ?? String(value)} style={{ width: w }}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={e => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); e.currentTarget.blur() } if (e.key === 'Escape') setDraft(null) }}
+        title={range ? `от ${range[0]} до ${range[1]}` : undefined}
         className="text-right font-mono text-[13px] text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
       <span className="text-[11px] text-[#9a9a95]">{suffix}</span>
     </span>
   )
 }
+
 function Card({ title, right, children }: { title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
@@ -292,16 +312,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           <Card title="Размеры для проверки">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Ширина
-                <NumInput value={dims.width} onChange={v => setDims(d => ({ ...d, width: clamp(v, c.width) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.width} range={c.width} onChange={v => setDims(d => ({ ...d, width: v }))} w={70} suffix="мм" /></label>
               {c.needsWidth2 && c.width2 && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Вторая
-                  <NumInput value={dims.width2 ?? 0} onChange={v => setDims(d => ({ ...d, width2: clamp(v, c.width2!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.width2 ?? 0} range={c.width2!} onChange={v => setDims(d => ({ ...d, width2: v }))} w={70} suffix="мм" /></label>
               )}
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Высота
-                <NumInput value={dims.height} onChange={v => setDims(d => ({ ...d, height: clamp(v, c.height) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.height} range={c.height} onChange={v => setDims(d => ({ ...d, height: v }))} w={70} suffix="мм" /></label>
               {c.doorWidth && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Дверь
-                  <NumInput value={dims.doorWidth ?? 0} onChange={v => setDims(d => ({ ...d, doorWidth: clamp(v, c.doorWidth!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.doorWidth ?? 0} range={c.doorWidth!} onChange={v => setDims(d => ({ ...d, doorWidth: v }))} w={70} suffix="мм" /></label>
               )}
             </div>
             <p className="text-[11px] text-[#9a9a95] mt-2">
@@ -570,7 +590,7 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
         <option value="client">выбор клиента</option>
       </select>
       {rule.mode === 'fixed' && (
-        <input type="number" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value) || 0 })}
+        <input type="text" inputMode="numeric" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value.replace(/\D/g, '')) || 0 })}
           className="w-12 text-right font-mono text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]" />
       )}
       {rule.mode === 'client' && (
@@ -584,7 +604,6 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
   )
 }
 
-const clamp = (v: number, [a, b]: [number, number]) => Math.min(b, Math.max(a, v))
 function defaultDims(code: string) {
   const c = getModel(code).constraints
   const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100
