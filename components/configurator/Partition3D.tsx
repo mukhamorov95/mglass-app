@@ -4,7 +4,7 @@ import * as THREE from 'three'
 import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
-  MeshTransmissionMaterial,
+  MeshTransmissionMaterial, Edges,
 } from '@react-three/drei'
 import { EffectComposer, N8AO } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
@@ -163,6 +163,10 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
             clearcoat={0.9}
             clearcoatRoughness={0.04}
           />
+          {/* V2: полированная кромка стекла — тонкая световая линия по рёбрам, читается толщина */}
+          <Edges threshold={15}>
+            <lineBasicMaterial color="#eaf6ef" transparent opacity={0.5} depthWrite={false} />
+          </Edges>
         </mesh>
       ))}
       {assembly.metal.map(m => (
