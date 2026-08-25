@@ -22,7 +22,16 @@ export async function GET() {
     .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,can_view_all_clients,can_view_all_deals,amo_user_id,max_discount_percent,can_delete,permissions,production_stations,can_view_money,hired_at,created_at')
     .order('created_at', { ascending: true })
 
-  if (!full.error) return NextResponse.json(full.data ?? [])
+  // Привязка к Telegram-боту: без неё уведомления менеджеру (А14) никуда не уходят,
+  // а по факту привязан был только владелец. Показываем это в списке, чтобы пробел
+  // был виден, а не выяснялся через «мне ничего не приходит».
+  async function withTelegram(rows: Record<string, unknown>[]) {
+    const { data: tg } = await db.from('telegram_users').select('user_id')
+    const bound = new Set((tg ?? []).map((t: { user_id: string | null }) => t.user_id))
+    return rows.map(r => ({ ...r, telegram_bound: bound.has(r.id as string) }))
+  }
+
+  if (!full.error) return NextResponse.json(await withTelegram(full.data ?? []))
 
   const base = await db
     .from('users')
@@ -30,7 +39,7 @@ export async function GET() {
     .order('created_at', { ascending: true })
 
   if (base.error) return NextResponse.json({ error: base.error.message }, { status: 500 })
-  return NextResponse.json(base.data ?? [])
+  return NextResponse.json(await withTelegram(base.data ?? []))
 }
 
 export async function PATCH(req: NextRequest) {
