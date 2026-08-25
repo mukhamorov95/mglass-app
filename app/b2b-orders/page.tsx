@@ -619,6 +619,50 @@ export default function B2BOrdersPage() {
   const [showOnlyNeedsControl, setShowOnlyNeedsControl] = useState(false)
   const [bulkActionLoading, setBulkActionLoading] = useState<string | null>(null)
 
+  // А3: повтор заказа — новый просчёт с теми же позициями и ценами, которые клиент
+  // уже согласовал. Номера, оплаты и следы запуска не тащим: это новый черновик.
+  const [repeating, setRepeating] = useState<number | null>(null)
+  async function repeatOrder(order: Order) {
+    setRepeating(order.id)
+    try {
+      const sb = createClient()
+      const { data: { user } } = await sb.auth.getUser()
+      let authorName: string | null = null
+      if (user?.id) {
+        const { data: prof } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
+        authorName = (prof?.name as string | null) ?? user.email ?? null
+      }
+      const notes = JSON.stringify({
+        status: 'quote',
+        quote_date: new Date().toISOString(),
+        manager_name: authorName ?? undefined,
+        repeated_from: order.id,
+        production_days: order.parsedNotes?.production_days ?? undefined,
+      })
+      const { data, error } = await sb.from('b2b_orders').insert({
+        client_id: order.client_id,
+        client_name: order.client_name,
+        discount_percent: order.discount_percent,
+        items: order.items,
+        total_area: order.total_area,
+        total_weight: order.total_weight,
+        total_cost_net: order.total_cost_net ?? 0,
+        total_sale_inc_vat: order.total_sale_inc_vat,
+        total_after_discount: order.total_after_discount,
+        notes,
+        created_by: user?.id ?? null,
+        created_by_name: authorName,
+      }).select('id').single()
+      if (error || !data) {
+        setToastError(true); setToastMsg('Не удалось повторить заказ')
+        return
+      }
+      setToastError(false)
+      setToastMsg(`Создан просчёт #${data.id} — открываю просчёты`)
+      setTimeout(() => { window.location.href = '/b2b-quotes' }, 900)
+    } finally { setRepeating(null) }
+  }
+
   function startEditNum(order: Order) {
     setEditNumId(order.id)
     setEditCustomNum(order.custom_number ?? '')
@@ -1485,6 +1529,15 @@ export default function B2BOrdersPage() {
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">🧾 Счёт клиенту</Link>
           <Link href={`/b2b-quotes/${order.id}/kp`} target="_blank"
             className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📄 КП</Link>
+          {/* А7: УПД — тот же документ, что в кабинете партнёра */}
+          <Link href={`/b2b-quotes/${order.id}/upd`} target="_blank"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">📑 УПД</Link>
+          {/* А3: повторить заказ — те же позиции новым просчётом */}
+          <button onClick={() => repeatOrder(order)} disabled={repeating === order.id}
+            title="Создать новый просчёт с этими же позициями"
+            className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] disabled:opacity-40 transition-colors">
+            {repeating === order.id ? '…' : '↻ Повторить'}
+          </button>
           {isOwner && (editTotalId === order.id ? (
             <span className="flex items-center gap-1.5">
               <span className="text-[10px] text-[#9a9a95]">Новая сумма ₽:</span>
