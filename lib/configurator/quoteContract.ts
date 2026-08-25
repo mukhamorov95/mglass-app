@@ -18,6 +18,9 @@ export type QuoteRequest = {
   choice?: Partial<Record<RoleId, string>>  // выбранная позиция в роли
   qtyChoice?: Partial<Record<RoleId, number>> // выбранное количество (петель 2 или 3)
   version?: number                          // версия прайса — считать по снимку, не по живому
+  zoneId?: string                           // зона доставки (нет → Москва)
+  km?: number                               // километраж за МКАД внутри зоны
+  installFactors?: string[]                 // надбавки монтажа: сложная стена, лестница, нестандарт
 }
 
 // Провенанс цены: по какой версии прайса и до какой даты действует. Даёт на КП

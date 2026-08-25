@@ -64,6 +64,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     problem_comment: comment,
     problem_at: now,
     problem_resolved_at: null,
+    problem_by: user.id,
     problem_by_name: who,
     updated_at: now,
   }).in('id', ids)

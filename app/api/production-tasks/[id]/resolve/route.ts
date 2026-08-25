@@ -35,6 +35,7 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
   const now = new Date().toISOString()
   const upd: Record<string, unknown> = {
     problem_resolved_at: now,
+    problem_resolved_by: user.id,
     problem_resolved_by_name: who,
     problem_resolution: resolution,
     updated_at: now,
