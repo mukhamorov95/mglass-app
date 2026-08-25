@@ -63,6 +63,7 @@ export type PlanRow = {
   unit:      Unit | null
   qty:       number          // сколько нужно, в базовой единице
   available: number          // сколько есть сейчас
+  reserved?: number          // сколько зарезервировано под этот заказ (дефолт для цеха)
   matched:   'ref' | 'alias' | 'name' | 'none'
   source:    string          // откуда взято (позиция заказа / BOM)
 }
