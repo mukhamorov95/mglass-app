@@ -77,3 +77,15 @@
 - Контракт финал: POST /api/inventory/consume { type:'b2b_order', id, origin:'plan' }, best-effort, 200 на пустом/повторе
 - Открыто (к backbone): (a) ~270 старых заказов без задач — историю не догоняем; (б) packaged руками из /b2b-orders мимо цеха — точка вкладки b2b-orders; (в) «на руках» завышен на цикл (резка↔упаковка ~10 сут) — доступный остаток верен, вопрос точности к владельцу
 - Производство сначала чинит гонку notes (атомарный mark_order_stages), потом вешает вызов; П19 последняя волна
+
+## Ожидание (после #307)
+- #307 (origin) CI зелёный, конфликтов нет — ждёт мержа backbone
+- Два хука списания зовут POST /api/inventory/consume {type,id,origin:'plan'}, best-effort:
+  производство (packaged в mirrorOrderStages, роль production — HTTP-гейт проходит) +
+  b2b-orders (ручной packaged, роль manager — HTTP-гейт 403!)
+- ACCESS-MODEL вопрос вынесен backbone: consume гейтится requireInventoryWrite (нет manager).
+  consume-на-packaged = системный side-effect (прецедент: reserveForOrder в launch-production,
+  где manager разрешён). Решение НЕ открываю сам — жду backbone.
+- Как backbone подтвердит: добавлю server-only обёртку consumeForOrder(docType,docId,by,origin='plan'),
+  импортируют ОБА хука; единая семантика, идемпотентность по (заказ,позиция), best-effort.
+- b2b-orders (сессия ...9dd210-94) предупреждён: не вешать до (1) #307 в main и (2) access-model от backbone.
