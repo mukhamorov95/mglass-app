@@ -3,13 +3,13 @@ import Link from 'next/link'
 // Каталог для партнёра (дизайн из прототипа, .pcab): что можно заказать у нас
 // и перепродать своему клиенту. Никаких наших цен/себестоимости.
 
-const CATALOG: { emoji: string; title: string; desc: string; margin: string }[] = [
-  { emoji: '💡', title: 'Зеркало с подсветкой (LED)', desc: 'В шкафы-купе, ванные, прихожие. Сенсор, диммер, подогрев. Готовое изделие «под ключ».', margin: 'ваша наценка 40–70%' },
-  { emoji: '🚪', title: 'Лофт-перегородки', desc: 'Межкомнатные и зонирующие: чёрный профиль + закалённое стекло. Замер → изготовление → монтаж.', margin: 'ваша наценка 30–50%' },
-  { emoji: '🚿', title: 'Душевые перегородки и кабины', desc: 'Распашные, раздвижные, угловые. Закалка, фурнитура, монтаж.', margin: 'ваша наценка 30–50%' },
-  { emoji: '🪞', title: 'Резка стекла и зеркала под мебель', desc: 'Фартуки-скинали, фасады, полки, зеркала в двери. Партии любого объёма.', margin: 'объём → низкая цена за деталь' },
-  { emoji: '🎨', title: 'Пескоструй и матирование', desc: 'Полное матирование или рисунок по трафарету. Логотипы, декор.', margin: 'декор с высокой маржой' },
-  { emoji: '🔺', title: 'Обработка: закалка, кромка, фацет, сверловка', desc: 'Полный цикл в своём цехе. Короткий срок.', margin: '—' },
+const CATALOG: { emoji: string; title: string; desc: string; margin: string; preset?: 'стекло' | 'зеркало' }[] = [
+  { emoji: '💡', title: 'Зеркало с подсветкой (LED)', desc: 'В шкафы-купе, ванные, прихожие. Сенсор, диммер, подогрев. Готовое изделие «под ключ».', margin: 'ваша наценка 40–70%', preset: 'зеркало' },
+  { emoji: '🚪', title: 'Лофт-перегородки', desc: 'Межкомнатные и зонирующие: чёрный профиль + закалённое стекло. Замер → изготовление → монтаж.', margin: 'ваша наценка 30–50%', preset: 'стекло' },
+  { emoji: '🚿', title: 'Душевые перегородки и кабины', desc: 'Распашные, раздвижные, угловые. Закалка, фурнитура, монтаж.', margin: 'ваша наценка 30–50%', preset: 'стекло' },
+  { emoji: '🪞', title: 'Резка стекла и зеркала под мебель', desc: 'Фартуки-скинали, фасады, полки, зеркала в двери. Партии любого объёма.', margin: 'объём → низкая цена за деталь', preset: 'стекло' },
+  { emoji: '🎨', title: 'Пескоструй и матирование', desc: 'Полное матирование или рисунок по трафарету. Логотипы, декор.', margin: 'декор с высокой маржой', preset: 'стекло' },
+  { emoji: '🔺', title: 'Обработка: закалка, кромка, фацет, сверловка', desc: 'Полный цикл в своём цехе. Короткий срок.', margin: '—', preset: 'стекло' },
 ]
 
 export default function PartnerCatalogPage() {
@@ -26,10 +26,11 @@ export default function PartnerCatalogPage() {
       <div className="wrap">
         <div className="cat-grid">
           {CATALOG.map(p => (
-            <div className="card" key={p.title} style={{ padding: 16 }}>
+            <div className="card" key={p.title} style={{ padding: 16, display: 'flex', flexDirection: 'column' }}>
               <p style={{ fontSize: 14, fontWeight: 700 }}>{p.emoji} {p.title}</p>
-              <p style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 6, lineHeight: 1.5 }}>{p.desc}</p>
+              <p style={{ fontSize: 12, color: 'var(--ink-2)', marginTop: 6, lineHeight: 1.5, flex: 1 }}>{p.desc}</p>
               {p.margin !== '—' && <p style={{ fontSize: 11, color: 'var(--green)', fontWeight: 600, marginTop: 8 }}>🎯 {p.margin}</p>}
+              <Link className="ghost" href={`/partner/new?preset=${p.preset ?? 'стекло'}`} style={{ marginTop: 10, alignSelf: 'flex-start' }}>Посчитать →</Link>
             </div>
           ))}
         </div>

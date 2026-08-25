@@ -1,25 +1,39 @@
 ## Текущая задача
-Маршрут A3→A10 конфигуратора (вкладка «Сайт + 3D»). Сделаны A3 (реализм сцены) и A4 v1 (конфигурируемость M1).
+Вкладка «Прайс душевых»: прайс ПО МОДЕЛЯМ (комплект под каждую М1…М12). Движок и хранилище готовы,
+следующая — перестройка админки /admin/visualizer-pricing.
 
 ## Что сделано (эта сессия)
-- A2 (избранное «наши позиции» + сравнение поставщиков) → PR #217 (территория Прайса, уедет в main через их ветку)
-- Координация 2 сессий → docs/CONFIGURATOR_COORDINATION.md (файловая граница, контракт, лог)
-- ТЗ M1 → docs/configurator/M1_CONFIG_SPEC.md
-- A3 сцена как рендер → components/configurator/Partition3D.tsx (отражающий пол, ACES, блики)
-- A4 M1 конфигурируемость:
-  - spec? в MetalPart/HardwarePlacement; variant (6-й арг) в buildFromModel; MDims += trayDepth/ceilingHeight → components/configurator/scene/assembly.ts
-  - Геометрия 4 креплений (perp90/diag45/stabilizer/ceiling) + 2 обвязок (partial/perimeter) со spec-кодами
-  - UI M1 (выбор крепления/обвязки + поддон/потолок) + проброс variant в 3D и quote → ConfiguratorClient.tsx, Partition3D(View).tsx
+- Устав вкладки и границы с 3D-контуром → docs/pricing/README.md
+- Движок прайса по моделям → lib/configurator/kit.ts (роли, комплект, правила количества, раскрой хлыстов), 20 тестов
+- Хранилище → supabase/migrations/20260825_configurator_model_kits.sql (ПРИМЕНЕНА) + lib/configurator/kitStore.ts
+- API комплектов → app/api/admin/configurator-kits/route.ts (GET/PUT, гейт admin/ceo/buyer)
+- Черри-пик 12e3725 от 3D-сессии — линт зелёный (0 ошибок, 366/366 тестов)
+- Админка комплекта модели → app/admin/visualizer-pricing/KitPricingClient.tsx + CatalogPicker.tsx
+  (старый VisualizerPricingClient удалён, page.tsx читает getKitStore)
+- Роли под варианты М1 (крепление/штанга 45°, стабилизатор, профиль по сторонам) + barPieces по ролям
+- Контракт визуализатора → lib/configurator/quoteContract.ts, /api/configurator/quote и /options на комплектах
+- Брак «-DEF/с дефектом» исключён из сравнения поставщиков
+- Погонные позиции (уплотнители 2.2 м, заглушка профиля 1 м) переведены в хлысты + роль «заглушка торцевая»
+- Погонное стыкуется из нескольких хлыстов, жёсткий профиль/труба — нет (негабарит виден в missing)
+- Влита геометрия вариантов М1 (8f4bba5), шим снят; 7 сквозных тестов на 4 крепления + 2 обвязки
 
 ## Следующий шаг
-Продолжить маршрут: доработать визуал креплений M1 (труба/кронштейны как в жизни, отдельные 3D-формы вместо плейсхолдеров kp002/kp006), затем A5 «Клиентский UX». Прайс (A9) не трогаю.
-При переходе на POST /api/configurator/options+/quote — мигрировать полную разбивку ConfiguratorClient под KitPriceResult (пингнуть Прайс, они уберут GET).
+Ждём ответы владельца: длина хлыста профиля 2200 (в базе 2000 — расходится с артикулом FDPA-51.22),
+артикул торцевой заглушки (похоже FDPA-501), что за FDC-5D / FDT-55L / FDP-35L (в справочниках не найдены).
+Готовое к работе: заполнять комплекты моделей в /admin/visualizer-pricing.
+PR #226 https://github.com/mukhamorov95/mglass-app/pull/226 — открыт, НЕ мержен: страница за логином,
+в браузере не проверена, по ней сейчас работает Вера. Мержить по слову владельца.
 
 ## Контекст
-Ветка feat/shower-3d-configurator. tsc 0, lint по изменённым чист.
-Контракт с Прайсом: variant Record<string,string> (mount∈{perp90,diag45,stabilizer,ceiling}, profileFrame∈{partial,perimeter}); spec-коды tube-*/profile-*/mount-*. trayDepth по умолчанию 1000 → длина трубы perp90 (важно для FDT-351/352). Верифицировано в /embed/shower.
-Себестоимость не в клиенте — цена с сервера.
+Два уровня: библиотека позиций на тариф (цена вбивается ОДИН раз) + комплект модели (ссылки на позиции).
+Правило: работают одновременно → разные роли; на выбор → одна роль с вариантами.
+Роли: hinge, handle, handle-slide, roller, mount-wall, mount-glass, mount-corner, connector, cap,
+seal-magnet, seal-bottom, seal-hinge, profile, tube. Переводчик геометрия→прайс — PLACEMENT_ROLE в kit.ts:
+3D-сессия обязалась пинговать при добавлении кодов в HardwarePlacement.model.
+Боевые ставки в БД: стекло clear 3000 / crystal 6000 / bronze-graphite 4800, монтаж 5000, доставка 4000.
 
 ## Открытые вопросы
-- Плейсхолдеры 3D-форм для mount-diag45/mount-stabilizer (сейчас kp002). Уточнить визуал креплений с владельцем.
-- Точная геометрия diag45 (угол/длина) — приближение, показать владельцу.
+- Длины хлыстов профиля/трубы: в БД один хлыст 2000 мм. Реально 2000/2200/3000? Ширина пропила?
+- Уплотнители (2.2 м) и заглушка (1 м) у поставщика ПОГОННЫЕ — перевести их из штук в хлысты.
+- Отдельная заглушка под дверью (нужен артикул) — добавить своей ролью.
+- Тариф premium пуст: ведём оба или пока только бюджет?
