@@ -18,6 +18,7 @@ export type TaskSnapshot = {
   status:      string
   started_at:  string | null
   assigned_to: string | null
+  started_by?: string | null
 }
 
 export type ProblemInput = { reasonCode: string; comment: string | null }
@@ -33,10 +34,14 @@ export function buildTaskUpdate(
 ): Record<string, unknown> {
   if (action === 'start') {
     return {
-      status:      'in_progress',
-      started_at:  task.started_at ?? now,
+      status:          'in_progress',
+      started_at:      task.started_at ?? now,
       // Взял в работу = задача его. Не перетираем чужое назначение.
-      assigned_to: task.assigned_to ?? actor.id,
+      assigned_to:     task.assigned_to ?? actor.id,
+      started_by:      task.started_by ?? actor.id,
+      started_by_name: actor.name,
+      // Явное нажатие — сильный сигнал, в отличие от автостарта по раскрытию карточки (П2).
+      started_via:     'button',
     }
   }
 
@@ -51,6 +56,9 @@ export function buildTaskUpdate(
       completed_by:        actor.id,
       completed_by_name:   actor.name,
       assigned_to:         task.assigned_to ?? actor.id,
+      // Закрыл, ничего не начиная — начал он же. Уже известного начавшего не перетираем:
+      // этап могли начать в одну смену, а закрыть в другую.
+      ...(task.started_by ? {} : { started_by: actor.id, started_by_name: actor.name }),
     }
   }
 
@@ -74,6 +82,9 @@ export const UNSET_TASK_PATCH: Record<string, unknown> = Object.freeze({
   status:              'queued',
   completed_at:        null,
   started_at:          null,
+  started_by:          null,
+  started_by_name:     null,
+  started_via:         null,   // вернулась в очередь — прежний сигнал начала работы недействителен (П2)
   completed_by:        null,
   completed_by_name:   null,
   problem_at:          null,

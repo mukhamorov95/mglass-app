@@ -30,6 +30,16 @@ describe('buildTaskUpdate — исполнитель без лишних дей�
     expect(buildTaskUpdate('done', actor, started, NOW).started_at).toBe('2026-08-25T08:00:00.000Z')
   })
 
+  it('закрыл, ничего не начиная — начавшим считается он же', () => {
+    expect(buildTaskUpdate('done', actor, fresh, NOW).started_by).toBe('u-1')
+  })
+
+  it('уже известного начавшего не перетирает: начать могли в одну смену, закрыть в другую', () => {
+    const upd = buildTaskUpdate('done', actor, { ...fresh, started_by: 'u-2' }, NOW)
+    expect(upd.started_by).toBeUndefined()
+    expect(upd.completed_by).toBe('u-1')
+  })
+
   it('«Готово» снимает висящий андон', () => {
     expect(buildTaskUpdate('done', actor, fresh, NOW).problem_resolved_at).toBe(NOW)
   })
@@ -40,6 +50,8 @@ describe('buildTaskUpdate — исполнитель без лишних дей�
     expect(upd.assigned_to).toBe('u-1')
     expect(upd.started_at).toBe(NOW)
     expect(upd.completed_by).toBeUndefined()
+    expect(upd.started_via).toBe('button')   // явное нажатие — сильный сигнал (П2)
+    expect(upd.started_by).toBe('u-1')
   })
 
   it('проблема помнит, кто её поднял', () => {
@@ -73,6 +85,8 @@ describe('отметка со старых экранов и её отмена',
     expect(UNSET_TASK_PATCH.completed_by).toBeNull()
     expect(UNSET_TASK_PATCH.completed_by_name).toBeNull()
     expect(UNSET_TASK_PATCH.problem_by).toBeNull()
+    expect(UNSET_TASK_PATCH.started_by).toBeNull()
+    expect(UNSET_TASK_PATCH.started_via).toBeNull()   // прежний сигнал начала работы недействителен (П2)
     expect(UNSET_TASK_PATCH.status).toBe('queued')
   })
 })

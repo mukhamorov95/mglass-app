@@ -175,22 +175,22 @@ export default function MyQueuePage() {
     setViewMaster(prev => ((prev?.id ?? null) === (m?.id ?? null) ? prev : m))
   }, [])
 
-  async function markStart(taskId: number) {
-    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: 'in_progress' } : t))
-    await fetch(`/api/production-tasks/${taskId}`, {
-      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'start' }),
+  // Один вход на все старты (П2): и явное «Взял», и автостарт при раскрытии
+  // карточки. via отличает сильный сигнал от слабого — см. lib/production/start.ts.
+  function sendStart(taskIds: number[], via: 'button' | 'open', orderId: number | null) {
+    if (taskIds.length) setTasks(prev => prev.map(t => taskIds.includes(t.id) ? { ...t, status: 'in_progress' } : t))
+    return fetch('/api/production/start', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ task_ids: taskIds, order_id: orderId, via }),
     }).catch(() => {})
   }
 
+  async function markStart(taskId: number) {
+    await sendStart([taskId], 'button', tasks.find(t => t.id === taskId)?.order_id ?? null)
+  }
+
   async function markStartOrder(taskIds: number[]) {
-    setTasks(prev => prev.map(t => taskIds.includes(t.id) ? { ...t, status: 'in_progress' } : t))
-    await Promise.all(taskIds.map(id =>
-      fetch(`/api/production-tasks/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'start' }),
-      }).catch(() => {})
-    ))
+    await sendStart(taskIds, 'button', tasks.find(t => taskIds.includes(t.id))?.order_id ?? null)
   }
 
   async function markDone(taskId: number) {
@@ -295,6 +295,24 @@ export default function MyQueuePage() {
     if (t.blocked_by_task_id == null) return true
     const b = blockers.get(t.blocked_by_task_id)
     return b?.status === 'done'
+  }
+
+  // П2: раскрыл карточку заказа на своей станции — значит взялся за него.
+  // Кнопка «Взял» существует с 30.06 и за два месяца собрала 0 нажатий, поэтому
+  // сигнал берём из действия, которое рабочий и так делает, а кнопку оставляем жить.
+  // Без await и без блокировки UI: он пришёл посмотреть, что делать, а не отмечаться.
+  // Свёрнутая карточка задачу НЕ снимает — он мог свернуть список и продолжать работу;
+  // прежний автостарт снимет сервер, когда рабочий раскроет другой заказ.
+  const toggleOrder = (orderId: number) => {
+    const opening = !expanded.has(orderId)
+    setExpanded(prev => {
+      const n = new Set(prev)
+      if (n.has(orderId)) n.delete(orderId); else n.add(orderId)
+      return n
+    })
+    if (!opening) return
+    const ids = tasks.filter(t => t.order_id === orderId && t.status === 'queued' && isReady(t)).map(t => t.id)
+    sendStart(ids, 'open', orderId)
   }
 
   // Закрытые задачи держим в памяти только ради поиска — во всех счётчиках,
@@ -543,7 +561,7 @@ export default function MyQueuePage() {
                   tasks={byOrder.get(id) ?? []}
                   blockers={blockers}
                   open={expanded.has(id)}
-                  onToggle={() => setExpanded(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })}
+                  onToggle={() => toggleOrder(id)}
                   isReady={isReady}
                   onStart={markStart}
                   onStartAll={markStartOrder}
