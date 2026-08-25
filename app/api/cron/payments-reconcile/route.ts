@@ -120,10 +120,20 @@ export async function GET(req: NextRequest) {
   }
 
   // Б7: розница в ядро. Оплаты B2C живут галочками ведомости продаж, а не
-  // заказами: в orders одна строка на всю базу. Первый прогон бэкфиллит их
-  // (916 предоплат и 625 остатков на 25.08.2026 не имели строки в payments).
-  // Сделки, привязанные к B2B-заказу, пропускаем — их закрыл проход выше по
-  // ключу документа, повторная запись затёрла бы более точные данные заказа.
+  // заказами: в orders одна строка на всю базу.
+  // ВНИМАНИЕ: 925 из 926 розничных строк — историческая выгрузка из Google-
+  // таблицы (import_gsheet, 2024–2026, ~140 млн ₽), и CFO-сессия отметила её как
+  // недоверенный источник факта. Поэтому массовый бэкфилл истории в денежное
+  // ядро НЕ идёт в плановом ночном прогоне: он запускается только явно
+  // (?retail=1), чтобы владелец/backbone запустили его осознанно и сверили
+  // результат, а не обнаружили 140 млн в ядре наутро. Строки помечаются
+  // import_batch='reconcile' и source='reconcile_retail' — заливка обратима (void).
+  const doRetail = new URL(req.url).searchParams.get('retail') === '1'
+  if (!doRetail) {
+    const { count: liveOnly } = await svc.from('payments')
+      .select('*', { count: 'exact', head: true }).is('voided_at', null)
+    return NextResponse.json({ ok: true, ...stat, retail: 'skipped (add ?retail=1 to backfill)', corePayments: liveOnly })
+  }
   type SaleRow = {
     id: number; amount: number | null; prepayment: number | null; sale_date: string
     paid_remainder_at: string | null; prepayment_paid: boolean; remainder_paid: boolean
