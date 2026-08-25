@@ -13,6 +13,7 @@ import {
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
 import { auditKits } from '@/lib/configurator/audit'
+import { buildDataHealth } from '@/lib/configurator/dataHealth'
 import { CatalogPicker } from './CatalogPicker'
 
 // Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
@@ -108,7 +109,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [km, setKm] = useState(0)
   const [floors, setFloors] = useState(0)
   const [installFactors, setInstallFactors] = useState<string[]>([])
-  const [view, setView] = useState<'kit' | 'audit' | 'versions' | 'order'>('kit')
+  const [view, setView] = useState<'kit' | 'audit' | 'versions' | 'order' | 'health'>('kit')
   type OrderLine = { model: string; dims: { width: number; height: number; width2?: number; doorWidth?: number }; finishId: string }
   const [orderLines, setOrderLines] = useState<OrderLine[]>([])
   type Cut = { itemId: string; name: string; roleLabel: string; perItemBars: number; pooledBars: number; perItemCost: number; pooledCost: number; saving: number; offcutMm: number }
@@ -150,6 +151,14 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const audit = useMemo(
     () => (view === 'audit' ? auditKits(cur.library, cur.kits, cur.rates, finance[tier]) : null),
     [view, cur.library, cur.kits, cur.rates, finance, tier],
+  )
+  const health = useMemo(
+    () => (view === 'health' ? buildDataHealth(
+      { budget: { library: store.budget.library, kits: store.budget.kits, rates: store.budget.rates },
+        premium: { library: store.premium.library, kits: store.premium.kits, rates: store.premium.rates } },
+      finance,
+    ) : null),
+    [view, store, finance],
   )
 
   // В скольких моделях используется позиция — предупреждение, что правка цены общая.
@@ -383,11 +392,57 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
           <button onClick={() => setView('audit')} className={`px-4 py-2 ${view === 'audit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Аудит</button>
           <button onClick={() => { setView('versions'); if (!versions) loadVersions() }} className={`px-4 py-2 ${view === 'versions' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Версии прайса</button>
           <button onClick={() => setView('order')} className={`px-4 py-2 ${view === 'order' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Раскрой заказа</button>
+          <button onClick={() => setView('health')} className={`px-4 py-2 ${view === 'health' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Здоровье данных</button>
         </div>
         <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
           ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
         </button>
       </div>
+
+      {view === 'health' && health && (
+        <div className="space-y-4 max-w-[980px]">
+          <Card>
+            <div className="flex items-baseline gap-3">
+              <p className="text-[28px] font-semibold text-[#111110] leading-none">{health.sellableTotal}<span className="text-[#9a9a95] text-[18px]"> из {health.modelsTotal}</span></p>
+              <p className="text-[13px] text-[#6b6b66]">моделей продаются клиенту хотя бы в одном тарифе. Остальные показывают «по запросу».</p>
+            </div>
+          </Card>
+
+          {health.toFill.length > 0 && (
+            <Card title="Что завести владельцу — по влиянию">
+              {health.toFill.map(t => (
+                <div key={t.key} className="flex items-start gap-2 py-1.5 border-b border-[#f4f4f0] last:border-0 text-[13px]">
+                  <span className="text-[10px] uppercase text-[#a0a09a] w-16 shrink-0 mt-0.5">{t.tier === 'budget' ? 'Бюджет' : 'Премиум'}</span>
+                  <span className="text-[#111110] flex-1">{t.title}</span>
+                  {t.impact > 0 && <span className="text-[#9a5a2a] shrink-0">задевает {t.impact} мод.{t.affects.length <= 6 ? ` (${t.affects.join(', ')})` : ''}</span>}
+                </div>
+              ))}
+            </Card>
+          )}
+
+          {health.tiers.map(th => (
+            <Card key={th.tier} title={`${th.tier === 'budget' ? 'Бюджет' : 'Премиум'} · ${th.ready} из ${th.total} продаются`}>
+              {th.empty && <p className="text-[13px] text-[#b04a3f]">Тариф пуст — ни одной позиции. Клиент везде увидит «по запросу».</p>}
+              {!th.empty && (
+                <div className="grid grid-cols-2 gap-x-6">
+                  {th.models.map(m => (
+                    <div key={m.code} className="flex items-center gap-2 py-1 text-[13px]">
+                      <span className={m.sellable ? 'text-[#256029]' : 'text-[#b04a3f]'}>{m.sellable ? '✅' : '⛔'}</span>
+                      <span className="font-mono text-[#111110] w-10">{m.code}</span>
+                      <span className="text-[#6b6b66] truncate flex-1">{m.name}</span>
+                      <span className="font-mono text-[12px] shrink-0">{m.sellable ? `от ${rub(m.priceFrom ?? 0)}` : <span className="text-[#9a5a2a]">по запросу · {m.gaps}</span>}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          ))}
+          <p className="text-[11px] text-[#9a9a95] px-1">
+            Полнота данных — это отчёт, а не ошибка кода: пустой премиум или незаведённые ролики CI не ломают.
+            Себестоимость видна только owner/buyer — эта страница под ролью.
+          </p>
+        </div>
+      )}
 
       {view === 'order' && (
         <div className="space-y-4 max-w-[900px]">
