@@ -168,6 +168,9 @@ export type KitSlot = {
 }
 export type ModelKit = {
   slots: KitSlot[]
+  // Своя маржа модели: стационарная стенка и душевая под ключ не обязаны иметь одну.
+  // Пусто → маржа тарифа из financial_settings.
+  margin?: number
   // Роли, которые геометрия требует, а в изделии их осознанно НЕТ (владелец так собирает).
   // Без этого списка удалённая роль вечно висела бы предупреждением «нет позиции».
   excluded?: RoleId[]
@@ -375,6 +378,8 @@ export type KitPriceResult = {
   total: number
   marginPct: number
   taxPct: number
+  marginSource: 'модель' | 'тариф'
+  belowMin: boolean            // маржа ниже минимально допустимой — продавать нельзя
   missing: { role: RoleId; label: string; reason: 'нет позиции' | 'нет цены' | 'кусок длиннее хлыста' }[]
   complete: boolean
 }
@@ -415,7 +420,7 @@ export function computeKitPrice(
   lib: Library,
   kit: ModelKit,
   rates: KitRates,
-  finance: { marginPct: number; taxPct: number },
+  finance: { marginPct: number; taxPct: number; minMarginPct?: number },
   opts: KitOptions = {},
 ): KitPriceResult {
   const glassType = opts.glassType ?? 'clear'
@@ -490,7 +495,9 @@ export function computeKitPrice(
 
   const hardwareCost = lines.reduce((s, l) => s + l.total, 0)
   const materialsCost = glassCost + hardwareCost
-  const fm = calcFinancialModel({ directCost: materialsCost, marginPercent: finance.marginPct, taxPercent: finance.taxPct })
+  // Маржа модели важнее маржи тарифа; налог всегда общий (это не предмет торга).
+  const marginPct = Number.isFinite(kit.margin) && (kit.margin as number) > 0 ? (kit.margin as number) : finance.marginPct
+  const fm = calcFinancialModel({ directCost: materialsCost, marginPercent: marginPct, taxPercent: finance.taxPct })
   const itemPrice = fm?.finalPrice ?? 0
   const installCost = rates.installPerSection * q.sections
   const deliveryCost = opts.withDelivery === false ? 0 : rates.deliveryMoscow
@@ -500,7 +507,9 @@ export function computeKitPrice(
     glassCost, lines, hardwareCost, materialsCost, itemPrice,
     sections: q.sections, installCost, deliveryCost, liftCost,
     total: itemPrice + installCost + deliveryCost + liftCost,
-    marginPct: finance.marginPct, taxPct: finance.taxPct,
+    marginPct, taxPct: finance.taxPct,
+    marginSource: marginPct === finance.marginPct ? 'тариф' : 'модель',
+    belowMin: marginPct < (finance.minMarginPct ?? 0),
     missing, complete: missing.length === 0,
   }
 }

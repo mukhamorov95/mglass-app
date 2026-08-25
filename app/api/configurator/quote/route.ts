@@ -3,7 +3,8 @@ import { createClient } from '@/lib/supabase-server'
 import { getKitStore } from '@/lib/configurator/kitStore'
 import { getModel, M_MODELS } from '@/lib/configurator/arrangement'
 import { computeKitQuantities, computeKitPrice, type RoleId } from '@/lib/configurator/kit'
-import { clientPriceFrom, DEFAULT_FINANCE, type Tier } from '@/lib/configurator/pricing'
+import { clientPriceFrom, type Tier } from '@/lib/configurator/pricing'
+import { getFinance } from '@/lib/configurator/financeStore'
 import { buildWithVariant, type QuoteRequest, type QuoteResponse } from '@/lib/configurator/quoteContract'
 
 // Серверный расчёт цены визуализатора по КОМПЛЕКТУ модели. Себестоимость и ставки не
@@ -18,10 +19,10 @@ export async function POST(req: NextRequest) {
   const thickness = body.thickness ?? 8
   const model = getModel(body.model)
 
-  const { library, rates, kits } = await getKitStore(tier)
+  const [{ library, rates, kits }, finance] = await Promise.all([getKitStore(tier), getFinance(tier)])
   const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
   const q = computeKitQuantities(assembly, thickness, model, rates.capMargin)
-  const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, DEFAULT_FINANCE, {
+  const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, finance, {
     glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors,
     choice: body.choice as Partial<Record<RoleId, string>> | undefined,
     qtyChoice: body.qtyChoice as Partial<Record<RoleId, number>> | undefined,
