@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
@@ -109,6 +109,9 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [choice, setChoice] = useState<Record<string, string>>({})       // роль → itemId позиции
   const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({}) // роль → количество (петли 2/3)
   const [m1var, setM1var] = useState<MVariant>({ mount: 'perp90', profileFrame: 'partial' })
+  // Фотореалистичный кадр: скриншот сцены → сервер (Gemini img2img) → журнальный рендер.
+  const sceneRef = useRef<HTMLDivElement>(null)
+  const [photo, setPhoto] = useState<{ loading: boolean; image?: string; error?: string } | null>(null)
   const isM1 = code === 'М1'
   const mVariant = useMemo<MVariant>(() => (isM1 ? m1var : {}), [isM1, m1var])
 
@@ -187,6 +190,32 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const rub = (n: number) => `${n.toLocaleString('ru-RU')} ₽`
   const c = model.constraints
 
+  // Кадр WebGL-сцены → сервер. preserveDrawingBuffer включён, frameloop always —
+  // в canvas всегда свежий кадр, поэтому берём его напрямую (JPEG, чтобы влезть в лимит тела).
+  async function makePhoto() {
+    const canvas = sceneRef.current?.querySelector('canvas')
+    if (!canvas) { setPhoto({ loading: false, error: 'Сцена ещё не загрузилась' }); return }
+    setPhoto({ loading: true })
+    try {
+      const shot = canvas.toDataURL('image/jpeg', 0.92)
+      const res = await fetch('/api/configurator/photoreal', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          image: shot,
+          config: {
+            model: `${model.code} ${model.name}`, width: dims.width, height: dims.height,
+            glass: glass.label, finish: finish.label,
+          },
+        }),
+      })
+      const d = await res.json().catch(() => null)
+      if (!res.ok || !d?.image) { setPhoto({ loading: false, error: d?.error ?? 'Не удалось создать вид' }); return }
+      setPhoto({ loading: false, image: d.image })
+    } catch {
+      setPhoto({ loading: false, error: 'Не удалось создать вид' })
+    }
+  }
+
   function sendLead() {
     const payload = {
       type: 'mglass-shower-config' as const,
@@ -253,11 +282,11 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
 
         {/* ── 3D (всегда виден, на мобильном — первым) ── */}
         <div className="order-1 lg:order-none min-w-0 lg:sticky lg:top-4 space-y-2">
-          <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
+          <div ref={sceneRef} className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
               finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant} />
           </div>
-          <div className="flex items-center justify-center gap-3">
+          <div className="flex items-center justify-center gap-3 flex-wrap">
             <p className="text-[12px] text-[#9a9a95]">
               {model.code} · {model.name}{att ? ` · дверь на ${att === 'стена' ? 'стене' : 'стекле'}` : ''}
             </p>
@@ -267,7 +296,14 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
                 {doorOpen ? 'Закрыть дверь' : 'Открыть дверь'}
               </button>
             )}
+            <button onClick={makePhoto} disabled={photo?.loading}
+              className={`text-[12px] font-medium rounded-lg px-3 py-1 border ${
+                photo?.loading ? 'border-[#e4e4e0] text-[#9a9a95]' : 'border-[#111110] bg-[#111110] text-white hover:bg-[#2a2a28]'
+              }`}>
+              {photo?.loading ? 'Создаём вид…' : '✨ Фотореалистичный вид'}
+            </button>
           </div>
+          {photo?.error && <p className="text-center text-[12px] text-[#9a5a2a]">{photo.error}</p>}
         </div>
 
         {/* ── Параметры + спецификация + цена ── на мобильном последним */}
@@ -448,6 +484,33 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           )}
         </div>
       </div>
+
+      {/* Фотореалистичный вид — результат */}
+      {photo?.image && (
+        <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4" onClick={() => setPhoto(null)}>
+          <div className="bg-white rounded-2xl max-w-[900px] w-full max-h-[90vh] flex flex-col overflow-hidden shadow-xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-3 border-b border-[#e4e4e0]">
+              <div>
+                <p className="text-[14px] font-semibold text-[#111110]">Фотореалистичный вид</p>
+                <p className="text-[11px] text-[#9a9a95]">{model.code} · {model.name} · {dims.width}×{dims.height} мм · {glass.label} · {finish.label}</p>
+              </div>
+              <button onClick={() => setPhoto(null)} className="text-[#9a9a95] hover:text-[#111110] text-[20px] leading-none">×</button>
+            </div>
+            <div className="overflow-auto p-3">
+              {/* eslint-disable-next-line @next/next/no-img-element -- data:URL из генерации, next/image не применим */}
+              <img src={photo.image} alt="Фотореалистичный вид душевой" className="w-full h-auto rounded-lg" />
+            </div>
+            <div className="flex items-center justify-between gap-3 px-4 py-3 border-t border-[#e4e4e0]">
+              <p className="text-[11px] text-[#9a9a95]">Иллюстрация. Точные размеры и комплектация — в расчёте.</p>
+              <div className="flex gap-2 shrink-0">
+                <button onClick={makePhoto} className="text-[12px] font-medium border border-[#e4e4e0] rounded-lg px-3 py-1.5 hover:border-[#111110]">Ещё вариант</button>
+                <a href={photo.image} download={`mglass-${model.code}-${dims.width}x${dims.height}.png`}
+                  className="text-[12px] font-medium bg-[#111110] text-white rounded-lg px-3 py-1.5 hover:bg-[#2a2a28]">Скачать</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
