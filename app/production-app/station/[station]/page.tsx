@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import ProductionTabs from '@/components/ProductionTabs'
+import { SheetSVG } from '@/components/SheetSVG'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import {
   runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS,
@@ -26,8 +27,23 @@ type Item = {
   hasTriplex?: boolean; triplexLayers?: number
   triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
 }
-type OrderRow = { id: number; client_name: string; custom_number: string | null; items: Item[] }
+type OrderRow = { id: number; client_name: string; custom_number: string | null; items: Item[]; notes: string | null; launched_at: string | null }
 type MatRow = { name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; pattern_direction: string | null }
+
+// А4: срок отгрузки заказа (из А1). Партия кроится по срочности, а не по числу листов.
+function addWorkingDays(from: Date, days: number): Date {
+  const d = new Date(from); let left = days
+  while (left > 0) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) left-- }
+  return d
+}
+function orderDeadlineMs(o: OrderRow): number | null {
+  let n: Record<string, unknown> = {}
+  try { n = o.notes ? JSON.parse(o.notes) : {} } catch {}
+  const dd = n.deadline_date
+  if (typeof dd === 'string' && dd) return new Date(dd).getTime()
+  if (o.launched_at) return addWorkingDays(new Date(o.launched_at), 15).getTime()
+  return null
+}
 
 type Batch = {
   key: string
@@ -37,6 +53,7 @@ type Batch = {
   result: MaterialCuttingResult | null      // только для резки
   orders: { orderId: number; number: string; client: string; taskId: number; size: string; qty: number }[]
   taskIds: number[]
+  minDeadlineMs: number | null              // самый ранний срок среди заказов партии
 }
 
 export default function StationBatchesPage() {
@@ -72,7 +89,7 @@ export default function StationBatchesPage() {
 
     const orderIds = [...new Set(tasks.map(t => t.order_id))]
     const [{ data: orderRows }, { data: matRows }, { data: cfg }, { data: poRows }] = await Promise.all([
-      sb.from('b2b_orders').select('id,client_name,custom_number,items').in('id', orderIds).gte('created_at', PROD_SINCE),
+      sb.from('b2b_orders').select('id,client_name,custom_number,items,notes,launched_at').in('id', orderIds).gte('created_at', PROD_SINCE),
       isCutting ? sb.from('b2b_materials').select('name,thickness,sheet_width,sheet_height,pattern_direction').eq('active', true) : Promise.resolve({ data: [] as MatRow[] }),
       isCutting ? sb.from('cutting_settings').select('*').eq('id', 1).single() : Promise.resolve({ data: null }),
       // Заявки на материал по этим заказам (для гейта резки по приходу материала)
@@ -100,7 +117,7 @@ export default function StationBatchesPage() {
     const settings: CuttingSettings = { ...DEFAULT_CUTTING_SETTINGS, ...(cfg ?? {}) }
 
     const groups = new Map<string, PieceGroup>()
-    const meta = new Map<string, { orders: Batch['orders']; area: number }>()
+    const meta = new Map<string, { orders: Batch['orders']; area: number; minDeadlineMs: number | null }>()
     // Каждая задача — конкретное стекло: у триплекса задачи разложены ПО СЛОЯМ ещё при
     // запуске в производство (layer 1..N), слой задачи определяет материал/толщину.
     for (const t of tasks) {
@@ -121,7 +138,7 @@ export default function StationBatchesPage() {
           sheetWidth: mat?.sheet_width ?? 3210, sheetHeight: mat?.sheet_height ?? 2250,
           patternDirection: (mat?.pattern_direction ?? 'none') as PieceGroup['patternDirection'],
         })
-        meta.set(key, { orders: [], area: 0 })
+        meta.set(key, { orders: [], area: 0, minDeadlineMs: null })
       }
       const g = groups.get(key)!
       const m = meta.get(key)!
@@ -131,6 +148,8 @@ export default function StationBatchesPage() {
       }
       m.area += (item.width * item.height * qty) / 1_000_000
       m.orders.push({ orderId: order.id, number: order.custom_number?.trim() || `#${order.id}`, client: order.client_name, taskId: t.id, size: `${item.width}×${item.height}${t.layer_note ? ` · ${t.layer_note}` : ''}`, qty })
+      const dl = orderDeadlineMs(order)
+      if (dl != null) m.minDeadlineMs = m.minDeadlineMs == null ? dl : Math.min(m.minDeadlineMs, dl)
     }
 
     const results = isCutting ? runCuttingOptimizer(groups, settings) : []
@@ -141,8 +160,15 @@ export default function StationBatchesPage() {
       return {
         key, label: g.materialLabel, totalPieces: g.pieces.length, totalAreaM2: m.area,
         result: resByKey.get(key) ?? null, orders: m.orders, taskIds: [...new Set(m.orders.map(o => o.taskId))],
+        minDeadlineMs: m.minDeadlineMs,
       }
-    }).sort((a, b) => (b.result?.sheetsNeeded ?? b.totalPieces) - (a.result?.sheetsNeeded ?? a.totalPieces))
+      // А4: сначала самое срочное по сроку отгрузки; при равенстве — крупные партии
+      // (больше листов) вперёд. Заказы без срока — в конец.
+    }).sort((a, b) => {
+      const ad = a.minDeadlineMs ?? Infinity, bd = b.minDeadlineMs ?? Infinity
+      if (ad !== bd) return ad - bd
+      return (b.result?.sheetsNeeded ?? b.totalPieces) - (a.result?.sheetsNeeded ?? a.totalPieces)
+    })
 
     setBatches(out)
     setLoading(false)
@@ -201,7 +227,18 @@ export default function StationBatchesPage() {
             <div key={b.key} className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
               <div className="px-4 py-3 flex items-center justify-between gap-3">
                 <button className="min-w-0 text-left flex-1" onClick={() => setExpanded(p => { const n = new Set(p); n.has(b.key) ? n.delete(b.key) : n.add(b.key); return n })}>
-                  <p className="text-[15px] font-bold text-[#111110] truncate">{b.label}</p>
+                  <p className="text-[15px] font-bold text-[#111110] truncate flex items-center gap-2">
+                    <span className="truncate">{b.label}</span>
+                    {(() => {
+                      const dm = b.minDeadlineMs
+                      if (dm == null) return null
+                      const start = new Date(); start.setHours(0, 0, 0, 0)
+                      const days = Math.floor((dm - start.getTime()) / 86_400_000)
+                      const cls = days < 0 ? 'bg-red-100 text-red-700' : days <= 1 ? 'bg-orange-100 text-orange-700' : days <= 3 ? 'bg-amber-100 text-amber-700' : 'bg-[#eef0ee] text-[#6b6b66]'
+                      const txt = days < 0 ? `просрочено ${-days} дн` : days === 0 ? 'сегодня' : days === 1 ? 'завтра' : `${days} дн`
+                      return <span className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded ${cls}`}>⏱ {txt}</span>
+                    })()}
+                  </p>
                   <p className="text-[12px] text-[#6b6b66]">
                     {b.result ? <><b className="text-blue-700">{b.result.sheetsNeeded}</b> листов · </> : null}
                     {b.totalPieces} деталей · {b.totalAreaM2.toFixed(2)} м² · из {b.orders.length} строк
@@ -215,7 +252,19 @@ export default function StationBatchesPage() {
                 </button>
               </div>
               {isOpen && (
-                <div className="border-t border-[#f0f0ec] divide-y divide-[#f8f8f7]">
+                <div className="border-t border-[#f0f0ec]">
+                  {isCutting && b.result && b.result.sheets.length > 0 && (
+                    <div className="px-4 py-3 space-y-3 bg-[#fafaf9] border-b border-[#f0f0ec]">
+                      <p className="text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Карта раскроя · {b.result.sheetsNeeded} лист(ов)</p>
+                      {b.result.sheets.map((sheet, si) => (
+                        <div key={si}>
+                          <p className="text-[11px] text-[#6b6b66] mb-1">Лист {si + 1} · КПД {sheet.efficiency}%</p>
+                          <SheetSVG sheet={sheet} sheetW={b.result!.sheetWidth} sheetH={b.result!.sheetHeight} edgeMargin={DEFAULT_CUTTING_SETTINGS.edge_margin} />
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <div className="divide-y divide-[#f8f8f7]">
                   {b.orders.map((o, i) => {
                     const waitMat = matPending.has(o.orderId)
                     return (
@@ -231,6 +280,7 @@ export default function StationBatchesPage() {
                       </button>
                     </div>
                   )})}
+                  </div>
                 </div>
               )}
             </div>

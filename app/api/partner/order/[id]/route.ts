@@ -84,6 +84,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const history = Array.isArray(pn.status_history) ? pn.status_history : []
   const drawingUrl = typeof pn.drawing_url === 'string' && pn.drawing_url ? `/api/b2b/drawing/${o.id}` : null
 
+  // Статус оплаты для партнёра: paid — оплачен (payment_status или этап invoice_paid);
+  // awaiting — заказ в работе/отгружен, но оплата ещё не отмечена; null — просчёт.
+  const paid = pn.payment_status === 'paid' || typeof stages.invoice_paid === 'string' || stages.invoice_paid === true
+  const paymentStatus: 'paid' | 'awaiting' | null = paid ? 'paid' : (launched ? 'awaiting' : null)
+
   return NextResponse.json({
     id: o.id,
     number: (o.custom_number as string | null)?.trim() || `#${o.id}`,
@@ -101,6 +106,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     ready: packed && !shipped,
     progressPct: (lane === 'in_work' || lane === 'shipped') ? Math.round((doneN / LANE.length) * 100) : 0,
     deadline,
+    paymentStatus,
     total: Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0),
     items,
     timeline,

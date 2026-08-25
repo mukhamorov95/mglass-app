@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import Link from 'next/link'
 
 // Добавь id нового раздела — он подсветится жёлтым до первого прочтения
 const NEW_ITEMS = [
@@ -287,8 +288,10 @@ export default function GuidePage() {
 
         <NewSection id="kpi" title="📊 KPI — Показатели работы" acked={acked} onAck={acknowledge}>
           <div className="bg-blue-50 border border-blue-100 rounded-lg px-4 py-3 mb-3">
-            <p className="text-[12px] font-semibold text-blue-700">🔧 Раздел KPI в системе находится в разработке.</p>
-            <p className="text-[11px] text-blue-600 mt-0.5">Ниже — плановые показатели для самоконтроля.</p>
+            <p className="text-[12px] font-semibold text-blue-700">📊 Живые показатели — в дашбордах.</p>
+            <p className="text-[11px] text-blue-600 mt-0.5">
+              Факт по выручке, конверсии и марже: <Link href="/ceo" className="underline font-medium">/ceo</Link> · <Link href="/manager-dashboard" className="underline font-medium">/manager-dashboard</Link> · <Link href="/commercial" className="underline font-medium">/commercial</Link>. Ниже — плановые ориентиры для самоконтроля.
+            </p>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
