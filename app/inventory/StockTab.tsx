@@ -124,6 +124,11 @@ export default function StockTab({ items, canWrite, canSeeCost, reload }: Props)
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums">
                         {describeQty(i.qty, i.unit, i.pack_label, i.pack_size)}
+                        {i.qty_reserved > 0 && (
+                          <div className="text-[11px] text-[#9a9a95]">
+                            резерв {i.qty_reserved} · свободно {Math.round((i.qty - i.qty_reserved) * 10000) / 10000}
+                          </div>
+                        )}
                       </td>
                       <td className="px-3 py-2">
                         <input className={`${INPUT} w-full text-right`} disabled={!canWrite} inputMode="decimal"
