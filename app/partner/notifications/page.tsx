@@ -10,6 +10,7 @@ type Item = { id: number; kind: string; title: string; body: string | null; link
 
 const ICON: Record<string, string> = {
   access: '👋', submitted: '📨', in_work: '🏭', ready: '✅', shipped: '🚚', recalc: '✎',
+  drawing_approved: '📐', drawing_rework: '✎',
 }
 const fmt = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
 

@@ -6,6 +6,7 @@ import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
 import type { FacetPrice, B2BOrderItem } from '@/lib/b2bCalculator'
 import type { SurchargeRule } from '@/lib/surcharges'
 import type { B2BMaterial, B2BService } from '@/lib/types'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Партнёрский просчёт. КРИТИЧНО: считает СЕРВЕР через ЕДИНЫЙ движок computeQuoteItem —
 // тот же, что у менеджера (/calculator/b2b). Включает авто-надбавки за габариты/
@@ -38,7 +39,7 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Не авторизован' }, { status: 401 })
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
-  const { data: client } = await svc.from('b2b_clients').select('id,name,discount_percent').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
   if (!client) return NextResponse.json({ error: 'Аккаунт не привязан' }, { status: 403 })
 
   const body = await req.json().catch(() => ({}))

@@ -3,6 +3,7 @@ import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import type { B2BMaterial } from '@/lib/types'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Справочники для партнёрского калькулятора. Отдаём ТОЛЬКО безопасные поля:
 // материалы (id/имя/категория/толщина/цена продажи), опции фацета (мм + цена),
@@ -16,7 +17,7 @@ export async function GET() {
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  const { data: client } = await svc.from('b2b_clients').select('id,name,discount_percent').eq('user_id', user.id).maybeSingle()
+  const client = await resolvePartnerClient<{ id: number; name: string; discount_percent: number | null }>(svc, user.id, 'id,name,discount_percent')
   if (!client) return NextResponse.json({ linked: false, materials: [], facetOptions: [], surcharges: [] })
 
   const [{ data: mats }, { data: matrix }, { data: facets }, { data: surchargeData }] = await Promise.all([

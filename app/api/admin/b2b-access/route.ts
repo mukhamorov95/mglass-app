@@ -26,17 +26,29 @@ export async function GET() {
   const a = admin()
   const { data: clients } = await a.from('b2b_clients')
     .select('id,name,user_id,discount_percent,active').order('name')
+  const { data: members } = await a.from('b2b_client_members').select('client_id,user_id')
 
-  const linkedIds = (clients ?? []).map(c => c.user_id).filter(Boolean) as string[]
+  // Собираем email по всем причастным учёткам (первичные + участники команды).
+  const allIds = [
+    ...(clients ?? []).map(c => c.user_id).filter(Boolean) as string[],
+    ...(members ?? []).map(m => m.user_id as string),
+  ]
   let emails: Record<string, string> = {}
-  if (linkedIds.length) {
-    const { data: us } = await a.from('users').select('id,email').in('id', linkedIds)
+  if (allIds.length) {
+    const { data: us } = await a.from('users').select('id,email').in('id', [...new Set(allIds)])
     emails = Object.fromEntries((us ?? []).map(u => [u.id as string, u.email as string]))
+  }
+  const membersByClient = new Map<number, { userId: string; email: string | null }[]>()
+  for (const m of members ?? []) {
+    const list = membersByClient.get(m.client_id as number) ?? []
+    list.push({ userId: m.user_id as string, email: emails[m.user_id as string] ?? null })
+    membersByClient.set(m.client_id as number, list)
   }
 
   const rows = (clients ?? []).map(c => ({
     id: c.id, name: c.name, discount: c.discount_percent, active: c.active,
     linked: !!c.user_id, email: c.user_id ? (emails[c.user_id as string] ?? null) : null,
+    members: membersByClient.get(c.id) ?? [],
   }))
   return NextResponse.json({ clients: rows })
 }
@@ -56,6 +68,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true })
   }
 
+  // A6: убрать сотрудника из команды компании (удаляем членство, учётку не трогаем).
+  if (body.action === 'remove_member') {
+    const clientId = Number(body.clientId)
+    const memberId = String(body.userId ?? '')
+    if (!clientId || !memberId) return NextResponse.json({ error: 'Нужны клиент и сотрудник' }, { status: 400 })
+    const { error } = await a.from('b2b_client_members').delete().eq('client_id', clientId).eq('user_id', memberId)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
   // Разрешить/запретить клиенту самому скачивать счёт-спецификацию (после проверки паритета).
   if (body.action === 'set_self_invoice') {
     const clientId = Number(body.clientId)
@@ -70,7 +92,7 @@ export async function POST(req: Request) {
   if (!clientId || !email) return NextResponse.json({ error: 'Нужны клиент и email' }, { status: 400 })
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return NextResponse.json({ error: 'Некорректный email' }, { status: 400 })
 
-  const { data: client } = await a.from('b2b_clients').select('id,name').eq('id', clientId).maybeSingle()
+  const { data: client } = await a.from('b2b_clients').select('id,name,user_id').eq('id', clientId).maybeSingle()
   if (!client) return NextResponse.json({ error: 'Клиент не найден' }, { status: 404 })
 
   // Учётка: создаём новую или находим существующую по email.
@@ -85,11 +107,27 @@ export async function POST(req: Request) {
     userId = created.user.id
   }
 
+  // Изоляция: один логин = ровно одна компания. Если email уже привязан к ДРУГОЙ
+  // компании (как первичный или участник) — отказываем, чтобы не смешать данные.
+  const { data: otherPrimary } = await a.from('b2b_clients').select('id').eq('user_id', userId).neq('id', clientId).maybeSingle()
+  const { data: otherMember } = await a.from('b2b_client_members').select('client_id').eq('user_id', userId).maybeSingle()
+  if (otherPrimary || (otherMember && otherMember.client_id !== clientId)) {
+    return NextResponse.json({ error: 'Этот email уже привязан к другой компании' }, { status: 400 })
+  }
+
   // Роль partner + имя (строка public.users создаётся триггером handle_new_user при createUser).
   await a.from('users').update({ role: 'partner', name: client.name }).eq('id', userId)
-  // Привязка карточки клиента к учётке — ядро изоляции кабинета.
-  const { error: linkErr } = await a.from('b2b_clients').update({ user_id: userId }).eq('id', clientId)
-  if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 500 })
+
+  // A6: первый доступ → первичный владелец (b2b_clients.user_id). Последующие → участники команды.
+  const asMember = !!client.user_id && client.user_id !== userId
+  if (asMember) {
+    const { error: memErr } = await a.from('b2b_client_members').upsert(
+      { client_id: clientId, user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true })
+    if (memErr) return NextResponse.json({ error: memErr.message }, { status: 500 })
+  } else if (!client.user_id) {
+    const { error: linkErr } = await a.from('b2b_clients').update({ user_id: userId }).eq('id', clientId)
+    if (linkErr) return NextResponse.json({ error: linkErr.message }, { status: 500 })
+  }
 
   const token = await createSetupToken(userId)
   const base = (process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin).replace(/\/$/, '')
@@ -102,5 +140,5 @@ export async function POST(req: Request) {
   }).catch(() => {})
   const emailed = await notifyPartnerAccessGranted({ to: email, clientName: client.name, setupLink }).catch(() => false)
 
-  return NextResponse.json({ ok: true, link: setupLink, emailed })
+  return NextResponse.json({ ok: true, link: setupLink, emailed, member: asMember })
 }

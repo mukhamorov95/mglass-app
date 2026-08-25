@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { resolvePartnerClient } from '@/lib/partnerClient'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
@@ -44,10 +45,9 @@ export async function GET() {
 
   const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
-  // Привязанный клиент. Ошибка (нет колонки user_id) или отсутствие строки → «не привязан».
-  const { data: client, error: cErr } = await svc
-    .from('b2b_clients').select('id,name').eq('user_id', user.id).maybeSingle()
-  if (cErr || !client) return NextResponse.json({ linked: false, client: null, orders: [] })
+  // Привязанный клиент (первичный владелец ИЛИ участник команды). Нет → «не привязан».
+  const client = await resolvePartnerClient<{ id: number; name: string }>(svc, user.id, 'id,name')
+  if (!client) return NextResponse.json({ linked: false, client: null, orders: [] })
 
   // Все состояния: просчёт → отправлен в работу → в работе → отгружен.
   // Партнёр видит и просчёты, которые мы сделали для него.
