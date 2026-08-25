@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createServiceClient } from '@/lib/supabase-service'
 
 // Б8: скан/квитанция к операции ДДС. Бакет приватный (тот же, что у заявок),
 // поэтому файл отдаём подписанной ссылкой на 5 минут, а не публичным URL.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 const BUCKET = 'b2b-attachments'
 const MAX_BYTES = 15 * 1024 * 1024
 
