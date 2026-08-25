@@ -307,6 +307,7 @@ const ADMIN_B2B: NavEntry[] = [
   { href: '/admin/b2b-services',     label: 'Услуги',            icon: '🔧' },
   { href: '/admin/b2b-materials',    label: 'Материалы',         icon: '🪟' },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️' },
+  { href: '/admin/margin-audit',     label: 'Аудит маржи',       icon: '📉' },
   { href: '/admin/archive',          label: 'Архив расчётов',    icon: '📁' },
   { href: '/admin/ai-b2b-quote',     label: 'AI B2B Quote',      icon: '⚡' },
 ]
