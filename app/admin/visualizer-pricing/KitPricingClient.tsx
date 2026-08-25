@@ -11,7 +11,24 @@ import {
   ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
+import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { CatalogPicker } from './CatalogPicker'
+
+// Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
+// но название поставщика бывает неочевидным — тогда владелец задаёт форму руками.
+const SHAPES: { id: string; label: string }[] = [
+  { id: 'hinge-glass', label: 'Петля стекло-стекло' },
+  { id: 'hinge-wall', label: 'Петля стекло-стена' },
+  { id: 'handle-bar', label: 'Ручка-скоба' },
+  { id: 'handle-knob', label: 'Ручка-кноб' },
+  { id: 'handle-inset', label: 'Ручка-купе врезная' },
+  { id: 'roller', label: 'Ролик' },
+  { id: 'mount-glass', label: 'Крепление к стеклу' },
+  { id: 'mount-wall', label: 'Крепление к стене' },
+  { id: 'mount-corner', label: 'Крепление угловое' },
+  { id: 'connector', label: 'Соединитель' },
+  { id: 'cap', label: 'Заглушка' },
+]
 
 // Прайс душевых: слева модель → справа ЕЁ комплект. Цена позиции живёт в библиотеке
 // тарифа (правится один раз), комплект модели держит порядок вариантов, ★ по умолчанию
@@ -112,6 +129,31 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const removeEntry = (si: number, ei: number) => editKit(k => { k.slots[si].entries.splice(ei, 1) })
   const setQtyRule = (si: number, ei: number, qty: QtyRule) => editKit(k => { k.slots[si].entries[ei].qty = qty })
   const resetKit = () => edit(s => { s.kits[code] = defaultKitFor(model, s.library) })
+  const setShape = (id: string, shape: string) => editItem(id, i => { if (shape) i.shape = shape; else delete i.shape })
+
+  // Позиция нужна не одной модели: добавляем её в комплект всех моделей, где эта роль есть.
+  function applyToAllModels(itemId: string, role: RoleId) {
+    edit(s => {
+      for (const m of M_MODELS) {
+        const k = s.kits[m.code] ?? defaultKitFor(getModel(m.code), s.library)
+        const slot = k.slots.find(sl => sl.role === role)
+        if (!slot || slot.entries.some(e => e.itemId === itemId)) continue
+        slot.entries.push({ itemId, qty: { mode: 'role' }, ...(slot.entries.length === 0 ? { primary: true } : {}) })
+        s.kits[m.code] = k
+      }
+    })
+  }
+
+  // Второй тариф начинают не с нуля: переносим библиотеку и комплекты, дальше правятся цены.
+  function copyFromOtherTier() {
+    const other: Tier = tier === 'budget' ? 'premium' : 'budget'
+    setStore(prev => {
+      const next = structuredClone(prev)
+      next[tier] = { ...next[tier], library: structuredClone(prev[other].library), kits: structuredClone(prev[other].kits) }
+      return next
+    })
+    setDirty(true); setMsg(null)
+  }
 
   // ── пикер справочника: позиция уезжает в библиотеку с ролью слота ──
   const [picker, setPicker] = useState<{ si: number; itemId?: string } | null>(null)
@@ -200,9 +242,14 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
         </div>
       </div>
 
-      <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium mb-5">
-        <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
-        <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+      <div className="flex items-center gap-3 mb-5">
+        <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
+          <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
+          <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+        </div>
+        <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
+          ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start">
@@ -403,8 +450,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                         </div>
                       )}
 
-                      <div className="flex items-center gap-2 pl-2 pt-0.5">
+                      <div className="flex flex-wrap items-center gap-2 pl-2 pt-0.5">
                         <QtyRuleEditor rule={e.qty} onChange={r => setQtyRule(si, ei, r)} />
+                        {meta.kind === 'piece' && (
+                          <select value={it.shape ?? ''} onChange={ev => setShape(it.id, ev.target.value)}
+                            title="Как позиция выглядит в 3D у клиента"
+                            className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
+                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === inferShape(it.name))?.label ?? 'по названию'})</option>
+                            {SHAPES.map(sh => <option key={sh.id} value={sh.id}>вид: {sh.label}</option>)}
+                          </select>
+                        )}
+                        <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
+                          className="text-[11px] text-[#4b6ea9] hover:underline">во все модели</button>
                         {used > 1 && <span className="text-[10px] text-[#b09a6a]" title="Цена общая для всех моделей">в {used} моделях</span>}
                         {it.ref && <span className="text-[10px] text-[#8a9a7a] truncate">🔗 {it.ref.label ?? it.ref.base}</span>}
                       </div>
