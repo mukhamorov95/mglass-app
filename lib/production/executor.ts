@@ -37,6 +37,8 @@ export function buildTaskUpdate(
       started_at:  task.started_at ?? now,
       // Взял в работу = задача его. Не перетираем чужое назначение.
       assigned_to: task.assigned_to ?? actor.id,
+      // Явное нажатие — сильный сигнал, в отличие от автостарта по раскрытию карточки (П2).
+      started_via: 'button',
     }
   }
 
@@ -74,6 +76,7 @@ export const UNSET_TASK_PATCH: Record<string, unknown> = Object.freeze({
   status:              'queued',
   completed_at:        null,
   started_at:          null,
+  started_via:         null,   // вернулась в очередь — прежний сигнал начала работы недействителен (П2)
   completed_by:        null,
   completed_by_name:   null,
   problem_at:          null,

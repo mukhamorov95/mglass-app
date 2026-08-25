@@ -40,6 +40,7 @@ describe('buildTaskUpdate — исполнитель без лишних дей�
     expect(upd.assigned_to).toBe('u-1')
     expect(upd.started_at).toBe(NOW)
     expect(upd.completed_by).toBeUndefined()
+    expect(upd.started_via).toBe('button')   // явное нажатие — сильный сигнал (П2)
   })
 
   it('проблема помнит, кто её поднял', () => {
@@ -73,6 +74,7 @@ describe('отметка со старых экранов и её отмена',
     expect(UNSET_TASK_PATCH.completed_by).toBeNull()
     expect(UNSET_TASK_PATCH.completed_by_name).toBeNull()
     expect(UNSET_TASK_PATCH.problem_by).toBeNull()
+    expect(UNSET_TASK_PATCH.started_via).toBeNull()   // прежний сигнал начала работы недействителен (П2)
     expect(UNSET_TASK_PATCH.status).toBe('queued')
   })
 })
