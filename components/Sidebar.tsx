@@ -56,6 +56,7 @@ const MANAGER_MGLASS: NavEntry[] = [
 // ─── Manager: B2B ─────────────────────────────────────────────────────────────
 
 const MANAGER_B2B: NavItem[] = [
+  { href: '/b2b-today',      label: 'Мой день · B2B',  icon: '☀️' },
   { href: '/calculator/b2b', label: 'B2B Калькулятор', icon: '🧮' },
   { href: '/b2b-quotes',     label: 'B2B Просчёты',    icon: '📝' },
   { href: '/b2b-orders',     label: 'B2B Заказы',      icon: '📦' },
