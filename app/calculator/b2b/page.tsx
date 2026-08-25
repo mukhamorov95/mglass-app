@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
 import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from '@/lib/calcServiceCost'
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
+import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
@@ -132,7 +133,11 @@ export default function B2BCalculatorPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [clients, setClients]     = useState<B2BClient[]>([])
-  const [materials, setMaterials] = useState<B2BMaterial[]>([])
+  // А12: базовый прайс из справочника и индивидуальный прайс выбранного клиента.
+  // materials — то, что видит калькулятор: база с наложенными ценами клиента.
+  const [baseMaterials, setMaterials] = useState<B2BMaterial[]>([])
+  const [clientPrices, setClientPrices] = useState<Map<number, number>>(new Map())
+  const materials = useMemo(() => applyClientPrices(baseMaterials, clientPrices), [baseMaterials, clientPrices])
   const [services, setServices]         = useState<B2BService[]>([])
   const [films, setFilms]               = useState<B2BFilm[]>([])
   const [prodSettings, setProdSettings] = useState<ProductionSettings>(DEFAULT_PRODUCTION_SETTINGS)
@@ -475,6 +480,29 @@ export default function B2BCalculatorPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (mg) setClientId(mg.id)
   }, [mglassOnly, clientId, clients])
+
+  // А12: прайс клиента подтягиваем при смене клиента. Уже набранные позиции
+  // пересчитываем — иначе цена зависела бы от того, в каком порядке менеджер
+  // выбрал клиента и добавил стекло.
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const sb = createClient()
+      const map = await loadClientPrices(sb, clientId)
+      if (cancelled) return
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setClientPrices(map)
+    })()
+    return () => { cancelled = true }
+  }, [clientId])
+
+  useEffect(() => {
+    if (items.length === 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setItems(prev => prev.map(i => recomputeItem(i, null)))
+  // Пересчёт только при смене прайса клиента: зависимость от items зациклила бы эффект.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientPrices])
 
   // ── Autosave draft to localStorage ──
   useEffect(() => {

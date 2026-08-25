@@ -11,6 +11,7 @@ import {
 } from '@/lib/types'
 import Pagination from '@/components/Pagination'
 import EntitiesEditor from './EntitiesEditor'
+import ClientPricesEditor from './ClientPricesEditor'
 
 const PAGE_SIZE = 50
 
@@ -53,7 +54,7 @@ function nextContactLabel(dateStr: string | null) {
   return { text: `через ${d}д`, cls: 'text-[#8a8a85]' }
 }
 
-type ExpandMode = 'note' | 'remind' | 'manager' | 'requisites'
+type ExpandMode = 'note' | 'remind' | 'manager' | 'requisites' | 'prices'
 
 type ManagerOption = { id: string; name: string; code: number | null }
 
@@ -484,6 +485,14 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
                       className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'manager' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-50'}`}>
                       Менеджер
                     </button>}
+                    {/* А12: индивидуальный прайс клиента */}
+                    <button
+                      onClick={() => toggleInline(c.id, 'prices')}
+                      title="Индивидуальные цены клиента"
+                      className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${
+                        isExpanded && expandMode === 'prices' ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'}`}>
+                      Прайс
+                    </button>
                     <button
                       onClick={() => openRequisites(c)}
                       className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${
@@ -551,6 +560,9 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
                             {savingInline ? '...' : 'Сохранить'}
                           </button>
                         </div>
+                      )}
+                      {expandMode === 'prices' && (
+                        <ClientPricesEditor clientId={c.id} canEdit={isOwner} />
                       )}
                       {expandMode === 'requisites' && (
                         <div>

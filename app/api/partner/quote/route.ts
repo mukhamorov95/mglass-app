@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
+import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { prepPricedMaterials } from '@/lib/b2bMaterialPricing'
 import { computeQuoteItem, computeQuoteTotals } from '@/lib/b2b/computeQuote'
 import type { FacetPrice, B2BOrderItem } from '@/lib/b2bCalculator'
@@ -58,7 +59,13 @@ export async function POST(req: NextRequest) {
     svc.from('b2b_surcharge_rules').select('*').eq('active', true).order('sort_order'),
     svc.from('b2b_services').select('*').eq('active', true),
   ])
-  const priced = prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>)
+  // А12: индивидуальный прайс клиента поверх общего — кабинет партнёра обязан
+  // считать по тем же ценам, что менеджер, иначе цифры разойдутся.
+  const clientPrices = await loadClientPrices(svc, client.id)
+  const priced = applyClientPrices(
+    prepPricedMaterials((mats ?? []) as B2BMaterial[], (matrix ?? []) as Array<Record<string, unknown>>),
+    clientPrices,
+  )
   const byId = new Map(priced.map(m => [m.id, m]))
   const facetPrices = (facets ?? []) as FacetPrice[]
   const surchargeRules = (surcharges ?? []) as SurchargeRule[]
