@@ -38,6 +38,7 @@ const SECTIONS = [
     title: 'Операции',
     color: 'border-orange-200',
     items: [
+      { href: '/admin/b2b-flow',      emoji: '🔄', label: 'B2B-поток',     desc: 'Интейк vs отгрузка, пропускная способность цеха' },
       { href: '/admin/suppliers',     emoji: '🏭', label: 'Поставщики',    desc: 'База поставщиков, контакты, условия' },
       { href: '/admin/brigades',      emoji: '👷', label: 'Бригады',       desc: 'Монтажные бригады, рейтинги, специализация' },
       { href: '/admin/delivery-zones',emoji: '🚗', label: 'Зоны доставки', desc: 'Тарифы: в МКАД, до 10 км, 30+ км' },
