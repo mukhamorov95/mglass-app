@@ -43,3 +43,12 @@
 Реализация в этой ветке закрывает её шаги С1, С2, С3, С5 (приёмка) и С6 под именами
 `inventory_items` / `inventory_moves` — сверка имён и остатка спеки в docs/INVENTORY.md.
 Не сделаны: резервы под заказ (С4) и заявки на закупку из дефицита.
+
+## С4 — резерв под заказ (ветка claude/inventory-reserve-c4, PR #287)
+- Миграция inventory_reservations (ПРИМЕНЕНА) + триггер qty_reserved
+- reserveForOrder(docType, docId, items) → { reserved, shortages, alreadyReserved };
+  best-effort, идемпотентно; резерв ≠ расход (qty не трогается)
+- releaseReservation / markReservationConsumed / listReservations; applyConsume закрывает резерв
+- HTTP /api/inventory/reserve (POST/GET/DELETE); резерв виден в таблице остатков; 4 теста
+- Вызов из launch-production вживляет backbone-сессия (её файл) — отдан контракт + сигнатура
+- НЕ мержу: backbone (mglass-app-83) — гейт приёмки, ждёт вердикт по #287
