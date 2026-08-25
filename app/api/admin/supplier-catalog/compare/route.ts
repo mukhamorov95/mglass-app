@@ -1,27 +1,11 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createServiceClient } from '@/lib/supabase-service'
+import { isDefect, tokens } from '@/lib/supplier/similar'
 
 // Сравнение поставщиков: по выбранной позиции ищем похожие у всех поставщиков
 // (по значимым словам названия) и возвращаем отсортированный по себестоимости
 // список — чтобы логист видел, у кого та же фурнитура дешевле.
-
-// Значимые токены названия: слова ≥3 букв и размеры вида «30х10», числа.
-function tokens(name: string): string[] {
-  const norm = name.toLowerCase().replace(/ё/g, 'е').replace(/[×хx]/g, 'х')
-  const raw = norm.match(/[а-яa-z]{3,}|\d+(?:[.,]\d+)?(?:х\d+)*/gi) ?? []
-  const stop = new Set(['для', 'под', 'все', 'шт', 'мм', 'см', 'фурнитура'])
-  const seen = new Set<string>()
-  const out: string[] = []
-  for (const t of raw) {
-    if (stop.has(t) || seen.has(t)) continue
-    seen.add(t); out.push(t)
-    if (out.length >= 3) break   // 3 самых первых значимых слова
-  }
-  return out
-}
-
-export const isDefect = (name: string) => /дефект|-def\b|уценк/i.test(name)
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'buyer'])

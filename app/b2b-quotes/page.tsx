@@ -15,6 +15,7 @@ import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
+import { checkSavedItems } from '@/lib/b2b/bomCheck'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -1096,6 +1097,19 @@ export default function B2BQuotesPage() {
                         ⚠️ {quote.margin_percent}%
                       </span>
                     )}
+
+                    {/* Спецификация не сходится со справочником: позиция без себестоимости */}
+                    {(() => {
+                      const bom = checkSavedItems(quote.items)
+                      if (bom.length === 0) return null
+                      return (
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 whitespace-nowrap"
+                          title={bom.map(i => i.detail).join('\n')}>
+                          ⚠️ нет в справочнике: {bom.length}
+                        </span>
+                      )
+                    })()}
 
                     {/* "На согласовании" — только этот статус показываем плашкой, он требует action */}
                     {status === 'pending_approval' && (

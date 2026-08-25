@@ -17,11 +17,16 @@ export type QuoteRequest = {
   variant?: MVariant                        // ключи геометрии (mount, profileFrame) — прайс их не трактует
   choice?: Partial<Record<RoleId, string>>  // выбранная позиция в роли
   qtyChoice?: Partial<Record<RoleId, number>> // выбранное количество (петель 2 или 3)
+  version?: number                          // версия прайса — считать по снимку, не по живому
 }
 
+// Провенанс цены: по какой версии прайса и до какой даты действует. Даёт на КП
+// «цена действительна до» и воспроизводимость выданного КП.
+export type PriceProvenance = { version: number; label: string; publishedAt: string; validUntil: string } | null
+
 export type OptionsResponse = KitChoices          // что предложить клиенту: варианты и количества
-export type QuoteFull = { full: true; price: KitPriceResult }
-export type QuotePublic = { full: false; total: number; clientFrom: number; complete: boolean }
+export type QuoteFull = { full: true; price: KitPriceResult; provenance: PriceProvenance }
+export type QuotePublic = { full: false; total: number; clientFrom: number; complete: boolean; provenance: PriceProvenance }
 export type QuoteResponse = QuoteFull | QuotePublic
 
 // Вариант приходит от геометрии и уходит в геометрию — прайс его только передаёт.

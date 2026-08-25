@@ -74,3 +74,44 @@ export type ConsumePlan = {
   rows:      PlanRow[]
   already:   boolean         // по документу уже списывали
 }
+
+export type ReservationStatus = 'active' | 'released' | 'consumed'
+
+export type InventoryReservation = {
+  id:          number
+  item_id:     number
+  qty:         number
+  status:      ReservationStatus
+  doc_type:    'b2b_order' | 'order'
+  doc_id:      string
+  note:        string
+  created_at:  string
+  released_at: string | null
+}
+
+// Результат резервирования под заказ — контракт для launch-production.
+export type ReservedRow = {
+  item_id:   number
+  name:      string
+  unit:      Unit
+  reserved:  number   // сколько зарезервировано (= min(потребность, доступное) не режем: резервируем всю потребность)
+  available: number   // было доступно на момент резерва (qty − qty_reserved до этого резерва)
+  source:    string   // как названо в заказе
+}
+
+export type ShortageRow = {
+  item_id:  number | null   // null — позиции нет в номенклатуре
+  name:     string
+  unit:     Unit | null
+  need:     number          // сколько требуется всего
+  available: number         // сколько было доступно
+  short:    number          // нехватка = need − available (что докупить)
+  reason:   'not_in_stock' | 'insufficient'
+  source:   string
+}
+
+export type ReserveResult = {
+  reserved:        ReservedRow[]
+  shortages:       ShortageRow[]
+  alreadyReserved: boolean   // по заказу уже был активный резерв — ничего не создавали
+}

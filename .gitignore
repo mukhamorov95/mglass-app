@@ -49,3 +49,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .claude/worktrees/
+
+# Локальные оверрайды прав — не коммитим (решение владельца, не PR)
+.claude/settings.local.json

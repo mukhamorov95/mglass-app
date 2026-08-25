@@ -8,7 +8,15 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 
-type Item = { text: string; kind: string; done?: boolean }
+type Item = { text: string; kind: string; done?: boolean; task_id?: number }
+type TaskState = { status: string; result_note: string | null }
+
+const TASK_META: Record<string, { label: string; cls: string }> = {
+  queued:      { label: 'у владельца', cls: 'bg-blue-100 text-blue-800' },
+  in_progress: { label: 'в работе',    cls: 'bg-amber-100 text-amber-800' },
+  done:        { label: 'сделано',     cls: 'bg-emerald-100 text-emerald-800' },
+  cancelled:   { label: 'отклонено',   cls: 'bg-[#f0f0ec] text-[#6b6b66]' },
+}
 type Note = {
   id: number; unit: string; source: string; transcript: string | null
   items: Item[]; summary: string | null; status: string; error: string | null
@@ -23,9 +31,10 @@ const STATUS_META: Record<string, { label: string; cls: string }> = {
   failed:    { label: 'разбор не удался',   cls: 'bg-red-100 text-red-700' },
 }
 
-export function NotesTab({ unit, myName }: { unit: 'ip' | 'ooo'; myName: string }) {
+export function NotesTab({ unit }: { unit: 'ip' | 'ooo' }) {
   const sb = createClient()
   const [notes, setNotes] = useState<Note[]>([])
+  const [tasks, setTasks] = useState<Record<number, TaskState>>({})
   const [state, setState] = useState<'idle' | 'rec' | 'busy'>('idle')
   const [err, setErr] = useState<string | null>(null)
   const [textMode, setTextMode] = useState(false)
@@ -36,6 +45,8 @@ export function NotesTab({ unit, myName }: { unit: 'ip' | 'ooo'; myName: string 
   const load = useCallback(async () => {
     const { data } = await sb.from('accounting_notes').select('*').order('id', { ascending: false }).limit(100)
     setNotes((data ?? []) as Note[])
+    const r = await fetch('/api/accounting/notes/confirm')
+    if (r.ok) setTasks((await r.json()).tasks ?? {})
   }, [sb])
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load() }, [load])
@@ -74,10 +85,12 @@ export function NotesTab({ unit, myName }: { unit: 'ip' | 'ooo'; myName: string 
     }
   }
 
+  // Подтверждение отдаём серверу: он же заводит задачи владельцу и пингует в Telegram
   async function setStatus(n: Note, status: string) {
-    await sb.from('accounting_notes')
-      .update({ status, answered_at: new Date().toISOString(), answered_by: myName })
-      .eq('id', n.id)
+    await fetch('/api/accounting/notes/confirm', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ note_id: n.id, status }),
+    })
     await load()
   }
 
@@ -100,7 +113,8 @@ export function NotesTab({ unit, myName }: { unit: 'ip' | 'ooo'; myName: string 
         )}
         {state === 'idle' && !textMode && (
           <p className="text-[12px] text-[#9a9a95] mt-2">
-            Нажми и скажи, что предлагаешь или что мешает. Запишу дословно и разложу по пунктам.{' '}
+            Нажми и скажи, что предлагаешь или что мешает. Запишу дословно, разложу по пунктам,
+            а после твоего «верно» отправлю владельцу — ответ придёт сюда же.{' '}
             <button onClick={() => setTextMode(true)} className="underline">Или текстом</button>
           </p>
         )}
@@ -163,13 +177,26 @@ export function NotesTab({ unit, myName }: { unit: 'ip' | 'ooo'; myName: string 
                       <span className={it.done ? 'text-[#9a9a95] line-through' : 'text-[#111110]'}>
                         {i + 1}. {it.text}
                         <span className="text-[#9a9a95] text-[12px]"> · {it.kind}</span>
+                        {it.task_id && tasks[it.task_id] && (
+                          <>
+                            <span className={`ml-2 text-[11px] px-2 py-0.5 rounded-full font-medium ${
+                              (TASK_META[tasks[it.task_id]!.status] ?? TASK_META.queued).cls}`}>
+                              {(TASK_META[tasks[it.task_id]!.status] ?? TASK_META.queued).label}
+                            </span>
+                            {tasks[it.task_id]!.result_note && (
+                              <span className="block text-[12px] text-[#6b6b66] mt-0.5">
+                                Ответ: {tasks[it.task_id]!.result_note}
+                              </span>
+                            )}
+                          </>
+                        )}
                       </span>
                     </li>
                   ))}
                 </ol>
                 {n.status === 'new' && (
                   <div className="flex gap-2 mt-3">
-                    <button onClick={() => setStatus(n, 'confirmed')} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">Да, всё верно</button>
+                    <button onClick={() => setStatus(n, 'confirmed')} className="px-3 py-1.5 rounded-lg bg-[#111110] text-white text-[12px] font-medium">Да, всё верно — владельцу</button>
                     <button onClick={() => setStatus(n, 'rejected')} className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[12px] text-[#6b6b66]">Понял не так</button>
                   </div>
                 )}
