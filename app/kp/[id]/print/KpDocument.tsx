@@ -152,7 +152,7 @@ export default function KpDocument({ kp }: { kp: KpContent }) {
           <div className="cell"><div className="k">КП №</div><div className="v red">{kp.number ?? '—'}</div></div>
           <div className="cell"><div className="k">ДАТА</div><div className="v">{kp.date ?? '—'}</div></div>
           <div className="cell"><div className="k">МЕНЕДЖЕР</div><div className="v">{kp.manager ?? '—'}</div></div>
-          <div className="cell"><div className="k">АКТУАЛЬНО ДО</div><div className="v">{kp.valid_until ?? '—'}</div></div>
+          <div className="cell"><div className="k">{kp.valid_until ? 'АКТУАЛЬНО ДО' : 'АКТУАЛЬНОСТЬ'}</div><div className="v">{kp.valid_until || '14 дней'}</div></div>
         </div>
 
         <Sec n="01" title="СМЕТА" meta={kp.vat_label ?? 'НДС 5% ВКЛЮЧЁН'} />
