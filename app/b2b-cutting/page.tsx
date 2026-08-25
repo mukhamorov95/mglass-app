@@ -165,7 +165,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
 
   // Global drag handlers
   useEffect(() => {
-    function onMove(e: MouseEvent) {
+    function onMove(e: PointerEvent) {
       const dr = dragRef.current
       if (!dr || !svgRef.current) return
       const r = svgRef.current.getBoundingClientRect()
@@ -187,9 +187,15 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
       }
     }
     function onUp() { dragRef.current = null }
-    window.addEventListener('mousemove', onMove)
-    window.addEventListener('mouseup', onUp)
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp) }
+    // Pointer Events (не mouse): работают и мышью, и пальцем на цеховом планшете.
+    window.addEventListener('pointermove', onMove)
+    window.addEventListener('pointerup', onUp)
+    window.addEventListener('pointercancel', onUp)
+    return () => {
+      window.removeEventListener('pointermove', onMove)
+      window.removeEventListener('pointerup', onUp)
+      window.removeEventListener('pointercancel', onUp)
+    }
   }, [sheetW, sheetH, edgeMargin, gap])
 
   function handleUnplacedClick(piece: CuttingPiece) {
@@ -226,7 +232,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
     })
   }
 
-  function onPieceMouseDown(e: React.MouseEvent, id: string) {
+  function onPiecePointerDown(e: React.PointerEvent, id: string) {
     e.preventDefault()
     e.stopPropagation()
     const pl = plsRef.current[id]
@@ -284,7 +290,7 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
         <svg
           ref={svgRef}
           viewBox={`0 0 ${sheetW} ${sheetH}`}
-          style={{ display: 'block', width: '100%' }}
+          style={{ display: 'block', width: '100%', touchAction: 'none' }}
         >
           <rect x={0} y={0} width={sheetW} height={sheetH} fill="#d8d8d4" />
           <rect
@@ -301,8 +307,8 @@ function ManualCuttingEditor({ pieces, sheetW, sheetH, edgeMargin, gap }: {
             const fill = pieceColor(orderColorMap.get(pc.orderId) ?? 0, 0.85)
             const minDim = Math.min(w, h)
             return (
-              <g key={id} style={{ cursor: 'grab' }}
-                onMouseDown={e => onPieceMouseDown(e, id)}
+              <g key={id} style={{ cursor: 'grab', touchAction: 'none' }}
+                onPointerDown={e => onPiecePointerDown(e, id)}
                 onClick={e => { e.stopPropagation(); setSelId(id) }}
               >
                 <rect
@@ -439,7 +445,7 @@ function MaterialSection({ result, edgeMargin, gap, pieces, expanded, onToggle }
           )}
 
           {/* Split view */}
-          <div className="grid grid-cols-2 gap-4 items-start">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             {/* Left: Auto */}
             <div className="space-y-3">
               <div className="flex items-center gap-2">
