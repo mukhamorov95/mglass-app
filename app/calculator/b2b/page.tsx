@@ -8,6 +8,7 @@ import { calcServiceCost, ProductionSettings, DEFAULT_PRODUCTION_SETTINGS } from
 import { applicableSurcharges, type SurchargeRule } from '@/lib/surcharges'
 import { applyClientPrices, loadClientPrices } from '@/lib/b2b/clientPrices'
 import { computeQuoteItem } from '@/lib/b2b/computeQuote'
+import { checkQuoteBom, summarizeIssues, type BomCheckItem } from '@/lib/b2b/bomCheck'
 import { runCuttingOptimizer, DEFAULT_CUTTING_SETTINGS, type PieceGroup } from '@/lib/cuttingOptimizer'
 import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
@@ -246,6 +247,8 @@ export default function B2BCalculatorPage() {
   const [fServiceIds, setFServiceIds] = useState<number[]>([])
   const [fComment, setFComment]       = useState('')
   const [facetPrices, setFacetPrices] = useState<FacetPrice[]>([])
+  // материалы, привязанные к прайсу поставщика — для мягкого предупреждения в проверке спецификации
+  const [pricedMaterials, setPricedMaterials] = useState<Set<string> | null>(null)
   const widthRef = useRef<HTMLInputElement>(null)
   const heightRef = useRef<HTMLInputElement>(null)
   const qtyRef = useRef<HTMLInputElement>(null)
@@ -590,6 +593,43 @@ export default function B2BCalculatorPage() {
     const s = services.find(s => s.type === 'per_m2' && /триплекс/i.test(s.name))
     return s ? { salePerM2: s.value, costPerM2: s.cost_price ?? 0 } : null
   }, [services])
+
+  // Привязки материалов к прайсу поставщика — только для предупреждения «цена не обновится».
+  // Ошибку глотаем: без привязок проверка спецификации просто не покажет этот мягкий пункт.
+  useEffect(() => {
+    let alive = true
+    fetch('/api/admin/glass-price-mappings')
+      .then(r => r.ok ? r.json() : null)
+      .then((d: { mappings?: { matrix_name: string; matrix_category: string; enabled: boolean }[] } | null) => {
+        if (!alive || !d?.mappings) return
+        setPricedMaterials(new Set(d.mappings.filter(m => m.enabled).map(m => `${m.matrix_name.trim()}|${m.matrix_category}`)))
+      })
+      .catch(() => {})
+    return () => { alive = false }
+  }, [])
+
+  // Проверка спецификации: где позиция не сходится со справочником — там себестоимость
+  // считается от нуля, и изделие может уйти клиенту дешевле, чем обошлось нам.
+  const bomIssues = useMemo(() => {
+    if (items.length === 0) return []
+    const bomItems: BomCheckItem[] = items.map(it => {
+      const mat = baseMaterials.find(m => m.id === it.materialId)
+      return {
+        material: mat
+          ? { name: mat.name, category: mat.category, thickness: mat.thickness, cost_price: mat.cost_price, active: mat.active }
+          : { name: it.materialName, category: it.category, thickness: it.thickness, cost_price: it.costMaterial > 0 ? it.costMaterial : 0, active: false },
+        hasTempering: it.hasTempering,
+        hasFacet: it.hasFacet,
+        facetTypeMm: it.facetTypeMm,
+        hasTriplex: it.hasTriplex ?? false,
+        triplexPrice: it.hasTriplex ? { salePerM2: it.saleTriplex ?? 0, costPerM2: it.costTriplex ?? 0 } : null,
+        services: it.services.map(s => ({ name: s.name, type: s.type, value: s.value, cost_price: s.costPrice })),
+      }
+    })
+    return checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+  }, [items, baseMaterials, facetPrices, pricedMaterials])
+
+  const bomSummary = useMemo(() => summarizeIssues(bomIssues), [bomIssues])
 
   // Переключение на изделие производства: лениво грузим розничные справочники + финмодель.
   async function switchKind(kind: 'material' | 'fmirror' | 'floft') {
@@ -2593,6 +2633,27 @@ export default function B2BCalculatorPage() {
                     ⚠️ Скидка снижает итог ниже минимальной стоимости позиций. Просчёт сохранится и сразу готов к запуску.
                   </div>
                 )}
+                {bomIssues.length > 0 && (
+                  <div className={`rounded-lg px-3 py-2.5 text-[12px] border ${bomSummary.blocking > 0 ? 'bg-red-50 border-red-200 text-red-700' : 'bg-amber-50 border-amber-200 text-amber-700'}`}>
+                    <p className="font-semibold mb-1">
+                      {bomSummary.blocking > 0
+                        ? `Нет в справочнике: ${bomSummary.blocking} ${bomSummary.blocking === 1 ? 'позиция' : 'позиций'} без себестоимости`
+                        : 'Спецификация: есть замечания'}
+                    </p>
+                    <ul className="space-y-0.5">
+                      {bomIssues.slice(0, 8).map((iss, n) => (
+                        <li key={n} className={iss.severity === 'warn' ? 'opacity-75' : ''}>
+                          Поз. {iss.itemIndex + 1}: {iss.detail}
+                        </li>
+                      ))}
+                    </ul>
+                    {bomIssues.length > 8 && <p className="mt-1 opacity-75">…и ещё {bomIssues.length - 8}</p>}
+                    {bomSummary.blocking > 0 && (
+                      <p className="mt-1.5 font-medium">Проверь позиции в справочнике до отправки клиенту — маржа по ним считается от нуля.</p>
+                    )}
+                  </div>
+                )}
+
                 {editingOrderId != null && (
                   <p className="text-[11px] text-[#9a9a95] text-center">Редактируется просчёт{ourOrderNumber ? ` №${ourOrderNumber}` : ''} — сохранится в ту же запись</p>
                 )}
