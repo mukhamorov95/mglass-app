@@ -104,7 +104,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [view, setView] = useState<'kit' | 'audit'>('kit')
+  const [view, setView] = useState<'kit' | 'audit' | 'versions'>('kit')
   type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
     changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
   const [diffs, setDiffs] = useState<Diff[] | null>(null)
@@ -115,6 +115,11 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     best: { supplier: string; name: string; cost: number; url: string; imageUrl: string; match: number } }
   const [savings, setSavings] = useState<{ rows: Saving[]; totalPerItem: number; checked: number } | null>(null)
   const [seeking, setSeeking] = useState(false)
+  type VersionMeta = { id: number; label: string; validDays: number; publishedBy: string; publishedAt: string }
+  const [versions, setVersions] = useState<VersionMeta[] | null>(null)
+  const [publishing, setPublishing] = useState(false)
+  const [vLabel, setVLabel] = useState('')
+  const [vDays, setVDays] = useState(30)
 
   const cur = store[tier]
   const model = getModel(code)
@@ -164,6 +169,22 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
       })
       if (r.ok) { setMsg(`Цены обновлены: ${(await r.json()).applied}`); setDiffs(null); location.reload() }
     } finally { setChecking(false) }
+  }
+
+  async function loadVersions() {
+    const r = await fetch('/api/admin/configurator-kits/versions')
+    if (r.ok) setVersions((await r.json()).versions)
+  }
+  async function publishVersion() {
+    if (dirty) { setMsg('Сначала сохрани изменения — версия замораживает то, что в базе'); return }
+    setPublishing(true)
+    try {
+      const r = await fetch('/api/admin/configurator-kits/versions', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ label: vLabel, validDays: vDays }),
+      })
+      if (r.ok) { setVLabel(''); setMsg('Версия прайса опубликована'); loadVersions() }
+    } finally { setPublishing(false) }
   }
 
   async function findSavings() {
@@ -335,11 +356,53 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
         <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
           <button onClick={() => setView('kit')} className={`px-4 py-2 ${view === 'kit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Комплекты</button>
           <button onClick={() => setView('audit')} className={`px-4 py-2 ${view === 'audit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Аудит</button>
+          <button onClick={() => { setView('versions'); if (!versions) loadVersions() }} className={`px-4 py-2 ${view === 'versions' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Версии прайса</button>
         </div>
         <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
           ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
         </button>
       </div>
+
+      {view === 'versions' && (
+        <div className="space-y-4 max-w-[820px]">
+          <Card title="Опубликовать версию прайса">
+            <p className="text-[13px] text-[#6b6b66] mb-3">
+              Версия замораживает весь прайс (позиции, комплекты, ставки, маржу) на сегодня. КП, выданное по
+              версии, всегда пересчитывается по её ценам — клиент не увидит другую сумму после подорожания,
+              и мы не продадим по устаревшей себестоимости.
+            </p>
+            <div className="flex items-end gap-2 flex-wrap">
+              <label className="text-[13px] text-[#4b4b47]">Метка
+                <input value={vLabel} onChange={e => setVLabel(e.target.value)} placeholder="напр. «сентябрь, Ветро +8%»"
+                  className="block mt-0.5 w-[300px] text-[13px] border border-[#e4e4e0] rounded-md px-2 py-1.5 outline-none focus:border-[#111110]" /></label>
+              <label className="text-[13px] text-[#4b4b47]">Срок КП
+                <span className="block mt-0.5"><NumInput value={vDays} onChange={setVDays} suffix="дн" w={64} /></span></label>
+              <button onClick={publishVersion} disabled={publishing}
+                className="text-[13px] font-medium px-4 py-2 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {publishing ? 'Публикую…' : 'Опубликовать'}
+              </button>
+            </div>
+            {dirty && <p className="text-[12px] text-[#b04a3f] mt-2">Есть несохранённые правки — сначала «Сохранить».</p>}
+          </Card>
+
+          <Card title="Опубликованные версии">
+            {!versions && <p className="text-[13px] text-[#9a9a95]">Загрузка…</p>}
+            {versions?.length === 0 && <p className="text-[13px] text-[#9a9a95]">Пока ни одной версии. Прайс работает вживую.</p>}
+            {versions?.map(v => {
+              const until = new Date(new Date(v.publishedAt).getTime() + v.validDays * 86400000)
+              return (
+                <div key={v.id} className="flex items-center gap-2 py-2 border-t border-[#f4f4f0] first:border-0 text-[13px]">
+                  <span className="font-mono text-[#9a9a95] w-8">#{v.id}</span>
+                  <span className="text-[#111110] flex-1 truncate">{v.label || '— без метки —'}</span>
+                  <span className="text-[#6b6b66]">{new Date(v.publishedAt).toLocaleDateString('ru-RU')}</span>
+                  <span className="text-[#9a9a95]">КП до {until.toLocaleDateString('ru-RU')}</span>
+                  <span className="text-[#9a9a95] truncate max-w-[160px]">{v.publishedBy}</span>
+                </div>
+              )
+            })}
+          </Card>
+        </div>
+      )}
 
       {view === 'audit' && audit && (
         <div className="space-y-4 max-w-[980px]">
@@ -468,7 +531,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
         </div>
       )}
 
-      <div className={`${view === 'audit' ? 'hidden ' : ''}grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start`}>
+      <div className={`${view !== 'kit' ? 'hidden ' : ''}grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start`}>
         {/* Модельный ряд */}
         <div className="grid gap-1.5 lg:sticky lg:top-4">
           {M_MODELS.map(m => {

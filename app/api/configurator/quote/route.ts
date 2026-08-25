@@ -1,11 +1,10 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { getKitStore } from '@/lib/configurator/kitStore'
 import { getModel, M_MODELS } from '@/lib/configurator/arrangement'
 import { computeKitQuantities, computeKitPrice, type RoleId } from '@/lib/configurator/kit'
 import { clientPriceFrom, type Tier } from '@/lib/configurator/pricing'
-import { getFinance } from '@/lib/configurator/financeStore'
-import { buildWithVariant, type QuoteRequest, type QuoteResponse } from '@/lib/configurator/quoteContract'
+import { resolveTierData } from '@/lib/configurator/priceVersion'
+import { buildWithVariant, type QuoteRequest, type QuoteResponse, type PriceProvenance } from '@/lib/configurator/quoteContract'
 
 // Серверный расчёт цены визуализатора по КОМПЛЕКТУ модели. Себестоимость и ставки не
 // уходят в браузер: неавторизованному (публичный embed) — только сумма «от N ₽»,
@@ -19,7 +18,7 @@ export async function POST(req: NextRequest) {
   const thickness = body.thickness ?? 8
   const model = getModel(body.model)
 
-  const [{ library, rates, kits }, finance] = await Promise.all([getKitStore(tier), getFinance(tier)])
+  const { data: { library, rates, kits }, finance, version, validUntil } = await resolveTierData(tier, body.version)
   const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
   const q = computeKitQuantities(assembly, thickness, model, rates.capMargin)
   const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, finance, {
@@ -28,9 +27,13 @@ export async function POST(req: NextRequest) {
     qtyChoice: body.qtyChoice as Partial<Record<RoleId, number>> | undefined,
   })
 
+  const provenance: PriceProvenance = version && validUntil
+    ? { version: version.id, label: version.label, publishedAt: version.publishedAt, validUntil }
+    : null
+
   const { data: { user } } = await (await createClient()).auth.getUser()
   const res: QuoteResponse = user
-    ? { full: true, price }
-    : { full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete }
+    ? { full: true, price, provenance }
+    : { full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete, provenance }
   return NextResponse.json(res)
 }
