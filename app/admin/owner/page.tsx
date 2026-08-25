@@ -21,6 +21,7 @@ const SECTIONS = [
     items: [
       { href: '/admin/bonus-center', emoji: '🎁', label: 'Bonus Center', desc: 'Бонусы для AI-менеджера: замер, доставка, upgrade' },
       { href: '/admin/sales-center', emoji: '📣', label: 'Sales Center', desc: 'Скрипты, обратная связь, инсайты по продажам' },
+      { href: '/admin/avito-funnel', emoji: '📈', label: 'Воронка Avito', desc: 'Конверсия живого бота «Иван»: лиды, квалификация, скоринг' },
     ],
   },
   {
