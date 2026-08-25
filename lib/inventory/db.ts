@@ -1,6 +1,6 @@
 import { createServiceClient } from '@/lib/supabase-service'
 import type {
-  InventoryItem, InventoryMove, Kind, Unit, Contour, MoveReason, RefTable, DocType, ConsumePlan, PlanRow,
+  InventoryItem, InventoryMove, Kind, Unit, Contour, MoveReason, MoveOrigin, RefTable, DocType, ConsumePlan, PlanRow,
 } from './types'
 import { sheetArea, INCOMING } from './units'
 import { normalizeUnit } from './match'
@@ -52,7 +52,7 @@ export type MoveRow = InventoryMove & { item_name: string; item_unit: Unit }
 export async function listMoves(opts: { itemId?: number; limit?: number; reason?: MoveReason } = {}): Promise<MoveRow[]> {
   let q = svc()
     .from('inventory_moves')
-    .select('id, item_id, qty, pack_qty, reason, unit_cost, doc_type, doc_id, note, created_by, created_by_name, created_at, inventory_items(name, unit)')
+    .select('id, item_id, qty, pack_qty, reason, origin, unit_cost, doc_type, doc_id, note, created_by, created_by_name, created_at, inventory_items(name, unit)')
     .order('created_at', { ascending: false })
     .limit(opts.limit ?? 200)
   if (opts.itemId) q = q.eq('item_id', opts.itemId)
@@ -125,6 +125,7 @@ export type NewMove = {
   qty:       number          // со знаком, в базовой единице
   pack_qty?: number | null
   reason:    MoveReason
+  origin?:   MoveOrigin
   unit_cost?: number
   doc_type?: DocType | null
   doc_id?:   string | null
@@ -140,6 +141,7 @@ export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<
     qty:       Number(r.qty),
     pack_qty:  r.pack_qty ?? null,
     reason:    r.reason,
+    origin:    r.origin ?? 'fact',
     unit_cost: Math.max(0, Number(r.unit_cost ?? 0)),
     doc_type:  r.doc_type ?? null,
     doc_id:    r.doc_id ?? null,
@@ -355,7 +357,7 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
 }
 
 export async function applyConsume(
-  plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[],
+  plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[], origin: MoveOrigin = 'fact',
 ): Promise<{ inserted: number; skipped: number; released: number }> {
   const use = (rows ?? plan.rows).filter(r => r.item_id !== null && r.qty > 0)
 
@@ -366,6 +368,7 @@ export async function applyConsume(
     item_id: r.item_id as number,
     qty:     -Math.abs(r.qty),
     reason:  'order' as MoveReason,
+    origin,
     doc_type: plan.doc_type,
     doc_id:   plan.doc_id,
     note:     plan.title,
