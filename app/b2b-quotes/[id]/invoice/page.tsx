@@ -248,6 +248,9 @@ export default function InvoicePage() {
       <div className="no-print max-w-[820px] mx-auto pt-6 px-4 flex flex-wrap items-center gap-2">
         <button onClick={downloadPdf} className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28]">⬇ Скачать PDF</button>
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
+        {/* А7: УПД по этому же заказу — реквизиты берутся отсюда же */}
+        <a href={`/b2b-quotes/${id}/upd`} target="_blank" rel="noreferrer"
+          className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">📑 УПД</a>
         <button onClick={() => setShowEditor(v => !v)} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white ml-auto">{showEditor ? 'Скрыть реквизиты' : 'Реквизиты покупателя'}</button>
       </div>
 

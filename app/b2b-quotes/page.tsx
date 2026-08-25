@@ -102,7 +102,7 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
   paid:    { label: 'Оплачен',     bg: 'bg-emerald-50', text: 'text-emerald-700', short: '🟢' },
 }
 
-type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today'
+type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today' | 'templates'
 
 // Запущенные в работу (sent/confirmed) — это уже заказы, они живут в /b2b-orders
 // и в просчётах не показываются. Здесь — только активные просчёты.
@@ -113,7 +113,12 @@ const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'quote',            label: 'Черновики' },
   { key: 'agreed',           label: 'Согласовано' },
   { key: 'rejected',         label: 'Отказ' },
+  { key: 'templates',        label: 'Шаблоны' },
 ]
+
+// А3: шаблон — обычный просчёт с notes.is_template. Отдельной таблицы не заводим:
+// шаблон должен считаться тем же движком и открываться тем же калькулятором.
+const isTemplate = (q: { notes: string | null }) => parseNotes(q.notes).is_template === true
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -613,7 +618,8 @@ export default function B2BQuotesPage() {
     const { data: { user } } = await sb.auth.getUser()
     const parsed = parseNotes(q.notes)
     // Автор дубля — текущий пользователь (не исходный менеджер): чистим manager_name в notes.
-    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, manager_name: currentUserName ?? undefined })
+    // Копия/«из шаблона» — всегда обычный черновик: флаг шаблона и следы запуска снимаем.
+    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, is_template: undefined, template_name: undefined, manager_name: currentUserName ?? undefined })
     const { data, error } = await sb.from('b2b_orders').insert({
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
@@ -626,8 +632,21 @@ export default function B2BQuotesPage() {
     }).select().single()
     if (!error && data) {
       setQuotes(prev => [{ ...data, items: q.items }, ...prev])
-      showToast('Расчёт скопирован как черновик')
+      showToast(isTemplate(q) ? 'Просчёт создан из шаблона' : 'Расчёт скопирован как черновик')
     }
+  }
+
+  // А3: пометить/снять шаблон. Шаблон не мешается в активных вкладках и служит
+  // заготовкой для повторяющихся заказов клиента.
+  async function toggleTemplate(q: Quote) {
+    const parsed = parseNotes(q.notes)
+    const next = !isTemplate(q)
+    const newNotes = JSON.stringify({ ...parsed, is_template: next || undefined })
+    const { error } = await createClient().from('b2b_orders')
+      .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id)
+    if (error) { showToast('Не удалось сохранить'); return }
+    setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
+    showToast(next ? 'Добавлено в шаблоны' : 'Убрано из шаблонов')
   }
 
   async function handleDelete() {
@@ -704,10 +723,11 @@ export default function B2BQuotesPage() {
 
   const visible = useMemo(() => {
     let list: Quote[]
-    if (tab === 'all') list = quotes.filter(notLaunched)
-    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && isToday(q.created_at))
-    else if (tab === 'needs_transfer') list = quotes.filter(looksLikeOrder)
-    else list = quotes.filter(q => getStatus(q) === tab)
+    if (tab === 'templates') list = quotes.filter(isTemplate)
+    else if (tab === 'all') list = quotes.filter(q => notLaunched(q) && !isTemplate(q))
+    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && !isTemplate(q) && isToday(q.created_at))
+    else if (tab === 'needs_transfer') list = quotes.filter(q => looksLikeOrder(q) && !isTemplate(q))
+    else list = quotes.filter(q => !isTemplate(q) && getStatus(q) === tab)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(x =>
@@ -1042,10 +1062,18 @@ export default function B2BQuotesPage() {
                         className="text-[11px] text-[#c4c4be] hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
                         🧮
                       </Link>
-                      {/* Duplicate */}
-                      <button onClick={() => duplicateQuote(quote)} title="Дублировать расчёт"
+                      {/* Duplicate / «из шаблона» */}
+                      <button onClick={() => duplicateQuote(quote)}
+                        title={isTemplate(quote) ? 'Создать просчёт из шаблона' : 'Дублировать расчёт'}
                         className="text-[11px] text-[#c4c4be] hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50 transition-colors">
-                        ⧉
+                        {isTemplate(quote) ? '＋' : '⧉'}
+                      </button>
+                      {/* А3: шаблон повторяющегося заказа */}
+                      <button onClick={() => toggleTemplate(quote)}
+                        title={isTemplate(quote) ? 'Убрать из шаблонов' : 'Сохранить как шаблон'}
+                        className={`text-[11px] px-1.5 py-1 rounded transition-colors ${
+                          isTemplate(quote) ? 'text-amber-500 hover:bg-amber-50' : 'text-[#c4c4be] hover:text-amber-500 hover:bg-amber-50'}`}>
+                        {isTemplate(quote) ? '★' : '☆'}
                       </button>
                       {/* Delete */}
                       <button onClick={() => setDeletingId(quote.id)} title="Удалить"
