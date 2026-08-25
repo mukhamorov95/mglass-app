@@ -6,7 +6,7 @@ import {
   OrbitControls, Environment, Lightformer, ContactShadows,
   MeshTransmissionMaterial, Edges, RoundedBox,
 } from '@react-three/drei'
-import { EffectComposer, N8AO } from '@react-three/postprocessing'
+import { EffectComposer, N8AO, Bloom, Vignette, SMAA } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
@@ -201,6 +201,9 @@ function Studio() {
       <Lightformer form="rect" intensity={2.4} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.24, 5.5, 1]} color="#f4f8ff" />
       <Lightformer form="rect" intensity={2.2} position={[0.6, 3, 3.6]} rotation={[0, 0, 0]} scale={[0.18, 6, 1]} color="#ffffff" />
       <Lightformer form="rect" intensity={1.8} position={[-3.6, 2, 1]} rotation={[0, Math.PI / 3, 0]} scale={[0.2, 5, 1]} color="#eef3ff" />
+      {/* V7: градиентная среда — тёплое отражение «от пола» снизу + холодный купол сверху */}
+      <Lightformer form="rect" intensity={0.5} position={[0, -1.5, 1.5]} rotation={[-Math.PI / 2, 0, 0]} scale={[10, 10, 1]} color="#ffe8d6" />
+      <Lightformer form="ring" intensity={0.5} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={7} color="#eef4ff" />
     </Environment>
   )
 }
@@ -235,11 +238,12 @@ export default function Partition3D(
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
         camera={{ position: [cx - camDist * 0.58, ty + h * 0.26, cz - camDist * 1.05], fov: 33 }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.06 }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.03 }}
         onCreated={onCanvasCreated}
       >
         <Suspense fallback={null}>
-          <color attach="background" args={['#eef0ee']} />
+          {/* V10: тёплый студийный фон-кадр */}
+          <color attach="background" args={['#f0efec']} />
           {/* V6: тёплый ключ + холодное заполнение + контровой; мягкие тени */}
           <ambientLight intensity={0.28} />
           <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.75} color="#fff4e6" castShadow
@@ -259,9 +263,12 @@ export default function Partition3D(
             maxDistance={span * 3.5}
             target={[cx, ty, cz]}
           />
-          {/* V1: мягкое затенение контактов (AO) — тени в углах/стыках, объём */}
-          <EffectComposer enableNormalPass multisampling={4}>
+          {/* V1 AO + V8 bloom/виньетка + V9 SMAA — «рендерный» финиш */}
+          <EffectComposer enableNormalPass multisampling={0}>
             <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes quality="medium" />
+            <Bloom intensity={0.16} luminanceThreshold={0.96} luminanceSmoothing={0.12} mipmapBlur />
+            <Vignette offset={0.28} darkness={0.32} />
+            <SMAA />
           </EffectComposer>
         </Suspense>
       </Canvas>
