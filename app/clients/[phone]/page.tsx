@@ -5,6 +5,7 @@ import { redirect, notFound } from 'next/navigation'
 import { ORDER_STATUS_LABELS } from '@/lib/types'
 import type { OrderStatus } from '@/lib/types'
 import { phoneKey, formatPhone, extractPhone } from '@/lib/b2c/phoneKey'
+import NewCalcButtons from './NewCalcButtons'
 
 // М1: единая карточка сделки B2C. Раньше здесь были только заказы и расчёты, и
 // сопоставлялись они точным равенством строки телефона — «8(915)129-12-77» и
@@ -177,6 +178,12 @@ export default async function ClientDetailPage({ params }: { params: Promise<{ p
           {activeOrders.length > 0 && (
             <p className="text-[12px] text-blue-700 mt-3">В работе сейчас: {activeOrders.length}</p>
           )}
+
+          {/* М2: новый расчёт с уже подставленным клиентом */}
+          <div className="mt-4 pt-4 border-t border-[#f0f0ec]">
+            <p className="text-[11px] text-[#9a9a95] mb-2">Новый расчёт для клиента</p>
+            <NewCalcButtons clientName={clientName} clientPhone={clientPhone} />
+          </div>
         </div>
 
         {timeline.length > 0 && (
