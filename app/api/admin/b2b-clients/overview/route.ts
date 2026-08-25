@@ -66,5 +66,13 @@ export async function GET() {
     }
   })
 
-  return NextResponse.json({ clients: rows, year })
+  // Приглашённые партнёры без компании (role=partner, не первичный и не участник) —
+  // дыра онбординга: инвайт ставит роль, но не привязывает к b2b_clients.
+  const linkedUserIds = new Set(allIds)
+  const { data: partnerUsers } = await a.from('users').select('id,email,name').eq('role', 'partner')
+  const unlinkedPartners = (partnerUsers ?? [])
+    .filter(u => !linkedUserIds.has(u.id as string))
+    .map(u => ({ userId: u.id as string, email: (u.email as string | null) ?? null, name: (u.name as string | null) ?? null }))
+
+  return NextResponse.json({ clients: rows, year, unlinkedPartners })
 }
