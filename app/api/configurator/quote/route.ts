@@ -1,35 +1,35 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
-import { getPricing } from '@/lib/configurator/pricingStore'
+import { getKitStore } from '@/lib/configurator/kitStore'
 import { getModel, M_MODELS } from '@/lib/configurator/arrangement'
-import { buildFromModel, type MDims } from '@/components/configurator/scene/assembly'
-import { computeQuantities, computePrice, clientPriceFrom, DEFAULT_FINANCE, type Tier } from '@/lib/configurator/pricing'
+import { computeKitQuantities, computeKitPrice, type RoleId } from '@/lib/configurator/kit'
+import { clientPriceFrom, DEFAULT_FINANCE, type Tier } from '@/lib/configurator/pricing'
+import { buildWithVariant, type QuoteRequest, type QuoteResponse } from '@/lib/configurator/quoteContract'
 
-// Серверный расчёт цены визуализатора. Себестоимость и ставки НЕ уходят в браузер:
-// неавторизованному (публичный embed) отдаём только сумму «от N ₽»; авторизованному
-// менеджеру/владельцу — полную разбивку. Цены — из Supabase (админка), фолбэк — дефолты.
+// Серверный расчёт цены визуализатора по КОМПЛЕКТУ модели. Себестоимость и ставки не
+// уходят в браузер: неавторизованному (публичный embed) — только сумма «от N ₽»,
+// авторизованному менеджеру/владельцу — полная разбивка.
 export async function POST(req: NextRequest) {
-  const body = await req.json().catch(() => null) as {
-    model?: string; dims?: MDims; thickness?: number; tier?: string; glassType?: string; finishId?: string; withDelivery?: boolean; floors?: number; choice?: Record<string, string>
-  } | null
+  const body = await req.json().catch(() => null) as QuoteRequest | null
   if (!body?.model || !body.dims || !M_MODELS.some(m => m.code === body.model)) {
     return NextResponse.json({ error: 'model + dims обязательны' }, { status: 400 })
   }
   const tier: Tier = body.tier === 'premium' ? 'premium' : 'budget'
   const thickness = body.thickness ?? 8
+  const model = getModel(body.model)
 
-  const prices = await getPricing(tier)
-  const assembly = buildFromModel(getModel(body.model), body.dims, thickness)
-  const q = computeQuantities(assembly, thickness)
-  const price = computePrice(q, prices, DEFAULT_FINANCE, {
-    glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors, choice: body.choice,
+  const { library, rates, kits } = await getKitStore(tier)
+  const assembly = buildWithVariant(model, body.dims, thickness, body.variant)
+  const q = computeKitQuantities(assembly, thickness, model)
+  const price = computeKitPrice(q, library, kits[body.model] ?? { slots: [] }, rates, DEFAULT_FINANCE, {
+    glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors,
+    choice: body.choice as Partial<Record<RoleId, string>> | undefined,
+    qtyChoice: body.qtyChoice as Partial<Record<RoleId, number>> | undefined,
   })
 
   const { data: { user } } = await (await createClient()).auth.getUser()
-  if (user) {
-    // Авторизованный (менеджер/владелец) — полная разбивка себестоимости.
-    return NextResponse.json({ full: true, price })
-  }
-  // Публичный embed — только клиентская цена + флаг полноты (без себестоимости и без списка).
-  return NextResponse.json({ full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete })
+  const res: QuoteResponse = user
+    ? { full: true, price }
+    : { full: false, total: price.total, clientFrom: clientPriceFrom(price.total), complete: price.complete }
+  return NextResponse.json(res)
 }

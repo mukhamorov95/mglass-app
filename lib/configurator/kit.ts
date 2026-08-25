@@ -388,6 +388,8 @@ export function computeKitPrice(
 }
 
 // ── Что показать клиенту как ВЫБОР (без себестоимости) ────────────
+export const inferShapeOf = (it: LibraryItem) => it.shape || inferShape(it.name)
+
 export type KitChoiceOption = { itemId: string; name: string; shape: string; primary: boolean }
 export type KitChoices = {
   variants: { role: RoleId; label: string; options: KitChoiceOption[] }[]
