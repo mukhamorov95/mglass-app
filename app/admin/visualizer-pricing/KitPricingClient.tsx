@@ -5,13 +5,14 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
-import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
+import { GLASS_TYPE_IDS, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
   ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
   PROFILE_SIDES as PROFILE_SIDES_UI,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
+import { auditKits } from '@/lib/configurator/audit'
 import { CatalogPicker } from './CatalogPicker'
 
 // Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
@@ -88,7 +89,9 @@ function Card({ title, right, children }: { title?: string; right?: React.ReactN
   )
 }
 
-export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore> }) {
+export type FinanceIn = { marginPct: number; taxPct: number; minMarginPct: number; source: string }
+
+export function KitPricingClient({ initial, finance }: { initial: Record<Tier, TierStore>; finance: Record<Tier, FinanceIn> }) {
   const [tier, setTier] = useState<Tier>('budget')
   const [store, setStore] = useState<Record<Tier, TierStore>>(initial)
   const [code, setCode] = useState('М7')
@@ -101,6 +104,17 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [view, setView] = useState<'kit' | 'audit'>('kit')
+  type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
+    changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
+  const [diffs, setDiffs] = useState<Diff[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  type Saving = { itemId: string; name: string; roleLabel: string; supplier: string; cost: number
+    savePerUnit: number; usedInModels: string[]
+    best: { supplier: string; name: string; cost: number; url: string; imageUrl: string; match: number } }
+  const [savings, setSavings] = useState<{ rows: Saving[]; totalPerItem: number; checked: number } | null>(null)
+  const [seeking, setSeeking] = useState(false)
 
   const cur = store[tier]
   const model = getModel(code)
@@ -111,12 +125,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
 
   const assembly = useMemo(() => buildFromModel(model, dims, 8), [model, dims])
   const q = useMemo(() => computeKitQuantities(assembly, 8, model, cur.rates.capMargin), [assembly, model, cur.rates.capMargin])
+  const fin = finance[tier]
   const price = useMemo(
-    () => computeKitPrice(q, cur.library, kit, cur.rates, DEFAULT_FINANCE, { glassType, finishId, choice, qtyChoice }),
-    [q, cur.library, kit, cur.rates, glassType, finishId, choice, qtyChoice],
+    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice }),
+    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice],
   )
   const clientView = useMemo(() => kitChoices(cur.library, kit, q), [cur.library, kit, q])
   const byId = useMemo(() => new Map(cur.library.items.map(i => [i.id, i])), [cur.library])
+
+  const audit = useMemo(
+    () => (view === 'audit' ? auditKits(cur.library, cur.kits, cur.rates, finance[tier]) : null),
+    [view, cur.library, cur.kits, cur.rates, finance, tier],
+  )
 
   // В скольких моделях используется позиция — предупреждение, что правка цены общая.
   const usage = useMemo(() => {
@@ -124,6 +144,35 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     for (const k of Object.values(cur.kits)) for (const s of k.slots) for (const e of s.entries) m.set(e.itemId, (m.get(e.itemId) ?? 0) + 1)
     return m
   }, [cur.kits])
+
+  // Сверка с прайсом поставщика: показываем разницу, применяем только отмеченное.
+  async function checkPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch(`/api/admin/configurator-kits/reprice?tier=${tier}`)
+      const d = r.ok ? (await r.json()).diffs as Diff[] : []
+      setDiffs(d)
+      setPicked(new Set(d.filter(x => x.changes.length > 0).map(x => x.itemId)))
+    } finally { setChecking(false) }
+  }
+  async function applyPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch('/api/admin/configurator-kits/reprice', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier, itemIds: [...picked] }),
+      })
+      if (r.ok) { setMsg(`Цены обновлены: ${(await r.json()).applied}`); setDiffs(null); location.reload() }
+    } finally { setChecking(false) }
+  }
+
+  async function findSavings() {
+    setSeeking(true)
+    try {
+      const r = await fetch(`/api/admin/supplier-catalog/savings?tier=${tier}`)
+      if (r.ok) setSavings(await r.json())
+    } finally { setSeeking(false) }
+  }
 
   function edit(mutate: (s: TierStore) => void) {
     setStore(prev => { const next = structuredClone(prev); mutate(next[tier]); return next })
@@ -283,12 +332,143 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
           <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
         </div>
+        <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
+          <button onClick={() => setView('kit')} className={`px-4 py-2 ${view === 'kit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Комплекты</button>
+          <button onClick={() => setView('audit')} className={`px-4 py-2 ${view === 'audit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Аудит</button>
+        </div>
         <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
           ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start">
+      {view === 'audit' && audit && (
+        <div className="space-y-4 max-w-[980px]">
+          <Card>
+            <div className="flex items-baseline gap-3">
+              <p className="text-[28px] font-semibold text-[#111110] leading-none">{audit.ready}<span className="text-[#9a9a95] text-[18px]"> из {audit.total}</span></p>
+              <p className="text-[13px] text-[#6b6b66]">моделей можно показывать клиенту с ценой в тарифе «{tier === 'budget' ? 'Бюджет' : 'Премиум'}»</p>
+            </div>
+            <p className="text-[12px] text-[#9a9a95] mt-1.5">
+              Каждая модель прогнана на трёх размерах (минимум, середина, максимум) во всех {FINISHES.length} цветах.
+              Блокер — клиент увидит «по запросу» вместо цены.
+            </p>
+          </Card>
+
+          <Card title="Цены поставщика">
+            <div className="flex items-center gap-3">
+              <button onClick={checkPrices} disabled={checking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {checking ? 'Сверяю…' : 'Сверить со справочником'}
+              </button>
+              {diffs && <span className="text-[13px] text-[#6b6b66]">
+                {diffs.length === 0 ? 'Все цены совпадают с прайсом' : `Расхождений: ${diffs.length}`}
+              </span>}
+              {diffs && picked.size > 0 && (
+                <button onClick={applyPrices} disabled={checking}
+                  className="ml-auto text-[13px] font-medium px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110]">
+                  Применить отмеченные ({picked.size})
+                </button>
+              )}
+            </div>
+            {diffs?.map(d => (
+              <div key={d.itemId} className="flex items-start gap-2 py-1.5 mt-1 border-t border-[#f4f4f0] text-[13px]">
+                <input type="checkbox" checked={picked.has(d.itemId)} disabled={d.changes.length === 0}
+                  onChange={e => setPicked(p => { const n = new Set(p); if (e.target.checked) n.add(d.itemId); else n.delete(d.itemId); return n })}
+                  className="mt-1" />
+                <span className="w-[240px] shrink-0 truncate text-[#111110]">{d.name}</span>
+                {d.note
+                  ? <span className="text-[#b09a6a]">{d.note}</span>
+                  : <span className="text-[#6b6b66]">
+                      {d.changes.slice(0, 4).map(c => `${c.finish}${c.stockLen ? ` ${c.stockLen}мм` : ''}: ${c.was} → ${c.now} (${c.deltaPct > 0 ? '+' : ''}${c.deltaPct}%)`).join(' · ')}
+                      {d.changes.length > 4 && ` …и ещё ${d.changes.length - 4}`}
+                    </span>}
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Автоматически ничего не переписывается: цена изделия не должна меняться без твоего ведома.
+              История цен пишется при каждом импорте прайса.
+            </p>
+          </Card>
+
+          <Card title="Где мы переплачиваем">
+            <div className="flex items-center gap-3">
+              <button onClick={findSavings} disabled={seeking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {seeking ? 'Ищу…' : 'Найти дешевле у поставщиков'}
+              </button>
+              {savings && (
+                <span className="text-[13px] text-[#6b6b66]">
+                  {savings.rows.length === 0
+                    ? `Проверено позиций: ${savings.checked}. Дешевле не нашлось — берём по лучшей цене`
+                    : `Нашлось ${savings.rows.length} из ${savings.checked}: до ${rub(savings.totalPerItem)} на изделии`}
+                </span>
+              )}
+            </div>
+            {savings?.rows.map(r => (
+              <div key={r.itemId} className="py-2 mt-1 border-t border-[#f4f4f0]">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="text-[10px] uppercase text-[#a0a09a] w-[120px] shrink-0">{r.roleLabel}</span>
+                  <span className="text-[#111110] truncate flex-1">{r.name}</span>
+                  <span className="font-mono text-[#6b6b66] shrink-0">{rub(r.cost)}</span>
+                  <span className="text-[#256029] font-semibold shrink-0">−{rub(r.savePerUnit)}</span>
+                </div>
+                <div className="flex items-center gap-2 pl-[128px] text-[12px] text-[#6b6b66]">
+                  {r.best.imageUrl && <img src={r.best.imageUrl} alt="" className="w-6 h-6 rounded object-cover border border-[#eeece5]" />}
+                  <span className="truncate flex-1">
+                    {r.best.supplier}: {r.best.name} — {rub(r.best.cost)}
+                    {r.best.url && <a href={r.best.url} target="_blank" rel="noreferrer" className="ml-1 text-[#4b6ea9] hover:underline">карточка</a>}
+                  </span>
+                  <span className="text-[#9a9a95] shrink-0">стоит в {r.usedInModels.length} моделях</span>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Сравниваются только позиции из комплектов и только в базовом цвете, чтобы не сравнить хром с золотом.
+              Брак и «эконом» исключены. Замена — решение закупщика: у дешёвой позиции может быть другое качество.
+            </p>
+          </Card>
+
+          {audit.libraryIssues.length > 0 && (
+            <Card title="Библиотека позиций">
+              {audit.libraryIssues.map((i, n) => (
+                <div key={n} className="flex items-start gap-2 py-1 text-[13px] border-b border-[#f4f4f0] last:border-0">
+                  <span className={i.severity === 'blocker' ? 'text-[#b04a3f]' : 'text-[#b09a6a]'}>{i.severity === 'blocker' ? '●' : '○'}</span>
+                  <span className="text-[#111110] w-[220px] shrink-0 truncate">{i.label}</span>
+                  <span className="text-[#6b6b66]">{i.detail}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          <Card title="Модели">
+            {audit.models.map(m => (
+              <div key={m.code} className="py-2 border-b border-[#f4f4f0] last:border-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[13px] ${m.sellable ? 'text-[#256029]' : 'text-[#b04a3f]'}`}>{m.sellable ? '✅' : '⛔'}</span>
+                  <button onClick={() => { setModelCode(m.code); setView('kit') }} className="text-[13px] text-[#111110] hover:underline">
+                    <span className="font-mono">{m.code}</span> · {m.name}
+                  </button>
+                  <span className="ml-auto font-mono text-[12px] text-[#6b6b66]">
+                    {m.sizes.length > 0 && `${rub(m.sizes[0].total)} … ${rub(m.sizes[m.sizes.length - 1].total)}`}
+                  </span>
+                </div>
+                {m.issues.length > 0 && (
+                  <div className="pl-6 pt-0.5">
+                    {m.issues.slice(0, 6).map((i, n) => (
+                      <p key={n} className={`text-[12px] ${i.severity === 'blocker' ? 'text-[#9a5a2a]' : 'text-[#9a9a95]'}`}>
+                        {i.label} — {i.code}
+                      </p>
+                    ))}
+                    {m.issues.length > 6 && <p className="text-[12px] text-[#9a9a95]">…и ещё {m.issues.length - 6}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      <div className={`${view === 'audit' ? 'hidden ' : ''}grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start`}>
         {/* Модельный ряд */}
         <div className="grid gap-1.5 lg:sticky lg:top-4">
           {M_MODELS.map(m => {
@@ -360,7 +540,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
               </div>
             ))}
             <div className="flex justify-between text-[13px] pt-2 mt-1 border-t border-[#f0f0ec]"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono">{rub(price.materialsCost)}</span></div>
-            <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Цена изделия ({price.marginPct}/{price.taxPct}%)</span><span className="font-mono">{rub(price.itemPrice)}</span></div>
+            <div className="flex justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">
+                Цена изделия (маржа {price.marginPct}% {price.marginSource === 'модель' ? '— своя у модели' : '— тариф'}, налог {price.taxPct}%)
+              </span>
+              <span className="font-mono">{rub(price.itemPrice)}</span>
+            </div>
+            {price.belowMin && (
+              <p className="text-[11px] text-[#b04a3f] py-0.5">⚠️ Маржа ниже минимальной {fin.minMarginPct}% — так продавать нельзя</p>
+            )}
             <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)} + доставка</span><span className="font-mono">{rub(price.installCost + price.deliveryCost)}</span></div>
             <div className="flex justify-between text-[14px] font-semibold pt-1"><span>Сумма изделия</span><span className="font-mono">{rub(price.total)}</span></div>
           </Card>
@@ -590,6 +778,25 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
             </div>
             <p className="text-[11px] text-[#9a9a95] mt-1.5">
               Роли, которые модель требует, но их нет в комплекте, попадают в предупреждение спецификации.
+            </p>
+          </Card>
+
+          <Card title="Финансы">
+            <div className="flex items-center justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Маржа тарифа</span>
+              <span className="font-mono text-[#111110]">{fin.marginPct}%</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Налог</span>
+              <span className="font-mono text-[#111110]">{fin.taxPct}%</span>
+            </div>
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Маржа модели {model.code}</span>
+              <NumInput value={kit.margin ?? 0} onChange={v => editKit(k => { if (v > 0) k.margin = v; else delete k.margin })} suffix="%" w={64} />
+            </label>
+            <p className="text-[11px] text-[#9a9a95] mt-1">
+              0 — берётся маржа тарифа. Минимум {fin.minMarginPct}%. Источник: {fin.source}.
+              Меняются в разделе финансовых настроек, здесь только для этой модели.
             </p>
           </Card>
 

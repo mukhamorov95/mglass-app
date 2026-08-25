@@ -4,6 +4,7 @@ import { createServiceClient } from '@/lib/supabase-service'
 import { recordPayment, voidPayment } from '@/lib/payments/recordPayment'
 import { b2bPaymentKey } from '@/lib/payments/paymentKeys'
 import { upsertSaleFromB2B, voidSale } from '@/lib/salesLedger'
+import { notifyOrderManager } from '@/lib/b2b/notifyManager'
 
 // Д2: ЕДИНСТВЕННЫЙ писатель оплаты B2B-заказа. Все три экрана (просчёты,
 // заказы, дебиторка CFO) ходят сюда — прямых update из браузера больше нет.
@@ -118,6 +119,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   } catch (e) {
     // Ядро не должно ломать рабочий процесс менеджера: notes уже записаны.
     warnings.push(e instanceof Error ? e.message : 'Ошибка записи в денежное ядро')
+  }
+
+  // А14: менеджеру в Telegram — по его заказу прошла оплата. Себе не пишем.
+  if (body.status === 'paid' || body.status === 'partial') {
+    const num = order.custom_number?.trim() || `#${orderId}`
+    const sum = body.status === 'paid' ? total : prepayment
+    await notifyOrderManager(
+      orderId,
+      `💰 ${body.status === 'paid' ? 'Оплачен' : 'Предоплата по'} заказ${body.status === 'paid' ? '' : 'у'} <b>${num}</b> · ${Math.round(sum).toLocaleString('ru-RU')} ₽`
+        + `\n${order.client_name ?? ''}`,
+      '/b2b-orders',
+    )
   }
 
   return NextResponse.json({ ok: true, notes: nextNotes, warnings })

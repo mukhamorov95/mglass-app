@@ -4,8 +4,9 @@ import * as THREE from 'three'
 import { Canvas, type RootState } from '@react-three/fiber'
 import {
   OrbitControls, Environment, Lightformer, ContactShadows,
-  MeshTransmissionMaterial, MeshReflectorMaterial,
+  MeshTransmissionMaterial, Edges, RoundedBox,
 } from '@react-three/drei'
+import { EffectComposer, N8AO, Bloom, Vignette, SMAA } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
@@ -19,12 +20,12 @@ const MATTE = new Set(['satin', 'black', 'gunmetal', 'brgold', 'brrose'])
 // чёрный/белый — крашеные (metalness ниже). Ближе к каталожному эскизу.
 type FinishMat = { color: string; metalness: number; roughness: number; clearcoat: number; clearcoatRoughness: number; env: number }
 const FINISH_MATERIAL: Record<string, FinishMat> = {
-  chrome:   { color: '#e2e6e9', metalness: 1,   roughness: 0.05, clearcoat: 1,   clearcoatRoughness: 0.03, env: 1.9 },
+  chrome:   { color: '#e6eaee', metalness: 1,   roughness: 0.025,clearcoat: 1,   clearcoatRoughness: 0.02, env: 2.5 },
   satin:    { color: '#c6ccd0', metalness: 1,   roughness: 0.32, clearcoat: 0.4, clearcoatRoughness: 0.3,  env: 1.3 },
   black:    { color: '#212428', metalness: 0.6, roughness: 0.5,  clearcoat: 0.35,clearcoatRoughness: 0.4,  env: 0.9 },
   gunmetal: { color: '#3b4045', metalness: 0.92,roughness: 0.34, clearcoat: 0.5, clearcoatRoughness: 0.3,  env: 1.1 },
   bronze:   { color: '#7d5a3a', metalness: 1,   roughness: 0.38, clearcoat: 0.4, clearcoatRoughness: 0.3,  env: 1.1 },
-  gold:     { color: '#caa42a', metalness: 1,   roughness: 0.13, clearcoat: 0.8, clearcoatRoughness: 0.06, env: 1.7 },
+  gold:     { color: '#caa42a', metalness: 1,   roughness: 0.11, clearcoat: 0.85,clearcoatRoughness: 0.05, env: 2.0 },
   brgold:   { color: '#b8974a', metalness: 1,   roughness: 0.34, clearcoat: 0.3, clearcoatRoughness: 0.35, env: 1.2 },
   white:    { color: '#eceae4', metalness: 0.2, roughness: 0.55, clearcoat: 0.5, clearcoatRoughness: 0.5,  env: 0.8 },
   rose:     { color: '#c98f78', metalness: 1,   roughness: 0.15, clearcoat: 0.7, clearcoatRoughness: 0.08, env: 1.6 },
@@ -43,24 +44,36 @@ function onCanvasCreated(state: RootState) {
 // Процедурная плитка ниши: одна крупная плитка с тонким швом (CanvasTexture,
 // офлайн). Repeat тиражирует её в аккуратную сетку — без резкой «шахматки».
 function makeTileTexture(): THREE.CanvasTexture {
+  const S = 512
   const c = document.createElement('canvas')
-  c.width = c.height = 256
+  c.width = c.height = S
   const ctx = c.getContext('2d')!
-  const grout = 4
-  ctx.fillStyle = '#c2c0ba'                       // шов
-  ctx.fillRect(0, 0, 256, 256)
-  const g = ctx.createLinearGradient(0, 0, 190, 256)
-  g.addColorStop(0, '#efeee9')
-  g.addColorStop(0.5, '#e8e6e0')
-  g.addColorStop(1, '#e0ded7')
+  const grout = 7
+  // шов — тёмный, с мягким градиентом → глубина затирки
+  ctx.fillStyle = '#a7a39b'
+  ctx.fillRect(0, 0, S, S)
+  // тело плитки (тёплый off-white, диагональный градиент)
+  const g = ctx.createLinearGradient(0, 0, S * 0.75, S)
+  g.addColorStop(0, '#f1f0eb'); g.addColorStop(0.5, '#eae8e2'); g.addColorStop(1, '#e2e0d9')
   ctx.fillStyle = g
-  ctx.fillRect(0, 0, 256 - grout, 256 - grout)    // плитка с швом справа/снизу
-  // лёгкие прожилки (мрамор), низкая заметность
-  ctx.strokeStyle = 'rgba(150,147,140,0.16)'
-  ctx.lineWidth = 1.4
-  const veins = [[30, 70, 130, 30, 210, 120], [200, 20, 150, 130, 230, 230], [40, 200, 120, 170, 90, 250]]
+  ctx.fillRect(0, 0, S - grout, S - grout)
+  // мягкая фаска-тень у шва (низ/право) — плитка «утоплена»
+  const bevel = 26
+  const sh = ctx.createLinearGradient(S - grout - bevel, 0, S - grout, 0)
+  sh.addColorStop(0, 'rgba(120,116,108,0)'); sh.addColorStop(1, 'rgba(120,116,108,0.22)')
+  ctx.fillStyle = sh; ctx.fillRect(S - grout - bevel, 0, bevel, S - grout)
+  const sv = ctx.createLinearGradient(0, S - grout - bevel, 0, S - grout)
+  sv.addColorStop(0, 'rgba(120,116,108,0)'); sv.addColorStop(1, 'rgba(120,116,108,0.22)')
+  ctx.fillStyle = sv; ctx.fillRect(0, S - grout - bevel, S - grout, bevel)
+  // блик у верх/лево кромки — противоположная фаска (объём)
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'
+  ctx.fillRect(0, 0, S - grout, 2); ctx.fillRect(0, 0, 2, S - grout)
+  // прожилки мрамора (низкая заметность)
+  ctx.strokeStyle = 'rgba(150,147,140,0.14)'; ctx.lineWidth = 2.4
+  const V = S / 256
+  const veins = [[30, 70, 130, 30, 210, 120], [200, 20, 150, 130, 230, 230], [40, 200, 120, 170, 90, 250], [120, 40, 60, 150, 180, 210]]
   for (const [x1, y1, cx, cy, x2, y2] of veins) {
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(x1 * V, y1 * V); ctx.quadraticCurveTo(cx * V, cy * V, x2 * V, y2 * V); ctx.stroke()
   }
   const tex = new THREE.CanvasTexture(c)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -86,28 +99,19 @@ function NicheMesh({ niche }: { niche: Niche }) {
   const floorMat = useMemo(() => tiledMaterial(base, FW, FD), [base, FW, FD])
   const backMat = useMemo(() => tiledMaterial(base, w + EXT, WH), [base, w, WH])
   const sideMat = useMemo(() => tiledMaterial(base, depth + EXT, WH), [base, depth, WH])
+  // V5: та же текстура как bump-карта — тёмная затирка утоплена → рельеф шва под светом.
   const tile = (map: THREE.Texture) =>
-    <meshStandardMaterial map={map} color="#f2f0ea" roughness={0.8} metalness={0.03} envMapIntensity={0.5} />
+    <meshStandardMaterial map={map} bumpMap={map} bumpScale={0.5} color="#f4f2ec" roughness={0.62} metalness={0.04} envMapIntensity={0.75} />
 
   return (
     <group>
       {/* большой облицованный пол — полированный керамогранит, слабо зеркалит кабину */}
       <mesh position={[w / 2, 0, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <planeGeometry args={[FW, FD]} />
-        <MeshReflectorMaterial
-          map={floorMat}
-          resolution={512}
-          mixBlur={10}
-          mixStrength={0.5}
-          blur={[400, 120]}
-          mirror={0}
-          roughness={0.85}
-          depthScale={1.1}
-          minDepthThreshold={0.4}
-          maxDepthThreshold={1.3}
-          color="#f2f0ea"
-          metalness={0.04}
-        />
+        {/* Глянцевая плитка (полированный керамогранит): отражение окружения через
+            envMap — без off-screen прохода MeshReflectorMaterial, который конфликтовал
+            с MeshTransmissionMaterial стекла и давал чёрный артефакт на части GPU. */}
+        <meshStandardMaterial map={floorMat} color="#f1efe9" roughness={0.5} metalness={0.05} envMapIntensity={0.85} />
       </mesh>
       {walls.back && (
         <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
@@ -127,11 +131,11 @@ function NicheMesh({ niche }: { niche: Niche }) {
           {tile(sideMat.clone())}
         </mesh>
       )}
-      {/* поддон */}
-      <mesh position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
-        <boxGeometry args={[w + 0.05, trayH, depth + 0.05]} />
-        <meshStandardMaterial color="#f1efea" roughness={0.3} metalness={0.05} envMapIntensity={0.8} />
-      </mesh>
+      {/* V4: поддон — акрил/камень со скруглёнными кромками и мокрым подблеском (clearcoat) */}
+      <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
+        position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
+        <meshPhysicalMaterial color="#f4f2ee" roughness={0.14} metalness={0.02} clearcoat={0.6} clearcoatRoughness={0.12} envMapIntensity={1.0} />
+      </RoundedBox>
     </group>
   )
 }
@@ -144,22 +148,26 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
         <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
           <boxGeometry args={g.size} />
           <MeshTransmissionMaterial
-            transmission={0.9}
-            thickness={0.012}
-            roughness={0.05}
-            ior={1.5}
-            chromaticAberration={0.012}
+            transmission={0.96}
+            thickness={0.008}
+            roughness={0.03}
+            ior={1.52}
+            chromaticAberration={0.02}
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
-            samples={5}
-            resolution={384}
+            samples={6}
+            resolution={512}
             color={glassTint.color}
             attenuationColor={glassTint.attenuation}
             attenuationDistance={glassTint.distance}
-            clearcoat={0.7}
-            clearcoatRoughness={0.05}
+            clearcoat={0.9}
+            clearcoatRoughness={0.04}
           />
+          {/* V2: полированная кромка стекла — тонкая световая линия по рёбрам, читается толщина */}
+          <Edges threshold={15}>
+            <lineBasicMaterial color="#eaf6ef" transparent opacity={0.5} depthWrite={false} />
+          </Edges>
         </mesh>
       ))}
       {assembly.metal.map(m => (
@@ -178,7 +186,7 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
 
 function Studio() {
   return (
-    <Environment resolution={384} frames={1}>
+    <Environment resolution={512} frames={1}>
       <color attach="background" args={['#d3d7dd']} />
       {/* верхний софт-бокс — основной свет */}
       <Lightformer form="rect" intensity={3.2} position={[0, 5, 1]} rotation={[Math.PI / 2, 0, 0]} scale={[9, 5, 1]} color="#ffffff" />
@@ -188,9 +196,14 @@ function Studio() {
       {/* контровой сзади — блики на кромках хрома и стекла */}
       <Lightformer form="rect" intensity={2.4} position={[0, 3, -5]} scale={[7, 4, 1]} color="#ffffff" />
       <Lightformer form="ring" intensity={1.4} position={[3, 2, 4]} scale={2.2} color="#ffffff" />
-      {/* вертикальные софт-боксы — вытянутые «студийные» блики-полосы на хроме и стекле */}
-      <Lightformer form="rect" intensity={2.2} position={[-2.2, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.35, 5, 1]} color="#ffffff" />
-      <Lightformer form="rect" intensity={2.0} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.3, 5, 1]} color="#f4f8ff" />
+      {/* V3: вертикальные софт-боксы — вытянутые «студийные» блики-полосы на хроме */}
+      <Lightformer form="rect" intensity={2.6} position={[-2.2, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.28, 5.5, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={2.4} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.24, 5.5, 1]} color="#f4f8ff" />
+      <Lightformer form="rect" intensity={2.2} position={[0.6, 3, 3.6]} rotation={[0, 0, 0]} scale={[0.18, 6, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={1.8} position={[-3.6, 2, 1]} rotation={[0, Math.PI / 3, 0]} scale={[0.2, 5, 1]} color="#eef3ff" />
+      {/* V7: градиентная среда — тёплое отражение «от пола» снизу + холодный купол сверху */}
+      <Lightformer form="rect" intensity={0.5} position={[0, -1.5, 1.5]} rotation={[-Math.PI / 2, 0, 0]} scale={[10, 10, 1]} color="#ffe8d6" />
+      <Lightformer form="ring" intensity={0.5} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={7} color="#eef4ff" />
     </Environment>
   )
 }
@@ -220,23 +233,26 @@ export default function Partition3D(
   return (
     <div className="w-full h-[420px] md:h-[480px] rounded-xl overflow-hidden bg-gradient-to-b from-[#f2f1ee] to-[#e4e2dd]">
       <Canvas
-        shadows
+        shadows="soft"
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
         camera={{ position: [cx - camDist * 0.58, ty + h * 0.26, cz - camDist * 1.05], fov: 33 }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.06 }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.03 }}
         onCreated={onCanvasCreated}
       >
         <Suspense fallback={null}>
-          <color attach="background" args={['#eef0ee']} />
-          <ambientLight intensity={0.35} />
-          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.5} castShadow
-            shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} />
-          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.5} color="#eaf0ff" />
+          {/* V10: тёплый студийный фон-кадр */}
+          <color attach="background" args={['#f0efec']} />
+          {/* V6: тёплый ключ + холодное заполнение + контровой; мягкие тени */}
+          <ambientLight intensity={0.28} />
+          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.75} color="#fff4e6" castShadow
+            shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} shadow-normalBias={0.02} shadow-radius={5} />
+          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.6} color="#e6eeff" />
+          <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.4} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
-          <ContactShadows position={[cx, 0.002, cz]} opacity={0.42} scale={span * 3.2} blur={2.2} far={span * 1.2} resolution={1024} />
+          <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
           <Studio />
           <OrbitControls
             makeDefault
@@ -247,6 +263,13 @@ export default function Partition3D(
             maxDistance={span * 3.5}
             target={[cx, ty, cz]}
           />
+          {/* V1 AO + V8 bloom/виньетка + V9 SMAA — «рендерный» финиш */}
+          <EffectComposer enableNormalPass multisampling={0}>
+            <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes quality="medium" />
+            <Bloom intensity={0.16} luminanceThreshold={0.96} luminanceSmoothing={0.12} mipmapBlur />
+            <Vignette offset={0.28} darkness={0.32} />
+            <SMAA />
+          </EffectComposer>
         </Suspense>
       </Canvas>
     </div>

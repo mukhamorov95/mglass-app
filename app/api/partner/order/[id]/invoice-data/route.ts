@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { documentSafeOrder } from '@/lib/b2b/publicQuote'
 
 // Данные счёта-спецификации для кабинета партнёра. Строго по своему клиенту.
 // Открывается ТОЛЬКО если владелец включил самообслуживание (b2b_clients.can_self_invoice)
@@ -42,6 +43,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const launched = !!(order.launched_at || pn.launched_at)
   if (!launched) return NextResponse.json({ error: 'Счёт доступен после запуска заказа в работу' }, { status: 409 })
 
+  const c = client as unknown as Record<string, string | null>
   const { data: ents } = await svc
     .from('b2b_client_legal_entities')
     .select(ENTITY_COLS)
@@ -50,5 +52,21 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     .order('is_default', { ascending: false })
     .order('id', { ascending: true })
 
-  return NextResponse.json({ order, client, entities: ents ?? [] })
+  // Наружу — только то, что печатается в счёте/УПД. Сырой items содержит costExVat,
+  // costMaterial, margin и цены услуг: партнёру наша себестоимость не видна нигде,
+  // включая JSON-ответ. Реквизиты клиента отдаём тоже белым списком.
+  const safeClient = {
+    id: client.id, name: client.name,
+    full_name: c.full_name ?? null, inn: c.inn ?? null, kpp: c.kpp ?? null, ogrn: c.ogrn ?? null,
+    legal_address: c.legal_address ?? null,
+    bank_account: c.bank_account ?? null, bank_name: c.bank_name ?? null,
+    bik: c.bik ?? null, corr_account: c.corr_account ?? null,
+    supply_contract_no: c.supply_contract_no ?? null, supply_contract_date: c.supply_contract_date ?? null,
+  }
+
+  return NextResponse.json({
+    order: documentSafeOrder(order as Record<string, unknown>),
+    client: safeClient,
+    entities: ents ?? [],
+  })
 }

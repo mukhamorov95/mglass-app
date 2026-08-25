@@ -423,13 +423,13 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
       const ax = Lg, az = 0, bx = Lg - d, bz = d
       const L = Math.hypot(bx - ax, bz - az), rotY = Math.atan2(-(bz - az), bx - ax)
       metal.push({ key: 'm1-tube', kind: 'rail', rotY, spec: 'tube-diag45', pos: [(ax + bx) / 2, yTop, (az + bz) / 2], size: [L, 0.010, 0.030] })
-      hardware.push({ key: 'm1-mnt-d45a', model: 'kp006', spec: 'mount-diag45', rotY, pos: [ax, yTop, az] })
-      hardware.push({ key: 'm1-mnt-d45b', model: 'kp002', spec: 'mount-diag45', rotY, pos: [bx, yTop, bz] })
+      hardware.push({ key: 'm1-mnt-d45a', model: 'kp006', shape: 'mount-diag45', spec: 'mount-diag45', rotY, pos: [ax, yTop, az] })
+      hardware.push({ key: 'm1-mnt-d45b', model: 'kp002', shape: 'mount-diag45', spec: 'mount-diag45', rotY, pos: [bx, yTop, bz] })
     } else if (mount === 'stabilizer') {
       // Короткая стабилизационная штанга от свободного края к задней стене.
       const L = Math.min(0.35, trayDepth)
       metal.push({ key: 'm1-tube', kind: 'rail', rotY: Math.PI / 2, spec: 'tube-stabilizer', pos: [Lg, yTop, L / 2], size: [L, 0.010, 0.030] })
-      hardware.push({ key: 'm1-mnt-stab', model: 'kp002', spec: 'mount-stabilizer', rotY: Math.PI / 2, pos: [Lg, yTop, L] })
+      hardware.push({ key: 'm1-mnt-stab', model: 'kp002', shape: 'mount-stabilizer', spec: 'mount-stabilizer', rotY: Math.PI / 2, pos: [Lg, yTop, L] })
     }
     // mount === 'ceiling' — трубы нет; стекло до потолка (H), профиль сверху добавлен выше.
   }

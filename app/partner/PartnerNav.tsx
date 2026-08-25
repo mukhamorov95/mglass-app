@@ -109,6 +109,10 @@ export default function PartnerNav() {
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="7" r="3.2" /><path d="M4.5 16.5a5.5 5.5 0 0 1 11 0" /></svg></span>
           <span className="tx">Профиль</span>
         </Link>
+        <Link href="/partner/claims" className={item(path.startsWith('/partner/claims'))}>
+          <span className="ic"><svg viewBox="0 0 20 20"><path d="M10 2.5 2.5 16.5h15z" /><line x1="10" y1="8" x2="10" y2="12" /><line x1="10" y1="14.2" x2="10" y2="14.25" /></svg></span>
+          <span className="tx">Гарантия</span>
+        </Link>
         <Link href="/partner/guide" className={item(path.startsWith('/partner/guide'))}>
           <span className="ic"><svg viewBox="0 0 20 20"><circle cx="10" cy="10" r="7.4" /><path d="M7.9 7.6a2.2 2.2 0 1 1 3 2c-.8.5-1 1-1 1.9" /><line x1="10" y1="14.3" x2="10" y2="14.35" /></svg></span>
           <span className="tx">Как пользоваться</span>

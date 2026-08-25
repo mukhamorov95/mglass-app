@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { getRole } from '@/lib/getRole'
+import { getRole, ROLE_HOME } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 
@@ -79,7 +79,10 @@ const OWNER_CENTER = [
 
 export default async function Home() {
   const role = await getRole()
-  if (role === 'partner') redirect('/partner')   // партнёр видит только свой кабинет
+  // Роль-старт: специализированные роли уходят сразу в свой раздел, а не на
+  // менеджерскую панель. manager/admin/ceo не в карте — остаются здесь.
+  const home = role ? ROLE_HOME[role] : undefined
+  if (home) redirect(home)
   const isAdmin = role === 'admin'
   const supabase = await createClient()
 

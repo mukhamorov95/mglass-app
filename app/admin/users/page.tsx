@@ -23,6 +23,7 @@ type User = {
   can_view_money: boolean
   hired_at: string | null
   created_at: string
+  telegram_bound?: boolean   // привязан ли к боту — без этого уведомления не доходят
 }
 
 // Станции цеха — словарь совпадает с lib/productionStages.ts DetailStageKey (без 'problem').
@@ -47,6 +48,10 @@ const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   seo:        { label: 'SEO',           color: 'bg-rose-50 text-rose-700' },
   cfo:        { label: 'Финдиректор',   color: 'bg-teal-50 text-teal-700' },
   measurer:   { label: 'Замерщик',      color: 'bg-cyan-50 text-cyan-700' },
+  office:     { label: 'Офис-менеджер', color: 'bg-sky-50 text-sky-700' },
+  logist:     { label: 'Логистика',     color: 'bg-lime-50 text-lime-700' },
+  partner:    { label: 'Клиент B2B',    color: 'bg-fuchsia-50 text-fuchsia-700' },
+  accountant: { label: 'Бухгалтерия',   color: 'bg-slate-50 text-slate-700' },
 }
 
 const PERM_LABELS: { key: keyof UserPermissions; icon: string; label: string }[] = [
@@ -83,7 +88,7 @@ export default function UsersPage() {
   const [showInvite, setShowInvite]     = useState(false)
   const [inviteEmail, setInviteEmail]   = useState('')
   const [invitePassword, setInvitePassword] = useState('')
-  const [inviteRole, setInviteRole]     = useState<'manager' | 'admin' | 'buyer'>('manager')
+  const [inviteRole, setInviteRole]     = useState<'partner' | 'manager' | 'production' | 'office' | 'logist' | 'buyer' | 'measurer' | 'admin'>('manager')
   const [inviteName, setInviteName]     = useState('')
   const [inviteLink, setInviteLink]     = useState<string | null>(null)
   const [linkCopied, setLinkCopied]     = useState(false)
@@ -596,9 +601,14 @@ export default function UsersPage() {
                                 const data = await res.json()
                                 if (data.code) setTelegramCode({ userId: u.id, code: data.code })
                               }}
-                              className="text-[11px] px-2 py-1 rounded-full bg-blue-50 text-blue-600 hover:bg-blue-100"
-                              title="Создать Telegram-код">
-                              TG
+                              className={`text-[11px] px-2 py-1 rounded-full transition-colors ${
+                                u.telegram_bound
+                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                  : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}
+                              title={u.telegram_bound
+                                ? 'Telegram привязан. Нажмите, чтобы выдать новый код (перепривязка)'
+                                : 'Не привязан к боту — уведомления не приходят. Нажмите, чтобы выдать код'}>
+                              {u.telegram_bound ? 'TG ✓' : 'TG'}
                             </button>
                           </div>
                         </td>
@@ -732,12 +742,20 @@ export default function UsersPage() {
                     </div>
                     <div>
                       <label className="block text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest mb-1">Роль</label>
-                      <select value={inviteRole} onChange={e => setInviteRole(e.target.value as 'manager' | 'admin' | 'buyer')}
+                      <select value={inviteRole} onChange={e => setInviteRole(e.target.value as typeof inviteRole)}
                         className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110]">
-                        <option value="manager">Менеджер</option>
-                        <option value="buyer">Закупщик</option>
-                        <option value="measurer">Замерщик</option>
-                        <option value="admin">Администратор</option>
+                        <optgroup label="Разделы">
+                          <option value="partner">Клиент B2B</option>
+                          <option value="manager">Менеджер M-Glass</option>
+                          <option value="production">Работник производства</option>
+                          <option value="office">Офис-менеджер</option>
+                          <option value="logist">Логистика</option>
+                          <option value="buyer">Склад</option>
+                        </optgroup>
+                        <optgroup label="Прочие">
+                          <option value="measurer">Замерщик</option>
+                          <option value="admin">Администратор</option>
+                        </optgroup>
                       </select>
                     </div>
                     <div>

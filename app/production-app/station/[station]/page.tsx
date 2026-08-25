@@ -12,6 +12,7 @@ import {
   type CuttingSettings, type PieceGroup, type MaterialCuttingResult,
 } from '@/lib/cuttingOptimizer'
 import { PROD_SINCE } from '@/lib/orderFlags'
+import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 // Агрегированный экран станции: задачи этого этапа из ВСЕХ заказов, собранные
 // в партии по «материал + толщина». Для резки — со сводным раскроем (листы).
@@ -31,17 +32,12 @@ type OrderRow = { id: number; client_name: string; custom_number: string | null;
 type MatRow = { name: string; thickness: number; sheet_width: number | null; sheet_height: number | null; pattern_direction: string | null }
 
 // А4: срок отгрузки заказа (из А1). Партия кроится по срочности, а не по числу листов.
-function addWorkingDays(from: Date, days: number): Date {
-  const d = new Date(from); let left = days
-  while (left > 0) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) left-- }
-  return d
-}
 function orderDeadlineMs(o: OrderRow): number | null {
   let n: Record<string, unknown> = {}
   try { n = o.notes ? JSON.parse(o.notes) : {} } catch {}
   const dd = n.deadline_date
   if (typeof dd === 'string' && dd) return new Date(dd).getTime()
-  if (o.launched_at) return addWorkingDays(new Date(o.launched_at), 15).getTime()
+  if (o.launched_at) return addWorkingDays(new Date(o.launched_at), DEFAULT_WORKING_DAYS).getTime()
   return null
 }
 

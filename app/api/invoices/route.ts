@@ -1,11 +1,37 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-service'
 import { isOwnerRole } from '@/lib/getRole'
 
 // Реестр счетов: список / сохранение единого счёта / смена статуса оплаты.
 // RLS уже ограничивает финконтуром; здесь дополнительно проставляем автора.
 
 const FIN_ROLES = ['admin', 'ceo', 'cfo', 'accountant', 'commercial']
+
+// А10: менеджер работает с тем же реестром, но видит только счета своих клиентов.
+// RLS на invoices открыта финконтуру, поэтому для менеджера читаем сервис-клиентом
+// и режем выборку сами — по списку его клиентов и по авторству счёта.
+async function managerScope(sb: Awaited<ReturnType<typeof createClient>>, userId: string) {
+  const { data } = await sb.from('b2b_clients').select('id').eq('manager_id', userId)
+  return (data ?? []).map((c: { id: number }) => c.id)
+}
+
+async function requireAny() {
+  const sb = await createClient()
+  const { data: { user } } = await sb.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }) }
+  const { data: profile } = await sb.from('users').select('role, name, can_view_all_clients').eq('id', user.id).maybeSingle()
+  const role = (profile?.role as string | undefined) ?? ''
+  const fin = isOwnerRole(role) || FIN_ROLES.includes(role)
+  if (!fin && role !== 'manager') {
+    return { error: NextResponse.json({ error: 'Недостаточно прав' }, { status: 403 }) }
+  }
+  return {
+    sb, user, fin, role,
+    seeAll: fin || profile?.can_view_all_clients === true,
+    name: (profile?.name as string) || user.email || null,
+  }
+}
 
 async function requireFin() {
   const sb = await createClient()
@@ -20,14 +46,27 @@ async function requireFin() {
 }
 
 export async function GET() {
-  const a = await requireFin()
+  const a = await requireAny()
   if ('error' in a) return a.error
-  const { data } = await a.sb.from('invoices').select('*').order('id', { ascending: false }).limit(500)
-  return NextResponse.json({ invoices: data ?? [] })
+
+  if (a.fin || a.seeAll) {
+    const client = a.fin ? a.sb : createServiceClient()
+    const { data } = await client.from('invoices').select('*').order('id', { ascending: false }).limit(500)
+    return NextResponse.json({ invoices: data ?? [], scope: a.fin ? 'all' : 'all_clients' })
+  }
+
+  const clientIds = await managerScope(a.sb, a.user.id)
+  const svc = createServiceClient()
+  const { data } = await svc.from('invoices')
+    .select('*')
+    .or(`payer_client_id.in.(${clientIds.length ? clientIds.join(',') : '0'}),created_by.eq.${a.user.id}`)
+    .order('id', { ascending: false })
+    .limit(500)
+  return NextResponse.json({ invoices: data ?? [], scope: 'mine' })
 }
 
 export async function POST(req: Request) {
-  const a = await requireFin()
+  const a = await requireAny()
   if ('error' in a) return a.error
   const b = await req.json().catch(() => ({})) as {
     invoice_no?: string; payer_client_id?: number | null; payer_entity_id?: number | null; payer_name?: string
@@ -37,7 +76,15 @@ export async function POST(req: Request) {
   if (!(b.amount != null && b.amount >= 0) || !order_ids.length) {
     return NextResponse.json({ error: 'Нужны сумма и заказы' }, { status: 400 })
   }
-  const { data, error } = await a.sb.from('invoices').insert({
+  // Менеджер может выставить счёт только своему клиенту — проверяем до записи.
+  if (!a.fin && !a.seeAll) {
+    const clientIds = await managerScope(a.sb, a.user.id)
+    if (!b.payer_client_id || !clientIds.includes(Number(b.payer_client_id))) {
+      return NextResponse.json({ error: 'Счёт можно выставить только своему клиенту' }, { status: 403 })
+    }
+  }
+  const writer = a.fin ? a.sb : createServiceClient()
+  const { data, error } = await writer.from('invoices').insert({
     invoice_no: (b.invoice_no ?? '').trim() || '—',
     payer_client_id: b.payer_client_id ?? null,
     payer_entity_id: b.payer_entity_id ?? null,

@@ -72,11 +72,14 @@ export async function middleware(request: NextRequest) {
                     // ICS-фид календаря владельца: календарь не умеет логиниться,
                     // аутентификация — секрет в URL (проверяется в самом роуте)
                     pathname.startsWith('/api/vlad/calendar/')
+  // А5: КП по ссылке для клиента — логина нет, доступ даёт токен в URL
+  // (проверяется в самом роуте, наружу уходит whitelist полей без себестоимости).
+  const isPublicKp = pathname.startsWith('/p/kp/') || pathname.startsWith('/api/public/kp/')
   // Публичные демо-страницы дизайна (только вымышленные данные, без запросов к БД).
   const isPublicDemo = pathname.startsWith('/design/')
   // Встраиваемые виджеты для сайта (Tilda): публичный конфигуратор без логина.
   // + серверный расчёт цены (себестоимость считается на сервере, не уходит в браузер).
-  const isPublicEmbed = pathname.startsWith('/embed/') || pathname.startsWith('/api/configurator/')
+  const isPublicEmbed = pathname.startsWith('/embed/') || pathname.startsWith('/api/configurator/') || isPublicKp
   // Установка пароля по одноразовой ссылке: пользователь ещё не вошёл, поэтому
   // страница и её API доступны без сессии (действие защищено токеном в ссылке).
   const isPublicAuth = pathname === '/set-password' || pathname.startsWith('/api/auth/set-password')

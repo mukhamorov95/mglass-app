@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { resolvePartnerClient } from '@/lib/partnerClient'
+import { deadlineFor } from '@/lib/b2b/deadline'
 
 // Кабинет партнёра — «мои заказы» (read-only, строго по своему клиенту).
 // Клиент определяется по b2b_clients.user_id = auth.uid(). Никогда не отдаёт
@@ -22,20 +23,10 @@ function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}
   try { const p = JSON.parse(n); return typeof p === 'object' && p ? p as Record<string, unknown> : {} } catch { return {} }
 }
-// Рабочие дни (пропуская сб/вс) — согласованно с А1/А4 (расчёт срока при запуске
-// и сортировка цеха). Раньше запущенный заказ без явного срока показывал фабрикованные
-// +7 дней; теперь честный ориентир — запуск + 15 рабочих дней (сварное правит менеджер).
-function addWorkingDays(from: Date, days: number): Date {
-  const d = new Date(from); let left = days
-  while (left > 0) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) left-- }
-  return d
-}
+// Срок отгрузки считает общий модуль lib/b2b/deadline — та же формула, что видит
+// менеджер при запуске в работу. Раньше здесь жила своя копия, и даты расходились.
 function deadline(pn: Record<string, unknown>, createdAt: string): string {
-  const dl = pn.deadline_date ? new Date(pn.deadline_date as string)
-    : pn.launched_at && pn.production_days ? (() => { const d = new Date(pn.launched_at as string); d.setDate(d.getDate() + (pn.production_days as number)); return d })()
-    : pn.launched_at ? addWorkingDays(new Date(pn.launched_at as string), 15)
-    : addWorkingDays(new Date(createdAt), 15)
-  return dl.toISOString()
+  return deadlineFor(pn, createdAt).toISOString()
 }
 
 export async function GET() {

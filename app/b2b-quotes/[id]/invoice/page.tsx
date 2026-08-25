@@ -115,6 +115,48 @@ export default function InvoicePage() {
     }
   }
 
+  // А10: зарегистрировать счёт в реестре — с этого момента он не «печать на лету»,
+  // а документ: попадает в «Счета B2B» менеджера и в дебиторку финконтура.
+  const [regLoading, setRegLoading] = useState(false)
+  const [regMsg, setRegMsg] = useState<string | null>(null)
+  async function registerInvoice() {
+    if (!order) return
+    setRegLoading(true); setRegMsg(null)
+    try {
+      const amount = order.total_after_discount || order.total_sale_inc_vat || 0
+      const r = await fetch('/api/invoices', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          invoice_no: order.custom_number?.trim() || String(order.id).padStart(5, '0'),
+          payer_client_id: order.client_id,
+          payer_name: req.full_name || buyerName,
+          order_ids: [order.id],
+          amount,
+          vat: Math.round(amount * 22 / 122),
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      setRegMsg(r.ok ? 'Счёт зарегистрирован — виден в «Счета B2B»' : (j.error || 'Не удалось зарегистрировать'))
+    } finally { setRegLoading(false) }
+  }
+
+  // А8: ссылка на оплату для клиента (в буфер обмена). Пока эквайринг не подключён —
+  // роут честно отвечает 501, и менеджер видит, чего не хватает.
+  const [payLoading, setPayLoading] = useState(false)
+  const [payMsg, setPayMsg] = useState<string | null>(null)
+  async function payLink() {
+    setPayLoading(true); setPayMsg(null)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${id}/pay-link`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setPayMsg(j.error || 'Не удалось получить ссылку'); return }
+      try {
+        await navigator.clipboard.writeText(j.url)
+        setPayMsg(`Ссылка на оплату ${Math.round(j.amount).toLocaleString('ru-RU')} ₽ скопирована`)
+      } catch { window.prompt('Ссылка на оплату:', j.url) }
+    } finally { setPayLoading(false) }
+  }
+
   async function save() {
     setSaving(true); setSaved(false)
     try {
@@ -248,6 +290,21 @@ export default function InvoicePage() {
       <div className="no-print max-w-[820px] mx-auto pt-6 px-4 flex flex-wrap items-center gap-2">
         <button onClick={downloadPdf} className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28]">⬇ Скачать PDF</button>
         <button onClick={() => document.fonts.ready.then(() => window.print())} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
+        {/* А7: УПД по этому же заказу — реквизиты берутся отсюда же */}
+        <a href={`/b2b-quotes/${id}/upd`} target="_blank" rel="noreferrer"
+          className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">📑 УПД</a>
+        {/* А8: ссылка на онлайн-оплату — общий провайдер с кабинетом партнёра */}
+        <button onClick={payLink} disabled={payLoading}
+          className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white disabled:opacity-40">
+          {payLoading ? '…' : '💳 Ссылка на оплату'}
+        </button>
+        {payMsg && <span className="text-[12px] text-[#6b6b66] max-w-[420px]">{payMsg}</span>}
+        {/* А10: реестр счетов */}
+        <button onClick={registerInvoice} disabled={regLoading}
+          className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white disabled:opacity-40">
+          {regLoading ? '…' : '📒 В реестр счетов'}
+        </button>
+        {regMsg && <span className="text-[12px] text-[#6b6b66] max-w-[420px]">{regMsg}</span>}
         <button onClick={() => setShowEditor(v => !v)} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white ml-auto">{showEditor ? 'Скрыть реквизиты' : 'Реквизиты покупателя'}</button>
       </div>
 

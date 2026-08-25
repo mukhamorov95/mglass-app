@@ -247,6 +247,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
         <Link className="ghost" href={`/partner/order/${o.id}/kp`}>↓ Скачать КП</Link>
         {o.canInvoice && <Link className="ghost" href={`/partner/order/${o.id}/invoice`}>↓ Счёт-спецификация</Link>}
         {o.canInvoice && o.lane === 'shipped' && <Link className="ghost" href={`/partner/order/${o.id}/upd`}>↓ УПД</Link>}
+        {(o.lane === 'in_work' || o.lane === 'shipped') && <Link className="ghost" href={`/partner/claims?order=${o.id}`}>⚠️ Сообщить о проблеме</Link>}
         <Link className="primary" href={`/partner/new?reorder=${o.id}`}>Повторить заказ</Link>
       </div>
     </div>
