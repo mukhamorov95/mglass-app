@@ -36,6 +36,7 @@ function bucketOf(deadlineMs: number | null): number {
   if (days <= 7) return 3       // ≤неделя
   return 4                      // позже
 }
+function startOfTodayISO(): string { const d = new Date(); d.setHours(0, 0, 0, 0); return d.toISOString() }
 const BUCKETS = ['Просрочено', 'Сегодня', '≤3 дн', '≤неделя', 'Позже', 'Без срока']
 const BUCKET_HEAD = ['text-red-700', 'text-orange-600', 'text-amber-600', 'text-[#6b6b66]', 'text-[#9a9a95]', 'text-[#c4c4be]']
 
@@ -54,6 +55,14 @@ export default async function ProductionLoadPage() {
     .select('order_id, stage_key').neq('status', 'done').limit(20000)
   const tasks = (taskData ?? []) as Task[]
   const orderIds = [...new Set(tasks.map(t => t.order_id))]
+
+  // А5: пропускная способность — сколько задач закрыто СЕГОДНЯ по этапам (поток
+  // против очереди). Рабочие идут queued→done без «в работе», поэтому меряем не WIP
+  // по людям (трение), а реальный выход по этапу за день.
+  const { data: doneData } = await svc.from('production_tasks')
+    .select('stage_key').eq('status', 'done').gte('completed_at', startOfTodayISO()).limit(20000)
+  const doneToday = new Map<string, number>()
+  for (const d of (doneData ?? []) as { stage_key: string }[]) doneToday.set(d.stage_key, (doneToday.get(d.stage_key) ?? 0) + 1)
 
   const orderDeadline = new Map<number, number | null>()
   for (let i = 0; i < orderIds.length; i += 500) {
@@ -93,6 +102,7 @@ export default async function ProductionLoadPage() {
                 <th className="text-left py-2.5 px-3 text-[#9a9a95] font-medium">Этап</th>
                 {BUCKETS.map((b, i) => <th key={b} className={`text-center py-2.5 px-2 font-semibold text-[11px] uppercase tracking-wide ${BUCKET_HEAD[i]}`}>{b}</th>)}
                 <th className="text-center py-2.5 px-3 text-[#111110] font-semibold">Всего</th>
+                <th className="text-center py-2.5 px-3 text-emerald-700 font-semibold border-l border-[#f0f0ec]">✓ Сегодня</th>
               </tr>
             </thead>
             <tbody>
@@ -109,6 +119,7 @@ export default async function ProductionLoadPage() {
                       </td>
                     ))}
                     <td className="py-2 px-3 text-center font-mono font-bold text-[#111110]">{rt}</td>
+                    <td className="py-2 px-3 text-center font-mono text-emerald-700 border-l border-[#f8f8f7]">{doneToday.get(s.key) || <span className="text-[#e4e4e0]">·</span>}</td>
                   </tr>
                 )
               })}
@@ -118,6 +129,7 @@ export default async function ProductionLoadPage() {
                 <td className="py-2 px-3 text-[#6b6b66] text-[12px]">Итого</td>
                 {colTot.map((n, i) => <td key={i} className="py-2 px-1.5 text-center font-mono text-[#111110]">{n || '·'}</td>)}
                 <td className="py-2 px-3 text-center font-mono font-bold text-[#111110]">{totalPending}</td>
+                <td className="py-2 px-3 text-center font-mono font-bold text-emerald-700 border-l border-[#f0f0ec]">{[...doneToday.values()].reduce((a, b) => a + b, 0) || '·'}</td>
               </tr>
             </tfoot>
           </table>
