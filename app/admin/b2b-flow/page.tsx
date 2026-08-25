@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { createServiceClient } from '@/lib/supabase-service'
+import { deadlineOf } from '@/lib/orderFlags'
 
 // А10: сквозная аналитика B2B-потока (капстоун роадмапа). Объём и пропускная
 // способность: сколько заказов входит в производство и сколько выходит (отгрузка),
@@ -41,6 +42,19 @@ export default async function B2BFlowPage() {
   }
   const avgCycle = cycles.length ? Math.round(cycles.reduce((a, b) => a + b, 0) / cycles.length) : null
 
+  // A2 «В срок %»: по отгруженным, у кого есть И дата отгрузки, И срок — успели ли к дедлайну.
+  // Сравниваем по дате (первые 10 символов): и дата отгрузки, и deadline_date лежат как YYYY-MM-DD.
+  let onTime = 0, late = 0, shippedNoDeadline = 0
+  for (const r of rows) {
+    const sd = shippedDate(r.notes); if (!sd) continue
+    const dl = deadlineOf(r.notes)
+    if (!dl) { shippedNoDeadline++; continue }
+    if (sd.slice(0, 10) <= dl.slice(0, 10)) onTime++; else late++
+  }
+  const judged = onTime + late
+  const onTimePct = judged ? Math.round(onTime / judged * 100) : null
+  const onTimeTone = onTimePct == null ? 'text-[#9a9a95]' : onTimePct >= 95 ? 'text-emerald-600' : onTimePct >= 80 ? 'text-amber-600' : 'text-red-600'
+
   // Недельный поток: запущено vs отгружено (по дате отгрузки, где есть; иначе по launched-неделе флага).
   const weeks: { ms: number; launched: number; shipped: number }[] = []
   for (let i = 11; i >= 0; i--) weeks.push({ ms: weekStartMs(daysAgoISO(i * 7)), launched: 0, shipped: 0 })
@@ -76,6 +90,19 @@ export default async function B2BFlowPage() {
         </div>
 
         <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+          <div className="flex items-baseline justify-between mb-1">
+            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Отгрузка в срок</p>
+            <p className={`text-[22px] font-bold font-mono leading-none ${onTimeTone}`}>{onTimePct != null ? `${onTimePct}%` : '—'}</p>
+          </div>
+          <p className="text-[11px] text-[#9a9a95]">
+            {judged
+              ? `${onTime} в срок · ${late} с опозданием — из ${judged} заказов с датой отгрузки и сроком`
+              : 'пока нет заказов, у которых есть и дата отгрузки, и срок'}
+            {shippedNoDeadline ? ` · ещё ${shippedNoDeadline} отгружено без срока (в расчёт не берём)` : ''}
+          </p>
+        </div>
+
+        <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
           <div className="flex items-center justify-between mb-3">
             <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Поток по неделям · <span className="text-blue-600">запущено</span> / <span className="text-emerald-600">отгружено</span></p>
           </div>
@@ -90,7 +117,7 @@ export default async function B2BFlowPage() {
               </div>
             ))}
           </div>
-          <p className="text-[11px] text-[#9a9a95] mt-2">Синяя выше зелёной устойчиво = очередь растёт (цех не успевает за интейком). Даты отгрузки заполнены не везде — «в срок %» копится с внедрением сроков (А1).</p>
+          <p className="text-[11px] text-[#9a9a95] mt-2">Синяя выше зелёной устойчиво = очередь растёт (цех не успевает за интейком). «В срок %» считается по заказам, где есть и дата отгрузки, и срок — покрытие растёт по мере проставления сроков при запуске.</p>
         </div>
 
         <div className="flex gap-3 flex-wrap">
