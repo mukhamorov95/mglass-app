@@ -68,6 +68,9 @@ export default function MovesTab({ canSeeCost }: { canSeeCost: boolean }) {
                   </td>
                   <td className="px-3 py-2 text-[#9a9a95]">
                     {REASON_LABELS[m.reason]}
+                    {m.origin === 'plan' && (
+                      <span className="ml-1 text-[10px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200">по плану</span>
+                    )}
                     {m.doc_type && <span className="ml-1 text-[11px]">({DOC_LABELS[m.doc_type] ?? m.doc_type} {m.doc_id})</span>}
                   </td>
                   {canSeeCost && (
