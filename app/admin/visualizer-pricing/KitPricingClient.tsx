@@ -79,6 +79,7 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   const cur = store[tier]
   const model = getModel(code)
@@ -402,18 +403,30 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           {ROLE_GROUPS.map(grp => {
             const inGroup = kit.slots.map((slot, si) => ({ slot, si })).filter(x => grp.roles.includes(x.slot.role))
             if (inGroup.length === 0) return null
+            const filled = inGroup.filter(x => x.slot.entries.length > 0).length
+            const isOpen = !collapsed[grp.id]
             return (
-              <div key={grp.id} className="space-y-2">
-                <p className="text-[12px] font-semibold text-[#111110] px-1 pt-1">{grp.title}</p>
+              <div key={grp.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <button onClick={() => setCollapsed(c => ({ ...c, [grp.id]: !c[grp.id] }))}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-[#faf9f6] border-b border-[#eeece5] text-left hover:bg-[#f5f4ef]">
+                  <span className={`text-[10px] text-[#9a9a95] transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                  <span className="text-[13px] font-semibold text-[#111110]">{grp.title}</span>
+                  <span className={`text-[11px] ${filled === inGroup.length ? 'text-[#5a8a5a]' : 'text-[#b09a6a]'}`}>
+                    {filled} из {inGroup.length}
+                  </span>
+                  <span className="ml-auto text-[11px] text-[#9a9a95]">
+                    {inGroup.map(x => ROLE_META[x.slot.role].label).join(' · ')}
+                  </span>
+                </button>
+                {isOpen && <div className="p-2 space-y-2">
                 {inGroup.map(({ slot, si }) => {
             const meta = ROLE_META[slot.role]
             const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
             const unneeded = qty === 0
             return (
-              <Card key={slot.role}
-                right={<button onClick={() => removeSlot(si)} className="text-[11px] text-[#b04a3f] hover:underline">удалить роль</button>}>
-                <div className="flex items-center gap-2 mb-0.5 -mt-1">
-                  <p className="text-[13px] font-semibold text-[#111110]">{meta.label}</p>
+              <div key={slot.role} className="rounded-lg border border-[#eeece5] bg-white pl-3 pr-3 py-2.5 border-l-[3px] border-l-[#e0ddd2]">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[13px] font-medium text-[#111110]">{meta.label}</p>
                   {unneeded
                     ? <span className="text-[10px] text-[#b09a6a]">модели не нужна</span>
                     : <span className="text-[10px] text-[#8a9a7a]">×{qty} из геометрии</span>}
@@ -421,6 +434,8 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                     <button onClick={() => setSelect(si, 'one')} className={`px-2 py-0.5 ${slot.select === 'one' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>одна из списка</button>
                     <button onClick={() => setSelect(si, 'all')} className={`px-2 py-0.5 ${slot.select === 'all' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>все сразу</button>
                   </span>
+                  <button onClick={() => removeSlot(si)} title="Убрать эту подгруппу из модели"
+                    className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-0.5">×</button>
                 </div>
                 <p className="text-[11px] text-[#9a9a95] mb-2">{meta.hint}</p>
 
@@ -496,9 +511,10 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   <button onClick={() => setPicker({ si })} className="text-[12px] font-medium text-[#256029] hover:underline">📗 из справочника</button>
                   <button onClick={() => addManual(si)} className="text-[12px] text-[#9a9a95] hover:underline">+ вручную</button>
                 </div>
-              </Card>
+              </div>
             )
           })}
+                </div>}
               </div>
             )
           })}
