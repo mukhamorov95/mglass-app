@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toPublicQuote, newPublicToken } from '@/lib/b2b/publicQuote'
+import { toPublicQuote, newPublicToken, documentSafeOrder, documentSafeItems } from '@/lib/b2b/publicQuote'
 
 // Публичное КП отдаётся без логина — главное требование: наружу не уходит
 // ничего про себестоимость и внутреннюю кухню.
@@ -61,5 +61,38 @@ describe('toPublicQuote', () => {
     const a = newPublicToken(), b = newPublicToken()
     expect(a).toMatch(/^[a-f0-9]{32}$/)
     expect(a).not.toBe(b)
+  })
+})
+
+// Кабинет партнёра: счёт и УПД получают заказ через documentSafeOrder — сырой items
+// содержит costExVat/costMaterial/margin и цены услуг, наружу они уходить не должны.
+describe('documentSafeOrder — кабинет партнёра', () => {
+  const LEAKS = ['costExVat', 'costMaterial', 'costWithVat', 'inputVat', 'margin', 'pricePerM2', 'totalAreaBilled', 'wastePercent']
+
+  it('не отдаёт себестоимость и внутренние поля позиции', () => {
+    const safe = documentSafeOrder({ ...ORDER, launched_at: '2026-08-25T00:00:00Z' })
+    const json = JSON.stringify(safe)
+    for (const leak of LEAKS) expect(json).not.toContain(leak)
+    expect(json).not.toContain('16616')
+  })
+
+  it('оставляет всё, что печатается в счёте', () => {
+    const safe = documentSafeOrder({ ...ORDER, launched_at: null })
+    expect(safe.total_after_discount).toBe(34207)
+    expect(safe.discount_percent).toBe(10)
+    expect(safe.items[0].saleIncVat).toBe(38008)
+    expect(safe.items[0].materialName).toBe('Зеркало 4 мм')
+    expect(safe.items[0].quantity).toBe(2)
+  })
+
+  it('цена услуги внутрь строки не попадает', () => {
+    const [it] = documentSafeItems(ORDER.items)
+    expect(it.services).toEqual([{ id: 1, name: 'Полировка' }])
+    expect(JSON.stringify(it.services)).not.toContain('cost')
+  })
+
+  it('мусор вместо items не роняет документ', () => {
+    expect(documentSafeItems(null)).toEqual([])
+    expect(documentSafeItems('нет')).toEqual([])
   })
 })

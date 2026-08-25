@@ -138,3 +138,29 @@ export function toPublicQuote(order: OrderRow): PublicQuote {
     clientResponse:  resp,
   }
 }
+
+// Позиции для документа, который уходит наружу (счёт/УПД в кабинете партнёра,
+// публичное КП). Тот же белый список, что в publicItem: себестоимость, маржа,
+// расход материала и цены услуг остаются внутри компании.
+export function documentSafeItems(items: unknown): PublicQuoteItem[] {
+  if (!Array.isArray(items)) return []
+  return (items as Record<string, unknown>[]).map(publicItem)
+}
+
+// Заказ для документа партнёра: ничего лишнего, кроме того, что печатается.
+export function documentSafeOrder(order: Record<string, unknown>) {
+  return {
+    id: Number(order.id),
+    client_id: order.client_id == null ? null : Number(order.client_id),
+    client_name: (order.client_name as string | null) ?? null,
+    custom_number: (order.custom_number as string | null) ?? null,
+    client_order_number: (order.client_order_number as string | null) ?? null,
+    discount_percent: Number(order.discount_percent) || 0,
+    items: documentSafeItems(order.items),
+    total_sale_inc_vat: Number(order.total_sale_inc_vat) || 0,
+    total_after_discount: Number(order.total_after_discount) || 0,
+    notes: typeof order.notes === 'string' ? order.notes : null,
+    created_at: String(order.created_at ?? ''),
+    launched_at: (order.launched_at as string | null) ?? null,
+  }
+}
