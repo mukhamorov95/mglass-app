@@ -3,6 +3,7 @@ import { redirect, notFound } from 'next/navigation'
 import { getRole, isOwnerRole } from '@/lib/getRole'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { finalTotalOf, type PriceApproval } from '@/lib/b2b/priceOverride'
+import { paidByOrder, remainderStatus } from '@/lib/b2b/orderPayments'
 import { effectiveItemTotal, type B2BOrderItem } from '@/lib/b2bCalculator'
 import { deadlineFor } from '@/lib/b2b/deadline'
 import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
@@ -52,7 +53,28 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
   const approval = notes.price_approval as PriceApproval | undefined
   const claim = notes.claim as { status?: string; reason?: string; cost?: number; fault?: string } | undefined
   const delivery = notes.delivery as { method?: string; address?: string | null; status?: string } | undefined
-  const paid = notes.payment_status === 'paid' ? total : notes.payment_status === 'partial' ? Number(notes.prepayment_amount) || 0 : 0
+  // A23: оплата — из payments (не из notes). Прямые платежи по заказу + доля от
+  // оплаченных счетов, куда заказ входит. Считаем на сервере — деньги наружу
+  // без себестоимости.
+  const [{ data: pays }, { data: invs }] = await Promise.all([
+    sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').eq('b2b_order_id', dealId).is('voided_at', null),
+    sb.from('invoices').select('id, order_ids, amount').overlaps('order_ids', [dealId]),
+  ])
+  let invPays: { amount: number; b2b_order_id: number | null; invoice_id: number | null; voided_at: string | null }[] = []
+  const invIds = ((invs ?? []) as { id: number }[]).map(i => i.id)
+  if (invIds.length) {
+    const { data } = await sb.from('payments').select('amount, b2b_order_id, invoice_id, voided_at').in('invoice_id', invIds).is('voided_at', null)
+    invPays = ((data ?? []) as Record<string, unknown>[])
+      .filter(p => p.b2b_order_id == null)
+      .map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: null, invoice_id: Number(p.invoice_id) || null, voided_at: null }))
+  }
+  const paidMap = paidByOrder(
+    [...((pays ?? []) as Record<string, unknown>[]).map(p => ({ amount: Number(p.amount) || 0, b2b_order_id: Number(p.b2b_order_id) || null, invoice_id: p.invoice_id == null ? null : Number(p.invoice_id), voided_at: (p.voided_at as string | null) ?? null })), ...invPays],
+    ((invs ?? []) as Record<string, unknown>[]).map(i => ({ id: Number(i.id), order_ids: Array.isArray(i.order_ids) ? (i.order_ids as unknown[]).map(Number) : null, amount: Number(i.amount) || 0 })),
+    new Map([[dealId, total]]),
+  )
+  const rem = remainderStatus(total, paidMap.get(dealId) ?? 0)
+  const paid = rem.paid
   const history = (Array.isArray(notes.total_history) ? notes.total_history : []) as { old_total?: number; new_total?: number; changed_by?: string; changed_at?: string; reset?: boolean }[]
 
   return (
@@ -118,10 +140,12 @@ export default async function DealPage({ params }: { params: Promise<{ id: strin
         <Section title="Деньги">
           <dl className="text-[12px] space-y-1">
             <div className="flex justify-between"><dt className="text-[#9a9a95]">К оплате</dt><dd className="font-mono font-semibold">{fmt(total)}</dd></div>
-            <div className="flex justify-between"><dt className="text-[#9a9a95]">Оплачено</dt><dd className="font-mono">{fmt(paid)}</dd></div>
+            <div className="flex justify-between"><dt className="text-[#9a9a95]">Оплачено</dt><dd className="font-mono">{rem.hasPayment ? fmt(paid) : '—'}</dd></div>
             <div className="flex justify-between">
-              <dt className="text-[#9a9a95]">Долг</dt>
-              <dd className={`font-mono font-semibold ${total - paid > 0 ? 'text-red-600' : 'text-emerald-600'}`}>{fmt(total - paid)}</dd>
+              <dt className="text-[#9a9a95]">{rem.hasPayment ? 'Остаток' : 'Оплата'}</dt>
+              <dd className={`font-mono font-semibold ${!rem.hasPayment ? 'text-[#9a9a95]' : rem.outstanding ? 'text-red-600' : 'text-emerald-600'}`}>
+                {rem.hasPayment ? (rem.outstanding ? fmt(rem.remainder) : 'закрыт') : 'не заведена'}
+              </dd>
             </div>
             {owner && (
               <div className="flex justify-between"><dt className="text-[#9a9a95]">Себестоимость</dt><dd className="font-mono text-[#6b6b66]">{fmt(Number(order.total_cost_net) || 0)}</dd></div>
