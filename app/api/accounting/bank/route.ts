@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
@@ -12,7 +13,6 @@ import { recordPayment } from '@/lib/payments/recordPayment'
 
 export const maxDuration = 120
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 // Банки отдают 1С-обмен в windows-1251; utf-8 распознаём по отсутствию «замен».
 async function decode(file: File): Promise<string> {

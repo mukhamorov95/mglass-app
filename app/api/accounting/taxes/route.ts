@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { buildYear, type TaxRegime } from '@/lib/taxCalendar'
@@ -8,7 +9,6 @@ import { buildYear, type TaxRegime } from '@/lib/taxCalendar'
 // проставляет бухгалтер. Оплата рождает операцию ДДС в фонде «Налоги» — так
 // налог виден и в календаре, и в ОДДС, а не отдельной вселенной.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 async function me() {
   const sb = await createClient()
