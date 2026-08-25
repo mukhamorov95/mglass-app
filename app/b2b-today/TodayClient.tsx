@@ -52,6 +52,8 @@ const TONE: Record<Bucket['tone'], string> = {
 
 export default function TodayClient() {
   const [rows, setRows] = useState<Row[]>([])
+  // А18: план/факт месяца. Плана нет — блок не мешается, просто показываем факт.
+  const [plan, setPlan] = useState<{ plan: number; launched: number; paid: number; forecast: number; donePct: number | null; name: string }[] | null>(null)
   const [nowTs, setNowTs] = useState(0)   // время берём в эффекте: рендер должен быть чистым
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -84,6 +86,13 @@ export default function TodayClient() {
         setRows((data ?? []) as Row[])
       } finally { setLoading(false) }
     })()
+  }, [])
+
+  useEffect(() => {
+    fetch('/api/b2b-plans')
+      .then(r => r.ok ? r.json() : null)
+      .then(j => { if (j?.rows) setPlan(j.rows) })
+      .catch(() => {})
   }, [])
 
   const buckets = useMemo<Bucket[]>(() => {
@@ -161,6 +170,36 @@ export default function TodayClient() {
           {loading ? 'Считаю…' : totalActions > 0 ? `${totalActions} дел требуют вас` : 'Всё разобрано'}
         </p>
       </div>
+
+      {/* А18: план/факт по B2B за месяц */}
+      {plan && plan.length > 0 && (
+        <div className="mb-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {plan.slice(0, 6).map((p, i) => (
+            <div key={i} className="border border-[#e4e4e0] bg-white rounded-2xl px-4 py-3">
+              <p className="text-[11px] text-[#9a9a95] truncate">{p.name}</p>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className="text-[18px] font-bold font-mono text-[#111110]">{fmt(p.launched)}</span>
+                {p.plan > 0 && <span className="text-[12px] text-[#9a9a95]">из {fmt(p.plan)}</span>}
+              </div>
+              {p.plan > 0 ? (
+                <>
+                  <div className="h-1.5 bg-[#f0f0ec] rounded-full mt-2 overflow-hidden">
+                    <div className={`h-full rounded-full ${(p.donePct ?? 0) >= 100 ? 'bg-emerald-500' : (p.donePct ?? 0) >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                      style={{ width: `${Math.min(100, p.donePct ?? 0)}%` }} />
+                  </div>
+                  <p className="text-[11px] text-[#6b6b66] mt-1">
+                    {p.donePct}% плана · прогноз {fmt(p.forecast)}{p.paid > 0 && ` · оплачено ${fmt(p.paid)}`}
+                  </p>
+                </>
+              ) : (
+                <p className="text-[11px] text-[#9a9a95] mt-1">
+                  план не задан · прогноз {fmt(p.forecast)}{p.paid > 0 && ` · оплачено ${fmt(p.paid)}`}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {error ? (
         <p className="text-[13px] text-red-600">{error}</p>
