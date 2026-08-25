@@ -16,6 +16,7 @@ import { BankTab } from '@/components/accounting/BankTab'
 import { PayrollTab } from '@/components/accounting/PayrollTab'
 import { TaxesTab } from '@/components/accounting/TaxesTab'
 import { CounterpartiesTab } from '@/components/accounting/CounterpartiesTab'
+import { AuditTab } from '@/components/accounting/AuditTab'
 
 type Fund = { id: number; unit: string; flow: string; fund_class: string; name: string; percent: number | null; sort: number; active: boolean }
 type Subfund = { id: number; fund_id: number; name: string; sort: number; active: boolean }
@@ -36,7 +37,7 @@ const shiftMonth = (ym: string, d: number) => {
 
 export default function AccountingPage() {
   const sb = createClient()
-  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'requests' | 'committee' | 'notes'>('odds')
+  const [tab, setTab] = useState<'odds' | 'finweek' | 'entry' | 'unposted' | 'bank' | 'payroll' | 'taxes' | 'partners' | 'docs' | 'audit' | 'requests' | 'committee' | 'notes'>('odds')
   const [unposted, setUnposted] = useState(0)
   const [locked, setLocked] = useState(false)
   const [log, setLog] = useState<{ id: number; entry_id: number; action: string; entry_date: string; actor: string | null; at: string; amount: number }[]>([])
@@ -273,7 +274,7 @@ export default function AccountingPage() {
           <div className="flex gap-1 mt-3 -mb-px overflow-x-auto no-scrollbar">
             {(isBuyer
               ? ([['requests', 'Заявки на оплату']] as const)
-              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
+              : ([['odds', 'ОДДС'], ['finweek', 'Финнеделя'], ['entry', 'Ввод операций'], ['unposted', 'К проведению'], ['bank', 'Выписка'], ['payroll', 'Зарплата'], ['taxes', 'Налоги'], ['partners', 'Контрагенты'], ['docs', 'Документы'], ['audit', '✅ Проверка'], ['requests', 'Заявки'], ['committee', 'Комитет'], ['notes', '🎙 Предложения']] as const)
             ).map(([k, label]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`px-3.5 py-2 text-[13px] font-medium border-b-2 whitespace-nowrap flex-shrink-0 ${tab === k ? 'border-[#111110] text-[#111110]' : 'border-transparent text-[#9a9a95]'}`}>
@@ -468,6 +469,7 @@ export default function AccountingPage() {
           <CounterpartiesTab unit={unit} from={`${month.slice(0, 4)}-01-01`} />
         )}
         {tab === 'docs' && !isBuyer && <DocumentsTab />}
+        {tab === 'audit' && !isBuyer && <AuditTab today={fDate} />}
         {tab === 'finweek' && !isBuyer && <FinweekTab unit={unit} funds={funds} isFin={isFin} myName={myName} showBreakevenLink={['cfo', 'admin', 'ceo'].includes(myRole)} />}
         {tab === 'requests' && <RequestsTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
         {tab === 'committee' && !isBuyer && <CommitteeTab unit={unit} funds={funds} subfunds={subfunds} isFin={isFin} myName={myName} />}
