@@ -1,0 +1,11 @@
+[
+ {"name":"Прозрачное М1","category":"glass","t4":355,"t5":451,"t6":540,"t8":781,"t10":975,"t12":5700},
+ {"name":"Тонированное (бронза/графит)","category":"glass","t4":695,"t5":883,"t6":1056,"t8":1576,"t10":1822,"t12":null},
+ {"name":"Сатинированное бесцветное","category":"glass","t4":740,"t5":888,"t6":1073,"t8":1480,"t10":1776,"t12":null},
+ {"name":"Сатин тонированный","category":"glass","t4":1000,"t5":1200,"t6":1450,"t8":2000,"t10":2400,"t12":null},
+ {"name":"Осветлённое CrystalVision","category":"glass","t4":950,"t5":null,"t6":1400,"t8":2100,"t10":2689,"t12":10300},
+ {"name":"CrystalVision Matelux","category":"glass","t4":1050,"t5":null,"t6":1659,"t8":2352,"t10":2972,"t12":null},
+ {"name":"Серебро","category":"mirror","t4":730,"t5":null,"t6":1095,"t8":null,"t10":null,"t12":null},
+ {"name":"Осветлённое","category":"mirror","t4":1180,"t5":null,"t6":1770,"t8":null,"t10":null,"t12":null},
+ {"name":"Тонированное (бронза/графит)","category":"mirror","t4":1000,"t5":null,"t6":1700,"t8":null,"t10":null,"t12":null}
+]
