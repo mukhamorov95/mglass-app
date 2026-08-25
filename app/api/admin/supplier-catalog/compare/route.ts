@@ -21,6 +21,8 @@ function tokens(name: string): string[] {
   return out
 }
 
+export const isDefect = (name: string) => /дефект|-def\b|уценк/i.test(name)
+
 export async function GET(req: NextRequest) {
   const guard = await requireRole(['admin', 'ceo', 'buyer'])
   if (guard instanceof NextResponse) return guard
@@ -38,8 +40,10 @@ export async function GET(req: NextRequest) {
   for (const t of toks) query = query.ilike('name', `%${t}%`)   // AND по словам
   const { data: matches } = await query.limit(40)
 
+  // Брак («с дефектом», -DEF) в прайсе стоит копейки и всегда всплывает первым —
+  // в подбор он попасть не должен: это не та же позиция, а уценка.
   const list = (matches ?? [])
-    .filter(m => m.cost_price > 0)
+    .filter(m => m.cost_price > 0 && !isDefect(m.name))
     .sort((a, b) => a.cost_price - b.cost_price)
     .slice(0, 12)
   const cheapest = list.length ? list[0].cost_price : null

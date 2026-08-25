@@ -225,3 +225,45 @@ describe('kit — распознавание роли по названию', ()
     expect(inferRole('Непонятная железка')).toBe(null)
   })
 })
+
+describe('kit — варианты одной модели (М1: труба 90° / 45° / стабилизатор / в потолок)', () => {
+  // Геометрия помечает узел через spec — у вариантов разные артикулы, по общему kind их не развести.
+  const asm = (spec: string, len: number) => ({
+    glass: [{ key: 'g', role: 'fixed' as const, rotY: 0, pos: [0, 1, 0] as [number, number, number], size: [0.9, 2, 0.008] as [number, number, number] }],
+    metal: [{ key: 'b', kind: 'rail' as const, rotY: 0, pos: [0, 2, 0] as [number, number, number], size: [len, 0.03, 0.01] as [number, number, number], spec }],
+    hardware: [],
+    niche: { w: 1, depth: 1, wallH: 2.5, trayH: 0, walls: { back: true, left: false, right: false } },
+    bounds: { w: 1, d: 1, h: 2 }, center: [0.5, 1, 0.5] as [number, number, number],
+  })
+
+  const lib: Library = { items: [
+    { id: 't90', name: 'Труба FDT-35L', role: 'tube', stocks: [{ len: 1000, prices: { chrome: 900 } }] },
+    { id: 't45', name: 'Штанга FDT-55L', role: 'tube-diag45', stocks: [{ len: 1400, prices: { chrome: 1600 } }] },
+  ] }
+  const kit: ModelKit = { slots: [
+    { role: 'tube', select: 'one', entries: [{ itemId: 't90', qty: { mode: 'role' }, primary: true }] },
+    { role: 'tube-diag45', select: 'one', entries: [{ itemId: 't45', qty: { mode: 'role' }, primary: true }] },
+  ] }
+
+  it('активен только выбранный вариант — второй не считается и не идёт в missing', () => {
+    const q = computeKitQuantities(asm('tube-perp90', 0.9), 8)
+    expect(q.barPieces['tube']).toEqual([900])
+    expect(q.roleQty['tube-diag45']).toBe(0)
+    const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
+    expect(p.lines.map(l => l.role)).toEqual(['tube'])
+    expect(p.missing).toEqual([])
+  })
+
+  it('вариант 45° берёт свой артикул и свою цену', () => {
+    const q = computeKitQuantities(asm('tube-diag45', 1.27), 8)
+    const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
+    expect(p.lines.map(l => l.itemId)).toEqual(['t45'])
+    expect(p.hardwareCost).toBe(1600)
+  })
+
+  it('без пометки spec работает старый фолбэк: rail → труба, профиль → профиль', () => {
+    const q = computeKitQuantities(asm('', 1.1), 8)
+    expect(q.barPieces['tube']).toEqual([1100])
+    expect(q.tubePieces).toEqual([1100])
+  })
+})

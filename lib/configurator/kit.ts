@@ -16,9 +16,10 @@ import type { PriceByColor, BarStock, CatalogRef, Tier } from '@/lib/configurato
 // Позиции НА ВЫБОР — одна роль с несколькими записями (петля Balge или FDP-115).
 export const ROLES = [
   'hinge', 'handle', 'handle-slide', 'roller',
-  'mount-wall', 'mount-glass', 'mount-corner', 'connector',
+  'mount-wall', 'mount-glass', 'mount-corner', 'mount-diag45', 'mount-stabilizer', 'connector',
   'cap', 'seal-magnet', 'seal-bottom', 'seal-hinge',
-  'profile', 'tube',
+  'profile', 'profile-wall', 'profile-floor', 'profile-top', 'profile-vertical',
+  'tube', 'tube-diag45', 'tube-stabilizer',
 ] as const
 export type RoleId = typeof ROLES[number]
 
@@ -31,13 +32,21 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-wall':   { label: 'Крепление к стене',     kind: 'piece', hint: 'труба 30×10 → стена' },
   'mount-glass':  { label: 'Крепление к стеклу',    kind: 'piece', hint: 'держатель стекла на трубе' },
   'mount-corner': { label: 'Крепление угловое',     kind: 'piece', hint: 'Г-образное, труба → стекло' },
+  'mount-diag45': { label: 'Крепление 45°',         kind: 'piece', hint: 'штанга «люкс» под 45° — два крепления' },
+  'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
   'cap':          { label: 'Заглушки',              kind: 'piece', hint: '2 на каждый кусок профиля' },
   'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'piece', hint: 'притвор двери' },
   'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'piece', hint: 'низ двери / створки' },
   'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'piece', hint: 'стык двери и стационара' },
   'profile':      { label: 'Профиль',               kind: 'bar',   hint: 'по стене и по полу — хлысты' },
-  'tube':         { label: 'Труба / штанга',        kind: 'bar',   hint: '30×10 — хлысты' },
+  'profile-wall': { label: 'Профиль по стене',      kind: 'bar',   hint: 'вертикаль у стены' },
+  'profile-floor':{ label: 'Профиль по полу',       kind: 'bar',   hint: 'нижняя обвязка' },
+  'profile-top':  { label: 'Профиль верхний',       kind: 'bar',   hint: 'верх — потолочный вариант и обвязка по периметру' },
+  'profile-vertical': { label: 'Профиль вертикальный', kind: 'bar', hint: 'свободная вертикаль — только по периметру' },
+  'tube':         { label: 'Труба / штанга',        kind: 'bar',   hint: '30×10 перпендикулярно — длина от глубины поддона' },
+  'tube-diag45':  { label: 'Штанга 45°',            kind: 'bar',   hint: 'вариант «люкс»' },
+  'tube-stabilizer': { label: 'Стабилизационная штанга', kind: 'bar', hint: 'распорка' },
 }
 export const isRole = (v: string): v is RoleId => (ROLES as readonly string[]).includes(v)
 
@@ -47,6 +56,12 @@ const PLACEMENT_ROLE: Record<string, RoleId> = {
   balge: 'hinge', dessau: 'hinge', sd210: 'handle', kupe: 'handle-slide', roller: 'roller',
   kp002: 'mount-wall', kp006: 'mount-glass', kp001: 'mount-corner', connector: 'connector', cap: 'cap',
 }
+
+// Геометрия может пометить узел явно (`spec`) — тогда роль берётся оттуда: у вариантов
+// одной модели (труба 90° / 45° / стабилизатор / в потолок) артикулы разные, и по общему
+// kind их не развести. Нет spec — работает старый фолбэк по kind/model.
+const specRole = (spec: string | undefined, fallback: RoleId): RoleId =>
+  spec && isRole(spec) ? spec : fallback
 
 // Название позиции справочника → роль (подсказка при вставке; правится вручную).
 export function inferRole(text: string): RoleId | null {
@@ -110,8 +125,9 @@ export type KitQuantities = {
   thickness: number
   sections: number
   glassM2: number
-  profilePieces: number[]        // куски, мм — для раскроя
+  profilePieces: number[]        // куски профиля, мм (сводно — для раскроя и совместимости)
   tubePieces: number[]
+  barPieces: Record<string, number[]>   // куски по КАЖДОЙ bar-роли
   roleQty: Record<RoleId, number>
   swingDoors: number
   slideDoors: number
@@ -132,20 +148,30 @@ function doorCounts(model?: MModel): { swing: number; slide: number } {
 
 export function computeKitQuantities(assembly: Assembly, thickness: number, model?: MModel): KitQuantities {
   const glassM2 = round2(assembly.glass.reduce((s, g) => s + g.size[0] * g.size[1], 0))
-  const profilePieces = [
-    ...assembly.metal.filter(m => m.kind === 'profile').map(m => mm(m.size[0])),
-    ...assembly.metal.filter(m => m.kind === 'post').map(m => mm(m.size[1])),
-  ].filter(l => l > 0)
-  const tubePieces = assembly.metal.filter(m => m.kind === 'rail').map(m => mm(m.size[0])).filter(l => l > 0)
+
+  // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
+  const barPieces: Record<string, number[]> = {}
+  for (const m of assembly.metal) {
+    const spec = (m as { spec?: string }).spec
+    const fallback: RoleId = m.kind === 'rail' ? 'tube' : 'profile'
+    const role = specRole(spec, fallback)
+    const len = mm(m.kind === 'post' ? m.size[1] : m.size[0])
+    if (len <= 0) continue
+    ;(barPieces[role] ??= []).push(len)
+  }
+  const profilePieces = ROLES.filter(r => r.startsWith('profile')).flatMap(r => barPieces[r] ?? [])
+  const tubePieces = ROLES.filter(r => r.startsWith('tube')).flatMap(r => barPieces[r] ?? [])
 
   const roleQty = Object.fromEntries(ROLES.map(r => [r, 0])) as Record<RoleId, number>
   for (const h of assembly.hardware) {
-    const role = PLACEMENT_ROLE[h.model]
-    if (role) roleQty[role] += 1
+    const spec = (h as { spec?: string }).spec
+    const fallback = PLACEMENT_ROLE[h.model]
+    if (!spec && !fallback) continue
+    roleQty[specRole(spec, fallback)] += 1
   }
+  // Заглушки — по 2 на каждый кусок профиля (верх/низ), сколько бы ролей профиля ни было.
   roleQty.cap = profilePieces.length * 2
-  roleQty.profile = profilePieces.length
-  roleQty.tube = tubePieces.length
+  for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
   // Уплотнители: магнитный и петлевой — на каждую распашную дверь (притвор и стык
   // со стационаром), нижний — на каждую подвижную створку (распашную и раздвижную).
@@ -156,7 +182,7 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   roleQty['seal-hinge'] = swingDoors
   roleQty['seal-bottom'] = swingDoors + slideDoors
 
-  return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, roleQty, swingDoors, slideDoors }
+  return { thickness, sections: assembly.glass.length, glassM2, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
 }
 
 // ── Раскрой хлыстов ───────────────────────────────────────────────
@@ -310,7 +336,7 @@ export function computeKitPrice(
       const qty = resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
-        const pieces = slot.role === 'profile' ? q.profilePieces : q.tubePieces
+        const pieces = q.barPieces[slot.role] ?? []
         const stocks: Stock[] = (it.stocks ?? [])
           .map(s => ({ len: s.len, price: s.prices?.[finishId] ?? s.prices?.chrome ?? 0 }))
           .filter(s => s.len > 0 && s.price > 0)
