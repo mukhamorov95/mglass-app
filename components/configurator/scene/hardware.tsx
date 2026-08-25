@@ -154,9 +154,7 @@ function KP006({ material }: { material: THREE.Material }) {
 // блок винтом к стене. X — вдоль трубы, +Z — к стене.
 function KP002({ material }: { material: THREE.Material }) {
   return (
-    <mesh material={material} castShadow>
-      <boxGeometry args={[18 * M, 40 * M, 31 * M]} />
-    </mesh>
+    <RoundedBox args={[18 * M, 40 * M, 31 * M]} radius={2.5 * M} smoothness={3} material={material} castShadow />
   )
 }
 
@@ -167,9 +165,7 @@ function KP001({ material }: { material: THREE.Material }) {
   return (
     <group>
       {/* тело блока (принимает трубу перпендикулярно) */}
-      <mesh position={[0, 5 * M, 0]} material={material} castShadow>
-        <boxGeometry args={[36 * M, 32 * M, 22 * M]} />
-      </mesh>
+      <RoundedBox args={[36 * M, 32 * M, 22 * M]} radius={2.5 * M} smoothness={3} position={[0, 5 * M, 0]} material={material} castShadow />
       {/* U-скоба снизу — на кромку бокового стекла (две щеки по граням) */}
       {[-6 * M, 6 * M].map((x, i) => (
         <mesh key={i} position={[x, -16 * M, 0]} material={material} castShadow>
@@ -199,9 +195,7 @@ function KupeHandle({ material }: { material: THREE.Material }) {
 // колпачок закрывает торец (в ±X), чуть крупнее сечения бруса.
 function TubeCap({ material }: { material: THREE.Material }) {
   return (
-    <mesh material={material} castShadow>
-      <boxGeometry args={[16 * M, 36 * M, 16 * M]} />
-    </mesh>
+    <RoundedBox args={[16 * M, 36 * M, 16 * M]} radius={2.5 * M} smoothness={3} material={material} castShadow />
   )
 }
 

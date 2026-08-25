@@ -15,7 +15,7 @@ const THICKNESS = 8   // душевые — только 8 мм закалённ
 // Тип/цвет стекла (тон в 3D через MeshTransmissionMaterial).
 type GlassType = { id: string; label: string; swatch: string; tint: GlassTint }
 const GLASS_TYPES: GlassType[] = [
-  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#dcebe0', attenuation: '#a3c6ab', distance: 1.35 } },
+  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#e8f2ec', attenuation: '#c2ddca', distance: 2.4 } },
   { id: 'crystal',  label: 'Осветлённое Crystal Vision', swatch: '#dfeaf6', tint: { color: '#e9f2fb', attenuation: '#c4daef', distance: 3.2 } },
   { id: 'bronze',   label: 'Тонированная бронза',        swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Тонированная графит',        swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
@@ -213,8 +213,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr_330px] gap-5 items-start">
-        {/* ── Тариф + Модель (сворачивается) ── */}
-        <div className="lg:sticky lg:top-4 space-y-3">
+        {/* ── Тариф + Модель (сворачивается) ── на мобильном под 3D */}
+        <div className="order-2 lg:order-none lg:sticky lg:top-4 space-y-3">
           <div className="inline-flex w-full rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
             <button onClick={() => changeTier('budget')}
               className={`flex-1 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
@@ -226,7 +226,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
               <div className="flex items-center justify-between mb-2">
                 <label className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest">Модель</label>
               </div>
-              <div className="grid gap-1.5">
+              <div className="grid gap-1.5 max-h-[52vh] overflow-auto pr-1 lg:max-h-none lg:overflow-visible lg:pr-0">
                 {M_MODELS.map(m => (
                   <button key={m.code} onClick={() => changeModel(m.code)}
                     className={`text-left px-3 py-2 rounded-lg text-[13px] border transition-colors ${
@@ -251,8 +251,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           )}
         </div>
 
-        {/* ── 3D (всегда виден) ── */}
-        <div className="min-w-0 lg:sticky lg:top-4 space-y-2">
+        {/* ── 3D (всегда виден, на мобильном — первым) ── */}
+        <div className="order-1 lg:order-none min-w-0 lg:sticky lg:top-4 space-y-2">
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
               finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant} />
@@ -270,8 +270,8 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           </div>
         </div>
 
-        {/* ── Параметры + спецификация + цена ── */}
-        <div className="space-y-4">
+        {/* ── Параметры + спецификация + цена ── на мобильном последним */}
+        <div className="order-3 lg:order-none space-y-4">
           <Section title="Габариты">
             <div className="space-y-3.5">
               <Field label="Ширина" value={dims.width} min={c.width[0]} max={c.width[1]} onChange={v => setD('width', v)} />

@@ -43,24 +43,36 @@ function onCanvasCreated(state: RootState) {
 // Процедурная плитка ниши: одна крупная плитка с тонким швом (CanvasTexture,
 // офлайн). Repeat тиражирует её в аккуратную сетку — без резкой «шахматки».
 function makeTileTexture(): THREE.CanvasTexture {
+  const S = 512
   const c = document.createElement('canvas')
-  c.width = c.height = 256
+  c.width = c.height = S
   const ctx = c.getContext('2d')!
-  const grout = 4
-  ctx.fillStyle = '#c2c0ba'                       // шов
-  ctx.fillRect(0, 0, 256, 256)
-  const g = ctx.createLinearGradient(0, 0, 190, 256)
-  g.addColorStop(0, '#efeee9')
-  g.addColorStop(0.5, '#e8e6e0')
-  g.addColorStop(1, '#e0ded7')
+  const grout = 7
+  // шов — тёмный, с мягким градиентом → глубина затирки
+  ctx.fillStyle = '#a7a39b'
+  ctx.fillRect(0, 0, S, S)
+  // тело плитки (тёплый off-white, диагональный градиент)
+  const g = ctx.createLinearGradient(0, 0, S * 0.75, S)
+  g.addColorStop(0, '#f1f0eb'); g.addColorStop(0.5, '#eae8e2'); g.addColorStop(1, '#e2e0d9')
   ctx.fillStyle = g
-  ctx.fillRect(0, 0, 256 - grout, 256 - grout)    // плитка с швом справа/снизу
-  // лёгкие прожилки (мрамор), низкая заметность
-  ctx.strokeStyle = 'rgba(150,147,140,0.16)'
-  ctx.lineWidth = 1.4
-  const veins = [[30, 70, 130, 30, 210, 120], [200, 20, 150, 130, 230, 230], [40, 200, 120, 170, 90, 250]]
+  ctx.fillRect(0, 0, S - grout, S - grout)
+  // мягкая фаска-тень у шва (низ/право) — плитка «утоплена»
+  const bevel = 26
+  const sh = ctx.createLinearGradient(S - grout - bevel, 0, S - grout, 0)
+  sh.addColorStop(0, 'rgba(120,116,108,0)'); sh.addColorStop(1, 'rgba(120,116,108,0.22)')
+  ctx.fillStyle = sh; ctx.fillRect(S - grout - bevel, 0, bevel, S - grout)
+  const sv = ctx.createLinearGradient(0, S - grout - bevel, 0, S - grout)
+  sv.addColorStop(0, 'rgba(120,116,108,0)'); sv.addColorStop(1, 'rgba(120,116,108,0.22)')
+  ctx.fillStyle = sv; ctx.fillRect(0, S - grout - bevel, S - grout, bevel)
+  // блик у верх/лево кромки — противоположная фаска (объём)
+  ctx.fillStyle = 'rgba(255,255,255,0.35)'
+  ctx.fillRect(0, 0, S - grout, 2); ctx.fillRect(0, 0, 2, S - grout)
+  // прожилки мрамора (низкая заметность)
+  ctx.strokeStyle = 'rgba(150,147,140,0.14)'; ctx.lineWidth = 2.4
+  const V = S / 256
+  const veins = [[30, 70, 130, 30, 210, 120], [200, 20, 150, 130, 230, 230], [40, 200, 120, 170, 90, 250], [120, 40, 60, 150, 180, 210]]
   for (const [x1, y1, cx, cy, x2, y2] of veins) {
-    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(cx, cy, x2, y2); ctx.stroke()
+    ctx.beginPath(); ctx.moveTo(x1 * V, y1 * V); ctx.quadraticCurveTo(cx * V, cy * V, x2 * V, y2 * V); ctx.stroke()
   }
   const tex = new THREE.CanvasTexture(c)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -87,7 +99,7 @@ function NicheMesh({ niche }: { niche: Niche }) {
   const backMat = useMemo(() => tiledMaterial(base, w + EXT, WH), [base, w, WH])
   const sideMat = useMemo(() => tiledMaterial(base, depth + EXT, WH), [base, depth, WH])
   const tile = (map: THREE.Texture) =>
-    <meshStandardMaterial map={map} color="#f2f0ea" roughness={0.8} metalness={0.03} envMapIntensity={0.5} />
+    <meshStandardMaterial map={map} color="#f4f2ec" roughness={0.62} metalness={0.04} envMapIntensity={0.75} />
 
   return (
     <group>
@@ -144,21 +156,21 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
         <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
           <boxGeometry args={g.size} />
           <MeshTransmissionMaterial
-            transmission={0.9}
-            thickness={0.012}
-            roughness={0.05}
-            ior={1.5}
-            chromaticAberration={0.012}
+            transmission={0.96}
+            thickness={0.008}
+            roughness={0.03}
+            ior={1.52}
+            chromaticAberration={0.02}
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
-            samples={5}
-            resolution={384}
+            samples={6}
+            resolution={512}
             color={glassTint.color}
             attenuationColor={glassTint.attenuation}
             attenuationDistance={glassTint.distance}
-            clearcoat={0.7}
-            clearcoatRoughness={0.05}
+            clearcoat={0.9}
+            clearcoatRoughness={0.04}
           />
         </mesh>
       ))}
@@ -236,7 +248,7 @@ export default function Partition3D(
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.5} color="#eaf0ff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
-          <ContactShadows position={[cx, 0.002, cz]} opacity={0.42} scale={span * 3.2} blur={2.2} far={span * 1.2} resolution={1024} />
+          <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
           <Studio />
           <OrbitControls
             makeDefault

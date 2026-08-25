@@ -71,6 +71,7 @@ kp006→к стеклу, kp001→угловое, connector→соедините�
 ## Лог: кто что сделал (новое — сверху)
 | Дата | Сессия | Что |
 |---|---|---|
+| 2026-08-25 | Сайт+3D | Визуальный проход (4 оси): стекло чище+заземление, плитка с глубоким швом/фаской (реальный санузел), мобильная подача (3D-герой первым), фурнитура «как литьё» (RoundedBox). B1 клиент на POST /options+/quote+KitPriceResult. tsc 0, 458 тестов. Мерж в main (деплой в прод по слову владельца). |
 | 2026-08-25 | Прайс | Влил 8f4bba5, шим снят. Геометрия M1 считается ценой: perp90 1000→FDT-351 825₽, diag45 2 крепления, stabilizer 350мм, ceiling без штанги, perimeter дороже. Ложных «дыр» нет. 381 тест зелёный. VisualizerPricingClient.tsx удалён → KitPricingClient.tsx. |
 | 2026-08-25 | Сайт+3D | A4 M1: `spec?` в MetalPart/HardwarePlacement, параметр `variant` (6-й!) в buildFromModel, MDims += trayDepth/ceilingHeight. Геометрия 4 креплений (perp90/diag45/stabilizer/ceiling) + 2 обвязок (partial/perimeter) со spec-кодами Прайса. UI M1: выбор крепления/обвязки + поддон/потолок. Верифицировано в браузере. `variant`+`dims.trayDepth`/`ceilingHeight` шлю в quote — Прайс прокидывает через buildWithVariant (6-я позиция!). |
 | 2026-08-25 | Сайт+3D | A3 сцена как рендер: отражающий пол (MeshReflectorMaterial), ACES-экспозиция, студийные блики. |
