@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
-import { buildFromModel, type MDims, type GlassTint, type HardwareChoice } from '@/components/configurator/scene/assembly'
+import { buildFromModel, M1_TRAY_DEPTH_DEFAULT, type MDims, type GlassTint, type HardwareChoice, type MVariant } from '@/components/configurator/scene/assembly'
 import { computeQuantities, totalMeters, HARDWARE_LABEL, type PriceResult, type HardwareOption } from '@/lib/configurator/pricing'
 
 type Quote = { full: boolean; price?: PriceResult; total?: number; clientFrom?: number; complete?: boolean }
@@ -92,6 +92,9 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [sent, setSent] = useState(false)
   const [options, setOptions] = useState<Record<string, HardwareOption[]>>({})
   const [choice, setChoice] = useState<Record<string, string>>({})
+  const [m1var, setM1var] = useState<MVariant>({ mount: 'perp90', profileFrame: 'partial' })
+  const isM1 = code === 'М1'
+  const mVariant = useMemo<MVariant>(() => (isM1 ? m1var : {}), [isM1, m1var])
 
   const finishOptions = finishesFor(tier)
   function changeTier(t: Tier) {
@@ -107,11 +110,12 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   function changeModel(c: string) {
     setCode(c)
     setDims(defaultsFor(getModel(c)))
+    setM1var({ mount: 'perp90', profileFrame: 'partial' })
     setModelOpen(false)   // выбрал → сворачиваем список, освобождаем экран
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
 
-  const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS), [model, dims])
+  const assembly = useMemo(() => buildFromModel(model, dims, THICKNESS, true, {}, mVariant), [model, dims, mVariant])
   const quantities = useMemo(() => computeQuantities(assembly, THICKNESS), [assembly])
 
   // Варианты фурнитуры (петля/ручка) из тарифа — для выбора клиентом (без себеста).
@@ -140,11 +144,11 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     const id = setTimeout(() => {
       fetch('/api/configurator/quote', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, glassType: glassId, finishId, choice }),
+        body: JSON.stringify({ model: code, dims, thickness: THICKNESS, tier, glassType: glassId, finishId, choice, variant: mVariant }),
       }).then(r => (r.ok ? r.json() : null)).then(q => { if (q) setQuote(q) }).catch(() => {})
     }, 250)
     return () => { clearTimeout(id); ctrl.abort() }
-  }, [code, dims, tier, glassId, finishId, choice])
+  }, [code, dims, tier, glassId, finishId, choice, mVariant])
   const price = quote?.price ?? null
   const clientFrom = quote?.clientFrom ?? (price ? Math.floor(price.total / 100) * 100 : null)
   const att = doorAttachment(model)
@@ -219,7 +223,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
         <div className="min-w-0 lg:sticky lg:top-4 space-y-2">
           <div className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
-              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} />
+              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant} />
           </div>
           <div className="flex items-center justify-center gap-3">
             <p className="text-[12px] text-[#9a9a95]">
@@ -248,6 +252,51 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
               )}
             </div>
           </Section>
+
+          {isM1 && (
+            <Section title="Крепление и обвязка">
+              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Крепление штанги</p>
+              <div className="grid grid-cols-2 gap-1.5 mb-3">
+                {([
+                  ['perp90', 'Перпендикулярно 90°'],
+                  ['diag45', 'Под 45° · люкс'],
+                  ['stabilizer', 'Стабилизатор'],
+                  ['ceiling', 'В потолок'],
+                ] as const).map(([m, label]) => (
+                  <button key={m} onClick={() => setM1var(v => ({ ...v, mount: m }))}
+                    className={`px-2.5 py-2 rounded-lg border text-left text-[12px] leading-tight ${
+                      (m1var.mount ?? 'perp90') === m ? 'border-[#111110] bg-[#fafafa] text-[#111110]' : 'border-[#e4e4e0] text-[#4b4b47] hover:border-[#c4c4be]'
+                    }`}>{label}</button>
+                ))}
+              </div>
+              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Обвязка профилем</p>
+              <div className="grid grid-cols-2 gap-1.5">
+                {([
+                  ['partial', 'Стена + низ'],
+                  ['perimeter', 'По периметру'],
+                ] as const).map(([p, label]) => (
+                  <button key={p} onClick={() => setM1var(v => ({ ...v, profileFrame: p }))}
+                    className={`px-2.5 py-2 rounded-lg border text-[12px] ${
+                      (m1var.profileFrame ?? 'partial') === p ? 'border-[#111110] bg-[#fafafa] text-[#111110]' : 'border-[#e4e4e0] text-[#4b4b47] hover:border-[#c4c4be]'
+                    }`}>{label}</button>
+                ))}
+              </div>
+              {m1var.mount === 'perp90' && (
+                <div className="mt-3">
+                  <Field label="Глубина поддона" value={dims.trayDepth ?? M1_TRAY_DEPTH_DEFAULT} min={500} max={1500} onChange={v => setD('trayDepth', v)} />
+                  {(dims.trayDepth ?? M1_TRAY_DEPTH_DEFAULT) === M1_TRAY_DEPTH_DEFAULT && (
+                    <p className="text-[11px] text-[#9a9a95] mt-1">Стандарт {M1_TRAY_DEPTH_DEFAULT} мм — задаёт длину трубы. Можно указать свою; уточняется на замере.</p>
+                  )}
+                </div>
+              )}
+              {m1var.mount === 'ceiling' && (
+                <div className="mt-3">
+                  <Field label="Высота потолка" value={dims.ceilingHeight ?? 2500} min={2200} max={3200} onChange={v => setD('ceilingHeight', v)} />
+                  <p className="text-[11px] text-[#9a9a95] mt-1">Стекло тянется до потолка; профиль сверху, по стене и снизу.</p>
+                </div>
+              )}
+            </Section>
+          )}
 
           <Section title="Стекло">
             <div className="grid grid-cols-2 gap-1.5">
