@@ -97,12 +97,16 @@ export default function PartnerNewQuotePage() {
       setSurchargeRules((d.surcharges ?? []) as SurchargeRule[])
       setDiscount(Number(d.discountPercent) || 0)
       if (d.facetOptions?.[0]) setFacetMm(Number(d.facetOptions[0].typeMm))
-      const sel = firstSel(mats, 'стекло')
+      // Пресет из каталога: /partner/new?preset=стекло|зеркало — предвыбор категории.
+      const params = new URLSearchParams(window.location.search)
+      const preset = params.get('preset')
+      const startCat: SuperCat = preset === 'зеркало' ? 'зеркало' : 'стекло'
+      const sel = firstSel(mats, startCat)
+      if (startCat !== 'стекло') setSuperCat(startCat)
       setThickness(sel.thickness); setMatId(sel.matId)
       // Режим редактирования: /partner/new?edit=<id> — грузим позиции просчёта.
       // Повтор заказа: /partner/new?reorder=<id> — грузим те же позиции, но как
       // НОВЫЙ просчёт (editingId не ставим → сохранение создаёт новый, а не правит).
-      const params = new URLSearchParams(window.location.search)
       const editParam = params.get('edit')
       const reorderParam = params.get('reorder')
       if (editParam) {
@@ -200,6 +204,12 @@ export default function PartnerNewQuotePage() {
   }
   function removePosition(idx: number) {
     const next = list.filter((_, i) => i !== idx)
+    setList(next); setSavedId(null); setSubmitted(false)
+    void recompute(next, false)
+  }
+  // Дублировать позицию — быстрый ввод похожих деталей (партии однотипных изделий).
+  function duplicateRow(idx: number) {
+    const next = [...list.slice(0, idx + 1), { ...list[idx] }, ...list.slice(idx + 1)]
     setList(next); setSavedId(null); setSubmitted(false)
     void recompute(next, false)
   }
@@ -381,6 +391,7 @@ export default function PartnerNewQuotePage() {
                       <td className="r tnum">{p ? fmt(p.price) : (busy ? '…' : '')}</td>
                       <td className="r" style={{ whiteSpace: 'nowrap' }}>
                         <button className="rm" onClick={() => editRow(i)} title="Изменить">✎</button>
+                        <button className="rm" onClick={() => duplicateRow(i)} title="Дублировать">⧉</button>
                         <button className="rm" onClick={() => removePosition(i)} title="Убрать">✕</button>
                       </td>
                     </tr>
