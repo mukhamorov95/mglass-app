@@ -1,4 +1,5 @@
 import { getKitStore } from '@/lib/configurator/kitStore'
+import { getFinance, type Finance } from '@/lib/configurator/financeStore'
 import { KitPricingClient, type TierStore } from './KitPricingClient'
 import type { Tier } from '@/lib/configurator/pricing'
 
@@ -7,10 +8,13 @@ import type { Tier } from '@/lib/configurator/pricing'
 export const metadata = { title: 'Прайс душевых — M-Glass' }
 
 export default async function Page() {
-  const [budget, premium] = await Promise.all([getKitStore('budget'), getKitStore('premium')])
+  const [budget, premium, finBudget, finPremium] = await Promise.all([
+    getKitStore('budget'), getKitStore('premium'), getFinance('budget'), getFinance('premium'),
+  ])
   const initial: Record<Tier, TierStore> = {
     budget: { library: budget.library, rates: budget.rates, kits: budget.kits },
     premium: { library: premium.library, rates: premium.rates, kits: premium.kits },
   }
-  return <KitPricingClient initial={initial} />
+  const finance: Record<Tier, Finance> = { budget: finBudget, premium: finPremium }
+  return <KitPricingClient initial={initial} finance={finance} />
 }

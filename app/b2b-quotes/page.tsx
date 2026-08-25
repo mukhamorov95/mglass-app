@@ -11,6 +11,11 @@ import { isMGlassClient, isMGlassOnlyUser, MGLASS_SCOPE_ERROR } from '@/lib/b2bS
 import { computeOrderEconomics, type EcoOrder, type EcoItem } from '@/lib/orderEconomics'
 import { DEFAULT_SHOP_SALARIES, type ShopThroughput } from '@/lib/laborModel'
 import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
+import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
+import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
+import type { PriceApproval } from '@/lib/b2b/priceOverride'
+import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
+import { checkSavedItems } from '@/lib/b2b/bomCheck'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -35,6 +40,9 @@ type OrderItem = {
   wastePercent?: number
   comment?: string
   services?: { id: number; name: string; cost: number }[]
+  // Ручная цена позиции: договорная (manualTotal) или разложенная из корректировки итога.
+  manualTotal?: number | null
+  manualAuto?: boolean
 }
 
 type Attachment = {
@@ -98,7 +106,7 @@ const PAYMENT_META: Record<PaymentStatus, { label: string; bg: string; text: str
   paid:    { label: 'Оплачен',     bg: 'bg-emerald-50', text: 'text-emerald-700', short: '🟢' },
 }
 
-type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today'
+type TabKey = QuoteStatus | 'all' | 'needs_transfer' | 'today' | 'templates' | 'price_approval'
 
 // Запущенные в работу (sent/confirmed) — это уже заказы, они живут в /b2b-orders
 // и в просчётах не показываются. Здесь — только активные просчёты.
@@ -109,7 +117,20 @@ const ALL_TABS: { key: TabKey; label: string }[] = [
   { key: 'quote',            label: 'Черновики' },
   { key: 'agreed',           label: 'Согласовано' },
   { key: 'rejected',         label: 'Отказ' },
+  { key: 'templates',        label: 'Шаблоны' },
+  { key: 'price_approval',   label: '⚠️ Согласовать цену' },
 ]
+
+// А11: цена с тонкой маржой ждёт решения владельца (не блокируется).
+const approvalOf = (q: { notes: string | null }): PriceApproval | null => {
+  const a = parseNotes(q.notes).price_approval
+  return a && typeof a === 'object' ? a as PriceApproval : null
+}
+const needsPriceApproval = (q: { notes: string | null }) => approvalOf(q)?.needed === true
+
+// А3: шаблон — обычный просчёт с notes.is_template. Отдельной таблицы не заводим:
+// шаблон должен считаться тем же движком и открываться тем же калькулятором.
+const isTemplate = (q: { notes: string | null }) => parseNotes(q.notes).is_template === true
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -239,7 +260,7 @@ function buildTelegramPositionLines(quote: Quote): string[] {
 function buildTelegramWorkText(quote: Quote): string {
   const quoteNumber = quote.custom_number?.trim() || `00${quote.id}`
   const clientName  = formatTelegramClientName(quote.client_name ?? '')
-  const finalPrice  = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+  const finalPrice  = finalTotalOf(quote)
   const lines       = [quoteNumber, clientName, ...buildTelegramPositionLines(quote)]
   lines.push('', `🥝${formatTelegramRub(finalPrice)}`)
   return lines.join('\n')
@@ -267,6 +288,10 @@ export default function B2BQuotesPage() {
   const [workDate, setWorkDate]       = useState(new Date().toISOString().slice(0, 10))
   const [workNumber, setWorkNumber]   = useState('')
   const [workDeadline, setWorkDeadline] = useState('')  // срок сдачи (notes.deadline_date)
+  const [queueCount, setQueueCount] = useState<number | null>(null)  // А6: заказов в работе
+  // А13: свободный остаток стекла по названию материала (м²). Склад читаем через
+  // /api/inventory/items — напрямую к таблицам браузер не ходит (там RLS deny-by-default).
+  const [stock, setStock] = useState<Map<string, number>>(new Map())
   const [workDrawing, setWorkDrawing] = useState<File | null>(null)  // чертёж для цеха (notes.drawing_url)
   const workDateRef = useRef<HTMLInputElement>(null)
 
@@ -306,14 +331,43 @@ export default function B2BQuotesPage() {
     if (payEditId !== null) setTimeout(() => payAmountRef.current?.focus(), 50)
   }, [payEditId])
 
-  // ── Discount edit ──────────────────────────────────────────────────────────
+  // ── Правка цены: итог ⇄ скидка (одна панель, два способа думать) ───────────
+  // Источник правды — целевой ИТОГ. Скидка выводится из него и раскладывается по
+  // позициям на сервере (/api/b2b-quotes/[id]/adjust-total), чтобы КП, счёт и
+  // производство видели ту же цену построчно.
   const [discountEditId, setDiscountEditId] = useState<number | null>(null)
   const [discountInput, setDiscountInput]   = useState('')
-  const discountInputRef = useRef<HTMLInputElement>(null)
+  const [totalInput, setTotalInput]         = useState('')
+  const [priceSaving, setPriceSaving]       = useState(false)
+  // Второй клик по кнопке при тонкой марже: не запрещаем цену, но заставляем осознать доход.
+  const [priceConfirmId, setPriceConfirmId] = useState<number | null>(null)
+  const totalInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (discountEditId !== null) setTimeout(() => discountInputRef.current?.focus(), 50)
+    if (discountEditId !== null) setTimeout(() => { totalInputRef.current?.focus(); totalInputRef.current?.select() }, 50)
   }, [discountEditId])
+
+  function openPriceEditor(q: Quote) {
+    setPriceConfirmId(null)
+    if (discountEditId === q.id) { setDiscountEditId(null); return }
+    setDiscountEditId(q.id)
+    setTotalInput(String(finalTotalOf(q)))
+    setDiscountInput(String(q.discount_percent ?? 0))
+  }
+
+  // Инпуты связаны: правишь сумму — пересчитывается %, правишь % — сумма.
+  function onTotalTyped(v: string, base: number) {
+    setPriceConfirmId(null)
+    setTotalInput(v)
+    const t = Number(v.replace(/[^\d.]/g, ''))
+    setDiscountInput(base > 0 && Number.isFinite(t) ? String(Math.round((1 - t / base) * 1000) / 1000) : '0')
+  }
+  function onDiscountTyped(v: string, base: number) {
+    setPriceConfirmId(null)
+    setDiscountInput(v)
+    const d = Number(v.replace(/[^\d.-]/g, ''))
+    setTotalInput(Number.isFinite(d) ? String(Math.round(base * (1 - d / 100))) : String(base))
+  }
 
   // Оплата пишется только через /api/b2b-orders/[id]/payment — там же
   // наполняются денежное ядро и ведомость продаж (Д2).
@@ -515,6 +569,32 @@ export default function B2BQuotesPage() {
       setMglassOnly(!isOwner && isMGlassOnlyUser(perms))
       const canSeeAll = profile?.role === 'admin' || profile?.role === 'buyer' || profile?.see_all_orders === true
 
+      // А13: остатки склада — справочно, ошибка загрузки не ломает список просчётов.
+      fetch('/api/inventory/items?contour=all')
+        .then(r => r.ok ? r.json() : null)
+        .then((j: { items?: { name: string; qty: number; qty_reserved: number; unit: string }[] } | null) => {
+          if (!j?.items) return
+          const m = new Map<string, number>()
+          for (const it of j.items) {
+            if (it.unit !== 'м2') continue
+            const free = Number(it.qty ?? 0) - Number(it.qty_reserved ?? 0)
+            const key = it.name.trim().toLowerCase()
+            m.set(key, (m.get(key) ?? 0) + free)
+          }
+          setStock(m)
+        })
+        .catch(() => {})
+
+      // А6: очередь производства — сколько заказов уже запущено и ещё не отгружено.
+      // Нужна как честный контекст при выборе срока сдачи (мощность цеха в системе
+      // не описана, поэтому ничего не выдумываем — показываем факт очереди).
+      sb.from('b2b_orders')
+        .select('id', { count: 'exact', head: true })
+        .is('archived_at', null)
+        .not('launched_at', 'is', null)
+        .not('notes', 'ilike', '%shipped_date%')
+        .then(({ count }) => setQueueCount(count ?? null))
+
       // Запущенные в производство (launched_at выставлен) живут в /b2b-orders и в этом
       // списке не показываются ни в одной вкладке — не грузим их вовсе. Это режет выборку
       // с тысяч строк до десятков и убирает долгую загрузку. Возврат в черновик обнуляет
@@ -580,7 +660,8 @@ export default function B2BQuotesPage() {
     const { data: { user } } = await sb.auth.getUser()
     const parsed = parseNotes(q.notes)
     // Автор дубля — текущий пользователь (не исходный менеджер): чистим manager_name в notes.
-    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, manager_name: currentUserName ?? undefined })
+    // Копия/«из шаблона» — всегда обычный черновик: флаг шаблона и следы запуска снимаем.
+    const newNotes = JSON.stringify({ ...parsed, status: 'quote', quote_date: new Date().toISOString(), launched_at: undefined, payment_status: undefined, is_template: undefined, template_name: undefined, manager_name: currentUserName ?? undefined })
     const { data, error } = await sb.from('b2b_orders').insert({
       client_id: q.client_id, client_name: q.client_name,
       discount_percent: q.discount_percent, margin_percent: q.margin_percent,
@@ -593,8 +674,62 @@ export default function B2BQuotesPage() {
     }).select().single()
     if (!error && data) {
       setQuotes(prev => [{ ...data, items: q.items }, ...prev])
-      showToast('Расчёт скопирован как черновик')
+      showToast(isTemplate(q) ? 'Просчёт создан из шаблона' : 'Расчёт скопирован как черновик')
     }
+  }
+
+  // А2: ссылка на КП для клиента — выдаём и сразу кладём в буфер обмена.
+  const [sharing, setSharing] = useState<number | null>(null)
+  async function shareQuote(q: Quote) {
+    setSharing(q.id)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${q.id}/share`, { method: 'POST' })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { showToast(j.error || 'Не удалось создать ссылку'); return }
+      const parsed = parseNotes(q.notes)
+      if (!parsed.public_token) {
+        const newNotes = JSON.stringify({ ...parsed, public_token: j.token })
+        setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
+      }
+      try {
+        await navigator.clipboard.writeText(j.url)
+        showToast('Ссылка на КП скопирована — можно отправлять клиенту')
+      } catch {
+        window.prompt('Ссылка на КП для клиента:', j.url)
+      }
+    } finally { setSharing(null) }
+  }
+
+  // А11: решение владельца по цене с тонкой маржой. Цену не трогаем — решение
+  // снимает пометку и остаётся в истории просчёта.
+  const [approving, setApproving] = useState<number | null>(null)
+  async function resolvePriceApproval(id: number, resolution: 'approved' | 'rejected') {
+    setApproving(id)
+    try {
+      const r = await fetch(`/api/b2b-quotes/${id}/price-approval`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ resolution }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { showToast(j.error || 'Не удалось сохранить решение'); return }
+      setQuotes(prev => prev.map(x => x.id === id
+        ? { ...x, notes: JSON.stringify({ ...parseNotes(x.notes), price_approval: j.approval }) }
+        : x))
+      showToast(resolution === 'approved' ? 'Цена согласована' : 'Цена отклонена — менеджер пересоберёт')
+    } finally { setApproving(null) }
+  }
+
+  // А3: пометить/снять шаблон. Шаблон не мешается в активных вкладках и служит
+  // заготовкой для повторяющихся заказов клиента.
+  async function toggleTemplate(q: Quote) {
+    const parsed = parseNotes(q.notes)
+    const next = !isTemplate(q)
+    const newNotes = JSON.stringify({ ...parsed, is_template: next || undefined })
+    const { error } = await createClient().from('b2b_orders')
+      .update({ notes: newNotes, ...buildUpdateMeta() }).eq('id', q.id)
+    if (error) { showToast('Не удалось сохранить'); return }
+    setQuotes(prev => prev.map(x => x.id === q.id ? { ...x, notes: newNotes } : x))
+    showToast(next ? 'Добавлено в шаблоны' : 'Убрано из шаблонов')
   }
 
   async function handleDelete() {
@@ -610,38 +745,50 @@ export default function B2BQuotesPage() {
     showToast('Просчёт архивирован')
   }
 
-  async function saveDiscount(id: number) {
-    const q = quotes.find(x => x.id === id)
-    if (!q) return
-    const newDiscount = Math.min(50, Math.max(0, Number(discountInput) || 0))
-    const baseTotal   = q.total_sale_inc_vat
-    const newTotal    = Math.round(baseTotal * (1 - newDiscount / 100))
-    const parsed      = parseNotes(q.notes)
-    const history     = Array.isArray(parsed.discount_history) ? [...(parsed.discount_history as unknown[])] : []
-    history.push({
-      old_discount: q.discount_percent,
-      new_discount: newDiscount,
-      old_total:    q.total_after_discount ?? q.total_sale_inc_vat,
-      new_total:    newTotal,
-      changed_at:   new Date().toISOString(),
-      changed_by:   currentUserId ?? undefined,
-    })
-    const newNotes = JSON.stringify({ ...parsed, discount_history: history })
-    const { error } = await createClient().from('b2b_orders').update({
-      discount_percent:     newDiscount,
-      total_after_discount: newTotal,
-      notes:                newNotes,
-      ...buildUpdateMeta(),   // фиксируем, кто и когда менял скидку (как в остальных мутациях)
-    }).eq('id', id)
-    if (error) { showToast('Ошибка сохранения скидки'); return }
+  // Ручная корректировка итога: сумму раскидывает сервер (общий алгоритм +
+  // история в notes.total_history), фронт только показывает результат.
+  async function savePriceOverride(id: number) {
+    const target = Math.round(Number(totalInput.replace(/[^\d.]/g, '')) || 0)
+    if (target <= 0) { showToast('Укажите итоговую сумму'); return }
+    setPriceSaving(true)
+    try {
+      const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newTotal: target }),
+      })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(json.error || 'Не удалось сохранить сумму'); return }
+      applyPriceResult(id, json)
+      setDiscountEditId(null)
+      setPriceConfirmId(null)
+      const marginPart = json.marginPercent != null ? ` · маржа ${json.marginPercent}%` : ''
+      showToast(json.discountPercent > 0
+        ? `Итог ${fmt(json.newTotal)} · скидка ${json.discountPercent}% разложена по позициям${marginPart}`
+        : `Итог ${fmt(json.newTotal)} разложен по позициям${marginPart}`)
+    } finally { setPriceSaving(false) }
+  }
+
+  async function resetPriceOverride(id: number) {
+    setPriceSaving(true)
+    try {
+      const res  = await fetch(`/api/b2b-quotes/${id}/adjust-total`, { method: 'DELETE' })
+      const json = await res.json().catch(() => ({}))
+      if (!res.ok) { showToast(json.error || 'Не удалось вернуть прайс'); return }
+      applyPriceResult(id, json)
+      setDiscountEditId(null)
+      showToast('Цены возвращены к прайсу')
+    } finally { setPriceSaving(false) }
+  }
+
+  function applyPriceResult(id: number, json: { newTotal: number; discountPercent: number; marginPercent?: number; items?: OrderItem[]; notes?: string }) {
     setQuotes(prev => prev.map(x => x.id === id ? {
       ...x,
-      discount_percent:     newDiscount,
-      total_after_discount: newTotal,
-      notes:                newNotes,
+      items:                (json.items as OrderItem[]) ?? x.items,
+      discount_percent:     json.discountPercent,
+      total_after_discount: json.newTotal,
+      margin_percent:       json.marginPercent ?? x.margin_percent,
+      notes:                json.notes ?? x.notes,
     } : x))
-    setDiscountEditId(null)
-    showToast(`Скидка обновлена: ${newDiscount}%`)
   }
 
   // Shared "who changed this, when" payload — column-level authorship.
@@ -659,10 +806,12 @@ export default function B2BQuotesPage() {
 
   const visible = useMemo(() => {
     let list: Quote[]
-    if (tab === 'all') list = quotes.filter(notLaunched)
-    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && isToday(q.created_at))
-    else if (tab === 'needs_transfer') list = quotes.filter(looksLikeOrder)
-    else list = quotes.filter(q => getStatus(q) === tab)
+    if (tab === 'price_approval') list = quotes.filter(needsPriceApproval)
+    else if (tab === 'templates') list = quotes.filter(isTemplate)
+    else if (tab === 'all') list = quotes.filter(q => notLaunched(q) && !isTemplate(q))
+    else if (tab === 'today') list = quotes.filter(q => notLaunched(q) && !isTemplate(q) && isToday(q.created_at))
+    else if (tab === 'needs_transfer') list = quotes.filter(q => looksLikeOrder(q) && !isTemplate(q))
+    else list = quotes.filter(q => !isTemplate(q) && getStatus(q) === tab)
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(x =>
@@ -704,11 +853,13 @@ export default function B2BQuotesPage() {
   }, [visible, throughput])
 
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0 }
+    const c: Record<string, number> = { all: 0, today: 0, needs_transfer: 0, templates: 0, price_approval: 0 }
     for (const q of quotes) {
+      if (isTemplate(q)) { c.templates++; continue }
       const s = getStatus(q); c[s] = (c[s] ?? 0) + 1
       if (notLaunched(q)) { c.all++; if (isToday(q.created_at)) c.today++ }
       if (looksLikeOrder(q)) c.needs_transfer++
+      if (needsPriceApproval(q)) c.price_approval++
     }
     return c
   }, [quotes])
@@ -761,7 +912,8 @@ export default function B2BQuotesPage() {
 
       {/* Status tabs */}
       <div className="flex items-center gap-1 mb-4 flex-wrap">
-        {ALL_TABS.map(t => (
+        {/* А11: вкладка согласования цены появляется, только когда есть что решать */}
+        {ALL_TABS.filter(t => t.key !== 'price_approval' || (counts.price_approval ?? 0) > 0).map(t => (
           <button key={t.key} onClick={() => { setTab(t.key); setPage(1) }}
             className={`text-[12px] font-medium px-3 py-1.5 rounded-lg transition-colors ${tab === t.key ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4]'}`}>
             {t.label}
@@ -798,7 +950,7 @@ export default function B2BQuotesPage() {
               : new Date(quote.created_at)
             const dateStr   = quoteDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
             const timeStr   = quoteDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
-            const finalPrice = (quote.discount_percent ?? 0) > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+            const finalPrice = finalTotalOf(quote)
             const userNotes  = typeof parsed.user_notes === 'string' ? parsed.user_notes : null
             const statusComment = typeof parsed.status_comment === 'string' ? parsed.status_comment : null
             const hasAttach  = attachments.some(a => a.order_id === quote.id)
@@ -813,13 +965,26 @@ export default function B2BQuotesPage() {
               ? parsed.ai_review as { issues?: { severity?: string; text?: string }[]; summary?: string }
               : null
 
-            // Discount preview — computed once per row, cheap arithmetic
+            // Превью корректировки — считается один раз на строку, арифметика дешёвая.
+            // Источник — введённый ИТОГ; скидка/маржа выводятся из него.
             const discBase      = quote.total_sale_inc_vat
-            const discNewPct    = Math.min(50, Math.max(0, Number(discountInput) || 0))
-            const discNewTotal  = Math.round(discBase * (1 - discNewPct / 100))
+            const discNewTotal  = Math.max(0, Math.round(Number(totalInput.replace(/[^\d.]/g, '')) || 0))
+            const discNewPct    = discBase > 0 ? Math.round((1 - discNewTotal / discBase) * 1000) / 10 : 0
             const discCost      = quote.total_cost_net ?? 0
-            const discProfit    = discNewTotal - discCost
-            const discMargin    = discNewTotal > 0 ? (discProfit / discNewTotal * 100) : 0
+            const discRevExVat  = discNewTotal * 100 / (100 + 22)
+            const discProfit    = discRevExVat - discCost
+            const discMargin    = discRevExVat > 0 ? (discProfit / discRevExVat * 100) : 0
+            const isOverridden  = hasAutoOverride(quote.items) || !!parsed.price_override
+            const approval      = approvalOf(quote)
+            // А2/А5: состояние клиентской ссылки — отправлена, открыта, отвечено
+            const shareToken   = typeof parsed.public_token === 'string' ? parsed.public_token : null
+            const shareOpened  = typeof parsed.public_opened_at === 'string' ? parsed.public_opened_at : null
+            const clientAnswer = (parsed.client_response && typeof parsed.client_response === 'object')
+              ? parsed.client_response as { action?: string; comment?: string | null; at?: string }
+              : null
+            const overrideMeta  = (parsed.price_override && typeof parsed.price_override === 'object')
+              ? parsed.price_override as { base?: number; target?: number; discount_percent?: number; at?: string; by_name?: string | null }
+              : null
 
             return (
               <div key={quote.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
@@ -852,6 +1017,47 @@ export default function B2BQuotesPage() {
                           </span>
                         )}
                         <p className="text-[13px] font-semibold text-[#111110] truncate">{quote.client_name}</p>
+                        {isOverridden && (
+                          <span
+                            className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200 whitespace-nowrap"
+                            title={overrideMeta
+                              ? `Итог задан вручную: ${fmt(overrideMeta.base ?? quote.total_sale_inc_vat)} → ${fmt(overrideMeta.target ?? finalPrice)}`
+                                + `${overrideMeta.discount_percent ? ` (скидка ${overrideMeta.discount_percent}%)` : ''}`
+                                + `${overrideMeta.by_name ? ` · ${overrideMeta.by_name}` : ''}`
+                                + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU')}` : ''}`
+                              : 'Цены позиций заданы вручную'}>
+                            ✏️ ручная корректировка
+                          </span>
+                        )}
+                        {approval && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                              approval.needed ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : approval.resolution === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : 'bg-red-50 text-red-600 border-red-200'}`}
+                            title={approval.needed
+                              ? `Маржа ${approval.margin}% при цене ${fmt(approval.total)} — ждёт решения владельца`
+                              : `${approval.resolution === 'approved' ? 'Согласовал' : 'Отклонил'}: ${approval.resolved_by_name ?? '—'}`}>
+                            {approval.needed ? `⚠️ цена на согласовании · ${approval.margin}%`
+                              : approval.resolution === 'approved' ? '✓ цена согласована'
+                              : '✕ цена отклонена'}
+                          </span>
+                        )}
+                        {shareToken && (
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                              clientAnswer?.action === 'approve' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                              : clientAnswer?.action === 'question' ? 'bg-blue-50 text-blue-700 border-blue-200'
+                              : shareOpened ? 'bg-[#f0f0ec] text-[#6b6b66] border-[#e4e4e0]'
+                              : 'bg-white text-[#9a9a95] border-[#e4e4e0]'}`}
+                            title={clientAnswer?.comment
+                              ? `Клиент: ${clientAnswer.comment}`
+                              : shareOpened ? `Клиент открыл ${new Date(shareOpened).toLocaleString('ru-RU')}` : 'Ссылка выдана'}>
+                            {clientAnswer?.action === 'approve' ? '🔗 клиент согласовал'
+                              : clientAnswer?.action === 'question' ? '🔗 вопрос от клиента'
+                              : shareOpened ? '🔗 клиент открыл' : '🔗 ссылка выдана'}
+                          </span>
+                        )}
                         {looksLikeOrder(quote) && (
                           <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200" title="У просчёта есть признаки заказа — перенесите в B2B-заказы">
                             Похоже, это уже заказ
@@ -892,6 +1098,19 @@ export default function B2BQuotesPage() {
                       </span>
                     )}
 
+                    {/* Спецификация не сходится со справочником: позиция без себестоимости */}
+                    {(() => {
+                      const bom = checkSavedItems(quote.items)
+                      if (bom.length === 0) return null
+                      return (
+                        <span
+                          className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700 border border-red-200 whitespace-nowrap"
+                          title={bom.map(i => i.detail).join('\n')}>
+                          ⚠️ нет в справочнике: {bom.length}
+                        </span>
+                      )
+                    })()}
+
                     {/* "На согласовании" — только этот статус показываем плашкой, он требует action */}
                     {status === 'pending_approval' && (
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${sMeta.bg} ${sMeta.text}`}>
@@ -899,25 +1118,38 @@ export default function B2BQuotesPage() {
                       </span>
                     )}
 
-                    {/* Price */}
+                    {/* Цена — кликабельная: правится прямо в списке */}
                     <div className="text-right min-w-[80px]">
-                      <p className="text-[13px] font-semibold text-[#111110]">{fmt(finalPrice)}</p>
                       <button
-                        onClick={() => {
-                          setDiscountEditId(isDiscountEditThis ? null : quote.id)
-                          setDiscountInput(String(quote.discount_percent ?? 0))
-                        }}
-                        className="text-[10px] leading-tight text-emerald-600 hover:text-emerald-800 hover:underline">
-                        {(quote.discount_percent ?? 0) > 0 ? `−${quote.discount_percent}% · изм.` : '% скидка'}
+                        onClick={() => openPriceEditor(quote)}
+                        title="Изменить итоговую сумму — скидка разложится по всем позициям"
+                        className={`text-[13px] font-semibold text-[#111110] hover:text-emerald-700 hover:underline decoration-dotted underline-offset-2 transition-colors ${isDiscountEditThis ? 'text-emerald-700 underline' : ''}`}>
+                        {fmt(finalPrice)}
+                      </button>
+                      <button
+                        onClick={() => openPriceEditor(quote)}
+                        className="block ml-auto text-[10px] leading-tight text-emerald-600 hover:text-emerald-800 hover:underline">
+                        {(quote.discount_percent ?? 0) > 0 ? `−${quote.discount_percent}% · изм.` : '✏️ изм. цену'}
                       </button>
                     </div>
 
                     {/* Status actions */}
                     <div className="flex items-center gap-1">
+                      {isOwner && approval?.needed && (<>
+                        <button onClick={() => resolvePriceApproval(quote.id, 'approved')} disabled={approving === quote.id}
+                          title={`Маржа ${approval.margin}% — согласовать цену`}
+                          className="text-[11px] font-semibold px-2 py-1 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Цена ок
+                        </button>
+                        <button onClick={() => resolvePriceApproval(quote.id, 'rejected')} disabled={approving === quote.id}
+                          className="text-[11px] font-medium px-2 py-1 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Отклонить
+                        </button>
+                      </>)}
                       {/* Согласование отключено: quote и agreed сразу запускаются в работу */}
                       {(status === 'quote' || status === 'agreed') && (
                         <button
-                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); const dl = new Date(); dl.setDate(dl.getDate() + 14); setWorkDeadline(dl.toISOString().slice(0, 10)) }}
+                          onClick={() => { setWorkDateId(quote.id); setWorkDate(new Date().toISOString().slice(0, 10)); setWorkNumber(quote.custom_number ?? ''); setWorkDeadline(toDateInput(shipDateFrom(new Date(), Number(parseNotes(quote.notes).production_days) || null))) }}
                           className="text-[11px] font-semibold px-2.5 py-1 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors whitespace-nowrap">
                           Запустить в работу →
                         </button>
@@ -952,6 +1184,18 @@ export default function B2BQuotesPage() {
                         className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
                         {copiedId === quote.id ? '✓' : 'ТГ'}
                       </button>
+                      {/* А4: одна карточка сделки */}
+                      <Link href={`/b2b-deal/${quote.id}`}
+                        title="Карточка сделки: документы, деньги, производство, клиент"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        🗂
+                      </Link>
+                      {/* А2: ссылка клиенту с согласованием */}
+                      <button onClick={() => shareQuote(quote)} disabled={sharing === quote.id}
+                        title="Ссылка на КП для клиента: он видит цены и может согласовать"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] disabled:opacity-40 transition-colors whitespace-nowrap">
+                        {sharing === quote.id ? '…' : '🔗'}
+                      </button>
                       {/* КП */}
                       <Link href={`/b2b-quotes/${quote.id}/kp`} target="_blank"
                         title="Открыть КП для печати"
@@ -977,10 +1221,18 @@ export default function B2BQuotesPage() {
                         className="text-[11px] text-[#c4c4be] hover:text-purple-500 px-1.5 py-1 rounded hover:bg-purple-50 transition-colors">
                         🧮
                       </Link>
-                      {/* Duplicate */}
-                      <button onClick={() => duplicateQuote(quote)} title="Дублировать расчёт"
+                      {/* Duplicate / «из шаблона» */}
+                      <button onClick={() => duplicateQuote(quote)}
+                        title={isTemplate(quote) ? 'Создать просчёт из шаблона' : 'Дублировать расчёт'}
                         className="text-[11px] text-[#c4c4be] hover:text-blue-500 px-1.5 py-1 rounded hover:bg-blue-50 transition-colors">
-                        ⧉
+                        {isTemplate(quote) ? '＋' : '⧉'}
+                      </button>
+                      {/* А3: шаблон повторяющегося заказа */}
+                      <button onClick={() => toggleTemplate(quote)}
+                        title={isTemplate(quote) ? 'Убрать из шаблонов' : 'Сохранить как шаблон'}
+                        className={`text-[11px] px-1.5 py-1 rounded transition-colors ${
+                          isTemplate(quote) ? 'text-amber-500 hover:bg-amber-50' : 'text-[#c4c4be] hover:text-amber-500 hover:bg-amber-50'}`}>
+                        {isTemplate(quote) ? '★' : '☆'}
                       </button>
                       {/* Delete */}
                       <button onClick={() => setDeletingId(quote.id)} title="Удалить"
@@ -1024,56 +1276,111 @@ export default function B2BQuotesPage() {
                   </div>
                 )}
 
-                {/* ── Discount edit panel ────────────────────────────────── */}
+                {/* ── Правка цены: итог ⇄ скидка ─────────────────────────── */}
                 {isDiscountEditThis && (
                   <div className="px-4 py-3 border-t border-[#f0f0ec] bg-[#fafaf9] space-y-2.5">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">Скидка по просчёту</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95]">
+                      Итоговая сумма клиенту · {quote.items.length} поз.
+                    </p>
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-[11px] text-[#6b6b66]">
-                        Текущая: <span className="font-semibold">{quote.discount_percent ?? 0}%</span>
+                        Прайс: <span className="font-mono">{fmt(discBase)}</span>
                       </span>
                       <span className="text-[#c4c4be] select-none">→</span>
-                      <span className="text-[11px] text-[#6b6b66]">Новая:</span>
+                      <span className="text-[11px] text-[#6b6b66]">Итог:</span>
+                      <input
+                        ref={totalInputRef}
+                        type="text" inputMode="numeric"
+                        className="w-32 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[13px] font-mono text-right outline-none focus:border-[#111110] transition-colors"
+                        value={totalInput}
+                        onChange={e => onTotalTyped(e.target.value, discBase)}
+                        onKeyDown={e => e.key === 'Enter' && savePriceOverride(quote.id)}
+                      />
+                      <span className="text-[12px] text-[#6b6b66]">₽</span>
+                      <span className="text-[#c4c4be] select-none">или скидка</span>
                       <div className="flex items-center gap-1">
                         <input
-                          ref={discountInputRef}
-                          type="number" min="0" max="50" step="1"
+                          type="number" step="0.5"
                           className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none focus:border-[#111110] transition-colors"
                           value={discountInput}
-                          onChange={e => setDiscountInput(e.target.value)}
-                          onKeyDown={e => e.key === 'Enter' && saveDiscount(quote.id)}
+                          onChange={e => onDiscountTyped(e.target.value, discBase)}
+                          onKeyDown={e => e.key === 'Enter' && savePriceOverride(quote.id)}
                         />
                         <span className="text-[12px] text-[#6b6b66]">%</span>
                       </div>
                     </div>
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[220px]">
+                    <p className="text-[11px] text-[#9a9a95]">
+                      Сумма разложится по всем позициям пропорционально прайсу — КП, счёт и производство увидят те же цены.
+                    </p>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-0.5 text-[11px] bg-white border border-[#f0f0ec] rounded-lg px-3 py-2 w-fit min-w-[240px]">
                       <span className="text-[#9a9a95]">Было к оплате</span>
                       <span className="font-mono text-right text-[#6b6b66]">{finalPrice.toLocaleString('ru-RU')} ₽</span>
                       <span className="text-[#9a9a95]">Станет к оплате</span>
-                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : 'text-[#111110]'}`}>
+                      <span className={`font-mono text-right font-semibold ${discNewTotal < finalPrice ? 'text-emerald-600' : discNewTotal > finalPrice ? 'text-amber-600' : 'text-[#111110]'}`}>
                         {discNewTotal.toLocaleString('ru-RU')} ₽
                       </span>
+                      <span className="text-[#9a9a95]">{discNewPct >= 0 ? 'Скидка от прайса' : 'Надбавка к прайсу'}</span>
+                      <span className="font-mono text-right text-[#6b6b66]">{Math.abs(discNewPct).toFixed(1)}%</span>
                       <span className="text-[#9a9a95]">Себестоимость</span>
                       <span className="font-mono text-right text-[#6b6b66]">{discCost.toLocaleString('ru-RU')} ₽</span>
-                      <span className="text-[#9a9a95]">Прибыль</span>
+                      <span className="text-[#9a9a95]">Заработок с заказа</span>
                       <span className={`font-mono text-right font-semibold ${discProfit < 0 ? 'text-red-600' : 'text-[#111110]'}`}>
-                        {discProfit.toLocaleString('ru-RU')} ₽
+                        {Math.round(discProfit).toLocaleString('ru-RU')} ₽
                       </span>
                       <span className="text-[#9a9a95]">Маржа</span>
-                      <span className={`font-mono text-right font-semibold ${discMargin < 20 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                      <span className={`font-mono text-right font-semibold ${discMargin < 25 ? 'text-red-500' : discMargin < 35 ? 'text-amber-600' : 'text-emerald-600'}`}>
                         {discMargin.toFixed(1)}%
                       </span>
                     </div>
-                    {discMargin < 20 && discNewTotal > 0 && (
-                      <p className="text-[11px] text-amber-600 font-medium">⚠️ Внимание: маржа ниже 20%</p>
+                    {/* Цену не запрещаем — но менеджер обязан увидеть, сколько он на ней зарабатывает */}
+                    {discNewTotal > 0 && (
+                      discProfit <= 0 ? (
+                        <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          🚨 Осторожно: при цене {fmt(discNewTotal)} заказ уходит в убыток — минус {fmt(Math.abs(Math.round(discProfit)))}.
+                          Это ниже себестоимости {fmt(discCost)}.
+                        </p>
+                      ) : discMargin < 25 ? (
+                        <p className="text-[11px] font-semibold text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                          ⚠️ Осторожно: при цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
+                          Это ниже нормы 25% — цена уйдёт на согласование владельцу.
+                        </p>
+                      ) : discMargin < 35 ? (
+                        <p className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                          При цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%). Маржа тонковата.
+                        </p>
+                      ) : (
+                        <p className="text-[11px] font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                          При цене {fmt(discNewTotal)} заработок с заказа — {fmt(Math.round(discProfit))} ({discMargin.toFixed(1)}%).
+                        </p>
+                      )
                     )}
                     <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => saveDiscount(quote.id)}
-                        disabled={discNewPct < 0 || discNewPct > 50}
-                        className="text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 transition-colors whitespace-nowrap">
-                        Сохранить
-                      </button>
+                      {(() => {
+                        // Тонкая маржа не блокирует цену — но требует второго, осознанного клика.
+                        const risky   = discNewTotal > 0 && (discProfit <= 0 || discMargin < 25)
+                        const armed   = priceConfirmId === quote.id
+                        const confirm = risky && !armed
+                        return (
+                          <button
+                            onClick={() => confirm ? setPriceConfirmId(quote.id) : savePriceOverride(quote.id)}
+                            disabled={priceSaving || discNewTotal <= 0}
+                            className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg text-white disabled:opacity-40 transition-colors whitespace-nowrap ${
+                              risky ? 'bg-red-600 hover:bg-red-700' : 'bg-[#111110] hover:bg-[#2a2a28]'}`}>
+                            {priceSaving ? 'Сохраняю…'
+                              : confirm ? `Зафиксировать ${fmt(discNewTotal)}?`
+                              : armed   ? `Да, ${fmt(discNewTotal)} — я понимаю`
+                              : 'Зафиксировать цену'}
+                          </button>
+                        )
+                      })()}
+                      {isOverridden && (
+                        <button
+                          onClick={() => resetPriceOverride(quote.id)}
+                          disabled={priceSaving}
+                          className="text-[11px] font-medium px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-white disabled:opacity-40 transition-colors whitespace-nowrap">
+                          Вернуть прайс
+                        </button>
+                      )}
                       <button
                         onClick={() => setDiscountEditId(null)}
                         className="text-[#9a9a95] hover:text-[#111110] transition-colors text-sm px-1">
@@ -1104,6 +1411,9 @@ export default function B2BQuotesPage() {
                         onChange={e => setWorkDeadline(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && confirmWorkDate()}
                       />
+                      <span className="text-[10px] text-blue-700/70 whitespace-nowrap">
+                        {DEFAULT_WORKING_DAYS} раб. дней{queueCount != null && ` · в работе сейчас: ${queueCount}`}
+                      </span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[11px] font-semibold text-blue-700 flex-shrink-0">№ заказа:</span>
@@ -1198,6 +1508,7 @@ export default function B2BQuotesPage() {
                             <th className="px-2 py-1.5 text-right w-10">Кол.</th>
                             <th className="px-2 py-1.5 text-right w-14">Кв.м</th>
                             <th className="px-2 py-1.5 text-right w-14">Вес, кг</th>
+                            <th className="px-2 py-1.5 text-right w-16" title="Свободный остаток на складе">Склад</th>
                             <th className="px-2 py-1.5 text-right w-18">Цена/м²</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#111110]">Итого</th>
                             <th className="px-2 py-1.5 text-right w-20 text-[#9a9a95]">Себест.</th>
@@ -1230,6 +1541,18 @@ export default function B2BQuotesPage() {
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{item.quantity ?? ''}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.totalAreaNet ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#6b6b66]">{Number(item.totalWeight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
+                                {(() => {
+                                  const free = stock.get(String(item.materialName ?? '').trim().toLowerCase())
+                                  const need = Number(item.totalAreaNet ?? 0)
+                                  if (free == null) return <td className="px-2 py-1 text-right text-[#c4c4be]">—</td>
+                                  const enough = free >= need
+                                  return (
+                                    <td className={`px-2 py-1 text-right font-mono whitespace-nowrap ${enough ? 'text-emerald-600' : 'text-red-600 font-semibold'}`}
+                                      title={enough ? 'Хватает на эту позицию' : `Не хватает ${(need - free).toLocaleString('ru-RU', { maximumFractionDigits: 2 })} м²`}>
+                                      {free.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}
+                                    </td>
+                                  )
+                                })()}
                                 <td className="px-2 py-1 text-right font-mono text-[#111110]">{Number(item.pricePerM2 ?? 0).toLocaleString('ru-RU')}</td>
                                 <td className="px-2 py-1 text-right font-mono font-semibold text-[#111110] whitespace-nowrap">{itemFull.toLocaleString('ru-RU')} ₽</td>
                                 <td className="px-2 py-1 text-right font-mono text-[#9a9a95] whitespace-nowrap">{Number(item.costExVat ?? 0).toLocaleString('ru-RU')} ₽</td>
@@ -1243,12 +1566,13 @@ export default function B2BQuotesPage() {
                             <td className="px-2 py-1.5 text-right font-mono text-[11px]">{(quote.total_area ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 3 })}</td>
                             <td className="px-2 py-1.5 text-right font-mono text-[11px] text-[#6b6b66]">{(quote.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}</td>
                             <td />
+                            <td />
                             <td className="px-2 py-1.5 text-right font-mono whitespace-nowrap text-[11px] text-[#6b6b66]">{fmt(quote.total_sale_inc_vat)}</td>
                             <td />
                           </tr>
                           {(quote.discount_percent ?? 0) > 0 && (
                             <tr className="bg-[#fafaf9]">
-                              <td colSpan={10} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
+                              <td colSpan={11} className="px-2 py-0.5 text-right text-[11px] text-emerald-600">
                                 Скидка {quote.discount_percent}%
                               </td>
                               <td className="px-2 py-0.5 text-right font-mono text-[11px] text-emerald-600 whitespace-nowrap">
@@ -1258,13 +1582,35 @@ export default function B2BQuotesPage() {
                             </tr>
                           )}
                           <tr className="bg-[#fafaf9] border-t border-[#e4e4e0] font-semibold">
-                            <td colSpan={10} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
+                            <td colSpan={11} className="px-2 py-1.5 text-right text-[11px] text-[#111110]">Итого к оплате</td>
                             <td className="px-2 py-1.5 text-right font-mono font-bold whitespace-nowrap text-[11px] text-[#111110]">{fmt(finalPrice)}</td>
                             <td />
                           </tr>
                         </tfoot>
                       </table>
                     </div>
+
+                    {/* А20: что видел и делал клиент */}
+                    {(() => {
+                      const events = buildClientTimeline(parsed)
+                      if (events.length === 0) return null
+                      return (
+                        <div className="mb-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Клиент</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {events.map((e, i) => (
+                              <span key={i} title={e.at ? new Date(e.at).toLocaleString('ru-RU') : undefined}
+                                className={`text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                                  e.tone === 'good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : e.tone === 'warn' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-white text-[#6b6b66] border-[#e4e4e0]'}`}>
+                                {e.icon} {e.text}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {/* ПРЕДВАРИТЕЛЬНАЯ ЗАКУПКА */}
                     {(() => {

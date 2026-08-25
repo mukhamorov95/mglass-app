@@ -8,6 +8,7 @@ import {
 } from '@dnd-kit/core'
 import { CSS } from '@dnd-kit/utilities'
 import { createClient } from '@/lib/supabase-browser'
+import { finalTotalOf } from '@/lib/b2b/priceOverride'
 
 type Quote = {
   id: number
@@ -76,7 +77,7 @@ function DraggableCard({ quote, isOverlay }: { quote: Quote; isOverlay?: boolean
     transition: isOverlay ? undefined : 'opacity 0.15s',
   }
 
-  const total = quote.discount_percent > 0 ? quote.total_after_discount : quote.total_sale_inc_vat
+  const total = finalTotalOf(quote)
   const isLowMargin = quote.margin_percent > 0 && quote.margin_percent < 15
   const days = daysInStatus(quote)
   const manager = parseNotes(quote.notes).manager_name as string | null
@@ -121,8 +122,7 @@ function DroppableColumn({
   quotes: Quote[]
 }) {
   const { isOver, setNodeRef } = useDroppable({ id: col.key })
-  const total = quotes.reduce((s, q) =>
-    s + (q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat), 0)
+  const total = quotes.reduce((s, q) => s + finalTotalOf(q), 0)
 
   return (
     <div className="flex-shrink-0 w-[230px]">
@@ -274,7 +274,7 @@ export default function B2BPipelinePage() {
                 </div>
                 <div className="divide-y divide-[#f8f8f7]">
                   {columns[col.key].map(q => {
-                    const total = q.discount_percent > 0 ? q.total_after_discount : q.total_sale_inc_vat
+                    const total = finalTotalOf(q)
                     const days = daysInStatus(q)
                     return (
                       <div key={q.id} className="px-3 py-2.5 bg-white flex items-center justify-between gap-2">

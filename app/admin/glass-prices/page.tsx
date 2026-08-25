@@ -134,6 +134,7 @@ export default function GlassPricesPage() {
   const [savingAll, setSavingAll] = useState(false)
   const [syncingB2B, setSyncingB2B] = useState(false)
   const autoFilledRef = useRef<Set<string>>(new Set())
+  const [priceList, setPriceList] = useState<{ price_date: string; title: string } | null>(null)
   const [undoRows, setUndoRows]   = useState<GlassRow[] | null>(null)
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -206,6 +207,10 @@ export default function GlassPricesPage() {
   }, [])
 
   useEffect(() => {
+    fetch('/api/admin/glass-price-history')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => setPriceList(d?.current ?? null))
+      .catch(() => {})
     fetch('/api/admin/suppliers?supplier_type=glass_mirror')
       .then(r => r.ok ? r.json() : [])
       .then((data: { id: string; name: string; status: string }[]) =>
@@ -869,6 +874,12 @@ export default function GlassPricesPage() {
               className="text-[12px] font-medium px-3.5 py-2 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 hover:bg-orange-100 disabled:opacity-50 transition-colors whitespace-nowrap">
               {syncingB2B ? 'Синхронизация...' : '⟳ Синхр. в B2B'}
             </button>
+            <a href="/admin/glass-price-lists"
+              className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap"
+              title={priceList ? `Действует прайс от ${new Date(priceList.price_date).toLocaleDateString('ru-RU')}` : 'Прайсы поставщика ещё не загружались'}>
+              📄 Прайсы поставщика
+              {priceList && <span className="ml-1.5 text-[#9a9a95]">от {new Date(priceList.price_date).toLocaleDateString('ru-RU')}</span>}
+            </a>
             <a href="/admin/waste-modifiers"
               className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">
               Модификаторы расхода →

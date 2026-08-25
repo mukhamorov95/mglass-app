@@ -5,18 +5,8 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { buildProductionTasks } from '@/lib/productionRouting'
 import { parseNotes } from '@/lib/orderFlags'
 import { deadlineFor } from '@/lib/contractDeadlines'
+import { addWorkingDays } from '@/lib/b2b/deadline'
 
-// Рабочие дни от даты (пропуская сб/вс) → календарная дата дедлайна.
-function addWorkingDays(from: Date, days: number): Date {
-  const d = new Date(from)
-  let left = days
-  while (left > 0) {
-    d.setDate(d.getDate() + 1)
-    const wd = d.getDay()
-    if (wd !== 0 && wd !== 6) left--
-  }
-  return d
-}
 // Сварное изделие в спецификации (лофт/рама/каркас) → срок 25 р.дн. вместо 15.
 function hasWelded(items: unknown[]): boolean {
   return items.some(it => {

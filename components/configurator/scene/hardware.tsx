@@ -154,9 +154,7 @@ function KP006({ material }: { material: THREE.Material }) {
 // блок винтом к стене. X — вдоль трубы, +Z — к стене.
 function KP002({ material }: { material: THREE.Material }) {
   return (
-    <mesh material={material} castShadow>
-      <boxGeometry args={[18 * M, 40 * M, 31 * M]} />
-    </mesh>
+    <RoundedBox args={[18 * M, 40 * M, 31 * M]} radius={2.5 * M} smoothness={3} material={material} castShadow />
   )
 }
 
@@ -167,9 +165,7 @@ function KP001({ material }: { material: THREE.Material }) {
   return (
     <group>
       {/* тело блока (принимает трубу перпендикулярно) */}
-      <mesh position={[0, 5 * M, 0]} material={material} castShadow>
-        <boxGeometry args={[36 * M, 32 * M, 22 * M]} />
-      </mesh>
+      <RoundedBox args={[36 * M, 32 * M, 22 * M]} radius={2.5 * M} smoothness={3} position={[0, 5 * M, 0]} material={material} castShadow />
       {/* U-скоба снизу — на кромку бокового стекла (две щеки по граням) */}
       {[-6 * M, 6 * M].map((x, i) => (
         <mesh key={i} position={[x, -16 * M, 0]} material={material} castShadow>
@@ -199,9 +195,7 @@ function KupeHandle({ material }: { material: THREE.Material }) {
 // колпачок закрывает торец (в ±X), чуть крупнее сечения бруса.
 function TubeCap({ material }: { material: THREE.Material }) {
   return (
-    <mesh material={material} castShadow>
-      <boxGeometry args={[16 * M, 36 * M, 16 * M]} />
-    </mesh>
+    <RoundedBox args={[16 * M, 36 * M, 16 * M]} radius={2.5 * M} smoothness={3} material={material} castShadow />
   )
 }
 
@@ -221,6 +215,44 @@ function TubeConnector({ material }: { material: THREE.Material }) {
   )
 }
 
+// FDC-5D — коннектор трубы под 45°: круглый шарнир (диск-фланец у поверхности +
+// шаровой узел + короткий хомут на трубу). Ось трубы вдоль X.
+function MountDiag45({ material }: { material: THREE.Material }) {
+  return (
+    <group>
+      {/* диск-фланец к плоскости (стекло/стена), в −Z */}
+      <mesh position={[0, 0, -6 * M]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
+        <cylinderGeometry args={[15 * M, 15 * M, 6 * M, 24]} />
+      </mesh>
+      {/* шаровой шарнир */}
+      <mesh material={material} castShadow>
+        <sphereGeometry args={[11 * M, 22, 16]} />
+      </mesh>
+      {/* хомут на трубу (вдоль X) */}
+      <mesh position={[10 * M, 0, 0]} rotation={[0, 0, Math.PI / 2]} material={material} castShadow>
+        <cylinderGeometry args={[9 * M, 9 * M, 14 * M, 20]} />
+      </mesh>
+    </group>
+  )
+}
+
+// FDK-5R — стабилизационное крепление: настенный круглый фланец + шток-муфта,
+// принимающая штангу. Ось штанги вдоль X, стена в +Z (к трубе — внутрь).
+function MountStabilizer({ material }: { material: THREE.Material }) {
+  return (
+    <group>
+      {/* круглый настенный фланец */}
+      <mesh position={[0, 0, 6 * M]} rotation={[Math.PI / 2, 0, 0]} material={material} castShadow>
+        <cylinderGeometry args={[16 * M, 16 * M, 5 * M, 24]} />
+      </mesh>
+      {/* муфта-шток вдоль трубы */}
+      <mesh position={[0, 0, -2 * M]} rotation={[0, 0, Math.PI / 2]} material={material} castShadow>
+        <cylinderGeometry args={[10 * M, 10 * M, 22 * M, 20]} />
+      </mesh>
+    </group>
+  )
+}
+
 export function Hardware({ model, shape, material }: { model: HardwareModel; shape?: string; material: THREE.Material }) {
   const sh = (shape as HardwareShape) || shapeForModel(model)
   const hingePlate = model === 'dessau' ? 'dessau' : 'balge'
@@ -233,6 +265,8 @@ export function Hardware({ model, shape, material }: { model: HardwareModel; sha
     case 'mount-glass': return <KP006 material={material} />
     case 'mount-wall': return <KP002 material={material} />
     case 'mount-corner': return <KP001 material={material} />
+    case 'mount-diag45': return <MountDiag45 material={material} />
+    case 'mount-stabilizer': return <MountStabilizer material={material} />
     case 'connector': return <TubeConnector material={material} />
     case 'cap': return <TubeCap material={material} />
     case 'hinge-glass': default: return <Hinge model={hingePlate} material={material} />

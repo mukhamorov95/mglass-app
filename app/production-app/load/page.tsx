@@ -1,6 +1,7 @@
 import ProductionTabs from '@/components/ProductionTabs'
 import { createServiceClient } from '@/lib/supabase-service'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
+import { addWorkingDays, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 
 // А3: тепловая карта загрузки цеха. Строки — этапы, столбцы — СРОЧНОСТЬ по сроку
 // отгрузки заказа (production_day у задач не заполнен, поэтому ось — дедлайн из А1).
@@ -11,19 +12,13 @@ export const dynamic = 'force-dynamic'
 type Task = { order_id: number; stage_key: string }
 type OrderRow = { id: number; notes: string | null; launched_at: string | null }
 
-// Date — вне тела компонента (react-покомпонентная чистота).
-function addWorkingDays(from: Date, days: number): Date {
-  const d = new Date(from); let left = days
-  while (left > 0) { d.setDate(d.getDate() + 1); const wd = d.getDay(); if (wd !== 0 && wd !== 6) left-- }
-  return d
-}
 function orderDeadlineMs(o: OrderRow): number | null {
   let notes: Record<string, unknown> = {}
   try { notes = o.notes ? JSON.parse(o.notes) : {} } catch {}
   const dd = notes.deadline_date
   if (typeof dd === 'string' && dd) return new Date(dd).getTime()
   // fallback для старых заказов без срока: запуск + 15 рабочих дней
-  if (o.launched_at) return addWorkingDays(new Date(o.launched_at), 15).getTime()
+  if (o.launched_at) return addWorkingDays(new Date(o.launched_at), DEFAULT_WORKING_DAYS).getTime()
   return null
 }
 function bucketOf(deadlineMs: number | null): number {

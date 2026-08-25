@@ -6,7 +6,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer' | 'accountant'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer' | 'accountant' | 'office' | 'logist'
 
 export type UserProfile = {
   role:        Role
@@ -29,7 +29,7 @@ function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
          r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
          r === 'commercial' || r === 'cfo' || r === 'partner' || r === 'measurer' ||
-         r === 'accountant'
+         r === 'accountant' || r === 'office' || r === 'logist'
 }
 
 // Case-insensitive normalisation. Accepts a few common UI aliases.
@@ -154,11 +154,15 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
+    '/b2b-today',
+    '/b2b-deal',
     '/b2b-quotes',
     '/b2b-orders',
+    '/b2b-invoices',
     '/b2b-crm',
     '/b2b-cutting',
     '/production-app',
+    '/inventory',
   ],
 
   production: [
@@ -166,6 +170,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/b2b-production',
     '/b2b-cutting',
     '/production-app',
+    '/inventory',
     '/p/o',
   ],
 
@@ -194,6 +199,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/materials',
     '/admin/services',
     '/admin/glass-prices',
+    '/admin/glass-price-lists',
     '/admin/mirror-lighting',
     '/admin/mirror-frames',
     '/admin/facet',
@@ -201,6 +207,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/admin/route-sheet',
     '/admin/stock-control',
     '/admin/procurement',
+    '/inventory',
     '/admin/cutting-settings',
     '/accounting',
   ],
@@ -208,6 +215,9 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   commercial: [
     '/',
     '/commercial',
+    '/b2b-invoices',
+    '/b2b-deal',
+    '/inventory',
     '/b2b-growth',
     '/installations',
     '/crm',
@@ -221,6 +231,8 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   cfo: [
     '/',
     '/cfo',
+    '/b2b-invoices',
+    '/inventory',
     '/accounting',
     '/admin/cfo',
     '/admin/pnl',
@@ -248,6 +260,48 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/measurer-cabinet',
     '/measure-calendar',
   ],
+
+  // Офис-менеджер: координация — счета, КП, клиенты, календарь, задачи (CRM).
+  // Без маржи, себестоимости и CFO-дашбордов.
+  office: [
+    '/',
+    '/clients',
+    '/calendar',
+    '/kp',
+    '/contracts',
+    '/orders',
+    '/b2b-invoices',
+    '/measure-requests',
+    '/measure-calendar',
+    '/crm',
+  ],
+
+  // Логистика: планирование монтажей и доставок + просмотр заказов под них.
+  logist: [
+    '/',
+    '/installations',
+    '/calendar',
+    '/measure-calendar',
+    '/orders',
+    '/b2b-orders',
+  ],
+}
+
+// Домашний экран роли: куда отправлять с корня «/», чтобы человек попадал сразу
+// в свой раздел, а не на менеджерскую панель. manager/admin/ceo не в карте —
+// они остаются на «/» (общая панель / Owner Center). Пути входят в ROLE_ALLOWED
+// соответствующей роли, поэтому canAccessRoute их не отбивает.
+export const ROLE_HOME: Partial<Record<Role, string>> = {
+  partner:    '/partner',
+  production: '/production-app',
+  buyer:      '/inventory',
+  office:     '/crm',
+  logist:     '/installations',
+  measurer:   '/measurer-cabinet',
+  accountant: '/accounting',
+  cfo:        '/cfo',
+  commercial: '/commercial',
+  seo:        '/marketing',
 }
 
 // Per-user B2B scope flag. `mglass_only` unlocks a narrow B2B subset for a

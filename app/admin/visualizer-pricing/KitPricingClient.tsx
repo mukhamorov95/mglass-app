@@ -5,13 +5,14 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import { FINISHES } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, type GlassTint } from '@/components/configurator/scene/assembly'
-import { GLASS_TYPE_IDS, DEFAULT_FINANCE, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
+import { GLASS_TYPE_IDS, supplierColorToFinish, type Tier } from '@/lib/configurator/pricing'
 import {
   computeKitQuantities, computeKitPrice, kitChoices, requiredRoles, defaultKitFor,
-  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm,
+  ROLES, ROLE_META, CAP_MARGIN_MM, parseLengthMm, ROLE_GROUPS, autoShapeForRole, piecesForRole,
+  PROFILE_SIDES as PROFILE_SIDES_UI,
   type RoleId, type Library, type LibraryItem, type ModelKit, type KitRates, type QtyRule,
 } from '@/lib/configurator/kit'
-import { inferShape } from '@/lib/configurator/hardwareShapes'
+import { auditKits } from '@/lib/configurator/audit'
 import { CatalogPicker } from './CatalogPicker'
 
 // Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
@@ -48,15 +49,35 @@ const TINT: Record<string, GlassTint> = {
 const rub = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const uid = (p: string) => `${p}-${Math.round(Math.random() * 1e9).toString(36)}`
 
-function NumInput({ value, onChange, w = 88, suffix = '₽' }: { value: number; onChange: (v: number) => void; w?: number; suffix?: string }) {
+// Числовое поле с черновиком: пока владелец печатает, значение НЕ трогаем и НЕ зажимаем
+// в диапазон. Иначе на «600» после первой цифры прилетает clamp(6)→500, курсор скачет,
+// и в поле оказывается что угодно, кроме введённого. Границы применяем на blur/Enter.
+function NumInput({ value, onChange, w = 88, suffix = '₽', range }: {
+  value: number; onChange: (v: number) => void; w?: number; suffix?: string; range?: [number, number]
+}) {
+  const [draft, setDraft] = useState<string | null>(null)
+  const commit = () => {
+    if (draft === null) return
+    const raw = Number(draft.replace(',', '.'))
+    const n = Number.isFinite(raw) ? raw : value
+    const fixed = range ? Math.min(range[1], Math.max(range[0], n)) : Math.max(0, n)
+    setDraft(null)
+    if (fixed !== value) onChange(fixed)
+  }
   return (
     <span className="flex items-center gap-1">
-      <input type="number" value={value} onChange={e => onChange(Number(e.target.value) || 0)} style={{ width: w }}
+      <input type="text" inputMode="decimal" value={draft ?? String(value)} style={{ width: w }}
+        onChange={e => setDraft(e.target.value)}
+        onFocus={e => e.currentTarget.select()}
+        onBlur={commit}
+        onKeyDown={e => { if (e.key === 'Enter') { commit(); e.currentTarget.blur() } if (e.key === 'Escape') setDraft(null) }}
+        title={range ? `от ${range[0]} до ${range[1]}` : undefined}
         className="text-right font-mono text-[13px] text-[#111110] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 focus:border-[#111110] outline-none" />
       <span className="text-[11px] text-[#9a9a95]">{suffix}</span>
     </span>
   )
 }
+
 function Card({ title, right, children }: { title?: string; right?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
@@ -68,7 +89,9 @@ function Card({ title, right, children }: { title?: string; right?: React.ReactN
   )
 }
 
-export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore> }) {
+export type FinanceIn = { marginPct: number; taxPct: number; minMarginPct: number; source: string }
+
+export function KitPricingClient({ initial, finance }: { initial: Record<Tier, TierStore>; finance: Record<Tier, FinanceIn> }) {
   const [tier, setTier] = useState<Tier>('budget')
   const [store, setStore] = useState<Record<Tier, TierStore>>(initial)
   const [code, setCode] = useState('М7')
@@ -80,6 +103,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const [saving, setSaving] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [view, setView] = useState<'kit' | 'audit'>('kit')
+  type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
+    changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
+  const [diffs, setDiffs] = useState<Diff[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  type Saving = { itemId: string; name: string; roleLabel: string; supplier: string; cost: number
+    savePerUnit: number; usedInModels: string[]
+    best: { supplier: string; name: string; cost: number; url: string; imageUrl: string; match: number } }
+  const [savings, setSavings] = useState<{ rows: Saving[]; totalPerItem: number; checked: number } | null>(null)
+  const [seeking, setSeeking] = useState(false)
 
   const cur = store[tier]
   const model = getModel(code)
@@ -90,12 +125,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
 
   const assembly = useMemo(() => buildFromModel(model, dims, 8), [model, dims])
   const q = useMemo(() => computeKitQuantities(assembly, 8, model, cur.rates.capMargin), [assembly, model, cur.rates.capMargin])
+  const fin = finance[tier]
   const price = useMemo(
-    () => computeKitPrice(q, cur.library, kit, cur.rates, DEFAULT_FINANCE, { glassType, finishId, choice, qtyChoice }),
-    [q, cur.library, kit, cur.rates, glassType, finishId, choice, qtyChoice],
+    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice }),
+    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice],
   )
   const clientView = useMemo(() => kitChoices(cur.library, kit, q), [cur.library, kit, q])
   const byId = useMemo(() => new Map(cur.library.items.map(i => [i.id, i])), [cur.library])
+
+  const audit = useMemo(
+    () => (view === 'audit' ? auditKits(cur.library, cur.kits, cur.rates, finance[tier]) : null),
+    [view, cur.library, cur.kits, cur.rates, finance, tier],
+  )
 
   // В скольких моделях используется позиция — предупреждение, что правка цены общая.
   const usage = useMemo(() => {
@@ -103,6 +144,35 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     for (const k of Object.values(cur.kits)) for (const s of k.slots) for (const e of s.entries) m.set(e.itemId, (m.get(e.itemId) ?? 0) + 1)
     return m
   }, [cur.kits])
+
+  // Сверка с прайсом поставщика: показываем разницу, применяем только отмеченное.
+  async function checkPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch(`/api/admin/configurator-kits/reprice?tier=${tier}`)
+      const d = r.ok ? (await r.json()).diffs as Diff[] : []
+      setDiffs(d)
+      setPicked(new Set(d.filter(x => x.changes.length > 0).map(x => x.itemId)))
+    } finally { setChecking(false) }
+  }
+  async function applyPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch('/api/admin/configurator-kits/reprice', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier, itemIds: [...picked] }),
+      })
+      if (r.ok) { setMsg(`Цены обновлены: ${(await r.json()).applied}`); setDiffs(null); location.reload() }
+    } finally { setChecking(false) }
+  }
+
+  async function findSavings() {
+    setSeeking(true)
+    try {
+      const r = await fetch(`/api/admin/supplier-catalog/savings?tier=${tier}`)
+      if (r.ok) setSavings(await r.json())
+    } finally { setSeeking(false) }
+  }
 
   function edit(mutate: (s: TierStore) => void) {
     setStore(prev => { const next = structuredClone(prev); mutate(next[tier]); return next })
@@ -129,6 +199,11 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
   const removeEntry = (si: number, ei: number) => editKit(k => { k.slots[si].entries.splice(ei, 1) })
   const setQtyRule = (si: number, ei: number, qty: QtyRule) => editKit(k => { k.slots[si].entries[ei].qty = qty })
   const resetKit = () => edit(s => { s.kits[code] = defaultKitFor(model, s.library) })
+  const excludeRole = (role: RoleId) => editKit(k => {
+    k.slots = k.slots.filter(sl => sl.role !== role)
+    k.excluded = [...new Set([...(k.excluded ?? []), role])]
+  })
+  const unexcludeRole = (role: RoleId) => editKit(k => { k.excluded = (k.excluded ?? []).filter(r => r !== role) })
   const setShape = (id: string, shape: string) => editItem(id, i => { if (shape) i.shape = shape; else delete i.shape })
 
   // Позиция нужна не одной модели: добавляем её в комплект всех моделей, где эта роль есть.
@@ -163,10 +238,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     const target = picker
     setPicker(null)
     if (!target) return
+    // Сначала подтягиваем карточку с сайта поставщика (ссылка, фото, характеристики),
+    // потом читаем варианты — так позиция сразу приезжает с фото.
+    await fetch('/api/admin/supplier-catalog/enrich', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [rowId] }),
+    }).catch(() => {})
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
-    const { variants, name, supplier, base } = await res.json() as {
+    const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
       variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+      imageUrl?: string; specs?: Record<string, string>
     }
     const byFinish: Record<string, number> = {}
     for (const v of variants) {
@@ -187,11 +268,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
         if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
         else it.prices = { ...it.prices, ...byFinish }
         it.ref = { supplier, base, label }
+        if (imageUrl) it.image = imageUrl
+        if (specs && Object.keys(specs).length) it.specs = specs
         return
       }
       const id = uid('it')
       s.library.items.push({
         id, name: shortName, role: slot.role, ref: { supplier, base, label },
+        ...(imageUrl ? { image: imageUrl } : {}),
+        ...(specs && Object.keys(specs).length ? { specs } : {}),
         ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
       })
       const k = s.kits[code]!
@@ -247,12 +332,143 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           <button onClick={() => setTier('budget')} className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
           <button onClick={() => setTier('premium')} className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
         </div>
+        <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
+          <button onClick={() => setView('kit')} className={`px-4 py-2 ${view === 'kit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Комплекты</button>
+          <button onClick={() => setView('audit')} className={`px-4 py-2 ${view === 'audit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Аудит</button>
+        </div>
         <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
           ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
         </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start">
+      {view === 'audit' && audit && (
+        <div className="space-y-4 max-w-[980px]">
+          <Card>
+            <div className="flex items-baseline gap-3">
+              <p className="text-[28px] font-semibold text-[#111110] leading-none">{audit.ready}<span className="text-[#9a9a95] text-[18px]"> из {audit.total}</span></p>
+              <p className="text-[13px] text-[#6b6b66]">моделей можно показывать клиенту с ценой в тарифе «{tier === 'budget' ? 'Бюджет' : 'Премиум'}»</p>
+            </div>
+            <p className="text-[12px] text-[#9a9a95] mt-1.5">
+              Каждая модель прогнана на трёх размерах (минимум, середина, максимум) во всех {FINISHES.length} цветах.
+              Блокер — клиент увидит «по запросу» вместо цены.
+            </p>
+          </Card>
+
+          <Card title="Цены поставщика">
+            <div className="flex items-center gap-3">
+              <button onClick={checkPrices} disabled={checking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {checking ? 'Сверяю…' : 'Сверить со справочником'}
+              </button>
+              {diffs && <span className="text-[13px] text-[#6b6b66]">
+                {diffs.length === 0 ? 'Все цены совпадают с прайсом' : `Расхождений: ${diffs.length}`}
+              </span>}
+              {diffs && picked.size > 0 && (
+                <button onClick={applyPrices} disabled={checking}
+                  className="ml-auto text-[13px] font-medium px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110]">
+                  Применить отмеченные ({picked.size})
+                </button>
+              )}
+            </div>
+            {diffs?.map(d => (
+              <div key={d.itemId} className="flex items-start gap-2 py-1.5 mt-1 border-t border-[#f4f4f0] text-[13px]">
+                <input type="checkbox" checked={picked.has(d.itemId)} disabled={d.changes.length === 0}
+                  onChange={e => setPicked(p => { const n = new Set(p); if (e.target.checked) n.add(d.itemId); else n.delete(d.itemId); return n })}
+                  className="mt-1" />
+                <span className="w-[240px] shrink-0 truncate text-[#111110]">{d.name}</span>
+                {d.note
+                  ? <span className="text-[#b09a6a]">{d.note}</span>
+                  : <span className="text-[#6b6b66]">
+                      {d.changes.slice(0, 4).map(c => `${c.finish}${c.stockLen ? ` ${c.stockLen}мм` : ''}: ${c.was} → ${c.now} (${c.deltaPct > 0 ? '+' : ''}${c.deltaPct}%)`).join(' · ')}
+                      {d.changes.length > 4 && ` …и ещё ${d.changes.length - 4}`}
+                    </span>}
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Автоматически ничего не переписывается: цена изделия не должна меняться без твоего ведома.
+              История цен пишется при каждом импорте прайса.
+            </p>
+          </Card>
+
+          <Card title="Где мы переплачиваем">
+            <div className="flex items-center gap-3">
+              <button onClick={findSavings} disabled={seeking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {seeking ? 'Ищу…' : 'Найти дешевле у поставщиков'}
+              </button>
+              {savings && (
+                <span className="text-[13px] text-[#6b6b66]">
+                  {savings.rows.length === 0
+                    ? `Проверено позиций: ${savings.checked}. Дешевле не нашлось — берём по лучшей цене`
+                    : `Нашлось ${savings.rows.length} из ${savings.checked}: до ${rub(savings.totalPerItem)} на изделии`}
+                </span>
+              )}
+            </div>
+            {savings?.rows.map(r => (
+              <div key={r.itemId} className="py-2 mt-1 border-t border-[#f4f4f0]">
+                <div className="flex items-center gap-2 text-[13px]">
+                  <span className="text-[10px] uppercase text-[#a0a09a] w-[120px] shrink-0">{r.roleLabel}</span>
+                  <span className="text-[#111110] truncate flex-1">{r.name}</span>
+                  <span className="font-mono text-[#6b6b66] shrink-0">{rub(r.cost)}</span>
+                  <span className="text-[#256029] font-semibold shrink-0">−{rub(r.savePerUnit)}</span>
+                </div>
+                <div className="flex items-center gap-2 pl-[128px] text-[12px] text-[#6b6b66]">
+                  {r.best.imageUrl && <img src={r.best.imageUrl} alt="" className="w-6 h-6 rounded object-cover border border-[#eeece5]" />}
+                  <span className="truncate flex-1">
+                    {r.best.supplier}: {r.best.name} — {rub(r.best.cost)}
+                    {r.best.url && <a href={r.best.url} target="_blank" rel="noreferrer" className="ml-1 text-[#4b6ea9] hover:underline">карточка</a>}
+                  </span>
+                  <span className="text-[#9a9a95] shrink-0">стоит в {r.usedInModels.length} моделях</span>
+                </div>
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Сравниваются только позиции из комплектов и только в базовом цвете, чтобы не сравнить хром с золотом.
+              Брак и «эконом» исключены. Замена — решение закупщика: у дешёвой позиции может быть другое качество.
+            </p>
+          </Card>
+
+          {audit.libraryIssues.length > 0 && (
+            <Card title="Библиотека позиций">
+              {audit.libraryIssues.map((i, n) => (
+                <div key={n} className="flex items-start gap-2 py-1 text-[13px] border-b border-[#f4f4f0] last:border-0">
+                  <span className={i.severity === 'blocker' ? 'text-[#b04a3f]' : 'text-[#b09a6a]'}>{i.severity === 'blocker' ? '●' : '○'}</span>
+                  <span className="text-[#111110] w-[220px] shrink-0 truncate">{i.label}</span>
+                  <span className="text-[#6b6b66]">{i.detail}</span>
+                </div>
+              ))}
+            </Card>
+          )}
+
+          <Card title="Модели">
+            {audit.models.map(m => (
+              <div key={m.code} className="py-2 border-b border-[#f4f4f0] last:border-0">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[13px] ${m.sellable ? 'text-[#256029]' : 'text-[#b04a3f]'}`}>{m.sellable ? '✅' : '⛔'}</span>
+                  <button onClick={() => { setModelCode(m.code); setView('kit') }} className="text-[13px] text-[#111110] hover:underline">
+                    <span className="font-mono">{m.code}</span> · {m.name}
+                  </button>
+                  <span className="ml-auto font-mono text-[12px] text-[#6b6b66]">
+                    {m.sizes.length > 0 && `${rub(m.sizes[0].total)} … ${rub(m.sizes[m.sizes.length - 1].total)}`}
+                  </span>
+                </div>
+                {m.issues.length > 0 && (
+                  <div className="pl-6 pt-0.5">
+                    {m.issues.slice(0, 6).map((i, n) => (
+                      <p key={n} className={`text-[12px] ${i.severity === 'blocker' ? 'text-[#9a5a2a]' : 'text-[#9a9a95]'}`}>
+                        {i.label} — {i.code}
+                      </p>
+                    ))}
+                    {m.issues.length > 6 && <p className="text-[12px] text-[#9a9a95]">…и ещё {m.issues.length - 6}</p>}
+                  </div>
+                )}
+              </div>
+            ))}
+          </Card>
+        </div>
+      )}
+
+      <div className={`${view === 'audit' ? 'hidden ' : ''}grid grid-cols-1 lg:grid-cols-[200px_1fr_440px] gap-5 items-start`}>
         {/* Модельный ряд */}
         <div className="grid gap-1.5 lg:sticky lg:top-4">
           {M_MODELS.map(m => {
@@ -282,16 +498,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
           <Card title="Размеры для проверки">
             <div className="flex flex-wrap items-center gap-3">
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Ширина
-                <NumInput value={dims.width} onChange={v => setDims(d => ({ ...d, width: clamp(v, c.width) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.width} range={c.width} onChange={v => setDims(d => ({ ...d, width: v }))} w={70} suffix="мм" /></label>
               {c.needsWidth2 && c.width2 && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Вторая
-                  <NumInput value={dims.width2 ?? 0} onChange={v => setDims(d => ({ ...d, width2: clamp(v, c.width2!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.width2 ?? 0} range={c.width2!} onChange={v => setDims(d => ({ ...d, width2: v }))} w={70} suffix="мм" /></label>
               )}
               <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Высота
-                <NumInput value={dims.height} onChange={v => setDims(d => ({ ...d, height: clamp(v, c.height) }))} w={70} suffix="мм" /></label>
+                <NumInput value={dims.height} range={c.height} onChange={v => setDims(d => ({ ...d, height: v }))} w={70} suffix="мм" /></label>
               {c.doorWidth && (
                 <label className="flex items-center gap-1.5 text-[13px] text-[#4b4b47]">Дверь
-                  <NumInput value={dims.doorWidth ?? 0} onChange={v => setDims(d => ({ ...d, doorWidth: clamp(v, c.doorWidth!) }))} w={70} suffix="мм" /></label>
+                  <NumInput value={dims.doorWidth ?? 0} range={c.doorWidth!} onChange={v => setDims(d => ({ ...d, doorWidth: v }))} w={70} suffix="мм" /></label>
               )}
             </div>
             <p className="text-[11px] text-[#9a9a95] mt-2">
@@ -324,7 +540,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
               </div>
             ))}
             <div className="flex justify-between text-[13px] pt-2 mt-1 border-t border-[#f0f0ec]"><span className="text-[#6b6b66]">Себестоимость</span><span className="font-mono">{rub(price.materialsCost)}</span></div>
-            <div className="flex justify-between text-[13px] py-0.5"><span className="text-[#4b4b47]">Цена изделия ({price.marginPct}/{price.taxPct}%)</span><span className="font-mono">{rub(price.itemPrice)}</span></div>
+            <div className="flex justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">
+                Цена изделия (маржа {price.marginPct}% {price.marginSource === 'модель' ? '— своя у модели' : '— тариф'}, налог {price.taxPct}%)
+              </span>
+              <span className="font-mono">{rub(price.itemPrice)}</span>
+            </div>
+            {price.belowMin && (
+              <p className="text-[11px] text-[#b04a3f] py-0.5">⚠️ Маржа ниже минимальной {fin.minMarginPct}% — так продавать нельзя</p>
+            )}
             <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)} + доставка</span><span className="font-mono">{rub(price.installCost + price.deliveryCost)}</span></div>
             <div className="flex justify-between text-[14px] font-semibold pt-1"><span>Сумма изделия</span><span className="font-mono">{rub(price.total)}</span></div>
           </Card>
@@ -390,15 +614,33 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
             <Card><p className="text-[13px] text-[#b0b0aa] italic">Комплект пуст — добавь роль ниже или собери заново по геометрии.</p></Card>
           )}
 
-          {kit.slots.map((slot, si) => {
+          {ROLE_GROUPS.map(grp => {
+            const inGroup = kit.slots.map((slot, si) => ({ slot, si })).filter(x => grp.roles.includes(x.slot.role))
+            if (inGroup.length === 0) return null
+            const filled = inGroup.filter(x => x.slot.entries.length > 0).length
+            const isOpen = !collapsed[grp.id]
+            return (
+              <div key={grp.id} className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
+                <button onClick={() => setCollapsed(c => ({ ...c, [grp.id]: !c[grp.id] }))}
+                  className="w-full flex items-center gap-2 px-4 py-2.5 bg-[#faf9f6] border-b border-[#eeece5] text-left hover:bg-[#f5f4ef]">
+                  <span className={`text-[10px] text-[#9a9a95] transition-transform ${isOpen ? 'rotate-90' : ''}`}>▶</span>
+                  <span className="text-[13px] font-semibold text-[#111110]">{grp.title}</span>
+                  <span className={`text-[11px] ${filled === inGroup.length ? 'text-[#5a8a5a]' : 'text-[#b09a6a]'}`}>
+                    {filled} из {inGroup.length}
+                  </span>
+                  <span className="ml-auto text-[11px] text-[#9a9a95]">
+                    {inGroup.map(x => ROLE_META[x.slot.role].label).join(' · ')}
+                  </span>
+                </button>
+                {isOpen && <div className="p-2 space-y-2">
+                {inGroup.map(({ slot, si }) => {
             const meta = ROLE_META[slot.role]
-            const qty = q.roleQty[slot.role] ?? 0
+            const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
             const unneeded = qty === 0
             return (
-              <Card key={slot.role}
-                right={<button onClick={() => removeSlot(si)} className="text-[11px] text-[#b04a3f] hover:underline">удалить роль</button>}>
-                <div className="flex items-center gap-2 mb-0.5 -mt-1">
-                  <p className="text-[13px] font-semibold text-[#111110]">{meta.label}</p>
+              <div key={slot.role} className="rounded-lg border border-[#eeece5] bg-white pl-3 pr-3 py-2.5 border-l-[3px] border-l-[#e0ddd2]">
+                <div className="flex items-center gap-2 mb-0.5">
+                  <p className="text-[13px] font-medium text-[#111110]">{meta.label}</p>
                   {unneeded
                     ? <span className="text-[10px] text-[#b09a6a]">модели не нужна</span>
                     : <span className="text-[10px] text-[#8a9a7a]">×{qty} из геометрии</span>}
@@ -406,6 +648,8 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                     <button onClick={() => setSelect(si, 'one')} className={`px-2 py-0.5 ${slot.select === 'one' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>одна из списка</button>
                     <button onClick={() => setSelect(si, 'all')} className={`px-2 py-0.5 ${slot.select === 'all' ? 'bg-[#111110] text-white' : 'bg-white text-[#6b6b66]'}`}>все сразу</button>
                   </span>
+                  <button onClick={() => removeSlot(si)} title="Убрать эту подгруппу из модели"
+                    className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-0.5">×</button>
                 </div>
                 <p className="text-[11px] text-[#9a9a95] mb-2">{meta.hint}</p>
 
@@ -418,6 +662,9 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   return (
                     <div key={e.itemId} className="py-1 border-b border-[#f4f4f0] last:border-0">
                       <div className="flex items-center gap-1">
+                        {it.image
+                          ? <img src={it.image} alt="" className="w-7 h-7 rounded object-cover border border-[#eeece5] shrink-0" />
+                          : <span className="w-7 h-7 rounded bg-[#f6f5f1] border border-[#eeece5] shrink-0" />}
                         {slot.select === 'one' && (
                           <button onClick={() => setPrimary(si, ei)} title={e.primary ? 'Показывается клиенту первой' : 'Сделать вариантом по умолчанию'}
                             className={`text-[14px] leading-none shrink-0 ${e.primary ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{e.primary ? '★' : '☆'}</button>
@@ -456,13 +703,18 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                           <select value={it.shape ?? ''} onChange={ev => setShape(it.id, ev.target.value)}
                             title="Как позиция выглядит в 3D у клиента"
                             className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
-                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === inferShape(it.name))?.label ?? 'по названию'})</option>
+                            <option value="">вид: авто ({SHAPES.find(sh => sh.id === autoShapeForRole(it.name, it.role))?.label ?? 'по названию'})</option>
                             {SHAPES.map(sh => <option key={sh.id} value={sh.id}>вид: {sh.label}</option>)}
                           </select>
                         )}
                         <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
                           className="text-[11px] text-[#4b6ea9] hover:underline">во все модели</button>
                         {used > 1 && <span className="text-[10px] text-[#b09a6a]" title="Цена общая для всех моделей">в {used} моделях</span>}
+                        {it.specs && Object.keys(it.specs).length > 0 && (
+                          <span className="text-[10px] text-[#6b6b66]" title="Характеристики с сайта поставщика">
+                            {Object.entries(it.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                          </span>
+                        )}
                         {it.ref && <span className="text-[10px] text-[#8a9a7a] truncate">🔗 {it.ref.label ?? it.ref.base}</span>}
                       </div>
                     </div>
@@ -473,24 +725,78 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   <button onClick={() => setPicker({ si })} className="text-[12px] font-medium text-[#256029] hover:underline">📗 из справочника</button>
                   <button onClick={() => addManual(si)} className="text-[12px] text-[#9a9a95] hover:underline">+ вручную</button>
                 </div>
-              </Card>
+              </div>
             )
           })}
+                </div>}
+              </div>
+            )
+          })}
+
+          {(() => {
+            const gaps = needed.filter(r => !kit.slots.some(sl => sl.role === r)
+              && !(kit.excluded ?? []).includes(r)
+              && !(PROFILE_SIDES_UI.includes(r) && kit.slots.some(sl => sl.role === 'profile')))
+            const excluded = kit.excluded ?? []
+            if (gaps.length === 0 && excluded.length === 0) return null
+            return (
+              <Card title="Модель требует, а в комплекте нет">
+                {gaps.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px]">
+                    <span className="text-[#9a5a2a]">⚠️ {ROLE_META[r].label}</span>
+                    <button onClick={() => addSlot(r)} className="ml-auto text-[12px] text-[#256029] hover:underline">добавить</button>
+                    <button onClick={() => excludeRole(r)} className="text-[12px] text-[#9a9a95] hover:underline" title="В этой модели такая позиция не используется">не используется</button>
+                  </div>
+                ))}
+                {excluded.map(r => (
+                  <div key={r} className="flex items-center gap-2 py-1 text-[13px] text-[#9a9a95]">
+                    <span>— {ROLE_META[r].label}: не используется</span>
+                    <button onClick={() => unexcludeRole(r)} className="ml-auto text-[12px] text-[#4b6ea9] hover:underline">вернуть</button>
+                  </div>
+                ))}
+              </Card>
+            )
+          })()}
 
           <Card title="Добавить роль">
             <div className="flex items-center gap-2">
               <select value={addRole} onChange={e => setAddRole(e.target.value as RoleId | '')}
                 className="flex-1 text-[13px] border border-[#e4e4e0] rounded-lg px-2 py-1.5 outline-none focus:border-[#111110]">
                 <option value="">— выбери, что ещё есть в модели —</option>
-                {freeRoles.map(r => (
-                  <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>
-                ))}
+                {ROLE_GROUPS.map(g => {
+                  const free = g.roles.filter(r => freeRoles.includes(r))
+                  if (free.length === 0) return null
+                  return (
+                    <optgroup key={g.id} label={g.title}>
+                      {free.map(r => <option key={r} value={r}>{ROLE_META[r].label}{needed.includes(r) ? ' — нужна модели' : ''}</option>)}
+                    </optgroup>
+                  )
+                })}
               </select>
               <button onClick={() => { if (addRole) { addSlot(addRole); setAddRole('') } }} disabled={!addRole}
                 className={`text-[13px] font-medium px-3 py-1.5 rounded-lg ${addRole ? 'bg-[#111110] text-white' : 'bg-[#eee] text-[#9a9a95]'}`}>Добавить</button>
             </div>
             <p className="text-[11px] text-[#9a9a95] mt-1.5">
               Роли, которые модель требует, но их нет в комплекте, попадают в предупреждение спецификации.
+            </p>
+          </Card>
+
+          <Card title="Финансы">
+            <div className="flex items-center justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Маржа тарифа</span>
+              <span className="font-mono text-[#111110]">{fin.marginPct}%</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Налог</span>
+              <span className="font-mono text-[#111110]">{fin.taxPct}%</span>
+            </div>
+            <label className="flex items-center justify-between gap-2 text-[13px] py-0.5">
+              <span className="text-[#4b4b47]">Маржа модели {model.code}</span>
+              <NumInput value={kit.margin ?? 0} onChange={v => editKit(k => { if (v > 0) k.margin = v; else delete k.margin })} suffix="%" w={64} />
+            </label>
+            <p className="text-[11px] text-[#9a9a95] mt-1">
+              0 — берётся маржа тарифа. Минимум {fin.minMarginPct}%. Источник: {fin.source}.
+              Меняются в разделе финансовых настроек, здесь только для этой модели.
             </p>
           </Card>
 
@@ -522,7 +828,7 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
         <option value="client">выбор клиента</option>
       </select>
       {rule.mode === 'fixed' && (
-        <input type="number" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value) || 0 })}
+        <input type="text" inputMode="numeric" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value.replace(/\D/g, '')) || 0 })}
           className="w-12 text-right font-mono text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]" />
       )}
       {rule.mode === 'client' && (
@@ -536,7 +842,6 @@ function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRul
   )
 }
 
-const clamp = (v: number, [a, b]: [number, number]) => Math.min(b, Math.max(a, v))
 function defaultDims(code: string) {
   const c = getModel(code).constraints
   const mid = ([a, b]: [number, number]) => Math.round((a + b) / 200) * 100

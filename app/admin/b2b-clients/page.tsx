@@ -56,11 +56,30 @@ export default function B2BClientsPage() {
   const [statNames, setStatNames] = useState<Record<number, string>>({})
   const [statsLoading, setStatsLoading] = useState(false)
 
+  // ── Приглашённые партнёры без компании ──
+  const [unlinked, setUnlinked] = useState<{ userId: string; email: string | null; name: string | null }[]>([])
+  const [attachTo, setAttachTo] = useState<Record<string, string>>({})   // userId → clientId
+  const [attachBusy, setAttachBusy] = useState<string | null>(null)
+
   function loadOverview() {
     setLoadingRows(true)
     fetch('/api/admin/b2b-clients/overview')
-      .then(r => r.json()).then(d => setRows((d.clients ?? []) as Row[]))
+      .then(r => r.json()).then(d => { setRows((d.clients ?? []) as Row[]); setUnlinked(d.unlinkedPartners ?? []) })
       .catch(() => setRows([])).finally(() => setLoadingRows(false))
+  }
+  async function attachPartner(userId: string) {
+    const clientId = Number(attachTo[userId])
+    if (!clientId) return
+    setAttachBusy(userId)
+    try {
+      const r = await fetch('/api/admin/b2b-access', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'link_existing', clientId, userId }),
+      })
+      const d = await r.json()
+      if (!r.ok) { alert(d.error || 'Не удалось привязать'); return }
+      loadOverview()
+    } finally { setAttachBusy(null) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { loadOverview() }, [])
@@ -214,6 +233,29 @@ export default function B2BClientsPage() {
       {/* ══ СПРАВОЧНИК ══ */}
       {tab === 'clients' && (
         <>
+          {unlinked.length > 0 && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 mb-6">
+              <p className="text-[13px] font-semibold text-amber-900">Приглашённые партнёры без компании — {unlinked.length}</p>
+              <p className="text-[12px] text-amber-800 mt-0.5 mb-3">Эти пользователи получили роль «Клиент B2B», но не привязаны к заказчику — их кабинет будет пустым. Привяжите каждого к его компании.</p>
+              <div className="flex flex-col gap-2">
+                {unlinked.map(u => (
+                  <div key={u.userId} className="flex flex-wrap items-center gap-2 bg-white border border-amber-200 rounded-lg px-3 py-2">
+                    <span className="text-[13px] font-medium text-[#111110]">{u.email ?? u.name ?? u.userId.slice(0, 8)}</span>
+                    <select value={attachTo[u.userId] ?? ''} onChange={e => setAttachTo(m => ({ ...m, [u.userId]: e.target.value }))}
+                      className="ml-auto bg-white border border-[#e4e4e0] rounded-lg px-2.5 py-1.5 text-[12px] outline-none focus:border-[#111110] max-w-[240px]">
+                      <option value="">— выберите компанию —</option>
+                      {rows.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    </select>
+                    <button onClick={() => attachPartner(u.userId)} disabled={!attachTo[u.userId] || attachBusy === u.userId}
+                      className="text-[12px] font-semibold px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">
+                      {attachBusy === u.userId ? '…' : 'Привязать'}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div ref={formRef} className={`rounded-xl border p-5 mb-6 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">{editingId !== null ? `Редактировать — ID ${editingId}` : 'Добавить клиента'}</h2>

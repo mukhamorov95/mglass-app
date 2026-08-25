@@ -144,12 +144,21 @@ export type B2BOrderItem = {
   // Договорная цена позиции: менеджер вписал «Итого» руками (вкл. НДС, ПОСЛЕ
   // скидки — конечная сумма клиенту). null/undefined = считаем по прайсу.
   manualTotal?: number | null
+  // true — цена раскидана автоматически из ручной корректировки ИТОГА просчёта
+  // (lib/b2b/priceOverride.ts). Такую цену система вправе пересчитать сама;
+  // manualTotal без этого флага — договорная цена, выставленная руками.
+  manualAuto?: boolean
+  // А12: цена позиции пришла из индивидуального прайса клиента. Скидка клиента к
+  // ней не применяется — это уже конечная договорённость, иначе скидка задвоится.
+  clientPriced?: boolean
 }
 
 // Фактическое «Итого» позиции: ручная договорная цена, иначе прайс со скидкой.
 // Единственная точка правды — все экраны и сохранение считают через неё.
 export function effectiveItemTotal(item: B2BOrderItem, discountPercent: number): number {
-  return item.manualTotal ?? Math.round(item.saleIncVat * (1 - discountPercent / 100))
+  if (item.manualTotal != null) return item.manualTotal
+  const pct = item.clientPriced ? 0 : discountPercent
+  return Math.round(item.saleIncVat * (1 - pct / 100))
 }
 
 export type B2BOrderTotals = {
@@ -339,8 +348,8 @@ export function calcTotals(items: B2BOrderItem[], discountPercent: number): B2BO
   // С ручными ценами итог собирается построчно (скидка к ним не применяется
   // повторно — договорная цена конечна); без них — прежняя формула от суммы,
   // чтобы копейки округления в старых просчётах не поехали
-  const hasManual          = items.some(i => i.manualTotal != null)
-  const totalAfterDiscount = hasManual
+  const perItemTotals      = items.some(i => i.manualTotal != null || i.clientPriced)
+  const totalAfterDiscount = perItemTotals
     ? items.reduce((s, i) => s + effectiveItemTotal(i, discountPercent), 0)
     : Math.round(totalSaleIncVat * (1 - discountPercent / 100))
   const vatToState         = totalOutputVat - totalInputVat

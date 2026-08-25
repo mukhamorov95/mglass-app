@@ -36,7 +36,7 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
   'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная — только в проёме двери (стационар закрывает полость стеклом)' },
-  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'на срез профиля — 2 на кусок' },
+  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'открытый торец напольного профиля — со стороны входа' },
   'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'bar',   hint: 'притвор двери — по высоте двери' },
   'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'bar',   hint: 'низ створки — по ширине двери' },
   'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'bar',   hint: 'стык со стационаром — по высоте двери' },
@@ -50,6 +50,48 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'tube-stabilizer': { label: 'Стабилизационная штанга', kind: 'bar', hint: 'распорка' },
 }
 export const isRole = (v: string): v is RoleId => (ROLES as readonly string[]).includes(v)
+
+// Крупные блоки комплекта: владелец мыслит «труба», «крепление трубы», «уплотнители»,
+// а роль — это уже подгруппа внутри блока (крепление к стене / к стеклу / угловое).
+export const ROLE_GROUPS: { id: string; title: string; roles: RoleId[] }[] = [
+  { id: 'glass-hw', title: 'Петли и ручки', roles: ['hinge', 'handle', 'handle-slide', 'roller'] },
+  { id: 'tube', title: 'Труба / штанга', roles: ['tube', 'tube-diag45', 'tube-stabilizer'] },
+  { id: 'mounts', title: 'Крепление трубы', roles: ['mount-wall', 'mount-glass', 'mount-corner', 'mount-diag45', 'mount-stabilizer', 'connector'] },
+  { id: 'profile', title: 'Профиль', roles: ['profile', 'profile-wall', 'profile-floor', 'profile-top', 'profile-vertical'] },
+  { id: 'caps', title: 'Заглушки', roles: ['cap', 'cap-end'] },
+  { id: 'seals', title: 'Уплотнители', roles: ['seal-magnet', 'seal-hinge', 'seal-bottom'] },
+]
+// П-профиль у нас один и тот же на все стороны — по стене, по полу, по верху.
+// Поэтому по умолчанию в комплекте ОДИН слот «Профиль», и все куски сторон уходят
+// в общий раскрой (из одного хлыста кроятся и стойка, и низ). Развести стороны по
+// разным артикулам можно — достаточно завести отдельный слот стороны.
+export const PROFILE_SIDES: RoleId[] = ['profile-wall', 'profile-floor', 'profile-top', 'profile-vertical']
+
+// Куски для bar-роли: общий «Профиль» собирает стороны, у которых нет своего слота.
+export function piecesForRole(q: KitQuantities, kit: ModelKit, role: RoleId): number[] {
+  const own = q.barPieces[role] ?? []
+  if (role !== 'profile') return own
+  const sides = PROFILE_SIDES.filter(r => !kit.slots.some(sl => sl.role === r))
+  return [...own, ...sides.flatMap(r => q.barPieces[r] ?? [])]
+}
+
+export const groupOfRole = (role: RoleId) => ROLE_GROUPS.find(g => g.roles.includes(role)) ?? ROLE_GROUPS[0]
+
+// Форма для 3D по роли — чтобы у крепления не подставлялась петля просто потому,
+// что название не разобралось.
+const ROLE_SHAPE: Partial<Record<RoleId, string>> = {
+  hinge: 'hinge-glass', handle: 'handle-bar', 'handle-slide': 'handle-inset', roller: 'roller',
+  'mount-wall': 'mount-wall', 'mount-glass': 'mount-glass', 'mount-corner': 'mount-corner',
+  'mount-diag45': 'mount-corner', 'mount-stabilizer': 'mount-wall', connector: 'connector',
+  cap: 'cap', 'cap-end': 'cap',
+}
+export const autoShapeForRole = (name: string, role: RoleId): string => {
+  const byName = inferShape(name)
+  // inferShape по умолчанию отдаёт петлю — для не-петлевой роли это враньё, берём роль.
+  const fallback = ROLE_SHAPE[role]
+  if (byName === 'hinge-glass' && fallback && role !== 'hinge') return fallback
+  return byName
+}
 
 // Точка установки из геометрии → роль. Геометрия называет фурнитуру артикулами,
 // прайс мыслит ролями; эта таблица — единственный переводчик между контурами.
@@ -93,7 +135,7 @@ export function inferRole(text: string): RoleId | null {
 // Длина хлыста из названия поставщика: «…прозрачный 2.2 м», «…, 1 м, для п-образного…».
 // Уплотнители и заглушка продаются погонно — считать их штуками значит врать себе в цене.
 export function parseLengthMm(text: string): number {
-  const m = (text || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яёa-z])/i)
+  const m = (text || '').replaceAll(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яёa-z])/i)
   return m ? Math.round(parseFloat(m[1]) * 1000) : 0
 }
 
@@ -106,6 +148,8 @@ export type LibraryItem = {
   stocks?: BarStock[]        // bar: хлысты (длина + цена по цвету)
   ref?: CatalogRef           // провенанс: строка справочника поставщика
   shape?: string             // форма для 3D (переопределяет авто по названию)
+  image?: string             // фото с сайта поставщика — видно, что именно ставим
+  specs?: Record<string, string>   // характеристики с карточки: сечение, длина, угол
 }
 export type Library = { items: LibraryItem[] }
 
@@ -122,7 +166,15 @@ export type KitSlot = {
   select: 'one' | 'all'      // 'one' — клиент выбирает вариант; 'all' — работают все записи
   entries: KitEntry[]
 }
-export type ModelKit = { slots: KitSlot[] }
+export type ModelKit = {
+  slots: KitSlot[]
+  // Своя маржа модели: стационарная стенка и душевая под ключ не обязаны иметь одну.
+  // Пусто → маржа тарифа из financial_settings.
+  margin?: number
+  // Роли, которые геометрия требует, а в изделии их осознанно НЕТ (владелец так собирает).
+  // Без этого списка удалённая роль вечно висела бы предупреждением «нет позиции».
+  excluded?: RoleId[]
+}
 
 export const DEFAULT_QTY: QtyRule = { mode: 'role' }
 export const emptyKit = (): ModelKit => ({ slots: [] })
@@ -164,12 +216,14 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 
   // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
   const barPieces: Record<string, number[]> = {}
+  let floorRuns = 0
   for (const m of assembly.metal) {
     const spec = (m as { spec?: string }).spec
     const fallback: RoleId = m.kind === 'rail' ? 'tube' : 'profile'
     const role = specRole(spec, fallback)
     const len = mm(m.kind === 'post' ? m.size[1] : m.size[0])
     if (len <= 0) continue
+    if (m.kind === 'profile' || role === 'profile-floor') floorRuns += 1
     ;(barPieces[role] ??= []).push(len)
   }
   const profilePieces = ROLES.filter(r => r.startsWith('profile')).flatMap(r => barPieces[r] ?? [])
@@ -200,7 +254,9 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
     if (vertical.length) { barPieces['seal-magnet'] = vertical; barPieces['seal-hinge'] = [...vertical] }
     barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
   }
-  roleQty['cap-end'] = profilePieces.length * 2
+  // Торцевая заглушка закрывает открытый торец НАПОЛЬНОГО профиля — тот, что видно
+  // со стороны входа. По одной на напольный ран; стойки у стены торцом не смотрят.
+  roleQty['cap-end'] = floorRuns
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
   return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
@@ -322,6 +378,8 @@ export type KitPriceResult = {
   total: number
   marginPct: number
   taxPct: number
+  marginSource: 'модель' | 'тариф'
+  belowMin: boolean            // маржа ниже минимально допустимой — продавать нельзя
   missing: { role: RoleId; label: string; reason: 'нет позиции' | 'нет цены' | 'кусок длиннее хлыста' }[]
   complete: boolean
 }
@@ -362,7 +420,7 @@ export function computeKitPrice(
   lib: Library,
   kit: ModelKit,
   rates: KitRates,
-  finance: { marginPct: number; taxPct: number },
+  finance: { marginPct: number; taxPct: number; minMarginPct?: number },
   opts: KitOptions = {},
 ): KitPriceResult {
   const glassType = opts.glassType ?? 'clear'
@@ -377,7 +435,7 @@ export function computeKitPrice(
 
   for (const slot of kit.slots) {
     const meta = ROLE_META[slot.role]
-    const need = q.roleQty[slot.role] ?? 0
+    const need = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)
     const entries = slot.entries.filter(e => byId.has(e.itemId))
     // Слот не нужен этой модели (геометрия не даёт количества) — молча пропускаем.
     if (need <= 0 && !slot.entries.some(e => e.qty.mode === 'fixed')) continue
@@ -391,10 +449,13 @@ export function computeKitPrice(
     let paid = false
     for (const e of active) {
       const it = byId.get(e.itemId)!
-      const qty = resolveQty(e.qty, slot.role, q, opts)
+      // У хлыстовой роли «количество» — это куски раскроя. Считать их через roleQty нельзя:
+      // общий слот «Профиль» собирает куски сторон (profile-wall/floor), а под своим
+      // ключом у него пусто — позиция молча выпадала из спецификации как «нет цены».
+      const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
-        const pieces = q.barPieces[slot.role] ?? []
+        const pieces = piecesForRole(q, kit, slot.role)
         const stocks: Stock[] = (it.stocks ?? [])
           .map(s => ({ len: s.len, price: s.prices?.[finishId] ?? s.prices?.chrome ?? 0 }))
           .filter(s => s.len > 0 && s.price > 0)
@@ -423,15 +484,20 @@ export function computeKitPrice(
 
   // Роль нужна модели, а слота под неё в комплекте вообще нет — это дыра, а не «удалил намеренно»:
   // молчать нельзя, иначе изделие уедет клиенту дешевле себестоимости.
+  const hasCommonProfile = kit.slots.some(s => s.role === 'profile')
   for (const role of ROLES) {
     if ((q.roleQty[role] ?? 0) <= 0) continue
     if (kit.slots.some(s => s.role === role)) continue
+    if (kit.excluded?.includes(role)) continue                      // владелец сказал: в этой модели не используется
+    if (hasCommonProfile && PROFILE_SIDES.includes(role)) continue   // сторона идёт общим профилем
     missing.push({ role, label: ROLE_META[role].label, reason: 'нет позиции' })
   }
 
   const hardwareCost = lines.reduce((s, l) => s + l.total, 0)
   const materialsCost = glassCost + hardwareCost
-  const fm = calcFinancialModel({ directCost: materialsCost, marginPercent: finance.marginPct, taxPercent: finance.taxPct })
+  // Маржа модели важнее маржи тарифа; налог всегда общий (это не предмет торга).
+  const marginPct = Number.isFinite(kit.margin) && (kit.margin as number) > 0 ? (kit.margin as number) : finance.marginPct
+  const fm = calcFinancialModel({ directCost: materialsCost, marginPercent: marginPct, taxPercent: finance.taxPct })
   const itemPrice = fm?.finalPrice ?? 0
   const installCost = rates.installPerSection * q.sections
   const deliveryCost = opts.withDelivery === false ? 0 : rates.deliveryMoscow
@@ -441,13 +507,15 @@ export function computeKitPrice(
     glassCost, lines, hardwareCost, materialsCost, itemPrice,
     sections: q.sections, installCost, deliveryCost, liftCost,
     total: itemPrice + installCost + deliveryCost + liftCost,
-    marginPct: finance.marginPct, taxPct: finance.taxPct,
+    marginPct, taxPct: finance.taxPct,
+    marginSource: marginPct === finance.marginPct ? 'тариф' : 'модель',
+    belowMin: marginPct < (finance.minMarginPct ?? 0),
     missing, complete: missing.length === 0,
   }
 }
 
 // ── Что показать клиенту как ВЫБОР (без себестоимости) ────────────
-export const inferShapeOf = (it: LibraryItem) => it.shape || inferShape(it.name)
+export const inferShapeOf = (it: LibraryItem) => it.shape || autoShapeForRole(it.name, it.role)
 
 export type KitChoiceOption = { itemId: string; name: string; shape: string; primary: boolean }
 export type KitChoices = {
@@ -497,8 +565,9 @@ export function requiredRoles(model: MModel): RoleId[] {
 // Комплект по умолчанию: слот на каждую требуемую роль, внутри — позиции библиотеки
 // с этой ролью (первая ★). Роль без позиций даёт пустой слот — владелец увидит дыру.
 export function defaultKitFor(model: MModel, lib: Library): ModelKit {
+  const roles = requiredRoles(model).map(r => (PROFILE_SIDES.includes(r) ? 'profile' : r))
   return {
-    slots: requiredRoles(model).map(role => ({
+    slots: [...new Set(roles)].map(role => ({
       role,
       select: 'one' as const,
       entries: lib.items.filter(i => i.role === role).map((i, idx) => ({

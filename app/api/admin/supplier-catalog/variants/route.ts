@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const supa = createServiceClient()
   const { data: row } = await supa.from('supplier_price_rows')
-    .select('supplier,article,name').eq('id', id).maybeSingle()
+    .select('supplier,article,name,url,image_url,specs').eq('id', id).maybeSingle()
   if (!row) return NextResponse.json({ error: 'не найдено' }, { status: 404 })
 
   const slash = row.article.lastIndexOf('/')
@@ -27,5 +27,8 @@ export async function GET(req: NextRequest) {
     .or(`article.eq.${base},article.ilike.${esc}/%`)
     .order('color')
 
-  return NextResponse.json({ supplier: row.supplier, base, name: row.name, variants: variants ?? [] })
+  return NextResponse.json({
+    supplier: row.supplier, base, name: row.name, variants: variants ?? [],
+    url: row.url ?? '', imageUrl: row.image_url ?? '', specs: row.specs ?? {},
+  })
 }

@@ -691,9 +691,14 @@ export default function ProcurementPage() {
           <h1 className="text-[18px] font-semibold text-[#111110]">Закупки / Счета</h1>
           <p className="text-[12px] text-[#9a9a95]">Канбан — {orders.filter(o => o.status !== 'closed').length} активных</p>
         </div>
-        <button onClick={openNew} className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
-          + Новая закупка
-        </button>
+        <div className="flex items-center gap-2">
+          <a href="/inventory?tab=receive" className="px-4 py-2 border border-[#e4e4e0] text-[13px] rounded-lg hover:bg-[#f5f5f3]">
+            Принять на склад
+          </a>
+          <button onClick={openNew} className="px-4 py-2 bg-[#111110] text-white text-[13px] font-medium rounded-lg hover:bg-[#2a2a28]">
+            + Новая закупка
+          </button>
+        </div>
       </div>
 
       {loadError && (

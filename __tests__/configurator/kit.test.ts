@@ -56,7 +56,7 @@ describe('kit — количества из геометрии', () => {
     expect(q.roleQty['mount-wall']).toBeGreaterThan(0)
     expect(q.roleQty['mount-glass']).toBeGreaterThan(0)
     expect(q.roleQty['mount-corner']).toBeGreaterThan(0)
-    expect(q.roleQty['cap-end']).toBe(q.profilePieces.length * 2)   // торцевые — штуками
+    expect(q.roleQty['cap-end']).toBe(2)                            // торцевые — по открытому торцу напольного профиля
     expect(q.barPieces.cap).toEqual([650])                          // погонная — только проём двери 600 + запас
     expect(q.roleQty.roller).toBe(0)          // распашная — роликов нет
   })
@@ -165,6 +165,15 @@ describe('kit — расчёт по комплекту модели', () => {
     const lib: Library = { items: LIB.items.map(i => i.id === 'profile' ? { ...i, stocks: [{ len: 1200, prices: { chrome: 400 } }] } : i) }
     const p = computeKitPrice(q, lib, kitM7(), RATES, FIN, { finishId: 'chrome' })
     expect(p.missing.some(m => m.role === 'profile' && m.reason === 'кусок длиннее хлыста')).toBe(true)
+  })
+
+  it('роль помечена «не используется» — предупреждения нет', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    const kit = kitM7()
+    kit.slots = kit.slots.filter(s => s.role !== 'cap-end')
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(true)
+    kit.excluded = ['cap-end']
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(false)
   })
 
   it('роль модели нужна, а слота нет — попадает в missing (не уедет дешевле себестоимости)', () => {
@@ -313,6 +322,8 @@ describe('kit — перенос погонных позиций из старо
     expect(parseLengthMm('Уплотнитель прозрачный 2.2 м, ус 18 мм')).toBe(2200)
     expect(parseLengthMm('Заглушка верхняя FDPA-500.1, 19х13х2мм, 1 м')).toBe(1000)
     expect(parseLengthMm('Профиль FDPA-51.3, длина 3 м')).toBe(3000)
+    // запятых в названии несколько — брать нужно ту, что у длины, а не первую попавшуюся
+    expect(parseLengthMm('Профиль для стекла FDPA-51.22, 19х12х1,75, для стекла 8 мм, длина 2,2 м')).toBe(2200)
     expect(parseLengthMm('Крепление трубы 30х10 к стене')).toBe(0)
   })
 
@@ -348,5 +359,25 @@ describe('kit — заглушка ставится только в проёме
     const kit: ModelKit = { slots: [{ role: 'cap', select: 'one', entries: [{ itemId: 'cp', qty: { mode: 'role' }, primary: true }] }] }
     const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
     expect(p.lines.find(l => l.role === 'cap')!.total).toBe(158)   // один метровый хлыст вместо четырёх кусков
+  })
+})
+
+describe('kit — профиль одним слотом и торцевая заглушка', () => {
+  it('М1: общий слот «Профиль» считает куски сторон, а не выпадает из спецификации', () => {
+    const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 1000, height: 2000 }, 8), 8, getModel('М1'))
+    // геометрия отдаёт куски под сторонами, под своим ключом у «profile» пусто
+    expect(q.barPieces['profile']).toBeUndefined()
+    const lib: Library = { items: [{ id: 'p', name: 'Профиль FDPA-51.22', role: 'profile', stocks: [{ len: 2200, prices: { chrome: 712 } }] }] }
+    const kit: ModelKit = { slots: [{ role: 'profile', select: 'one', entries: [{ itemId: 'p', qty: { mode: 'role' }, primary: true }] }] }
+    const p = computeKitPrice(q, lib, kit, RATES, FIN, { finishId: 'chrome' })
+    const line = p.lines.find(l => l.role === 'profile')
+    expect(line).toBeDefined()
+    expect(line!.total).toBeGreaterThan(0)
+    expect(p.missing.some(m => m.role === 'profile')).toBe(false)
+  })
+
+  it('М1: торцевая заглушка одна — на открытый торец напольного профиля', () => {
+    const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 1000, height: 2000 }, 8), 8, getModel('М1'))
+    expect(q.roleQty['cap-end']).toBe(1)
   })
 })
