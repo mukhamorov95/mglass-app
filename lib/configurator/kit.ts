@@ -135,7 +135,7 @@ export function inferRole(text: string): RoleId | null {
 // Длина хлыста из названия поставщика: «…прозрачный 2.2 м», «…, 1 м, для п-образного…».
 // Уплотнители и заглушка продаются погонно — считать их штуками значит врать себе в цене.
 export function parseLengthMm(text: string): number {
-  const m = (text || '').replace(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яёa-z])/i)
+  const m = (text || '').replaceAll(',', '.').match(/(\d+(?:\.\d+)?)\s*м(?![а-яёa-z])/i)
   return m ? Math.round(parseFloat(m[1]) * 1000) : 0
 }
 
@@ -148,6 +148,8 @@ export type LibraryItem = {
   stocks?: BarStock[]        // bar: хлысты (длина + цена по цвету)
   ref?: CatalogRef           // провенанс: строка справочника поставщика
   shape?: string             // форма для 3D (переопределяет авто по названию)
+  image?: string             // фото с сайта поставщика — видно, что именно ставим
+  specs?: Record<string, string>   // характеристики с карточки: сечение, длина, угол
 }
 export type Library = { items: LibraryItem[] }
 

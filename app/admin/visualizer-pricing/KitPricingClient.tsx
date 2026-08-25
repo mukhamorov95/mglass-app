@@ -162,10 +162,16 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
     const target = picker
     setPicker(null)
     if (!target) return
+    // Сначала подтягиваем карточку с сайта поставщика (ссылка, фото, характеристики),
+    // потом читаем варианты — так позиция сразу приезжает с фото.
+    await fetch('/api/admin/supplier-catalog/enrich', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids: [rowId] }),
+    }).catch(() => {})
     const res = await fetch(`/api/admin/supplier-catalog/variants?id=${rowId}`)
     if (!res.ok) return
-    const { variants, name, supplier, base } = await res.json() as {
+    const { variants, name, supplier, base, imageUrl, specs } = await res.json() as {
       variants: { color: string; cost_price: number }[]; name: string; supplier: string; base: string
+      imageUrl?: string; specs?: Record<string, string>
     }
     const byFinish: Record<string, number> = {}
     for (const v of variants) {
@@ -186,11 +192,15 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
         if (isBar) it.stocks = [{ len: parseLengthMm(name), prices: byFinish }, ...(it.stocks ?? [])]
         else it.prices = { ...it.prices, ...byFinish }
         it.ref = { supplier, base, label }
+        if (imageUrl) it.image = imageUrl
+        if (specs && Object.keys(specs).length) it.specs = specs
         return
       }
       const id = uid('it')
       s.library.items.push({
         id, name: shortName, role: slot.role, ref: { supplier, base, label },
+        ...(imageUrl ? { image: imageUrl } : {}),
+        ...(specs && Object.keys(specs).length ? { specs } : {}),
         ...(isBar ? { stocks: [{ len: parseLengthMm(name), prices: byFinish }] } : { prices: byFinish }),
       })
       const k = s.kits[code]!
@@ -423,6 +433,9 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                   return (
                     <div key={e.itemId} className="py-1 border-b border-[#f4f4f0] last:border-0">
                       <div className="flex items-center gap-1">
+                        {it.image
+                          ? <img src={it.image} alt="" className="w-7 h-7 rounded object-cover border border-[#eeece5] shrink-0" />
+                          : <span className="w-7 h-7 rounded bg-[#f6f5f1] border border-[#eeece5] shrink-0" />}
                         {slot.select === 'one' && (
                           <button onClick={() => setPrimary(si, ei)} title={e.primary ? 'Показывается клиенту первой' : 'Сделать вариантом по умолчанию'}
                             className={`text-[14px] leading-none shrink-0 ${e.primary ? 'text-[#e0a200]' : 'text-[#d0d0cc] hover:text-[#e0a200]'}`}>{e.primary ? '★' : '☆'}</button>
@@ -468,6 +481,11 @@ export function KitPricingClient({ initial }: { initial: Record<Tier, TierStore>
                         <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
                           className="text-[11px] text-[#4b6ea9] hover:underline">во все модели</button>
                         {used > 1 && <span className="text-[10px] text-[#b09a6a]" title="Цена общая для всех моделей">в {used} моделях</span>}
+                        {it.specs && Object.keys(it.specs).length > 0 && (
+                          <span className="text-[10px] text-[#6b6b66]" title="Характеристики с сайта поставщика">
+                            {Object.entries(it.specs).slice(0, 3).map(([k, v]) => `${k}: ${v}`).join(' · ')}
+                          </span>
+                        )}
                         {it.ref && <span className="text-[10px] text-[#8a9a7a] truncate">🔗 {it.ref.label ?? it.ref.base}</span>}
                       </div>
                     </div>
