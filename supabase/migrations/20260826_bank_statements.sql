@@ -29,3 +29,10 @@ create policy bank_rows_select on bank_statement_rows for select to authenticate
   exists (select 1 from crm_caller() c where c.u_role in ('accountant','cfo','admin','ceo'))
 );
 -- Пишет только серверный роут (service-role): он проверяет роль и рождает операцию.
+
+-- Б9+: связь строки выписки со счётом и с денежным ядром. Шов согласован с
+-- backbone-сессией: факт денег живёт в payments, статус B2B-заказа — производная
+-- от ядра и считается на стороне backbone; из бухгалтерии заказ не трогаем.
+alter table bank_statement_rows
+  add column if not exists invoice_id bigint references invoices(id),
+  add column if not exists payment_id bigint references payments(id);

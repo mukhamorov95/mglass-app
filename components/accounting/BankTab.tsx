@@ -13,6 +13,7 @@ type Row = {
   id: number; op_date: string; amount: number; direction: 'in' | 'out'
   counterparty: string | null; purpose: string | null; doc_no: string | null
   status: string; suggest: Suggest; request: { id: number; status: string } | null
+  invoice: { id: number; no: string; payer: string | null; amount: number; orders: number[] } | null
 }
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
@@ -112,9 +113,13 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                 <p className="text-[12px] text-[#9a9a95] mt-0.5">
                   {DD(r.op_date)}{r.doc_no ? ` · док. ${r.doc_no}` : ''}
                   {r.request ? ' · есть заявка' : ''}
+                  {r.invoice ? ` · счёт ${r.invoice.no}${r.invoice.payer ? `, ${r.invoice.payer}` : ''}` : ''}
                   {r.suggest ? ` · фонд из: ${r.suggest.from}` : ''}
                 </p>
                 {r.purpose && <p className="text-[12px] text-[#6b6b66] mt-1 line-clamp-2">{r.purpose}</p>}
+                {r.direction === 'in' && !r.invoice && (
+                  <p className="text-[12px] text-[#9a9a95] mt-1">счёт не нашёлся — проведём как обычный приход</p>
+                )}
               </div>
               <span className={`text-[15px] font-mono font-semibold flex-shrink-0 ${r.direction === 'in' ? 'text-emerald-700' : 'text-[#111110]'}`}>
                 {r.direction === 'in' ? '+' : '−'}{RUB(r.amount)}
@@ -133,10 +138,16 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
                   <option value={0}>подфонд…</option>
                   {subfunds.filter(s => s.fund_id === d.fund).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                 </select>
-                <button onClick={() => act(r.id, { action: 'post', fund_id: d.fund, subfund_id: d.sub, request_id: r.request?.id })}
+                <button onClick={() => act(r.id, {
+                  action: 'post', fund_id: d.fund, subfund_id: d.sub,
+                  request_id: r.request?.id, invoice_id: r.invoice?.id,
+                })}
                   disabled={busy === r.id || !d.fund}
                   className="px-4 py-1.5 rounded-lg bg-[#111110] text-white text-[13px] font-semibold disabled:opacity-40">
-                  {busy === r.id ? '…' : r.request ? 'Провести и закрыть заявку' : 'Провести'}
+                  {busy === r.id ? '…'
+                    : r.request ? 'Провести и закрыть заявку'
+                    : r.invoice ? 'Провести и закрыть счёт'
+                    : 'Провести'}
                 </button>
                 <button onClick={() => act(r.id, { action: 'skip' })} disabled={busy === r.id}
                   className="px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[13px] text-[#6b6b66] disabled:opacity-50">

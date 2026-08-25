@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { parseStatement, dedupe } from '@/lib/bank/parseStatement'
+import { recordPayment } from '@/lib/payments/recordPayment'
 
 // Б9: загрузка банковской выписки и разнесение её по фондам.
 // Строка выписки — кандидат, а не операция: ДДС рождается только после
@@ -90,6 +91,30 @@ export async function GET(req: NextRequest) {
     if (!byCp.has(k)) byCp.set(k, h)
   }
 
+  // Приход ищем среди выставленных счетов: по ИНН плательщика, по сумме и по
+  // номеру счёта в назначении платежа. Шов с backbone: статус B2B-заказа мы не
+  // трогаем, наше дело — счёт и деньги.
+  const { data: invoices } = await svc.from('invoices')
+    .select('id,invoice_no,payer_client_id,payer_name,amount,status,order_ids')
+    .eq('status', 'issued').limit(500)
+  const payerIds = (invoices ?? []).map(i => i.payer_client_id).filter(Boolean) as number[]
+  const { data: clients } = payerIds.length
+    ? await svc.from('b2b_clients').select('id,inn').in('id', payerIds)
+    : { data: [] }
+  const innByClient = new Map((clients ?? []).map(c => [Number(c.id), String(c.inn ?? '')]))
+
+  const matchInvoice = (r: { amount: number; inn: string | null; purpose: string | null }) => {
+    const cands = (invoices ?? []).filter(i => {
+      const sameAmount = Math.abs(Number(i.amount) - Number(r.amount)) < 0.5
+      const sameInn = !!r.inn && innByClient.get(Number(i.payer_client_id)) === r.inn
+      const noInPurpose = !!i.invoice_no && i.invoice_no !== '—'
+        && new RegExp(`(^|\\D)${i.invoice_no.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(\\D|$)`).test(r.purpose ?? '')
+      // ИНН или номер счёта — сильные признаки; одна лишь сумма — слабый, но с ними складывается
+      return (sameInn && (sameAmount || noInPurpose)) || (noInPurpose && sameAmount) || (noInPurpose && sameInn)
+    })
+    return cands.length === 1 ? cands[0] : null
+  }
+
   // Одобренные заявки — кандидаты на «этот расход уже согласован»
   const { data: reqs } = await svc.from('payment_requests')
     .select('id,amount,counterparty,fund_id,subfund_id,status,desired_date')
@@ -103,8 +128,14 @@ export async function GET(req: NextRequest) {
           Math.abs(Number(q.amount) - Number(r.amount)) < 0.5 &&
           (!q.counterparty || !cp || q.counterparty.trim().toLowerCase().slice(0, 12) === cp.slice(0, 12)))
       : null
+    const invoice = r.direction === 'in' ? matchInvoice(r as { amount: number; inn: string | null; purpose: string | null }) : null
     return {
       ...r,
+      invoice: invoice ? {
+        id: Number(invoice.id), no: invoice.invoice_no as string,
+        payer: (invoice.payer_name as string) ?? null,
+        amount: Number(invoice.amount), orders: (invoice.order_ids as number[]) ?? [],
+      } : null,
       suggest: hist
         ? { fund_id: hist.fund_id, subfund_id: hist.subfund_id, account: hist.account, from: 'история' as const }
         : match
@@ -154,6 +185,30 @@ export async function PATCH(req: NextRequest) {
   }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Приход по счёту: факт денег пишем в ядро payments (единственный источник
+  // правды по деньгам), счёт помечаем оплаченным. Заказ не трогаем — его статус
+  // считает backbone как производную от ядра.
+  const invoiceId = Number(body.invoice_id) || null
+  let paymentId: number | null = null
+  if (invoiceId && row.direction === 'in') {
+    const { data: inv } = await svc.from('invoices').select('id,order_ids,amount').eq('id', invoiceId).maybeSingle()
+    const orders = ((inv?.order_ids as number[]) ?? []).map(Number).filter(n => n > 0)
+    if (orders.length === 1) {
+      const p = await recordPayment(svc, {
+        externalKey: `bank:${row.unit}:${row.external_key}`,
+        amount: Number(row.amount), paidAt: String(row.op_date), kind: 'full',
+        source: 'bank_statement_import', method: 'Перевод',
+        b2bOrderId: orders[0], enteredByName: me.name, note: `Счёт ${invoiceId} из выписки`,
+      }).catch(() => null)
+      paymentId = p?.id ?? null
+    }
+    // Мульти-заказный счёт: ядру нужен якорь invoice_id (миграция backbone) —
+    // до неё платёж не пишем, чтобы не привязать деньги к произвольному заказу.
+    await svc.from('invoices').update({
+      status: 'paid', paid_at: String(row.op_date), updated_at: new Date().toISOString(),
+    }).eq('id', invoiceId)
+  }
+
   const requestId = Number(body.request_id) || null
   if (requestId) {
     // Заявка закрывается фактом платежа из банка — руками её больше не отмечают
@@ -164,7 +219,8 @@ export async function PATCH(req: NextRequest) {
   }
 
   await svc.from('bank_statement_rows')
-    .update({ status: 'posted', entry_id: entry.id, request_id: requestId }).eq('id', id)
+    .update({ status: 'posted', entry_id: entry.id, request_id: requestId, invoice_id: invoiceId, payment_id: paymentId })
+    .eq('id', id)
 
-  return NextResponse.json({ ok: true, entry_id: entry.id })
+  return NextResponse.json({ ok: true, entry_id: entry.id, payment_id: paymentId })
 }
