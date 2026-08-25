@@ -3,6 +3,7 @@
 import { useEffect, useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createScopedClient } from '@/lib/supabase-browser'
+import { isMGlassClient } from '@/lib/b2bScope'
 import { useOrganization } from '@/lib/hooks/use-organization'
 import {
   B2BClient, B2BCRM, B2BInteraction, clientToCRM,
@@ -63,7 +64,14 @@ const INTERACTION_TYPES = [
   { value: 'message', label: 'Сообщение'},
 ]
 
-export default function B2BCRMClient() {
+type Props = {
+  isOwner:   boolean
+  canSeeAll: boolean   // менеджер с can_view_all_clients / скоупом all_clients
+  mglassOnly: boolean  // менеджер, ограниченный внутренним клиентом M GLASS
+  myUserId:  string | null
+}
+
+export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId }: Props) {
   const router = useRouter()
   const { orgId } = useOrganization()
   const [clients, setClients] = useState<ClientWithMeta[]>([])
@@ -132,7 +140,12 @@ export default function B2BCRMClient() {
       if (!lastIntByClient.has(i.client_id)) lastIntByClient.set(i.client_id, i)
     }
 
-    const enriched: ClientWithMeta[] = (cls ?? []).map((c: B2BClient) => ({
+    // Изоляция менеджера — тот же принцип, что в app/calculator/b2b: свои клиенты,
+    // либо все по галке, либо только M GLASS для ограниченного скоупа.
+    const scoped = (cls ?? []).filter((c: B2BClient) =>
+      canSeeAll ? true : mglassOnly ? isMGlassClient(c) : c.manager_id === myUserId)
+
+    const enriched: ClientWithMeta[] = scoped.map((c: B2BClient) => ({
       ...c,
       crm: clientToCRM(c),
       lastInteraction: lastIntByClient.get(c.id) ?? null,
@@ -466,11 +479,11 @@ export default function B2BCRMClient() {
                       className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'remind' ? 'bg-[#111110] text-white' : 'text-[#6b6b66] hover:bg-[#f0f0ec]'}`}>
                       Напомнить
                     </button>
-                    <button
+                    {isOwner && <button
                       onClick={() => { toggleInline(c.id, 'manager'); setAssigningManagerId(c.manager_id ?? '') }}
                       className={`text-[11px] font-medium px-2.5 py-1 rounded-lg transition-colors ${isExpanded && expandMode === 'manager' ? 'bg-orange-500 text-white' : 'text-orange-600 hover:bg-orange-50'}`}>
                       Менеджер
-                    </button>
+                    </button>}
                     <button
                       onClick={() => openRequisites(c)}
                       className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border transition-colors ${

@@ -2,7 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import type { B2BOrderItem } from '@/lib/b2bCalculator'
-import { distributeTargetTotal, clearAutoOverride, orderMarginPercent, type OverrideMeta } from '@/lib/b2b/priceOverride'
+import {
+  distributeTargetTotal, clearAutoOverride, orderMarginPercent,
+  MIN_MARGIN_PERCENT, type OverrideMeta, type PriceApproval,
+} from '@/lib/b2b/priceOverride'
 
 // Ручная корректировка итоговой суммы ПРОСЧЁТА (до запуска в работу).
 // POST { newTotal } — раскидать сумму по позициям и зафиксировать скидку.
@@ -107,7 +110,22 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     discount_percent: res.discountPercent, markup_percent: res.markupPercent,
     changed_by: actorName, changed_by_id: userId, changed_at: override.at, source: 'quote_list',
   })
-  const newNotes = JSON.stringify({ ...notes, price_override: override, total_history: history })
+  // А11: тонкая маржа не блокирует цену, но ставит её на согласование владельцу.
+  // Пока не согласовано — просчёт виден владельцу в отдельной вкладке, у менеджера
+  // горит бейдж. Ушли выше порога — заявка снимается сама.
+  const approval: PriceApproval | undefined = marginPercent < MIN_MARGIN_PERCENT
+    ? {
+        needed: true, margin: marginPercent, total: res.appliedTotal,
+        by: userId, by_name: actorName, at: override.at, resolution: null,
+      }
+    : undefined
+
+  const newNotes = JSON.stringify({
+    ...notes,
+    price_override: override,
+    total_history: history,
+    price_approval: approval,
+  })
 
   const { error } = await sb.from('b2b_orders').update({
     items:                res.items,
@@ -125,6 +143,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     discountPercent: res.discountPercent,
     markupPercent:   res.markupPercent,
     marginPercent,
+    needsApproval:   !!approval,
     items:           res.items,
     notes:           newNotes,
   })
@@ -143,6 +162,7 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
 
   const rest = { ...notes }
   delete rest.price_override
+  delete rest.price_approval
   const history = Array.isArray(notes.total_history) ? [...(notes.total_history as unknown[])] : []
   history.push({
     old_total: Number(order.total_after_discount) || 0, new_total: restored,

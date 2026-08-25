@@ -154,8 +154,10 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/my-earnings',
     '/manager-dashboard',
     '/calculator/b2b',
+    '/b2b-today',
     '/b2b-quotes',
     '/b2b-orders',
+    '/b2b-invoices',
     '/b2b-crm',
     '/b2b-cutting',
     '/production-app',
@@ -212,6 +214,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   commercial: [
     '/',
     '/commercial',
+    '/b2b-invoices',
     '/inventory',
     '/b2b-growth',
     '/installations',
@@ -226,6 +229,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
   cfo: [
     '/',
     '/cfo',
+    '/b2b-invoices',
     '/inventory',
     '/accounting',
     '/admin/cfo',

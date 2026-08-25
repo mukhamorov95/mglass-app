@@ -4,6 +4,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { ANDON_REASONS } from '@/lib/productionRouting'
+import { notifyOrderManager } from '@/lib/b2b/notifyManager'
 
 // Проблема с экрана по QR (/p/o/[orderId]).
 //
@@ -67,6 +68,15 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     updated_at: now,
   }).in('id', ids)
   if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 })
+
+  // А14: проблему на производстве менеджер должен узнать первым, а не от клиента.
+  await notifyOrderManager(
+    orderId,
+    `🛠 Проблема на производстве по заказу <b>#${orderId}</b>`
+      + `\nПричина: ${reason}${comment ? `\n${comment}` : ''}`
+      + `${who ? `\nОтметил: ${who}` : ''}`,
+    '/b2b-orders',
+  )
 
   return NextResponse.json({ ok: true, marked: ids.length, skipped: items.length - frontier.size })
 }
