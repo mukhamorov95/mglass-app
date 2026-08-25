@@ -76,8 +76,12 @@ export async function POST(req: NextRequest) {
   if (!res) return NextResponse.json({ error: 'Сервис изображений недоступен' }, { status: 502 })
   if (!res.ok) {
     const detail = await res.text().catch(() => '')
-    // Ключ наружу не отдаём — только код и краткая причина.
-    return NextResponse.json({ error: `Ошибка генерации (${res.status})`, detail: detail.slice(0, 300) }, { status: 502 })
+    // Клиенту — человеческий текст; техническая причина только в detail (ключ не отдаём).
+    // 429 от Gemini = исчерпана квота аккаунта (нужен биллинг), а не вина клиента.
+    const human = res.status === 429
+      ? 'Сервис фотовидов сейчас недоступен. Попробуйте позже.'
+      : `Не удалось создать вид (${res.status})`
+    return NextResponse.json({ error: human, detail: detail.slice(0, 300) }, { status: 502 })
   }
 
   const json = await res.json().catch(() => null) as {
