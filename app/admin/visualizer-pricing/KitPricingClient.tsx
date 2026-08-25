@@ -104,7 +104,16 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [msg, setMsg] = useState<string | null>(null)
   const [addRole, setAddRole] = useState<RoleId | ''>('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
-  const [view, setView] = useState<'kit' | 'audit' | 'versions'>('kit')
+  const [zoneId, setZoneId] = useState('')
+  const [km, setKm] = useState(0)
+  const [floors, setFloors] = useState(0)
+  const [installFactors, setInstallFactors] = useState<string[]>([])
+  const [view, setView] = useState<'kit' | 'audit' | 'versions' | 'order'>('kit')
+  type OrderLine = { model: string; dims: { width: number; height: number; width2?: number; doorWidth?: number }; finishId: string }
+  const [orderLines, setOrderLines] = useState<OrderLine[]>([])
+  type Cut = { itemId: string; name: string; roleLabel: string; perItemBars: number; pooledBars: number; perItemCost: number; pooledCost: number; saving: number; offcutMm: number }
+  const [orderReport, setOrderReport] = useState<{ cuts: Cut[]; perItemTotal: number; pooledTotal: number; saving: number; offcutMm: number } | null>(null)
+  const [planning, setPlanning] = useState(false)
   type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
     changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
   const [diffs, setDiffs] = useState<Diff[] | null>(null)
@@ -132,8 +141,8 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const q = useMemo(() => computeKitQuantities(assembly, 8, model, cur.rates.capMargin), [assembly, model, cur.rates.capMargin])
   const fin = finance[tier]
   const price = useMemo(
-    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice }),
-    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice],
+    () => computeKitPrice(q, cur.library, kit, cur.rates, fin, { glassType, finishId, choice, qtyChoice, zoneId, km, floors, installFactors }),
+    [q, cur.library, kit, cur.rates, fin, glassType, finishId, choice, qtyChoice, zoneId, km, floors, installFactors],
   )
   const clientView = useMemo(() => kitChoices(cur.library, kit, q), [cur.library, kit, q])
   const byId = useMemo(() => new Map(cur.library.items.map(i => [i.id, i])), [cur.library])
@@ -185,6 +194,22 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
       })
       if (r.ok) { setVLabel(''); setMsg('Версия прайса опубликована'); loadVersions() }
     } finally { setPublishing(false) }
+  }
+
+  function addCurrentToOrder() {
+    setOrderLines(v => [...v, { model: code, dims: { ...dims }, finishId }])
+    setOrderReport(null)
+  }
+  async function planOrder() {
+    if (orderLines.length < 2) return
+    setPlanning(true)
+    try {
+      const r = await fetch('/api/configurator/order-cutting', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier, items: orderLines.map(l => ({ model: l.model, dims: l.dims, finishId: l.finishId })) }),
+      })
+      if (r.ok) setOrderReport(await r.json())
+    } finally { setPlanning(false) }
   }
 
   async function findSavings() {
@@ -357,11 +382,67 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
           <button onClick={() => setView('kit')} className={`px-4 py-2 ${view === 'kit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Комплекты</button>
           <button onClick={() => setView('audit')} className={`px-4 py-2 ${view === 'audit' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Аудит</button>
           <button onClick={() => { setView('versions'); if (!versions) loadVersions() }} className={`px-4 py-2 ${view === 'versions' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Версии прайса</button>
+          <button onClick={() => setView('order')} className={`px-4 py-2 ${view === 'order' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Раскрой заказа</button>
         </div>
         <button onClick={copyFromOtherTier} className="text-[12px] text-[#4b6ea9] hover:underline">
           ↳ Заполнить из «{tier === 'budget' ? 'Премиум' : 'Бюджет'}» (позиции и комплекты)
         </button>
       </div>
+
+      {view === 'order' && (
+        <div className="space-y-4 max-w-[900px]">
+          <Card title="Изделия заказа">
+            <p className="text-[13px] text-[#6b6b66] mb-3">
+              Добавь несколько изделий — общий раскрой профиля и трубы из одного пула хлыстов экономит материал
+              против поштучного. Изделие берётся из текущей модели и размеров слева («+ добавить текущее»).
+            </p>
+            <div className="flex items-center gap-2 mb-3">
+              <button onClick={addCurrentToOrder} className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white">+ добавить текущее ({code})</button>
+              {orderLines.length >= 2 && (
+                <button onClick={planOrder} disabled={planning} className="text-[13px] font-medium px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110]">
+                  {planning ? 'Считаю…' : 'Посчитать общий раскрой'}
+                </button>
+              )}
+              {orderLines.length > 0 && <button onClick={() => { setOrderLines([]); setOrderReport(null) }} className="text-[12px] text-[#9a9a95] hover:underline ml-auto">очистить</button>}
+            </div>
+            {orderLines.length === 0 && <p className="text-[13px] text-[#b0b0aa] italic">Пусто — добавь хотя бы два изделия.</p>}
+            {orderLines.map((l, i) => (
+              <div key={i} className="flex items-center gap-2 py-1 text-[13px] border-t border-[#f4f4f0] first:border-0">
+                <span className="font-mono text-[#9a9a95] w-6">{i + 1}</span>
+                <span className="text-[#111110] w-16">{l.model}</span>
+                <span className="text-[#6b6b66]">{l.dims.width}×{l.dims.height}{l.dims.width2 ? `×${l.dims.width2}` : ''} мм · {FINISHES.find(f => f.id === l.finishId)?.label ?? l.finishId}</span>
+                <button onClick={() => setOrderLines(v => v.filter((_, j) => j !== i))} className="ml-auto text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none">×</button>
+              </div>
+            ))}
+          </Card>
+
+          {orderReport && (
+            <Card title="Экономия общего раскроя">
+              <div className="flex items-baseline gap-3 mb-2">
+                <p className="text-[24px] font-semibold text-[#256029] leading-none">−{rub(orderReport.saving)}</p>
+                <p className="text-[13px] text-[#6b6b66]">материала на заказе против поштучного раскроя</p>
+              </div>
+              <div className="flex gap-6 text-[13px] text-[#6b6b66] mb-3">
+                <span>Поштучно: <b className="text-[#111110] font-mono">{rub(orderReport.perItemTotal)}</b></span>
+                <span>Общим раскроем: <b className="text-[#111110] font-mono">{rub(orderReport.pooledTotal)}</b></span>
+                <span>Обрезь: <b className="text-[#111110] font-mono">{(orderReport.offcutMm / 1000).toFixed(1)} м</b></span>
+              </div>
+              {orderReport.cuts.map(c => (
+                <div key={c.itemId} className="flex items-center gap-2 py-1 text-[13px] border-t border-[#f4f4f0]">
+                  <span className="text-[#a0a09a] text-[11px] uppercase w-24 shrink-0">{c.roleLabel}</span>
+                  <span className="text-[#111110] truncate flex-1">{c.name}</span>
+                  <span className="text-[#6b6b66] font-mono">{c.perItemBars} → {c.pooledBars} хл.</span>
+                  {c.saving > 0 && <span className="text-[#256029] font-semibold font-mono shrink-0">−{rub(c.saving)}</span>}
+                </div>
+              ))}
+              <p className="text-[11px] text-[#9a9a95] mt-2">
+                Объединяются только куски ОДНОЙ позиции: из общего хлыста режется одинаковый профиль. Обрезь — метраж,
+                уже оплаченный в себестоимости, ушедший в отход.
+              </p>
+            </Card>
+          )}
+        </div>
+      )}
 
       {view === 'versions' && (
         <div className="space-y-4 max-w-[820px]">
@@ -612,8 +693,32 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             {price.belowMin && (
               <p className="text-[11px] text-[#b04a3f] py-0.5">⚠️ Маржа ниже минимальной {fin.minMarginPct}% — так продавать нельзя</p>
             )}
-            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)} + доставка</span><span className="font-mono">{rub(price.installCost + price.deliveryCost)}</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Монтаж {q.sections}×{rub(cur.rates.installPerSection)}{price.installExtra > 0 ? ` + надбавки ${rub(price.installExtra)}` : ''}</span><span className="font-mono">{rub(price.installCost)}</span></div>
+            <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Доставка · {price.deliveryZone}</span><span className="font-mono">{rub(price.deliveryCost)}</span></div>
+            {price.liftCost > 0 && <div className="flex justify-between text-[13px]"><span className="text-[#4b4b47]">Подъём {floors} эт.</span><span className="font-mono">{rub(price.liftCost)}</span></div>}
             <div className="flex justify-between text-[14px] font-semibold pt-1"><span>Сумма изделия</span><span className="font-mono">{rub(price.total)}</span></div>
+            {((cur.rates.deliveryZones ?? []).length > 0 || (cur.rates.installSurcharges ?? []).length > 0) && (
+              <div className="mt-2 pt-2 border-t border-[#f0f0ec] space-y-1.5">
+                {(cur.rates.deliveryZones ?? []).length > 0 && (
+                  <div className="flex items-center gap-1.5 text-[12px]">
+                    <span className="text-[#9a9a95] w-14">Зона</span>
+                    <select value={zoneId} onChange={e => setZoneId(e.target.value)} className="text-[12px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]">
+                      <option value="">Москва</option>
+                      {(cur.rates.deliveryZones ?? []).map(z => <option key={z.id} value={z.id}>{z.label}</option>)}
+                    </select>
+                    <NumInput value={km} onChange={setKm} w={54} suffix="км" />
+                    <span className="text-[#9a9a95] ml-1">этаж</span><NumInput value={floors} onChange={setFloors} w={40} suffix="" />
+                  </div>
+                )}
+                {(cur.rates.installSurcharges ?? []).map(f => (
+                  <label key={f.id} className="flex items-center gap-1.5 text-[12px] text-[#4b4b47]">
+                    <input type="checkbox" checked={installFactors.includes(f.id)}
+                      onChange={e => setInstallFactors(v => e.target.checked ? [...v, f.id] : v.filter(x => x !== f.id))} />
+                    {f.label} <span className="text-[#9a9a95]">({f.kind === 'per-section' ? 'за секцию' : 'разово'} {rub(f.amount)})</span>
+                  </label>
+                ))}
+              </div>
+            )}
           </Card>
 
           {(clientView.variants.length > 0 || clientView.quantities.length > 0) && (
@@ -869,6 +974,41 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Подъём за этаж</span><NumInput value={cur.rates.liftPerFloor} onChange={v => edit(s => { s.rates.liftPerFloor = v })} /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Пропил (отход на рез)</span><NumInput value={cur.rates.kerf ?? 0} onChange={v => edit(s => { s.rates.kerf = v })} suffix="мм" /></label>
             <label className="flex items-center justify-between gap-2 text-[13px] py-0.5"><span className="text-[#4b4b47]">Запас заглушки по двери</span><NumInput value={cur.rates.capMargin ?? CAP_MARGIN_MM} onChange={v => edit(s => { s.rates.capMargin = v })} suffix="мм" /></label>
+          </Card>
+
+          <Card title="Зоны доставки">
+            <p className="text-[12px] text-[#9a9a95] mb-2">Первая зона, чей лимит км ≥ введённого, и берётся. Пусто — только Москва по ставке выше.</p>
+            {(cur.rates.deliveryZones ?? []).map((z, zi) => (
+              <div key={zi} className="flex items-center gap-1.5 py-1 border-b border-[#f4f4f0] last:border-0">
+                <input value={z.label} onChange={e => edit(s => { s.rates.deliveryZones![zi].label = e.target.value })}
+                  className="flex-1 min-w-0 text-[13px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 outline-none focus:border-[#111110]" />
+                <NumInput value={z.base} onChange={v => edit(s => { s.rates.deliveryZones![zi].base = v })} w={72} />
+                <NumInput value={z.perKm ?? 0} onChange={v => edit(s => { s.rates.deliveryZones![zi].perKm = v })} w={56} suffix="₽/км" />
+                <NumInput value={z.maxKm ?? 0} onChange={v => edit(s => { s.rates.deliveryZones![zi].maxKm = v || undefined })} w={56} suffix="км" />
+                <button onClick={() => edit(s => { s.rates.deliveryZones!.splice(zi, 1) })} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+              </div>
+            ))}
+            <button onClick={() => edit(s => { s.rates.deliveryZones = [...(s.rates.deliveryZones ?? []), { id: uid('z'), label: 'Новая зона', base: 0 }] })}
+              className="text-[12px] text-[#4b6ea9] hover:underline mt-1">+ зона</button>
+          </Card>
+
+          <Card title="Надбавки за монтаж">
+            <p className="text-[12px] text-[#9a9a95] mb-2">Сложная стена — за секцию, разовые (лестница, нестандарт) — за заказ. Менеджер отмечает при просчёте.</p>
+            {(cur.rates.installSurcharges ?? []).map((f, fi) => (
+              <div key={fi} className="flex items-center gap-1.5 py-1 border-b border-[#f4f4f0] last:border-0">
+                <input value={f.label} onChange={e => edit(s => { s.rates.installSurcharges![fi].label = e.target.value })}
+                  className="flex-1 min-w-0 text-[13px] border border-[#e4e4e0] rounded-md px-1.5 py-0.5 outline-none focus:border-[#111110]" />
+                <select value={f.kind} onChange={e => edit(s => { s.rates.installSurcharges![fi].kind = e.target.value as 'per-section' | 'per-order' })}
+                  className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
+                  <option value="per-section">за секцию</option>
+                  <option value="per-order">за заказ</option>
+                </select>
+                <NumInput value={f.amount} onChange={v => edit(s => { s.rates.installSurcharges![fi].amount = v })} w={72} />
+                <button onClick={() => edit(s => { s.rates.installSurcharges!.splice(fi, 1) })} className="text-[#c4c4be] hover:text-[#b04a3f] text-[15px] leading-none px-1">×</button>
+              </div>
+            ))}
+            <button onClick={() => edit(s => { s.rates.installSurcharges = [...(s.rates.installSurcharges ?? []), { id: uid('f'), label: 'Новая надбавка', kind: 'per-order', amount: 0 }] })}
+              className="text-[12px] text-[#4b6ea9] hover:underline mt-1">+ надбавка</button>
           </Card>
         </div>
       </div>

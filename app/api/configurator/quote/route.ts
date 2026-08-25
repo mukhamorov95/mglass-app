@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     glassType: body.glassType, finishId: body.finishId, withDelivery: body.withDelivery, floors: body.floors,
     choice: body.choice as Partial<Record<RoleId, string>> | undefined,
     qtyChoice: body.qtyChoice as Partial<Record<RoleId, number>> | undefined,
+    zoneId: body.zoneId, km: body.km, installFactors: body.installFactors,
   })
 
   const provenance: PriceProvenance = version && validUntil
