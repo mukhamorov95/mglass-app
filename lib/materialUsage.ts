@@ -36,6 +36,19 @@ export const SHEET_M2 = (w: number, h: number) => w * h / 1_000_000
 // вручную разные waste_percent (зеркало 18% против рифлёного 45%).
 export const DEFAULT_REUSE_RATE = 0.7
 
+// Категории, которые НЕЛЬЗЯ раскраивать: это готовые изделия производства
+// (зеркало с подсветкой в раме, душевая, лофт-перегородка), а не лист стекла.
+// У них себестоимость финальная и штучная — «лист» и «остаток» для них не
+// существуют. Раньше такая позиция попадала в раскрой, получала виртуальный
+// лист 3210×2250 и списывала невозвратный остаток по цене изделия за м²,
+// из-за чего «честная» себестоимость раздувалась в разы (см. заказ #5322).
+// Тот же принцип уже был в lib/autoWasteApply.ts — здесь его не хватало.
+const NON_SHEET_CATEGORIES = new Set(['изделие'])
+
+export function isSheetMaterial(category?: string | null): boolean {
+  return !NON_SHEET_CATEGORIES.has(String(category ?? ''))
+}
+
 export type UsageItem = {
   materialName: string
   thickness: number
@@ -72,6 +85,7 @@ function buildGroups(items: UsageItem[]): Map<string, PieceGroup> {
   const groups = new Map<string, PieceGroup>()
   for (const it of items) {
     if (!it.width || !it.height || !it.quantity) continue
+    if (!isSheetMaterial(it.category)) continue   // изделия не раскраиваются
     const key = `${it.materialName}|${it.thickness}|${it.category ?? ''}`
     if (!groups.has(key)) groups.set(key, {
       pieces: [],
