@@ -6,7 +6,7 @@ import { DEFAULT_PERMISSIONS } from './permissions'
 export type { UserPermissions }
 export { DEFAULT_PERMISSIONS }
 
-export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer' | 'accountant'
+export type Role = 'admin' | 'manager' | 'production' | 'seo' | 'ceo' | 'buyer' | 'commercial' | 'cfo' | 'partner' | 'measurer' | 'accountant' | 'office' | 'logist'
 
 export type UserProfile = {
   role:        Role
@@ -29,7 +29,7 @@ function isRole(r: unknown): r is Role {
   return r === 'admin' || r === 'manager' || r === 'production' ||
          r === 'seo'   || r === 'ceo'     || r === 'buyer' ||
          r === 'commercial' || r === 'cfo' || r === 'partner' || r === 'measurer' ||
-         r === 'accountant'
+         r === 'accountant' || r === 'office' || r === 'logist'
 }
 
 // Case-insensitive normalisation. Accepts a few common UI aliases.
@@ -155,6 +155,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/manager-dashboard',
     '/calculator/b2b',
     '/b2b-today',
+    '/b2b-deal',
     '/b2b-quotes',
     '/b2b-orders',
     '/b2b-invoices',
@@ -215,6 +216,7 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/',
     '/commercial',
     '/b2b-invoices',
+    '/b2b-deal',
     '/inventory',
     '/b2b-growth',
     '/installations',
@@ -257,6 +259,31 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/',
     '/measurer-cabinet',
     '/measure-calendar',
+  ],
+
+  // Офис-менеджер: координация — счета, КП, клиенты, календарь, задачи (CRM).
+  // Без маржи, себестоимости и CFO-дашбордов.
+  office: [
+    '/',
+    '/clients',
+    '/calendar',
+    '/kp',
+    '/contracts',
+    '/orders',
+    '/b2b-invoices',
+    '/measure-requests',
+    '/measure-calendar',
+    '/crm',
+  ],
+
+  // Логистика: планирование монтажей и доставок + просмотр заказов под них.
+  logist: [
+    '/',
+    '/installations',
+    '/calendar',
+    '/measure-calendar',
+    '/orders',
+    '/b2b-orders',
   ],
 }
 

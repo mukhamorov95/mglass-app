@@ -228,6 +228,9 @@ export default function ShowerCalculatorPage() {
         if (raw) {
           sessionStorage.removeItem('mglass_shower_prefill')
           const p = JSON.parse(raw) as Record<string, unknown>
+          // М2: клиент из карточки сделки — чтобы расчёт не потерял телефон
+          if (p.clientName)  setClientName(String(p.clientName))
+          if (p.clientPhone) setClientPhone(String(p.clientPhone))
           if (p.tier)      setTier(p.tier as ShowerTier)
           if (p.modelId)   setModelId(p.modelId as string)
           if (p.width)     setWidth(String(p.width))

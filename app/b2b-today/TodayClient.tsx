@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase-browser'
 import { finalTotalOf } from '@/lib/b2b/priceOverride'
 import { deadlineFor } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
+import PlanEditor from './PlanEditor'
 
 // Экран собран из того, что уже есть в данных: ничего не додумывает и не прогнозирует.
 // Каждая карточка — это конкретное действие менеджера, а не метрика для отчёта.
@@ -53,7 +54,9 @@ const TONE: Record<Bucket['tone'], string> = {
 export default function TodayClient() {
   const [rows, setRows] = useState<Row[]>([])
   // А18: план/факт месяца. Плана нет — блок не мешается, просто показываем факт.
-  const [plan, setPlan] = useState<{ plan: number; launched: number; paid: number; forecast: number; donePct: number | null; name: string }[] | null>(null)
+  const [plan, setPlan] = useState<{ managerId: string | null; plan: number; launched: number; paid: number; forecast: number; donePct: number | null; name: string }[] | null>(null)
+  const [planMonth, setPlanMonth] = useState<string>('')
+  const [canSetPlan, setCanSetPlan] = useState(false)
   const [nowTs, setNowTs] = useState(0)   // время берём в эффекте: рендер должен быть чистым
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -88,12 +91,19 @@ export default function TodayClient() {
     })()
   }, [])
 
-  useEffect(() => {
+  function loadPlans() {
     fetch('/api/b2b-plans')
       .then(r => r.ok ? r.json() : null)
-      .then(j => { if (j?.rows) setPlan(j.rows) })
+      .then(j => {
+        if (!j?.rows) return
+        setPlan(j.rows)
+        setPlanMonth(j.month)
+        setCanSetPlan(!!j.seeAll)
+      })
       .catch(() => {})
-  }, [])
+  }
+
+  useEffect(() => { loadPlans() }, [])
 
   const buckets = useMemo<Bucket[]>(() => {
     const answered: Bucket['rows'] = []
@@ -170,6 +180,11 @@ export default function TodayClient() {
           {loading ? 'Считаю…' : totalActions > 0 ? `${totalActions} дел требуют вас` : 'Всё разобрано'}
         </p>
       </div>
+
+      {/* А18: ввод плана — владельцу и коммерческому */}
+      {canSetPlan && plan && planMonth && (
+        <PlanEditor rows={plan} month={planMonth} onSaved={loadPlans} />
+      )}
 
       {/* А18: план/факт по B2B за месяц */}
       {plan && plan.length > 0 && (

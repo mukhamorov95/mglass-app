@@ -10,7 +10,7 @@
 //      себестоимости НЕТ вообще — они растворены в марже. Честно — все четыре
 //      операции по живым ставкам (зарплата ÷ объём периода, lib/laborModel).
 
-import { computeMaterialUsage, DEFAULT_REUSE_RATE, type UsageItem } from './materialUsage'
+import { computeMaterialUsage, DEFAULT_REUSE_RATE, isSheetMaterial, type UsageItem } from './materialUsage'
 import type { SheetFormat } from './cuttingOptimizer'
 import { laborRates, pieceLaborCost, type ShopSalaries, type ShopThroughput } from './laborModel'
 import { TEMPERING_COST, EDGE_COST_PER_M, PACKAGING_PER_M2, TRANSPORT_PER_PIECE } from './b2bCalculator'
@@ -98,6 +98,7 @@ export function computeOrderEconomics(
   } else {
     const usageItems: UsageItem[] = order.items
       .filter(it => it.width > 0 && it.height > 0 && it.quantity > 0)
+      .filter(it => isSheetMaterial(it.category))
       .map(it => ({
         materialName: it.materialName, thickness: it.thickness, category: it.category,
         width: it.width, height: it.height, quantity: it.quantity, costPerM2: it.costPerM2,
@@ -108,6 +109,15 @@ export function computeOrderEconomics(
     honestMaterial = usage.reduce((s, u) => s + u.honestCost, 0)
     sheets = usage.reduce((s, u) => s + u.sheets, 0)
     netM2 = usage.reduce((s, u) => s + u.netM2, 0)
+
+    // Изделия производства мимо раскроя: их себестоимость покупная и финальная —
+    // честная равна системной, ровно как в калькуляторе (lib/autoWasteApply.ts).
+    for (const it of order.items) {
+      if (isSheetMaterial(it.category)) continue
+      const net = it.width * it.height / 1_000_000 * (it.quantity || 0)
+      honestMaterial += net * (1 + (it.wastePercent || 0) / 100) * it.costPerM2
+      netM2 += net
+    }
   }
 
   // ── Пробег по позициям: система-материал, закалка, доставка, кромочный метраж ─

@@ -105,6 +105,11 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
   const [addRole, setAddRole] = useState<RoleId | ''>('')
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
   const [view, setView] = useState<'kit' | 'audit'>('kit')
+  type Diff = { itemId: string; name: string; supplier: string; maxDeltaPct: number; note?: string
+    changes: { finish: string; was: number; now: number; deltaPct: number; stockLen?: number }[] }
+  const [diffs, setDiffs] = useState<Diff[] | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [picked, setPicked] = useState<Set<string>>(new Set())
 
   const cur = store[tier]
   const model = getModel(code)
@@ -134,6 +139,27 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     for (const k of Object.values(cur.kits)) for (const s of k.slots) for (const e of s.entries) m.set(e.itemId, (m.get(e.itemId) ?? 0) + 1)
     return m
   }, [cur.kits])
+
+  // Сверка с прайсом поставщика: показываем разницу, применяем только отмеченное.
+  async function checkPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch(`/api/admin/configurator-kits/reprice?tier=${tier}`)
+      const d = r.ok ? (await r.json()).diffs as Diff[] : []
+      setDiffs(d)
+      setPicked(new Set(d.filter(x => x.changes.length > 0).map(x => x.itemId)))
+    } finally { setChecking(false) }
+  }
+  async function applyPrices() {
+    setChecking(true)
+    try {
+      const r = await fetch('/api/admin/configurator-kits/reprice', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tier, itemIds: [...picked] }),
+      })
+      if (r.ok) { setMsg(`Цены обновлены: ${(await r.json()).applied}`); setDiffs(null); location.reload() }
+    } finally { setChecking(false) }
+  }
 
   function edit(mutate: (s: TierStore) => void) {
     setStore(prev => { const next = structuredClone(prev); mutate(next[tier]); return next })
@@ -312,6 +338,42 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
             <p className="text-[12px] text-[#9a9a95] mt-1.5">
               Каждая модель прогнана на трёх размерах (минимум, середина, максимум) во всех {FINISHES.length} цветах.
               Блокер — клиент увидит «по запросу» вместо цены.
+            </p>
+          </Card>
+
+          <Card title="Цены поставщика">
+            <div className="flex items-center gap-3">
+              <button onClick={checkPrices} disabled={checking}
+                className="text-[13px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white disabled:bg-[#eee] disabled:text-[#9a9a95]">
+                {checking ? 'Сверяю…' : 'Сверить со справочником'}
+              </button>
+              {diffs && <span className="text-[13px] text-[#6b6b66]">
+                {diffs.length === 0 ? 'Все цены совпадают с прайсом' : `Расхождений: ${diffs.length}`}
+              </span>}
+              {diffs && picked.size > 0 && (
+                <button onClick={applyPrices} disabled={checking}
+                  className="ml-auto text-[13px] font-medium px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110]">
+                  Применить отмеченные ({picked.size})
+                </button>
+              )}
+            </div>
+            {diffs?.map(d => (
+              <div key={d.itemId} className="flex items-start gap-2 py-1.5 mt-1 border-t border-[#f4f4f0] text-[13px]">
+                <input type="checkbox" checked={picked.has(d.itemId)} disabled={d.changes.length === 0}
+                  onChange={e => setPicked(p => { const n = new Set(p); if (e.target.checked) n.add(d.itemId); else n.delete(d.itemId); return n })}
+                  className="mt-1" />
+                <span className="w-[240px] shrink-0 truncate text-[#111110]">{d.name}</span>
+                {d.note
+                  ? <span className="text-[#b09a6a]">{d.note}</span>
+                  : <span className="text-[#6b6b66]">
+                      {d.changes.slice(0, 4).map(c => `${c.finish}${c.stockLen ? ` ${c.stockLen}мм` : ''}: ${c.was} → ${c.now} (${c.deltaPct > 0 ? '+' : ''}${c.deltaPct}%)`).join(' · ')}
+                      {d.changes.length > 4 && ` …и ещё ${d.changes.length - 4}`}
+                    </span>}
+              </div>
+            ))}
+            <p className="text-[11px] text-[#9a9a95] mt-2">
+              Автоматически ничего не переписывается: цена изделия не должна меняться без твоего ведома.
+              История цен пишется при каждом импорте прайса.
             </p>
           </Card>
 

@@ -14,6 +14,7 @@ import { DEFAULT_REUSE_RATE } from '@/lib/materialUsage'
 import { hasAutoOverride, finalTotalOf } from '@/lib/b2b/priceOverride'
 import { shipDateFrom, toDateInput, DEFAULT_WORKING_DAYS } from '@/lib/b2b/deadline'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
+import { buildClientTimeline } from '@/lib/b2b/clientTimeline'
 
 const HONEST_THIN = 25   // ниже — «тонко»
 
@@ -1169,6 +1170,12 @@ export default function B2BQuotesPage() {
                         className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
                         {copiedId === quote.id ? '✓' : 'ТГ'}
                       </button>
+                      {/* А4: одна карточка сделки */}
+                      <Link href={`/b2b-deal/${quote.id}`}
+                        title="Карточка сделки: документы, деньги, производство, клиент"
+                        className="text-[11px] font-medium px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] hover:text-[#111110] transition-colors whitespace-nowrap">
+                        🗂
+                      </Link>
                       {/* А2: ссылка клиенту с согласованием */}
                       <button onClick={() => shareQuote(quote)} disabled={sharing === quote.id}
                         title="Ссылка на КП для клиента: он видит цены и может согласовать"
@@ -1568,6 +1575,28 @@ export default function B2BQuotesPage() {
                         </tfoot>
                       </table>
                     </div>
+
+                    {/* А20: что видел и делал клиент */}
+                    {(() => {
+                      const events = buildClientTimeline(parsed)
+                      if (events.length === 0) return null
+                      return (
+                        <div className="mb-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-1">Клиент</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {events.map((e, i) => (
+                              <span key={i} title={e.at ? new Date(e.at).toLocaleString('ru-RU') : undefined}
+                                className={`text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap ${
+                                  e.tone === 'good' ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : e.tone === 'warn' ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-white text-[#6b6b66] border-[#e4e4e0]'}`}>
+                                {e.icon} {e.text}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )
+                    })()}
 
                     {/* ПРЕДВАРИТЕЛЬНАЯ ЗАКУПКА */}
                     {(() => {

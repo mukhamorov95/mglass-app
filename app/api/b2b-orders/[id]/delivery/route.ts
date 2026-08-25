@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
 import { parseNotes } from '@/lib/b2b/publicQuote'
+import { createServiceClient } from '@/lib/supabase-service'
+import { pushNotification } from '@/lib/partnerNotify'
 
 // А16: логистика отгрузки со стороны менеджера. Партнёр в кабинете выбирает способ
 // получения (/api/partner/order/[id]/delivery) — здесь менеджер видит то же поле,
@@ -30,7 +32,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (method === 'delivery' && !address) return NextResponse.json({ error: 'Укажите адрес доставки' }, { status: 400 })
 
   const sb = await createServerClient()
-  const { data: order } = await sb.from('b2b_orders').select('id, notes').eq('id', orderId).maybeSingle()
+  const { data: order } = await sb.from('b2b_orders').select('id, client_id, custom_number, notes').eq('id', orderId).maybeSingle()
   if (!order) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
   const { data: { user } } = await sb.auth.getUser()
@@ -64,6 +66,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     updated_at: new Date().toISOString(),
   }).eq('id', orderId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // А20: клиент видит отгрузку в своём кабинете сразу, а не после ночного крона.
+  if (status === 'delivered' && order.client_id) {
+    try {
+      await pushNotification(createServiceClient(), {
+        clientId: Number(order.client_id),
+        orderId,
+        kind: 'shipped',
+        title: `Заказ ${(order.custom_number as string | null)?.trim() || `#${orderId}`} отгружен`,
+        body: delivery.method === 'delivery' ? `Доставка: ${delivery.address ?? ''}`.trim() : 'Самовывоз',
+        link: `/partner/order/${orderId}`,
+      })
+    } catch { /* уведомление не должно ломать отметку отгрузки */ }
+  }
 
   return NextResponse.json({ ok: true, delivery })
 }

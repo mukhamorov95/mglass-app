@@ -340,6 +340,9 @@ export default function MirrorCalculatorPage() {
           if (raw) {
             sessionStorage.removeItem('mglass_mirror_prefill')
             const p = JSON.parse(raw) as Record<string, unknown>
+            // М2: клиент из карточки сделки — чтобы расчёт не потерял телефон
+            if (p.clientName)  setClientName(String(p.clientName))
+            if (p.clientPhone) setClientPhone(String(p.clientPhone))
             if (p.width)        setWidth(String(p.width))
             if (p.height)       setHeight(String(p.height))
             if (p.mirrorName)   setMirrorName(p.mirrorName as string)
