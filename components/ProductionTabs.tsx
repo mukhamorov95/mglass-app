@@ -12,6 +12,7 @@ import { createClient } from '@/lib/supabase-browser'
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
   { href: '/production-app/load',     label: '📊 Загрузка',    match: p => p.startsWith('/production-app/load') },
+  { href: '/production-app/activity', label: '👥 Кто что делал', match: p => p.startsWith('/production-app/activity') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
   { href: '/production-app/problems', label: '⚠️ Проблемы',    match: p => p.startsWith('/production-app/problems') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
