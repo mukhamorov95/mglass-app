@@ -65,6 +65,16 @@ export const PRODUCTION_STAGES = [
   { key: 'packaging' as const, label: 'Упаковка'     },
 ] satisfies { key: Exclude<DetailStageKey, 'problem'>; label: string }[]
 
+// Ярлык этапа по строке ИЗ БАЗЫ. STAGE_LABELS сознательно оставлен строгим
+// (Record<DetailStageKey, string>): он гарантирует, что у каждого этапа есть подпись,
+// и ловит опечатки во всех 11 местах, где им пользуются. Ослабить его до
+// Record<string, string> ради экранов, читающих stage_key из production_tasks, —
+// значит снять эту гарантию везде ради удобства в одном месте. Поэтому граница
+// «непроверенная строка → подпись» живёт здесь, одной функцией с фолбэком.
+export function stageLabel(key: string): string {
+  return STAGE_LABELS[key as DetailStageKey] ?? key
+}
+
 export const STAGE_LABELS: Record<DetailStageKey, string> = {
   cutting:   'Резка',
   curved:    'Криволинейка',
