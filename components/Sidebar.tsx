@@ -124,7 +124,6 @@ const BUYER_B2B_ALL: NavItem[] = [
 // Production oversight for the scoped buyer (Вера надзирает за цехом).
 const BUYER_PRODUCTION: NavItem[] = [
   { href: '/production-app',            label: 'Производство',        icon: '📱', indent: true },
-  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭', indent: true },
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────
@@ -228,7 +227,6 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/access-check',     label: 'Диагностика прав', icon: '🔎' },
   { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
   { href: '/production-app',              label: 'Production App',      icon: '📱' },
-  { href: '/production-app/supervisor',   label: 'Панель производства',  icon: '🔭' },
 ]
 
 const ADMIN_MARKETING: NavItem[] = [
@@ -338,7 +336,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },
-  { href: '/production-app/board',    label: 'Заказы в работе',  icon: '🔧' },
+  { href: '/production-app/board',    label: 'Обзор цеха',       icon: '🔧' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
   { href: '/production-app/activity', label: 'Кто что делал',    icon: '👥' },
@@ -365,10 +363,8 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
   { href: '/production-app/guide',    label: 'Регламент работы',      icon: '📘' },
 ]
 
-// Деньги цеха: read-only витрина финансов производства (доступ выдаёт владелец).
-const PRODUCTION_NAV_MONEY: NavItem[] = [
-  { href: '/production-app/money',    label: 'Финансы производства',  icon: '💰' },
-]
+// Группа «Деньги» в навигации цеха убрана (П6): витрина финмодели CFO к работе смены
+// не относится. Экран /production-app/money на месте, доступен по прямому адресу.
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -827,7 +823,6 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 
@@ -905,7 +900,6 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 

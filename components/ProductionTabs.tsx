@@ -2,8 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 
 // Единая навигация цеха (production-app). Порядок = частота использования
 // мастером: задачи → заказы, дальше экраны начальника и снабжения (тот же
@@ -30,27 +28,10 @@ const pill = (active: boolean) =>
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
   const onObzor = path === '/production-app' || path.startsWith('/production-app/board')
-  // «Заработок» — только реферерам; «Деньги» — owner-ролям и can_view_money.
-  const [isReferrer, setIsReferrer] = useState(false)
-  const [seesMoney, setSeesMoney] = useState(false)
-  useEffect(() => {
-    const sb = createClient()
-    sb.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      sb.from('users').select('referral_rate_pct, role, can_view_money').eq('id', user.id).single()
-        .then(({ data }) => {
-          const d = data as { referral_rate_pct: number | null; role: string | null; can_view_money: boolean | null } | null
-          if (d?.referral_rate_pct != null) setIsReferrer(true)
-          if (d?.can_view_money || d?.role === 'admin' || d?.role === 'ceo' || d?.role === 'cfo') setSeesMoney(true)
-        })
-    })
-  }, [])
-
-  const tabs = [
-    ...TABS,
-    ...(seesMoney ? [{ href: '/production-app/money', label: '💰 Деньги', match: (p: string) => p.startsWith('/production-app/money') }] : []),
-    ...(isReferrer ? [{ href: '/production-app/earnings', label: '💰 Заработок', match: (p: string) => p.startsWith('/production-app/earnings') }] : []),
-  ]
+  // «Деньги» (витрина финмодели CFO) и «Заработок» (реферальные начисления) убраны из
+  // навигации цеха (П6): к работе смены они не относятся и жили здесь исторически.
+  // Файлы на месте — вернём по адресу, если окажутся кому-то нужны.
+  const tabs = TABS
 
   return (
     <div className="mt-3 space-y-2">
