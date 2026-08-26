@@ -744,6 +744,13 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </a>
           )}
 
+          {/* П9: наклейки нужны там, где режут, а не через карточку заказа.
+              Резчик клеит их сразу после реза — путь до них должен быть в один тап. */}
+          <Link href={`/production-app/orders/${orderId}/labels`}
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-[#e4e4e0] text-[13px] text-[#111110] hover:border-[#111110]">
+            🏷 Наклейки и маршрутный лист
+          </Link>
+
           {startable.length > 1 && (
             <button onClick={() => onStartAll(startable)}
               className="w-full py-2 rounded-lg border border-emerald-300 text-emerald-700 text-[13px] font-medium hover:bg-emerald-50">

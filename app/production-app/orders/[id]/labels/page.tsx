@@ -5,11 +5,14 @@ import JsBarcode from 'jsbarcode'
 import { createClient } from '@/lib/supabase-browser'
 import { getApplicableStages, STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
 import { materialLabel } from '@/lib/materialLabel'
+import { formatLabelCode } from '@/lib/production/labelCode'
 
 // Печать наклеек на термопринтер: маршрутный лист заказа + наклейка на каждую
-// деталь (штрихкод Code128 = MG-<orderId>-<itemIndex>, читается камерой и любым
-// BT-сканером). Наклейки клеятся на бумажный чертёж; в печь не идут — на стекле
-// остаётся маркер. При quantity>1 печатаем по наклейке на каждый физический лист.
+// деталь (штрихкод Code128, читается камерой и любым BT-сканером). Наклейки клеятся
+// на бумажный чертёж; в печь не идут — на стекле остаётся маркер.
+// При quantity>1 печатаем по наклейке на каждый физический лист, и номер листа идёт
+// В ШТРИХКОД (П9): раньше человек видел на наклейке «3/5», а сканер у всех пяти читал
+// один и тот же код. Формат и разбор — lib/production/labelCode.ts.
 
 type OrderItem = {
   materialName?: string; category?: string; thickness?: number
@@ -111,7 +114,7 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
           <p className="text-[12px] text-[#111110] font-medium">{order.client_name}</p>
           {order.client_order_number && <p className="text-[11px] text-[#6b6b66]">№ клиента: {order.client_order_number}</p>}
           <p className="text-[11px] text-[#6b6b66]">{order.items.length} поз. · {totalQty} шт.{deadline ? ` · срок ${deadline}` : ''}</p>
-          <div className="mt-2"><Barcode value={`MG-${order.id}`} height={40} /></div>
+          <div className="mt-2"><Barcode value={formatLabelCode(order.id)} height={40} /></div>
           <p className="text-[9px] text-[#9a9a95] mt-1">Едет с тележкой. В печь не кладётся.</p>
         </div>
 
@@ -137,7 +140,10 @@ export default function LabelsPage({ params }: { params: Promise<{ id: string }>
               <p className="text-[11px] text-[#111110]">{glass || '—'}</p>
               {flags && <p className="text-[10px] text-[#6b6b66] mt-0.5">{flags}</p>}
               <p className="text-[9px] text-[#9a9a95] mt-1 leading-tight">Маршрут: {routeOf(item)}</p>
-              <div className="mt-1.5"><Barcode value={`MG-${order.id}-${itemIndex}`} /></div>
+              {item.hasTempering && (
+                <p className="text-[10px] font-bold text-[#111110] mt-1 leading-tight">⚠ Снять перед закалкой · вернуть после</p>
+              )}
+              <div className="mt-1.5"><Barcode value={formatLabelCode(order.id, itemIndex, qty > 1 ? piece : null)} /></div>
             </div>
           )
         })}

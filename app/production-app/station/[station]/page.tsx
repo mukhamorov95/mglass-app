@@ -266,9 +266,16 @@ export default function StationBatchesPage() {
                     return (
                     <div key={`${o.taskId}-${i}`} className="px-4 py-2.5 flex items-center justify-between gap-2">
                       <Link href={`/p/o/${o.orderId}`} className="min-w-0">
-                        <p className="text-[13px] font-semibold text-[#111110] truncate">{o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span></p>
+                        <p className="text-[13px] font-semibold text-[#111110] truncate">
+                          {o.number} <span className="text-[#9a9a95] font-normal">· {o.client}</span>
+                        </p>
                         <p className="text-[12px] text-[#6b6b66]">{o.size} мм{o.qty > 1 ? ` × ${o.qty}` : ''}{waitMat && <span className="text-amber-600 font-medium"> · ⏳ ждёт материал</span>}</p>
                       </Link>
+                      {/* П9: наклейки клеятся на резке, сразу после реза — значит ссылка нужна здесь. */}
+                      {isCutting && (
+                        <Link href={`/production-app/orders/${o.orderId}/labels`} title="Наклейки и маршрутный лист"
+                          className="text-[15px] px-2 py-1.5 rounded-lg border border-[#e4e4e0] hover:border-[#111110] flex-shrink-0">🏷</Link>
+                      )}
                       <button onClick={() => markTasks([o.taskId])} disabled={busy}
                         title={waitMat ? 'Материал отмечен «нет» — заказ подсвечен на закупку, но резать можно' : ''}
                         className="text-[12px] font-medium px-3 py-1.5 rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50 disabled:opacity-40 disabled:hover:bg-transparent transition-colors whitespace-nowrap flex-shrink-0">
