@@ -1,6 +1,6 @@
 import ProductionTabs from '@/components/ProductionTabs'
 import { createServiceClient } from '@/lib/supabase-service'
-import { STAGE_LABELS } from '@/lib/productionStages'
+import { stageLabel } from '@/lib/productionStages'
 
 // Журнал активности цеха: кто сколько отметок закрыл сегодня, вчера и за неделю,
 // по каким этапам, и лента последних действий. Экран открыт всему цеху сознательно —
@@ -98,7 +98,7 @@ export default async function ShopActivityPage() {
               <div className="flex flex-wrap gap-1.5">
                 {[...p.stages.entries()].sort((a, b) => b[1] - a[1]).map(([st, n]) => (
                   <span key={st} className="text-[11px] text-[#6b6b66] bg-[#f5f5f3] border border-[#e4e4e0] rounded-md px-2 py-0.5">
-                    {STAGE_LABELS[st] ?? st} · <span className="font-mono font-semibold">{n}</span>
+                    {stageLabel(st)} · <span className="font-mono font-semibold">{n}</span>
                   </span>
                 ))}
               </div>
@@ -116,7 +116,7 @@ export default async function ShopActivityPage() {
                 <div key={i} className="flex items-center gap-2.5 text-[12.5px] py-1 border-b border-[#f5f5f3] last:border-0">
                   <span className="font-mono text-[#9a9a95] tabular-nums w-11 shrink-0">{timeOf(r.completed_at)}</span>
                   <span className="text-[#111110] font-medium w-24 shrink-0 truncate">{r.completed_by_name?.trim() || NO_NAME}</span>
-                  <span className="text-[#6b6b66] flex-1 truncate">{STAGE_LABELS[r.stage_key] ?? r.stage_key}</span>
+                  <span className="text-[#6b6b66] flex-1 truncate">{stageLabel(r.stage_key)}</span>
                   <span className="font-mono text-[#9a9a95] shrink-0">#{r.order_id}</span>
                 </div>
               ))}
