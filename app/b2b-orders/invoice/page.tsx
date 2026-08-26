@@ -126,21 +126,38 @@ export default function BatchInvoicePage() {
     QRCode.toDataURL(s, { margin: 0, width: 240 }).then(setQr).catch(() => {})
   }, [grandTotal, invNo])
 
-  // Сохранить счёт в реестр как документ (номер, плательщик, состав, сумма).
+  // Счёт становится записью: печать/PDF регистрируют единый счёт в реестре
+  // побочным эффектом. API идемпотентен по НАБОРУ заказов, поэтому повторная
+  // печать не плодит дубли, а правка номера менеджером не создаёт второй счёт.
+  const registeredRef = useRef(false)
+  async function postInvoice(): Promise<boolean> {
+    if (!grandTotal || !ids.length) return false
+    const r = await fetch('/api/invoices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoice_no: invNo, payer_client_id: payerEntity?.client_id ?? null, payer_entity_id: payerEntityId,
+        payer_name: payerEntity ? entityTitle(payerEntity) : null,
+        order_ids: ids, amount: grandTotal, vat,
+      }),
+    })
+    const d = await r.json().catch(() => ({}))
+    if (r.ok && d.id) setSavedInvId(d.id as number)
+    return r.ok
+  }
+  // Явная кнопка — с обратной связью.
   async function saveInvoice() {
     setSavingInv(true)
     try {
-      const r = await fetch('/api/invoices', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice_no: invNo, payer_client_id: payerEntity?.client_id ?? null, payer_entity_id: payerEntityId,
-          payer_name: payerEntity ? entityTitle(payerEntity) : null,
-          order_ids: ids, amount: grandTotal, vat,
-        }),
-      })
-      const d = await r.json().catch(() => ({}))
-      if (r.ok && d.id) setSavedInvId(d.id as number)
+      const ok = await postInvoice()
+      registeredRef.current = registeredRef.current || ok
     } finally { setSavingInv(false) }
+  }
+  // Тихая регистрация при печати/скачивании — один раз, best-effort.
+  async function ensureRegistered() {
+    if (registeredRef.current || !grandTotal || !ids.length) return
+    registeredRef.current = true
+    try { if (!(await postInvoice())) registeredRef.current = false }
+    catch { registeredRef.current = false }
   }
 
   async function savePayerToOrders() {
@@ -156,6 +173,7 @@ export default function BatchInvoicePage() {
 
   async function downloadPdf() {
     if (!docRef.current) return
+    void ensureRegistered()   // печать = документ выдан → в реестр
     try {
       // Снимок при десктопной ширине (renderDocCanvas) → PDF одинаков с телефона и ПК.
       const jspdf = await import('jspdf')
@@ -215,7 +233,7 @@ export default function BatchInvoicePage() {
       <div className="no-print max-w-[820px] mx-auto pt-6 px-4">
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={downloadPdf} className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28]">⬇ Скачать PDF</button>
-          <button onClick={() => document.fonts.ready.then(() => window.print())} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
+          <button onClick={() => { void ensureRegistered(); document.fonts.ready.then(() => window.print()) }} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
           <button onClick={saveInvoice} disabled={savingInv || savedInvId != null}
             className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white disabled:opacity-50">
             {savedInvId != null ? '✓ в реестре' : savingInv ? '…' : '💾 Сохранить счёт'}
