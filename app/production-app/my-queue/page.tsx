@@ -250,11 +250,18 @@ export default function MyQueuePage() {
     fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name ?? 'Цех', link: '' }) }).catch(() => {})
   }
 
-  // Свежий read-merge-write notes — параллельные экраны не должны терять поля (урок #4960)
+  // Точечный патч notes под блокировкой строки. Раньше здесь был свежий
+  // read-merge-write: он спасал от устаревшего снимка, но окно между чтением и
+  // записью оставалось — параллельная отметка этапа могла потеряться.
+  // patch_order_notes_shallow мержит верхний уровень в одной транзакции.
   async function mergeNotes(orderId: number, patch: (n: Record<string, unknown>) => Record<string, unknown>) {
     const { data: fresh } = await sb.from('b2b_orders').select('notes').eq('id', orderId).single()
     const n = parseNotes((fresh as { notes: string | null } | null)?.notes ?? null)
-    await sb.from('b2b_orders').update({ notes: JSON.stringify(patch(n)) }).eq('id', orderId)
+    const next = patch(n)
+    const changed: Record<string, unknown> = {}
+    for (const k of Object.keys(next)) if (next[k] !== n[k]) changed[k] = next[k]
+    if (Object.keys(changed).length === 0) return
+    await sb.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: changed })
   }
 
   // «Нет материала на весь заказ» (повторное нажатие = материал пришёл)

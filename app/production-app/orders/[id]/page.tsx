@@ -684,10 +684,12 @@ export default function ProductionOrderPage() {
 
     const updatedNotes = { ...notesObj, detail_stages: newStages, detail_stage_audit: newAudit }
     const sb           = createClient()
-    const { error: updateErr } = await sb
-      .from('b2b_orders')
-      .update({ notes: JSON.stringify(updatedNotes) })
-      .eq('id', order.id)
+    // Патчим только свои два ключа. Перезапись notes целиком уносила бы вместе с
+    // отменой этапа оплату, доставку и рекламацию — они живут в том же поле.
+    const { error: updateErr } = await sb.rpc('patch_order_notes_shallow', {
+      p_order_id: order.id,
+      p_patch: { detail_stages: newStages, detail_stage_audit: newAudit },
+    })
 
     if (updateErr) {
       setToast({ msg: 'Ошибка сохранения', ok: false })
