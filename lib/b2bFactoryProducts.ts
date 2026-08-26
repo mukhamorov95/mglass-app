@@ -277,19 +277,25 @@ export function calcFactoryLoft(
     doors: number; fixedParts: number; rows: number
     handle: LoftHandle; softClose: boolean
     glassId: number | null; tempering: boolean
+    // Стекло опционально — цех продаёт и голый каркас (заказчик стеклит сам
+    // либо стекло идёт отдельной позицией просчёта).
+    withGlass?: boolean
   },
   d: FactoryData,
 ): FactoryQuote | null {
   if (p.widthMm <= 0 || p.heightMm <= 0) return null
+  const withGlass = p.withGlass !== false
   const glass = d.loftGlasses.find(m => m.id === p.glassId) ?? d.loftGlasses[0] ?? null
-  if (!glass) return null
+  // Без стекла справочник не нужен: считаем каркас. Со стеклом — без позиции считать нечего.
+  if (withGlass && !glass) return null
   const temperSvc = d.retailServices.find(s => s.name.toLowerCase().includes('закалка'))
 
   const res = calcLoftFactory({
     widthMm: p.widthMm, heightMm: p.heightMm,
     construction: p.construction, doors: p.doors, fixedParts: p.fixedParts, rows: p.rows,
     handle: p.handle, softClose: p.softClose,
-    glassCostPerM2: glass.cost_price, glassName: glass.name,
+    glassCostPerM2: glass?.cost_price ?? 0, glassName: glass?.name ?? '',
+    withGlass,
     tempering: p.tempering, temperingCostPerM2: temperSvc?.cost_price ?? 0,
   }, d.loftRates)
   if (!res) return null
@@ -315,14 +321,15 @@ export function calcFactoryLoft(
   if (!fm) return null
 
   const kind = p.construction !== 'fixed' && p.doors > 0 ? 'дверь' : 'перегородка'
+  const frameNote = withGlass ? '' : ' (каркас)'
   return {
-    label: `Лофт-${kind} ${p.widthMm}×${p.heightMm} мм`,
+    label: `Лофт-${kind}${frameNote} ${p.widthMm}×${p.heightMm} мм`,
     spec: res.spec,
     widthMm: p.widthMm,
     heightMm: p.heightMm,
     // В справочнике материалов толщины нет отдельным полем — вынимаем из названия
     // («Осветлённое 8 мм»); не нашли — 0, габариты важнее и они уже проставлены.
-    thicknessMm: Number(/(\d+)\s*мм/.exec(glass.name)?.[1] ?? 0),
+    thicknessMm: withGlass ? Number(/(\d+)\s*мм/.exec(glass?.name ?? '')?.[1] ?? 0) : 0,
     perimeterM: Math.round(2 * (p.widthMm + p.heightMm) / 1000 * 1000) / 1000,
     areaPiece: res.areaM2,
     weightPerPiece: res.weightKg,
