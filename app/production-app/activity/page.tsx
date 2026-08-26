@@ -1,4 +1,6 @@
 import ProductionTabs from '@/components/ProductionTabs'
+import CrewInviteButton from './CrewInviteButton'
+import { getUserProfile, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
 import { stageLabel } from '@/lib/productionStages'
 
@@ -56,6 +58,9 @@ export default async function ShopActivityPage() {
     return rank(a) - rank(b) || b.marks_7d - a.marks_7d
   })
   const notOnboarded = crew.filter(c => c.last_sign_in == null && c.queue_open > 0).length
+  // Кнопку выдачи ссылки видит только владелец. Настоящий гейт — requireOwner
+  // на самом роуте; скрытие здесь только чтобы не мозолило глаза цеху.
+  const isOwner = isOwnerRole((await getUserProfile())?.role)
 
   const today = todayKey()
   const yesterday = daysAgoKey(1)
@@ -104,6 +109,7 @@ export default async function ShopActivityPage() {
                 {notOnboarded === 1 ? 'Один человек ни разу не заходил в приложение' : `${notOnboarded} человека ни разу не заходили в приложение`},
                 а работа на их станциях идёт. Пока они не вошли, их отметок не будет, и очередь на этих станциях
                 растёт не потому, что не успевают.
+                {isOwner && ' Пароли заводились автоматически — человек своего не знает. Выдайте ссылку: он задаст пароль сам.'}
               </p>
             )}
             <div className="mt-3 space-y-1">
@@ -112,7 +118,7 @@ export default async function ShopActivityPage() {
                 const silent  = !never && c.marks_total === 0
                 const stations = (c.stations ?? []).map(stageLabel).join(', ')
                 return (
-                  <div key={c.user_id} className="flex items-center gap-3 py-1.5 border-b border-[#f5f5f3] last:border-0 text-[12.5px]">
+                  <div key={c.user_id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-1.5 border-b border-[#f5f5f3] last:border-0 text-[12.5px]">
                     <span className="font-medium text-[#111110] w-24 shrink-0 truncate">{c.name ?? '—'}</span>
                     <span className="text-[#6b6b66] flex-1 truncate">{stations || 'станция не назначена'}</span>
                     {never ? (
@@ -129,6 +135,7 @@ export default async function ShopActivityPage() {
                     <span className="text-[11px] text-[#9a9a95] w-20 text-right shrink-0 tabular-nums">
                       {c.queue_open > 0 ? `${c.queue_open} в очереди` : ''}
                     </span>
+                    {isOwner && never && <CrewInviteButton userId={c.user_id} name={c.name ?? 'сотрудника'} />}
                   </div>
                 )
               })}
