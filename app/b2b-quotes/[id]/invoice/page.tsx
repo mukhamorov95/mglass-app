@@ -115,29 +115,53 @@ export default function InvoicePage() {
     }
   }
 
-  // А10: зарегистрировать счёт в реестре — с этого момента он не «печать на лету»,
-  // а документ: попадает в «Счета B2B» менеджера и в дебиторку финконтура.
+  // Счёт становится записью: печать/PDF регистрируют его в реестре побочным
+  // эффектом (без отдельного действия менеджера). API идемпотентен по набору
+  // заказов, поэтому повторная печать не плодит дубли и не «прыгает» номером.
   const [regLoading, setRegLoading] = useState(false)
   const [regMsg, setRegMsg] = useState<string | null>(null)
+  const registeredRef = useRef(false)
+
+  async function postInvoice(): Promise<{ ok: boolean; error?: string }> {
+    if (!order) return { ok: false }
+    const amount = order.total_after_discount || order.total_sale_inc_vat || 0
+    const r = await fetch('/api/invoices', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        invoice_no: order.custom_number?.trim() || String(order.id).padStart(5, '0'),
+        payer_client_id: order.client_id,
+        payer_entity_id: selectedEntityId,
+        payer_name: req.full_name || buyerName,
+        order_ids: [order.id],
+        amount,
+        vat: Math.round(amount * 22 / 122),
+      }),
+    })
+    const j = await r.json().catch(() => ({}))
+    return { ok: r.ok, error: j.error }
+  }
+
+  // Явная кнопка — с обратной связью. Оставлена как подтверждение, но основной
+  // путь — авто-регистрация на печати/PDF ниже.
   async function registerInvoice() {
     if (!order) return
     setRegLoading(true); setRegMsg(null)
     try {
-      const amount = order.total_after_discount || order.total_sale_inc_vat || 0
-      const r = await fetch('/api/invoices', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          invoice_no: order.custom_number?.trim() || String(order.id).padStart(5, '0'),
-          payer_client_id: order.client_id,
-          payer_name: req.full_name || buyerName,
-          order_ids: [order.id],
-          amount,
-          vat: Math.round(amount * 22 / 122),
-        }),
-      })
-      const j = await r.json().catch(() => ({}))
-      setRegMsg(r.ok ? 'Счёт зарегистрирован — виден в «Счета B2B»' : (j.error || 'Не удалось зарегистрировать'))
+      const res = await postInvoice()
+      registeredRef.current = registeredRef.current || res.ok
+      setRegMsg(res.ok ? 'Счёт зарегистрирован — виден в «Счета B2B»' : (res.error || 'Не удалось зарегистрировать'))
     } finally { setRegLoading(false) }
+  }
+
+  // Тихая регистрация при печати/скачивании — один раз на загрузку, best-effort:
+  // ошибка реестра не мешает менеджеру печатать документ.
+  async function ensureRegistered() {
+    if (registeredRef.current || !order) return
+    registeredRef.current = true
+    try {
+      const res = await postInvoice()
+      if (!res.ok) registeredRef.current = false
+    } catch { registeredRef.current = false }
   }
 
   // А8: ссылка на оплату для клиента (в буфер обмена). Пока эквайринг не подключён —
@@ -258,6 +282,7 @@ export default function InvoicePage() {
 
   async function downloadPdf() {
     if (!docRef.current) return
+    void ensureRegistered()   // печать = документ выдан → в реестр
     try {
       // Снимок при десктопной ширине (renderDocCanvas) → PDF одинаков с телефона и ПК.
       const jspdf = await import('jspdf')
@@ -289,7 +314,7 @@ export default function InvoicePage() {
       {/* Toolbar + requisites editor — screen only */}
       <div className="no-print max-w-[820px] mx-auto pt-6 px-4 flex flex-wrap items-center gap-2">
         <button onClick={downloadPdf} className="bg-[#111110] text-white text-[13px] font-semibold px-4 py-2 rounded-lg hover:bg-[#2a2a28]">⬇ Скачать PDF</button>
-        <button onClick={() => document.fonts.ready.then(() => window.print())} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
+        <button onClick={() => { void ensureRegistered(); document.fonts.ready.then(() => window.print()) }} className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">🖨 Печать</button>
         {/* А7: УПД по этому же заказу — реквизиты берутся отсюда же */}
         <a href={`/b2b-quotes/${id}/upd`} target="_blank" rel="noreferrer"
           className="border border-[#d4d4cf] text-[#333] text-[13px] px-4 py-2 rounded-lg hover:bg-white">📑 УПД</a>
