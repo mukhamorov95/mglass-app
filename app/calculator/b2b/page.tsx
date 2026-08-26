@@ -615,9 +615,22 @@ export default function B2BCalculatorPage() {
   // считается от нуля, и изделие может уйти клиенту дешевле, чем обошлось нам.
   const bomIssues = useMemo(() => {
     if (items.length === 0) return []
-    const bomItems: BomCheckItem[] = items.map(it => {
+    // Изделия производства (зеркало с подсветкой, лофт) в справочник листовых
+    // материалов не входят: у них materialId = 0, а себестоимость собственная —
+    // полная стоимость изделия из цеха. Раньше они не находились в baseMaterials
+    // и попадали в ветку fallback с жёстко проставленным active: false — то есть
+    // КАЖДОЕ изделие производства получало «материал выключен в справочнике» и
+    // «не привязан к прайсу поставщика», хотя с ним всё в порядке. Предупреждение,
+    // которое срабатывает всегда, перестают читать — и оно не сработает тогда,
+    // когда себестоимость действительно нулевая.
+    // Индексы исходных позиций: сообщение печатает «Поз. N», и после отсева
+    // изделий нумерация обязана остаться той, что видит менеджер в списке.
+    const sourceIdx: number[] = []
+    const bomItems: BomCheckItem[] = items.flatMap((it, i) => {
+      if (!(it.materialId > 0)) return []
+      sourceIdx.push(i)
       const mat = baseMaterials.find(m => m.id === it.materialId)
-      return {
+      return [{
         material: mat
           ? { name: mat.name, category: mat.category, thickness: mat.thickness, cost_price: mat.cost_price, active: mat.active }
           : { name: it.materialName, category: it.category, thickness: it.thickness, cost_price: it.costMaterial > 0 ? it.costMaterial : 0, active: false },
@@ -627,9 +640,10 @@ export default function B2BCalculatorPage() {
         hasTriplex: it.hasTriplex ?? false,
         triplexPrice: it.hasTriplex ? { salePerM2: it.saleTriplex ?? 0, costPerM2: it.costTriplex ?? 0 } : null,
         services: it.services.map(s => ({ name: s.name, type: s.type, value: s.value, cost_price: s.costPrice })),
-      }
+      }]
     })
-    return checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    const issues = checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    return issues.map(iss => ({ ...iss, itemIndex: sourceIdx[iss.itemIndex] ?? iss.itemIndex }))
   }, [items, baseMaterials, facetPrices, pricedMaterials])
 
   const bomSummary = useMemo(() => summarizeIssues(bomIssues), [bomIssues])
