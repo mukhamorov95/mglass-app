@@ -8,16 +8,30 @@ import { stageLabel } from '@/lib/productionStages'
 //
 // Данные появились только 26.08 вместе с П1 (до этого исполнитель нигде не хранился),
 // поэтому за прошлые периоды часть отметок без имени — их не выдумываем, показываем как есть.
+//
+// Сверху — СОСТАВ ЦЕХА целиком, а не только те, кто отмечает. Причина: 26.08 выяснилось,
+// что из шести заведённых работников четверо почти не входили в приложение, а полировщик
+// (645 задач в очереди) не входил ни разу. Человека, которого нет в системе, на экране
+// активности не было вовсе — то есть проблема была невидима ровно там, где на неё смотрят.
+// Формулировки нейтральные: «не заходил в приложение», а не «не работает». Мы знаем, что
+// люди работают, — они просто не в системе.
 
 export const dynamic = 'force-dynamic'
 
 type Row = { stage_key: string; completed_at: string; completed_by_name: string | null; order_id: number }
+type Crew = {
+  user_id: string; name: string | null; stations: string[] | null
+  last_sign_in: string | null; marks_total: number; marks_7d: number; queue_open: number
+}
 
 const NO_NAME = 'Без имени'
 function dayKey(iso: string): string { return iso.slice(0, 10) }
 function todayKey(): string { return new Date().toISOString().slice(0, 10) }
 function daysAgoKey(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10) }
 function daysAgoISO(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString() }
+function fmtDay(iso: string): string {
+  return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+}
 function timeOf(iso: string): string {
   const d = new Date(iso)
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -32,6 +46,16 @@ export default async function ShopActivityPage() {
     .order('completed_at', { ascending: false })
     .limit(3000)
   const rows = (data ?? []) as Row[]
+
+  // Состав цеха: все с ролью production, включая тех, кто ни разу не входил.
+  const { data: crewData } = await svc.rpc('production_crew_status')
+  const crew = (crewData ?? []) as Crew[]
+  // Наверх — тех, у кого есть очередь, но нет отметок: это и есть неподключённые.
+  const crewSorted = [...crew].sort((a, b) => {
+    const rank = (c: Crew) => c.marks_total === 0 && c.queue_open > 0 ? 0 : c.marks_total === 0 ? 2 : 1
+    return rank(a) - rank(b) || b.marks_7d - a.marks_7d
+  })
+  const notOnboarded = crew.filter(c => c.last_sign_in == null && c.queue_open > 0).length
 
   const today = todayKey()
   const yesterday = daysAgoKey(1)
@@ -70,6 +94,51 @@ export default async function ShopActivityPage() {
       </div>
 
       <div className="px-4 pt-4 max-w-[860px] space-y-4">
+
+        {/* Состав цеха — все, а не только отмечающие */}
+        {crew.length > 0 && (
+          <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+            <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-wide">Состав цеха · {crew.length}</p>
+            {notOnboarded > 0 && (
+              <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                {notOnboarded === 1 ? 'Один человек ни разу не заходил в приложение' : `${notOnboarded} человека ни разу не заходили в приложение`},
+                а работа на их станциях идёт. Пока они не вошли, их отметок не будет, и очередь на этих станциях
+                растёт не потому, что не успевают.
+              </p>
+            )}
+            <div className="mt-3 space-y-1">
+              {crewSorted.map(c => {
+                const never   = c.last_sign_in == null
+                const silent  = !never && c.marks_total === 0
+                const stations = (c.stations ?? []).map(stageLabel).join(', ')
+                return (
+                  <div key={c.user_id} className="flex items-center gap-3 py-1.5 border-b border-[#f5f5f3] last:border-0 text-[12.5px]">
+                    <span className="font-medium text-[#111110] w-24 shrink-0 truncate">{c.name ?? '—'}</span>
+                    <span className="text-[#6b6b66] flex-1 truncate">{stations || 'станция не назначена'}</span>
+                    {never ? (
+                      <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-0.5 shrink-0">
+                        не заходил в приложение
+                      </span>
+                    ) : silent ? (
+                      <span className="text-[11px] text-[#9a9a95] shrink-0">заходил {fmtDay(c.last_sign_in!)} · отметок нет</span>
+                    ) : (
+                      <span className="text-[11px] text-[#6b6b66] shrink-0 tabular-nums">
+                        {c.marks_7d} за неделю · {c.marks_total} всего
+                      </span>
+                    )}
+                    <span className="text-[11px] text-[#9a9a95] w-20 text-right shrink-0 tabular-nums">
+                      {c.queue_open > 0 ? `${c.queue_open} в очереди` : ''}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[10px] text-[#c4c4be] mt-2.5">
+              «Не заходил в приложение» — это про учётную запись, а не про человека: работа на станции идёт,
+              просто она нигде не отмечается. Как только человек войдёт, строка заполнится сама.
+            </p>
+          </div>
+        )}
 
         {people.length === 0 && (
           <div className="bg-white border border-[#e4e4e0] rounded-xl p-5 text-center">
