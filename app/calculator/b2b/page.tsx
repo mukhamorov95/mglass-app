@@ -188,7 +188,6 @@ export default function B2BCalculatorPage() {
   const [editTotalId, setEditTotalId] = useState<string | null>(null)
   // Мультивыбор позиций + массовая смена материала/толщины/типа.
   const [selIds, setSelIds]           = useState<Set<string>>(new Set())
-  const [bulkThickness, setBulkThickness] = useState<number | null>(null)
   const [bulkMatId, setBulkMatId]     = useState<number | null>(null)
   const [bulkQty, setBulkQty]         = useState('')   // массовое количество: поставить всем одно число
 
@@ -947,12 +946,16 @@ export default function B2BCalculatorPage() {
   }
 
   // ── Мультивыбор + массовая смена материала ──────────────────────────────────
-  const bulkThicknesses = useMemo(
-    () => [...new Set(materials.map(m => m.thickness))].sort((a, b) => a - b),
+  // Один список, сгруппированный по толщине (<optgroup>), а не два селекта:
+  // требовать выбрать толщину прежде материала — лишний шаг, из-за которого
+  // функция выглядела отсутствующей. Группы сохраняют навигацию по длинному
+  // списку, но не заставляют отвечать на вопрос про толщину заранее.
+  const bulkMaterialGroups = useMemo(
+    () => [...new Set(materials.map(m => m.thickness))]
+      .sort((a, b) => a - b)
+      .map(thickness => ({ thickness, materials: sortByPriority(materials.filter(m => m.thickness === thickness)) }))
+      .filter(g => g.materials.length > 0),
     [materials])
-  const bulkMaterials = useMemo(
-    () => sortByPriority(materials.filter(m => m.thickness === bulkThickness)),
-    [materials, bulkThickness])
 
   function toggleSel(localId: string) {
     setSelIds(prev => {
@@ -999,7 +1002,7 @@ export default function B2BCalculatorPage() {
     if (!mat || selIds.size === 0) return
     setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem(i, mat) : i))
     setSavedOrderId(null)
-    clearSel()
+    // Селекцию НЕ сбрасываем — владелец правит выбранные итеративно (как с количеством).
   }
   // Массовое переключение закалки у выбранных (зеркало закалку не поддерживает — пропускаем).
   function applyBulkTempering(on: boolean) {
@@ -2263,19 +2266,18 @@ export default function B2BCalculatorPage() {
                   <span className="text-[12px] font-semibold text-[#111110]">Выбрано: {selIds.size}</span>
                   <span className="text-[11px] text-[#6b6b66]">Сменить материал →</span>
                   <select
-                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none"
-                    value={bulkThickness ?? ''}
-                    onChange={e => { setBulkThickness(Number(e.target.value)); setBulkMatId(null) }}>
-                    <option value="">толщина</option>
-                    {bulkThicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
-                  </select>
-                  <select
-                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] text-[#111110] outline-none min-w-[160px]"
+                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] text-[#111110] outline-none min-w-[200px] disabled:opacity-40"
                     value={bulkMatId ?? ''}
-                    disabled={bulkThickness === null}
+                    disabled={bulkMaterialGroups.length === 0}
                     onChange={e => setBulkMatId(e.target.value ? Number(e.target.value) : null)}>
-                    <option value="">{bulkThickness === null ? 'сначала толщина' : 'тип / материал'}</option>
-                    {bulkMaterials.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
+                    <option value="">{bulkMaterialGroups.length === 0 ? 'справочник материалов пуст' : 'выберите материал'}</option>
+                    {bulkMaterialGroups.map(g => (
+                      <optgroup key={g.thickness} label={`${g.thickness} мм`}>
+                        {g.materials.map(m => (
+                          <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                   <button onClick={applyBulkMaterial} disabled={bulkMatId === null}
                     className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
