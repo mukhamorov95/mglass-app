@@ -65,6 +65,9 @@ export default function MyQueuePage() {
   // П3: вместо андона — «Переделать». Хранится задача, на которой рабочий нашёл брак.
   const [reworkFor, setReworkFor] = useState<number | null>(null)
   const [reworkBusy, setReworkBusy] = useState(false)
+  // «Другое» — единственная причина со свободным текстом: список из пяти закрывает
+  // известное, а тут цех сам покажет, чего в нём не хватает (через месяц будет видно из данных).
+  const [reworkOther, setReworkOther] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
@@ -283,14 +286,15 @@ export default function MyQueuePage() {
 
   // Тап по причине И ЕСТЬ подтверждение — ни модалки с «Отправить», ни обязательного
   // комментария. Два тапа вместо четырёх, и второй несёт причину.
-  async function submitRework(reason: ReworkReason) {
+  async function submitRework(reason: ReworkReason, comment?: string) {
     if (reworkFor == null || reworkBusy) return
     setReworkBusy(true)
     await fetch('/api/production/rework', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ task_id: reworkFor, reason }),
+      body: JSON.stringify({ task_id: reworkFor, reason, comment: comment?.trim() || null }),
     }).catch(() => {})
     setReworkFor(null)
+    setReworkOther('')
     setReworkBusy(false)
     load()
   }
@@ -584,19 +588,32 @@ export default function MyQueuePage() {
 
       {/* Лист причин переделки. Кнопки крупные — цех работает с телефона и в перчатках. */}
       {reworkFor != null && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => setReworkFor(null)}>
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-end sm:items-center justify-center" onClick={() => { setReworkFor(null); setReworkOther('') }}>
           <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5" onClick={e => e.stopPropagation()}>
             <h2 className="text-[15px] font-bold text-[#111110]">Что случилось?</h2>
             <p className="text-[12px] text-[#9a9a95] mt-1 mb-3">Деталь вернётся в работу, этап переоткроется</p>
             <div className="space-y-2">
-              {REWORK_REASONS.map(r => (
+              {REWORK_REASONS.filter(r => r.code !== 'other').map(r => (
                 <button key={r.code} disabled={reworkBusy} onClick={() => submitRework(r.code)}
                   className="w-full px-4 py-3.5 rounded-xl border border-[#e4e4e0] text-[15px] font-medium text-[#111110] text-left active:scale-[0.99] hover:border-red-300 hover:bg-red-50 disabled:opacity-50">
                   {r.label}
                 </button>
               ))}
+              {/* «Другое» со свободным текстом. Один лишний шаг только здесь — четыре
+                  частые причины остаются в один тап, а редкую цех опишет словами. */}
+              <div className="rounded-xl border border-[#e4e4e0] p-3">
+                <p className="text-[15px] font-medium text-[#111110] mb-2">Другое — своими словами</p>
+                <input value={reworkOther} onChange={e => setReworkOther(e.target.value)}
+                  placeholder="Что случилось?" enterKeyHint="send"
+                  onKeyDown={e => { if (e.key === 'Enter' && reworkOther.trim()) submitRework('other', reworkOther) }}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-2.5 text-[15px] outline-none focus:border-[#111110]" />
+                <button disabled={reworkBusy || !reworkOther.trim()} onClick={() => submitRework('other', reworkOther)}
+                  className="w-full mt-2 py-2.5 rounded-lg bg-red-600 text-white text-[14px] font-medium disabled:opacity-40">
+                  Переделать
+                </button>
+              </div>
             </div>
-            <button onClick={() => setReworkFor(null)} className="w-full mt-3 py-2.5 rounded-lg text-[13px] font-medium text-[#9a9a95]">Отмена</button>
+            <button onClick={() => { setReworkFor(null); setReworkOther('') }} className="w-full mt-3 py-2.5 rounded-lg text-[13px] font-medium text-[#9a9a95]">Отмена</button>
           </div>
         </div>
       )}
