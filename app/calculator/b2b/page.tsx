@@ -190,6 +190,7 @@ export default function B2BCalculatorPage() {
   const [selIds, setSelIds]           = useState<Set<string>>(new Set())
   const [bulkThickness, setBulkThickness] = useState<number | null>(null)
   const [bulkMatId, setBulkMatId]     = useState<number | null>(null)
+  const [bulkQty, setBulkQty]         = useState('')   // массовое количество: поставить всем одно число
 
   const [fSuperCat, setFSuperCat]     = useState<SuperCat>('стекло')
 
@@ -1014,6 +1015,27 @@ export default function B2BCalculatorPage() {
     setItems(prev => prev.filter(i => !selIds.has(i.localId)))
     setSavedOrderId(null)
     clearSel()
+  }
+
+  // Массовая правка количества у выбранных. Пересчёт — через тот же recomputeItem,
+  // что и смена материала: вторую ветку пересчёта не заводим. Количество не может
+  // стать 0 или отрицательным (иначе позиция молча выпадет из раскроя и уедет в КП
+  // как «0 шт»), поэтому всегда clamp'им к минимуму 1.
+  function applyBulkQty() {
+    const n = Math.floor(Number(bulkQty))
+    if (selIds.size === 0 || !Number.isFinite(n) || n < 1) return
+    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem({ ...i, quantity: n }, null) : i))
+    setSavedOrderId(null)
+  }
+  // Относительная правка (+1 / −1): у позиций количества разные, обнулять нельзя —
+  // сдвигаем от текущего, не ниже 1.
+  function bumpBulkQty(delta: number) {
+    if (selIds.size === 0) return
+    setItems(prev => prev.map(i =>
+      selIds.has(i.localId)
+        ? recomputeItem({ ...i, quantity: Math.max(1, (Number(i.quantity) || 1) + delta) }, null)
+        : i))
+    setSavedOrderId(null)
   }
 
   const [eComment, setEComment] = useState('')
@@ -2268,6 +2290,30 @@ export default function B2BCalculatorPage() {
                   <button onClick={() => applyBulkTempering(false)}
                     className="px-2.5 py-1 rounded-lg text-[12px] text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
                     выкл
+                  </button>
+                  <span className="w-px h-4 bg-[#c9d4f0]" />
+                  <span className="text-[11px] text-[#6b6b66]">Кол-во:</span>
+                  <button onClick={() => bumpBulkQty(-1)}
+                    title="Уменьшить на 1 у выбранных (не ниже 1)"
+                    className="px-2 py-1 rounded-lg text-[12px] font-mono text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    −1
+                  </button>
+                  <button onClick={() => bumpBulkQty(1)}
+                    title="Увеличить на 1 у выбранных"
+                    className="px-2 py-1 rounded-lg text-[12px] font-mono text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    +1
+                  </button>
+                  <input
+                    type="number" min="1" step="1" placeholder="напр. 2"
+                    value={bulkQty}
+                    onChange={e => setBulkQty(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') applyBulkQty() }}
+                    className="w-16 bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none" />
+                  <button onClick={applyBulkQty}
+                    disabled={Math.floor(Number(bulkQty)) < 1 || !Number.isFinite(Number(bulkQty)) || bulkQty.trim() === ''}
+                    title="Поставить всем выбранным это количество"
+                    className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
+                    Задать
                   </button>
                   <span className="w-px h-4 bg-[#c9d4f0]" />
                   <button onClick={bulkDelete}
