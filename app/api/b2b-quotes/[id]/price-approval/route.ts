@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireOwner } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-service'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import type { PriceApproval } from '@/lib/b2b/priceOverride'
 
@@ -46,9 +47,13 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     resolved_at: new Date().toISOString(),
     comment,
   }
+  // notes — точечным патчем своего ключа price_approval, а не целой записью:
+  // иначе оплата/доставка/этапы, попавшие в notes между чтением и записью, были
+  // бы затёрты. Патч зовём сервис-клиентом (гейт RPC), колонки авторства — sb.
+  const svc = createServiceClient()
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { price_approval: next } })
   const { error } = await sb.from('b2b_orders')
     .update({
-      notes: JSON.stringify({ ...notes, price_approval: next }),
       updated_by_user_id: user?.id ?? null,
       updated_by_name: name,
       updated_at: new Date().toISOString(),

@@ -59,8 +59,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ? { shipped_date: shipDate ?? new Date().toISOString().slice(0, 10) }
     : {}
 
+  // notes — точечным патчем своих ключей (delivery, shipped_date), а не целой
+  // записью: иначе оплата/этапы/рекламация, попавшие в notes между чтением и
+  // записью, были бы затёрты. Патч зовём сервис-клиентом (гейт RPC), колонки — sb.
+  const svc = createServiceClient()
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { delivery, ...shipped } })
   const { error } = await sb.from('b2b_orders').update({
-    notes: JSON.stringify({ ...notes, delivery, ...shipped }),
     updated_by_user_id: user?.id ?? null,
     updated_by_name: name,
     updated_at: new Date().toISOString(),
