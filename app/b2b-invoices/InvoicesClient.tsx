@@ -11,11 +11,15 @@ type Invoice = {
   order_ids: number[]
   amount: number
   vat: number
-  status: 'issued' | 'paid' | 'cancelled'
+  status: 'issued' | 'paid' | 'cancelled'   // ручной флажок (переопределение)
   issued_at: string
   paid_at: string | null
   comment: string | null
   created_by_name: string | null
+  // Производные от payments (A23): истина об оплате — здесь, не во флажке status.
+  paid: number
+  remainder: number
+  derivedStatus: 'paid' | 'partial' | 'unpaid'
 }
 
 type Tab = 'open' | 'paid' | 'all'
@@ -42,10 +46,12 @@ export default function InvoicesClient() {
       .finally(() => setLoading(false))
   }, [])
 
+  // Оплачен/не оплачен — по ПЛАТЕЖАМ (derivedStatus), не по ручному флажку.
+  // Аннулированные (ручной status) в дебиторку не входят.
   const visible = useMemo(() => {
     let list = invoices
-    if (tab === 'open') list = list.filter(i => i.status === 'issued')
-    else if (tab === 'paid') list = list.filter(i => i.status === 'paid')
+    if (tab === 'open') list = list.filter(i => i.status !== 'cancelled' && i.derivedStatus !== 'paid')
+    else if (tab === 'paid') list = list.filter(i => i.derivedStatus === 'paid')
     if (search.trim()) {
       const q = search.trim().toLowerCase()
       list = list.filter(i =>
@@ -57,21 +63,24 @@ export default function InvoicesClient() {
     return list
   }, [invoices, tab, search])
 
-  // Дебиторка: всё, что выставлено и не оплачено. Просрочка — старше 14 дней.
+  // Дебиторка = выставлено минус оплачено (по платежам), а не сумма счёта.
+  // Просрочка — не оплачен и старше 14 дней от даты выставления.
   const debt = useMemo(() => {
-    const open = invoices.filter(i => i.status === 'issued')
+    const open = invoices.filter(i => i.status !== 'cancelled' && i.derivedStatus !== 'paid')
     const overdue = open.filter(i => daysSince(i.issued_at) > 14)
+    const rem = (i: Invoice) => Number(i.remainder ?? i.amount ?? 0)
     return {
-      openSum: open.reduce((s, i) => s + Number(i.amount ?? 0), 0),
+      openSum: open.reduce((s, i) => s + rem(i), 0),
       openCount: open.length,
-      overdueSum: overdue.reduce((s, i) => s + Number(i.amount ?? 0), 0),
+      overdueSum: overdue.reduce((s, i) => s + rem(i), 0),
       overdueCount: overdue.length,
     }
   }, [invoices])
 
+  const notCancelled = (i: Invoice) => i.status !== 'cancelled'
   const TABS: { key: Tab; label: string; count: number }[] = [
-    { key: 'open', label: 'Не оплачены', count: invoices.filter(i => i.status === 'issued').length },
-    { key: 'paid', label: 'Оплачены',    count: invoices.filter(i => i.status === 'paid').length },
+    { key: 'open', label: 'Не оплачены', count: invoices.filter(i => notCancelled(i) && i.derivedStatus !== 'paid').length },
+    { key: 'paid', label: 'Оплачены',    count: invoices.filter(i => i.derivedStatus === 'paid').length },
     { key: 'all',  label: 'Все',         count: invoices.length },
   ]
 
@@ -118,22 +127,35 @@ export default function InvoicesClient() {
       ) : (
         <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
           {visible.map(inv => {
-            const overdue = inv.status === 'issued' && daysSince(inv.issued_at) > 14
+            const cancelled = inv.status === 'cancelled'
+            const overdue = !cancelled && inv.derivedStatus !== 'paid' && daysSince(inv.issued_at) > 14
+            // Ручной флажок разошёлся с платежами: показываем честно, не прячем.
+            const manualPaid = inv.status === 'paid'
+            const diverges = !cancelled && manualPaid && inv.derivedStatus !== 'paid'
             return (
               <div key={inv.id} className="px-5 py-3 flex items-center gap-4 flex-wrap">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-bold font-mono text-[#111110]">№ {inv.invoice_no}</span>
                     <span className="text-[13px] text-[#111110] truncate">{inv.payer_name ?? '—'}</span>
-                    {inv.status === 'paid' && (
-                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">оплачен {date(inv.paid_at)}</span>
-                    )}
-                    {inv.status === 'cancelled' && (
+                    {cancelled ? (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">аннулирован</span>
+                    ) : inv.derivedStatus === 'paid' ? (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">оплачен</span>
+                    ) : inv.derivedStatus === 'partial' ? (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">частично · остаток {fmt(inv.remainder)}</span>
+                    ) : (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">не оплачен</span>
                     )}
                     {overdue && (
                       <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-600">
                         просрочен {daysSince(inv.issued_at)} дн.
+                      </span>
+                    )}
+                    {diverges && (
+                      <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-orange-50 text-orange-700 border border-orange-200"
+                        title="Счёт отмечен оплаченным вручную, но платежи этого не подтверждают">
+                        ручной флажок ≠ платежи
                       </span>
                     )}
                   </div>
@@ -150,6 +172,9 @@ export default function InvoicesClient() {
                 </div>
                 <div className="text-right">
                   <p className="text-[14px] font-semibold text-[#111110] font-mono whitespace-nowrap">{fmt(Number(inv.amount))}</p>
+                  {!cancelled && inv.paid > 0 && inv.derivedStatus !== 'paid' && (
+                    <p className="text-[10px] text-[#9a9a95] whitespace-nowrap">оплачено {fmt(inv.paid)}</p>
+                  )}
                   {Number(inv.vat) > 0 && <p className="text-[10px] text-[#9a9a95]">НДС {fmt(Number(inv.vat))}</p>}
                 </div>
               </div>
