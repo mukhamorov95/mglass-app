@@ -221,6 +221,9 @@ export default function B2BCalculatorPage() {
   const [flSoftClose, setFlSoftClose] = useState(false)
   const [flTempering, setFlTempering] = useState(false)
   const [flGlassId, setFlGlassId] = useState<number | null>(null)
+  // Стекло в лофте опционально: цех продаёт и голый каркас, а стекло тогда
+  // считается отдельной позицией просчёта.
+  const [flWithGlass, setFlWithGlass] = useState(true)
   const [flParsing, setFlParsing] = useState(false)
   const [flParseNote, setFlParseNote] = useState<string | null>(null)
   const [fThickness, setFThickness]   = useState<number | null>(null)
@@ -666,7 +669,7 @@ export default function B2BCalculatorPage() {
         doors: Number(flDoors) || 0, fixedParts: Number(flFixed) || 0,
         rows: Number(flRows) || 1,
         handle: flHandle, softClose: flSoftClose,
-        glassId: flGlassId, tempering: flTempering,
+        glassId: flGlassId, tempering: flTempering, withGlass: flWithGlass,
       }, factoryData)
     }
     return null
@@ -1681,11 +1684,21 @@ export default function B2BCalculatorPage() {
                       </label>
                     </div>
                     <div>
-                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Стекло</label>
-                      <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
-                        className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
-                        {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      </select>
+                      <label className="flex items-center gap-2 text-[13px] font-medium text-[#6e6e73] mb-1 cursor-pointer">
+                        <input type="checkbox" checked={flWithGlass} onChange={e => setFlWithGlass(e.target.checked)} className="accent-[#111110]" />
+                        Стекло в изделии
+                      </label>
+                      {flWithGlass ? (
+                        <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
+                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                          {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      ) : (
+                        <p className="text-[11px] text-[#6b6b66] leading-snug">
+                          Считаем только каркас: без стекла, закалки и остекления.
+                          Стекло добавь отдельной позицией просчёта.
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
