@@ -67,15 +67,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   history.push({ old_total: oldTotal, new_total: nt, changed_by: actor, changed_at: new Date().toISOString() })
   notes.total_history = history
 
+  // Колонки пишем прямо, notes — точечным патчем (только свой ключ total_history),
+  // чтобы не затереть чужие ключи (оплата, доставка, этапы), попавшие в notes
+  // между нашим чтением и записью. Правило: контур патчит только свои ключи.
   const { error: upErr } = await svc.from('b2b_orders').update({
     items: rescaled,
     total_sale_inc_vat: nt,
     total_after_discount: nt,
     discount_percent: 0,
-    notes: JSON.stringify(notes),
     updated_at: new Date().toISOString(),
   }).eq('id', orderId)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { total_history: history } })
 
   // Реестр продаж: если заказ оплачен — обновляем сумму (sale_date НЕ трогаем).
   const { data: sale } = await svc.from('crm_sales').select('id').eq('b2b_order_id', orderId).maybeSingle()

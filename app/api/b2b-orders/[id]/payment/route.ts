@@ -70,7 +70,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const notes = parseNotes(order.notes)
   const stages = { ...(notes.stages ?? {}) }
 
-  // 1) legacy-запись: на ней живут бейджи и старые экраны
+  // 1) legacy-запись: на ней живут бейджи и старые экраны. Пишем ТОЧЕЧНО, а не
+  // целым notes: плоские ключи (payment_status/prepayment_amount/paid_at) —
+  // shallow-patch; вложенный stages.invoice_paid — mark_order_stages (shallow
+  // заменил бы весь stages и вернул клоббер этапов из #274). Ключи, которые надо
+  // снять, передаём null — читатели проверяют truthiness.
   const nextNotes: Notes = {
     ...notes,
     payment_status: body.status,
@@ -78,8 +82,14 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     paid_at: body.status === 'paid' ? new Date().toISOString() : undefined,
     stages: { ...stages, invoice_paid: body.status === 'paid' ? paidAt : null },
   }
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
+    payment_status: body.status,
+    prepayment_amount: body.status === 'partial' ? prepayment : null,
+    paid_at: body.status === 'paid' ? nextNotes.paid_at : null,
+  } })
+  await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: { invoice_paid: body.status === 'paid' ? paidAt : null } })
   const { error: upErr } = await svc.from('b2b_orders')
-    .update({ notes: JSON.stringify(nextNotes), updated_by_name: me?.name ?? null, updated_at: new Date().toISOString() })
+    .update({ updated_by_name: me?.name ?? null, updated_at: new Date().toISOString() })
     .eq('id', orderId)
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 })
 
