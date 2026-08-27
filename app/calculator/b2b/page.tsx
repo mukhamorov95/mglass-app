@@ -208,6 +208,9 @@ export default function B2BCalculatorPage() {
   // Стороны подсветки: по умолчанию весь периметр. Лента, профиль, рассеиватель и
   // мощность блока считаются от выбранных сторон.
   const [fmSides, setFmSides] = useState<LightSides>({ ...ALL_SIDES })
+  // Фацет и пескоструй — разные обработки, каждая со своей себестоимостью.
+  const [fmSandblast, setFmSandblast] = useState(false)
+  const [fmFacetMm, setFmFacetMm]     = useState<number | null>(null)
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
   const [fmCurved, setFmCurved]   = useState(false)
@@ -678,6 +681,12 @@ export default function B2BCalculatorPage() {
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
         underlayCost: Number(fmUnderlay) || 0, metalFrame: fmFrame,
         lightSides: fmSides,
+        sandblast: fmSandblast,
+        facetTypeMm: fmFacetMm,
+        facetCostPerM: (() => {
+          const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
+          return f ? Number(f.cost_price) + Number(f.transport_cost ?? 0) : 0
+        })(),
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -1650,6 +1659,50 @@ export default function B2BCalculatorPage() {
                         </div>
                       </div>
                     )}
+                    {/* Обработки зеркала. Фацет и пескоструй — РАЗНЫЕ работы, не одна
+                        «декоративка»: у фацета своя ставка за пог.м, у пескоструя — своя
+                        за м². Если себестоимость не заведена в справочнике, говорим прямо:
+                        иначе маржа посчитается от нуля и изделие уйдёт дешевле, чем обошлось. */}
+                    <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#faf9f7] p-3 space-y-2">
+                      <p className="text-[11px] font-medium text-[#6e6e73]">Обработка</p>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                          <input type="checkbox" checked={fmSandblast} onChange={e => setFmSandblast(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                          Пескоструй
+                        </label>
+                        <span className="w-px h-4 bg-[#e4e4e0]" />
+                        <span className="text-[12px] text-[#6b6b66]">Фацет:</span>
+                        <select value={fmFacetMm ?? ''} onChange={e => setFmFacetMm(e.target.value ? Number(e.target.value) : null)}
+                          className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110]">
+                          <option value="">без фацета</option>
+                          {facetPrices.filter(f => f.active !== false).map(f => (
+                            <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {(() => {
+                        const warn: string[] = []
+                        if (fmSandblast) {
+                          const sb = factoryData?.retailMaterials.find(m => m.name.toLowerCase().includes('пескоструй'))
+                          if (!sb) warn.push('Пескоструй: позиции нет в справочнике материалов')
+                          else if (!(Number(sb.cost_price) > 0)) warn.push('Пескоструй: себестоимость не заведена')
+                        }
+                        if (fmFacetMm != null) {
+                          const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
+                          const c = f ? Number(f.cost_price) + Number(f.transport_cost ?? 0) : 0
+                          if (!(c > 0)) warn.push(`Фацет ${fmFacetMm} мм: себестоимость не заведена`)
+                        }
+                        if (warn.length === 0) return null
+                        return (
+                          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
+                            {warn.map((w, i) => <p key={i} className="text-[11px] text-red-700">{w}</p>)}
+                            <p className="text-[11px] text-red-700 font-medium mt-1">Маржа по этой обработке считается от нуля — заведи цену в справочнике до отправки клиенту.</p>
+                          </div>
+                        )
+                      })()}
+                    </div>
                       <select value={fmButton} onChange={e => setFmButton(e.target.value as 'none' | 'sensor' | 'wave')}
                         className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                         <option value="none">Без кнопки</option>
