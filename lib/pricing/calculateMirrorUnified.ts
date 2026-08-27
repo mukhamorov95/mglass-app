@@ -45,6 +45,10 @@ export type CalculateMirrorUnifiedInputs = {
 
   // Modular lighting components — all priced via component.cost_price.
   hasLighting: boolean
+  // Длина подсветки, пог.м. Лента, профиль и рассеиватель идут не по всему периметру:
+  // подсветка бывает только по вертикальным сторонам, только сверху-снизу или с одной
+  // стороны. Не передана — берём весь периметр (прежнее поведение).
+  lightingLengthM?: number
   voltage?:    12 | 24
   frame?:       MirrorLightingComponent | null
   ledStrip?:    MirrorLightingComponent | null
@@ -182,23 +186,28 @@ export function calculateMirrorUnified(
   })
 
   // 2. Modular lighting — each component by its own cost_price.
+  // Лента, профиль и рассеиватель кроятся по длине ПОДСВЕТКИ, а не по периметру зеркала:
+  // при подсветке по двум сторонам материала уходит вдвое меньше.
+  const lightM = inputs.lightingLengthM != null && inputs.lightingLengthM >= 0
+    ? inputs.lightingLengthM
+    : perimeter
   if (inputs.hasLighting) {
     if (inputs.frame && inputs.shape !== 'complex') {
       lines.push({
         name:  dn(inputs.frame),
-        qty:   Number(perimeter.toFixed(2)),
+        qty:   Number(lightM.toFixed(2)),
         unit:  'пог.м',
         price: inputs.frame.cost_price,
-        total: Math.round(perimeter * inputs.frame.cost_price),
+        total: Math.round(lightM * inputs.frame.cost_price),
       })
     }
     if (inputs.ledStrip) {
       lines.push({
         name:  dn(inputs.ledStrip),
-        qty:   Number(perimeter.toFixed(2)),
+        qty:   Number(lightM.toFixed(2)),
         unit:  'пог.м',
         price: inputs.ledStrip.cost_price,
-        total: Math.round(perimeter * inputs.ledStrip.cost_price),
+        total: Math.round(lightM * inputs.ledStrip.cost_price),
       })
     }
     if (inputs.powerSupply) {
@@ -213,10 +222,10 @@ export function calculateMirrorUnified(
     if (inputs.diffuser && inputs.diffuser.cost_price > 0) {
       lines.push({
         name:  dn(inputs.diffuser),
-        qty:   Number(perimeter.toFixed(2)),
+        qty:   Number(lightM.toFixed(2)),
         unit:  'пог.м',
         price: inputs.diffuser.cost_price,
-        total: Math.round(perimeter * inputs.diffuser.cost_price),
+        total: Math.round(lightM * inputs.diffuser.cost_price),
       })
     }
     // Lighting consumables — provod, термоусадка, разъёмы, изоляция и т.д.
