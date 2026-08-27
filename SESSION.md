@@ -119,3 +119,20 @@ STANDBY. Всё смержено:
 Неотмеченный этап ≠ несделанная работа. Цепочка Бека → Ильзат → Адилет → Никита
 не должна вставать из-за того, что кто-то не нажал кнопку. Пропущенное
 закрывается как auto_closed и никому не приписывается.
+
+## Подетальное списание на резке — ПОСТРОЕНО (ветка claude/inventory-consume-at-cutting)
+- Миграция 20260828_inventory_consume_per_item.sql (ПРИМЕНЕНА): item_index, stage, attempt в
+  inventory_moves; старый unique index сужен до item_index IS NULL (упаковочный fallback/приход);
+  новый ключ (заказ, позиция, этап, ПОПЫТКА) WHERE reason='order' — переделка списывает новый лист,
+  повтор попытки no-op, встречные коррекции (reason=return) не конфликтуют. Проверено на боевой БД.
+- lib/inventory/db.ts: orderHasCuttingTasks, resolveOrderItem (items[itemIndex]→площадь+позиция),
+  consumeItemAtStage, reverseItemConsume; NewMove/InventoryMove +item_index/stage/attempt
+- lib/inventory/consumeHook.ts (server-only):
+  • consumeForItem(docType, docId, itemIndex, attempt, by, origin='plan') — резка, основной путь
+  • reverseItemConsume(docType, docId, itemIndex, attempt, by) — откат мисклика UNSET
+  • consumeForOrder теперь ПРОПУСКАЕТ заказы с cutting-задачами (упаковка = только для мимо-цеха)
+  • комментарий про origin переписан (было неверно про упаковку)
+- origin='plan' на обоих путях (подтвердили e3 + Производство): количество плановое, не измеренное
+- Резервов нет (reserveForOrder не вживлён) → per-item с резервами не взаимодействует
+- Точку вызова (3 пути резки + отсев каскада + UNSET/REOPEN) вживляет «Производство», их половина
+  готова и покрыта тестами, ждёт функцию. attempt передают они (production_tasks.rework_count).
