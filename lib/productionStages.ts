@@ -8,6 +8,7 @@ export type DetailStageKey =
   | 'polishing'
   | 'drilling'
   | 'facet'
+  | 'sandblast'
   | 'tempering'
   | 'triplex'
   | 'packaging'
@@ -60,6 +61,7 @@ export const PRODUCTION_STAGES = [
   { key: 'polishing' as const, label: 'Полировка'    },
   { key: 'drilling'  as const, label: 'Сверление'    },
   { key: 'facet'     as const, label: 'Фацет'        },
+  { key: 'sandblast' as const, label: 'Песочка'      },
   { key: 'tempering' as const, label: 'Закалка'      },
   { key: 'triplex'   as const, label: 'Триплекс'     },
   { key: 'packaging' as const, label: 'Упаковка'     },
@@ -81,6 +83,7 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
   polishing: 'Полировка',
   drilling:  'Сверление',
   facet:     'Фацет',
+  sandblast: 'Песочка',
   tempering: 'Закалка',
   triplex:   'Триплекс',
   packaging: 'Упаковка',
@@ -92,15 +95,18 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
 // - drilling: `!== false` (старые записи без поля hasHoles сохраняют сверловку — без регрессии).
 // - curved: только явно криволинейные изделия (shape === 'curved'); по умолчанию НЕ применяется.
 // - facet: только если у детали есть фацет (hasFacet === true).
+// - sandblast: песочка. Отдельная работа со своей оснасткой (макет → оракал → наклейка
+//   → пескоструй), идёт ДО закалки: закалённое стекло не пескоструят.
 // - triplex: только если деталь триплексная (hasTriplex === true).
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean },
 ) {
   return PRODUCTION_STAGES.filter(s => {
     if (s.key === 'tempering') return itemNeedsTempering(item)
     if (s.key === 'drilling')  return item.hasHoles !== false
     if (s.key === 'curved')    return item.shape === 'curved'
     if (s.key === 'facet')     return item.hasFacet === true
+    if (s.key === 'sandblast') return item.hasSandblast === true
     if (s.key === 'triplex')   return item.hasTriplex === true
     return true
   })
