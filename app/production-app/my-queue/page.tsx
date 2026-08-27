@@ -4,8 +4,9 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
-import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
+import { STAGE_LABELS, stageLabel, type DetailStageKey } from '@/lib/productionStages'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
+import { explainEmptyQueue } from '@/lib/production/completeOrder'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
 import LeadSummary from './LeadSummary'
 import { materialLabelShort } from '@/lib/materialLabel'
@@ -79,6 +80,10 @@ export default function MyQueuePage() {
   // «Всё готово» закрывает заказ целиком одним касанием — подтверждаем вторым тапом,
   // чтобы телефон в кармане не закрыл смену.
   const [confirmDone, setConfirmDone] = useState<number | null>(null)
+  // Открытые задачи заказа ЦЕЛИКОМ, не только свои: нужны и счётчику «Всё готово»
+  // (сервер закрывает весь заказ), и объяснению пустой карточки в поиске.
+  const [orderWork, setOrderWork] = useState<Map<number, { station: string; n: number }[]>>(new Map())
+  const [workLoaded, setWorkLoaded] = useState(false)
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
   const [search, setSearch] = useState('')
@@ -147,6 +152,20 @@ export default function MyQueuePage() {
         ? sb.from('production_tasks').select('id,status,stage_key').in('id', blockerIds)
         : Promise.resolve({ data: [] as BlockerLite[] }),
     ])
+
+    // Что по этим заказам ещё открыто у ВСЕГО цеха, а не только у меня.
+    const { data: workRows } = orderIds.length
+      ? await sb.from('production_tasks').select('order_id,station').in('order_id', orderIds).neq('status', 'done')
+      : { data: [] as { order_id: number; station: string }[] }
+    const workMap = new Map<number, Map<string, number>>()
+    for (const w of (workRows ?? []) as { order_id: number; station: string }[]) {
+      const byStation = workMap.get(w.order_id) ?? new Map<string, number>()
+      byStation.set(w.station, (byStation.get(w.station) ?? 0) + 1)
+      workMap.set(w.order_id, byStation)
+    }
+    setOrderWork(new Map([...workMap].map(([id, m]) =>
+      [id, [...m].map(([station, n]) => ({ station, n })).sort((a, b) => b.n - a.n)])))
+    setWorkLoaded(true)
 
     // Производственный контур — только заказы с PROD_SINCE
     const freshOrders = new Map((orderRows ?? []).map((o: OrderLite) => [o.id, o]))
@@ -590,6 +609,8 @@ export default function MyQueuePage() {
                   onStartAll={markStartOrder}
                   onDone={markDone}
                   onCompleteOrder={completeOrder}
+                  work={orderWork.get(id) ?? null}
+                  workLoaded={workLoaded}
                   confirming={confirmDone === id}
                   onAskConfirm={() => setConfirmDone(confirmDone === id ? null : id)}
                   onRework={setReworkFor}
@@ -640,7 +661,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onCompleteOrder, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -652,6 +673,8 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
   onCompleteOrder: (orderId: number) => void
+  work: { station: string; n: number }[] | null
+  workLoaded: boolean
   confirming: boolean
   onAskConfirm: () => void
   onRework: (id: number) => void
@@ -673,6 +696,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   // строкой «уже сделано», а в счётчиках работы они не участвуют.
   const doneTasks = tasks.filter(t => t.status === 'done')
   const live = tasks.filter(t => t.status !== 'done' && t.status !== 'problem')
+  // Мои открытые с учётом проблемных: «Всё готово» на сервере закрывает и их,
+  // и заказ, где осталась только проблема, кнопку терять не должен.
+  const myOpen = tasks.filter(t => t.status !== 'done')
+  // Сколько закроется на самом деле: сервер закрывает ЗАКАЗ, а не мою долю в нём.
+  const orderOpen = work ? work.reduce((s, w) => s + w.n, 0) : myOpen.length
+  const emptyReason = explainEmptyQueue({ myOpen: myOpen.length, workLoaded, orderOpen })
   const ready = live.filter(isReady)
   const waiting = live.filter(t => !isReady(t))
   const inWork = live.filter(t => t.status === 'in_progress').length
@@ -717,12 +746,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                   Взял весь ({startable.length})
                 </button>
               )}
-              {live.length > 0 && (
+              {myOpen.length > 0 && (
                 confirming ? (
                   <span className="flex items-center gap-1.5">
                     <button onClick={() => onCompleteOrder(orderId)}
                       className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:opacity-90">
-                      Да, закрыть {live.length}
+                      Да, закрыть {orderOpen}
                     </button>
                     <button onClick={onAskConfirm}
                       className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
@@ -730,7 +759,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                 ) : (
                   <button onClick={onAskConfirm} title="Закрыть все этапы всех деталей заказа"
                     className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
-                    ✅ Всё готово ({live.length})
+                    ✅ Всё готово ({orderOpen})
                   </button>
                 )
               )}
@@ -756,6 +785,34 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
 
       {open && (
         <div className="border-t border-[#f0f0ee] px-4 py-3 space-y-3">
+
+          {/* Пустая карточка обязана объяснить себя. Владелец нашёл заказ по поиску,
+              увидел «0 дет. · ✓ 2 сделано» и написал «изменений не вижу» — код отработал
+              верно, а карточка молчала. Рабочий в такой ситуации решит, что заказ потерялся,
+              и пойдёт искать обходной путь: Никита так и нашёл «Открыть карточку заказа».
+              Ничего не выдумываем: пока состав работы по заказу не загружен, говорим только
+              то, что знаем наверняка. */}
+          {emptyReason && (
+            emptyReason === 'unknown' ? (
+              <p className="text-[13px] text-[#6b6b66]">По этому заказу у тебя нет открытых задач.</p>
+            ) : emptyReason === 'order-done' ? (
+              <p className="text-[13px] text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
+                ✅ Заказ готов — все этапы всех деталей закрыты.
+                {doneTasks.length > 0 && <span className="text-[#6b6b66]"> Твоих отметок здесь {doneTasks.length}.</span>}
+              </p>
+            ) : (
+              <div className="text-[13px] text-[#111110] bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg px-3 py-2">
+                <p>Заказ в работе, но не на твоей станции — по нему у тебя открытых задач нет.</p>
+                <p className="text-[12px] text-[#6b6b66] mt-1">
+                  Сейчас открыто: {work!.map(w => `${stageLabel(w.station)} — ${w.n}`).join(' · ')}
+                </p>
+                {doneTasks.length > 0 && (
+                  <p className="text-[12px] text-[#6b6b66] mt-0.5">Твоих отметок по нему {doneTasks.length}.</p>
+                )}
+              </div>
+            )
+          )}
+
           {/* Чертёж заказа (прикрепляется менеджером или в «Заказах»);
               bucket приватный — грузим через прокси с подписанной ссылкой */}
           {drawingUrl && (
@@ -782,12 +839,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
 
           {/* Действия по всему заказу: готов целиком / нет материала целиком */}
           <div className="flex gap-2">
-            {live.length > 0 && (
+            {myOpen.length > 0 && (
               confirming ? (
                 <>
                   <button onClick={() => onCompleteOrder(orderId)}
                     className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-bold">
-                    Да, закрыть {live.length} задач
+                    Да, закрыть {orderOpen} задач
                   </button>
                   <button onClick={onAskConfirm}
                     className="px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[13px]">Отмена</button>
@@ -795,7 +852,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
               ) : (
                 <button onClick={onAskConfirm}
                   className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
-                  ✅ Всё готово ({live.length} задач)
+                  ✅ Всё готово ({orderOpen} задач)
                 </button>
               )
             )}
