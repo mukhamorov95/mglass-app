@@ -487,3 +487,43 @@ export async function reverseItemConsume(
   const res = await addMoves(reversal, by)
   return { ok: true, inserted: res.inserted, matched: true }
 }
+
+
+// Упаковочный проход по заказу С задачами резки: списывает КАЖДУЮ позицию через
+// тот же ключ (заказ, позиция, cutting, 0), что и живая резка. Позиции, списанные
+// живой резкой, БД отсеивает уникальным индексом (no-op); позиции, у которых резку
+// закрыл каскад (живой отметки не было → списания нет), списываются здесь.
+//
+// Так закрывается дыра: заказ с cutting-задачами, но без живых отметок, при старом
+// условии «есть задачи → пропустить» не списывался НИКОГДА. Двойного списания нет по
+// построению — ключ БД атомарно отсеивает уже списанное, проверять «кто первый» не нужно.
+export async function sweepCuttingConsume(
+  orderId: string, by: MoveActor, origin: MoveOrigin = 'plan',
+): Promise<{ inserted: number; items: number }> {
+  const db = svc()
+  const { data } = await db.from('b2b_orders').select('items').eq('id', Number(orderId)).maybeSingle()
+  const raw = data?.items as { items?: unknown[] } | unknown[] | null
+  const list = Array.isArray(raw) ? raw : (raw?.items ?? [])
+
+  // Попытку берём ТЕКУЩУЮ по позиции (production_tasks.rework_count), не ноль. Иначе
+  // переделанную позицию, списанную живьём с attempt=1, проход с attempt=0 списал бы
+  // ВТОРОЙ раз (другой ключ, дедуп не срабатывает). С текущей попыткой: живой рез той
+  // же попытки → no-op; переделка, добитая каскадом → списывается верно.
+  // Оговорка: проход видит только ТЕКУЩУЮ попытку. Если промежуточная попытка не
+  // закрывалась вовсе (её рез не отмечали ни живьём, ни каскадом), её лист проход не
+  // поймает — допустимо, но зафиксировано здесь, а не обнаружено потом.
+  const { data: tasks } = await db.from('production_tasks')
+    .select('item_index, rework_count').eq('order_id', Number(orderId)).eq('stage_key', 'cutting')
+  const attemptByItem = new Map<number, number>()
+  for (const t of (tasks ?? []) as { item_index: number; rework_count: number | null }[]) {
+    attemptByItem.set(t.item_index, Number(t.rework_count ?? 0))
+  }
+
+  let inserted = 0
+  for (let i = 0; i < list.length; i++) {
+    const attempt = attemptByItem.get(i) ?? 0
+    const r = await consumeItemAtStage(orderId, i, attempt, 'cutting', by, origin)
+    inserted += r.inserted
+  }
+  return { inserted, items: list.length }
+}

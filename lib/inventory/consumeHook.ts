@@ -1,7 +1,7 @@
 import 'server-only'
 import type { DocType, MoveOrigin } from './types'
 import {
-  buildConsumePlan, applyConsume, orderHasCuttingTasks,
+  buildConsumePlan, applyConsume, orderHasCuttingTasks, sweepCuttingConsume,
   consumeItemAtStage, reverseItemConsume as reverseItemConsumeDb, type MoveActor,
 } from './db'
 
@@ -19,8 +19,10 @@ import {
 //   • РЕЗКА (основной путь) — consumeForItem по детали при закрытии cutting-задачи.
 //     Материал физически уходит именно на резке. Идемпотентность по (заказ, позиция,
 //     этап, попытка): переделка (attempt++) списывает новый лист, повтор попытки — no-op.
-//   • УПАКОВКА (страховка) — consumeForOrder на packaged для заказов МИМО цеха (без
-//     задач резки). Заказ с резкой этот путь пропускает: списание уже прошло подетально.
+//   • УПАКОВКА — consumeForOrder на packaged. Для заказа МИМО цеха (без задач резки)
+//     списывает весь план. Для заказа ЧЕРЕЗ цех проходит по позициям тем же ключом
+//     резки: живые уже списаны (БД отсеивает), а закрытые каскадом без живой отметки
+//     дописывает здесь — иначе они не спишутся никогда.
 //
 // origin по умолчанию 'plan' на обоих путях: количество плановое — площадь берётся
 // из заказа, стекло не взвешивают, обрезь не меряют. Ось origin про происхождение
@@ -49,8 +51,12 @@ export async function consumeForOrder(
 ): Promise<ConsumeHookResult> {
   try {
     if (docType === 'b2b_order' && await orderHasCuttingTasks(docId)) {
-      // Списание этого заказа ведёт резка подетально — упаковка не дублирует.
-      return { ok: true, inserted: 0, released: 0, alreadyConsumed: true }
+      // Заказ через цех: списание ведёт резка подетально. На упаковке ПРОХОДИМ по
+      // всем позициям тем же ключом — живые уже списаны (БД отсеивает), а позиции,
+      // где резку закрыл каскад без живой отметки, списываем здесь. Иначе они не
+      // спишутся никогда (дыра: 48 заказов с задачами, но без живых отметок резки).
+      const sweep = await sweepCuttingConsume(docId, by, origin)
+      return { ok: true, inserted: sweep.inserted, released: 0, alreadyConsumed: sweep.inserted === 0 }
     }
     const plan = await buildConsumePlan(docType, docId)
     if (plan.already) {
