@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/apiAuth'
 import { actorName, buildTaskUpdate } from '@/lib/production/executor'
 import { pickFinalTasks, type ClosableTask } from '@/lib/production/completeOrder'
 import { cascadePriorStages } from '@/lib/productionCascade'
+import { consumeCutting, loadCascadedTasks } from '@/lib/production/consumeBridge'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 
 // «Всё готово» — закрыть заказ целиком одним нажатием (запрос Никиты с упаковки).
@@ -32,7 +33,7 @@ export async function POST(req: NextRequest) {
   const svc = createServiceClient()
   const [{ data: rows }, { data: prof }] = await Promise.all([
     svc.from('production_tasks')
-      .select('id, item_index, sequence_order, status, started_at, assigned_to, started_by, stage_key')
+      .select('id, item_index, sequence_order, status, started_at, assigned_to, started_by, stage_key, rework_count')
       .eq('order_id', orderId),
     supabase.from('users').select('name').eq('id', user.id).maybeSingle(),
   ])
@@ -62,6 +63,12 @@ export async function POST(req: NextRequest) {
       ...keys.map(k => ({ item, stage: k, entry: { status: 'done', updated_at: now, updated_by: user.id, updated_by_email: user.email ?? undefined, auto: true } })),
     ]
     await svc.rpc('mark_detail_stages', { p_order_id: orderId, p_updates: updates })
+
+    // Склад: сама закрытая задача (если это резка) и всё, что закрыл каскад.
+    const by = { userId: user.id, name: actor.name ?? undefined }
+    await consumeCutting(orderId, [{ item_index: f.item_index, stage_key: snapshot.stage_key, rework_count: (snapshot as { rework_count?: number | null }).rework_count ?? 0 }], 'complete-order', by)
+    const cascadedTasks = await loadCascadedTasks(svc, orderId, f.item_index, keys)
+    await consumeCutting(orderId, cascadedTasks, 'cascade', by)
   }
 
   await mirrorOrderStages(svc, orderId)
