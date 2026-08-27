@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient as createServerClient } from '@/lib/supabase-server'
+import { createServiceClient } from '@/lib/supabase-service'
 import { parseNotes } from '@/lib/b2b/publicQuote'
 import { notifyOrderManager } from '@/lib/b2b/notifyManager'
 
@@ -72,8 +73,12 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const history = Array.isArray(notes.claim_history) ? [...(notes.claim_history as unknown[])] : []
   history.push({ ...claim, at: now, by: name })
 
+  // notes — точечным патчем своих ключей (claim/claim_history), колонки авторства
+  // отдельно. Иначе целая запись notes затёрла бы оплату/доставку/этапы, попавшие
+  // туда между чтением и записью. Патч зовём сервис-клиентом (гейт RPC).
+  const svc = createServiceClient()
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: { claim, claim_history: history } })
   const { error } = await sb.from('b2b_orders').update({
-    notes: JSON.stringify({ ...notes, claim, claim_history: history }),
     updated_by_user_id: user?.id ?? null,
     updated_by_name: name,
     updated_at: now,

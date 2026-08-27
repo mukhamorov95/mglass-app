@@ -1,11 +1,12 @@
 import { createServiceClient } from '@/lib/supabase-service'
 import type {
-  InventoryItem, InventoryMove, Kind, Unit, Contour, MoveReason, RefTable, DocType, ConsumePlan, PlanRow,
+  InventoryItem, InventoryMove, Kind, Unit, Contour, MoveReason, MoveOrigin, RefTable, DocType, ConsumePlan, PlanRow,
 } from './types'
 import { sheetArea, INCOMING } from './units'
 import { normalizeUnit } from './match'
 import { planB2BOrder, planBomLines, type MatchTarget, type B2BItemLike, type BomLike } from './plan'
-import type { InventoryActor } from './auth'
+// Для записи движения нужна только атрибуция «кто инициировал» — не вся роль.
+export type MoveActor = { userId?: string; name?: string }
 import { markReservationConsumed, listReservations } from './reserve'
 
 const svc = () => createServiceClient()
@@ -52,7 +53,7 @@ export type MoveRow = InventoryMove & { item_name: string; item_unit: Unit }
 export async function listMoves(opts: { itemId?: number; limit?: number; reason?: MoveReason } = {}): Promise<MoveRow[]> {
   let q = svc()
     .from('inventory_moves')
-    .select('id, item_id, qty, pack_qty, reason, unit_cost, doc_type, doc_id, note, created_by, created_by_name, created_at, inventory_items(name, unit)')
+    .select('id, item_id, qty, pack_qty, reason, origin, unit_cost, doc_type, doc_id, note, created_by, created_by_name, created_at, inventory_items(name, unit)')
     .order('created_at', { ascending: false })
     .limit(opts.limit ?? 200)
   if (opts.itemId) q = q.eq('item_id', opts.itemId)
@@ -125,13 +126,14 @@ export type NewMove = {
   qty:       number          // со знаком, в базовой единице
   pack_qty?: number | null
   reason:    MoveReason
+  origin?:   MoveOrigin
   unit_cost?: number
   doc_type?: DocType | null
   doc_id?:   string | null
   note?:     string
 }
 
-export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<{ inserted: number; skipped: number }> {
+export async function addMoves(rows: NewMove[], actor: MoveActor): Promise<{ inserted: number; skipped: number }> {
   const clean = rows.filter(r => r.item_id && Number(r.qty) !== 0)
   if (!clean.length) return { inserted: 0, skipped: rows.length }
 
@@ -140,12 +142,13 @@ export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<
     qty:       Number(r.qty),
     pack_qty:  r.pack_qty ?? null,
     reason:    r.reason,
+    origin:    r.origin ?? 'fact',
     unit_cost: Math.max(0, Number(r.unit_cost ?? 0)),
     doc_type:  r.doc_type ?? null,
     doc_id:    r.doc_id ?? null,
     note:      r.note ?? '',
-    created_by:      actor.userId,
-    created_by_name: actor.name,
+    created_by:      actor.userId ?? null,
+    created_by_name: actor.name ?? '',
   }))
 
   // Повтор по документу отсекает уникальный индекс — считаем это «уже списано»,
@@ -160,7 +163,7 @@ export async function addMoves(rows: NewMove[], actor: InventoryActor): Promise<
 
 // Инвентаризация: вводим ФАКТ, система сама пишет разницу движением.
 export async function applyCount(
-  rows: { item_id: number; actual: number; note?: string }[], actor: InventoryActor,
+  rows: { item_id: number; actual: number; note?: string }[], actor: MoveActor,
 ): Promise<{ adjusted: number; unchanged: number }> {
   const ids = rows.map(r => r.item_id)
   if (!ids.length) return { adjusted: 0, unchanged: 0 }
@@ -355,7 +358,7 @@ export async function buildConsumePlan(docType: DocType, docId: string): Promise
 }
 
 export async function applyConsume(
-  plan: ConsumePlan, actor: InventoryActor, rows?: PlanRow[],
+  plan: ConsumePlan, actor: MoveActor, rows?: PlanRow[], origin: MoveOrigin = 'fact',
 ): Promise<{ inserted: number; skipped: number; released: number }> {
   const use = (rows ?? plan.rows).filter(r => r.item_id !== null && r.qty > 0)
 
@@ -366,6 +369,7 @@ export async function applyConsume(
     item_id: r.item_id as number,
     qty:     -Math.abs(r.qty),
     reason:  'order' as MoveReason,
+    origin,
     doc_type: plan.doc_type,
     doc_id:   plan.doc_id,
     note:     plan.title,

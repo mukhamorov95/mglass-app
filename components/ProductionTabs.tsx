@@ -2,8 +2,6 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
 
 // Единая навигация цеха (production-app). Порядок = частота использования
 // мастером: задачи → заказы, дальше экраны начальника и снабжения (тот же
@@ -12,8 +10,9 @@ import { createClient } from '@/lib/supabase-browser'
 const TABS: { href: string; label: string; match: (p: string) => boolean }[] = [
   { href: '/production-app/my-queue', label: '✅ Мои задачи',   match: p => p.startsWith('/production-app/my-queue') },
   { href: '/production-app/load',     label: '📊 Загрузка',    match: p => p.startsWith('/production-app/load') },
+  { href: '/production-app/activity', label: '👥 Кто что делал', match: p => p.startsWith('/production-app/activity') },
   { href: '/production-app/orders',   label: '📋 Заказы',      match: p => p === '/production-app/orders' },
-  { href: '/production-app/problems', label: '⚠️ Проблемы',    match: p => p.startsWith('/production-app/problems') },
+  { href: '/production-app/metrics',  label: '📈 Метрики',     match: p => p.startsWith('/production-app/metrics') },
   { href: '/production-app/material', label: 'Материал',       match: p => p.startsWith('/production-app/material') },
   { href: '/production-app/voronezh', label: '🚚 Воронеж',     match: p => p.startsWith('/production-app/voronezh') },
   { href: '/production-app/docs',     label: 'Документы',      match: p => p.startsWith('/production-app/docs') },
@@ -29,27 +28,10 @@ const pill = (active: boolean) =>
 export default function ProductionTabs({ extra }: { extra?: React.ReactNode }) {
   const path = usePathname()
   const onObzor = path === '/production-app' || path.startsWith('/production-app/board')
-  // «Заработок» — только реферерам; «Деньги» — owner-ролям и can_view_money.
-  const [isReferrer, setIsReferrer] = useState(false)
-  const [seesMoney, setSeesMoney] = useState(false)
-  useEffect(() => {
-    const sb = createClient()
-    sb.auth.getUser().then(({ data: { user } }) => {
-      if (!user) return
-      sb.from('users').select('referral_rate_pct, role, can_view_money').eq('id', user.id).single()
-        .then(({ data }) => {
-          const d = data as { referral_rate_pct: number | null; role: string | null; can_view_money: boolean | null } | null
-          if (d?.referral_rate_pct != null) setIsReferrer(true)
-          if (d?.can_view_money || d?.role === 'admin' || d?.role === 'ceo' || d?.role === 'cfo') setSeesMoney(true)
-        })
-    })
-  }, [])
-
-  const tabs = [
-    ...TABS,
-    ...(seesMoney ? [{ href: '/production-app/money', label: '💰 Деньги', match: (p: string) => p.startsWith('/production-app/money') }] : []),
-    ...(isReferrer ? [{ href: '/production-app/earnings', label: '💰 Заработок', match: (p: string) => p.startsWith('/production-app/earnings') }] : []),
-  ]
+  // «Деньги» (витрина финмодели CFO) и «Заработок» (реферальные начисления) убраны из
+  // навигации цеха (П6): к работе смены они не относятся и жили здесь исторически.
+  // Файлы на месте — вернём по адресу, если окажутся кому-то нужны.
+  const tabs = TABS
 
   return (
     <div className="mt-3 space-y-2">

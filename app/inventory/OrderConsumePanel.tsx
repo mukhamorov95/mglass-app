@@ -59,8 +59,8 @@ export default function OrderConsumePanel({ docType, docId, onDone, compact }: P
         }),
       })
       const j = await res.json()
-      if (res.status === 409) { setDone(true); setError('По этому заказу материал уже списан'); return }
       if (!res.ok) throw new Error(j.error ?? 'Ошибка списания')
+      if (j.alreadyConsumed) { setDone(true); setError('По этому заказу материал уже списан'); return }
       setDone(true)
       onDone?.({ inserted: j.inserted ?? 0, released: j.released ?? 0 })
     } catch (e) {

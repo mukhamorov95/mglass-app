@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, type DetailStageKey } from '@/lib/productionStages'
+import { parseLabelCode } from '@/lib/production/labelCode'
 
 // Скан-отметка: камера (html5-qrcode) ИЛИ BT-сканер (HID-клавиатура). Скан
 // MG-<orderId>-<itemIndex> → находим текущий готовый этап детали → «Готово».
@@ -48,14 +49,16 @@ export default function ScanPage() {
     if (seenRef.current.code === code && nowT - seenRef.current.t < 2500) return
     seenRef.current = { code, t: nowT }
 
-    const mPart = code.match(/^MG-(\d+)-(\d+)$/)
-    const mOrder = code.match(/^MG-(\d+)$/)
-    if (!mPart && !mOrder) { beep(false); pushRecent(`⚠ Не наш код: ${code}`, false); return }
-    if (mOrder && !mPart) { window.location.href = `/production-app/orders/${mOrder[1]}`; return }
+    // Разбор в одном месте (lib/production/labelCode): принимаем и старые наклейки
+    // MG-заказ-позиция, и новые MG-заказ-позиция-лист. Номер листа пока не влияет на
+    // отметку — учёт ведётся по позиции, — но в цеху уже клеятся наклейки с ним.
+    const parsed = parseLabelCode(code)
+    if (!parsed) { beep(false); pushRecent(`⚠ Не наш код: ${code}`, false); return }
+    if (parsed.itemIndex == null) { window.location.href = `/production-app/orders/${parsed.orderId}`; return }
 
     busyRef.current = true
     try {
-      const orderId = Number(mPart![1]), itemIndex = Number(mPart![2])
+      const orderId = parsed.orderId, itemIndex = parsed.itemIndex
       const [{ data: ord }, { data: taskRows }] = await Promise.all([
         sb.from('b2b_orders').select('custom_number').eq('id', orderId).single(),
         sb.from('production_tasks').select('id,stage_key,station,status,blocked_by_task_id,sequence_order').eq('order_id', orderId).eq('item_index', itemIndex).order('sequence_order'),

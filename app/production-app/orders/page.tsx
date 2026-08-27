@@ -118,8 +118,11 @@ export default function OrdersScreen() {
     const path = `order-drawings/${order.id}.${ext}`
     const { error } = await sb.storage.from('b2b-attachments').upload(path, file, { upsert: true })
     if (error) { flash('Не удалось загрузить'); return }
-    // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing
-    await sb.from('b2b_orders').update({ notes: JSON.stringify({ ...parseNotes(order.notes), drawing_url: path }) }).eq('id', order.id)
+    // bucket приватный, publicUrl не работает — храним путь, показ идёт через /api/b2b/drawing.
+    // Точечный патч, а не перезапись notes целиком: снимок заказа в списке устаревает,
+    // и запись блобом стирала бы всё, что за это время положили туда другие контуры —
+    // оплату, доставку, отметки этапов.
+    await sb.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { drawing_url: path } })
     await load()
   }
 

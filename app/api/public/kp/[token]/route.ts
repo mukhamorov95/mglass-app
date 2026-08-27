@@ -32,9 +32,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   const svc = createServiceClient()
   const notes = parseNotes((order as { notes: string | null }).notes)
   if (!notes.public_opened_at) {
-    await svc.from('b2b_orders')
-      .update({ notes: JSON.stringify({ ...notes, public_opened_at: new Date().toISOString() }) })
-      .eq('id', order.id)
+    // Точечный патч: только свой ключ, чтобы не затереть чужие при открытии ссылки.
+    await svc.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: { public_opened_at: new Date().toISOString() } })
   }
 
   return NextResponse.json({ quote: toPublicQuote(order) }, { headers: { 'Cache-Control': 'no-store' } })
@@ -57,19 +56,19 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
 
   const at = new Date().toISOString()
   const history = Array.isArray(notes.status_history) ? [...(notes.status_history as unknown[])] : []
-  const next: Record<string, unknown> = {
-    ...notes,
-    client_response: { action, comment, at },
-  }
+  // Точечный патч своих ключей, а не запись всего notes: оплата/доставка/этапы,
+  // попавшие в notes между чтением и записью, не должны затираться клиентским
+  // согласованием по ссылке. Все ключи здесь плоские (status — верхний уровень).
+  const patch: Record<string, unknown> = { client_response: { action, comment, at } }
   if (action === 'approve' && !launched) {
-    next.status = 'agreed'
-    next.status_comment = comment ?? 'Согласовано клиентом по ссылке'
+    patch.status = 'agreed'
+    patch.status_comment = comment ?? 'Согласовано клиентом по ссылке'
     history.push({ from: current, to: 'agreed', at, by: 'client_link' })
-    next.status_history = history
+    patch.status_history = history
   }
 
   const svc = createServiceClient()
-  const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(next) }).eq('id', order.id)
+  const { error } = await svc.rpc('patch_order_notes_shallow', { p_order_id: order.id, p_patch: patch })
   if (error) return NextResponse.json({ error: 'Не удалось сохранить' }, { status: 500 })
 
   // А14: менеджеру в Telegram — клиент ответил по КП. Best effort, ответ клиента

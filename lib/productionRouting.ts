@@ -15,7 +15,7 @@ export type RoutingStage = {
 // Reuses getApplicableStages (already handles tempering-for-mirrors and the
 // hasHoles drilling filter) — does not reimplement those business rules.
 export function buildItemRoute(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean },
 ): RoutingStage[] {
   return getApplicableStages(item).map((stage, i) => ({
     stageKey:      stage.key,
@@ -38,13 +38,13 @@ export type NewProductionTaskRow = {
 
 export type RoutingItem = {
   hasTempering?: boolean; materialName?: string; category?: string
-  hasHoles?: boolean; shape?: string; hasFacet?: boolean
+  hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasSandblast?: boolean
   hasTriplex?: boolean; triplexLayers?: number; thickness?: number
   triplexGlasses?: { materialId?: number; materialName?: string; thickness?: number }[]
 }
 
 // Этапы, которые для триплекса выполняются НА КАЖДОМ СТЕКЛЕ пакета (до склейки).
-const PER_LAYER_STAGES = new Set(['cutting', 'curved', 'polishing', 'drilling', 'facet', 'tempering'])
+const PER_LAYER_STAGES = new Set(['cutting', 'curved', 'polishing', 'drilling', 'facet', 'sandblast', 'tempering'])
 
 export function buildProductionTasks(
   orderId: number,

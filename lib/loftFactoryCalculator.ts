@@ -22,6 +22,10 @@ export type LoftFactoryInputs = {
   softClose: boolean          // для sliding
   glassCostPerM2: number
   glassName: string
+  // Стекло опционально: цех продаёт и голый каркас (заказчик стеклит сам либо
+  // стекло считается отдельной позицией). Без него не считаем ни само стекло,
+  // ни закалку, ни остекление-сборку — этой работы физически не будет.
+  withGlass?: boolean
   tempering: boolean
   temperingCostPerM2: number
 }
@@ -144,14 +148,15 @@ export function calcLoftFactory(p: LoftFactoryInputs, rates: LoftRates): LoftFac
   }
 
   // ── Стекло ────────────────────────────────────────────────────────────
+  const withGlass = p.withGlass !== false
   const waste = 1 + Math.max(0, rate('glass_waste_pct')) / 100
-  const glassAreaM2 = glassAreaNetM2 * waste
-  lines.push({
+  const glassAreaM2 = withGlass ? glassAreaNetM2 * waste : 0
+  if (withGlass) lines.push({
     name: p.glassName, qty: r2(glassAreaM2), unit: 'м²', price: p.glassCostPerM2,
     total: Math.round(glassAreaM2 * p.glassCostPerM2),
     note: `${glassCount} шт ~${Math.round(gW * 1000)}×${Math.round(gH * 1000)}, отход ${rate('glass_waste_pct')}%`,
   })
-  if (p.tempering && p.temperingCostPerM2 > 0)
+  if (withGlass && p.tempering && p.temperingCostPerM2 > 0)
     lines.push({ name: 'Закалка', qty: r2(glassAreaM2), unit: 'м²', price: p.temperingCostPerM2, total: Math.round(glassAreaM2 * p.temperingCostPerM2) })
 
   // ── Работы ────────────────────────────────────────────────────────────
@@ -164,13 +169,13 @@ export function calcLoftFactory(p: LoftFactoryInputs, rates: LoftRates): LoftFac
   if (rate('paint_oven') > 0)
     lines.push({ name: 'Покраска порошковая (RAL)', qty: 1, unit: 'печка', price: rate('paint_oven'), total: Math.round(rate('paint_oven')) })
   // Сборка — ₽/м² изделия (ставка glazing_m2); старая ставка ₽/стекло — фолбэк
-  if (rate('glazing_m2') > 0)
+  if (withGlass && rate('glazing_m2') > 0)
     lines.push({ name: 'Остекление и сборка', qty: r2(areaM2), unit: 'м²', price: rate('glazing_m2'), total: Math.round(areaM2 * rate('glazing_m2')) })
-  else if (rate('glazing_glass') > 0)
+  else if (withGlass && rate('glazing_glass') > 0)
     lines.push({ name: 'Остекление и сборка', qty: glassCount, unit: 'стекло', price: rate('glazing_glass'), total: Math.round(glassCount * rate('glazing_glass')) })
 
   const totalCost = lines.reduce((s, l) => s + l.total, 0)
-  const weightKg = profileM * W_PROFILE + shtapikM * W_SHTAPIK + glassAreaNetM2 * 10
+  const weightKg = profileM * W_PROFILE + shtapikM * W_SHTAPIK + (withGlass ? glassAreaNetM2 * 10 : 0)
 
   return {
     areaM2: r2(areaM2),
@@ -185,9 +190,9 @@ export function calcLoftFactory(p: LoftFactoryInputs, rates: LoftRates): LoftFac
     spec: [
       ...specParts,
       `створка ${Math.round(leafW)}×${Math.round(leafH)}`,
-      `${rows} стекла по вертикали`,
-      p.glassName,
-      p.tempering ? 'закалка' : null,
+      withGlass ? `${rows} стекла по вертикали` : null,
+      withGlass ? p.glassName : 'без стекла (каркас)',
+      withGlass && p.tempering ? 'закалка' : null,
       'покраска RAL',
     ].filter(Boolean).join(' · '),
   }

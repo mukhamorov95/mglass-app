@@ -24,18 +24,18 @@ export async function PATCH(
   const { data: order } = await svc.from('b2b_orders').select('notes').eq('id', id).single()
   if (!order) return NextResponse.json({ error: 'Заказ не найден' }, { status: 404 })
 
-  const notes = typeof order.notes === 'string'
-    ? (() => { try { return JSON.parse(order.notes) } catch { return {} } })()
-    : (order.notes ?? {})
+  // notes ТОЧЕЧНО, а не целиком: плоские ключи docs_printed* — shallow-patch;
+  // вложенный stages.printed — mark_order_stages (shallow заменил бы весь stages
+  // и вернул клоббер этапов из #274). Иначе оплата/доставка/этапы, попавшие в
+  // notes между чтением и записью, были бы затёрты.
   const nowIso = new Date().toISOString()
-  notes.docs_printed = printed
-  notes.docs_printed_at = printed ? nowIso : null
-  notes.docs_printed_by = printed ? (user.email ?? user.id) : null
-  // Зеркалим в order-level stages.printed — чтобы борд/список «Чертёж» видели отметку Валерии
-  notes.stages = notes.stages ?? {}
-  notes.stages.printed = printed ? nowIso : null
-
-  const { error } = await svc.from('b2b_orders').update({ notes: JSON.stringify(notes) }).eq('id', id)
+  const orderId = Number(id)
+  await svc.rpc('patch_order_notes_shallow', { p_order_id: orderId, p_patch: {
+    docs_printed: printed,
+    docs_printed_at: printed ? nowIso : null,
+    docs_printed_by: printed ? (user.email ?? user.id) : null,
+  } })
+  const { error } = await svc.rpc('mark_order_stages', { p_order_id: orderId, p_stages: { printed: printed ? nowIso : null } })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

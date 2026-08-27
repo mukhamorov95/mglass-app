@@ -17,8 +17,20 @@ export type BankRow = {
   externalKey: string          // идемпотентность повторной загрузки
 }
 
+// Остатки по счёту из СекцияРасчСчет — банк отдаёт их сам. Начальный остаток
+// закрывает ввод для Б15 без ручного набора; итоги дают сверку «сошлось / нет».
+export type AccountBalance = {
+  account: string
+  opening: number | null
+  credit: number | null      // ВсегоПоступило
+  debit: number | null       // ВсегоСписано
+  closing: number | null
+  dateStart: string | null
+  dateEnd: string | null
+}
+
 export type ParseResult =
-  | { ok: true; format: '1c' | 'csv'; rows: BankRow[]; accounts: string[] }
+  | { ok: true; format: '1c' | 'csv'; rows: BankRow[]; accounts: string[]; balances: AccountBalance[] }
   | { ok: false; error: string }
 
 const pad = (n: number) => String(n).padStart(2, '0')
@@ -59,7 +71,14 @@ function parse1C(text: string): ParseResult {
   const lines = text.split(/\r?\n/)
   const accounts = new Set<string>()
   const rows: BankRow[] = []
+  const balances: AccountBalance[] = []
   let doc: Record<string, string> | null = null
+  let acct: Record<string, string> | null = null   // блок СекцияРасчСчет
+
+  const numOrNull = (s: string | undefined) => {
+    const v = toAmount(s ?? '')
+    return Number.isFinite(v) ? v : null
+  }
 
   for (const line of lines) {
     const eq = line.indexOf('=')
@@ -76,12 +95,37 @@ function parse1C(text: string): ParseResult {
       continue
     }
     if (doc) { if (key) doc[key] = value; continue }
-    // Вне документа: расчётные счета владельца файла
+
+    // Блок остатков по счёту — банк отдаёт начальный/конечный остаток и обороты
+    if (key === 'СекцияРасчСчет') { acct = {}; continue }
+    if (key === 'КонецРасчСчет') {
+      if (acct?.['РасчСчет']) {
+        accounts.add(acct['РасчСчет'])
+        balances.push({
+          account: acct['РасчСчет'],
+          opening: numOrNull(acct['НачальныйОстаток']),
+          credit: numOrNull(acct['ВсегоПоступило']),
+          debit: numOrNull(acct['ВсегоСписано']),
+          closing: numOrNull(acct['КонечныйОстаток']),
+          dateStart: toIsoDate(acct['ДатаНачала'] ?? ''),
+          dateEnd: toIsoDate(acct['ДатаКонца'] ?? ''),
+        })
+      }
+      acct = null
+      continue
+    }
+    if (acct) { if (key) acct[key] = value; continue }
+
+    // Вне блоков: расчётный счёт владельца файла (шапка)
     if (key === 'РасчСчет' && value) accounts.add(value)
   }
 
-  if (!rows.length) return { ok: false, error: 'В файле не нашлось ни одного документа формата 1С' }
-  return { ok: true, format: '1c', rows, accounts: [...accounts] }
+  // Пустой день — это валидная выписка, а не ошибка: банк прислал остатки без
+  // движений. Ошибка только если файл вообще не похож на 1С-обмен (нет и остатков).
+  if (!rows.length && !balances.length) {
+    return { ok: false, error: 'В файле не нашлось ни одного документа формата 1С' }
+  }
+  return { ok: true, format: '1c', rows, accounts: [...accounts], balances }
 }
 
 function docTo1CRow(d: Record<string, string>, accounts: Set<string>): BankRow | null {
@@ -218,7 +262,8 @@ function parseCsv(text: string): ParseResult {
   }
 
   if (!rows.length) return { ok: false, error: 'Строк с датой и суммой не нашлось' }
-  return { ok: true, format: 'csv', rows, accounts: [] }
+  // CSV из личного кабинета остатки в структурированном виде не несёт
+  return { ok: true, format: 'csv', rows, accounts: [], balances: [] }
 }
 
 export function parseStatement(text: string): ParseResult {

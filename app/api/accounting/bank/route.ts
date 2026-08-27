@@ -60,11 +60,27 @@ export async function POST(req: NextRequest) {
     .upsert(rows, { onConflict: 'unit,external_key', ignoreDuplicates: true, count: 'exact' })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
+  // Сверка с итогами банка: сумма разобранных строк должна совпасть с
+  // ВсегоПоступило/ВсегоСписано из выписки. Расхождение = парсер что-то пропустил.
+  const inSum = round2(parsed.rows.filter(r => r.direction === 'in').reduce((s, r) => s + r.amount, 0))
+  const outSum = round2(parsed.rows.filter(r => r.direction === 'out').reduce((s, r) => s + r.amount, 0))
+  const bank = parsed.balances[0] ?? null
+  const reconcile = bank && bank.credit != null && bank.debit != null
+    ? {
+        ok: Math.abs(inSum - bank.credit) < 0.01 && Math.abs(outSum - bank.debit) < 0.01,
+        bankIn: bank.credit, bankOut: bank.debit, parsedIn: inSum, parsedOut: outSum,
+        opening: bank.opening, closing: bank.closing, account: bank.account,
+      }
+    : null
+
   return NextResponse.json({
     ok: true, format: parsed.format, parsed: rows.length,
     added: count ?? 0, duplicates: rows.length - (count ?? 0),
+    empty: rows.length === 0, reconcile,
   })
 }
+
+const round2 = (v: number) => Math.round(v * 100) / 100
 
 export async function GET(req: NextRequest) {
   const guard = await requireRole([...FIN_ROLES])

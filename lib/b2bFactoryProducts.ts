@@ -155,10 +155,29 @@ export const frameOptions = (d: FactoryData) =>
 
 // Зеркало с подсветкой: стандартная комплектация (профиль/лента/БП/рассеиватель — первые
 // подходящие из справочника), себестоимость по COST-строке матрицы + factory overhead.
+// Подсветка бывает не по всему периметру: только по вертикальным сторонам, только
+// сверху-снизу, с одной стороны. Лента, профиль и рассеиватель кроятся по выбранным
+// сторонам — иначе на «парящем» зеркале мы считаем вдвое больше материала, чем уйдёт.
+export type LightSides = { top: boolean; bottom: boolean; left: boolean; right: boolean }
+
+export const ALL_SIDES: LightSides = { top: true, bottom: true, left: true, right: true }
+
+export function lightingLengthM(w: number, h: number, sides?: LightSides): number {
+  const s = sides ?? ALL_SIDES
+  const horiz = (s.top ? w : 0) + (s.bottom ? w : 0)
+  const vert  = (s.left ? h : 0) + (s.right ? h : 0)
+  return (horiz + vert) / 1000
+}
+
 export function calcFactoryMirror(
   p: {
     widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number
     hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave'
+    lightSides?: LightSides   // какие стороны подсвечены; не задано = весь периметр
+    // Фацет и пескоструй — РАЗНЫЕ обработки, а не одна «декоративка».
+    sandblast?: boolean          // пескоструй по зеркалу
+    facetTypeMm?: number | null  // фацет: ширина фаски, мм; null = без фацета
+    facetCostPerM?: number       // себестоимость фацета, ₽/пог.м (из facet_prices)
     ledId?: number | null      // лента (температура) из справочника; null = авто
     frameId?: number | null    // каркас (профиль сзади); null = авто; при curved не применяется
     curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
@@ -181,8 +200,10 @@ export function calcFactoryMirror(
     : (p.frameId ? d.components.find(c => c.component_type === 'frame' && c.id === p.frameId) : null)
       ?? d.components.find(c => c.component_type === 'frame') ?? null
   const underlay = p.curved ? Math.max(0, p.underlayCost ?? 0) : 0
-  const perimeter = 2 * (p.widthMm + p.heightMm) / 1000
-  const needW = (led?.power_per_meter ?? 10) * perimeter
+  // Мощность считаем от ДЛИНЫ ПОДСВЕТКИ, а не от периметра: иначе на зеркале
+  // с подсветкой по двум сторонам подбирается блок вдвое мощнее и дороже нужного.
+  const lightM = lightingLengthM(p.widthMm, p.heightMm, p.lightSides)
+  const needW = (led?.power_per_meter ?? 10) * lightM
   const psus = d.components.filter(c => c.component_type === 'power_supply' && c.voltage === voltage)
   const psu = psus.find(c => (c.max_power ?? 0) >= needW) ?? psus[psus.length - 1] ?? null
   const diffuser = d.components.find(c => c.component_type === 'diffuser') ?? null
@@ -191,14 +212,16 @@ export function calcFactoryMirror(
     width: p.widthMm, height: p.heightMm, shape: p.curved ? 'complex' : 'rectangle',
     mirrorMaterial: stub ? { ...stub, name: `${p.mirrorName} ${p.mirrorMm} мм` } : null,
     mirrorCostPriceCostRow: costRow,
-    hasLighting: p.hasLighting, voltage,
+    hasLighting: p.hasLighting, voltage, lightingLengthM: lightM,
     frame:       p.hasLighting ? (frame ? toLC(frame) : null) : null,
     ledStrip:    p.hasLighting ? (led ? toLC(led) : null) : null,
     powerSupply: p.hasLighting ? (psu ? toLC(psu) : null) : null,
     diffuser:    p.hasLighting ? (diffuser ? toLC(diffuser) : null) : null,
-    buttonType: p.buttonType, hasSandblast: false,
+    buttonType: p.buttonType, hasSandblast: !!p.sandblast,
     hasSubstrate: underlay > 0, substratePrice: underlay,
-    hasFacet: false, facetTypeMm: null, facetCostPerM: 0,
+    hasFacet: p.facetTypeMm != null && p.facetTypeMm > 0,
+    facetTypeMm: p.facetTypeMm ?? null,
+    facetCostPerM: p.facetCostPerM ?? 0,
     hasInstallation: false, hasDelivery: false,
     partnerPercent: 0, discount: 0,
     margin: d.mirrorCfg.productionMarginPercent, standardMargin: d.mirrorCfg.productionMarginPercent,
@@ -277,19 +300,25 @@ export function calcFactoryLoft(
     doors: number; fixedParts: number; rows: number
     handle: LoftHandle; softClose: boolean
     glassId: number | null; tempering: boolean
+    // Стекло опционально — цех продаёт и голый каркас (заказчик стеклит сам
+    // либо стекло идёт отдельной позицией просчёта).
+    withGlass?: boolean
   },
   d: FactoryData,
 ): FactoryQuote | null {
   if (p.widthMm <= 0 || p.heightMm <= 0) return null
+  const withGlass = p.withGlass !== false
   const glass = d.loftGlasses.find(m => m.id === p.glassId) ?? d.loftGlasses[0] ?? null
-  if (!glass) return null
+  // Без стекла справочник не нужен: считаем каркас. Со стеклом — без позиции считать нечего.
+  if (withGlass && !glass) return null
   const temperSvc = d.retailServices.find(s => s.name.toLowerCase().includes('закалка'))
 
   const res = calcLoftFactory({
     widthMm: p.widthMm, heightMm: p.heightMm,
     construction: p.construction, doors: p.doors, fixedParts: p.fixedParts, rows: p.rows,
     handle: p.handle, softClose: p.softClose,
-    glassCostPerM2: glass.cost_price, glassName: glass.name,
+    glassCostPerM2: glass?.cost_price ?? 0, glassName: glass?.name ?? '',
+    withGlass,
     tempering: p.tempering, temperingCostPerM2: temperSvc?.cost_price ?? 0,
   }, d.loftRates)
   if (!res) return null
@@ -315,14 +344,15 @@ export function calcFactoryLoft(
   if (!fm) return null
 
   const kind = p.construction !== 'fixed' && p.doors > 0 ? 'дверь' : 'перегородка'
+  const frameNote = withGlass ? '' : ' (каркас)'
   return {
-    label: `Лофт-${kind} ${p.widthMm}×${p.heightMm} мм`,
+    label: `Лофт-${kind}${frameNote} ${p.widthMm}×${p.heightMm} мм`,
     spec: res.spec,
     widthMm: p.widthMm,
     heightMm: p.heightMm,
     // В справочнике материалов толщины нет отдельным полем — вынимаем из названия
     // («Осветлённое 8 мм»); не нашли — 0, габариты важнее и они уже проставлены.
-    thicknessMm: Number(/(\d+)\s*мм/.exec(glass.name)?.[1] ?? 0),
+    thicknessMm: withGlass ? Number(/(\d+)\s*мм/.exec(glass?.name ?? '')?.[1] ?? 0) : 0,
     perimeterM: Math.round(2 * (p.widthMm + p.heightMm) / 1000 * 1000) / 1000,
     areaPiece: res.areaM2,
     weightPerPiece: res.weightKg,

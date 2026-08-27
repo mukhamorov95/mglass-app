@@ -48,7 +48,20 @@ export function BankTab({ unit, funds, subfunds, onPosted }: {
     const r = await fetch('/api/accounting/bank', { method: 'POST', body })
     const j = await r.json().catch(() => ({}))
     if (!r.ok) { setErr(j.error ?? 'Не разобралось'); setMsg(null); return }
-    setMsg(`Формат ${j.format === '1c' ? '1С-обмен' : 'CSV'}: строк ${j.parsed}, новых ${j.added}, уже было ${j.duplicates}`)
+    const fmt = j.format === '1c' ? '1С-обмен' : 'CSV'
+    if (j.empty) {
+      const rec = j.reconcile
+      setMsg(`${fmt}: движений за день нет${rec?.closing != null ? ` · остаток на счёте ${RUB(rec.closing)}` : ''}`)
+    } else {
+      let m = `${fmt}: строк ${j.parsed}, новых ${j.added}, уже было ${j.duplicates}`
+      const rec = j.reconcile
+      if (rec) {
+        m += rec.ok
+          ? ` · сошлось с итогами банка (приход ${RUB(rec.bankIn)}, расход ${RUB(rec.bankOut)})`
+          : ` · ⚠️ расходится с банком: у нас приход ${RUB(rec.parsedIn)}/расход ${RUB(rec.parsedOut)}, банк ${RUB(rec.bankIn)}/${RUB(rec.bankOut)}`
+      }
+      setMsg(m)
+    }
     await load()
   }
 

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useCallback } from 'react'
 import { createClient } from '@/lib/supabase-browser'
-import { materialStatus, parseNotes } from '@/lib/orderFlags'
+import { materialStatus } from '@/lib/orderFlags'
 import { materialLabelShort } from '@/lib/materialLabel'
 
 // Стадия «Материал» до резки (Бекмурза). Новый заказ, ушедший в резку, ждёт
@@ -49,8 +49,13 @@ export default function MaterialCheck() {
   async function setStatus(o: Order, status: 'ready' | 'needed') {
     setBusy(o.id)
     try {
-      const updated = { ...parseNotes(o.notes), material_status: status, material_checked_at: new Date().toISOString(), material_checked_by: me?.name ?? null }
-      await sb.from('b2b_orders').update({ notes: JSON.stringify(updated) }).eq('id', o.id)
+      // Точечный патч: o.notes — снимок из списка, перезапись целиком стёрла бы
+      // всё, что положили в notes другие контуры с момента загрузки экрана.
+      await sb.rpc('patch_order_notes_shallow', { p_order_id: o.id, p_patch: {
+        material_status: status,
+        material_checked_at: new Date().toISOString(),
+        material_checked_by: me?.name ?? null,
+      } })
       if (status === 'needed') {
         const label = o.custom_number?.trim() || `#${o.id}`
         const title = `Материал: ${label} (${o.client_name})`

@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, Fragment } from 'react'
+import { PRODUCTION_STAGES } from '@/lib/productionStages'
 import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 
@@ -27,16 +28,11 @@ type User = {
 }
 
 // Станции цеха — словарь совпадает с lib/productionStages.ts DetailStageKey (без 'problem').
-const STATIONS: { value: string; label: string }[] = [
-  { value: 'cutting',   label: 'Резка' },
-  { value: 'curved',    label: 'Криволинейка' },
-  { value: 'polishing', label: 'Полировка' },
-  { value: 'drilling',  label: 'Сверловка' },
-  { value: 'facet',     label: 'Фацет' },
-  { value: 'tempering', label: 'Закалка' },
-  { value: 'triplex',   label: 'Триплекс' },
-  { value: 'packaging', label: 'Упаковка' },
-]
+// Станция = этап маршрута, поэтому список берётся из PRODUCTION_STAGES, а не
+// повторяется здесь руками: своя копия уже успела разойтись с общей («Сверловка»
+// против «Сверление») и новый этап в неё не попадал бы вовсе.
+const STATIONS: { value: string; label: string }[] =
+  PRODUCTION_STAGES.map(s => ({ value: s.key, label: s.label }))
 
 const ROLE_LABELS: Record<string, { label: string; color: string }> = {
   admin:      { label: 'Администратор', color: 'bg-purple-50 text-purple-700' },

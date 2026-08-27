@@ -588,7 +588,7 @@ export default function B2BOrdersPage() {
   const [editCustomNum, setEditCustomNum]   = useState('')
   const [editClientNum, setEditClientNum]   = useState('')
   const [savingNum, setSavingNum]           = useState(false)
-  // Правка итоговой суммы запущенного заказа (владелец, только вниз)
+  // Правка итоговой суммы запущенного заказа (владелец; вверх и вниз)
   const [editTotalId, setEditTotalId]       = useState<number | null>(null)
   const [editTotalVal, setEditTotalVal]     = useState('')
   const [savingTotal, setSavingTotal]       = useState(false)
@@ -739,12 +739,14 @@ export default function B2BOrdersPage() {
   }
 
   // Владелец меняет итог заказа: серверный роут пересчитывает все позиции
-  // пропорционально (НДС/маржа заново), синхронит реестр продаж. Только вниз.
+  // пропорционально (НДС/маржа заново), синхронит реестр продаж.
+  // Вверх тоже: продали дороже, чем просчитали — обычное дело, заказ должен
+  // показывать реальную сумму сделки, а не ту, что вышла из калькулятора.
   async function saveOrderTotal(orderId: number, oldTotal: number) {
     setTotalErr(null)
     const nt = Math.round(Number(editTotalVal))
     if (!nt || nt <= 0) { setTotalErr('Введите сумму'); return }
-    if (nt >= oldTotal) { setTotalErr(`Меньше ${Math.round(oldTotal).toLocaleString('ru-RU')} ₽`); return }
+    if (nt === Math.round(oldTotal)) { setTotalErr('Сумма та же'); return }
     setSavingTotal(true)
     try {
       const res = await fetch(`/api/b2b-orders/${orderId}/adjust-total`, {
@@ -1675,7 +1677,7 @@ export default function B2BOrdersPage() {
             </span>
           ) : (
             <button onClick={() => { setEditTotalId(order.id); setEditTotalVal(''); setTotalErr(null) }}
-              title="Пересчитать все позиции под новую (меньшую) сумму"
+              title="Пересчитать все позиции под новую сумму — можно и больше, и меньше"
               className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
           ))}
         </div>

@@ -124,7 +124,6 @@ const BUYER_B2B_ALL: NavItem[] = [
 // Production oversight for the scoped buyer (Вера надзирает за цехом).
 const BUYER_PRODUCTION: NavItem[] = [
   { href: '/production-app',            label: 'Производство',        icon: '📱', indent: true },
-  { href: '/production-app/supervisor', label: 'Панель производства', icon: '🔭', indent: true },
 ]
 
 // ─── SEO role ─────────────────────────────────────────────────────────────────
@@ -206,6 +205,7 @@ const CEO_SYSTEM: NavItem[] = [
   { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
   { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
+  { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
 ]
 
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
@@ -227,7 +227,6 @@ const ADMIN_OWNER: NavItem[] = [
   { href: '/admin/access-check',     label: 'Диагностика прав', icon: '🔎' },
   { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
   { href: '/production-app',              label: 'Production App',      icon: '📱' },
-  { href: '/production-app/supervisor',   label: 'Панель производства',  icon: '🔭' },
 ]
 
 const ADMIN_MARKETING: NavItem[] = [
@@ -267,6 +266,7 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/pricing-manual',      label: 'Pricing Manual', icon: '📖' },
   { href: '/admin/owner-questionnaire', label: 'Стратегия',      icon: '🎯' },
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
+  { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
@@ -336,9 +336,10 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/my-queue', label: 'Мои задачи',       icon: '✅' },
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },
-  { href: '/production-app/board',    label: 'Заказы в работе',  icon: '🔧' },
+  { href: '/production-app/board',    label: 'Обзор цеха',       icon: '🔧' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
+  { href: '/production-app/activity', label: 'Кто что делал',    icon: '👥' },
   { href: '/production-app/metrics',  label: 'Метрики цеха',     icon: '📈' },
 ]
 
@@ -356,16 +357,14 @@ const PRODUCTION_NAV_TEAM: NavItem[] = [
   { href: '/production-app/ideas',    label: 'Идеи и проблемы',  icon: '💡' },
 ]
 
-// Обучение: регламент + учебный заказ для тренировки.
+// Обучение: регламент. Учебный заказ ДЕМО-1 убран 26.08 — владелец подтвердил,
+// что он больше не нужен: цех устоявшийся, новых людей на нём не обучают.
 const PRODUCTION_NAV_LEARN: NavItem[] = [
   { href: '/production-app/guide',    label: 'Регламент работы',      icon: '📘' },
-  { href: '/production-app/demo',     label: 'Учебный заказ ДЕМО-1',  icon: '🎓' },
 ]
 
-// Деньги цеха: read-only витрина финансов производства (доступ выдаёт владелец).
-const PRODUCTION_NAV_MONEY: NavItem[] = [
-  { href: '/production-app/money',    label: 'Финансы производства',  icon: '💰' },
-]
+// Группа «Деньги» в навигации цеха убрана (П6): витрина финмодели CFO к работе смены
+// не относится. Экран /production-app/money на месте, доступен по прямому адресу.
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -391,7 +390,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
     if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
-    if (inSection(pathname, ['/production-app/guide', '/production-app/demo'])) open.push('prod_learn')
+    if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
@@ -423,7 +422,7 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, ['/production-app', '/b2b-production'])) open.push('prod_shop')
     if (inSection(pathname, ['/b2b-cutting', '/production-app/material', '/production-app/docs', '/production-app/buy'])) open.push('prod_supply')
     if (inSection(pathname, ['/production-app/ideas'])) open.push('prod_team')
-    if (inSection(pathname, ['/production-app/guide', '/production-app/demo'])) open.push('prod_learn')
+    if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
     return open
   }
   if (role === 'manager') {
@@ -824,7 +823,6 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 
@@ -902,7 +900,6 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('prod_money',  'Деньги',               'text-amber-600',  'text-amber-400',  PRODUCTION_NAV_MONEY,  'bg-amber-50 text-amber-700 font-medium')}
       </>
     )
 
