@@ -65,11 +65,14 @@ export async function POST(
     // При отмене нужен completed_at ДО снятия: по нему опознаётся каскад, вызванный
     // именно этой отметкой (каскад ставит ту же метку времени, что и вызвавшая отметка).
     let prevCompletedAt: string | null = null
+    let prevSeq: number | null = null
     if (u.action === 'unset') {
       const { data: before } = await svc.from('production_tasks')
-        .select('completed_at').eq('order_id', orderId)
+        .select('completed_at, sequence_order').eq('order_id', orderId)
         .eq('item_index', u.item_index).eq('stage_key', u.stage_key).maybeSingle()
-      prevCompletedAt = (before as { completed_at: string | null } | null)?.completed_at ?? null
+      const b = before as { completed_at: string | null; sequence_order: number } | null
+      prevCompletedAt = b?.completed_at ?? null
+      prevSeq = b?.sequence_order ?? null
     }
 
     const { data, error } = await svc
@@ -85,7 +88,7 @@ export async function POST(
     // Снятие отметки трогало только СВОЮ задачу: этапы, закрытые каскадом от неё, оставались
     // закрытыми, и заказ показывал «сделано» там, где отметку уже сняли. Возвращаем их тоже.
     if (u.action === 'unset' && !error) {
-      const back = await reverseCascade(svc, orderId, u.item_index, prevCompletedAt)
+      const back = await reverseCascade(svc, orderId, u.item_index, prevCompletedAt, prevSeq)
       if (back.length) reopened.push({ item_index: u.item_index, stages: back })
     }
 

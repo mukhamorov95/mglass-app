@@ -15,24 +15,49 @@ export type CascadedStage = { item_index: number; stage_key: string }
 // списания на резку (27.08) у этой лжи появилась цена: мисклик по упаковке закрывал каскадом
 // резку, списывал материал, а снятие отметки его не возвращало.
 //
-// Признак «того же каскада» — completed_at: каскад проставляет его ТЕМ ЖЕ значением, что и
-// вызвавшая отметка. Снимаем только auto_closed с этой меткой времени: живые отметки, стоявшие
-// раньше, не трогаем — их ставил человек.
+// Признак «того же каскада» — ДВА условия, и одной метки времени мало.
+//
+// 1) completed_at: каскад проставляет его тем же значением, что и вызвавшая отметка.
+// 2) sequence_order МЕНЬШЕ снимаемого этапа: каскад по построению закрывает только
+//    предыдущие этапы.
+//
+// Почему без второго нельзя. `now` в sync-stages вычисляется ОДИН РАЗ на весь запрос, а цикл
+// обрабатывает несколько обновлений. Закрыли одним запросом полировку и закалку — оба каскада
+// проставят ОДИНАКОВЫЙ completed_at. Тогда снятие полировки переоткрыло бы и то, что каскадила
+// закалка: заказ показал бы открытое сверление при закрытой закалке — новая ложь вместо старой,
+// только тише.
+// Сегодняшние вызывающие шлют один этап на много позиций, поэтому случай не воспроизводится —
+// но условие стоит строки, а гарантия остаётся при любом будущем вызывающем.
+//
+// Живые отметки не трогаем в любом случае: только auto_closed, их ставил не человек.
+
+export type ReversibleTask = { id: number; stage_key: string; sequence_order: number }
+
+export function pickCascadeReversal(
+  tasks: ReversibleTask[],
+  beforeSequenceOrder: number | null,
+): ReversibleTask[] {
+  if (beforeSequenceOrder == null) return []
+  return tasks.filter(t => t.sequence_order < beforeSequenceOrder)
+}
+
 export async function reverseCascade(
   svc: SupabaseClient,
   orderId: number,
   itemIndex: number,
   completedAt: string | null,
+  beforeSequenceOrder: number | null,
 ): Promise<string[]> {
-  if (!completedAt) return []
+  if (!completedAt || beforeSequenceOrder == null) return []
   const { data } = await svc
     .from('production_tasks')
-    .select('id, stage_key')
+    .select('id, stage_key, sequence_order')
     .eq('order_id', orderId)
     .eq('item_index', itemIndex)
     .eq('auto_closed', true)
     .eq('completed_at', completedAt)
-  const rows = (data ?? []) as { id: number; stage_key: string }[]
+    .lt('sequence_order', beforeSequenceOrder)
+  const rows = pickCascadeReversal((data ?? []) as ReversibleTask[], beforeSequenceOrder)
   if (rows.length === 0) return []
   await svc.from('production_tasks')
     .update({ status: 'queued', completed_at: null, completed_by: null, completed_by_name: null,

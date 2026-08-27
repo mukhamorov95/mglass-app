@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   isAttributable, planConsume, shouldConsume, shouldReverse, type CuttingMark,
 } from '@/lib/production/cuttingConsume'
+import { pickCascadeReversal } from '@/lib/productionCascade'
 
 const mark = (over: Partial<CuttingMark> = {}): CuttingMark =>
   ({ orderId: 5269, itemIndex: 0, stageKey: 'cutting', source: 'worker', attempt: 0, ...over })
@@ -83,5 +84,30 @@ describe('shouldReverse — по переоткрытию РЕЗКИ, а не п
 
   it('ключевое: важно ЧТО переоткрыли, а не что сняли руками — мисклик по упаковке каскадом закрыл резку, и её переоткрытие обязано вернуть материал', () => {
     expect(shouldReverse({ stageKey: 'cutting', reason: 'unset' })).toBe(true)
+  })
+})
+
+describe('pickCascadeReversal — метки времени мало, нужна граница по маршруту', () => {
+  const t = (id: number, stage: string, seq: number) => ({ id, stage_key: stage, sequence_order: seq })
+
+  it('возвращает только то, что ИДЁТ ДО снимаемого этапа', () => {
+    // маршрут: резка(1) полировка(2) сверление(3) закалка(4)
+    const sameStamp = [t(1, 'cutting', 1), t(3, 'drilling', 3)]
+    // снимаем полировку (2): резка каскадила от неё, сверление — от закалки
+    expect(pickCascadeReversal(sameStamp, 2).map(x => x.stage_key)).toEqual(['cutting'])
+  })
+
+  it('без границы вернулось бы лишнее — сверление при закрытой закалке', () => {
+    const sameStamp = [t(1, 'cutting', 1), t(3, 'drilling', 3)]
+    expect(sameStamp.filter(x => true)).toHaveLength(2)          // как было бы без условия
+    expect(pickCascadeReversal(sameStamp, 2)).toHaveLength(1)    // как стало
+  })
+
+  it('снимаем первый этап маршрута — откатывать нечего', () => {
+    expect(pickCascadeReversal([t(1, 'cutting', 1)], 1)).toEqual([])
+  })
+
+  it('без номера этапа ничего не трогаем — гадать нельзя', () => {
+    expect(pickCascadeReversal([t(1, 'cutting', 1)], null)).toEqual([])
   })
 })
