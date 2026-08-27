@@ -243,6 +243,7 @@ export default function B2BCalculatorPage() {
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fCurved, setFCurved]         = useState(false)
+  const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
   // А19: распознавание файла клиента
   type ParsedItem = { id: string; width: number | null; height: number | null; quantity: number; label: string; comment: string; confidence: string; needsReview: boolean }
@@ -280,6 +281,7 @@ export default function B2BCalculatorPage() {
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eCurved, setECurved]         = useState(false)
+  const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
   const [eTriplex, setETriplex]       = useState(false)
   const [eTriplexLayers, setETriplexLayers] = useState<2 | 3>(2)
@@ -811,7 +813,11 @@ export default function B2BCalculatorPage() {
         wastePercent: fWaste, hasTempering: fTempering,
         resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
         hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-        hasHoles: false, shape: 'rect',
+        // Признаки изделия -> маршрут цеха. Раньше здесь было зашито shape: 'rect',
+        // и криволинейное зеркало уходило в цех как прямое — без этапа криволинейки.
+        hasHoles: false,
+        shape: fKind === 'fmirror' && fmCurved ? 'curved' : 'rect',
+        hasSandblast: fKind === 'fmirror' && fmSandblast,
         hasTriplex: false, triplexLayers: 2, triplexPrice, triplexExtraGlasses: [],
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
@@ -835,7 +841,7 @@ export default function B2BCalculatorPage() {
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect',
+      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
@@ -1070,6 +1076,7 @@ export default function B2BCalculatorPage() {
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
+    setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
     setETriplexLayers(item.triplexLayers === 3 ? 3 : 2)
@@ -1099,7 +1106,7 @@ export default function B2BCalculatorPage() {
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
@@ -2041,6 +2048,19 @@ export default function B2BCalculatorPage() {
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
                   <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-[#111110]'}`}>
                     {fCurved ? 'Криволинейный рез' : 'Прямой рез'}
+                  </span>
+                </label>
+              </div>
+              <div>
+                {/* Песочка — отдельный этап цеха со своей оснасткой (макет → оракал →
+                    наклейка → пескоструй). Нажали здесь — деталь пойдёт через него;
+                    не нажали — не пойдёт. Маршрут строится из просчёта, а не угадывается. */}
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Песочка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fSandblast ? 'border-violet-300 bg-violet-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fSandblast} onChange={e => setFSandblast(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fSandblast ? 'text-violet-700' : 'text-[#111110]'}`}>
+                    {fSandblast ? 'С песочкой' : 'Без песочки'}
                   </span>
                 </label>
               </div>
@@ -3019,7 +3039,7 @@ export default function B2BCalculatorPage() {
             wastePercent: eWaste, hasTempering: eTempering,
             resolvedServices: resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
             hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
             hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
@@ -3158,6 +3178,11 @@ export default function B2BCalculatorPage() {
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
+                    </label>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eSandblast ? 'border-violet-300 bg-violet-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      <input type="checkbox" checked={eSandblast} onChange={e => setESandblast(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eSandblast ? 'text-violet-700 font-medium' : 'text-[#111110]'}`}>Песочка</span>
                     </label>
                     <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                       <input type="checkbox" checked={eMinPrice} onChange={e => setEMinPrice(e.target.checked)}

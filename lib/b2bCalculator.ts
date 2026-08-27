@@ -98,6 +98,7 @@ export type B2BOrderItem = {
   hasFacet: boolean
   facetTypeMm: number | null
   hasHoles?: boolean        // нужна сверловка — влияет на маршрут производства (lib/productionRouting.ts)
+  hasSandblast?: boolean    // нужна песочка — отдельный этап маршрута (lib/productionRouting.ts)
   shape?: 'rect' | 'curved' // криволинейный рез — станция curved
   hasTriplex?: boolean      // триплекс/склейка — станция triplex; стекло считается по каждому слою
   triplexLayers?: number    // 2 или 3 стекла в пакете (по умолчанию 2)
