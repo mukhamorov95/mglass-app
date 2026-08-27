@@ -147,7 +147,27 @@ export function documentSafeItems(items: unknown): PublicQuoteItem[] {
   return (items as Record<string, unknown>[]).map(publicItem)
 }
 
+// Единственные поля notes, которые реально печатаются в документах наружу:
+//   • quote_date, production_days — счёт (components/InvoiceDocument)
+//   • shipped_date, launched_at   — дата УПД (components/UpdDocument)
+// Всё остальное в notes — внутреннее (ai_review, status_history, status_comment,
+// price_override, разбор AI, история цен…) и наружу идти не должно. Белый список
+// здесь, в одной точке: любой вызыватель хелпера защищён по построению, а не по
+// тому, вспомнил ли он затереть notes у себя.
+const DOCUMENT_NOTE_FIELDS = ['quote_date', 'production_days', 'shipped_date', 'launched_at'] as const
+
+export function documentSafeNotes(rawNotes: unknown): string | null {
+  const parsed = parseNotes(typeof rawNotes === 'string' ? rawNotes : null)
+  const out: Record<string, unknown> = {}
+  for (const k of DOCUMENT_NOTE_FIELDS) {
+    if (parsed[k] != null) out[k] = parsed[k]
+  }
+  return Object.keys(out).length ? JSON.stringify(out) : null
+}
+
 // Заказ для документа партнёра: ничего лишнего, кроме того, что печатается.
+// items и notes очищены по построению — внутренние поля вырезаны здесь, а не у
+// вызывателя. Реквизиты клиента вызыватель по-прежнему собирает белым списком сам.
 export function documentSafeOrder(order: Record<string, unknown>) {
   return {
     id: Number(order.id),
@@ -159,7 +179,7 @@ export function documentSafeOrder(order: Record<string, unknown>) {
     items: documentSafeItems(order.items),
     total_sale_inc_vat: Number(order.total_sale_inc_vat) || 0,
     total_after_discount: Number(order.total_after_discount) || 0,
-    notes: typeof order.notes === 'string' ? order.notes : null,
+    notes: documentSafeNotes(order.notes),
     created_at: String(order.created_at ?? ''),
     launched_at: (order.launched_at as string | null) ?? null,
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createServiceClient } from '@/lib/supabase-service'
 
 // Б13: взаиморасчёты с поставщиками. Закупки живут своим контуром
@@ -8,7 +9,6 @@ import { createServiceClient } from '@/lib/supabase-service'
 // «оплачено по закупкам» и «оплачено деньгами»: сходятся не всегда, и это
 // само по себе диагноз, а не повод усреднять.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 
 const norm = (s: string | null | undefined) =>
   (s ?? '').toLowerCase().replace(/[«»"'`]/g, '').replace(/\s+/g, ' ')

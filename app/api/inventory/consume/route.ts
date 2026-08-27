@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireInventoryRead, requireInventoryWrite } from '@/lib/inventory/auth'
 import { buildConsumePlan, applyConsume } from '@/lib/inventory/db'
-import type { DocType, PlanRow } from '@/lib/inventory/types'
+import type { DocType, PlanRow, MoveOrigin } from '@/lib/inventory/types'
 
 export const runtime = 'nodejs'
 
@@ -24,10 +24,15 @@ export async function POST(req: NextRequest) {
   const actor = await requireInventoryWrite()
   if (actor instanceof NextResponse) return actor
   try {
-    const body = await req.json() as { type: DocType; id: string; rows?: PlanRow[] }
+    const body = await req.json() as { type: DocType; id: string; rows?: PlanRow[]; origin?: MoveOrigin }
     const plan = await buildConsumePlan(body.type, body.id)
-    if (plan.already) return NextResponse.json({ error: 'По этому документу уже списывали', inserted: 0 }, { status: 409 })
-    return NextResponse.json(await applyConsume(plan, actor, body.rows))
+    // «Уже списано» и «нечего списывать» — не ошибки, а нормальные исходы: даём
+    // 200 с флагами, чтобы автосписание из цеха не выглядело сбоем в логах.
+    if (plan.already) {
+      return NextResponse.json({ inserted: 0, released: 0, skipped: 0, alreadyConsumed: true })
+    }
+    const res = await applyConsume(plan, actor, body.rows, body.origin ?? 'fact')
+    return NextResponse.json({ ...res, alreadyConsumed: false })
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 400 })
   }

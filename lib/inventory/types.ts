@@ -6,6 +6,8 @@ export type Kind =
 
 export type Unit = 'м2' | 'шт' | 'м.п.' | 'кг' | 'л' | 'компл'
 
+export type MoveOrigin = 'fact' | 'plan'
+
 export type MoveReason =
   | 'purchase' | 'return' | 'order' | 'production' | 'writeoff'
   | 'defect' | 'count' | 'init' | 'manual' | 'transfer'
@@ -47,6 +49,7 @@ export type InventoryMove = {
   qty:             number
   pack_qty:        number | null
   reason:          MoveReason
+  origin:          MoveOrigin
   unit_cost:       number
   doc_type:        DocType | null
   doc_id:          string | null
@@ -63,6 +66,7 @@ export type PlanRow = {
   unit:      Unit | null
   qty:       number          // сколько нужно, в базовой единице
   available: number          // сколько есть сейчас
+  reserved?: number          // сколько зарезервировано под этот заказ (дефолт для цеха)
   matched:   'ref' | 'alias' | 'name' | 'none'
   source:    string          // откуда взято (позиция заказа / BOM)
 }

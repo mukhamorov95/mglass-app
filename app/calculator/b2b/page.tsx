@@ -14,7 +14,7 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
-import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, type FactoryData } from '@/lib/b2bFactoryProducts'
+import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -188,8 +188,8 @@ export default function B2BCalculatorPage() {
   const [editTotalId, setEditTotalId] = useState<string | null>(null)
   // Мультивыбор позиций + массовая смена материала/толщины/типа.
   const [selIds, setSelIds]           = useState<Set<string>>(new Set())
-  const [bulkThickness, setBulkThickness] = useState<number | null>(null)
   const [bulkMatId, setBulkMatId]     = useState<number | null>(null)
+  const [bulkQty, setBulkQty]         = useState('')   // массовое количество: поставить всем одно число
 
   const [fSuperCat, setFSuperCat]     = useState<SuperCat>('стекло')
 
@@ -205,6 +205,12 @@ export default function B2BCalculatorPage() {
   const [fmLighting, setFmLighting] = useState(true)
   const [fmFrame, setFmFrame]     = useState(false)
   const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
+  // Стороны подсветки: по умолчанию весь периметр. Лента, профиль, рассеиватель и
+  // мощность блока считаются от выбранных сторон.
+  const [fmSides, setFmSides] = useState<LightSides>({ ...ALL_SIDES })
+  // Фацет и пескоструй — разные обработки, каждая со своей себестоимостью.
+  const [fmSandblast, setFmSandblast] = useState(false)
+  const [fmFacetMm, setFmFacetMm]     = useState<number | null>(null)
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
   const [fmCurved, setFmCurved]   = useState(false)
@@ -221,6 +227,9 @@ export default function B2BCalculatorPage() {
   const [flSoftClose, setFlSoftClose] = useState(false)
   const [flTempering, setFlTempering] = useState(false)
   const [flGlassId, setFlGlassId] = useState<number | null>(null)
+  // Стекло в лофте опционально: цех продаёт и голый каркас, а стекло тогда
+  // считается отдельной позицией просчёта.
+  const [flWithGlass, setFlWithGlass] = useState(true)
   const [flParsing, setFlParsing] = useState(false)
   const [flParseNote, setFlParseNote] = useState<string | null>(null)
   const [fThickness, setFThickness]   = useState<number | null>(null)
@@ -234,6 +243,7 @@ export default function B2BCalculatorPage() {
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fCurved, setFCurved]         = useState(false)
+  const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
   // А19: распознавание файла клиента
   type ParsedItem = { id: string; width: number | null; height: number | null; quantity: number; label: string; comment: string; confidence: string; needsReview: boolean }
@@ -271,6 +281,7 @@ export default function B2BCalculatorPage() {
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eCurved, setECurved]         = useState(false)
+  const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
   const [eTriplex, setETriplex]       = useState(false)
   const [eTriplexLayers, setETriplexLayers] = useState<2 | 3>(2)
@@ -612,9 +623,22 @@ export default function B2BCalculatorPage() {
   // считается от нуля, и изделие может уйти клиенту дешевле, чем обошлось нам.
   const bomIssues = useMemo(() => {
     if (items.length === 0) return []
-    const bomItems: BomCheckItem[] = items.map(it => {
+    // Изделия производства (зеркало с подсветкой, лофт) в справочник листовых
+    // материалов не входят: у них materialId = 0, а себестоимость собственная —
+    // полная стоимость изделия из цеха. Раньше они не находились в baseMaterials
+    // и попадали в ветку fallback с жёстко проставленным active: false — то есть
+    // КАЖДОЕ изделие производства получало «материал выключен в справочнике» и
+    // «не привязан к прайсу поставщика», хотя с ним всё в порядке. Предупреждение,
+    // которое срабатывает всегда, перестают читать — и оно не сработает тогда,
+    // когда себестоимость действительно нулевая.
+    // Индексы исходных позиций: сообщение печатает «Поз. N», и после отсева
+    // изделий нумерация обязана остаться той, что видит менеджер в списке.
+    const sourceIdx: number[] = []
+    const bomItems: BomCheckItem[] = items.flatMap((it, i) => {
+      if (!(it.materialId > 0)) return []
+      sourceIdx.push(i)
       const mat = baseMaterials.find(m => m.id === it.materialId)
-      return {
+      return [{
         material: mat
           ? { name: mat.name, category: mat.category, thickness: mat.thickness, cost_price: mat.cost_price, active: mat.active }
           : { name: it.materialName, category: it.category, thickness: it.thickness, cost_price: it.costMaterial > 0 ? it.costMaterial : 0, active: false },
@@ -624,9 +648,10 @@ export default function B2BCalculatorPage() {
         hasTriplex: it.hasTriplex ?? false,
         triplexPrice: it.hasTriplex ? { salePerM2: it.saleTriplex ?? 0, costPerM2: it.costTriplex ?? 0 } : null,
         services: it.services.map(s => ({ name: s.name, type: s.type, value: s.value, cost_price: s.costPrice })),
-      }
+      }]
     })
-    return checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    const issues = checkQuoteBom(bomItems, { facetPrices, ...(pricedMaterials ? { pricedMaterials } : {}) })
+    return issues.map(iss => ({ ...iss, itemIndex: sourceIdx[iss.itemIndex] ?? iss.itemIndex }))
   }, [items, baseMaterials, facetPrices, pricedMaterials])
 
   const bomSummary = useMemo(() => summarizeIssues(bomIssues), [bomIssues])
@@ -657,6 +682,13 @@ export default function B2BCalculatorPage() {
         mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
         underlayCost: Number(fmUnderlay) || 0, metalFrame: fmFrame,
+        lightSides: fmSides,
+        sandblast: fmSandblast,
+        facetTypeMm: fmFacetMm,
+        facetCostPerM: (() => {
+          const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
+          return f ? Number(f.cost_price) + Number(f.transport_cost ?? 0) : 0
+        })(),
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -666,7 +698,7 @@ export default function B2BCalculatorPage() {
         doors: Number(flDoors) || 0, fixedParts: Number(flFixed) || 0,
         rows: Number(flRows) || 1,
         handle: flHandle, softClose: flSoftClose,
-        glassId: flGlassId, tempering: flTempering,
+        glassId: flGlassId, tempering: flTempering, withGlass: flWithGlass,
       }, factoryData)
     }
     return null
@@ -781,7 +813,11 @@ export default function B2BCalculatorPage() {
         wastePercent: fWaste, hasTempering: fTempering,
         resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
         hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-        hasHoles: false, shape: 'rect',
+        // Признаки изделия -> маршрут цеха. Раньше здесь было зашито shape: 'rect',
+        // и криволинейное зеркало уходило в цех как прямое — без этапа криволинейки.
+        hasHoles: false,
+        shape: fKind === 'fmirror' && fmCurved ? 'curved' : 'rect',
+        hasSandblast: fKind === 'fmirror' && fmSandblast,
         hasTriplex: false, triplexLayers: 2, triplexPrice, triplexExtraGlasses: [],
         applyMinPrice: fMinPrice,
         comment: [p.label, p.comment, p.needsReview ? 'проверить размер' : ''].filter(Boolean).join(' · ') || undefined,
@@ -805,7 +841,7 @@ export default function B2BCalculatorPage() {
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect',
+      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
@@ -929,12 +965,16 @@ export default function B2BCalculatorPage() {
   }
 
   // ── Мультивыбор + массовая смена материала ──────────────────────────────────
-  const bulkThicknesses = useMemo(
-    () => [...new Set(materials.map(m => m.thickness))].sort((a, b) => a - b),
+  // Один список, сгруппированный по толщине (<optgroup>), а не два селекта:
+  // требовать выбрать толщину прежде материала — лишний шаг, из-за которого
+  // функция выглядела отсутствующей. Группы сохраняют навигацию по длинному
+  // списку, но не заставляют отвечать на вопрос про толщину заранее.
+  const bulkMaterialGroups = useMemo(
+    () => [...new Set(materials.map(m => m.thickness))]
+      .sort((a, b) => a - b)
+      .map(thickness => ({ thickness, materials: sortByPriority(materials.filter(m => m.thickness === thickness)) }))
+      .filter(g => g.materials.length > 0),
     [materials])
-  const bulkMaterials = useMemo(
-    () => sortByPriority(materials.filter(m => m.thickness === bulkThickness)),
-    [materials, bulkThickness])
 
   function toggleSel(localId: string) {
     setSelIds(prev => {
@@ -981,7 +1021,7 @@ export default function B2BCalculatorPage() {
     if (!mat || selIds.size === 0) return
     setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem(i, mat) : i))
     setSavedOrderId(null)
-    clearSel()
+    // Селекцию НЕ сбрасываем — владелец правит выбранные итеративно (как с количеством).
   }
   // Массовое переключение закалки у выбранных (зеркало закалку не поддерживает — пропускаем).
   function applyBulkTempering(on: boolean) {
@@ -997,6 +1037,27 @@ export default function B2BCalculatorPage() {
     setItems(prev => prev.filter(i => !selIds.has(i.localId)))
     setSavedOrderId(null)
     clearSel()
+  }
+
+  // Массовая правка количества у выбранных. Пересчёт — через тот же recomputeItem,
+  // что и смена материала: вторую ветку пересчёта не заводим. Количество не может
+  // стать 0 или отрицательным (иначе позиция молча выпадет из раскроя и уедет в КП
+  // как «0 шт»), поэтому всегда clamp'им к минимуму 1.
+  function applyBulkQty() {
+    const n = Math.floor(Number(bulkQty))
+    if (selIds.size === 0 || !Number.isFinite(n) || n < 1) return
+    setItems(prev => prev.map(i => selIds.has(i.localId) ? recomputeItem({ ...i, quantity: n }, null) : i))
+    setSavedOrderId(null)
+  }
+  // Относительная правка (+1 / −1): у позиций количества разные, обнулять нельзя —
+  // сдвигаем от текущего, не ниже 1.
+  function bumpBulkQty(delta: number) {
+    if (selIds.size === 0) return
+    setItems(prev => prev.map(i =>
+      selIds.has(i.localId)
+        ? recomputeItem({ ...i, quantity: Math.max(1, (Number(i.quantity) || 1) + delta) }, null)
+        : i))
+    setSavedOrderId(null)
   }
 
   const [eComment, setEComment] = useState('')
@@ -1015,6 +1076,7 @@ export default function B2BCalculatorPage() {
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
+    setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
     setETriplexLayers(item.triplexLayers === 3 ? 3 : 2)
@@ -1044,7 +1106,7 @@ export default function B2BCalculatorPage() {
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
@@ -1565,6 +1627,89 @@ export default function B2BCalculatorPage() {
                         <input type="checkbox" checked={fmLighting} onChange={e => setFmLighting(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
                         <span className={`text-[13px] font-medium ${fmLighting ? 'text-amber-700' : 'text-[#111110]'}`}>Подсветка LED</span>
                       </label>
+                    {fmLighting && (
+                      <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#faf9f7] p-3">
+                        <p className="text-[11px] font-medium text-[#6e6e73] mb-2">Где подсветка — нажми на стороны</p>
+                        <div className="flex items-start gap-3">
+                          <div className="relative w-[104px] h-[128px] shrink-0">
+                            <div className="absolute inset-[9px] rounded border border-[#d4d4ce] bg-white" />
+                            <button type="button" aria-pressed={fmSides.top} title="Сверху"
+                              onClick={() => setFmSides(v => ({ ...v, top: !v.top }))}
+                              className={`absolute left-[9px] right-[9px] top-0 h-[9px] rounded-sm transition-colors ${fmSides.top ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.bottom} title="Снизу"
+                              onClick={() => setFmSides(v => ({ ...v, bottom: !v.bottom }))}
+                              className={`absolute left-[9px] right-[9px] bottom-0 h-[9px] rounded-sm transition-colors ${fmSides.bottom ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.left} title="Слева"
+                              onClick={() => setFmSides(v => ({ ...v, left: !v.left }))}
+                              className={`absolute top-[9px] bottom-[9px] left-0 w-[9px] rounded-sm transition-colors ${fmSides.left ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.right} title="Справа"
+                              onClick={() => setFmSides(v => ({ ...v, right: !v.right }))}
+                              className={`absolute top-[9px] bottom-[9px] right-0 w-[9px] rounded-sm transition-colors ${fmSides.right ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              <button type="button" onClick={() => setFmSides({ ...ALL_SIDES })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Периметр</button>
+                              <button type="button" onClick={() => setFmSides({ top: false, bottom: false, left: true, right: true })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Бока</button>
+                              <button type="button" onClick={() => setFmSides({ top: true, bottom: true, left: false, right: false })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Верх и низ</button>
+                            </div>
+                            {(() => {
+                              const w = Number(fmW) || 0, h = Number(fmH) || 0
+                              const m = lightingLengthM(w, h, fmSides)
+                              const none = !fmSides.top && !fmSides.bottom && !fmSides.left && !fmSides.right
+                              if (none) return <p className="text-[11px] text-red-600">Не выбрана ни одна сторона — подсветку считать не из чего.</p>
+                              return <p className="text-[11px] text-[#6b6b66]">Лента, профиль и рассеиватель: <span className="font-mono text-[#111110]">{m > 0 ? m.toFixed(2) : '—'}</span> пог.м{w > 0 && h > 0 ? '' : ' (укажи размеры)'}</p>
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    {/* Обработки зеркала. Фацет и пескоструй — РАЗНЫЕ работы, не одна
+                        «декоративка»: у фацета своя ставка за пог.м, у пескоструя — своя
+                        за м². Если себестоимость не заведена в справочнике, говорим прямо:
+                        иначе маржа посчитается от нуля и изделие уйдёт дешевле, чем обошлось. */}
+                    <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#faf9f7] p-3 space-y-2">
+                      <p className="text-[11px] font-medium text-[#6e6e73]">Обработка</p>
+
+                      <div className="flex flex-wrap items-center gap-2">
+                        <label className="flex items-center gap-2 text-[12px] text-[#6b6b66] cursor-pointer">
+                          <input type="checkbox" checked={fmSandblast} onChange={e => setFmSandblast(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                          Пескоструй
+                        </label>
+                        <span className="w-px h-4 bg-[#e4e4e0]" />
+                        <span className="text-[12px] text-[#6b6b66]">Фацет:</span>
+                        <select value={fmFacetMm ?? ''} onChange={e => setFmFacetMm(e.target.value ? Number(e.target.value) : null)}
+                          className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] outline-none focus:border-[#111110]">
+                          <option value="">без фацета</option>
+                          {facetPrices.filter(f => f.active !== false).map(f => (
+                            <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {(() => {
+                        const warn: string[] = []
+                        if (fmSandblast) {
+                          const sb = factoryData?.retailMaterials.find(m => m.name.toLowerCase().includes('пескоструй'))
+                          if (!sb) warn.push('Пескоструй: позиции нет в справочнике материалов')
+                          else if (!(Number(sb.cost_price) > 0)) warn.push('Пескоструй: себестоимость не заведена')
+                        }
+                        if (fmFacetMm != null) {
+                          const f = facetPrices.find(x => x.type_mm === fmFacetMm && x.active !== false)
+                          const c = f ? Number(f.cost_price) + Number(f.transport_cost ?? 0) : 0
+                          if (!(c > 0)) warn.push(`Фацет ${fmFacetMm} мм: себестоимость не заведена`)
+                        }
+                        if (warn.length === 0) return null
+                        return (
+                          <div className="rounded-lg border border-red-200 bg-red-50 px-2.5 py-2">
+                            {warn.map((w, i) => <p key={i} className="text-[11px] text-red-700">{w}</p>)}
+                            <p className="text-[11px] text-red-700 font-medium mt-1">Маржа по этой обработке считается от нуля — заведи цену в справочнике до отправки клиенту.</p>
+                          </div>
+                        )
+                      })()}
+                    </div>
                       <select value={fmButton} onChange={e => setFmButton(e.target.value as 'none' | 'sensor' | 'wave')}
                         className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                         <option value="none">Без кнопки</option>
@@ -1681,11 +1826,21 @@ export default function B2BCalculatorPage() {
                       </label>
                     </div>
                     <div>
-                      <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Стекло</label>
-                      <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
-                        className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
-                        {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
-                      </select>
+                      <label className="flex items-center gap-2 text-[13px] font-medium text-[#6e6e73] mb-1 cursor-pointer">
+                        <input type="checkbox" checked={flWithGlass} onChange={e => setFlWithGlass(e.target.checked)} className="accent-[#111110]" />
+                        Стекло в изделии
+                      </label>
+                      {flWithGlass ? (
+                        <select value={flGlassId ?? ''} onChange={e => setFlGlassId(Number(e.target.value))}
+                          className="w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
+                          {factoryData.loftGlasses.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                        </select>
+                      ) : (
+                        <p className="text-[11px] text-[#6b6b66] leading-snug">
+                          Считаем только каркас: без стекла, закалки и остекления.
+                          Стекло добавь отдельной позицией просчёта.
+                        </p>
+                      )}
                     </div>
                   </>
                 )}
@@ -1893,6 +2048,19 @@ export default function B2BCalculatorPage() {
                     className="w-3.5 h-3.5 rounded accent-[#111110]" />
                   <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-[#111110]'}`}>
                     {fCurved ? 'Криволинейный рез' : 'Прямой рез'}
+                  </span>
+                </label>
+              </div>
+              <div>
+                {/* Песочка — отдельный этап цеха со своей оснасткой (макет → оракал →
+                    наклейка → пескоструй). Нажали здесь — деталь пойдёт через него;
+                    не нажали — не пойдёт. Маршрут строится из просчёта, а не угадывается. */}
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Песочка</label>
+                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fSandblast ? 'border-violet-300 bg-violet-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                  <input type="checkbox" checked={fSandblast} onChange={e => setFSandblast(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                  <span className={`text-[13px] font-medium ${fSandblast ? 'text-violet-700' : 'text-[#111110]'}`}>
+                    {fSandblast ? 'С песочкой' : 'Без песочки'}
                   </span>
                 </label>
               </div>
@@ -2214,19 +2382,18 @@ export default function B2BCalculatorPage() {
                   <span className="text-[12px] font-semibold text-[#111110]">Выбрано: {selIds.size}</span>
                   <span className="text-[11px] text-[#6b6b66]">Сменить материал →</span>
                   <select
-                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] font-mono text-[#111110] outline-none"
-                    value={bulkThickness ?? ''}
-                    onChange={e => { setBulkThickness(Number(e.target.value)); setBulkMatId(null) }}>
-                    <option value="">толщина</option>
-                    {bulkThicknesses.map(t => <option key={t} value={t}>{t} мм</option>)}
-                  </select>
-                  <select
-                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] text-[#111110] outline-none min-w-[160px]"
+                    className="bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] text-[#111110] outline-none min-w-[200px] disabled:opacity-40"
                     value={bulkMatId ?? ''}
-                    disabled={bulkThickness === null}
+                    disabled={bulkMaterialGroups.length === 0}
                     onChange={e => setBulkMatId(e.target.value ? Number(e.target.value) : null)}>
-                    <option value="">{bulkThickness === null ? 'сначала толщина' : 'тип / материал'}</option>
-                    {bulkMaterials.map(m => <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>)}
+                    <option value="">{bulkMaterialGroups.length === 0 ? 'справочник материалов пуст' : 'выберите материал'}</option>
+                    {bulkMaterialGroups.map(g => (
+                      <optgroup key={g.thickness} label={`${g.thickness} мм`}>
+                        {g.materials.map(m => (
+                          <option key={m.id} value={m.id}>{m.supplier_material_name ? `${m.name} (${m.supplier_material_name})` : m.name}</option>
+                        ))}
+                      </optgroup>
+                    ))}
                   </select>
                   <button onClick={applyBulkMaterial} disabled={bulkMatId === null}
                     className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
@@ -2241,6 +2408,30 @@ export default function B2BCalculatorPage() {
                   <button onClick={() => applyBulkTempering(false)}
                     className="px-2.5 py-1 rounded-lg text-[12px] text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
                     выкл
+                  </button>
+                  <span className="w-px h-4 bg-[#c9d4f0]" />
+                  <span className="text-[11px] text-[#6b6b66]">Кол-во:</span>
+                  <button onClick={() => bumpBulkQty(-1)}
+                    title="Уменьшить на 1 у выбранных (не ниже 1)"
+                    className="px-2 py-1 rounded-lg text-[12px] font-mono text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    −1
+                  </button>
+                  <button onClick={() => bumpBulkQty(1)}
+                    title="Увеличить на 1 у выбранных"
+                    className="px-2 py-1 rounded-lg text-[12px] font-mono text-[#6b6b66] border border-[#e4e4e0] hover:bg-white transition-colors">
+                    +1
+                  </button>
+                  <input
+                    type="number" min="1" step="1" placeholder="напр. 2"
+                    value={bulkQty}
+                    onChange={e => setBulkQty(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') applyBulkQty() }}
+                    className="w-16 bg-white border border-[#c9d4f0] rounded-lg px-2 py-1 text-[12px] font-mono text-center outline-none" />
+                  <button onClick={applyBulkQty}
+                    disabled={Math.floor(Number(bulkQty)) < 1 || !Number.isFinite(Number(bulkQty)) || bulkQty.trim() === ''}
+                    title="Поставить всем выбранным это количество"
+                    className="px-3 py-1 rounded-lg bg-[#111110] text-white text-[12px] font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-[#2a2a28] transition-colors">
+                    Задать
                   </button>
                   <span className="w-px h-4 bg-[#c9d4f0]" />
                   <button onClick={bulkDelete}
@@ -2848,7 +3039,7 @@ export default function B2BCalculatorPage() {
             wastePercent: eWaste, hasTempering: eTempering,
             resolvedServices: resolveSvcs(services.filter(s => eServiceIds.includes(s.id)), eTierSel, eFilmSel),
             hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect',
+            hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
             hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
             triplexExtraGlasses: eTriplex ? triplexExtras(eSelectedMat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
             applyMinPrice: eMinPrice,
@@ -2987,6 +3178,11 @@ export default function B2BCalculatorPage() {
                       <input type="checkbox" checked={eCurved} onChange={e => setECurved(e.target.checked)}
                         className="w-3.5 h-3.5 rounded accent-[#111110]" />
                       <span className={`text-[13px] ${eCurved ? 'text-teal-700 font-medium' : 'text-[#111110]'}`}>Криволинейка</span>
+                    </label>
+                    <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eSandblast ? 'border-violet-300 bg-violet-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
+                      <input type="checkbox" checked={eSandblast} onChange={e => setESandblast(e.target.checked)}
+                        className="w-3.5 h-3.5 rounded accent-[#111110]" />
+                      <span className={`text-[13px] ${eSandblast ? 'text-violet-700 font-medium' : 'text-[#111110]'}`}>Песочка</span>
                     </label>
                     <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${eMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
                       <input type="checkbox" checked={eMinPrice} onChange={e => setEMinPrice(e.target.checked)}

@@ -20,6 +20,23 @@ export function deadlineFor(kind: ProductKind, hasWelded = false): Deadline {
   return { make: d.make, install: d.install, total: d.make + d.install }
 }
 
+// Сварное изделие в спецификации (лофт/рама/каркас) → срок 25 р.дн. вместо 15.
+// Живёт здесь, рядом с самой нормой, а не в роуте запуска: оценку срока показывают
+// ещё и партнёру в кабинете, и она должна совпадать с тем, что потом поставит запуск
+// производства. Две копии этой регулярки = два разных срока в разных местах.
+export function hasWeldedItems(items: unknown[]): boolean {
+  return items.some(it => {
+    const o = it as Record<string, unknown> | null
+    const s = `${o?.category ?? ''} ${o?.materialName ?? ''}`.toLowerCase()
+    return /сварн|лофт|каркас|рама|welded/.test(s)
+  })
+}
+
+// Дней изготовления по спецификации: сварное — 25 р.дн., иначе базовые 15.
+export function makeDaysFor(items: unknown[], kind: ProductKind = 'shower'): number {
+  return deadlineFor(kind, hasWeldedItems(items)).make
+}
+
 // Число прописью (для «Пятнадцать (15)» в тексте договора).
 const WORDS: Record<number, string> = {
   5: 'Пять', 15: 'Пятнадцать', 20: 'Двадцать', 25: 'Двадцать пять', 30: 'Тридцать',

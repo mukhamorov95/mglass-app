@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { toPublicQuote, newPublicToken, documentSafeOrder, documentSafeItems } from '@/lib/b2b/publicQuote'
+import { toPublicQuote, newPublicToken, documentSafeOrder, documentSafeItems, documentSafeNotes } from '@/lib/b2b/publicQuote'
 
 // Публичное КП отдаётся без логина — главное требование: наружу не уходит
 // ничего про себестоимость и внутреннюю кухню.
@@ -94,5 +94,47 @@ describe('documentSafeOrder — кабинет партнёра', () => {
   it('мусор вместо items не роняет документ', () => {
     expect(documentSafeItems(null)).toEqual([])
     expect(documentSafeItems('нет')).toEqual([])
+  })
+})
+
+// Дыра, прожившая до аудита безопасности: documentSafeOrder резал cost из items,
+// но notes отдавал сырыми — через них наружу уходили ai_review, status_history,
+// status_comment. Тест раньше проверял только items и давал ложное покрытие.
+describe('documentSafeOrder / documentSafeNotes — очистка notes', () => {
+  const DIRTY = JSON.stringify({
+    quote_date: '2026-08-25', production_days: 5, shipped_date: '2026-08-30', launched_at: '2026-08-26',
+    // внутреннее — наружу идти НЕ должно:
+    ai_review: { issues: [{ severity: 'high', text: 'маржа тонкая' }], summary: 'риск' },
+    status_history: [{ from: 'quote', to: 'agreed', by: 'client_link' }],
+    status_comment: 'внутренняя пометка менеджера',
+    price_approval: { needed: true, margin: 12 },
+    manager_name: 'Нуржан', payment_status: 'partial', price_override: { base: 40000 },
+  })
+
+  it('оставляет только печатаемые в документах поля notes', () => {
+    const safe = documentSafeOrder({ ...ORDER, notes: DIRTY })
+    const parsed = JSON.parse(safe.notes as string)
+    expect(Object.keys(parsed).sort()).toEqual(['launched_at', 'production_days', 'quote_date', 'shipped_date'])
+  })
+
+  it('внутренние поля не просачиваются даже подстрокой', () => {
+    const safe = documentSafeOrder({ ...ORDER, notes: DIRTY })
+    const json = JSON.stringify(safe)
+    for (const leak of ['ai_review', 'status_history', 'status_comment', 'price_approval', 'price_override', 'payment_status', 'manager_name', 'маржа тонкая', 'внутренняя пометка']) {
+      expect(json).not.toContain(leak)
+    }
+  })
+
+  it('УПД снова получает shipped_date/launched_at (регресс локального фикса #299)', () => {
+    const notes = documentSafeNotes(DIRTY)
+    const parsed = JSON.parse(notes as string)
+    expect(parsed.shipped_date).toBe('2026-08-30')
+    expect(parsed.launched_at).toBe('2026-08-26')
+  })
+
+  it('пустые/мусорные notes дают null, а не «{}»', () => {
+    expect(documentSafeNotes(null)).toBeNull()
+    expect(documentSafeNotes('не json')).toBeNull()
+    expect(documentSafeNotes(JSON.stringify({ status_comment: 'только внутреннее' }))).toBeNull()
   })
 })

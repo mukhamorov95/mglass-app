@@ -8,7 +8,7 @@ type Item = { material: string; thickness: number; width: number; height: number
 type TL = { label: string; state: 'done' | 'now' | 'wait'; date: string | null }
 type Order = {
   id: number; number: string; clientOrderNumber: string | null; created_at: string
-  lane: string; ready: boolean; progressPct: number; deadline: string | null
+  lane: string; ready: boolean; progressPct: number; deadline: string | null; estimateDays?: number
   paymentStatus?: 'paid' | 'awaiting' | null
   onlinePayEnabled?: boolean
   canInvoice?: boolean
@@ -107,7 +107,7 @@ export default function PartnerOrderPage({ params }: { params: Promise<{ id: str
           <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-.02em' }}>
             {o.number}{o.clientOrderNumber && <span style={{ color: 'var(--muted)', fontWeight: 400 }}> · ваш № {o.clientOrderNumber}</span>}
           </div>
-          <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : ''}</div>
+          <div className="cap" style={{ marginTop: 3 }}>Создан {fmtDate(o.created_at)}{o.deadline ? ` · срок отгрузки ${fmtDate(o.deadline)}` : (o.lane === 'submitted' && o.estimateDays ? ` · срок ~${o.estimateDays} раб. дней после запуска` : '')}</div>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {o.paymentStatus && (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { createClient } from '@/lib/supabase-browser'
 import { PRODUCTION_STAGES } from '@/lib/productionStages'
 import { PROD_SINCE, deadlineOf } from '@/lib/orderFlags'
+import { measureStationTime, measureWorkerThroughput, whyNoData, MIN_MEASUREMENTS, type Closure } from '@/lib/production/cycleTime'
 import ProductionTabs from '@/components/ProductionTabs'
 
 // Метрики цеха: выработка по станциям, скорость (цикл/ожидание), журнал проблем.
@@ -22,6 +23,9 @@ type Task = {
   problem_comment: string | null
   problem_at: string | null
   problem_resolved_at: string | null
+  completed_by: string | null
+  completed_by_name: string | null
+  auto_closed: boolean | null
 }
 
 const hours = (ms: number) => ms / 3600000
@@ -53,7 +57,7 @@ export default function MetricsPage() {
       const since = new Date(Date.now() - 35 * 86400000).toISOString()
       const [{ data }, { data: ords }] = await Promise.all([
         sb.from('production_tasks')
-          .select('id, order_id, stage_key, station, status, created_at, started_at, completed_at, problem_reason_code, problem_comment, problem_at, problem_resolved_at')
+          .select('id, order_id, stage_key, station, status, created_at, started_at, completed_at, problem_reason_code, problem_comment, problem_at, problem_resolved_at, completed_by, completed_by_name, auto_closed')
           .gte('created_at', since).limit(5000),
         sb.from('b2b_orders').select('id,notes')
           .gte('created_at', PROD_SINCE)
@@ -104,13 +108,29 @@ export default function MetricsPage() {
     return { done: done.length, byStation, activeProblems, problemLog, wip, onTime, shipped, overdueNow }
   }, [tasks, deadlines, period, nowTs])
 
+  // П4 — время этапа. Считается интервалом между двумя подряд «Готово» одного человека
+  // на одной станции: это единственный сигнал, который цех подаёт добровольно.
+  // started_at сознательно не используется — после П2 он приходит от раскрытия карточки
+  // и завышает длительность на время, что карточка просто висела открытой.
+  const timing = useMemo(() => {
+    // nowTs, а не Date.now(): страница уже держит время в состоянии, потому что
+    // вызов часов во время рендера — нечистая функция (правило React 19).
+    if (!nowTs) return { stations: [], workers: [] }
+    const since = nowTs - period * 86400000
+    const closures: Closure[] = tasks
+      .filter(t => t.status === 'done' && t.completed_by && t.completed_at && !t.auto_closed)
+      .map(t => ({ worker: t.completed_by!, workerName: t.completed_by_name, station: t.station, at: Date.parse(t.completed_at!) }))
+      .filter(c => c.at >= since)
+    return { stations: measureStationTime(closures), workers: measureWorkerThroughput(closures) }
+  }, [tasks, period, nowTs])
+
   if (loading) return <div className="min-h-screen flex items-center justify-center text-[13px] text-[#8a8a85]">Загрузка…</div>
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-5 pt-6 pb-3">
         <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Метрики цеха</h1>
-        <p className="text-[12px] text-[#9a9a95] mt-0.5">Выработка, скорость и проблемы по станциям. Цикл — от «взял» до «готово»; ожидание+работа — от создания задачи до готовности.</p>
+        <p className="text-[12px] text-[#9a9a95] mt-0.5">Выработка, время работы и проблемы по станциям.</p>
         <ProductionTabs />
       </div>
 
@@ -172,6 +192,70 @@ export default function MetricsPage() {
             </table>
           </div>
           <p className="px-4 py-2 text-[10px] text-[#c4c4be]">Большое «ожидание+работа» при коротком цикле = задачи долго лежат в очереди — узкое место перед станцией.</p>
+        </div>
+
+        {/* П4 — время этапа */}
+        <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-hidden">
+          <p className="px-4 pt-4 pb-1 text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Время на изделие · за {period} дней</p>
+          <p className="px-4 pb-2 text-[11px] text-[#9a9a95]">
+            Считается по интервалу между отметками «Готово» — тем единственным, что цех делает всегда.
+            Интервал засчитывается, только если в это время человек не работал на других станциях.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <thead>
+                <tr className="text-left text-[10px] uppercase tracking-wider text-[#9a9a95] border-b border-[#f0f0ec]">
+                  <th className="px-4 py-2">Станция</th>
+                  <th className="px-2 py-2 text-right">Медиана</th>
+                  <th className="px-2 py-2 text-right">Долгие (p90)</th>
+                  <th className="px-4 py-2 text-right">Замеров</th>
+                </tr>
+              </thead>
+              <tbody>
+                {timing.stations.map(st => {
+                  const why = whyNoData(st)
+                  const label = PRODUCTION_STAGES.find(p => p.key === st.station)?.label ?? st.station
+                  return (
+                    <tr key={st.station} className="border-b border-[#f8f8f7] align-top">
+                      <td className="px-4 py-2 font-medium">{label}</td>
+                      {why ? (
+                        <td colSpan={3} className="px-2 py-2 text-[11px] text-[#9a9a95]">
+                          нет надёжной оценки — {why}
+                        </td>
+                      ) : (
+                        <>
+                          <td className="px-2 py-2 text-right font-mono font-bold">{st.medianMin!.toFixed(0)} мин</td>
+                          <td className="px-2 py-2 text-right font-mono text-[#6b6b66]">{st.p90Min!.toFixed(0)} мин</td>
+                          <td className="px-4 py-2 text-right font-mono text-[#9a9a95]">{st.measurements} · {st.items} изд.</td>
+                        </>
+                      )}
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          <p className="px-4 pt-3 pb-1 text-[11px] font-bold uppercase tracking-widest text-[#9a9a95]">Пропускная способность людей</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-[12px]">
+              <tbody>
+                {timing.workers.filter(w => w.measurements >= MIN_MEASUREMENTS).map(w => (
+                  <tr key={w.worker} className="border-b border-[#f8f8f7]">
+                    <td className="px-4 py-2 font-medium">{w.workerName ?? '—'}</td>
+                    <td className="px-2 py-2 text-right font-mono font-bold">{w.medianMin!.toFixed(1)} мин / изделие</td>
+                    <td className="px-4 py-2 text-right font-mono text-[#9a9a95]">{w.items} изд. за период</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="px-4 py-2 text-[10px] text-[#c4c4be]">
+            Пустая клетка — не сбой. Причин две. Либо человек ведёт несколько станций, и интервал
+            на каждой включает работу на остальных — разделить нельзя, честная мера тогда только
+            по человеку. Либо на станции просто не отмечают: работа идёт, а данных о ней нет.
+            Второе видно на экране «Кто что делал» — по пустой строке у того, кто на смене.
+          </p>
         </div>
 
         {/* Активные проблемы */}

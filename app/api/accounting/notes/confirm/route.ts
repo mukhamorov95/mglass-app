@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { notifyAdmins } from '@/lib/telegram'
@@ -10,7 +11,6 @@ import { notifyAdmins } from '@/lib/telegram'
 // и пингует владельца, а его ответ (result_note) возвращается в карточку.
 // Задачи пишем service-role: owner_tasks закрыты RLS для всех, кроме владельцев.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 type Item = { text: string; kind?: string; done?: boolean; task_id?: number }
 
 const PRIORITY: Record<string, 'low' | 'normal' | 'high'> = {

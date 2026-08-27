@@ -1,10 +1,15 @@
 import { createClient } from '@supabase/supabase-js'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
-import { type DetailStages, getApplicableStages, type DetailStageKey } from '@/lib/productionStages'
+import { type DetailStages, getApplicableStages, type DetailStageKey, stageLabel } from '@/lib/productionStages'
 import { PROD_SINCE } from '@/lib/orderFlags'
 
-// Борд начальника производства «заказ × этапы» — единый обзор цеха.
+// ЕДИНЫЙ ОБЗОР ЦЕХА. Собран из трёх экранов, которые отвечали на один вопрос
+// «что сейчас в цеху» (П6): матрица «заказ × этапы» отсюда, пул по станциям — из
+// «Пула на сегодня», сводка, фильтры и счётчик отмен — из «Панели производства».
+// Та панель вдобавок стояла целиком на notes.detail_stages и не обращалась к
+// production_tasks вообще — расходилась с остальным контуром по построению.
+// Оба прежних адреса оставлены редиректами: на «Пул на сегодня» ссылается дашборд CEO.
 // Строки = активные заказы, колонки = этапы ленты заказа, ячейки = статус этапа.
 // Основа: notes.stages (order-level флаги — данные есть по всем активным заказам).
 // Уточнение (в работе / частично / проблема): detail_stages + production_tasks
@@ -21,6 +26,8 @@ type NotesData = {
   docs_printed?: boolean
   stages?: Stages
   detail_stages?: DetailStages
+  detail_stage_audit?: unknown[]
+  urgent?: boolean
 }
 type ItemLite = { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string }
 type Order = { id: number; client_name: string | null; custom_number: string | null; items: ItemLite[]; created_at: string; pn: NotesData }
@@ -61,12 +68,25 @@ function dColor(d: number, ready: boolean) {
   return 'text-[#6b6b66] bg-[#f0f0ec] border-[#e4e4e0]'
 }
 
+// Фильтры перенесены из «Панели производства». Живут в адресе, а не в состоянии:
+// экран серверный, и ссылку на «просрочку» можно дать словами.
+const FILTERS = [
+  { key: 'all',      label: 'Все' },
+  { key: 'overdue',  label: 'Просрочка' },
+  { key: 'urgent',   label: 'Горит' },
+  { key: 'problems', label: 'Проблемы' },
+  { key: 'ready',    label: 'Готовы' },
+  { key: 'audit',    label: 'С отменами' },
+] as const
+type FilterKey = typeof FILTERS[number]['key']
+
 type CellStatus = 'done' | 'inprogress' | 'partial' | 'problem' | 'none'
 type Cell = { status: CellStatus; doneN?: number; total?: number; worker?: string; frontier?: boolean }
 
-export default async function BoardPage({ searchParams }: { searchParams: Promise<{ all?: string }> }) {
+export default async function BoardPage({ searchParams }: { searchParams: Promise<{ all?: string; filter?: string }> }) {
   const sp = await searchParams
   const showAll = sp.all === '1'
+  const filter: FilterKey = (FILTERS.some(f => f.key === sp.filter) ? sp.filter : 'all') as FilterKey
   const svc = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!)
 
   const { data } = await svc
@@ -99,6 +119,20 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   const userName = new Map((users ?? []).map(u => [u.id, (u.name ?? '').split(' ')[0]]))
   const ipByOrderStage = new Map<string, string | undefined>()
   for (const t of ipTasks ?? []) ipByOrderStage.set(`${t.order_id}:${t.stage_key}`, t.assigned_to ? userName.get(t.assigned_to) : undefined)
+
+  // Пул по станциям (из «Пула на сегодня»): сколько открытых задач стоит на каждой.
+  const { data: poolTasks } = orderIds.length
+    ? await svc.from('production_tasks').select('station,status').in('order_id', orderIds).in('status', ['queued', 'in_progress', 'problem'])
+    : { data: [] as { station: string; status: string }[] }
+  const pool = new Map<string, { open: number; problems: number }>()
+  for (const t of (poolTasks ?? []) as { station: string; status: string }[]) {
+    const cur = pool.get(t.station) ?? { open: 0, problems: 0 }
+    if (t.status === 'problem') cur.problems += 1; else cur.open += 1
+    pool.set(t.station, cur)
+  }
+  const poolRows = [...pool.entries()]
+    .map(([station, v]) => ({ station, label: stageLabel(station), ...v }))
+    .sort((a, b) => (b.open + b.problems) - (a.open + a.problems))
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
 
@@ -148,10 +182,30 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
     return { o, cells, anyProblem, allDone, days }
   }
 
-  const rows = active.map(buildRow).sort((a, b) => (a.allDone ? 1 : 0) - (b.allDone ? 1 : 0) || a.days - b.days)
-  const visible = showAll ? rows : rows.filter(r => !r.allDone)
-  const doneCount = rows.filter(r => r.allDone).length
+  const rows = active.map(buildRow)
+    .map(r => ({ ...r, undos: Array.isArray(r.o.pn.detail_stage_audit) ? r.o.pn.detail_stage_audit.length : 0 }))
+    .sort((a, b) => (a.allDone ? 1 : 0) - (b.allDone ? 1 : 0) || a.days - b.days)
+
+  const doneCount    = rows.filter(r => r.allDone).length
   const problemCount = rows.filter(r => r.anyProblem).length
+  const overdueCount = rows.filter(r => !r.allDone && r.days < 0).length
+  const urgentCount  = rows.filter(r => !r.allDone && r.days >= 0 && r.days <= 1).length
+  const undoCount    = rows.filter(r => r.undos > 0).length
+
+  const matches = (r: typeof rows[number]) => {
+    if (filter === 'overdue')  return !r.allDone && r.days < 0
+    if (filter === 'urgent')   return !r.allDone && r.days >= 0 && r.days <= 1
+    if (filter === 'problems') return r.anyProblem
+    if (filter === 'ready')    return r.allDone
+    if (filter === 'audit')    return r.undos > 0
+    return showAll || !r.allDone
+  }
+  const visible = rows.filter(matches)
+  const counts: Record<FilterKey, number> = {
+    all: showAll ? rows.length : rows.length - doneCount,
+    overdue: overdueCount, urgent: urgentCount, problems: problemCount,
+    ready: doneCount, audit: undoCount,
+  }
 
   const usedStages = new Set<string>()
   for (const o of active) for (const it of o.items) for (const s of getApplicableStages(it)) usedStages.add(s.key)
@@ -160,7 +214,7 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
   return (
     <div className="min-h-screen bg-[#f5f5f3] pb-20">
       <div className="bg-white border-b border-[#e4e4e0] px-4 pt-12 pb-3 lg:pt-6">
-        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Борд производства</h1>
+        <h1 className="text-[20px] font-bold text-[#111110] tracking-tight">Обзор цеха</h1>
         <p className="text-[13px] text-[#9a9a95] mt-0.5">
           {rows.length - doneCount} в работе · {doneCount} готовы к отгрузке{problemCount > 0 ? ` · ${problemCount} с проблемой` : ''}
         </p>
@@ -172,10 +226,47 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
         } />
       </div>
 
-      <div className="px-4 pt-4">
+      <div className="px-4 pt-4 space-y-3">
+
+        {/* Пул по станциям — перенесён из «Пула на сегодня». Где сколько стоит прямо сейчас. */}
+        {poolRows.length > 0 && (
+          <div className="bg-white rounded-xl border border-[#e4e4e0] px-4 py-3">
+            <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-wide mb-2">Стоит по станциям</p>
+            <div className="flex flex-wrap gap-2">
+              {poolRows.map(r => (
+                <Link key={r.station} href={`/production-app/station/${r.station}`}
+                  className="flex items-baseline gap-1.5 px-2.5 py-1.5 rounded-lg border border-[#e4e4e0] hover:border-[#111110] transition-colors">
+                  <span className="text-[12px] text-[#111110]">{r.label}</span>
+                  <span className="text-[13px] font-bold tabular-nums text-[#111110]">{r.open}</span>
+                  {r.problems > 0 && <span className="text-[11px] font-semibold text-red-600">⚠{r.problems}</span>}
+                </Link>
+              ))}
+            </div>
+            <p className="text-[10px] text-[#c4c4be] mt-2">
+              Большая очередь не всегда означает завал: если на станции не отмечают, работа идёт, а задачи копятся.
+              Кто отмечает — видно в «Кто что делал».
+            </p>
+          </div>
+        )}
+
+        {/* Фильтры — перенесены из «Панели производства» */}
+        <div className="flex flex-wrap gap-1.5">
+          {FILTERS.map(f => {
+            const active = filter === f.key
+            const n = counts[f.key]
+            const tone = f.key === 'overdue' ? 'text-red-600' : f.key === 'problems' ? 'text-orange-600' : f.key === 'ready' ? 'text-emerald-700' : 'text-[#6b6b66]'
+            return (
+              <Link key={f.key} href={f.key === 'all' ? '/production-app/board' : `/production-app/board?filter=${f.key}`}
+                className={`text-[11px] font-medium px-2.5 py-1 rounded-full transition-colors ${active ? 'bg-[#111110] text-white' : 'bg-white border border-[#e4e4e0] hover:bg-[#f0f0ec]'}`}>
+                {f.label} <span className={active ? 'opacity-70' : tone}>{n}</span>
+              </Link>
+            )
+          })}
+        </div>
+
         {visible.length === 0 ? (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-8 text-center">
-            <p className="text-[14px] text-[#9a9a95]">Нет заказов в работе</p>
+            <p className="text-[14px] text-[#9a9a95]">{filter === 'all' ? 'Нет заказов в работе' : 'Под этот фильтр ничего не попало'}</p>
           </div>
         ) : (
           <div className="bg-white rounded-xl border border-[#e4e4e0] overflow-x-auto">
@@ -188,12 +279,13 @@ export default async function BoardPage({ searchParams }: { searchParams: Promis
                 </tr>
               </thead>
               <tbody>
-                {visible.map(({ o, cells, anyProblem, allDone, days }) => (
+                {visible.map(({ o, cells, anyProblem, allDone, days, undos }) => (
                   <tr key={o.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
                     <td className="px-3 py-2 sticky left-0 bg-white">
                       <Link href={`/production-app/orders/${o.id}`} className="block min-w-[120px]">
                         <span className="font-bold text-[#111110]">{o.custom_number?.trim() || `00${o.id}`}</span>
                         {anyProblem && <span className="ml-1 text-red-600">⚠</span>}
+                        {undos > 0 && <span className="ml-1 text-blue-600" title={`Отмен этапов: ${undos}`}>↩{undos}</span>}
                         <span className="block text-[11px] text-[#9a9a95] truncate max-w-[160px]">{o.client_name}</span>
                       </Link>
                     </td>

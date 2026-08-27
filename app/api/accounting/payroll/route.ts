@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
+import { FIN_ROLES } from '@/lib/accounting/roles'
 import { createClient } from '@/lib/supabase-server'
 import { createServiceClient } from '@/lib/supabase-service'
 
@@ -9,7 +10,6 @@ import { createServiceClient } from '@/lib/supabase-service'
 // Долг = начислено − выплачено за месяц. Удержания (НДФЛ, взносы) считаются
 // отдельной строкой начисления и в долг человеку не идут — это долг государству.
 
-const FIN_ROLES = ['accountant', 'cfo', 'admin', 'ceo'] as const
 const WITHHELD = ['НДФЛ', 'взносы']
 const PAYROLL_FUNDS = ['фонд оплаты труда', 'сдельная зарплата']
 

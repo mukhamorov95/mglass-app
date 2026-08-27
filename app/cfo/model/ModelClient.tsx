@@ -8,6 +8,7 @@ import {
   type FixedLine,
   type BePnl,
 } from '@/lib/cfo/factModel'
+import type { SourceDiag, Verdict } from '@/lib/cfo/sourceDiagnostics'
 
 type FactInfo = { revenue: number; captured: boolean }
 
@@ -16,13 +17,14 @@ type Props = {
   fixed: FixedLine[]
   fundsRubByUnit: Record<string, number>
   factByUnit: Record<string, FactInfo>
+  diagnostics: SourceDiag[]
   daysElapsed: number
   monthLabel: string
   hasData: boolean
   updatedAt: string | null
 }
 
-type Tab = 'fact' | 'scen' | 'help'
+type Tab = 'fact' | 'scen' | 'src' | 'help'
 
 function fmt(n: number) {
   if (Math.abs(n) >= 1_000_000) return (n / 1_000_000).toFixed(2).replace('.', ',') + ' млн ₽'
@@ -32,7 +34,7 @@ function fmt(n: number) {
 function posColor(n: number) { return n >= 0 ? '#1f9d57' : '#d04a3b' }
 function marginColor(pct: number) { return pct >= 35 ? '#1f9d57' : pct >= 25 ? '#c98a12' : '#d04a3b' }
 
-export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit, daysElapsed, monthLabel, hasData, updatedAt }: Props) {
+export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit, diagnostics, daysElapsed, monthLabel, hasData, updatedAt }: Props) {
   const [tab, setTab] = useState<Tab>('fact')
   const [excluded, setExcluded] = useState<string[]>([])
   const [unit, setUnit] = useState<string>('all') // 'all' | название юнита
@@ -55,6 +57,7 @@ export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit
   const tabs: { id: Tab; label: string }[] = [
     { id: 'fact', label: 'Факт' },
     { id: 'scen', label: 'Сценарии' },
+    { id: 'src', label: 'Источники' },
     { id: 'help', label: 'Что это значит' },
   ]
   const unitBtns = [{ key: 'all', label: 'Компания (оба)' }, ...units.map((u) => ({ key: u, label: u }))]
@@ -115,6 +118,7 @@ export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit
             {tab === 'scen' && (
               <ScenTab base={base} scen={scen} fixed={selFixed} excluded={excluded} presets={presets} toggle={toggle} setExcluded={setExcluded} />
             )}
+            {tab === 'src' && <SourcesTab diagnostics={diagnostics} factByUnit={factByUnit} monthLabel={monthLabel} daysElapsed={daysElapsed} />}
             {tab === 'help' && <HelpTab />}
           </>
         )}
@@ -382,6 +386,74 @@ function CmpCol({ label, pnl, shaded }: { label: string; pnl: BePnl; shaded?: bo
       {row('Прибыль после долга', fmt(pnl.operating), true, posColor(pnl.operating))}
       {row('Безубыточность ТБ-0', pnl.tb0 != null ? fmt(pnl.tb0) : '—')}
     </div>
+  )
+}
+
+function verdictStyle(v: Verdict): { icon: string; label: string; color: string; bg: string } {
+  if (v === 'trust') return { icon: '✅', label: 'доверять', color: '#1f9d57', bg: 'color-mix(in srgb, #1f9d57 12%, transparent)' }
+  if (v === 'partial') return { icon: '⚠️', label: 'частично', color: '#c98a12', bg: 'color-mix(in srgb, #c98a12 14%, transparent)' }
+  return { icon: '⛔', label: 'не доверять', color: '#d04a3b', bg: 'color-mix(in srgb, #d04a3b 12%, transparent)' }
+}
+
+function SourcesTab({ diagnostics, factByUnit, monthLabel, daysElapsed }: {
+  diagnostics: SourceDiag[]
+  factByUnit: Record<string, { revenue: number; captured: boolean }>
+  monthLabel: string
+  daysElapsed: number
+}) {
+  const units = Array.from(new Set(diagnostics.map((d) => d.unit)))
+  if (!diagnostics.length) {
+    return <div className="bg-white border border-[#e4e4e0] rounded-xl p-6 text-sm text-[#4a4a46]">Источники недоступны — не удалось прочитать данные.</div>
+  }
+  return (
+    <>
+      <p className="text-sm text-[#4a4a46] mb-3.5 max-w-[74ch]">
+        Откуда берётся факт и чему можно верить — {monthLabel} (за {daysElapsed} дн.). Факт показываем <b>только из доверенного источника</b>;
+        если источник ненадёжен — честно «данных нет», а не молчаливый ноль или битая цифра из импорта.
+      </p>
+
+      {units.map((u) => {
+        const rows = diagnostics.filter((d) => d.unit === u)
+        const f = factByUnit[u]
+        return (
+          <Card key={u} title={u} hint={f?.captured ? 'настоящий факт есть' : 'доверенного источника нет'}>
+            <div className="mb-3 flex items-baseline justify-between gap-3 pb-2 border-b border-[#e4e4e0]">
+              <span className="text-[12px] text-[#6b6b66]">Факт месяца (из доверенного источника)</span>
+              <span className="font-mono tabular-nums font-semibold text-[15px]" style={{ color: f?.captured ? '#1f9d57' : '#c98a12' }}>
+                {f?.captured ? fmt(f.revenue) : 'данных нет'}
+              </span>
+            </div>
+            {rows.map((d) => {
+              const vs = verdictStyle(d.verdict)
+              return (
+                <div key={d.source} className="py-2.5 border-t border-[#e4e4e0] first:border-t-0">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <span className="text-[13px] font-semibold text-[#111110]">
+                      {d.source}{d.usedForFact && <span className="ml-1.5 text-[9px] font-semibold text-[#0f8b93] border border-[#0f8b93]/40 rounded px-1 py-px">используется</span>}
+                    </span>
+                    <span className="text-[11px] font-semibold rounded px-1.5 py-0.5" style={{ color: vs.color, background: vs.bg }}>
+                      {vs.icon} {vs.label}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-[#9a9a95] font-mono mt-0.5">{d.table}</div>
+                  <div className="flex flex-wrap gap-x-4 gap-y-0.5 text-[12px] text-[#4a4a46] mt-1.5">
+                    <span>записей: <b className="font-mono">{d.records}</b></span>
+                    {d.sumRub != null && <span>сумма: <b className="font-mono">{fmt(d.sumRub)}</b></span>}
+                    {d.periodFrom && <span>период: <b className="font-mono">{d.periodFrom} — {d.periodTo}</b></span>}
+                  </div>
+                  {d.issue && <div className="text-[12px] text-[#c98a12] mt-1">⚠ {d.issue}</div>}
+                  <div className="text-[11.5px] text-[#9a9a95] mt-1 leading-snug">{d.reason}</div>
+                </div>
+              )
+            })}
+          </Card>
+        )
+      })}
+
+      <p className="text-[11.5px] text-[#9a9a95] mt-1 leading-relaxed">
+        Как только розница пойдёт в доверенный источник (payments с привязкой к счёту) — факт по M-Glass включится здесь автоматически, экран менять не придётся.
+      </p>
+    </>
   )
 }
 
