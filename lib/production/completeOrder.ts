@@ -50,3 +50,25 @@ export function pickFinalTasks(tasks: ClosableTask[]): ClosableTask[] {
 export function countClosable(tasks: ClosableTask[]): number {
   return tasks.filter(t => t.status !== 'done').length
 }
+
+// ─── Почему у мастера по найденному заказу пусто ─────────────────────────────
+// Владелец нашёл заказ по поиску, увидел «0 дет. · ✓ 2 сделано» и написал
+// «изменений не вижу». Код отработал верно — у него по этому заказу задач нет, —
+// но карточка молчала. Рабочий в такой ситуации решает, что заказ потерялся, и
+// идёт искать обходной путь: именно так Никита и нашёл «Открыть карточку заказа».
+//
+// Три исхода, и третий важнее первого: человек должен понимать, что заказ жив,
+// просто не у него. Пока состав работы не загружен — говорим только то, что знаем
+// наверняка, и ничего не достраиваем.
+
+export type EmptyReason = 'unknown' | 'order-done' | 'elsewhere'
+
+export function explainEmptyQueue(opts: {
+  myOpen: number
+  workLoaded: boolean
+  orderOpen: number
+}): EmptyReason | null {
+  if (opts.myOpen > 0) return null           // у мастера есть работа — объяснять нечего
+  if (!opts.workLoaded) return 'unknown'     // не знаем — не выдумываем
+  return opts.orderOpen === 0 ? 'order-done' : 'elsewhere'
+}

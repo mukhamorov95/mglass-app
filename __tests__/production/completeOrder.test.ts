@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { countClosable, pickFinalTasks, type ClosableTask } from '@/lib/production/completeOrder'
+import { countClosable, explainEmptyQueue, pickFinalTasks, type ClosableTask } from '@/lib/production/completeOrder'
 
 const t = (id: number, item: number, seq: number, status = 'queued'): ClosableTask =>
   ({ id, item_index: item, sequence_order: seq, status })
@@ -46,5 +46,27 @@ describe('countClosable — что показать на кнопке', () => {
   })
   it('нечего закрывать — ноль', () => {
     expect(countClosable([t(1, 0, 1, 'done')])).toBe(0)
+  })
+})
+
+describe('explainEmptyQueue — пустая карточка обязана назвать причину', () => {
+  it('у мастера есть работа — объяснять нечего', () => {
+    expect(explainEmptyQueue({ myOpen: 3, workLoaded: true, orderOpen: 3 })).toBeNull()
+  })
+
+  it('состав работы ещё не загружен — не выдумываем, а говорим только известное', () => {
+    expect(explainEmptyQueue({ myOpen: 0, workLoaded: false, orderOpen: 0 })).toBe('unknown')
+  })
+
+  it('по заказу не осталось ничего — заказ готов', () => {
+    expect(explainEmptyQueue({ myOpen: 0, workLoaded: true, orderOpen: 0 })).toBe('order-done')
+  })
+
+  it('ГЛАВНЫЙ СЛУЧАЙ: у меня пусто, но заказ жив — работа на другой станции', () => {
+    expect(explainEmptyQueue({ myOpen: 0, workLoaded: true, orderOpen: 7 })).toBe('elsewhere')
+  })
+
+  it('«не загружено» не выдаётся за «готов»: без данных нельзя утверждать, что заказ закрыт', () => {
+    expect(explainEmptyQueue({ myOpen: 0, workLoaded: false, orderOpen: 0 })).not.toBe('order-done')
   })
 })
