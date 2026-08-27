@@ -505,25 +505,26 @@ export async function sweepCuttingConsume(
   const raw = data?.items as { items?: unknown[] } | unknown[] | null
   const list = Array.isArray(raw) ? raw : (raw?.items ?? [])
 
-  // Попытку берём ТЕКУЩУЮ по позиции (production_tasks.rework_count), не ноль. Иначе
-  // переделанную позицию, списанную живьём с attempt=1, проход с attempt=0 списал бы
-  // ВТОРОЙ раз (другой ключ, дедуп не срабатывает). С текущей попыткой: живой рез той
-  // же попытки → no-op; переделка, добитая каскадом → списывается верно.
-  // Оговорка: проход видит только ТЕКУЩУЮ попытку. Если промежуточная попытка не
-  // закрывалась вовсе (её рез не отмечали ни живьём, ни каскадом), её лист проход не
-  // поймает — допустимо, но зафиксировано здесь, а не обнаружено потом.
+  // Проход НЕ угадывает попытку, а закрывает ВСЕ: для позиции с rework_count=N лист
+  // резали N+1 раз (попытки 0..N), каждая — реальный отдельный лист. Проходим по всем,
+  // дедуп в БД гасит уже списанные (живьём/каскадом), а пропущенные best-effort'ом
+  // дописывает. Так нет ни фантома (любая попытка ≤ rework_count — реальный лист), ни
+  // дубля (ключ БД), ни недоучёта при многократном промахе. attempt=0 или «текущий»
+  // поодиночке ловили бы только один из листов переделанной позиции — этот ловит все.
   const { data: tasks } = await db.from('production_tasks')
     .select('item_index, rework_count').eq('order_id', Number(orderId)).eq('stage_key', 'cutting')
-  const attemptByItem = new Map<number, number>()
+  const reworkByItem = new Map<number, number>()
   for (const t of (tasks ?? []) as { item_index: number; rework_count: number | null }[]) {
-    attemptByItem.set(t.item_index, Number(t.rework_count ?? 0))
+    reworkByItem.set(t.item_index, Math.max(0, Number(t.rework_count ?? 0)))
   }
 
   let inserted = 0
   for (let i = 0; i < list.length; i++) {
-    const attempt = attemptByItem.get(i) ?? 0
-    const r = await consumeItemAtStage(orderId, i, attempt, 'cutting', by, origin)
-    inserted += r.inserted
+    const maxAttempt = reworkByItem.get(i) ?? 0
+    for (let attempt = 0; attempt <= maxAttempt; attempt++) {
+      const r = await consumeItemAtStage(orderId, i, attempt, 'cutting', by, origin)
+      inserted += r.inserted
+    }
   }
   return { inserted, items: list.length }
 }
