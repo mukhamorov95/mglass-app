@@ -837,24 +837,27 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
             </button>
           )}
 
-          {/* Действия по всему заказу: готов целиком / нет материала целиком */}
-          <div className="flex gap-2">
+          {/* Действия по всему заказу. В режиме подтверждения строка отдана ТОЛЬКО ему:
+              на 375 px три кнопки в ряд сжимались до ~110 px, ломались на 2–3 строки, и
+              «Да, закрыть» оказывалась вплотную к «Нет материала» — целясь в одну, попадёшь
+              в другую. Кнопка материала возвращается, как только подтверждение снято. */}
+          {myOpen.length > 0 && confirming && (
+            <div className="flex gap-2">
+              <button onClick={() => onCompleteOrder(orderId)}
+                className="flex-1 py-3 rounded-lg bg-emerald-600 text-white text-[14px] font-bold">
+                Да, закрыть {orderOpen} задач
+              </button>
+              <button onClick={onAskConfirm}
+                className="px-5 py-3 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[14px]">Отмена</button>
+            </div>
+          )}
+
+          <div className={`flex gap-2 ${confirming ? 'hidden' : ''}`}>
             {myOpen.length > 0 && (
-              confirming ? (
-                <>
-                  <button onClick={() => onCompleteOrder(orderId)}
-                    className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-bold">
-                    Да, закрыть {orderOpen} задач
-                  </button>
-                  <button onClick={onAskConfirm}
-                    className="px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[13px]">Отмена</button>
-                </>
-              ) : (
-                <button onClick={onAskConfirm}
-                  className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
-                  ✅ Всё готово ({orderOpen} задач)
-                </button>
-              )
+              <button onClick={onAskConfirm}
+                className="flex-1 py-3 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
+                ✅ Всё готово ({orderOpen} задач)
+              </button>
             )}
             <button onClick={() => onNoMatOrder(orderId)}
               className={`flex-1 py-2 rounded-lg text-[13px] font-semibold border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
@@ -910,10 +913,13 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                             )}
                           </span>
                           <div className="flex gap-1.5 flex-shrink-0">
-                            {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
-                            <button onClick={() => onDone(t.id)} className="px-3.5 py-1 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
+                            {/* Высота под палец: было py-1 — 28 px, а это самая нажимаемая
+                                кнопка во всём цеху, и жмут её с телефона, часто в перчатке.
+                                Ширины хватает и так, растёт только высота. */}
+                            {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-2.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
+                            <button onClick={() => onDone(t.id)} className="px-3.5 py-2.5 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
                             <button onClick={() => onRework(t.id)} title="Брак — деталь надо изготовить заново"
-                              className="px-2.5 py-1 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Переделать</button>
+                              className="px-2.5 py-2.5 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Переделать</button>
                           </div>
                         </div>
                       )
