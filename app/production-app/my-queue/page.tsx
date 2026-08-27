@@ -29,6 +29,16 @@ type TaskRow = {
   layer_note: string | null
   rework_count: number | null
 }
+type RouteStage = {
+  item_index:        number
+  stage_key:         string
+  sequence_order:    number
+  status:            string
+  station:           string
+  auto_closed:       boolean | null
+  completed_by_name: string | null
+}
+
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
 type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
 type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
@@ -73,6 +83,9 @@ export default function MyQueuePage() {
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
+  // Полный маршрут детали — ВСЕ этапы, включая чужие станции. Рабочий должен
+  // видеть путь изделия целиком: где оно было, где стоит сейчас, куда пойдёт.
+  const [routes, setRoutes] = useState<Map<string, RouteStage[]>>(new Map())
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
   // В поиске карточки раскрыты по умолчанию: ищут конкретный заказ, чтобы с ним работать,
   // а не чтобы посмотреть. Здесь — те, что человек свернул руками вопреки этому.
@@ -194,6 +207,25 @@ export default function MyQueuePage() {
     setDoneOrders(dMap)
     setDoneWeek(dw.filter(t => dMap.has(t.order_id)))
     setBlockers(new Map((blockerRows ?? []).map((b: BlockerLite) => [b.id, b])))
+
+    // Маршрут целиком по видимым заказам: без этого рабочий видит только свою
+    // станцию и не понимает, готова ли деталь и кто её вёл до него.
+    if (orderIds.length) {
+      const { data: routeRows } = await sb.from('production_tasks')
+        .select('item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
+        .in('order_id', orderIds)
+        .order('sequence_order', { ascending: true })
+      const rm = new Map<string, RouteStage[]>()
+      for (const r of (routeRows ?? []) as (RouteStage & { order_id: number })[]) {
+        const k = `${r.order_id}:${r.item_index}`
+        const arr = rm.get(k) ?? []
+        arr.push(r)
+        rm.set(k, arr)
+      }
+      setRoutes(rm)
+    } else {
+      setRoutes(new Map())
+    }
     setLoading(false)
   }, [sb, viewMaster])
 
@@ -605,6 +637,8 @@ export default function MyQueuePage() {
                   open={isOpen(id)}
                   onToggle={() => toggleOrder(id)}
                   isReady={isReady}
+                  routes={routes}
+                  myStations={myStations}
                   onStart={markStart}
                   onStartAll={markStartOrder}
                   onDone={markDone}
@@ -661,7 +695,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, routes, myStations, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -669,6 +703,8 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   open: boolean
   onToggle: () => void
   isReady: (t: TaskRow) => boolean
+  routes: Map<string, RouteStage[]>
+  myStations: string[]
   onStart: (id: number) => void
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
@@ -703,7 +739,6 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   const orderOpen = work ? work.reduce((s, w) => s + w.n, 0) : myOpen.length
   const emptyReason = explainEmptyQueue({ myOpen: myOpen.length, workLoaded, orderOpen })
   const ready = live.filter(isReady)
-  const waiting = live.filter(t => !isReady(t))
   const inWork = live.filter(t => t.status === 'in_progress').length
   // Деталь ≠ задача: у мастера с двумя станциями (закалка+упаковка) на одну
   // стекляшку приходится две задачи. Считаем детали по уникальному item_index,
@@ -871,8 +906,6 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
           <div className="space-y-1.5">
             {liveItems.map(idx => {
               const itemTasks = live.filter(t => t.item_index === idx).sort((a, b) => a.sequence_order - b.sequence_order)
-              const itemReady = itemTasks.filter(isReady)
-              const itemWaiting = itemTasks.filter(t => !isReady(t))
               const anyActive = itemTasks.some(t => t.status === 'in_progress')
               const noMat = noMatOrder || noMatItems.includes(idx)
               return (
@@ -896,15 +929,54 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                     </button>
                   </div>
 
-                  {/* Этапы этой детали: доступные — с кнопками, заблокированные — строкой */}
+                  {/* Весь путь изделия, включая чужие станции: рабочий должен видеть,
+                      где деталь была и куда пойдёт, а не только свой этап. */}
+                  {(() => {
+                    const route = routes.get(`${orderId}:${idx}`) ?? []
+                    if (route.length === 0) return null
+                    return (
+                      <div className="mt-2 flex flex-wrap items-center gap-x-1 gap-y-1">
+                        {route.map((r, i) => {
+                          const done = r.status === 'done'
+                          const mine = myStations.includes(r.station)
+                          const cls = done
+                            ? (r.auto_closed ? 'bg-[#f0f0ee] text-[#9a9a95] line-through' : 'bg-emerald-50 text-emerald-700')
+                            : r.status === 'in_progress' ? 'bg-amber-50 text-amber-700'
+                            : 'bg-white text-[#9a9a95] border border-[#e4e4e0]'
+                          return (
+                            <span key={i} className="flex items-center gap-1">
+                              <span className={`px-1.5 py-0.5 rounded text-[10px] whitespace-nowrap ${cls} ${mine ? 'font-semibold' : ''}`}
+                                title={done ? (r.auto_closed ? 'Закрыт автоматически — никто не отмечал' : `Отметил: ${r.completed_by_name ?? '—'}`) : 'Ещё не отмечен'}>
+                                {done ? '✓ ' : ''}{stageLabel(r.stage_key)}
+                              </span>
+                              {i < route.length - 1 && <span className="text-[9px] text-[#d4d4d0]">→</span>}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Этапы этой детали. Заблокированные тоже с кнопкой: если предыдущий
+                      мастер не отметил, это не значит, что он не сделал работу, — и
+                      следующий не должен из-за этого стоять. Сервер при отметке сам
+                      закроет пропущенные этапы как auto_closed, никому их не приписав. */}
                   <div className="mt-2 space-y-1">
-                    {itemReady.map(t => {
+                    {itemTasks.map(t => {
                       const active = t.status === 'in_progress'
+                      const ready  = isReady(t)
+                      const blocker = !ready && t.blocked_by_task_id ? blockers.get(t.blocked_by_task_id) : null
                       return (
                         <div key={t.id} className="flex items-center justify-between gap-2 flex-wrap">
                           <span className="text-[11px] text-[#111110]">
                             {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key}
                             {t.layer_note ? ` · ${t.layer_note}` : ''}{active ? ' · 🔧 в работе' : ''}
+                            {!ready && (
+                              <span className="ml-1.5 text-[10px] text-amber-700"
+                                title="Предыдущий этап никто не отметил. Если работа сделана — отмечай свой, он закроется сам.">
+                                · не отмечен: {blocker ? stageLabel(blocker.stage_key) : 'предыдущий этап'}
+                              </span>
+                            )}
                             {(t.rework_count ?? 0) > 0 && (
                               <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded bg-red-50 text-red-600"
                                 title="Этот этап уже переделывали">
@@ -917,19 +989,13 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                                 кнопка во всём цеху, и жмут её с телефона, часто в перчатке.
                                 Ширины хватает и так, растёт только высота. */}
                             {!active && <button onClick={() => onStart(t.id)} className="px-2.5 py-2.5 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px] font-medium hover:border-[#111110] hover:text-[#111110]">Взял</button>}
-                            <button onClick={() => onDone(t.id)} className="px-3.5 py-2.5 rounded-lg bg-emerald-600 text-white text-[12px] font-medium">Готово</button>
+                            <button onClick={() => onDone(t.id)}
+                              title={ready ? 'Этап сделан' : 'Отметить свой этап, даже если предыдущий никто не отметил'}
+                              className={`px-3.5 py-2.5 rounded-lg text-[12px] font-medium ${ready ? 'bg-emerald-600 text-white' : 'border border-emerald-600 text-emerald-700'}`}>Готово</button>
                             <button onClick={() => onRework(t.id)} title="Брак — деталь надо изготовить заново"
                               className="px-2.5 py-2.5 rounded-lg border border-red-200 text-red-600 text-[12px] font-medium">Переделать</button>
                           </div>
                         </div>
-                      )
-                    })}
-                    {itemWaiting.map(t => {
-                      const blocker = t.blocked_by_task_id ? blockers.get(t.blocked_by_task_id) : null
-                      return (
-                        <p key={t.id} className="text-[11px] text-amber-700">
-                          {STAGE_LABELS[t.stage_key as DetailStageKey] ?? t.stage_key} — ждёт: {blocker ? STAGE_LABELS[blocker.stage_key as DetailStageKey] ?? blocker.stage_key : 'предыдущий этап'}
-                        </p>
                       )
                     })}
                   </div>
