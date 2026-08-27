@@ -174,6 +174,10 @@ export function calcFactoryMirror(
     widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number
     hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave'
     lightSides?: LightSides   // какие стороны подсвечены; не задано = весь периметр
+    // Фацет и пескоструй — РАЗНЫЕ обработки, а не одна «декоративка».
+    sandblast?: boolean          // пескоструй по зеркалу
+    facetTypeMm?: number | null  // фацет: ширина фаски, мм; null = без фацета
+    facetCostPerM?: number       // себестоимость фацета, ₽/пог.м (из facet_prices)
     ledId?: number | null      // лента (температура) из справочника; null = авто
     frameId?: number | null    // каркас (профиль сзади); null = авто; при curved не применяется
     curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
@@ -213,9 +217,11 @@ export function calcFactoryMirror(
     ledStrip:    p.hasLighting ? (led ? toLC(led) : null) : null,
     powerSupply: p.hasLighting ? (psu ? toLC(psu) : null) : null,
     diffuser:    p.hasLighting ? (diffuser ? toLC(diffuser) : null) : null,
-    buttonType: p.buttonType, hasSandblast: false,
+    buttonType: p.buttonType, hasSandblast: !!p.sandblast,
     hasSubstrate: underlay > 0, substratePrice: underlay,
-    hasFacet: false, facetTypeMm: null, facetCostPerM: 0,
+    hasFacet: p.facetTypeMm != null && p.facetTypeMm > 0,
+    facetTypeMm: p.facetTypeMm ?? null,
+    facetCostPerM: p.facetCostPerM ?? 0,
     hasInstallation: false, hasDelivery: false,
     partnerPercent: 0, discount: 0,
     margin: d.mirrorCfg.productionMarginPercent, standardMargin: d.mirrorCfg.productionMarginPercent,
