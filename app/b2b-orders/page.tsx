@@ -1675,7 +1675,7 @@ export default function B2BOrdersPage() {
             </span>
           ) : (
             <button onClick={() => { setEditTotalId(order.id); setEditTotalVal(''); setTotalErr(null) }}
-              title="Пересчитать все позиции под новую (меньшую) сумму"
+              title="Пересчитать все позиции под новую сумму — можно и больше, и меньше"
               className="text-[11px] px-2.5 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110] transition-colors">✎ Изменить сумму ({fmt(finalPrice)})</button>
           ))}
         </div>
