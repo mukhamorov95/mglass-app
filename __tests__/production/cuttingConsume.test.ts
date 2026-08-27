@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import {
-  planConsume, shouldConsume, shouldReverse, type CuttingMark,
+  isAttributable, planConsume, shouldConsume, shouldReverse, type CuttingMark,
 } from '@/lib/production/cuttingConsume'
 
 const mark = (over: Partial<CuttingMark> = {}): CuttingMark =>
@@ -16,8 +16,8 @@ describe('shouldConsume — списываем по живой отметке р
     expect(shouldConsume(mark({ source: 'complete-order' }))).toBe(true)
   })
 
-  it('КАСКАД НЕ СПИСЫВАЕТ: он закрывает этапы, которых физически не делали', () => {
-    expect(shouldConsume(mark({ source: 'cascade' }))).toBe(false)
+  it('КАСКАД ТОЖЕ СПИСЫВАЕТ: он утверждает, что резка БЫЛА, просто её не отметили', () => {
+    expect(shouldConsume(mark({ source: 'cascade' }))).toBe(true)
   })
 
   it('другие этапы материал не трогают', () => {
@@ -26,8 +26,17 @@ describe('shouldConsume — списываем по живой отметке р
     }
   })
 
-  it('каскад именно по резке — всё равно нет: решает источник, а не этап', () => {
-    expect(shouldConsume(mark({ stageKey: 'cutting', source: 'cascade' }))).toBe(false)
+})
+
+describe('isAttributable — материал списываем, имя не подставляем', () => {
+  it('живая отметка приписывается человеку', () => {
+    expect(isAttributable('worker')).toBe(true)
+    expect(isAttributable('order-card')).toBe(true)
+    expect(isAttributable('complete-order')).toBe(true)
+  })
+
+  it('каскад — БЕЗ автора: «неизвестно КТО» и «неизвестно БЫЛО ЛИ» разные утверждения', () => {
+    expect(isAttributable('cascade')).toBe(false)
   })
 })
 
@@ -49,26 +58,30 @@ describe('planConsume', () => {
     expect(r.map(x => x.attempt)).toEqual([0, 1])
   })
 
-  it('каскадные отметки в пачке отсеиваются, живые остаются', () => {
+  it('каскадная резка в пачке тоже даёт списание', () => {
     const r = planConsume([mark({ source: 'cascade' }), mark({ itemIndex: 2 })])
-    expect(r).toEqual([{ orderId: 5269, itemIndex: 2, attempt: 0 }])
+    expect(r).toHaveLength(2)
   })
 
-  it('пачка без единой живой резки не даёт вызовов складу', () => {
-    expect(planConsume([mark({ stageKey: 'packaging' }), mark({ source: 'cascade' })])).toEqual([])
+  it('пачка без резки вообще не даёт вызовов складу', () => {
+    expect(planConsume([mark({ stageKey: 'packaging' }), mark({ stageKey: 'tempering' })])).toEqual([])
   })
 })
 
-describe('shouldReverse — мисклик откатываем, переделку нет', () => {
-  it('отмена отметки: материал не расходовался, нужно встречное движение', () => {
-    expect(shouldReverse('cutting', 'unset')).toBe(true)
+describe('shouldReverse — по переоткрытию РЕЗКИ, а не по снятому этапу', () => {
+  it('резку переоткрыли отменой отметки: материал не расходовался, нужен откат', () => {
+    expect(shouldReverse({ stageKey: 'cutting', reason: 'unset' })).toBe(true)
   })
 
   it('«Переделать»: лист израсходован, откат был бы неправдой', () => {
-    expect(shouldReverse('cutting', 'rework')).toBe(false)
+    expect(shouldReverse({ stageKey: 'cutting', reason: 'rework' })).toBe(false)
   })
 
-  it('отмена не-резки склада не касается', () => {
-    expect(shouldReverse('packaging', 'unset')).toBe(false)
+  it('переоткрытие не-резки склада не касается', () => {
+    expect(shouldReverse({ stageKey: 'packaging', reason: 'unset' })).toBe(false)
+  })
+
+  it('ключевое: важно ЧТО переоткрыли, а не что сняли руками — мисклик по упаковке каскадом закрыл резку, и её переоткрытие обязано вернуть материал', () => {
+    expect(shouldReverse({ stageKey: 'cutting', reason: 'unset' })).toBe(true)
   })
 })

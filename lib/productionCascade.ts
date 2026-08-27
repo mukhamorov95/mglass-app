@@ -10,6 +10,38 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 
 export type CascadedStage = { item_index: number; stage_key: string }
 
+// Откат каскада. Снятие отметки трогает только СВОЮ задачу — этапы, закрытые каскадом от неё,
+// оставались закрытыми, и заказ показывал «сделано» там, где отметку уже сняли. С переносом
+// списания на резку (27.08) у этой лжи появилась цена: мисклик по упаковке закрывал каскадом
+// резку, списывал материал, а снятие отметки его не возвращало.
+//
+// Признак «того же каскада» — completed_at: каскад проставляет его ТЕМ ЖЕ значением, что и
+// вызвавшая отметка. Снимаем только auto_closed с этой меткой времени: живые отметки, стоявшие
+// раньше, не трогаем — их ставил человек.
+export async function reverseCascade(
+  svc: SupabaseClient,
+  orderId: number,
+  itemIndex: number,
+  completedAt: string | null,
+): Promise<string[]> {
+  if (!completedAt) return []
+  const { data } = await svc
+    .from('production_tasks')
+    .select('id, stage_key')
+    .eq('order_id', orderId)
+    .eq('item_index', itemIndex)
+    .eq('auto_closed', true)
+    .eq('completed_at', completedAt)
+  const rows = (data ?? []) as { id: number; stage_key: string }[]
+  if (rows.length === 0) return []
+  await svc.from('production_tasks')
+    .update({ status: 'queued', completed_at: null, completed_by: null, completed_by_name: null,
+              started_at: null, started_by: null, started_by_name: null, started_via: null,
+              auto_closed: false })
+    .in('id', rows.map(r => r.id))
+  return rows.map(r => r.stage_key)
+}
+
 export async function cascadePriorStages(
   svc: SupabaseClient,
   orderId: number,
