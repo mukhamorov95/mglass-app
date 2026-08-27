@@ -73,6 +73,12 @@ export default function MyQueuePage() {
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
   const [expanded, setExpanded] = useState<Set<number>>(new Set())
+  // В поиске карточки раскрыты по умолчанию: ищут конкретный заказ, чтобы с ним работать,
+  // а не чтобы посмотреть. Здесь — те, что человек свернул руками вопреки этому.
+  const [collapsedInSearch, setCollapsedInSearch] = useState<Set<number>>(new Set())
+  // «Всё готово» закрывает заказ целиком одним касанием — подтверждаем вторым тапом,
+  // чтобы телефон в кармане не закрыл смену.
+  const [confirmDone, setConfirmDone] = useState<number | null>(null)
   // Начальник/владелец выбрал мастера в сводке — показываем ЕГО очередь
   const [viewMaster, setViewMaster] = useState<{ id: string; name: string; stations: string[] } | null>(null)
   const [search, setSearch] = useState('')
@@ -217,34 +223,21 @@ export default function MyQueuePage() {
     load()
   }
 
-  async function markDoneOrder(taskIds: number[]) {
-    const orderId = tasks.find(t => taskIds.includes(t.id))?.order_id
-    setTasks(prev => prev.filter(t => !taskIds.includes(t.id)))
-    await Promise.all(taskIds.map(id =>
-      fetch(`/api/production-tasks/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'done' }),
-      }).catch(() => {})
-    ))
-    // Весь заказ готов — пометки «ждёт материал» больше не актуальны, гасим все
-    if (orderId != null) {
-      const n0 = parseNotes(orders.get(orderId)?.notes)
-      const hadMarks = materialStatus(orders.get(orderId)?.notes) === 'needed'
-        || (Array.isArray(n0.material_needed_items) && (n0.material_needed_items as number[]).length > 0)
-      if (hadMarks) {
-        await mergeNotes(orderId, n => ({
-          ...n,
-          material_needed_items: [],
-          ...(n.material_status === 'needed' ? { material_status: 'ready' } : {}),
-        }))
-      }
-    }
+  // «Всё готово»: закрыть заказ целиком, минуя цепочку готовности. Именно она и была
+  // проблемой — упаковка Никиты числилась заблокированной, потому что предыдущие этапы
+  // никто не отметил, и закрыть её из очереди он не мог. Атрибуция — в
+  // lib/production/completeOrder.ts: на нажавшего пишется по одной задаче на деталь,
+  // остальное закрывает каскад без исполнителя.
+  async function completeOrder(orderId: number) {
+    setConfirmDone(null)
+    setTasks(prev => prev.filter(t => t.order_id !== orderId))
+    await fetch('/api/production/complete-order', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId }),
+    }).catch(() => {})
     load()
   }
 
-  // Заявка в канбан «Купить» (как делает вкладка «Материал») — снабжение видит
-  // номер заказа и что именно без материала; связь order/item даёт мастеру
-  // видеть статус закупки (заказано/пришло) прямо в очереди
   async function purchaseRequest(title: string, details: string | null, orderId: number, itemIndex: number | null) {
     await sb.from('shop_purchase_requests').insert({ title, qty: null, details, author_id: me?.id, author_name: me?.name ?? 'Цех', b2b_order_id: orderId, item_index: itemIndex })
     fetch('/api/shop-purchases/notify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, qty: '', author: me?.name ?? 'Цех', link: '' }) }).catch(() => {})
@@ -319,16 +312,31 @@ export default function MyQueuePage() {
   // Свёрнутая карточка задачу НЕ снимает — он мог свернуть список и продолжать работу;
   // прежний автостарт снимет сервер, когда рабочий раскроет другой заказ.
   const toggleOrder = (orderId: number) => {
-    const opening = !expanded.has(orderId)
-    setExpanded(prev => {
-      const n = new Set(prev)
-      if (n.has(orderId)) n.delete(orderId); else n.add(orderId)
-      return n
-    })
+    const searching = search.trim().length > 0
+    const opening = searching ? collapsedInSearch.has(orderId) : !expanded.has(orderId)
+    if (searching) {
+      setCollapsedInSearch(prev => {
+        const n = new Set(prev)
+        if (n.has(orderId)) n.delete(orderId); else n.add(orderId)
+        return n
+      })
+    } else {
+      setExpanded(prev => {
+        const n = new Set(prev)
+        if (n.has(orderId)) n.delete(orderId); else n.add(orderId)
+        return n
+      })
+    }
     if (!opening) return
     const ids = tasks.filter(t => t.order_id === orderId && t.status === 'queued' && isReady(t)).map(t => t.id)
     sendStart(ids, 'open', orderId)
   }
+
+  // Автораскрытие в поиске НЕ считается взятием в работу: совпадений может быть
+  // несколько, и стартовать разом несколько заказов было бы неправдой. Автостарт
+  // остаётся только на явном тапе (П2).
+  const isOpen = (orderId: number) =>
+    search.trim() ? !collapsedInSearch.has(orderId) : expanded.has(orderId)
 
   // Закрытые задачи держим в памяти только ради поиска — во всех счётчиках,
   // табло и группировках участвуют активные.
@@ -575,13 +583,15 @@ export default function MyQueuePage() {
                   order={orders.get(id)} orderId={id}
                   tasks={byOrder.get(id) ?? []}
                   blockers={blockers}
-                  open={expanded.has(id)}
+                  open={isOpen(id)}
                   onToggle={() => toggleOrder(id)}
                   isReady={isReady}
                   onStart={markStart}
                   onStartAll={markStartOrder}
                   onDone={markDone}
-                  onDoneAll={markDoneOrder}
+                  onCompleteOrder={completeOrder}
+                  confirming={confirmDone === id}
+                  onAskConfirm={() => setConfirmDone(confirmDone === id ? null : id)}
                   onRework={setReworkFor}
                   onNoMatOrder={toggleNoMaterialOrder}
                   onNoMatItem={toggleNoMaterialItem}
@@ -630,7 +640,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onDoneAll, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, onStart, onStartAll, onDone, onCompleteOrder, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -641,7 +651,9 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   onStart: (id: number) => void
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
-  onDoneAll: (ids: number[]) => void
+  onCompleteOrder: (orderId: number) => void
+  confirming: boolean
+  onAskConfirm: () => void
   onRework: (id: number) => void
   onNoMatOrder: (orderId: number) => void
   onNoMatItem: (orderId: number, itemIndex: number) => void
@@ -670,7 +682,6 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
   const liveItems = [...new Set(live.map(t => t.item_index))]
   const pieces = liveItems.reduce((s, i) => s + qtyOf(order, i), 0)
   const startable = ready.filter(t => t.status === 'queued').map(t => t.id)
-  const doneable = ready.filter(t => t.status === 'queued' || t.status === 'in_progress').map(t => t.id)
   const overdue = daysLbl?.includes('роср')
   const border = urgent || overdue ? 'border-red-300' : open ? 'border-[#111110]' : 'border-[#e4e4e0]'
 
@@ -706,11 +717,22 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
                   Взял весь ({startable.length})
                 </button>
               )}
-              {doneable.length > 0 && (
-                <button onClick={() => onDoneAll(doneable)} title="Весь заказ готов"
-                  className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
-                  ✅ Готов весь ({doneable.length})
-                </button>
+              {live.length > 0 && (
+                confirming ? (
+                  <span className="flex items-center gap-1.5">
+                    <button onClick={() => onCompleteOrder(orderId)}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:opacity-90">
+                      Да, закрыть {live.length}
+                    </button>
+                    <button onClick={onAskConfirm}
+                      className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
+                  </span>
+                ) : (
+                  <button onClick={onAskConfirm} title="Закрыть все этапы всех деталей заказа"
+                    className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
+                    ✅ Всё готово ({live.length})
+                  </button>
+                )
               )}
               <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
                 className={`px-3 py-2 rounded-lg text-[12px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
@@ -760,11 +782,22 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, o
 
           {/* Действия по всему заказу: готов целиком / нет материала целиком */}
           <div className="flex gap-2">
-            {doneable.length > 1 && (
-              <button onClick={() => onDoneAll(doneable)}
-                className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
-                ✅ Весь заказ готов ({doneable.length} задач)
-              </button>
+            {live.length > 0 && (
+              confirming ? (
+                <>
+                  <button onClick={() => onCompleteOrder(orderId)}
+                    className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-bold">
+                    Да, закрыть {live.length} задач
+                  </button>
+                  <button onClick={onAskConfirm}
+                    className="px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[13px]">Отмена</button>
+                </>
+              ) : (
+                <button onClick={onAskConfirm}
+                  className="flex-1 py-2 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
+                  ✅ Всё готово ({live.length} задач)
+                </button>
+              )
             )}
             <button onClick={() => onNoMatOrder(orderId)}
               className={`flex-1 py-2 rounded-lg text-[13px] font-semibold border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
