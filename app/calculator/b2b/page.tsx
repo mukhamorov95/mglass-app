@@ -14,7 +14,7 @@ import { computeProductionSummary } from '@/lib/productionSummary'
 import type { UserPermissions } from '@/lib/permissions'
 import { isMGlassClient, isMGlassOnlyUser, isAllClientsScope, hasB2BSalesScope, MGLASS_CLIENT_IDS, MGLASS_SCOPE_ERROR } from '@/lib/b2bScope'
 import { useOwnerStrategy } from '@/lib/useOwnerStrategy'
-import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, type FactoryData } from '@/lib/b2bFactoryProducts'
+import { loadFactoryData, calcFactoryMirror, calcFactoryLoft, factoryQuoteToItem, mirrorMms, ledOptions, frameOptions, lightingLengthM, ALL_SIDES, type FactoryData, type LightSides } from '@/lib/b2bFactoryProducts'
 
 const DRAFT_KEY = 'mglass_calc_draft'
 
@@ -205,6 +205,9 @@ export default function B2BCalculatorPage() {
   const [fmLighting, setFmLighting] = useState(true)
   const [fmFrame, setFmFrame]     = useState(false)
   const [fmButton, setFmButton]   = useState<'none' | 'sensor' | 'wave'>('none')
+  // Стороны подсветки: по умолчанию весь периметр. Лента, профиль, рассеиватель и
+  // мощность блока считаются от выбранных сторон.
+  const [fmSides, setFmSides] = useState<LightSides>({ ...ALL_SIDES })
   const [fmLedId, setFmLedId]     = useState<number | null>(null)
   const [fmFrameId, setFmFrameId] = useState<number | null>(null)
   const [fmCurved, setFmCurved]   = useState(false)
@@ -674,6 +677,7 @@ export default function B2BCalculatorPage() {
         mirrorName: fmName, mirrorMm: fmMm, hasLighting: fmLighting, buttonType: fmButton,
         ledId: fmLedId, frameId: fmFrameId, curved: fmCurved,
         underlayCost: Number(fmUnderlay) || 0, metalFrame: fmFrame,
+        lightSides: fmSides,
       }, factoryData)
     }
     if (fKind === 'floft') {
@@ -1607,6 +1611,45 @@ export default function B2BCalculatorPage() {
                         <input type="checkbox" checked={fmLighting} onChange={e => setFmLighting(e.target.checked)} className="w-3.5 h-3.5 rounded accent-[#111110]" />
                         <span className={`text-[13px] font-medium ${fmLighting ? 'text-amber-700' : 'text-[#111110]'}`}>Подсветка LED</span>
                       </label>
+                    {fmLighting && (
+                      <div className="mt-2 rounded-lg border border-[#e4e4e0] bg-[#faf9f7] p-3">
+                        <p className="text-[11px] font-medium text-[#6e6e73] mb-2">Где подсветка — нажми на стороны</p>
+                        <div className="flex items-start gap-3">
+                          <div className="relative w-[104px] h-[128px] shrink-0">
+                            <div className="absolute inset-[9px] rounded border border-[#d4d4ce] bg-white" />
+                            <button type="button" aria-pressed={fmSides.top} title="Сверху"
+                              onClick={() => setFmSides(v => ({ ...v, top: !v.top }))}
+                              className={`absolute left-[9px] right-[9px] top-0 h-[9px] rounded-sm transition-colors ${fmSides.top ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.bottom} title="Снизу"
+                              onClick={() => setFmSides(v => ({ ...v, bottom: !v.bottom }))}
+                              className={`absolute left-[9px] right-[9px] bottom-0 h-[9px] rounded-sm transition-colors ${fmSides.bottom ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.left} title="Слева"
+                              onClick={() => setFmSides(v => ({ ...v, left: !v.left }))}
+                              className={`absolute top-[9px] bottom-[9px] left-0 w-[9px] rounded-sm transition-colors ${fmSides.left ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                            <button type="button" aria-pressed={fmSides.right} title="Справа"
+                              onClick={() => setFmSides(v => ({ ...v, right: !v.right }))}
+                              className={`absolute top-[9px] bottom-[9px] right-0 w-[9px] rounded-sm transition-colors ${fmSides.right ? 'bg-amber-400' : 'bg-[#e4e4e0] hover:bg-[#d0d0ca]'}`} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex flex-wrap gap-1.5 mb-2">
+                              <button type="button" onClick={() => setFmSides({ ...ALL_SIDES })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Периметр</button>
+                              <button type="button" onClick={() => setFmSides({ top: false, bottom: false, left: true, right: true })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Бока</button>
+                              <button type="button" onClick={() => setFmSides({ top: true, bottom: true, left: false, right: false })}
+                                className="text-[11px] px-2 py-1 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:border-[#111110] hover:text-[#111110]">Верх и низ</button>
+                            </div>
+                            {(() => {
+                              const w = Number(fmW) || 0, h = Number(fmH) || 0
+                              const m = lightingLengthM(w, h, fmSides)
+                              const none = !fmSides.top && !fmSides.bottom && !fmSides.left && !fmSides.right
+                              if (none) return <p className="text-[11px] text-red-600">Не выбрана ни одна сторона — подсветку считать не из чего.</p>
+                              return <p className="text-[11px] text-[#6b6b66]">Лента, профиль и рассеиватель: <span className="font-mono text-[#111110]">{m > 0 ? m.toFixed(2) : '—'}</span> пог.м{w > 0 && h > 0 ? '' : ' (укажи размеры)'}</p>
+                            })()}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                       <select value={fmButton} onChange={e => setFmButton(e.target.value as 'none' | 'sensor' | 'wave')}
                         className="bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[13px] outline-none focus:border-[#111110]">
                         <option value="none">Без кнопки</option>

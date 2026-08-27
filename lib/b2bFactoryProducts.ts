@@ -155,10 +155,25 @@ export const frameOptions = (d: FactoryData) =>
 
 // Зеркало с подсветкой: стандартная комплектация (профиль/лента/БП/рассеиватель — первые
 // подходящие из справочника), себестоимость по COST-строке матрицы + factory overhead.
+// Подсветка бывает не по всему периметру: только по вертикальным сторонам, только
+// сверху-снизу, с одной стороны. Лента, профиль и рассеиватель кроятся по выбранным
+// сторонам — иначе на «парящем» зеркале мы считаем вдвое больше материала, чем уйдёт.
+export type LightSides = { top: boolean; bottom: boolean; left: boolean; right: boolean }
+
+export const ALL_SIDES: LightSides = { top: true, bottom: true, left: true, right: true }
+
+export function lightingLengthM(w: number, h: number, sides?: LightSides): number {
+  const s = sides ?? ALL_SIDES
+  const horiz = (s.top ? w : 0) + (s.bottom ? w : 0)
+  const vert  = (s.left ? h : 0) + (s.right ? h : 0)
+  return (horiz + vert) / 1000
+}
+
 export function calcFactoryMirror(
   p: {
     widthMm: number; heightMm: number; mirrorName: string; mirrorMm: number
     hasLighting: boolean; buttonType: 'none' | 'sensor' | 'wave'
+    lightSides?: LightSides   // какие стороны подсвечены; не задано = весь периметр
     ledId?: number | null      // лента (температура) из справочника; null = авто
     frameId?: number | null    // каркас (профиль сзади); null = авто; при curved не применяется
     curved?: boolean           // криволинейное — станция «Криволинейка» + форма complex
@@ -181,8 +196,10 @@ export function calcFactoryMirror(
     : (p.frameId ? d.components.find(c => c.component_type === 'frame' && c.id === p.frameId) : null)
       ?? d.components.find(c => c.component_type === 'frame') ?? null
   const underlay = p.curved ? Math.max(0, p.underlayCost ?? 0) : 0
-  const perimeter = 2 * (p.widthMm + p.heightMm) / 1000
-  const needW = (led?.power_per_meter ?? 10) * perimeter
+  // Мощность считаем от ДЛИНЫ ПОДСВЕТКИ, а не от периметра: иначе на зеркале
+  // с подсветкой по двум сторонам подбирается блок вдвое мощнее и дороже нужного.
+  const lightM = lightingLengthM(p.widthMm, p.heightMm, p.lightSides)
+  const needW = (led?.power_per_meter ?? 10) * lightM
   const psus = d.components.filter(c => c.component_type === 'power_supply' && c.voltage === voltage)
   const psu = psus.find(c => (c.max_power ?? 0) >= needW) ?? psus[psus.length - 1] ?? null
   const diffuser = d.components.find(c => c.component_type === 'diffuser') ?? null
@@ -191,7 +208,7 @@ export function calcFactoryMirror(
     width: p.widthMm, height: p.heightMm, shape: p.curved ? 'complex' : 'rectangle',
     mirrorMaterial: stub ? { ...stub, name: `${p.mirrorName} ${p.mirrorMm} мм` } : null,
     mirrorCostPriceCostRow: costRow,
-    hasLighting: p.hasLighting, voltage,
+    hasLighting: p.hasLighting, voltage, lightingLengthM: lightM,
     frame:       p.hasLighting ? (frame ? toLC(frame) : null) : null,
     ledStrip:    p.hasLighting ? (led ? toLC(led) : null) : null,
     powerSupply: p.hasLighting ? (psu ? toLC(psu) : null) : null,
