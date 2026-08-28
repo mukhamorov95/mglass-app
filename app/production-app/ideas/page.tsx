@@ -17,8 +17,14 @@ type Idea = {
   solution: string
   ai_hint: string | null
   status: 'new' | 'review' | 'accepted' | 'implemented' | 'rejected'
+  response: string | null
   created_at: string
 }
+
+// Порядок колонок доски = путь обращения. «Отклонено» стоит последним и в общий
+// поток не входит: это тупик, а не следующая стадия.
+const BOARD_FLOW: Idea['status'][] = ['new', 'review', 'accepted', 'implemented']
+const BOARD_COLUMNS: Idea['status'][] = [...BOARD_FLOW, 'rejected']
 
 const STATUS_META: Record<Idea['status'], { label: string; cls: string }> = {
   new:         { label: 'Отправлено',   cls: 'bg-[#f0f0ec] text-[#6b6b66]' },
@@ -50,16 +56,21 @@ export default function IdeasPage() {
   const [hint, setHint] = useState('')
   const [sending, setSending] = useState(false)
   const [sentOk, setSentOk] = useState(false)
+  // Доска видна только владельцу: RLS и так пускает менять статус лишь admin/ceo,
+  // но рабочему незачем показывать чужие обращения и органы управления ими.
+  const [isOwner, setIsOwner] = useState(false)
+  const [moving, setMoving] = useState<number | null>(null)
 
   const load = useCallback(async () => {
     setLoading(true)
     const { data: { user } } = await sb.auth.getUser()
     if (user) {
-      const { data: profile } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
+      const { data: profile } = await sb.from('users').select('name, role').eq('id', user.id).maybeSingle()
       setMe({ id: user.id, name: profile?.name ?? user.email ?? 'Сотрудник' })
+      setIsOwner(profile?.role === 'admin' || profile?.role === 'ceo')
     }
     const { data } = await sb.from('production_ideas')
-      .select('id,author_name,raw_text,problem,solution,ai_hint,status,created_at')
+      .select('id,author_name,raw_text,problem,solution,ai_hint,status,response,created_at')
       .order('id', { ascending: false }).limit(100)
     setIdeas((data ?? []) as Idea[])
     setLoading(false)
@@ -67,6 +78,17 @@ export default function IdeasPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => setLoading(false)) }, [load])
+
+  // Перенос карточки между колонками. Обновляем экран сразу, а не после ответа
+  // сервера: доска на планёрке листается быстро, и ожидание в полсекунды читается
+  // как «не сработало» — человек жмёт второй раз.
+  async function moveIdea(id: number, status: Idea['status']) {
+    setMoving(id)
+    setIdeas(prev => prev.map(i => (i.id === id ? { ...i, status } : i)))
+    const { error } = await sb.from('production_ideas').update({ status, updated_at: new Date().toISOString() }).eq('id', id)
+    if (error) await load()
+    setMoving(null)
+  }
 
   function toggleRecording() {
     if (recording) { recRef.current?.stop(); return }
@@ -183,7 +205,47 @@ export default function IdeasPage() {
 
         {/* История обращений */}
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Мои обращения · {ideas.length}</p>
+          {/* Доска владельца. Карточка двигается выбором колонки, а не перетаскиванием:
+              доску смотрят и с телефона, а drag-and-drop пальцем по горизонтально
+              прокручиваемым колонкам — это борьба с прокруткой, а не работа. */}
+          {isOwner && !loading && ideas.length > 0 && (
+            <div className="mb-6">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">Доска обращений · {ideas.length}</p>
+              <div className="flex gap-3 overflow-x-auto pb-2">
+                {BOARD_COLUMNS.map(col => {
+                  const inCol = ideas.filter(i => (i.status ?? 'new') === col)
+                  const meta = STATUS_META[col]
+                  return (
+                    <div key={col} className="flex-shrink-0 w-[260px]">
+                      <div className={`rounded-lg px-2.5 py-1.5 mb-2 text-[11px] font-semibold ${meta.cls}`}>
+                        {meta.label} · {inCol.length}
+                      </div>
+                      <div className="space-y-2">
+                        {inCol.length === 0 && (
+                          <p className="text-[11px] text-[#c4c4be] px-1">пусто</p>
+                        )}
+                        {inCol.map(idea => (
+                          <div key={idea.id} className={`bg-white rounded-lg border border-[#e4e4e0] px-3 py-2.5 ${moving === idea.id ? 'opacity-50' : ''}`}>
+                            <p className="text-[11px] font-bold text-[#111110]">№{idea.id} · {idea.author_name}</p>
+                            <p className="text-[12px] text-[#111110] mt-1 line-clamp-3">{idea.problem}</p>
+                            {idea.response && <p className="text-[11px] text-emerald-800 mt-1.5 line-clamp-2">✓ {idea.response}</p>}
+                            <select value={col} onChange={e => moveIdea(idea.id, e.target.value as Idea['status'])}
+                              className="mt-2 w-full bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[11px] outline-none focus:border-[#111110]">
+                              {BOARD_COLUMNS.map(s2 => (
+                                <option key={s2} value={s2}>{STATUS_META[s2].label}</option>
+                              ))}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-2">{isOwner ? 'Все обращения' : 'Мои обращения'} · {ideas.length}</p>
           {loading ? (
             <p className="text-[13px] text-[#9a9a95]">Загрузка…</p>
           ) : ideas.length === 0 ? (
@@ -200,6 +262,12 @@ export default function IdeasPage() {
                     </div>
                     <p className="text-[12px] text-[#111110]"><span className="font-semibold text-red-600">Проблема:</span> {idea.problem}</p>
                     {idea.solution && <p className="text-[12px] text-[#111110] mt-0.5"><span className="font-semibold text-emerald-700">Решение:</span> {idea.solution}</p>}
+                    {idea.response && (
+                      <div className="mt-2 rounded-lg bg-emerald-50 border border-emerald-100 px-3 py-2">
+                        <p className="text-[11px] font-semibold text-emerald-800 mb-0.5">Что сделали</p>
+                        <p className="text-[12px] text-emerald-900">{idea.response}</p>
+                      </div>
+                    )}
                     <p className="text-[11px] text-[#9a9a95] mt-1.5">{idea.author_name} · {new Date(idea.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 )
