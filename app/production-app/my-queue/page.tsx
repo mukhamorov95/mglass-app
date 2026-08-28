@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
-import { STAGE_LABELS, stageLabel, type DetailStageKey } from '@/lib/productionStages'
+import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '@/lib/productionStages'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue } from '@/lib/production/completeOrder'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
@@ -30,6 +30,7 @@ type TaskRow = {
   rework_count: number | null
 }
 type RouteStage = {
+  id:                number
   item_index:        number
   stage_key:         string
   sequence_order:    number
@@ -40,7 +41,7 @@ type RouteStage = {
 }
 
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
-type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
+type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string }
 type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
@@ -54,6 +55,21 @@ function specLine(item?: ItemSpec): string {
   const mat = materialLabelShort(item)
   const qty = item.quantity && item.quantity > 1 ? `${item.quantity} шт` : ''
   return [dims, mat, qty].filter(Boolean).join(' · ')
+}
+
+// Обработки изделия одной строкой (обращение №2 от цеха: «в карточке только
+// размеры, работнику этого недостаточно»). Признаки те же, из которых строится
+// маршрут, — резчик видит их до того, как возьмётся за лист.
+function featureLine(item?: ItemSpec): string {
+  if (!item) return ''
+  const f: string[] = []
+  if (item.shape === 'curved')   f.push('криволинейка')
+  if (item.hasHoles)             f.push('отверстия')
+  if (item.hasSandblast)         f.push('песочка')
+  if (item.hasFacet)             f.push('фацет')
+  if (item.hasTriplex)           f.push('триплекс')
+  if (item.hasTempering)         f.push('закалка')
+  return f.join(' · ')
 }
 
 // Горизонт отгрузки заказа: сегодня (вкл. просрочку) / завтра / эта неделя / позже
@@ -212,7 +228,7 @@ export default function MyQueuePage() {
     // станцию и не понимает, готова ли деталь и кто её вёл до него.
     if (orderIds.length) {
       const { data: routeRows } = await sb.from('production_tasks')
-        .select('item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
+        .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
         .in('order_id', orderIds)
         .order('sequence_order', { ascending: true })
       const rm = new Map<string, RouteStage[]>()
@@ -271,6 +287,25 @@ export default function MyQueuePage() {
         })
       }
     }
+    load()
+  }
+
+  // «Готово всё» по ОДНОЙ детали (обращение №3 от цеха). У Никиты две станции —
+  // закалка и упаковка. Он жмёт «Готово» на закалке, каскад закрывает всё ДО неё,
+  // а упаковка остаётся: она после. Приходится жать второй раз.
+  // Закрываем последний этап детали — каскад сам закроет все предыдущие. Тот же
+  // механизм, что у «Всё готово» на заказ, только в границах одной детали.
+  async function completeItem(orderId: number, itemIndex: number) {
+    const route = (routes.get(`${orderId}:${itemIndex}`) ?? [])
+      .filter(r => r.status !== 'done')
+      .sort((a, b) => a.sequence_order - b.sequence_order)
+    const last = route[route.length - 1]
+    if (!last) return
+    setTasks(prev => prev.filter(t => !(t.order_id === orderId && t.item_index === itemIndex)))
+    await fetch(`/api/production-tasks/${last.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'done' }),
+    }).catch(() => {})
     load()
   }
 
@@ -502,8 +537,17 @@ export default function MyQueuePage() {
             <p className="text-[13px] text-[#9a9a95] mt-0.5">{byOrder.size} заказов · {totalDetails} деталей · {totalReady} задач готово · {totalWaiting} ждут этапа</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
-              className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white w-44 outline-none focus:border-[#111110]" />
+            {/* Обращение №1 от цеха: «нет возможности удалить заказ целиком, приходится
+                стирать по цифрам». Родная крестик-кнопка type=search на телефоне не
+                показывается, поэтому своя — и с полем под палец, не 28 px. */}
+            <div className="relative">
+              <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
+                className={`border border-[#e4e4e0] rounded-lg pl-3 ${search ? 'pr-9' : 'pr-3'} py-2 text-[13px] bg-white w-44 outline-none focus:border-[#111110] [&::-webkit-search-cancel-button]:hidden`} />
+              {search && (
+                <button onClick={() => setSearch('')} aria-label="Очистить поиск"
+                  className="absolute right-0 top-0 h-full w-9 flex items-center justify-center text-[#9a9a95] hover:text-[#111110] text-[16px] leading-none">×</button>
+              )}
+            </div>
           </div>
         </div>
         <ProductionTabs />
@@ -639,6 +683,7 @@ export default function MyQueuePage() {
                   isReady={isReady}
                   routes={routes}
                   myStations={myStations}
+                  onCompleteItem={completeItem}
                   onStart={markStart}
                   onStartAll={markStartOrder}
                   onDone={markDone}
@@ -695,7 +740,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, routes, myStations, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -705,6 +750,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
   isReady: (t: TaskRow) => boolean
   routes: Map<string, RouteStage[]>
   myStations: string[]
+  onCompleteItem: (orderId: number, itemIndex: number) => void
   onStart: (id: number) => void
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
@@ -913,6 +959,19 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[idx]) || `Поз. ${idx + 1}`}</p>
+                      {(() => {
+                        const it = order?.items?.[idx]
+                        const feats = featureLine(it)
+                        const cmt = it?.comment?.trim()
+                        if (!feats && !cmt) return null
+                        return (
+                          <p className="text-[11px] text-[#6b6b66] mt-0.5">
+                            {feats && <span className="text-violet-700">{feats}</span>}
+                            {feats && cmt ? ' · ' : ''}
+                            {cmt}
+                          </p>
+                        )
+                      })()}
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
                         Поз. {idx + 1}
                         {noMat && (() => {
@@ -998,6 +1057,22 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                         </div>
                       )
                     })}
+                    {/* Одно нажатие закрывает деталь целиком, включая этапы ПОСЛЕ моей
+                        станции. Без него мастер с двумя станциями жмёт «Готово» дважды:
+                        каскад закрывает только предыдущие этапы. */}
+                    {(() => {
+                      // Счётчик — по ВСЕМУ маршруту детали, а не по моим задачам:
+                      // закроется вся деталь, включая чужие станции. Кнопка,
+                      // обещающая меньше, чем делает, у нас уже была.
+                      const openAll = (routes.get(`${orderId}:${idx}`) ?? []).filter(r => r.status !== 'done').length
+                      if (openAll < 2) return null
+                      return (
+                        <button onClick={() => onCompleteItem(orderId, idx)}
+                          className="mt-1.5 w-full py-2.5 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-semibold hover:bg-emerald-50">
+                          ✅ Готово всё по детали ({stageCountLabel(openAll)})
+                        </button>
+                      )
+                    })()}
                   </div>
                 </div>
               )

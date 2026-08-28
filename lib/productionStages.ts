@@ -172,3 +172,13 @@ export function calcOrderProgress(
   const progressPct    = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
   return { items: itemList, totalItems, completedItems, packedItems, progressPct, hasProblems }
 }
+
+// Подпись счётчика этапов на кнопке цеха. Живёт здесь, а не в компоненте:
+// её проверяет тест, и своя копия рядом с тестом разошлась бы с той, что видит
+// рабочий, — эту болезнь мы уже ловили на списке станций в админке.
+export function stageCountLabel(n: number): string {
+  const word = n % 10 === 1 && n % 100 !== 11 ? 'этап'
+    : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'этапа'
+    : 'этапов'
+  return `${n} ${word}`
+}
