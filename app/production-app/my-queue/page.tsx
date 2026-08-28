@@ -102,6 +102,11 @@ export default function MyQueuePage() {
   // известное, а тут цех сам покажет, чего в нём не хватает (через месяц будет видно из данных).
   const [reworkOther, setReworkOther] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
+  // «Всё готово» закрывает ЗАКАЗ целиком — это решение упаковщика: он последний
+  // в маршруте и единственный, кто физически видит, что заказ собран. Резчик,
+  // нажав её, закроет и полировку, и закалку, и упаковку по всем деталям —
+  // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
+  const canCloseOrder = myStations.includes('packaging')
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
@@ -687,6 +692,7 @@ export default function MyQueuePage() {
                   open={isOpen(id)}
                   onToggle={() => toggleOrder(id)}
                   isReady={isReady}
+                  canCloseOrder={canCloseOrder}
                   routes={routes}
                   myStations={myStations}
                   onCompleteItem={completeItem}
@@ -746,7 +752,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -754,6 +760,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
   open: boolean
   onToggle: () => void
   isReady: (t: TaskRow) => boolean
+  canCloseOrder: boolean
   routes: Map<string, RouteStage[]>
   myStations: string[]
   onCompleteItem: (orderId: number, itemIndex: number) => void
@@ -843,12 +850,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                     <button onClick={onAskConfirm}
                       className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
                   </span>
-                ) : (
+                ) : canCloseOrder ? (
                   <button onClick={onAskConfirm} title="Закрыть все этапы всех деталей заказа"
                     className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
                     ✅ Всё готово ({orderOpen})
                   </button>
-                )
+                ) : null
               )}
               <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
                 className={`px-3 py-2 rounded-lg text-[12px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
@@ -940,7 +947,7 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
           )}
 
           <div className={`flex gap-2 ${confirming ? 'hidden' : ''}`}>
-            {myOpen.length > 0 && (
+            {canCloseOrder && myOpen.length > 0 && (
               <button onClick={onAskConfirm}
                 className="flex-1 py-3 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
                 ✅ Всё готово ({orderOpen} задач)

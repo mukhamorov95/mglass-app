@@ -35,12 +35,23 @@ export async function POST(req: NextRequest) {
     svc.from('production_tasks')
       .select('id, item_index, sequence_order, status, started_at, assigned_to, started_by, stage_key, rework_count')
       .eq('order_id', orderId),
-    supabase.from('users').select('name').eq('id', user.id).maybeSingle(),
+    supabase.from('users').select('name, role, production_stations').eq('id', user.id).maybeSingle(),
   ])
+
+  // Закрыть заказ ЦЕЛИКОМ может только упаковщик: он последний в маршруте и
+  // единственный, кто физически видит, что заказ собран. Кнопку на экране мы
+  // прячем, но прятать — не значит запрещать: без этой проверки любой рабочий
+  // закрывает чужие этапы запросом (решение владельца 28.08).
+  const p = prof as { name: string | null; role: string | null; production_stations: string[] | null } | null
+  const stations = p?.production_stations ?? []
+  const isOwnerRole = p?.role === 'admin' || p?.role === 'ceo'
+  if (!isOwnerRole && !stations.includes('packaging')) {
+    return NextResponse.json({ error: 'Закрыть заказ целиком может только упаковщик' }, { status: 403 })
+  }
   const all = (rows ?? []) as (ClosableTask & { started_at: string | null; assigned_to: string | null; started_by: string | null; stage_key: string })[]
   if (all.length === 0) return NextResponse.json({ error: 'По заказу нет задач' }, { status: 404 })
 
-  const actor = { id: user.id, name: actorName((prof as { name: string | null } | null)?.name, user.email) }
+  const actor = { id: user.id, name: actorName(p?.name, user.email) }
   const now = new Date().toISOString()
   const finals = pickFinalTasks(all)
   if (finals.length === 0) return NextResponse.json({ ok: true, closed: 0, cascaded: 0, already: true })
