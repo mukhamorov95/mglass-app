@@ -244,6 +244,7 @@ export default function B2BCalculatorPage() {
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
   const [fHoleGroups, setFHoleGroups] = useState<HoleGroup[]>([])
+  const [fCutouts, setFCutouts]       = useState(0)
   const [fCurved, setFCurved]         = useState(false)
   const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
@@ -283,6 +284,7 @@ export default function B2BCalculatorPage() {
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
   const [eHoleGroups, setEHoleGroups] = useState<HoleGroup[]>([])
+  const [eCutouts, setECutouts]       = useState(0)
   const [eCurved, setECurved]         = useState(false)
   const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
@@ -844,7 +846,7 @@ export default function B2BCalculatorPage() {
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
+      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], hasCutouts: fCutouts > 0, cutouts: fCutouts, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
@@ -918,7 +920,10 @@ export default function B2BCalculatorPage() {
       cutouts += cc * q
       const shapeNote = isShaped ? `${it.shape ?? 'скошенная'}, готовая ${w}×${h}` : ''
       const cparts = [it.label, shapeNote, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
-      newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
+      // Вырезы — работа той же станции, что и сверловка. Раньше признак ставился
+      // только по отверстиям, и деталь с вырезами, но без отверстий, уходила мимо
+      // сверловщика совсем.
+      newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, hasCutouts: cc > 0, cutouts: cc, shape: 'rect' })
     }
     if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
     return { added: newItems.length, skipped, holes, cutouts, shaped, warnings }
@@ -1080,6 +1085,7 @@ export default function B2BCalculatorPage() {
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
     setEHoleGroups(normalizeHoles(item.holes))
+    setECutouts(Math.max(0, Number(item.cutouts) || 0))
     setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
@@ -1110,7 +1116,7 @@ export default function B2BCalculatorPage() {
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
+      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], hasCutouts: eCutouts > 0, cutouts: eCutouts, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
@@ -2090,6 +2096,17 @@ export default function B2BCalculatorPage() {
                   )}
                 </div>
               )}
+              <div>
+                {/* Вырезы — работа сверловщика, та же станция. Деталь с вырезом, но без
+                    отверстий, до него раньше не доходила вовсе. */}
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Вырезы</label>
+                <div className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg ${fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0]'}`}>
+                  <input type="number" min="0" value={fCutouts || ''} placeholder="0"
+                    onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
+                    className="w-14 bg-transparent text-[13px] outline-none" />
+                  <span className={`text-[13px] ${fCutouts > 0 ? 'text-blue-700 font-medium' : 'text-[#9a9a95]'}`}>шт</span>
+                </div>
+              </div>
               <div>
                 {/* Песочка — отдельный этап цеха со своей оснасткой (макет → оракал →
                     наклейка → пескоструй). Нажали здесь — деталь пойдёт через него;

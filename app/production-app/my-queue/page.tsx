@@ -42,7 +42,7 @@ type RouteStage = {
 }
 
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
-type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string; holes?: unknown }
+type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string; holes?: unknown; cutouts?: number }
 type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
@@ -71,6 +71,8 @@ function featureLine(item?: ItemSpec): string {
     const g = normalizeHoles(item.holes)
     f.push(g.length ? `отверстия ${holesLabel(g)}` : 'отверстия (размеры не указаны)')
   }
+  const cut = Math.max(0, Number(item.cutouts) || 0)
+  if (cut > 0)                   f.push(`вырезы ${cut}`)
   if (item.hasSandblast)         f.push('песочка')
   if (item.hasFacet)             f.push('фацет')
   if (item.hasTriplex)           f.push('триплекс')
