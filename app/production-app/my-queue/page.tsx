@@ -5,6 +5,7 @@ import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '@/lib/productionStages'
+import { normalizeHoles, holesLabel } from '@/lib/production/holes'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue } from '@/lib/production/completeOrder'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
@@ -41,7 +42,7 @@ type RouteStage = {
 }
 
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
-type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string }
+type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string; holes?: unknown }
 type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
@@ -64,7 +65,12 @@ function featureLine(item?: ItemSpec): string {
   if (!item) return ''
   const f: string[] = []
   if (item.shape === 'curved')   f.push('криволинейка')
-  if (item.hasHoles)             f.push('отверстия')
+  if (item.hasHoles) {
+    // Сверловщику нужны размеры, а не факт «отверстия есть»: без них он всё равно
+    // идёт спрашивать. Если группы не заведены — так и пишем, это видно менеджеру.
+    const g = normalizeHoles(item.holes)
+    f.push(g.length ? `отверстия ${holesLabel(g)}` : 'отверстия (размеры не указаны)')
+  }
   if (item.hasSandblast)         f.push('песочка')
   if (item.hasFacet)             f.push('фацет')
   if (item.hasTriplex)           f.push('триплекс')
