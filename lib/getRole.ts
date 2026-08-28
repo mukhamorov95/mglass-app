@@ -14,6 +14,7 @@ export type UserProfile = {
   managerCode: number | null
   canDelete:   boolean
   maxDiscount: number
+  canViewMoney: boolean   // users.can_view_money — витрина финмодели в цеху
 }
 
 // ─── Owner / role helpers ────────────────────────────────────────────────────
@@ -85,7 +86,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   // Try full profile first (requires migrated columns); fall back to role-only
   const { data, error } = await supabase
     .from('users')
-    .select('role, permissions, manager_code, can_delete, max_discount_percent')
+    .select('role, permissions, manager_code, can_delete, max_discount_percent, can_view_money')
     .eq('id', user.id)
     .single()
 
@@ -105,6 +106,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
       managerCode: null,
       canDelete:   isOwnerRole(role),
       maxDiscount: isOwnerRole(role) ? 100 : 5,
+      canViewMoney: isOwnerRole(role),
     }
   }
 
@@ -117,6 +119,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     managerCode: data.manager_code ?? null,
     canDelete:   data.can_delete ?? false,
     maxDiscount: data.max_discount_percent ?? 5,
+    canViewMoney: data.can_view_money === true || isOwnerRole(role) || role === 'cfo',
   }
 })
 
