@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { normalizeHoles, totalHoles, type HoleGroup } from '@/lib/production/holes'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
@@ -242,6 +243,7 @@ export default function B2BCalculatorPage() {
   const [fFacet, setFFacet]           = useState(false)
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
+  const [fHoleGroups, setFHoleGroups] = useState<HoleGroup[]>([])
   const [fCurved, setFCurved]         = useState(false)
   const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
@@ -280,6 +282,7 @@ export default function B2BCalculatorPage() {
   const [eFacet, setEFacet]           = useState(false)
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
+  const [eHoleGroups, setEHoleGroups] = useState<HoleGroup[]>([])
   const [eCurved, setECurved]         = useState(false)
   const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
@@ -841,7 +844,7 @@ export default function B2BCalculatorPage() {
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
+      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
@@ -1076,6 +1079,7 @@ export default function B2BCalculatorPage() {
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
+    setEHoleGroups(normalizeHoles(item.holes))
     setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
@@ -1106,7 +1110,7 @@ export default function B2BCalculatorPage() {
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
+      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
@@ -2051,6 +2055,41 @@ export default function B2BCalculatorPage() {
                   </span>
                 </label>
               </div>
+              {/* Сколько отверстий и какого диаметра. Признак «есть отверстия» верно
+                  направляет деталь к сверловщику, но не говорит ЧТО сверлить — до сих пор
+                  он узнавал это голосом или из чертежа, которого у большинства заказов нет.
+                  Групп бывает несколько: четыре ⌀12 под петли и два ⌀20 под ручку. */}
+              {fHoles && (
+                <div className="col-span-2 md:col-span-3 rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <p className="text-[11px] font-medium text-blue-900">
+                      Отверстия{fHoleGroups.length > 0 ? ` · всего ${totalHoles(normalizeHoles(fHoleGroups))}` : ''}
+                    </p>
+                    <button type="button" onClick={() => setFHoleGroups(prev => [...prev, { d: 0, n: 1 }])}
+                      className="text-[11px] px-2 py-1 rounded-lg border border-blue-300 text-blue-800 hover:bg-blue-100">+ группа</button>
+                  </div>
+                  {fHoleGroups.length === 0 ? (
+                    <p className="text-[11px] text-blue-800">Добавь группу: сколько отверстий и какого диаметра. Без этого сверловщик получит деталь без размеров.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {fHoleGroups.map((g, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input type="number" min="1" value={g.n || ''} placeholder="шт"
+                            onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, n: Number(e.target.value) || 0 } : x))}
+                            className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+                          <span className="text-[12px] text-[#6b6b66]">шт · ⌀</span>
+                          <input type="number" min="1" value={g.d || ''} placeholder="мм"
+                            onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, d: Number(e.target.value) || 0 } : x))}
+                            className="w-20 bg-white border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-[#111110]" />
+                          <span className="text-[12px] text-[#6b6b66]">мм</span>
+                          <button type="button" onClick={() => setFHoleGroups(prev => prev.filter((_, j) => j !== i))}
+                            className="ml-auto text-[12px] text-[#9a9a95] hover:text-red-600 px-2 py-1">удалить</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
               <div>
                 {/* Песочка — отдельный этап цеха со своей оснасткой (макет → оракал →
                     наклейка → пескоструй). Нажали здесь — деталь пойдёт через него;
