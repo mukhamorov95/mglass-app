@@ -9,7 +9,7 @@ import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 
-type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
+type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
@@ -363,8 +363,16 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
   { href: '/production-app/guide',    label: 'Регламент работы',      icon: '📘' },
 ]
 
-// Группа «Деньги» в навигации цеха убрана (П6): витрина финмодели CFO к работе смены
-// не относится. Экран /production-app/money на месте, доступен по прямому адресу.
+// Группа «Деньги» цеха. 26.08 её убрали из навигации с доводом «витрина финмодели
+// CFO к работе смены не относится». Обращение №4 от цеха (Бекмурза, 28.08) показало,
+// что довод неверен: по плану выручки формируется бонус, то есть к работе смены это
+// относится напрямую. Экран всё это время был на месте — но только по прямому адресу,
+// которого рабочий не знает; для него раздел просто исчез.
+// Ссылка возвращается ТОЛЬКО тем, кому владелец выдал право (users.can_view_money):
+// доступ никому не расширяется, восстанавливается лишь видимость уже выданного.
+const PRODUCTION_NAV_MONEY: NavItem[] = [
+  { href: '/production-app/money', label: 'Деньги и план', icon: '💰' },
+]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -468,7 +476,7 @@ function detectModeFromPath(pathname: string): ViewMode {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: Props) {
+export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, canViewMoney = false }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
 
@@ -823,6 +831,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
       </>
     )
 
@@ -900,6 +909,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
       </>
     )
 
