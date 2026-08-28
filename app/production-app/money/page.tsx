@@ -166,7 +166,7 @@ export default function MoneyPage() {
                 </div>
                 {data.bonusTeam.length > 0 && (
                   <div className="bg-white border border-[#e4e4e0] rounded-xl px-4 py-3">
-                    <h2 className="text-[13px] font-semibold text-[#111110]">Кто участвует в бонусном фонде <span className="text-[#9a9a95] font-normal">· стаж от 2 лет</span></h2>
+                    <h2 className="text-[13px] font-semibold text-[#111110]">Кто участвует в бонусном фонде <span className="text-[#9a9a95] font-normal">· состав назначает владелец</span></h2>
                     <div className="mt-2 space-y-1">
                       {data.bonusTeam.map(u => (
                         <div key={u.name} className="flex items-center justify-between text-[13px]">
@@ -177,7 +177,7 @@ export default function MoneyPage() {
                         </div>
                       ))}
                     </div>
-                    <p className="text-[11px] text-[#9a9a95] mt-2">Дата приёма заполняется владельцем в «Пользователях». Без даты сотрудник в фонде не участвует.</p>
+                    <p className="text-[11px] text-[#9a9a95] mt-2">Состав фонда отмечается владельцем в «Пользователях». Стаж рядом — справка, на участие он не влияет.</p>
                   </div>
                 )}
                 <p className="text-[12px] text-[#9a9a95]">Цифры из финмодели CFO (юнит «Производство»). Менять их здесь нельзя — правки в разделе CFO → Точка безубыточности.</p>
