@@ -22,6 +22,7 @@ type User = {
   permissions: UserPermissions
   production_stations: string[] | null
   can_view_money: boolean
+  bonus_eligible: boolean
   hired_at: string | null
   created_at: string
   telegram_bound?: boolean   // привязан ли к боту — без этого уведомления не доходят
@@ -476,7 +477,15 @@ export default function UsersPage() {
                                 className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${u.can_view_money ? 'bg-amber-100 text-amber-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
                                 💰 Деньги: {u.can_view_money ? 'видит' : 'нет'}
                               </button>
-                              <label className="flex items-center gap-1 text-[10px] text-[#9a9a95]" title="Дата приёма на работу — бонусный фонд производства делится между сотрудниками со стажем от 2 лет">
+                              {u.role === 'production' && (
+                                <button
+                                  onClick={() => updateUser(u.id, { bonus_eligible: !u.bonus_eligible })}
+                                  title="Участвует в бонусном фонде цеха. Состав назначает владелец — стаж рядом только справка."
+                                  className={`text-[10px] px-2 py-0.5 rounded-full font-medium transition-colors ${u.bonus_eligible ? 'bg-emerald-100 text-emerald-700' : 'bg-[#f0f0ec] text-[#9a9a95] hover:bg-[#e8e8e4]'}`}>
+                                  🏆 Бонус: {u.bonus_eligible ? 'да' : 'нет'}
+                                </button>
+                              )}
+                              <label className="flex items-center gap-1 text-[10px] text-[#9a9a95]" title="Дата приёма на работу — справка рядом с составом бонусного фонда, на участие не влияет">
                                 Принят:
                                 <input type="date" value={u.hired_at ?? ''}
                                   onChange={e => updateUser(u.id, { hired_at: e.target.value || null })}
