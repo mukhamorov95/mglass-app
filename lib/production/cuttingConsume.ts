@@ -33,7 +33,9 @@ export const CUTTING_STAGE = 'cutting'
 
 // Откуда пришла отметка. Каскад присутствует в перечислении сознательно: он должен быть
 // назван и явно отвергнут, а не забыт.
-export type MarkSource = 'worker' | 'order-card' | 'complete-order' | 'cascade'
+// 'my-stage' — «Готово на моей станции»: рабочий закрывает свой этап по всем
+// деталям заказа. Отметка живая, имя пишется — работу он утверждает сам.
+export type MarkSource = 'worker' | 'order-card' | 'complete-order' | 'my-stage' | 'cascade'
 
 export type CuttingMark = {
   orderId:   number

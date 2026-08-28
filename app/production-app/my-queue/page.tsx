@@ -109,6 +109,7 @@ export default function MyQueuePage() {
   // нажав её, закроет и полировку, и закалку, и упаковку по всем деталям —
   // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
   const canCloseOrder = myStations.includes('packaging')
+  const [confirmMine, setConfirmMine] = useState<number | null>(null)
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
@@ -318,6 +319,20 @@ export default function MyQueuePage() {
     await fetch(`/api/production-tasks/${last.id}`, {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'done' }),
+    }).catch(() => {})
+    load()
+  }
+
+  // «Готово на моей станции»: закрыть свой этап по ВСЕМ деталям заказа.
+  // Резчик делает заказ разом, а не по детали — жать пятнадцать раз незачем.
+  // Границу считает сервер по станциям профиля: чужие этапы не закроются, даже
+  // если запрос отправить руками.
+  async function completeMyStage(orderId: number) {
+    setConfirmMine(null)
+    setTasks(prev => prev.filter(t => !(t.order_id === orderId && myStations.includes(t.station))))
+    await fetch('/api/production/complete-my-stage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId }),
     }).catch(() => {})
     load()
   }
@@ -695,6 +710,9 @@ export default function MyQueuePage() {
                   onToggle={() => toggleOrder(id)}
                   isReady={isReady}
                   canCloseOrder={canCloseOrder}
+                  onCompleteMyStage={completeMyStage}
+                  confirmingMine={confirmMine === id}
+                  onAskConfirmMine={() => setConfirmMine(confirmMine === id ? null : id)}
                   routes={routes}
                   myStations={myStations}
                   onCompleteItem={completeItem}
@@ -754,7 +772,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingMine, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -763,6 +781,9 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
   onToggle: () => void
   isReady: (t: TaskRow) => boolean
   canCloseOrder: boolean
+  onCompleteMyStage: (orderId: number) => void
+  confirmingMine: boolean
+  onAskConfirmMine: () => void
   routes: Map<string, RouteStage[]>
   myStations: string[]
   onCompleteItem: (orderId: number, itemIndex: number) => void
@@ -859,6 +880,25 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
                   </button>
                 ) : null
               )}
+              {/* Свой этап по всему заказу — для тех, кто НЕ на упаковке. Закрывает
+                  только мои станции: заказ целиком закрывает упаковщик. */}
+              {!canCloseOrder && myOpen.length > 0 && (
+                confirmingMine ? (
+                  <span className="flex items-center gap-1.5">
+                    <button onClick={() => onCompleteMyStage(orderId)}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:opacity-90">
+                      Да, закрыть {myOpen.length}
+                    </button>
+                    <button onClick={onAskConfirmMine}
+                      className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
+                  </span>
+                ) : (
+                  <button onClick={onAskConfirmMine} title="Закрыть мой этап по всем деталям этого заказа"
+                    className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-medium hover:bg-emerald-50">
+                    ✅ Готово на моей станции ({myOpen.length})
+                  </button>
+                )
+              )}
               <button onClick={() => onNoMatOrder(orderId)} title={noMatOrder ? 'Материал пришёл' : 'Нет материала на весь заказ'}
                 className={`px-3 py-2 rounded-lg text-[12px] font-medium border ${noMatOrder ? 'bg-[#111110] text-white border-[#111110]' : 'border-red-200 text-red-600 hover:bg-red-50'}`}>
                 {noMatOrder ? '✅ Пришёл' : '🛒 Нет мат.'}
@@ -953,6 +993,12 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, c
               <button onClick={onAskConfirm}
                 className="flex-1 py-3 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
                 ✅ Всё готово ({orderOpen} задач)
+              </button>
+            )}
+            {!canCloseOrder && myOpen.length > 0 && (
+              <button onClick={() => onCompleteMyStage(orderId)}
+                className="flex-1 py-3 rounded-lg border border-emerald-600 text-emerald-700 text-[13px] font-semibold">
+                ✅ Готово на моей станции ({myOpen.length})
               </button>
             )}
             <button onClick={() => onNoMatOrder(orderId)}
