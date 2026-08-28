@@ -268,7 +268,7 @@ export default function IdeasPage() {
                         <p className="text-[12px] text-emerald-900">{idea.response}</p>
                       </div>
                     )}
-                    <p className="text-[11px] text-[#9a9a95] mt-1.5">{idea.author_name} · {new Date(idea.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-[11px] text-[#9a9a95] mt-1.5">{idea.author_name} · {new Date(idea.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}</p>
                   </div>
                 )
               })}

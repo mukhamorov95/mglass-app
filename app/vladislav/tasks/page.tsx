@@ -51,7 +51,7 @@ const TYPE_MAP: Record<TaskType, { label: string; cls: string }> = {
 }
 
 function fmt(d: string) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 export default function TasksPage() {

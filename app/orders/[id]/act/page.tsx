@@ -39,8 +39,8 @@ export default async function ActPage({
   const l = (lines ?? []) as OrderLine[]
 
   const actDate = o.actual_completion_date
-    ? new Date(o.actual_completion_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
-    : new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? new Date(o.actual_completion_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
+    : new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 
   const actNumber = `АВР-${o.number}`
 

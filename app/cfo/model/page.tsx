@@ -71,7 +71,7 @@ export default async function CfoModelPage() {
   const now = new Date()
   const monthStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`
   const daysElapsed = now.getDate()
-  const monthLabel = now.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })
+  const monthLabel = now.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'long', year: 'numeric' })
 
   let diagnostics: SourceDiag[] = []
   try {

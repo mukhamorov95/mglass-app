@@ -30,7 +30,7 @@ const METHODS = ['Счёт', 'Наличные', 'Карта', 'Перевод',
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const isoToday = () => new Date().toISOString().slice(0, 10)
-const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU')
+const fmtDate = (d: string) => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
 
 export default function ContractPaymentsPanel({ contractId, total }: { contractId: number; total: number }) {
   // Одним объектом: пришло из одного ответа и обновляется вместе — так и один

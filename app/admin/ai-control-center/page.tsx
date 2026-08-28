@@ -634,7 +634,7 @@ export default function AIControlCenter() {
                 <p className="text-[12px] text-[#6b6b66] mt-0.5">
                   {okCount} ОК · {warnCount} предупреждений · {errorCount} ошибок · {checks.length} проверок
                   {fixedCount > 0 && ` · ${fixedCount} исправлено`}
-                  {hcStarted && ` · ${hcStarted.toLocaleTimeString('ru-RU')}`}
+                  {hcStarted && ` · ${hcStarted.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' })}`}
                 </p>
               </div>
             </div>
@@ -976,8 +976,8 @@ export default function AIControlCenter() {
                   {[...fixLog].reverse().map(e => (
                     <div key={e.id} className="px-4 py-3 flex items-start gap-4">
                       <div className="flex-shrink-0 w-[72px]">
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-medium text-[#2a2a28]">{e.checkName}</p>
@@ -1006,8 +1006,8 @@ export default function AIControlCenter() {
                   {implLog.map((e, i) => (
                     <div key={i} className="px-4 py-3 flex items-start gap-4">
                       <div className="flex-shrink-0 w-[72px]">
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU')}</p>
-                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
+                        <p className="text-[10px] text-[#9a9a95]">{new Date(e.ts).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</p>
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-[12px] font-medium text-[#2a2a28]">{e.title}</p>

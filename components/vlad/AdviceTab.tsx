@@ -42,8 +42,8 @@ export default function AdviceTab() {
 
   if (loading) return <div className="py-10 text-center text-[13px] text-[#9a9a95]">Загрузка…</div>
 
-  const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' }) +
-    ' · ' + new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  const fmtWhen = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' }) +
+    ' · ' + new Date(iso).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
 
   return (
     <div className="space-y-2">

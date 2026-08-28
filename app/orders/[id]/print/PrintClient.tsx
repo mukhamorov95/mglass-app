@@ -57,7 +57,7 @@ export default function PrintClient({ order, lines, isAdmin }: Props) {
                 <span className="text-lg font-bold text-gray-900">MGlass</span>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                {new Date(order.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {new Date(order.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })}
               </p>
             </div>
             <div className="text-right">
@@ -163,7 +163,7 @@ export default function PrintClient({ order, lines, isAdmin }: Props) {
             <div className="mt-4 pt-4 border-t border-gray-100 flex justify-between text-sm">
               <span className="text-gray-500">Срок выполнения</span>
               <span className="font-medium text-gray-900">
-                {new Date(order.deadline).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+                {new Date(order.deadline).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })}
               </span>
             </div>
           )}
@@ -178,7 +178,7 @@ export default function PrintClient({ order, lines, isAdmin }: Props) {
 
           {/* Footer */}
           <div className="mt-10 pt-4 border-t border-gray-100 text-[10px] text-gray-300 text-center">
-            MGlass · {order.number} · {new Date().toLocaleDateString('ru-RU')}
+            MGlass · {order.number} · {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
           </div>
         </div>
       </div>

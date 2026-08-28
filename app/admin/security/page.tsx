@@ -34,7 +34,7 @@ function shortUA(ua: string | null): string {
   return `${os} · ${br}`
 }
 const fmtDT = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-const fmtT  = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+const fmtT  = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
 
 export default function SecurityPage() {
   const [devices, setDevices] = useState<Device[]>([])

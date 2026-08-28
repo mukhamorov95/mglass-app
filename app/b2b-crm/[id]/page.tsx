@@ -44,13 +44,13 @@ const typeLabel    = (v: string) => B2B_INTERACTION_TYPES.find(t => t.value === 
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 }
 function fmtDateShort(s: string) {
-  return new Date(s).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })
 }
 function fmtTime(s: string) {
-  return new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return new Date(s).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
 }
 
 const EMPTY_INTERACTION = { type: 'call', note: '', outcome: '', next_action: '', next_action_date: '' }

@@ -37,7 +37,7 @@ const COLS: { key: Req['status']; label: string; hdr: string }[] = [
   { key: 'arrived', label: 'Приехал на склад',  hdr: 'text-emerald-700' },
 ]
 
-const fmtD = (d: string | null) => d ? new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
+const fmtD = (d: string | null) => d ? new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''
 
 export default function BuyPage() {
   const sb = createClient()
@@ -177,7 +177,7 @@ export default function BuyPage() {
           {r.status === 'ordered' && r.ordered_by && (
             <p className="text-[11px] text-blue-700 mt-0.5">
               заказал: {r.ordered_by} · {fmtD(r.ordered_at)}
-              {r.expected_date && ` · 🚚 приедет к ${new Date(r.expected_date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`}
+              {r.expected_date && ` · 🚚 приедет к ${new Date(r.expected_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}`}
             </p>
           )}
           {r.status === 'arrived' && r.arrived_by && <p className="text-[11px] text-emerald-700 mt-0.5">принял: {r.arrived_by} · {fmtD(r.arrived_at)}</p>}

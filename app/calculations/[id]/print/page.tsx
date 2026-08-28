@@ -32,7 +32,7 @@ function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 function addDays(date: Date, days: number) {
   const d = new Date(date)
   d.setDate(d.getDate() + days)
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 // Extracts client-visible LED specs: color temp (K), wattage (W/m), LED count
@@ -216,7 +216,7 @@ export default function PrintPage() {
   if (!calc)   return <div style={S.loader}>Расчёт не найден</div>
 
   const createdAt     = new Date(calc.created_at)
-  const dateStr       = createdAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dateStr       = createdAt.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   const validUntil    = addDays(createdAt, 7)
   const serviceLines  = calc.financial_breakdown?.serviceLines ?? []
   const servicesTotal = calc.financial_breakdown?.servicesTotal ?? 0

@@ -43,7 +43,7 @@ function fmtTime(d: string) {
   const diffH = (now.getTime() - date.getTime()) / 3600000
   if (diffH < 1) return `${Math.round(diffH * 60)} мин назад`
   if (diffH < 24) return `${Math.round(diffH)} ч назад`
-  return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function statusOf(c: Chat): 'measurement' | 'human' | 'active' | 'new' | 'unread' {

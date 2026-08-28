@@ -71,7 +71,7 @@ function parseNotes(notes: string | null): NotesData {
 
 function fmtDate(s: string | undefined | null): string {
   if (!s) return ''
-  return new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function fmtDateShort(s: string): string {

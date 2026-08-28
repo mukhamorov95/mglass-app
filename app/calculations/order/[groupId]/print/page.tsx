@@ -34,7 +34,7 @@ function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 function addDays(date: Date, days: number) {
   const d = new Date(date)
   d.setDate(d.getDate() + days)
-  return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  return d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 }
 
 function getProductDescription(calc: Calc): string {
@@ -121,7 +121,7 @@ export default function GroupPrintPage() {
 
   const first      = calcs[0]
   const createdAt  = new Date(first.created_at)
-  const dateStr    = createdAt.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const dateStr    = createdAt.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   const validUntil = addDays(createdAt, 7)
   const groupNum   = first.id
 

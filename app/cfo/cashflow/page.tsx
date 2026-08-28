@@ -30,7 +30,7 @@ const startOfWeek = (d: Date) => {
   return x
 }
 const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x }
-const fmtDate = (d: Date) => d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+const fmtDate = (d: Date) => d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
 const inputCls = 'bg-white border border-[#e4e4e0] rounded-lg px-2 py-1 text-[12px] font-mono text-blue-700 font-semibold outline-none focus:border-[#111110] min-w-0'
 
 const parseNotes = (raw: unknown): Record<string, unknown> => {

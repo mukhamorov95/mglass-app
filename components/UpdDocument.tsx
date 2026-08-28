@@ -12,7 +12,7 @@ import { computeInvoiceTotals, type InvoiceOrder, type InvoiceOrderItem, type In
 
 const VAT_RATE = 22
 const money2 = (n: number) => (n ?? 0).toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 function parseNotes(notes: string | null): Record<string, unknown> {
   if (!notes) return {}
   try { const p = JSON.parse(notes); if (typeof p === 'object' && p !== null) return p } catch {}

@@ -105,7 +105,7 @@ export default function AdoptionPage() {
                       <span className="text-[10px] text-[#9a9a95] bg-[#f5f5f3] px-1.5 py-0.5 rounded">{f.domain}</span>
                     </div>
                     <p className="text-[11px] text-[#9a9a95] mt-0.5">
-                      выкачено {new Date(f.shipped).toLocaleDateString('ru-RU')} · {f.ageDays} дн. назад
+                      выкачено {new Date(f.shipped).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} · {f.ageDays} дн. назад
                       {f.usesTotal !== null && ` · использований: ${f.usesTotal} (за 30 дн: ${f.uses30d})`}
                     </p>
                     {f.hint && <p className="text-[11px] text-red-600 mt-0.5">{f.hint}</p>}

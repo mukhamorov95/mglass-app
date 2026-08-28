@@ -876,9 +876,9 @@ export default function GlassPricesPage() {
             </button>
             <a href="/admin/glass-price-lists"
               className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap"
-              title={priceList ? `Действует прайс от ${new Date(priceList.price_date).toLocaleDateString('ru-RU')}` : 'Прайсы поставщика ещё не загружались'}>
+              title={priceList ? `Действует прайс от ${new Date(priceList.price_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}` : 'Прайсы поставщика ещё не загружались'}>
               📄 Прайсы поставщика
-              {priceList && <span className="ml-1.5 text-[#9a9a95]">от {new Date(priceList.price_date).toLocaleDateString('ru-RU')}</span>}
+              {priceList && <span className="ml-1.5 text-[#9a9a95]">от {new Date(priceList.price_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>}
             </a>
             <a href="/admin/waste-modifiers"
               className="text-[12px] font-medium px-3.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] hover:bg-[#f5f5f4] transition-colors whitespace-nowrap">

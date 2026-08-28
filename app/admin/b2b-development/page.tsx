@@ -516,7 +516,7 @@ export default function B2BDevelopmentPage() {
                             {act.outcome && <p className="text-[11px] text-[#6b6b66]">{act.outcome}</p>}
                             {act.next_action && <p className="text-[11px] text-blue-600">→ {act.next_action}</p>}
                             <p className="text-[10px] text-[#c0c0bb] mt-0.5">
-                              {new Date(act.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                              {new Date(act.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}
                             </p>
                           </div>
                         </div>

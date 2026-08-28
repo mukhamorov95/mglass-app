@@ -27,7 +27,7 @@ type Row = {
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const fmt = (n: number) => Math.round(n ?? 0).toLocaleString('ru-RU') + ' ₽'
-const fmtDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const fmtDate = (d: string) => new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 
 function parseNotes(n: string | null): Record<string, unknown> {
   if (!n) return {}

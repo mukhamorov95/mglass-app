@@ -47,7 +47,7 @@ type OrderLite = { id: number; client_name: string; custom_number: string | null
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `00${id}`
-const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) }
+const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' }) }
 const qtyOf = (o: OrderLite | undefined, idx: number) => Math.max(1, o?.items?.[idx]?.quantity ?? 1)
 
 function specLine(item?: ItemSpec): string {

@@ -158,7 +158,7 @@ export default function InstallationsPage() {
         {days.map(({ d, items }) => (
           <div key={d.toISOString()} className="bg-white rounded-xl border border-[#e4e4e0] p-4">
             <p className="text-[12px] font-bold text-[#111110] mb-2 capitalize">
-              {d.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long' })}
               <span className="text-[#9a9a95] font-normal"> · {items.length} наряд(ов)</span>
             </p>
             {items.length === 0 ? (
@@ -170,7 +170,7 @@ export default function InstallationsPage() {
                   return (
                     <div key={a.id} className={`border border-[#f0f0ec] rounded-lg p-3 ${busy === a.id ? 'opacity-50' : ''}`}>
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-[13px] font-bold">{new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="font-mono text-[13px] font-bold">{new Date(a.scheduled_at).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</span>
                         <span className="text-[13px] font-medium">{a.client_name || a.orders?.client_name || a.assignee_name || '—'}</span>
                         {a.orders?.number && <span className="text-[11px] text-[#9a9a95]">заказ {a.orders.number}</span>}
                         <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${meta.cls}`}>{meta.label}</span>

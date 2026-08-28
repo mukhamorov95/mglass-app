@@ -22,7 +22,7 @@ type StatsData = {
 }
 
 function fmt(d: string) {
-  return new Date(d).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })
+  return new Date(d).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })
 }
 
 function toDateInput(ts: number) {
@@ -212,7 +212,7 @@ export default function ManagerStatsPage() {
                         <div key={day} className="flex-1 min-w-[8px]">
                           {isFirst && (
                             <p className="text-[9px] text-[#aeaeb2] whitespace-nowrap">
-                              {new Date(day).toLocaleDateString('ru-RU', { month: 'short' })}
+                              {new Date(day).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'short' })}
                             </p>
                           )}
                         </div>
@@ -355,7 +355,7 @@ export default function ManagerStatsPage() {
                             <th className="text-left px-5 py-2 text-[11px] font-semibold text-[#aeaeb2] sticky left-0 bg-white">Менеджер</th>
                             {months.map(m => (
                               <th key={m} className="text-center px-3 py-2 text-[10px] font-medium text-[#aeaeb2] whitespace-nowrap min-w-[56px]">
-                                {new Date(m + '-01').toLocaleDateString('ru-RU', { month: 'short', year: '2-digit' })}
+                                {new Date(m + '-01').toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'short', year: '2-digit' })}
                               </th>
                             ))}
                             <th className="text-center px-3 py-2 text-[11px] font-semibold text-[#aeaeb2]">Итого</th>

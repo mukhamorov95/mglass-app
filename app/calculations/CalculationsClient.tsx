@@ -523,7 +523,7 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
                           </div>
                           <div className="flex items-center gap-2 flex-shrink-0">
                             <span className="text-[11px] text-[#9a9a95]">
-                              {new Date(gi[0].created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                              {new Date(gi[0].created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                             </span>
                             {(isAdmin || canViewAll) && managerName && (
                               <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>
@@ -704,7 +704,7 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
                         </div>
                         <div className="flex items-center gap-2 flex-shrink-0">
                           <span className="text-[11px] text-[#9a9a95]">
-                            {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                            {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                           </span>
                           {(isAdmin || canViewAll) && managerName && (
                             <span className="text-[11px] text-[#9a9a95] border border-[#e4e4e0] px-1.5 py-0.5 rounded">{managerName}</span>

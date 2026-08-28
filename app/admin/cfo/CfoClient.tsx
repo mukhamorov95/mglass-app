@@ -545,7 +545,7 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(s),
       })
-      setSavedAt(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
+      setSavedAt(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' }))
       setEditSett(false)
     } finally { setSaving(false) }
   }
@@ -553,7 +553,7 @@ export default function CfoClient({ months, initialSettings, pricingRows, monthA
   function savePlan() {
     localStorage.setItem('mglass_rev_plan', JSON.stringify(revPlan))
     localStorage.setItem('mglass_funds', JSON.stringify(funds))
-    setSavedAt(new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }))
+    setSavedAt(new Date().toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' }))
     setEditPlan(false)
   }
 
