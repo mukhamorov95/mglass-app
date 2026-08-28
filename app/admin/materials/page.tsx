@@ -508,7 +508,7 @@ export default function MaterialsAdminPage() {
                                 <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-600 border border-orange-200">дублёр</span>
                               )}
                             </div>
-                            <span className="text-[10px] text-[#b8b8b4]">{new Date(m.created_at).toLocaleDateString('ru-RU')}</span>
+                            <span className="text-[10px] text-[#b8b8b4]">{new Date(m.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>
                           </div>
                         </td>
                         <td className="px-4 py-3 text-[#9a9a95] text-[11px] uppercase">{m.category}</td>

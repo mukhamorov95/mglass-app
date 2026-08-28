@@ -514,7 +514,7 @@ export default function ContractsPage() {
                                 <span className="text-[#9a9a95] mr-1.5">{payOpen.has(r.id) ? '▾' : '▸'}</span>
                                 Договор № {r.number} · {r.customer_type === 'company' ? 'юрлицо' : 'физлицо'}
                               </p>
-                              <p className="text-[11px] text-[#9a9a95]">{r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</p>
+                              <p className="text-[11px] text-[#9a9a95]">{r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
                             </div>
                             <div className="flex items-center gap-3 flex-shrink-0" onClick={e => e.stopPropagation()}>
                               <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>

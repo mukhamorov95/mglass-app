@@ -62,7 +62,7 @@ export default async function SpecPage({
 
   const bomItems = Array.from(matMap.values()).sort((a, b) => a.name.localeCompare(b.name, 'ru'))
 
-  const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const date = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <>

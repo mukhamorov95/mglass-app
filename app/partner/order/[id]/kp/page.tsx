@@ -11,7 +11,7 @@ type Item = { material: string; thickness: number; width: number; height: number
 type Order = { id: number; number: string; clientName: string; created_at: string; total: number; items: Item[] }
 
 const fmt = (n: number) => Math.round(n).toLocaleString('ru-RU') + ' ₽'
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: 'long', year: 'numeric' })
 
 export default function PartnerKPPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

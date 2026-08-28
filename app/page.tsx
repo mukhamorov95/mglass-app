@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { mskDayKey } from '@/lib/time'
 import { redirect } from 'next/navigation'
 import { getRole, ROLE_HOME } from '@/lib/getRole'
 import { createClient } from '@/lib/supabase-server'
@@ -86,10 +87,13 @@ export default async function Home() {
   const isAdmin = role === 'admin'
   const supabase = await createClient()
 
+  // Главная рендерится на сервере, а он в UTC: с полуночи до трёх ночи по Москве
+  // «сегодня» здесь было вчерашним — и подпись даты, и границы выборок за день.
   const now = new Date()
-  const todayStr  = now.toISOString().slice(0, 10)
-  const monthStr  = now.toISOString().slice(0, 7)
-  const dateLabel = `${DAYS[now.getDay()]}, ${now.getDate()} ${MONTHS[now.getMonth()]}`
+  const todayStr  = mskDayKey(now)
+  const monthStr  = todayStr.slice(0, 7)
+  const mskNow    = new Date(`${todayStr}T12:00:00Z`)   // полдень мск-дня: день недели и число берём из него
+  const dateLabel = `${DAYS[mskNow.getUTCDay()]}, ${mskNow.getUTCDate()} ${MONTHS[mskNow.getUTCMonth()]}`
 
   // Fetch B2C calc stats
   const { data: calcs } = await supabase
@@ -204,7 +208,7 @@ export default async function Home() {
                       )}
                     </div>
                     <p className="text-[12px] text-[#9a9a95] mt-0.5">
-                      {new Date(c.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                      {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}
                       {isAdmin && c.created_at && ' · ' + (usersMap[(c as { created_by?: string }).created_by ?? ''] ?? '')}
                     </p>
                   </div>

@@ -87,7 +87,7 @@ export default async function CfoDashboardPage() {
           <div>
             <h1 className="text-sm font-semibold text-[#111110]">CFO Center — Дашборд</h1>
             <p className="text-[10px] text-[#9a9a95] mt-0.5">
-              Финансовый контур MGlass · {now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })}
+              Финансовый контур MGlass · {now.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
           <div className="flex gap-2">

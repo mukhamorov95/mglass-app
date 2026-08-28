@@ -530,8 +530,8 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
                 <div key={v.id} className="flex items-center gap-2 py-2 border-t border-[#f4f4f0] first:border-0 text-[13px]">
                   <span className="font-mono text-[#9a9a95] w-8">#{v.id}</span>
                   <span className="text-[#111110] flex-1 truncate">{v.label || '— без метки —'}</span>
-                  <span className="text-[#6b6b66]">{new Date(v.publishedAt).toLocaleDateString('ru-RU')}</span>
-                  <span className="text-[#9a9a95]">КП до {until.toLocaleDateString('ru-RU')}</span>
+                  <span className="text-[#6b6b66]">{new Date(v.publishedAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>
+                  <span className="text-[#9a9a95]">КП до {until.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>
                   <span className="text-[#9a9a95] truncate max-w-[160px]">{v.publishedBy}</span>
                 </div>
               )

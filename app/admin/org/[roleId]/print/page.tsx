@@ -7,7 +7,7 @@ export default async function RolePrintPage({ params }: { params: Promise<{ role
   const role = getRoleById(roleId)
   if (!role) notFound()
 
-  const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const today = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <>

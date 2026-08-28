@@ -25,7 +25,7 @@ type Invoice = {
 type Tab = 'open' | 'paid' | 'all'
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
-const date = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU') : '—'
+const date = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'
 const daysSince = (s: string) => Math.floor((Date.now() - new Date(s).getTime()) / 86_400_000)
 
 export default function InvoicesClient() {

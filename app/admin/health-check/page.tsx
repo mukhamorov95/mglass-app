@@ -544,7 +544,7 @@ async function runChecks(
     const { data, error } = await sb.from('calculations').select('id, created_at').order('created_at', { ascending: false }).limit(5)
     if (error) return { status: 'error', detail: error.message }
     if (!data?.length) return { status: 'warn', detail: 'Нет расчётов' }
-    const last = new Date(data[0].created_at).toLocaleDateString('ru-RU')
+    const last = new Date(data[0].created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
     return { status: 'ok', detail: `Последний: ${last}, всего ≥ ${data.length}` }
   })
 
@@ -799,10 +799,10 @@ function FixLogSection({ entries, onClear }: { entries: FixLogEntry[]; onClear: 
             <div key={entry.id} className="px-4 py-3 flex items-start gap-4">
               <div className="flex-shrink-0 w-[72px]">
                 <p className="text-[10px] text-[#9a9a95]">
-                  {new Date(entry.ts).toLocaleDateString('ru-RU')}
+                  {new Date(entry.ts).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
                 </p>
                 <p className="text-[10px] text-[#9a9a95]">
-                  {new Date(entry.ts).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                  {new Date(entry.ts).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}
                 </p>
               </div>
               <div className="flex-1 min-w-0">
@@ -1056,7 +1056,7 @@ export default function HealthCheckPage() {
             <p className="text-[12px] text-[#6b6b66] mt-0.5">
               {okCount} ОК · {warnCount} предупреждений · {errorCount} ошибок · всего {total} проверок
               {fixedCount > 0 && ` · ${fixedCount} исправлено`}
-              {startedAt && ` · ${startedAt.toLocaleTimeString('ru-RU')}`}
+              {startedAt && ` · ${startedAt.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow' })}`}
             </p>
           </div>
         </div>

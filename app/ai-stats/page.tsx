@@ -39,7 +39,7 @@ function statusOf(chat: Chat): 'measurement' | 'human' | 'active' | 'new' {
 }
 
 function fmt(date: string) {
-  return new Date(date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+  return new Date(date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
 }
 
 function fmtPhone(raw: string) {

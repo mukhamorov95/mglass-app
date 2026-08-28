@@ -134,7 +134,7 @@ export default function AdminIdeasPage() {
                     </div>
                     <p className="text-[13px] text-gray-800"><span className="font-semibold text-red-600">Проблема:</span> {idea.problem}</p>
                     {idea.solution && <p className="text-[13px] text-gray-800 mt-0.5"><span className="font-semibold text-emerald-700">Решение:</span> {idea.solution}</p>}
-                    <p className="text-[11px] text-gray-400 mt-1">{new Date(idea.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
+                    <p className="text-[11px] text-gray-400 mt-1">{new Date(idea.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</p>
                   </button>
 
                   {isOpen && (

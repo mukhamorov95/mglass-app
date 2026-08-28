@@ -1,4 +1,5 @@
 import ProductionTabs from '@/components/ProductionTabs'
+import { mskTime, mskDayShort, mskDayKey, mskDayKeyAgo } from '@/lib/time'
 import CrewInviteButton from './CrewInviteButton'
 import { getUserProfile, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -27,17 +28,15 @@ type Crew = {
 }
 
 const NO_NAME = 'Без имени'
-function dayKey(iso: string): string { return iso.slice(0, 10) }
-function todayKey(): string { return new Date().toISOString().slice(0, 10) }
-function daysAgoKey(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10) }
+// Всё время — московское. Экран рендерится на сервере, а он в UTC: getHours()
+// показывал цеху 07:43 вместо 10:43, а группировка по iso.slice(0,10) относила
+// вечернюю отметку к предыдущему дню.
+const dayKey = mskDayKey
+const todayKey = (): string => mskDayKey()
+const daysAgoKey = (n: number): string => mskDayKeyAgo(n)
 function daysAgoISO(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString() }
-function fmtDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
-}
-function timeOf(iso: string): string {
-  const d = new Date(iso)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
+const fmtDay = mskDayShort
+const timeOf = mskTime
 
 export default async function ShopActivityPage() {
   const svc = createServiceClient()

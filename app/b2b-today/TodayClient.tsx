@@ -32,7 +32,7 @@ const parseNotes = (n: string | null): Notes => {
   try { const p = JSON.parse(n); return p && typeof p === 'object' ? p as Notes : {} } catch { return {} }
 }
 const daysSince = (iso: string, now: number) => Math.floor((now - new Date(iso).getTime()) / 86_400_000)
-const dayLabel = (d: Date) => d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+const dayLabel = (d: Date) => d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
 
 type Bucket = {
   key: string

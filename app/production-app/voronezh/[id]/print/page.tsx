@@ -172,7 +172,7 @@ export default function TripPrintPage({ params }: { params: Promise<{ id: string
           <div>
             <div className="text-[20px] font-semibold text-[#111110]">Лист рейса — {ship.title ?? `№${ship.id}`}</div>
             <div className="text-[13px] text-[#4b4b47] mt-1">
-              {ship.ship_date && <>Дата отправки: {new Date(ship.ship_date).toLocaleDateString('ru-RU')} · </>}
+              {ship.ship_date && <>Дата отправки: {new Date(ship.ship_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} · </>}
               M-Glass, Мытищи → Воронеж
             </div>
           </div>

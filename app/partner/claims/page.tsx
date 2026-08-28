@@ -19,7 +19,7 @@ const STATUS: Record<string, { l: string; cls: string }> = {
   open: { l: 'Принято', cls: 'p-sub' }, in_review: { l: 'На рассмотрении', cls: 'p-work' },
   resolved: { l: 'Решено', cls: 'p-ready' }, rejected: { l: 'Отклонено', cls: 'p-ship' },
 }
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 
 export default function PartnerClaimsPage() {
   const initialOrder = typeof window !== 'undefined' ? (new URLSearchParams(window.location.search).get('order') || '') : ''

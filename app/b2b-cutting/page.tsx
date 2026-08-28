@@ -658,7 +658,7 @@ export default function B2BCuttingPage() {
     setSaving(true)
     const sb = createClient()
     const { data } = await sb.from('cutting_plans').insert({
-      title: `Раскрой ${new Date().toLocaleDateString('ru-RU')}`,
+      title: `Раскрой ${new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}`,
       order_ids: Array.from(selectedIds),
       plan_data: results,
       status: 'draft',
@@ -673,7 +673,7 @@ export default function B2BCuttingPage() {
   function printSupplierRequest() {
     if (!results || results.length === 0) return
     const esc = (s: string) => String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] || c))
-    const date = new Date().toLocaleDateString('ru-RU')
+    const date = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
     const rows = results.map(r => `
       <tr>
         <td>${esc(r.materialLabel)}</td>
@@ -731,7 +731,7 @@ export default function B2BCuttingPage() {
       body: JSON.stringify({
         supplier_name: '',
         items, order_refs, b2b_order_ids: Array.from(selectedIds),
-        comment: `Заявка из раскроя ${new Date().toLocaleDateString('ru-RU')} — внести № счёта и поставщика`,
+        comment: `Заявка из раскроя ${new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })} — внести № счёта и поставщика`,
       }),
     })
     setSavingProc(false)
@@ -853,7 +853,7 @@ export default function B2BCuttingPage() {
                     <div className="text-right flex-shrink-0">
                       <div className="text-[12px] text-[#6b6b66]">{order.totalPieces} {order.totalPieces === 1 ? 'деталь' : order.totalPieces < 5 ? 'детали' : 'деталей'}</div>
                       <div className="text-[11px] text-[#9a9a95]">{order.totalAreaNet.toFixed(2)} м²</div>
-                      <div className="text-[11px] text-[#9a9a95]">{new Date(order.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</div>
+                      <div className="text-[11px] text-[#9a9a95]">{new Date(order.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}</div>
                     </div>
                   </div>
                 </div>

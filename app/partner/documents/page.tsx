@@ -10,7 +10,7 @@ type Order = { id: number; number: string; created_at: string; amount: number; s
 type Resp = { linked: boolean; orders: Order[] }
 
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 
 export default function PartnerDocumentsPage() {
   const [data, setData] = useState<Resp | null>(null)

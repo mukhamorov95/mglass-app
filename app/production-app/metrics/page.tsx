@@ -285,7 +285,7 @@ export default function MetricsPage() {
             <div className="space-y-1">
               {stats.problemLog.map(t => (
                 <p key={t.id} className="text-[12px] text-[#6b6b66]">
-                  <span className="font-mono">{t.problem_at ? new Date(t.problem_at).toLocaleDateString('ru-RU') : ''}</span>
+                  <span className="font-mono">{t.problem_at ? new Date(t.problem_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : ''}</span>
                   {' '}· заказ #{t.order_id} · {t.station} · {t.problem_reason_code || '—'}
                   {t.problem_comment ? ` — ${t.problem_comment}` : ''}
                   {t.problem_resolved_at ? ' · ✅ решено' : ' · 🔴 открыто'}

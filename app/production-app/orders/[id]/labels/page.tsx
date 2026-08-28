@@ -52,7 +52,7 @@ function Barcode({ value, height = 34 }: { value: string; height?: number }) {
   return <svg ref={ref} className="w-full" />
 }
 
-const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) : null
+const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' }) : null
 
 export default function LabelsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params)

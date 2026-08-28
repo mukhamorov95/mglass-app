@@ -120,7 +120,7 @@ export default function ManagerPage() {
               Мои сделки — {firstName}
             </h1>
             <p className="text-[12px] text-[#9a9a95] mt-0.5">
-              {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+              {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long' })}
             </p>
           </div>
           <a href={`https://${data.domain}/leads/`} target="_blank" rel="noreferrer"

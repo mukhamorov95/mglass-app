@@ -51,7 +51,7 @@ export default function ShopRequestsBar() {
             <span className="text-[13px] font-medium">{r.title}</span>
             {r.qty && <span className="text-[12px] text-[#6b6b66]">× {r.qty}</span>}
             {r.link_url && <a href={r.link_url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline">ссылка ↗</a>}
-            <span className="text-[11px] text-[#9a9a95]">от {r.author_name || '—'} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</span>
+            <span className="text-[11px] text-[#9a9a95]">от {r.author_name || '—'} · {new Date(r.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>
             <button onClick={() => markOrdered(r.id)} disabled={busy === r.id}
               className="ml-auto text-[11px] font-semibold bg-amber-500 text-white rounded-lg px-2.5 py-1 hover:bg-amber-600 disabled:opacity-40">
               ✓ Заказано

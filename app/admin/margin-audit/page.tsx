@@ -40,7 +40,7 @@ const MARGIN_TEXT: Record<AuditOrder['color'], string> = {
 const CARD = 'bg-white border border-[#e4e4e0] rounded-xl'
 const money = (v: number) => Math.round(v).toLocaleString('ru-RU')
 const pctv = (v: number | null) => v == null ? '—' : `${v}%`
-const dateRu = (s: string) => new Date(s).toLocaleDateString('ru-RU')
+const dateRu = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
 
 export default function MarginAuditPage() {
   const [report, setReport] = useState<Report | null>(null)

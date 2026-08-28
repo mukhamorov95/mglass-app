@@ -444,8 +444,8 @@ export default function B2BAnalyticsPage() {
                                     <td className="px-4 py-2.5 text-right font-mono font-bold text-[#111110]">{c.total_revenue.toLocaleString('ru-RU')} ₽</td>
                                     <td className="px-4 py-2.5 text-right text-[#6b6b66]">{c.total_orders_count}</td>
                                     <td className="px-4 py-2.5 text-right font-mono text-[#6b6b66]">{c.avg_order_value.toLocaleString('ru-RU')} ₽</td>
-                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.first_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
-                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.last_order_date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.first_order_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', year: '2-digit' })}</td>
+                                    <td className="px-4 py-2.5 text-right text-[#9a9a95]">{new Date(c.last_order_date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short', year: '2-digit' })}</td>
                                     <td className="px-4 py-2.5 text-right">
                                       <span className={`font-semibold ${c.days_since_last_order < 90 ? 'text-emerald-600' : c.days_since_last_order < 180 ? 'text-amber-600' : 'text-red-500'}`}>
                                         {c.days_since_last_order}д

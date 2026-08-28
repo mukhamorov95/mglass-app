@@ -135,7 +135,7 @@ export default function UnitEconomicsPage() {
                       {calc.client_name || '—'} · {(calc.final_price ?? 0).toLocaleString('ru-RU')} ₽
                     </div>
                     <div className={`text-[10px] ${isActive ? 'text-white/50' : 'text-[#c4c4be]'}`}>
-                      {new Date(calc.created_at).toLocaleDateString('ru-RU')}
+                      {new Date(calc.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
                     </div>
                   </button>
                 )

@@ -62,7 +62,7 @@ export default function ModelClient({ incomes, fixed, fundsRubByUnit, factByUnit
   ]
   const unitBtns = [{ key: 'all', label: 'Компания (оба)' }, ...units.map((u) => ({ key: u, label: u }))]
   const dateLabel = updatedAt
-    ? new Date(updatedAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+    ? new Date(updatedAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
     : '—'
 
   return (
