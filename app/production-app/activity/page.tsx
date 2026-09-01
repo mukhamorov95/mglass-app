@@ -140,7 +140,11 @@ export default async function ShopActivityPage() {
                     <span className="text-[11px] text-[#9a9a95] w-20 text-right shrink-0 tabular-nums">
                       {c.queue_open > 0 ? `${c.queue_open} в очереди` : ''}
                     </span>
-                    {isOwner && never && <CrewInviteButton userId={c.user_id} name={c.name ?? 'сотрудника'} />}
+                    {/* Ссылка нужна не только тем, кто НИ РАЗУ не входил. Адилет заходил
+                        один раз 10.07 и с тех пор ни одной отметки: для него кнопки не было,
+                        хотя именно он и не может войти. Показываем всем, кто в приложении
+                        не работает — не заходил вовсе либо заходил, но не отмечает. */}
+                    {isOwner && (never || silent) && <CrewInviteButton userId={c.user_id} name={c.name ?? 'сотрудника'} />}
                   </div>
                 )
               })}
