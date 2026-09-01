@@ -110,6 +110,11 @@ export default function MyQueuePage() {
   // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
   const canCloseOrder = myStations.includes('packaging')
   const [confirmMine, setConfirmMine] = useState<number | null>(null)
+  // Заказ, найденный по номеру, но БЕЗ моих задач: менеджер не отметил признак,
+  // и маршрут через мою станцию не построился. Рабочий видит пустоту и идёт к
+  // владельцу — так 01.09 пришёл Адилет с четырьмя заказами сразу.
+  const [foreignOrder, setForeignOrder] = useState<{ id: number; number: string; client: string } | null>(null)
+  const [addingStage, setAddingStage] = useState(false)
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
@@ -472,6 +477,36 @@ export default function MyQueuePage() {
     byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
   }
 
+  // Поиск не нашёл ничего среди МОИХ задач — ищем заказ вообще, чтобы предложить
+  // добавить свой этап, а не показывать пустой экран.
+  const qTrim = search.trim()
+  const lookForeign = qTrim.length >= 3 && byOrder.size === 0
+  useEffect(() => {
+    if (!lookForeign) return
+    let cancelled = false
+    const digits = qTrim.replace(/\D/g, '')
+    sb.from('b2b_orders')
+      .select('id,custom_number,client_name')
+      .or(`custom_number.ilike.%${qTrim}%${digits ? `,id.eq.${Number(digits)}` : ''}`)
+      .gte('created_at', PROD_SINCE).limit(1)
+      .then(({ data }) => {
+        const o = (data ?? [])[0] as { id: number; custom_number: string | null; client_name: string | null } | undefined
+        if (!cancelled) setForeignOrder(o ? { id: o.id, number: o.custom_number?.trim() || `00${o.id}`, client: o.client_name ?? '—' } : null)
+      })
+    return () => { cancelled = true }
+  }, [lookForeign, qTrim, sb])
+
+  async function addMyStage(orderId: number, stage: string) {
+    setAddingStage(true)
+    await fetch('/api/production/add-my-stage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId, stage }),
+    }).catch(() => {})
+    setAddingStage(false)
+    setForeignOrder(null)
+    load()
+  }
+
   // Горизонт по дате отгрузки заказа
   const todayStr = new Date(); todayStr.setHours(0, 0, 0, 0)
   const dayMs = 86400000
@@ -583,6 +618,31 @@ export default function MyQueuePage() {
 
       <div className="px-4 pt-4">
         <LeadSummary onPick={handlePick} />
+
+        {/* Заказ есть, но моих задач в нём нет. Раньше здесь была пустота, и рабочий
+            шёл к владельцу: «не отображается». Теперь видно, что заказ существует,
+            и почему его нет у меня — признак при просчёте не отмечен. */}
+        {lookForeign && foreignOrder && myStations.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-[14px] font-bold font-mono text-[#111110]">{foreignOrder.number}</p>
+            <p className="text-[13px] text-[#6b6b66]">{foreignOrder.client}</p>
+            <p className="text-[12px] text-amber-800 mt-1.5">
+              Заказ есть, но задач вашей станции в нём нет — при просчёте не отметили
+              {myStations.includes('drilling') ? ' отверстия или вырезы' : ' эту обработку'}.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2.5">
+              {myStations.map(st => (
+                <button key={st} onClick={() => addMyStage(foreignOrder.id, st)} disabled={addingStage}
+                  className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40">
+                  {addingStage ? '…' : `Добавить: ${stageLabel(st)}`}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-700 mt-2">
+              Добавится по всем изделиям заказа. Скажите менеджеру — в следующий раз отметит при просчёте.
+            </p>
+          </div>
+        )}
 
         {/* Табло мастера: изделия за сегодня и за неделю */}
         {myStations.length > 0 && (
