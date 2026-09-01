@@ -20,11 +20,13 @@ export function TreatToggle({ on, onChange, label, tone }: {
     indigo: 'border-indigo-300 bg-indigo-50 text-indigo-700',
   }
   return (
-    <label className={`flex items-center gap-2 min-h-[44px] px-3 border rounded-lg cursor-pointer transition-all ${
+    <label className={`flex items-center gap-2 min-h-[44px] px-2.5 py-1.5 border rounded-lg cursor-pointer transition-all ${
       on ? TONES[tone] : 'border-[#e4e4e0] bg-white text-[#6b6b66] hover:border-[#c4c4be]'}`}>
       <input type="checkbox" checked={on} onChange={e => onChange(e.target.checked)}
         className="w-4 h-4 rounded accent-[#111110] flex-shrink-0" />
-      <span className={`text-[13px] leading-tight ${on ? 'font-semibold' : 'font-medium'}`}>{label}</span>
+      {/* min-w-0 обязателен: без него флекс-элемент не сжимается и длинное слово
+          («Криволинейка») обрезается вместо переноса. */}
+      <span className={`text-[13px] leading-tight min-w-0 ${on ? 'font-semibold' : 'font-medium'}`}>{label}</span>
     </label>
   )
 }

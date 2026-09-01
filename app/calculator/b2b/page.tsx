@@ -2029,18 +2029,27 @@ export default function B2BCalculatorPage() {
                 {facetPrices.length > 0 && (
                   <TreatToggle on={fFacet} onChange={setFFacet} label="Фацет" tone="purple" />
                 )}
-                <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
                 <TreatToggle on={fCurved} onChange={setFCurved} label="Криволинейка" tone="teal" />
                 <TreatToggle on={fSandblast} onChange={setFSandblast} label="Песочка" tone="violet" />
                 <TreatToggle on={fTriplex} onChange={setFTriplex} label="Триплекс" tone="indigo" />
-                <label className={`flex items-center gap-2 min-h-[44px] px-3 border rounded-lg ${
-                  fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
-                  <input type="number" min="0" value={fCutouts || ''} placeholder="0"
-                    onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
-                    className="w-10 bg-transparent text-[13px] outline-none" />
-                  <span className={`text-[13px] leading-tight ${fCutouts > 0 ? 'text-blue-700 font-semibold' : 'text-[#6b6b66] font-medium'}`}>Вырезы</span>
-                </label>
               </div>
+
+              {/* Отверстия и вырезы — одна работа одного человека (сверловщик), и
+                  включают они один и тот же этап маршрута. Порознь они читались как
+                  два несвязанных признака: вырезы стояли в конце сетки, через две
+                  обработки от отверстий. Теперь это один блок, и видно, к кому он ведёт. */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 space-y-2">
+                <p className="text-[11px] font-medium text-blue-900">Сверловка · одна станция</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
+                  <label className={`flex items-center gap-2 min-h-[44px] px-2.5 py-1.5 border rounded-lg ${
+                    fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
+                    <input type="number" min="0" value={fCutouts || ''} placeholder="0"
+                      onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-9 bg-transparent text-[13px] outline-none flex-shrink-0" />
+                    <span className={`text-[13px] leading-tight min-w-0 ${fCutouts > 0 ? 'text-blue-700 font-semibold' : 'text-[#6b6b66] font-medium'}`}>Вырезы</span>
+                  </label>
+                </div>
 
               {/* Подробности включённых обработок — под сеткой во всю ширину.
                   Раньше они раскрывались внутри ячейки и ломали ряды. */}
@@ -2054,8 +2063,8 @@ export default function B2BCalculatorPage() {
                 </select>
               )}
 
-              {fHoles && (
-                <div className="rounded-lg border border-blue-200 bg-blue-50/60 p-2.5">
+                {fHoles && (
+                <div className="rounded-lg border border-blue-200 bg-white p-2.5">
                   <div className="flex items-center justify-between gap-2 mb-2">
                     <p className="text-[12px] font-medium text-blue-900">
                       Отверстия{fHoleGroups.length > 0 ? ` · всего ${totalHoles(normalizeHoles(fHoleGroups))}` : ''}
@@ -2072,11 +2081,11 @@ export default function B2BCalculatorPage() {
                           <input type="number" min="1" value={g.n || ''} placeholder="шт"
                             onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, n: Number(e.target.value) || 0 } : x))}
                             className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] outline-none focus:border-[#111110]" />
-                          <span className="text-[12px] text-[#6b6b66]">шт · ⌀</span>
+                          <span className="text-[12px] text-[#6b6b66] whitespace-nowrap">шт · ⌀</span>
                           <input type="number" min="1" value={g.d || ''} placeholder="мм"
                             onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, d: Number(e.target.value) || 0 } : x))}
                             className="w-20 bg-white border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] outline-none focus:border-[#111110]" />
-                          <span className="text-[12px] text-[#6b6b66]">мм</span>
+                          <span className="text-[12px] text-[#6b6b66] whitespace-nowrap">мм</span>
                           <button type="button" onClick={() => setFHoleGroups(prev => prev.filter((_, j) => j !== i))}
                             className="ml-auto text-[12px] text-[#9a9a95] hover:text-red-600 px-2 py-1.5">удалить</button>
                         </div>
@@ -2084,7 +2093,8 @@ export default function B2BCalculatorPage() {
                     </div>
                   )}
                 </div>
-              )}
+                )}
+              </div>
 
               {fTriplex && (() => {
                 const glassCats = SUPER_CATS[0].cats as readonly string[]
