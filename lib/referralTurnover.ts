@@ -7,6 +7,29 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type RefClient = { id: number; referrer_id: string; name: string; note: string | null; b2b_client_id: number | null }
 export type MonthAmount = { ym: string; amount: number }
 
+// Считается ли заказ в оборот партнёра.
+//
+// Архив в этой системе — уборка, а не отмена: 30.06.2026 одним действием туда ушли
+// 398 заказов клиентов Адилета, и 352 из них ОТГРУЖЕНЫ. Фильтр «архивные не берём»
+// вычёркивал их вместе с настоящей работой: кабинет показывал 200 заказов и 5,4 млн
+// вместо 565 и 15,1 млн — почти 97 тысяч его начисления пропадали.
+//
+// Правило: заказ, который стал работой (запущен в цех или отгружен), считается
+// независимо от архива. Архивный и при этом никогда не запускавшийся — не считается:
+// это и есть удалённая ошибка.
+export function countsForReferral(o: { archived_at?: string | null; notes?: unknown }): boolean {
+  if (!o.archived_at) return true
+  const n = parseNotes(o.notes)
+  const stages = (n.stages ?? {}) as Record<string, unknown>
+  return !!n.launched_at || !!stages.shipped
+}
+
+function parseNotes(n: unknown): Record<string, unknown> {
+  if (!n) return {}
+  if (typeof n === 'object') return n as Record<string, unknown>
+  try { return JSON.parse(String(n)) as Record<string, unknown> } catch { return {} }
+}
+
 export async function buildAutoTurnover(
   sb: SupabaseClient,
   clients: RefClient[],
@@ -14,20 +37,20 @@ export async function buildAutoTurnover(
   const linked = clients.filter(c => c.b2b_client_id != null)
   if (!linked.length) return {}
   const b2bIds = [...new Set(linked.map(c => c.b2b_client_id!))]
-  // Те же фильтры, что в /b2b-orders (истина заказов): без просчётов (quote),
-  // без импортированной истории (historical) и без архива. Иначе оборот
-  // партнёрки раздувается просчётами, которые так и не стали заказами.
+  // Без просчётов (quote) и без импортированной истории (historical): иначе оборот
+  // партнёрки раздувается тем, что заказом так и не стало.
+  // Архив НЕ фильтруем здесь — решает countsForReferral, см. комментарий у неё.
   const { data: orders } = await sb.from('b2b_orders')
-    .select('client_id,total_after_discount,total_sale_inc_vat,created_at')
+    .select('client_id,total_after_discount,total_sale_inc_vat,created_at,archived_at,notes')
     .in('client_id', b2bIds)
     .gte('created_at', '2026-01-01')
     .not('notes', 'ilike', '%"status":"quote"%')
     .not('notes', 'ilike', '%"historical":true%')
-    .is('archived_at', null)
     .limit(20000)
 
   const byClientMonth = new Map<number, Map<string, number>>()
   for (const o of orders ?? []) {
+    if (!countsForReferral(o)) continue
     const amt = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
     if (!amt) continue
     const ym = `${String(o.created_at).slice(0, 7)}-01`
