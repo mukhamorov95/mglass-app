@@ -9,7 +9,7 @@ import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 
-type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean }
+type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean; referralRate?: number | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
@@ -375,6 +375,15 @@ const PRODUCTION_NAV_MONEY: NavItem[] = [
   { href: '/production-app/money', label: 'Деньги и план', icon: '💰' },
 ]
 
+// «Мой заработок» — кабинет партнёра: его клиенты, их оборот и начисление по ставке.
+// Ссылки на него не было в меню ВООБЩЕ, и Адилет сказал, что кабинет «пропал»:
+// страница жива, ставка 1% на месте, шесть приведённых им клиентов на месте —
+// попасть было некуда. Та же болезнь, что у «Денег» цеха.
+// Показываем только тем, у кого ставка задана: остальным это пустой экран.
+const PRODUCTION_NAV_REFERRAL: NavItem[] = [
+  { href: '/production-app/earnings', label: 'Мой заработок', icon: '🤝' },
+]
+
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const MGLASS_PATHS = [
@@ -477,7 +486,7 @@ function detectModeFromPath(pathname: string): ViewMode {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, canViewMoney = false }: Props) {
+export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, canViewMoney = false, referralRate = null }: Props) {
   const router   = useRouter()
   const pathname = usePathname()
 
@@ -833,6 +842,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
         {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
+        {referralRate != null && accordion('prod_ref', 'Партнёрство', 'text-violet-700', 'text-violet-500', PRODUCTION_NAV_REFERRAL, 'bg-violet-50 text-violet-800 font-medium')}
       </>
     )
 
@@ -911,6 +921,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
         {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
+        {referralRate != null && accordion('prod_ref', 'Партнёрство', 'text-violet-700', 'text-violet-500', PRODUCTION_NAV_REFERRAL, 'bg-violet-50 text-violet-800 font-medium')}
       </>
     )
 

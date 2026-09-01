@@ -15,6 +15,7 @@ export type UserProfile = {
   canDelete:   boolean
   maxDiscount: number
   canViewMoney: boolean   // users.can_view_money — витрина финмодели в цеху
+  referralRate: number | null   // users.referral_rate_pct — ставка партнёра, включает «Мой заработок»
 }
 
 // ─── Owner / role helpers ────────────────────────────────────────────────────
@@ -86,7 +87,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
   // Try full profile first (requires migrated columns); fall back to role-only
   const { data, error } = await supabase
     .from('users')
-    .select('role, permissions, manager_code, can_delete, max_discount_percent, can_view_money')
+    .select('role, permissions, manager_code, can_delete, max_discount_percent, can_view_money, referral_rate_pct')
     .eq('id', user.id)
     .single()
 
@@ -107,6 +108,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
       canDelete:   isOwnerRole(role),
       maxDiscount: isOwnerRole(role) ? 100 : 5,
       canViewMoney: isOwnerRole(role),
+      referralRate: null,
     }
   }
 
@@ -120,6 +122,7 @@ export const getUserProfile = cache(async (): Promise<UserProfile | null> => {
     canDelete:   data.can_delete ?? false,
     maxDiscount: data.max_discount_percent ?? 5,
     canViewMoney: data.can_view_money === true || isOwnerRole(role) || role === 'cfo',
+    referralRate: data.referral_rate_pct != null ? Number(data.referral_rate_pct) : null,
   }
 })
 
