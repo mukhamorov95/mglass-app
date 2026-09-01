@@ -7,28 +7,22 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 export type RefClient = { id: number; referrer_id: string; name: string; note: string | null; b2b_client_id: number | null }
 export type MonthAmount = { ym: string; amount: number }
 
-// Считается ли заказ в оборот партнёра.
+// Архив ОБЯЗАТЕЛЬНО исключается — и это не «потерянные заказы».
 //
-// Архив в этой системе — уборка, а не отмена: 30.06.2026 одним действием туда ушли
-// 398 заказов клиентов Адилета, и 352 из них ОТГРУЖЕНЫ. Фильтр «архивные не берём»
-// вычёркивал их вместе с настоящей работой: кабинет показывал 200 заказов и 5,4 млн
-// вместо 565 и 15,1 млн — почти 97 тысяч его начисления пропадали.
+// 01.09.2026 я решил обратное и ошибся: увидел, что 30.06 одним действием в архив
+// ушли 398 заказов, из них 352 отгружены, и заключил, что архив вычёркивает живую
+// работу. Оборот Адилета вырос с 5,4 до 14,8 млн. Владелец не поверил цифре —
+// «не мог Жданов заказать на 8 миллионов» — и был прав.
 //
-// Правило: заказ, который стал работой (запущен в цех или отгружен), считается
-// независимо от архива. Архивный и при этом никогда не запускавшийся — не считается:
-// это и есть удалённая ошибка.
-export function countsForReferral(o: { archived_at?: string | null; notes?: unknown }): boolean {
-  if (!o.archived_at) return true
-  const n = parseNotes(o.notes)
-  const stages = (n.stages ?? {}) as Record<string, unknown>
-  return !!n.launched_at || !!stages.shipped
-}
-
-function parseNotes(n: unknown): Record<string, unknown> {
-  if (!n) return {}
-  if (typeof n === 'object') return n as Record<string, unknown>
-  try { return JSON.parse(String(n)) as Record<string, unknown> } catch { return {} }
-}
+// Что там на самом деле: заказы грузились из Google-таблицы ТРЕМЯ поколениями
+// импорта. «Импорт (Google)» — 109 строк, все в архиве. «v2» — 137, все в архиве.
+// «v3» — 137, все активные. Один и тот же заказ лежит трижды с одинаковой суммой до
+// рубля: 1455-1 по 91 350 ₽ в каждом поколении. Архив здесь — вытеснение старой
+// версии импорта, а не отмена заказа. Сложив архивные с активными, я посчитал
+// один заказ по три раза.
+//
+// Урок: расхождение в разы — это почти всегда дубли, а не потеря. Прежде чем
+// «возвращать» данные, надо посмотреть, чем строки отличаются друг от друга.
 
 export async function buildAutoTurnover(
   sb: SupabaseClient,
@@ -37,20 +31,22 @@ export async function buildAutoTurnover(
   const linked = clients.filter(c => c.b2b_client_id != null)
   if (!linked.length) return {}
   const b2bIds = [...new Set(linked.map(c => c.b2b_client_id!))]
-  // Без просчётов (quote) и без импортированной истории (historical): иначе оборот
-  // партнёрки раздувается тем, что заказом так и не стало.
-  // Архив НЕ фильтруем здесь — решает countsForReferral, см. комментарий у неё.
+  // Те же фильтры, что в /b2b-orders (истина заказов): без просчётов (quote), без
+  // импортированной истории (historical), без архива (вытесненные поколения импорта)
+  // и ТОЛЬКО запущенные в работу — просчёт заказом не является (владелец 01.09).
   const { data: orders } = await sb.from('b2b_orders')
-    .select('client_id,total_after_discount,total_sale_inc_vat,created_at,archived_at,notes')
+    .select('client_id,total_after_discount,total_sale_inc_vat,created_at,notes')
     .in('client_id', b2bIds)
     .gte('created_at', '2026-01-01')
     .not('notes', 'ilike', '%"status":"quote"%')
     .not('notes', 'ilike', '%"historical":true%')
+    .not('notes', 'is', null)
+    .ilike('notes', '%"launched_at"%')
+    .is('archived_at', null)
     .limit(20000)
 
   const byClientMonth = new Map<number, Map<string, number>>()
   for (const o of orders ?? []) {
-    if (!countsForReferral(o)) continue
     const amt = Number(o.total_after_discount ?? o.total_sale_inc_vat ?? 0)
     if (!amt) continue
     const ym = `${String(o.created_at).slice(0, 7)}-01`
