@@ -65,7 +65,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <CartProvider>
             {user && role !== 'partner' ? (
               <div className="flex min-h-screen">
-                <Sidebar userEmail={user.email ?? ''} role={role} permissions={permissions} canViewMoney={profile?.canViewMoney ?? false} />
+                <Sidebar userEmail={user.email ?? ''} role={role} permissions={permissions} canViewMoney={profile?.canViewMoney ?? false} referralRate={profile?.referralRate ?? null} />
                 <main className="flex-1 min-w-0 pt-12 lg:pt-0">{children}</main>
               </div>
             ) : (
