@@ -212,6 +212,10 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
+  // Видеостудия: сценарий + озвучка → готовый файл. Ссылку ставим сразу — за неделю
+  // нашлось четыре живых экрана, на которые не вело ничего, и каждый выглядел как
+  // «функция пропала».
+  { href: '/admin/video-studio',        label: 'Видеостудия',    icon: '🎥' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
   { href: '/admin/architecture',        label: 'Карта данных',   icon: '🗺️' },
 ]
@@ -416,7 +420,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
-    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
+    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
@@ -478,7 +482,7 @@ function detectModeFromPath(pathname: string): ViewMode {
     pathname.startsWith('/admin/users') || pathname.startsWith('/admin/product-line') ||
     pathname.startsWith('/admin/b2b-presentation') || pathname.startsWith('/admin/roadmap') ||
     pathname.startsWith('/admin/pricing-manual') || pathname.startsWith('/admin/owner-questionnaire') ||
-    pathname.startsWith('/admin/infrastructure') || pathname.startsWith('/admin/shower-images') ||
+    pathname.startsWith('/admin/infrastructure') || pathname.startsWith('/admin/shower-images') || pathname.startsWith('/admin/video-studio') ||
     pathname.startsWith('/marketing') || pathname.startsWith('/vladislav') ||
     pathname.startsWith('/ai-stats')  || pathname.startsWith('/amo-analysis')
   ) return 'ceo'
