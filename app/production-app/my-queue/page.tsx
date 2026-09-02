@@ -5,7 +5,7 @@ import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
 import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '@/lib/productionStages'
-import { normalizeHoles, holesLabel } from '@/lib/production/holes'
+import { holesFromComment, normalizeHoles, holesLabel } from '@/lib/production/holes'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue } from '@/lib/production/completeOrder'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
@@ -67,9 +67,18 @@ function featureLine(item?: ItemSpec): string {
   if (item.shape === 'curved')   f.push('криволинейка')
   if (item.hasHoles) {
     // Сверловщику нужны размеры, а не факт «отверстия есть»: без них он всё равно
-    // идёт спрашивать. Если группы не заведены — так и пишем, это видно менеджеру.
+    // идёт спрашивать. Порядок источников — от точного к сырому:
+    //   1) группы, заведённые менеджером;
+    //   2) диаметры от разбора чертежа — они уже напечатаны следом, комментарием
+    //      позиции; у 35 позиций из 83 они есть только там. Сам кусок сюда НЕ
+    //      поднимаем (проверено на стенде 375 px: одна и та же строка выводилась
+    //      дважды и занимала четыре строки вместо двух) — меняем только подпись,
+    //      потому что «размеры не указаны» над готовыми размерами это враньё;
+    //   3) размеров нет нигде — так и говорим.
     const g = normalizeHoles(item.holes)
-    f.push(g.length ? `отверстия ${holesLabel(g)}` : 'отверстия (размеры не указаны)')
+    if (g.length)                        f.push(`отверстия ${holesLabel(g)}`)
+    else if (holesFromComment(item.comment)) f.push('отверстия — размеры в комментарии')
+    else                                 f.push('отверстия (размеры не указаны)')
   }
   const cut = Math.max(0, Number(item.cutouts) || 0)
   if (cut > 0)                   f.push(`вырезы ${cut}`)
