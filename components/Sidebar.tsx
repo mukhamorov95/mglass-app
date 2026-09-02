@@ -322,6 +322,11 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
   { href: '/admin/ideas',          label: 'Идеи цеха',       icon: '💡' },
+  // Выдача доступа в кабинет заказчику. Ссылки на этот экран не было НИ ОТКУДА:
+  // он открывался только по прямому адресу, которого никто не знал. Итог — 66
+  // клиентов B2B, 51 из них заказывал за последние 90 дней, а кабинет заведён
+  // у одного. Канал сбыта стоял закрытым не по решению, а по недосмотру.
+  { href: '/admin/b2b-access',     label: 'Доступ в кабинет клиенту', icon: '🔑' },
   { href: '/admin/referrals',      label: 'Реферальная программа', icon: '🤝' },
   { href: '/admin/referral-stats', label: 'Партнёры — сводка', icon: '📊' },
   { href: '/admin/security',       label: 'Безопасность',    icon: '🛡️' },
@@ -428,7 +433,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
   }
   return open
 }
