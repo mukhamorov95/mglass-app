@@ -921,7 +921,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
                       )}
 
                       <div className="flex flex-wrap items-center gap-2 pl-2 pt-0.5">
-                        <QtyRuleEditor rule={e.qty} onChange={r => setQtyRule(si, ei, r)} />
+                        <QtyRuleEditor rule={e.qty} geomQty={meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : (q.roleQty[slot.role] ?? 0)} onChange={r => setQtyRule(si, ei, r)} />
                         {meta.kind === 'piece' && (
                           <select value={it.shape ?? ''} onChange={ev => setShape(it.id, ev.target.value)}
                             title="Как позиция выглядит в 3D у клиента"
@@ -1074,20 +1074,26 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
 }
 
 // Правило количества: из геометрии / фикс / выбор клиента. Больше нигде количество не вводится.
-function QtyRuleEditor({ rule, onChange }: { rule: QtyRule; onChange: (r: QtyRule) => void }) {
+function QtyRuleEditor({ rule, geomQty, onChange }: { rule: QtyRule; geomQty: number; onChange: (r: QtyRule) => void }) {
   return (
     <span className="flex items-center gap-1">
+      <span className="text-[11px] text-[#9a9a95]">Кол-во:</span>
       <select value={rule.mode} onChange={e => {
         const m = e.target.value
-        onChange(m === 'fixed' ? { mode: 'fixed', n: 1 } : m === 'client' ? { mode: 'client', options: [2, 3], def: 2 } : { mode: 'role' })
+        // Переход в «своё число» стартует с того, что даёт геометрия — меньше сюрпризов.
+        onChange(m === 'fixed' ? { mode: 'fixed', n: geomQty || 1 } : m === 'client' ? { mode: 'client', options: [2, 3], def: 2 } : { mode: 'role' })
       }} className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
-        <option value="role">кол-во из геометрии</option>
-        <option value="fixed">фиксированное</option>
+        <option value="role">из геометрии ({geomQty})</option>
+        <option value="fixed">задать своё</option>
         <option value="client">выбор клиента</option>
       </select>
       {rule.mode === 'fixed' && (
-        <input type="text" inputMode="numeric" value={rule.n} onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value.replace(/\D/g, '')) || 0 })}
-          className="w-12 text-right font-mono text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 outline-none focus:border-[#111110]" />
+        <span className="flex items-center gap-0.5">
+          <input type="text" inputMode="numeric" value={rule.n} onFocus={e => e.currentTarget.select()}
+            onChange={e => onChange({ mode: 'fixed', n: Number(e.target.value.replace(/\D/g, '')) || 0 })}
+            className="w-12 text-right font-mono text-[12px] border border-[#111110] rounded-md px-1 py-0.5 outline-none" />
+          <span className="text-[11px] text-[#9a9a95]">шт</span>
+        </span>
       )}
       {rule.mode === 'client' && (
         <input value={rule.options.join(',')} onChange={e => {
