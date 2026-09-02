@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { DocumentBlockParam, ImageBlockParam, TextBlockParam } from '@anthropic-ai/sdk/resources/messages/messages'
 import { createClient } from '@/lib/supabase-server'
+import { countHoleSignals, logDrawingParse } from '@/lib/ai/parseLog'
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! })
 
@@ -69,17 +70,36 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // См. lib/ai/parseLog.ts: до 02.09.2026 запуски разбора нигде не оставляли следа.
+  const startedAt = Date.now()
+  const { data: prof } = await supabase.from('users').select('name').eq('id', user.id).maybeSingle()
+  const who = (prof as { name: string | null } | null)?.name ?? user.email ?? null
+  let fileMeta: { name: string; type: string; size: number } | null = null
+  const note = (ok: boolean, extra: Partial<Parameters<typeof logDrawingParse>[0]> = {}) =>
+    logDrawingParse({ route: 'b2b/parse-pdf', userId: user.id, userName: who, file: fileMeta,
+                      durationMs: Date.now() - startedAt, ok, ...extra })
+
   try {
     const form = await req.formData()
     const file = form.get('file') as File | null
-    if (!file) return NextResponse.json({ error: 'Файл не получен' }, { status: 400 })
+    if (!file) {
+      await note(false, { error: 'Файл не получен' })
+      return NextResponse.json({ error: 'Файл не получен' }, { status: 400 })
+    }
+    fileMeta = { name: file.name, type: file.type, size: file.size }
 
     const maxSize = 20 * 1024 * 1024
-    if (file.size > maxSize) return NextResponse.json({ error: 'Файл слишком большой (макс. 20 МБ)' }, { status: 400 })
+    if (file.size > maxSize) {
+      await note(false, { error: 'файл больше 20 МБ' })
+      return NextResponse.json({ error: 'Файл слишком большой (макс. 20 МБ)' }, { status: 400 })
+    }
 
     const mimeType = file.type || ''
     const kind = ALLOWED_TYPES[mimeType]
-    if (!kind) return NextResponse.json({ error: 'Поддерживаются PDF, JPEG и PNG файлы' }, { status: 400 })
+    if (!kind) {
+      await note(false, { error: `тип не поддержан: ${mimeType || 'не указан'}` })
+      return NextResponse.json({ error: 'Поддерживаются PDF, JPEG и PNG файлы' }, { status: 400 })
+    }
 
     const buf = await file.arrayBuffer()
     const base64 = Buffer.from(buf).toString('base64')
@@ -110,7 +130,10 @@ export async function POST(req: Request) {
 
     // Вытаскиваем JSON из ответа
     const jsonMatch = text.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) return NextResponse.json({ error: 'Не удалось разобрать ответ модели', raw: text }, { status: 500 })
+    if (!jsonMatch) {
+      await note(false, { error: 'модель вернула не JSON' })
+      return NextResponse.json({ error: 'Не удалось разобрать ответ модели', raw: text }, { status: 500 })
+    }
 
     const parsed = JSON.parse(jsonMatch[0])
 
@@ -123,6 +146,9 @@ export async function POST(req: Request) {
       quantity: Math.max(1, Number(item.quantity) || 1),
     }))
 
+    const sig = countHoleSignals(items)
+    await note(true, { itemsFound: items.length, itemsWithHoles: sig.withHoles, itemsWithDiameter: sig.withDiameter })
+
     return NextResponse.json({
       items,
       rawText: parsed.rawText ?? '',
@@ -130,6 +156,7 @@ export async function POST(req: Request) {
     })
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Ошибка сервера'
+    await note(false, { error: msg })
     return NextResponse.json({ error: msg }, { status: 500 })
   }
 }

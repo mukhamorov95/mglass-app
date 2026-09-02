@@ -63,6 +63,13 @@ export function holesIncomplete(hasHoles: boolean, groups: HoleGroup[]): boolean
 // только Ø и теряла 46% диаметров — из них у Айжана все до одной.
 const DIAMETER = /[ØøΦφ⌀∅]\s*\d/
 
+// Один класс знаков на весь проект: его же спрашивает лог разбора чертежа и
+// счётчик в /admin/quote-quality. Разъехавшись, они снова покажут разные цифры
+// про одно и то же — так мы уже потеряли 46% диаметров.
+export function hasDiameterSign(text?: string | null): boolean {
+  return !!text && DIAMETER.test(text)
+}
+
 export function holesFromComment(comment?: string | null): string {
   if (!comment) return ''
   return comment
