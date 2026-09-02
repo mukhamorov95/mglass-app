@@ -11,6 +11,11 @@
 -- без этого счётчика пустое поле групп читается как «данных нет», хотя данные
 -- есть, просто в другом месте.
 --
+-- Знаков диаметра в комментариях два, и это не опечатка: 35 позиций написаны
+-- через Ø (U+00D8, латинская O со штрихом), 30 — через ∅ (U+2205, знак пустого
+-- множества). Разбор пишет тот, что стоял в чертеже. Класс из одного Ø терял 46%
+-- диаметров, и колонка «⌀ уже в комментарии» занижала ровно то, ради чего заведена.
+--
 -- Архивные просчёты не считаем: выброшенный черновик не характеризует работу.
 
 create or replace function public.quote_quality_weekly(p_from date)
@@ -34,7 +39,7 @@ as $$
     count(*) filter (where (it->>'hasHoles')::boolean is true)                as flagged,
     count(*) filter (where jsonb_typeof(it->'holes') = 'array'
                        and jsonb_array_length(it->'holes') > 0)               as detailed,
-    count(*) filter (where coalesce(it->>'comment', '') ~ '[Ø⌀]')             as diam_in_comment,
+    count(*) filter (where coalesce(it->>'comment', '') ~ '[ØøΦφ⌀∅]')        as diam_in_comment,
     count(*) filter (where (it->>'hasCutouts')::boolean is true)              as cutouts,
     count(distinct o.id)                                                      as orders
   from public.b2b_orders o
