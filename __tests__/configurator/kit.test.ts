@@ -381,3 +381,36 @@ describe('kit — профиль одним слотом и торцевая з�
     expect(q.roleQty['cap-end']).toBe(1)
   })
 })
+
+describe('kit — уплотнители по КАЖДОЙ створке (решает состав ролей, не геометрия)', () => {
+  it('раздвижная М8: магнитный и петлевой доступны по створкам, не только нижний', () => {
+    const c = getModel('М8').constraints
+    const q = computeKitQuantities(buildFromModel(getModel('М8'), { width: 1200, height: 2000, width2: c.needsWidth2 ? 1200 : undefined }, 8), 8, getModel('М8'))
+    expect(q.slideDoors).toBeGreaterThan(0)
+    expect((q.barPieces['seal-magnet'] ?? []).length).toBeGreaterThan(0)   // раньше было пусто — теперь по створкам
+    expect((q.barPieces['seal-hinge'] ?? []).length).toBeGreaterThan(0)
+    expect((q.barPieces['seal-bottom'] ?? []).length).toBeGreaterThan(0)
+    // вертикальные — по ВЫСОТЕ створки, нижний — по ширине
+    expect(q.barPieces['seal-magnet']!.every(v => v === 2000)).toBe(true)
+  })
+
+  it('Вера задаёт «фиксированное 1» магнитному на угловой М8 — один кусок, не по-створочно', () => {
+    const c = getModel('М8').constraints
+    const q = computeKitQuantities(buildFromModel(getModel('М8'), { width: 1200, height: 2000, width2: c.needsWidth2 ? 1200 : undefined }, 8), 8, getModel('М8'))
+    const lib: Library = { items: [{ id: 'm', name: 'Магнитный', role: 'seal-magnet', stocks: [{ len: 2200, prices: { chrome: 1028 } }] }] }
+    const perDoor: ModelKit = { slots: [{ role: 'seal-magnet', select: 'one', entries: [{ itemId: 'm', qty: { mode: 'role' }, primary: true }] }] }
+    const fixedOne: ModelKit = { slots: [{ role: 'seal-magnet', select: 'one', entries: [{ itemId: 'm', qty: { mode: 'fixed', n: 1 }, primary: true }] }] }
+    const pPer = computeKitPrice(q, lib, perDoor, RATES, FIN, { finishId: 'chrome' })
+    const pOne = computeKitPrice(q, lib, fixedOne, RATES, FIN, { finishId: 'chrome' })
+    expect(pPer.lines[0].plan!.reduce((s, b) => s + b.pieces.length, 0)).toBe(2)   // по-створочно = 2
+    expect(pOne.lines[0].plan!.reduce((s, b) => s + b.pieces.length, 0)).toBe(1)   // Вера задала 1
+    expect(pOne.total).toBeLessThan(pPer.total)
+  })
+
+  it('распашная М7 не изменилась: три уплотнителя как были', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    expect(q.barPieces['seal-magnet']).toEqual([2000])
+    expect(q.barPieces['seal-hinge']).toEqual([2000])
+    expect(q.barPieces['seal-bottom']).toEqual([600])
+  })
+})
