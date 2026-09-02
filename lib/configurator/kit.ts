@@ -36,7 +36,7 @@ export const ROLE_META: Record<RoleId, RoleMeta> = {
   'mount-stabilizer': { label: 'Крепление стабилизатора', kind: 'piece', hint: 'стабилизационная штанга' },
   'connector':    { label: 'Соединитель трубы',     kind: 'piece', hint: 'стык труб под углом' },
   'cap':          { label: 'Заглушка профиля',      kind: 'bar',   hint: 'погонная — только в проёме двери (стационар закрывает полость стеклом)' },
-  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'открытый торец напольного профиля — со стороны входа' },
+  'cap-end':      { label: 'Заглушка торцевая',     kind: 'piece', hint: 'только вручную — обычно стационар; задай количество' },
   'seal-magnet':  { label: 'Уплотнитель магнитный', kind: 'bar',   hint: 'притвор двери — по высоте двери' },
   'seal-bottom':  { label: 'Уплотнитель нижний',    kind: 'bar',   hint: 'низ створки — по ширине двери' },
   'seal-hinge':   { label: 'Уплотнитель петлевой',  kind: 'bar',   hint: 'стык со стационаром — по высоте двери' },
@@ -216,14 +216,12 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 
   // Кусок металла → своя bar-роль. Стойка меряется по высоте, остальное по длине.
   const barPieces: Record<string, number[]> = {}
-  let floorRuns = 0
   for (const m of assembly.metal) {
     const spec = (m as { spec?: string }).spec
     const fallback: RoleId = m.kind === 'rail' ? 'tube' : 'profile'
     const role = specRole(spec, fallback)
     const len = mm(m.kind === 'post' ? m.size[1] : m.size[0])
     if (len <= 0) continue
-    if (m.kind === 'profile' || role === 'profile-floor') floorRuns += 1
     ;(barPieces[role] ??= []).push(len)
   }
   const profilePieces = ROLES.filter(r => r.startsWith('profile')).flatMap(r => barPieces[r] ?? [])
@@ -249,18 +247,23 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   if (doorWidths.length && profilePieces.length) {
     barPieces.cap = doorWidths.flatMap(w => hasTopProfile ? [w + capMargin, w + capMargin] : [w + capMargin])
   }
-  // Уплотнители — по КАЖДОЙ створке (распашной И раздвижной): вертикальные по высоте,
-  // нижний по ширине. Геометрия даёт длину; ЧТО из этого войдёт в изделие, решает Вера
-  // составом ролей в комплекте, а не моё правило «магнитный только на распашную».
+  // Раздвижная модель: крепление к стене и к стеклу ВХОДЯТ в раздвижной комплект
+  // (ролики/трек), отдельно не требуются — обнуляем, чтобы не висели дырой.
+  const isSliding = slideDoors > 0 && swingDoors === 0
+  if (isSliding) { roleQty['mount-wall'] = 0; roleQty['mount-glass'] = 0 }
+
+  // Уплотнители по створке: вертикальные (магнитный/петлевой) по высоте — доступны и на
+  // распашной, и на раздвижной; НИЖНИЙ — только на РАСПАШНЫЕ двери, на раздвижные не
+  // ставится (решение владельца). Что войдёт в изделие — решает Вера составом ролей.
   if (doors.length) {
     const vertical = doors.map(d => mm(d.size[1]))
     barPieces['seal-magnet'] = vertical
     barPieces['seal-hinge'] = [...vertical]
-    barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
+    if (!isSliding) barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
   }
-  // Торцевая заглушка закрывает открытый торец НАПОЛЬНОГО профиля — тот, что видно
-  // со стороны входа. По одной на напольный ран; стойки у стены торцом не смотрят.
-  roleQty['cap-end'] = floorRuns
+  // Торцевая заглушка НЕ автоматическая: ставится только в стационаре, и то не всегда
+  // (решение владельца). Геометрия её не требует — Вера добавляет роль и задаёт количество
+  // вручную там, где нужно («задать своё N»). Остаётся 0, если её не задали.
   for (const r of ROLES) if (ROLE_META[r].kind === 'bar') roleQty[r] = (barPieces[r] ?? []).length
 
   return { thickness, sections: assembly.glass.length, glassM2, doorWidths, profilePieces, tubePieces, barPieces, roleQty, swingDoors, slideDoors }
