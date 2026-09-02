@@ -14,8 +14,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
-import { mskDateTime, mskDayShort } from '@/lib/time'
+import { mskDateTime, mskDayKey, mskDayShort } from '@/lib/time'
 import { isReadyToShip, sortByWaiting, daysWaiting, matchesQuery, type ShipRow } from '@/lib/production/shipping'
+import { packedOn, shippedOn, unpackedPieces } from '@/lib/production/dayLists'
+import DayReport from './DayReport'
 
 const PROD_SINCE = '2026-07-01'
 
@@ -35,16 +37,19 @@ export default function ShippingPage() {
   const [busy, setBusy]       = useState<number | null>(null)
   const [justShipped, setJustShipped] = useState<Map<number, string>>(new Map())
   const [now, setNow]         = useState<Date | null>(null)
+  const [remaining, setRemaining] = useState<Map<number, number | null>>(new Map())
+  const [today, setToday]     = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
     const [{ data: orders }, { data: tasks }] = await Promise.all([
       sb.from('b2b_orders').select('id,custom_number,client_name,notes').gte('created_at', PROD_SINCE).limit(2000),
-      sb.from('production_tasks').select('order_id,status'),
+      sb.from('production_tasks').select('order_id,status,station,item_index'),
     ])
 
+    const taskRows = (tasks ?? []) as { order_id: number; status: string; station: string; item_index: number }[]
     const agg = new Map<number, { total: number; done: number }>()
-    for (const t of (tasks ?? []) as { order_id: number; status: string }[]) {
+    for (const t of taskRows) {
       const a = agg.get(t.order_id) ?? { total: 0, done: 0 }
       a.total++
       if (t.status === 'done') a.done++
@@ -66,6 +71,32 @@ export default function ShippingPage() {
       }
     })
     setRows(list)
+
+    // Остаток по упаковке считаем только для сегодняшнего списка: тянуть items
+    // всех двух тысяч заказов ради десятка строк вечернего отчёта незачем.
+    const dayKey  = mskDayKey()
+    const packed  = packedOn(list, dayKey)
+    const ids     = packed.map(r => r.id)
+    const rem     = new Map<number, number | null>()
+    if (ids.length) {
+      const { data: itemRows } = await sb.from('b2b_orders').select('id,items').in('id', ids)
+      const qtyByOrder = new Map<number, Map<number, number>>()
+      for (const r of (itemRows ?? []) as { id: number; items: unknown }[]) {
+        const m = new Map<number, number>()
+        if (Array.isArray(r.items)) {
+          r.items.forEach((it, i) => m.set(i, Math.max(1, Number((it as { quantity?: number })?.quantity) || 1)))
+        }
+        qtyByOrder.set(r.id, m)
+      }
+      const byOrder = new Map<number, typeof taskRows>()
+      for (const t of taskRows) {
+        if (!ids.includes(t.order_id)) continue
+        byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
+      }
+      for (const id of ids) rem.set(id, unpackedPieces(byOrder.get(id) ?? [], qtyByOrder.get(id) ?? new Map()))
+    }
+    setRemaining(rem)
+    setToday(dayKey)
     setLoading(false)
   }, [sb])
 
@@ -89,6 +120,16 @@ export default function ShippingPage() {
     }
     setBusy(null)
   }
+
+  // Два списка за сегодня — для вечернего отчёта в группу «Заказ в работу».
+  // Строим по факту отметки за день, а не по тому, кто её поставил: отгружает
+  // тот, кто оказался у машины, и списку это безразлично.
+  const packedToday = useMemo(
+    () => packedOn(rows, today).map(r => ({ id: r.id, number: r.number, client: r.client, remaining: remaining.get(r.id) ?? null })),
+    [rows, today, remaining])
+  const shippedToday = useMemo(
+    () => shippedOn(rows, today).map(r => ({ id: r.id, number: r.number, client: r.client })),
+    [rows, today])
 
   const ready    = useMemo(() => sortByWaiting(rows.filter(isReadyToShip).filter(r => matchesQuery(r, q))), [rows, q])
   const searched = useMemo(() => (q.trim() ? rows.filter(r => matchesQuery(r, q)) : []), [rows, q])
@@ -117,6 +158,19 @@ export default function ShippingPage() {
       </div>
 
       <div className="px-4 py-4 max-w-3xl">
+        {!loading && (packedToday.length > 0 || shippedToday.length > 0) && (
+          <div className="space-y-2 mb-4">
+            <DayReport title="📦 Упаковано сегодня" rows={packedToday} />
+            <DayReport
+              title="🚚 Отгружено сегодня"
+              rows={shippedToday}
+              hint={shippedToday.length > 0
+                ? 'Остаток в скобках здесь не считается: отметка «Отгружен» стоит на заказе целиком, частичной отгрузки система не хранит. Если уехала часть — допишите руками.'
+                : undefined}
+            />
+          </div>
+        )}
+
         {!loading && ready.length === 0 && !q && (
           <div className="bg-white rounded-xl border border-[#e4e4e0] p-6 text-center text-[13px] text-[#9a9a95]">
             Готовых к отгрузке нет.
