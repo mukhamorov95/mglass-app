@@ -896,7 +896,7 @@ export default function MyEarningsPage() {
         <div className="bg-white border border-[#e4e4e0] rounded-lg px-4 py-3">
           <div className="flex items-baseline justify-between mb-2">
             <p className="text-[10px] font-semibold text-[#9a9a95] uppercase tracking-widest">Сегодня</p>
-            <p className="text-[10px] text-[#c4c4be]">{new Date().toLocaleDateString('ru-RU', { day: '2-digit', month: 'long' })}</p>
+            <p className="text-[10px] text-[#c4c4be]">{new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: 'long' })}</p>
           </div>
           <div className="grid grid-cols-3 gap-3">
             <div>

@@ -948,8 +948,8 @@ export default function B2BQuotesPage() {
             const quoteDate = parsed.quote_date
               ? new Date(String(parsed.quote_date))
               : new Date(quote.created_at)
-            const dateStr   = quoteDate.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
-            const timeStr   = quoteDate.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+            const dateStr   = quoteDate.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
+            const timeStr   = quoteDate.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
             const finalPrice = finalTotalOf(quote)
             const userNotes  = typeof parsed.user_notes === 'string' ? parsed.user_notes : null
             const statusComment = typeof parsed.status_comment === 'string' ? parsed.status_comment : null
@@ -1024,7 +1024,7 @@ export default function B2BQuotesPage() {
                               ? `Итог задан вручную: ${fmt(overrideMeta.base ?? quote.total_sale_inc_vat)} → ${fmt(overrideMeta.target ?? finalPrice)}`
                                 + `${overrideMeta.discount_percent ? ` (скидка ${overrideMeta.discount_percent}%)` : ''}`
                                 + `${overrideMeta.by_name ? ` · ${overrideMeta.by_name}` : ''}`
-                                + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU')}` : ''}`
+                                + `${overrideMeta.at ? ` · ${new Date(String(overrideMeta.at)).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}` : ''}`
                               : 'Цены позиций заданы вручную'}>
                             ✏️ ручная корректировка
                           </span>
@@ -1659,7 +1659,7 @@ export default function B2BQuotesPage() {
                       <div className="px-4 py-2 border-t border-[#f0f0ec] flex items-center gap-2 text-[11px] text-blue-700 bg-blue-50/30">
                         <span className="font-semibold">В работе с:</span>
                         <span className="font-mono">
-                          {new Date(workStartedAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          {new Date(workStartedAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })}
                         </span>
                       </div>
                     )}

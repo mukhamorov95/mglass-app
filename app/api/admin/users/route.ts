@@ -19,7 +19,7 @@ export async function GET() {
   // Try with new columns first; fall back to base columns if migration not run yet
   const full = await db
     .from('users')
-    .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,can_view_all_clients,can_view_all_deals,amo_user_id,max_discount_percent,can_delete,permissions,production_stations,can_view_money,hired_at,created_at')
+    .select('id,email,name,role,active,manager_code,password_plain,see_all_orders,can_view_all_clients,can_view_all_deals,amo_user_id,max_discount_percent,can_delete,permissions,production_stations,can_view_money,bonus_eligible,hired_at,created_at')
     .order('created_at', { ascending: true })
 
   // Привязка к Telegram-боту: без неё уведомления менеджеру (А14) никуда не уходят,

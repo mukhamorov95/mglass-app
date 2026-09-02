@@ -442,7 +442,7 @@ export default function B2BCRMClient({ isOwner, canSeeAll, mglassOnly, myUserId 
                         {c.lastInteraction && (
                           <div className="mt-1.5 text-[11px] text-[#9a9a95] truncate">
                             <span className="text-[#c4c4be]">
-                              {new Date(c.lastInteraction.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                              {new Date(c.lastInteraction.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}
                             </span>
                             {' · '}
                             {c.lastInteraction.note}

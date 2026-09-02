@@ -51,7 +51,7 @@ const SOURCE_LABEL: Record<Lead['source'], string> = {
 
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
 const fmtDT = (s: string) => new Date(s).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })
-const fmtTime = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+const fmtTime = (s: string) => new Date(s).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
 const ACT_KIND_META: Record<string, { icon: string; label: string }> = {
   call: { icon: '📞', label: 'Звонки' }, message: { icon: '💬', label: 'Сообщения' },
   stage: { icon: '➡️', label: 'Этапы' }, note: { icon: '📝', label: 'Заметки' }, system: { icon: '⚙️', label: 'Система' },

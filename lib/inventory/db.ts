@@ -127,6 +127,9 @@ export type NewMove = {
   pack_qty?: number | null
   reason:    MoveReason
   origin?:   MoveOrigin
+  item_index?: number | null
+  stage?:    string | null
+  attempt?:  number
   unit_cost?: number
   doc_type?: DocType | null
   doc_id?:   string | null
@@ -143,6 +146,9 @@ export async function addMoves(rows: NewMove[], actor: MoveActor): Promise<{ ins
     pack_qty:  r.pack_qty ?? null,
     reason:    r.reason,
     origin:    r.origin ?? 'fact',
+    item_index: r.item_index ?? null,
+    stage:     r.stage ?? null,
+    attempt:   r.attempt ?? 0,
     unit_cost: Math.max(0, Number(r.unit_cost ?? 0)),
     doc_type:  r.doc_type ?? null,
     doc_id:    r.doc_id ?? null,
@@ -382,4 +388,143 @@ export async function applyConsume(
     released = await markReservationConsumed(plan.doc_type, plan.doc_id).catch(() => 0)
   }
   return { ...res, released }
+}
+
+
+// ─── Подетальное списание при закрытии резки (решение владельца 27.08.2026) ───
+
+const round = (n: number) => Math.round(n * 10000) / 10000
+
+// Есть ли у заказа задачи резки — дискриминатор развилки. Если есть, списание
+// идёт подетально на резке, а упаковочный fallback по этому заказу пропускает.
+export async function orderHasCuttingTasks(orderId: string): Promise<boolean> {
+  const { data } = await svc()
+    .from('production_tasks')
+    .select('id').eq('order_id', Number(orderId)).eq('stage_key', 'cutting').limit(1)
+  return !!(data && data.length)
+}
+
+type B2BOrderItemRaw = { materialId?: number | null; materialName?: string | null; totalAreaBilled?: number | null; totalAreaNet?: number | null }
+
+// Одна позиция заказа → площадь + складская позиция. null-material / нулевая
+// площадь (услуга) → matched:false, списывать нечего.
+async function resolveOrderItem(orderId: string, itemIndex: number): Promise<
+  { area: number; item: { id: number; name: string; unit: Unit } | null; sourceName: string } | null
+> {
+  const { data, error } = await svc().from('b2b_orders').select('items').eq('id', Number(orderId)).maybeSingle()
+  if (error || !data) return null
+  const raw = data.items as { items?: B2BOrderItemRaw[] } | B2BOrderItemRaw[] | null
+  const list = Array.isArray(raw) ? raw : (raw?.items ?? [])
+  const it = list[itemIndex]
+  if (!it) return null
+
+  const area = round(Number(it.totalAreaBilled ?? it.totalAreaNet ?? 0))
+  const sourceName = it.materialName ?? `Материал #${it.materialId ?? '?'}`
+  if (!(area > 0)) return { area: 0, item: null, sourceName }
+
+  const stock = await matchTargets()
+  let hit = it.materialId != null
+    ? stock.find(t => t.ref_table === 'b2b_materials' && t.ref_id === String(it.materialId))
+    : undefined
+  if (!hit && it.materialName) {
+    const { normalizeName } = await import('./match')
+    const n = normalizeName(it.materialName)
+    hit = stock.find(t => t.bom_aliases.some(a => normalizeName(a) === n))
+       ?? stock.find(t => normalizeName(t.name) === n)
+  }
+  return { area, item: hit ? { id: hit.id, name: hit.name, unit: hit.unit } : null, sourceName }
+}
+
+export type ItemConsumeResult = {
+  ok: boolean; inserted: number; matched: boolean; name?: string; qty?: number; error?: string
+}
+
+// Списать материал ОДНОЙ позиции заказа при закрытии её этапа (резки). Идемпотентно
+// по (заказ, позиция, этап, попытка): повтор той же попытки — no-op, переделка
+// (attempt++) — второе списание (новый лист). best-effort через вызывающий хук.
+export async function consumeItemAtStage(
+  orderId: string, itemIndex: number, attempt: number, stage: string, by: MoveActor, origin: MoveOrigin = 'plan',
+): Promise<ItemConsumeResult> {
+  const resolved = await resolveOrderItem(orderId, itemIndex)
+  if (!resolved) return { ok: true, inserted: 0, matched: false }
+  if (!(resolved.area > 0)) return { ok: true, inserted: 0, matched: false }
+  if (!resolved.item)      return { ok: true, inserted: 0, matched: false, name: resolved.sourceName }
+
+  const res = await addMoves([{
+    item_id: resolved.item.id, qty: -Math.abs(resolved.area), reason: 'order', origin,
+    item_index: itemIndex, stage, attempt,
+    doc_type: 'b2b_order', doc_id: orderId,
+    note: `Списание на резке: ${resolved.sourceName} (поз. ${itemIndex}${attempt > 0 ? `, переделка ${attempt}` : ''})`,
+  }], by)
+  return { ok: true, inserted: res.inserted, matched: true, name: resolved.item.name, qty: resolved.area }
+}
+
+// Откат ошибочной отметки резки (мисклик, «отметили не тот заказ»): встречное
+// движение-коррекция. Идемпотентно: если откат по этой попытке уже есть — no-op.
+export async function reverseItemConsume(
+  orderId: string, itemIndex: number, attempt: number, stage: string, by: MoveActor,
+): Promise<ItemConsumeResult> {
+  const db = svc()
+  const { data: orig } = await db.from('inventory_moves')
+    .select('item_id, qty')
+    .eq('doc_type', 'b2b_order').eq('doc_id', orderId)
+    .eq('item_index', itemIndex).eq('stage', stage).eq('attempt', attempt).eq('reason', 'order')
+  const rows = (orig ?? []) as { item_id: number; qty: number }[]
+  if (!rows.length) return { ok: true, inserted: 0, matched: false }  // списания не было — откатывать нечего
+
+  const { data: already } = await db.from('inventory_moves')
+    .select('id')
+    .eq('doc_type', 'b2b_order').eq('doc_id', orderId)
+    .eq('item_index', itemIndex).eq('stage', stage).eq('attempt', attempt).eq('reason', 'return').limit(1)
+  if (already && already.length) return { ok: true, inserted: 0, matched: true }  // уже откачено
+
+  const reversal: NewMove[] = rows.map(r => ({
+    item_id: r.item_id, qty: Math.abs(r.qty), reason: 'return' as MoveReason, origin: 'plan' as MoveOrigin,
+    item_index: itemIndex, stage, attempt,
+    doc_type: 'b2b_order' as DocType, doc_id: orderId,
+    note: `Откат ошибочной отметки резки (поз. ${itemIndex}${attempt > 0 ? `, попытка ${attempt}` : ''})`,
+  }))
+  const res = await addMoves(reversal, by)
+  return { ok: true, inserted: res.inserted, matched: true }
+}
+
+
+// Упаковочный проход по заказу С задачами резки: списывает КАЖДУЮ позицию через
+// тот же ключ (заказ, позиция, cutting, 0), что и живая резка. Позиции, списанные
+// живой резкой, БД отсеивает уникальным индексом (no-op); позиции, у которых резку
+// закрыл каскад (живой отметки не было → списания нет), списываются здесь.
+//
+// Так закрывается дыра: заказ с cutting-задачами, но без живых отметок, при старом
+// условии «есть задачи → пропустить» не списывался НИКОГДА. Двойного списания нет по
+// построению — ключ БД атомарно отсеивает уже списанное, проверять «кто первый» не нужно.
+export async function sweepCuttingConsume(
+  orderId: string, by: MoveActor, origin: MoveOrigin = 'plan',
+): Promise<{ inserted: number; items: number }> {
+  const db = svc()
+  const { data } = await db.from('b2b_orders').select('items').eq('id', Number(orderId)).maybeSingle()
+  const raw = data?.items as { items?: unknown[] } | unknown[] | null
+  const list = Array.isArray(raw) ? raw : (raw?.items ?? [])
+
+  // Проход НЕ угадывает попытку, а закрывает ВСЕ: для позиции с rework_count=N лист
+  // резали N+1 раз (попытки 0..N), каждая — реальный отдельный лист. Проходим по всем,
+  // дедуп в БД гасит уже списанные (живьём/каскадом), а пропущенные best-effort'ом
+  // дописывает. Так нет ни фантома (любая попытка ≤ rework_count — реальный лист), ни
+  // дубля (ключ БД), ни недоучёта при многократном промахе. attempt=0 или «текущий»
+  // поодиночке ловили бы только один из листов переделанной позиции — этот ловит все.
+  const { data: tasks } = await db.from('production_tasks')
+    .select('item_index, rework_count').eq('order_id', Number(orderId)).eq('stage_key', 'cutting')
+  const reworkByItem = new Map<number, number>()
+  for (const t of (tasks ?? []) as { item_index: number; rework_count: number | null }[]) {
+    reworkByItem.set(t.item_index, Math.max(0, Number(t.rework_count ?? 0)))
+  }
+
+  let inserted = 0
+  for (let i = 0; i < list.length; i++) {
+    const maxAttempt = reworkByItem.get(i) ?? 0
+    for (let attempt = 0; attempt <= maxAttempt; attempt++) {
+      const r = await consumeItemAtStage(orderId, i, attempt, 'cutting', by, origin)
+      inserted += r.inserted
+    }
+  }
+  return { inserted, items: list.length }
 }

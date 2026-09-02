@@ -190,13 +190,13 @@ export default function MeasurerCabinetPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
             {week.map(({ d, items }) => (
               <div key={d.toISOString()} className="border border-[#f0f0ec] rounded-lg p-2.5">
-                <p className="text-[11px] font-bold capitalize">{d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}</p>
+                <p className="text-[11px] font-bold capitalize">{d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'short', day: 'numeric', month: 'short' })}</p>
                 {items.length === 0 ? <p className="text-[11px] text-emerald-600 mt-1">свободно</p> : (
                   <div className="mt-1 space-y-1.5">
                     {items.map(r => (
                       <div key={r.id} className={busy === r.id ? 'opacity-50' : ''}>
                         <p className="text-[11px]">
-                          <span className="font-mono font-semibold">{new Date(r.scheduled_at!).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                          <span className="font-mono font-semibold">{new Date(r.scheduled_at!).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</span>
                           {' '}{r.client_name}{isOwnerView && r.measurer_name ? ` · ${r.measurer_name}` : ''}
                         </p>
                         {r.address && <p className="text-[10px] text-[#9a9a95]">📍 {r.address}</p>}
@@ -224,7 +224,7 @@ export default function MeasurerCabinetPage() {
                 <div key={r.id} className="border border-[#f0f0ec] rounded-lg p-3">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-[13px] font-medium">{r.status === 'done' ? '✅' : '⚠️'} {r.deal_number || `#${r.id}`} · {r.client_name}</span>
-                    {r.scheduled_at && <span className="text-[11px] text-[#9a9a95]">{new Date(r.scheduled_at).toLocaleDateString('ru-RU')}</span>}
+                    {r.scheduled_at && <span className="text-[11px] text-[#9a9a95]">{new Date(r.scheduled_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>}
                     {isOwnerView && r.measurer_name && <span className="text-[11px] text-[#9a9a95]">· {r.measurer_name}</span>}
                     <span className="text-[12px] font-mono ml-auto">{fmt(r.measurer_fee)}</span>
                     <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${r.fee_status === 'paid' ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>

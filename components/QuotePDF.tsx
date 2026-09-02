@@ -116,9 +116,9 @@ function fmtN(n: number, d = 3) {
 }
 
 export default function QuotePDF(p: QuotePDFProps) {
-  const date = new Date(p.quoteDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const date = new Date(p.quoteDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   const validUntil = new Date(new Date(p.quoteDate).getTime() + 14 * 86_400_000)
-    .toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    .toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   const hasDiscount = p.discountPercent > 0
   const showPrices = p.priceMode === 'detailed'
   // Ширины колонок: со «Суммой» (detailed) и без неё (consolidated — 20% отдаём

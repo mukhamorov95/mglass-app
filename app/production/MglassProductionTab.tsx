@@ -45,7 +45,7 @@ type ProductionOrder = {
 }
 
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+  return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })
 }
 
 function DeadlineBadge({ deadline }: { deadline: string | null }) {
@@ -236,7 +236,7 @@ export default function MglassProductionTab() {
                       {stage.label}
                       {done && doneDate && (
                         <span className="text-[8px] font-normal opacity-70 leading-none mt-0.5">
-                          {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                          {new Date(doneDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                         </span>
                       )}
                     </button>

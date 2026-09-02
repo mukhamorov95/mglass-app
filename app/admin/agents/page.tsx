@@ -63,7 +63,7 @@ function fmtTime(iso: string | null) {
 }
 
 function fmtLogTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })
+  return new Date(iso).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })
 }
 
 function levelColor(level: string) {

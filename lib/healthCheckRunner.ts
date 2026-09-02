@@ -525,7 +525,7 @@ export async function runChecks(
     const { data, error } = await sb.from('calculations').select('id, created_at').order('created_at', { ascending: false }).limit(5)
     if (error) return { status: 'error', detail: error.message }
     if (!data?.length) return { status: 'warn', detail: 'Нет расчётов' }
-    return { status: 'ok', detail: `Последний: ${new Date(data[0].created_at).toLocaleDateString('ru-RU')}` }
+    return { status: 'ok', detail: `Последний: ${new Date(data[0].created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}` }
   })
   await check('calc_has_price', async () => {
     const { data, error } = await sb.from('calculations').select('final_price').order('created_at', { ascending: false }).limit(20)

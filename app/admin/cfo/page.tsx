@@ -171,7 +171,7 @@ export default async function CfoPage() {
       initialSettings={settings}
       pricingRows={(pricingData ?? []) as PricingRow[]}
       monthActuals={monthActuals}
-      monthLabel={now.toLocaleDateString('ru-RU', { month: 'long', year: 'numeric' })}
+      monthLabel={now.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', month: 'long', year: 'numeric' })}
     />
   )
 }

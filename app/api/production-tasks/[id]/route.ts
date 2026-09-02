@@ -4,6 +4,7 @@ import { createClient as createServiceClient } from '@supabase/supabase-js'
 import { requireRole } from '@/lib/apiAuth'
 import { mirrorOrderStages } from '@/lib/productionOrderMirror'
 import { cascadePriorStages } from '@/lib/productionCascade'
+import { consumeCutting, loadCascadedTasks } from '@/lib/production/consumeBridge'
 import { actorName, buildTaskUpdate, type TaskAction } from '@/lib/production/executor'
 
 // Действия цеха доступны рабочим производства и владельцу (+ закупщик Вера,
@@ -42,7 +43,7 @@ export async function PATCH(
   // лишний последовательный round-trip тут стоит дороже, чем выглядит.
   const [{ data: task, error: tErr }, { data: prof }] = await Promise.all([
     svc.from('production_tasks')
-      .select('id, order_id, item_index, stage_key, status, started_at, sequence_order, assigned_to, started_by')
+      .select('id, order_id, item_index, stage_key, status, started_at, sequence_order, assigned_to, started_by, rework_count')
       .eq('id', taskId)
       .single(),
     supabase.from('users').select('name').eq('id', user.id).maybeSingle(),
@@ -89,6 +90,15 @@ export async function PATCH(
 
   // 3) третье зеркало: если все позиции этапа закрыты — проставить order-level флаг (для /b2b-orders/Сводки)
   if (action === 'done') await mirrorOrderStages(svc, task.order_id)
+
+  // 4) склад: закрытая резка — израсходованный лист. Каскадные этапы передаём тем же вызовом,
+  // но без имени: каскад говорит «этап был», а не «его сделал вот этот человек».
+  if (action === 'done') {
+    const by = { userId: user.id, name: actor.name ?? undefined }
+    await consumeCutting(task.order_id, [{ item_index: task.item_index, stage_key: task.stage_key, rework_count: task.rework_count }], 'worker', by)
+    const cascadedTasks = await loadCascadedTasks(svc, task.order_id, task.item_index, cascaded)
+    await consumeCutting(task.order_id, cascadedTasks, 'cascade', by)
+  }
 
   return NextResponse.json({ ok: true, cascaded })
 }

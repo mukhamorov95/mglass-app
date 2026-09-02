@@ -75,7 +75,7 @@ const plural = (n: number, one: string, few: string, many: string) => {
   return many
 }
 const daysWord = (n: number) => `${n} ${plural(n, 'день', 'дня', 'дней')}`
-const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const fmtDate = (ms: number) => new Date(ms).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 
 const timesWord = (k: number) => {
   const r = Math.round(k * 10) / 10

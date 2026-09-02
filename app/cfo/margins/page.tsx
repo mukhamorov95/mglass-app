@@ -186,7 +186,7 @@ export default function MarginsPage() {
                       <tr key={c.id} className="border-b border-[#f5f5f3] last:border-0 hover:bg-[#fafaf9]">
                         <td className="px-3 py-2 text-[#9a9a95] font-mono text-[10px]">{c.id}</td>
                         <td className="px-3 py-2 text-[#6b6b66] whitespace-nowrap">
-                          {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                          {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                         </td>
                         <td className="px-3 py-2 font-medium">{PRODUCT_LABEL[c.product_type ?? ''] ?? c.product_type ?? '—'}</td>
                         <td className="px-3 py-2 text-[#6b6b66]">{c.creator?.name?.split(' ')[0] ?? '—'}</td>

@@ -22,6 +22,9 @@ export type QuoteItemInput = {
   facetTypeMm?: number | null
   hasHoles?: boolean                     // сверловка — пока только флаг маршрута, на цену не влияет
   hasSandblast?: boolean                 // песочка — отдельный этап цеха; на цену стекла не влияет
+  holes?: { d: number; n: number }[]     // сколько и какого диаметра — для сверловщика, на цену не влияет
+  hasCutouts?: boolean                   // вырезы — работа сверловщика, ведёт на ту же станцию
+  cutouts?: number                       // сколько вырезов
   shape?: 'rect' | 'curved'
   hasTriplex?: boolean
   triplexLayers?: number                 // 2 или 3; движок нормализует
@@ -76,6 +79,9 @@ export function computeQuoteItem(input: QuoteItemInput, ref: QuoteRefData): Omit
     ...(clientPriced ? { clientPriced: true } : {}),
     hasHoles: input.hasHoles ?? false,
     hasSandblast: input.hasSandblast ?? false,
+    holes: input.holes ?? [],
+    hasCutouts: input.hasCutouts ?? false,
+    cutouts: input.cutouts ?? 0,
     shape,
   }
 }

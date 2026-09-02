@@ -197,7 +197,7 @@ export default function ReceivablesPage() {
                       <td className="px-2 py-2 text-right font-mono">{fmt(total)}</td>
                       <td className="px-2 py-2 text-right font-mono text-[#6b6b66]">{prepay > 0 ? fmt(prepay) : '—'}</td>
                       <td className={`px-2 py-2 text-right font-mono font-bold ${bucket.cls}`}>{fmt(debt)}</td>
-                      <td className="px-2 py-2 text-right text-[#6b6b66]">{o.notes.stages?.invoice_sent ? new Date(o.notes.stages.invoice_sent).toLocaleDateString('ru-RU') : '—'}</td>
+                      <td className="px-2 py-2 text-right text-[#6b6b66]">{o.notes.stages?.invoice_sent ? new Date(o.notes.stages.invoice_sent).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'}</td>
                       <td className={`px-2 py-2 text-right font-mono font-semibold ${bucket.cls}`}>{days}</td>
                       <td className="px-4 py-2 text-right whitespace-nowrap">
                         <button onClick={() => markPartial(o)} disabled={busyId === o.id}
@@ -253,7 +253,7 @@ export default function ReceivablesPage() {
                       <td className="px-2 py-2">{c.customer?.full_name || c.customer?.name || '—'}</td>
                       <td className="px-2 py-2 text-right font-mono">{fmt(c.total || 0)}</td>
                       <td className="px-2 py-2 text-right">{c.status === 'signed' ? '✍️ подписан' : '📤 отправлен'}</td>
-                      <td className="px-4 py-2 text-right text-[#6b6b66]">{new Date(c.created_at).toLocaleDateString('ru-RU')}</td>
+                      <td className="px-4 py-2 text-right text-[#6b6b66]">{new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</td>
                     </tr>
                   ))}
                 </tbody>

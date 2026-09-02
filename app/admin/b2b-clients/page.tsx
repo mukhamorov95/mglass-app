@@ -22,7 +22,7 @@ const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'И�
 const EMPTY = { name: '', contact: null as string | null, phone: null as string | null, discount_percent: 0, active: true, notes: null as string | null }
 
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
-const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
+const fmtDate = (s: string | null) => s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' }) : '—'
 
 export default function B2BClientsPage() {
   const [tab, setTab] = useState<'clients' | 'stats'>('clients')

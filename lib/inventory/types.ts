@@ -50,6 +50,8 @@ export type InventoryMove = {
   pack_qty:        number | null
   reason:          MoveReason
   origin:          MoveOrigin
+  item_index:      number | null
+  stage:           string | null
   unit_cost:       number
   doc_type:        DocType | null
   doc_id:          string | null

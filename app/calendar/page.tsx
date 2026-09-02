@@ -277,7 +277,7 @@ export default function CalendarPage() {
                             {a.source === 'installation' ? '🔧 ' : ''}{TYPE_LABELS[a.kind]}
                           </span>
                           <span className="text-[10px] text-[#9a9a95]">
-                            {a.at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                            {a.at.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}
                           </span>
                         </div>
                         <p className="text-[11px] font-semibold text-[#111110] truncate">{a.title}</p>
@@ -339,7 +339,7 @@ export default function CalendarPage() {
                           {a.source === 'installation' ? '🔧 ' : ''}{TYPE_LABELS[a.kind]}
                         </span>
                         <span className="text-[12px] text-[#9a9a95]">
-                          {a.at.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                          {a.at.toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}
                         </span>
                       </div>
                       <p className="text-[13px] font-semibold text-[#111110]">{a.title}</p>

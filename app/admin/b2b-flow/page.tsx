@@ -172,7 +172,7 @@ export default async function B2BFlowPage() {
                   <div className="w-1/2 bg-blue-400 rounded-t" style={{ height: `${Math.round((w.launched / maxW) * 100)}%`, minHeight: w.launched ? 3 : 0 }} title={`запущено ${w.launched}`} />
                   <div className="w-1/2 bg-emerald-400 rounded-t" style={{ height: `${Math.round((w.shipped / maxW) * 100)}%`, minHeight: w.shipped ? 3 : 0 }} title={`отгружено ${w.shipped}`} />
                 </div>
-                <span className="text-[9px] text-[#9a9a95]">{new Date(w.ms).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
+                <span className="text-[9px] text-[#9a9a95]">{new Date(w.ms).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}</span>
               </div>
             ))}
           </div>

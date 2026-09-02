@@ -102,7 +102,7 @@ function DraggableCard({ quote, isOverlay }: { quote: Quote; isOverlay?: boolean
       </div>
       <p className="text-[14px] font-bold font-mono text-[#111110] mb-1.5">{fmt(total)}</p>
       <div className="flex items-center justify-between text-[10px] text-[#9a9a95]">
-        <span>{new Date(quote.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}</span>
+        <span>{new Date(quote.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}</span>
         <span className={`font-medium ${days >= 7 ? 'text-amber-600' : days >= 14 ? 'text-red-600' : ''}`}>
           {days}д
         </span>

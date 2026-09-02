@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback } from 'react'
 import Link from 'next/link'
 import ProductionTabs from '@/components/ProductionTabs'
 import { createClient } from '@/lib/supabase-browser'
-import { STAGE_LABELS, stageLabel, type DetailStageKey } from '@/lib/productionStages'
+import { STAGE_LABELS, stageLabel, stageCountLabel, type DetailStageKey } from '@/lib/productionStages'
+import { normalizeHoles, holesLabel } from '@/lib/production/holes'
 import { REWORK_REASONS, type ReworkReason } from '@/lib/production/rework'
 import { explainEmptyQueue } from '@/lib/production/completeOrder'
 import { PROD_SINCE, parseNotes, materialStatus, urgencyRank, isUrgent, deadlineOf, launchedOf, daysLeftLabel } from '@/lib/orderFlags'
@@ -30,6 +31,7 @@ type TaskRow = {
   rework_count: number | null
 }
 type RouteStage = {
+  id:                number
   item_index:        number
   stage_key:         string
   sequence_order:    number
@@ -40,12 +42,12 @@ type RouteStage = {
 }
 
 type DoneRow = { order_id: number; item_index: number; completed_at: string }
-type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string }
+type ItemSpec = { materialName?: string; category?: string; thickness?: number; width?: number; height?: number; quantity?: number; shape?: string; hasHoles?: boolean; hasFacet?: boolean; hasSandblast?: boolean; hasTempering?: boolean; hasTriplex?: boolean; comment?: string; holes?: unknown; cutouts?: number }
 type OrderLite = { id: number; client_name: string; custom_number: string | null; items?: ItemSpec[]; notes?: unknown }
 type BlockerLite = { id: number; status: string; stage_key: string }
 
 const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim() || `00${id}`
-const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) }
+const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' }) }
 const qtyOf = (o: OrderLite | undefined, idx: number) => Math.max(1, o?.items?.[idx]?.quantity ?? 1)
 
 function specLine(item?: ItemSpec): string {
@@ -54,6 +56,28 @@ function specLine(item?: ItemSpec): string {
   const mat = materialLabelShort(item)
   const qty = item.quantity && item.quantity > 1 ? `${item.quantity} шт` : ''
   return [dims, mat, qty].filter(Boolean).join(' · ')
+}
+
+// Обработки изделия одной строкой (обращение №2 от цеха: «в карточке только
+// размеры, работнику этого недостаточно»). Признаки те же, из которых строится
+// маршрут, — резчик видит их до того, как возьмётся за лист.
+function featureLine(item?: ItemSpec): string {
+  if (!item) return ''
+  const f: string[] = []
+  if (item.shape === 'curved')   f.push('криволинейка')
+  if (item.hasHoles) {
+    // Сверловщику нужны размеры, а не факт «отверстия есть»: без них он всё равно
+    // идёт спрашивать. Если группы не заведены — так и пишем, это видно менеджеру.
+    const g = normalizeHoles(item.holes)
+    f.push(g.length ? `отверстия ${holesLabel(g)}` : 'отверстия (размеры не указаны)')
+  }
+  const cut = Math.max(0, Number(item.cutouts) || 0)
+  if (cut > 0)                   f.push(`вырезы ${cut}`)
+  if (item.hasSandblast)         f.push('песочка')
+  if (item.hasFacet)             f.push('фацет')
+  if (item.hasTriplex)           f.push('триплекс')
+  if (item.hasTempering)         f.push('закалка')
+  return f.join(' · ')
 }
 
 // Горизонт отгрузки заказа: сегодня (вкл. просрочку) / завтра / эта неделя / позже
@@ -80,6 +104,17 @@ export default function MyQueuePage() {
   // известное, а тут цех сам покажет, чего в нём не хватает (через месяц будет видно из данных).
   const [reworkOther, setReworkOther] = useState('')
   const [myStations, setMyStations] = useState<string[]>([])
+  // «Всё готово» закрывает ЗАКАЗ целиком — это решение упаковщика: он последний
+  // в маршруте и единственный, кто физически видит, что заказ собран. Резчик,
+  // нажав её, закроет и полировку, и закалку, и упаковку по всем деталям —
+  // получится каша, за которую потом никто не отвечает (решение владельца 28.08).
+  const canCloseOrder = myStations.includes('packaging')
+  const [confirmMine, setConfirmMine] = useState<number | null>(null)
+  // Заказ, найденный по номеру, но БЕЗ моих задач: менеджер не отметил признак,
+  // и маршрут через мою станцию не построился. Рабочий видит пустоту и идёт к
+  // владельцу — так 01.09 пришёл Адилет с четырьмя заказами сразу.
+  const [foreignOrder, setForeignOrder] = useState<{ id: number; number: string; client: string } | null>(null)
+  const [addingStage, setAddingStage] = useState(false)
   const [me, setMe] = useState<{ id: string; name: string } | null>(null)
   // Статус закупки материала по заказам с пометками: 'orderId:all' / 'orderId:idx' → need|ordered|arrived + дата прибытия
   const [matReq, setMatReq] = useState<Map<string, { status: string; expected: string | null }>>(new Map())
@@ -212,7 +247,7 @@ export default function MyQueuePage() {
     // станцию и не понимает, готова ли деталь и кто её вёл до него.
     if (orderIds.length) {
       const { data: routeRows } = await sb.from('production_tasks')
-        .select('item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
+        .select('id,item_index,stage_key,sequence_order,status,station,auto_closed,completed_by_name,order_id')
         .in('order_id', orderIds)
         .order('sequence_order', { ascending: true })
       const rm = new Map<string, RouteStage[]>()
@@ -271,6 +306,39 @@ export default function MyQueuePage() {
         })
       }
     }
+    load()
+  }
+
+  // «Готово всё» по ОДНОЙ детали (обращение №3 от цеха). У Никиты две станции —
+  // закалка и упаковка. Он жмёт «Готово» на закалке, каскад закрывает всё ДО неё,
+  // а упаковка остаётся: она после. Приходится жать второй раз.
+  // Закрываем последний этап детали — каскад сам закроет все предыдущие. Тот же
+  // механизм, что у «Всё готово» на заказ, только в границах одной детали.
+  async function completeItem(orderId: number, itemIndex: number) {
+    const route = (routes.get(`${orderId}:${itemIndex}`) ?? [])
+      .filter(r => r.status !== 'done')
+      .sort((a, b) => a.sequence_order - b.sequence_order)
+    const last = route[route.length - 1]
+    if (!last) return
+    setTasks(prev => prev.filter(t => !(t.order_id === orderId && t.item_index === itemIndex)))
+    await fetch(`/api/production-tasks/${last.id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'done' }),
+    }).catch(() => {})
+    load()
+  }
+
+  // «Готово на моей станции»: закрыть свой этап по ВСЕМ деталям заказа.
+  // Резчик делает заказ разом, а не по детали — жать пятнадцать раз незачем.
+  // Границу считает сервер по станциям профиля: чужие этапы не закроются, даже
+  // если запрос отправить руками.
+  async function completeMyStage(orderId: number) {
+    setConfirmMine(null)
+    setTasks(prev => prev.filter(t => !(t.order_id === orderId && myStations.includes(t.station))))
+    await fetch('/api/production/complete-my-stage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId }),
+    }).catch(() => {})
     load()
   }
 
@@ -409,6 +477,36 @@ export default function MyQueuePage() {
     byOrder.set(t.order_id, [...(byOrder.get(t.order_id) ?? []), t])
   }
 
+  // Поиск не нашёл ничего среди МОИХ задач — ищем заказ вообще, чтобы предложить
+  // добавить свой этап, а не показывать пустой экран.
+  const qTrim = search.trim()
+  const lookForeign = qTrim.length >= 3 && byOrder.size === 0
+  useEffect(() => {
+    if (!lookForeign) return
+    let cancelled = false
+    const digits = qTrim.replace(/\D/g, '')
+    sb.from('b2b_orders')
+      .select('id,custom_number,client_name')
+      .or(`custom_number.ilike.%${qTrim}%${digits ? `,id.eq.${Number(digits)}` : ''}`)
+      .gte('created_at', PROD_SINCE).limit(1)
+      .then(({ data }) => {
+        const o = (data ?? [])[0] as { id: number; custom_number: string | null; client_name: string | null } | undefined
+        if (!cancelled) setForeignOrder(o ? { id: o.id, number: o.custom_number?.trim() || `00${o.id}`, client: o.client_name ?? '—' } : null)
+      })
+    return () => { cancelled = true }
+  }, [lookForeign, qTrim, sb])
+
+  async function addMyStage(orderId: number, stage: string) {
+    setAddingStage(true)
+    await fetch('/api/production/add-my-stage', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order_id: orderId, stage }),
+    }).catch(() => {})
+    setAddingStage(false)
+    setForeignOrder(null)
+    load()
+  }
+
   // Горизонт по дате отгрузки заказа
   const todayStr = new Date(); todayStr.setHours(0, 0, 0, 0)
   const dayMs = 86400000
@@ -502,8 +600,17 @@ export default function MyQueuePage() {
             <p className="text-[13px] text-[#9a9a95] mt-0.5">{byOrder.size} заказов · {totalDetails} деталей · {totalReady} задач готово · {totalWaiting} ждут этапа</p>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
-              className="border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white w-44 outline-none focus:border-[#111110]" />
+            {/* Обращение №1 от цеха: «нет возможности удалить заказ целиком, приходится
+                стирать по цифрам». Родная крестик-кнопка type=search на телефоне не
+                показывается, поэтому своя — и с полем под палец, не 28 px. */}
+            <div className="relative">
+              <input type="search" value={search} onChange={e => setSearch(e.target.value)} placeholder="Поиск: № заказа"
+                className={`border border-[#e4e4e0] rounded-lg pl-3 ${search ? 'pr-9' : 'pr-3'} py-2 text-[13px] bg-white w-44 outline-none focus:border-[#111110] [&::-webkit-search-cancel-button]:hidden`} />
+              {search && (
+                <button onClick={() => setSearch('')} aria-label="Очистить поиск"
+                  className="absolute right-0 top-0 h-full w-9 flex items-center justify-center text-[#9a9a95] hover:text-[#111110] text-[16px] leading-none">×</button>
+              )}
+            </div>
           </div>
         </div>
         <ProductionTabs />
@@ -511,6 +618,31 @@ export default function MyQueuePage() {
 
       <div className="px-4 pt-4">
         <LeadSummary onPick={handlePick} />
+
+        {/* Заказ есть, но моих задач в нём нет. Раньше здесь была пустота, и рабочий
+            шёл к владельцу: «не отображается». Теперь видно, что заказ существует,
+            и почему его нет у меня — признак при просчёте не отмечен. */}
+        {lookForeign && foreignOrder && myStations.length > 0 && (
+          <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-[14px] font-bold font-mono text-[#111110]">{foreignOrder.number}</p>
+            <p className="text-[13px] text-[#6b6b66]">{foreignOrder.client}</p>
+            <p className="text-[12px] text-amber-800 mt-1.5">
+              Заказ есть, но задач вашей станции в нём нет — при просчёте не отметили
+              {myStations.includes('drilling') ? ' отверстия или вырезы' : ' эту обработку'}.
+            </p>
+            <div className="flex flex-wrap gap-2 mt-2.5">
+              {myStations.map(st => (
+                <button key={st} onClick={() => addMyStage(foreignOrder.id, st)} disabled={addingStage}
+                  className="px-3.5 py-2.5 rounded-lg bg-[#111110] text-white text-[12px] font-semibold hover:bg-black disabled:opacity-40">
+                  {addingStage ? '…' : `Добавить: ${stageLabel(st)}`}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-amber-700 mt-2">
+              Добавится по всем изделиям заказа. Скажите менеджеру — в следующий раз отметит при просчёте.
+            </p>
+          </div>
+        )}
 
         {/* Табло мастера: изделия за сегодня и за неделю */}
         {myStations.length > 0 && (
@@ -637,8 +769,13 @@ export default function MyQueuePage() {
                   open={isOpen(id)}
                   onToggle={() => toggleOrder(id)}
                   isReady={isReady}
+                  canCloseOrder={canCloseOrder}
+                  onCompleteMyStage={completeMyStage}
+                  confirmingMine={confirmMine === id}
+                  onAskConfirmMine={() => setConfirmMine(confirmMine === id ? null : id)}
                   routes={routes}
                   myStations={myStations}
+                  onCompleteItem={completeItem}
                   onStart={markStart}
                   onStartAll={markStartOrder}
                   onDone={markDone}
@@ -695,7 +832,7 @@ export default function MyQueuePage() {
 
 // ─── Карточка заказа: раскрывается на месте, внутри детали и чертёж ───────────
 
-function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, routes, myStations, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
+function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, canCloseOrder, onCompleteMyStage, confirmingMine, onAskConfirmMine, routes, myStations, onCompleteItem, onStart, onStartAll, onDone, onCompleteOrder, work, workLoaded, confirming, onAskConfirm, onRework, onNoMatOrder, onNoMatItem, matReq }: {
   order: OrderLite | undefined
   orderId: number
   tasks: TaskRow[]
@@ -703,8 +840,13 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
   open: boolean
   onToggle: () => void
   isReady: (t: TaskRow) => boolean
+  canCloseOrder: boolean
+  onCompleteMyStage: (orderId: number) => void
+  confirmingMine: boolean
+  onAskConfirmMine: () => void
   routes: Map<string, RouteStage[]>
   myStations: string[]
+  onCompleteItem: (orderId: number, itemIndex: number) => void
   onStart: (id: number) => void
   onStartAll: (ids: number[]) => void
   onDone: (id: number) => void
@@ -791,10 +933,29 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                     <button onClick={onAskConfirm}
                       className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
                   </span>
-                ) : (
+                ) : canCloseOrder ? (
                   <button onClick={onAskConfirm} title="Закрыть все этапы всех деталей заказа"
                     className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-medium hover:opacity-90">
                     ✅ Всё готово ({orderOpen})
+                  </button>
+                ) : null
+              )}
+              {/* Свой этап по всему заказу — для тех, кто НЕ на упаковке. Закрывает
+                  только мои станции: заказ целиком закрывает упаковщик. */}
+              {!canCloseOrder && myOpen.length > 0 && (
+                confirmingMine ? (
+                  <span className="flex items-center gap-1.5">
+                    <button onClick={() => onCompleteMyStage(orderId)}
+                      className="px-3 py-2 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:opacity-90">
+                      Да, закрыть {myOpen.length}
+                    </button>
+                    <button onClick={onAskConfirmMine}
+                      className="px-2.5 py-2 rounded-lg border border-[#e4e4e0] text-[#6b6b66] text-[12px]">Отмена</button>
+                  </span>
+                ) : (
+                  <button onClick={onAskConfirmMine} title="Закрыть мой этап по всем деталям этого заказа"
+                    className="px-3 py-2 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-medium hover:bg-emerald-50">
+                    ✅ Готово на моей станции ({myOpen.length})
                   </button>
                 )
               )}
@@ -888,10 +1049,16 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
           )}
 
           <div className={`flex gap-2 ${confirming ? 'hidden' : ''}`}>
-            {myOpen.length > 0 && (
+            {canCloseOrder && myOpen.length > 0 && (
               <button onClick={onAskConfirm}
                 className="flex-1 py-3 rounded-lg bg-emerald-600 text-white text-[13px] font-semibold">
                 ✅ Всё готово ({orderOpen} задач)
+              </button>
+            )}
+            {!canCloseOrder && myOpen.length > 0 && (
+              <button onClick={() => onCompleteMyStage(orderId)}
+                className="flex-1 py-3 rounded-lg border border-emerald-600 text-emerald-700 text-[13px] font-semibold">
+                ✅ Готово на моей станции ({myOpen.length})
               </button>
             )}
             <button onClick={() => onNoMatOrder(orderId)}
@@ -913,6 +1080,19 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                   <div className="flex items-start justify-between gap-2 flex-wrap">
                     <div className="min-w-0">
                       <p className="text-[12px] font-mono text-[#111110]">{specLine(order?.items?.[idx]) || `Поз. ${idx + 1}`}</p>
+                      {(() => {
+                        const it = order?.items?.[idx]
+                        const feats = featureLine(it)
+                        const cmt = it?.comment?.trim()
+                        if (!feats && !cmt) return null
+                        return (
+                          <p className="text-[11px] text-[#6b6b66] mt-0.5">
+                            {feats && <span className="text-violet-700">{feats}</span>}
+                            {feats && cmt ? ' · ' : ''}
+                            {cmt}
+                          </p>
+                        )
+                      })()}
                       <p className={`text-[11px] ${noMat ? 'text-red-700' : 'text-[#6b6b66]'}`}>
                         Поз. {idx + 1}
                         {noMat && (() => {
@@ -998,6 +1178,22 @@ function OrderCard({ order, orderId, tasks, blockers, open, onToggle, isReady, r
                         </div>
                       )
                     })}
+                    {/* Одно нажатие закрывает деталь целиком, включая этапы ПОСЛЕ моей
+                        станции. Без него мастер с двумя станциями жмёт «Готово» дважды:
+                        каскад закрывает только предыдущие этапы. */}
+                    {(() => {
+                      // Счётчик — по ВСЕМУ маршруту детали, а не по моим задачам:
+                      // закроется вся деталь, включая чужие станции. Кнопка,
+                      // обещающая меньше, чем делает, у нас уже была.
+                      const openAll = (routes.get(`${orderId}:${idx}`) ?? []).filter(r => r.status !== 'done').length
+                      if (openAll < 2) return null
+                      return (
+                        <button onClick={() => onCompleteItem(orderId, idx)}
+                          className="mt-1.5 w-full py-2.5 rounded-lg border border-emerald-600 text-emerald-700 text-[12px] font-semibold hover:bg-emerald-50">
+                          ✅ Готово всё по детали ({stageCountLabel(openAll)})
+                        </button>
+                      )
+                    })()}
                   </div>
                 </div>
               )

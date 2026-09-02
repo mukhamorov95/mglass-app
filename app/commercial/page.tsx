@@ -196,7 +196,7 @@ export default function CommercialPage() {
         {/* Footer note */}
         {!loading && period !== 'today' && data?.fromDate && (
           <p className="text-[11px] text-[#c4c4be] mt-4 text-center">
-            Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
+            Данные с {new Date(data.fromDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long' })} по сегодня · обновляются ежедневно в 18:00
           </p>
         )}
 

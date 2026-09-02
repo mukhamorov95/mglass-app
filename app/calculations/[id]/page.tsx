@@ -528,7 +528,7 @@ export default function CalculationDetailPage() {
                   #{ch.id}
                 </Link>
                 <span className="text-amber-600 ml-1">
-                  ({ch.final_price.toLocaleString('ru-RU')} ₽ · {new Date(ch.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })})
+                  ({ch.final_price.toLocaleString('ru-RU')} ₽ · {new Date(ch.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })})
                 </span>
               </span>
             ))}

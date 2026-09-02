@@ -14,7 +14,7 @@ import NewCalcButtons from './NewCalcButtons'
 // договор → заказ → монтаж. Ничего не досочиняем: нет записи — нет строки.
 
 function fmt(n: number) { return Math.round(n).toLocaleString('ru-RU') + ' ₽' }
-const dt = (s: string | null | undefined) => s ? new Date(s).toLocaleDateString('ru-RU') : '—'
+const dt = (s: string | null | undefined) => s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'
 
 const PRODUCT_LABELS: Record<string, { label: string; emoji: string }> = {
   mirror:          { label: 'Зеркало', emoji: '🪞' },

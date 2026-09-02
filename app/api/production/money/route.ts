@@ -125,20 +125,24 @@ export async function GET() {
   const factThisMonth = monthly[nowKey] ?? { orders: 0, amount: 0 }
 
   // Участники бонусного фонда: производственники со стажем от 2 лет (users.hired_at)
+  // Участие в фонде — решение владельца (users.bonus_eligible), а не формула по стажу.
+  // Раньше считалось «стаж >= 2 лет», и состав расходился с реальным: у Никиты
+  // 1.8 года, у Адилета даты приёма нет вовсе, а оба в фонде участвуют.
+  // Стаж остаётся на экране справкой — он объясняет решение, но не принимает его.
   const { data: team } = await service.from('users')
-    .select('name, email, hired_at')
+    .select('name, email, hired_at, bonus_eligible')
     .eq('role', 'production').eq('active', true)
   const nowMs = Date.now()
-  const bonusTeam = ((team ?? []) as { name: string | null; email: string | null; hired_at: string | null }[]).map(u => {
+  const bonusTeam = ((team ?? []) as { name: string | null; email: string | null; hired_at: string | null; bonus_eligible: boolean | null }[]).map(u => {
     const hired = u.hired_at ? new Date(u.hired_at) : null
     const years = hired ? (nowMs - hired.getTime()) / (365.25 * 86400000) : null
     return {
       name: u.name ?? u.email ?? '—',
       hiredAt: u.hired_at,
       years: years != null ? Math.round(years * 10) / 10 : null,
-      eligible: years != null && years >= 2,
+      eligible: u.bonus_eligible === true,
     }
-  }).sort((a, b) => (b.years ?? -1) - (a.years ?? -1))
+  }).sort((a, b) => (Number(b.eligible) - Number(a.eligible)) || ((b.years ?? -1) - (a.years ?? -1)))
 
   return NextResponse.json({ model, monthly, monthlyReal, isAdmin, nowKey, factThisMonth, bonusTeam })
 }

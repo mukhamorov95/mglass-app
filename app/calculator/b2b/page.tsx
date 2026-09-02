@@ -1,6 +1,8 @@
 'use client'
 
 import { useEffect, useState, useMemo, useRef } from 'react'
+import { normalizeHoles, totalHoles, type HoleGroup } from '@/lib/production/holes'
+import { TreatToggle } from './TreatToggle'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import { B2BClient, B2BMaterial, B2BService, B2BFilm, computeMarginStatus } from '@/lib/types'
@@ -130,6 +132,7 @@ function parseSalePrice(m: B2BMaterial): B2BMaterial {
   return { ...m, sale_price: 0, passthrough: false }
 }
 
+
 export default function B2BCalculatorPage() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -242,6 +245,8 @@ export default function B2BCalculatorPage() {
   const [fFacet, setFFacet]           = useState(false)
   const [fFacetMm, setFFacetMm]       = useState<number>(10)
   const [fHoles, setFHoles]           = useState(false)
+  const [fHoleGroups, setFHoleGroups] = useState<HoleGroup[]>([])
+  const [fCutouts, setFCutouts]       = useState(0)
   const [fCurved, setFCurved]         = useState(false)
   const [fSandblast, setFSandblast]   = useState(false)
   const [fMinPrice, setFMinPrice]     = useState(true)
@@ -280,6 +285,8 @@ export default function B2BCalculatorPage() {
   const [eFacet, setEFacet]           = useState(false)
   const [eFacetMm, setEFacetMm]       = useState<number>(10)
   const [eHoles, setEHoles]           = useState(false)
+  const [eHoleGroups, setEHoleGroups] = useState<HoleGroup[]>([])
+  const [eCutouts, setECutouts]       = useState(0)
   const [eCurved, setECurved]         = useState(false)
   const [eSandblast, setESandblast]   = useState(false)
   const [eMinPrice, setEMinPrice]     = useState(true)
@@ -841,7 +848,7 @@ export default function B2BCalculatorPage() {
       wastePercent: fWaste, hasTempering: fTempering,
       resolvedServices: resolveSvcs(selectedServices, fTierSel, fFilmSel),
       hasFacet: fFacet, facetTypeMm: fFacet ? fFacetMm : null,
-      hasHoles: fHoles, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
+      hasHoles: fHoles, holes: fHoles ? normalizeHoles(fHoleGroups) : [], hasCutouts: fCutouts > 0, cutouts: fCutouts, shape: fCurved ? 'curved' : 'rect', hasSandblast: fSandblast,
       hasTriplex: fTriplex, triplexLayers: fTriplexLayers, triplexPrice,
       triplexExtraGlasses: fTriplex ? triplexExtras(selectedMaterial, fTriplexLayers, fTriplexMat2, fTriplexMat3) : [],
       applyMinPrice: fMinPrice, comment: fComment || undefined,
@@ -915,7 +922,10 @@ export default function B2BCalculatorPage() {
       cutouts += cc * q
       const shapeNote = isShaped ? `${it.shape ?? 'скошенная'}, готовая ${w}×${h}` : ''
       const cparts = [it.label, shapeNote, it.notes, hh ? `отв: ${hh}` : '', cc ? `вырезы: ${cc}` : ''].filter(Boolean)
-      newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, shape: 'rect' })
+      // Вырезы — работа той же станции, что и сверловка. Раньше признак ставился
+      // только по отверстиям, и деталь с вырезами, но без отверстий, уходила мимо
+      // сверловщика совсем.
+      newItems.push({ ...calc, localId: crypto.randomUUID(), comment: cparts.join(' · ') || undefined, hasHoles: hh > 0, hasCutouts: cc > 0, cutouts: cc, shape: 'rect' })
     }
     if (newItems.length) { setItems(prev => [...prev, ...newItems]); setSavedOrderId(null) }
     return { added: newItems.length, skipped, holes, cutouts, shaped, warnings }
@@ -1076,6 +1086,8 @@ export default function B2BCalculatorPage() {
     setEFacet(item.hasFacet ?? false)
     setEFacetMm(item.facetTypeMm ?? 10)
     setEHoles(item.hasHoles ?? false)
+    setEHoleGroups(normalizeHoles(item.holes))
+    setECutouts(Math.max(0, Number(item.cutouts) || 0))
     setESandblast(item.hasSandblast ?? false)
     setECurved(item.shape === 'curved')
     setETriplex(item.hasTriplex ?? false)
@@ -1106,7 +1118,7 @@ export default function B2BCalculatorPage() {
       wastePercent: eWaste, hasTempering: eTempering,
       resolvedServices: resolveSvcs(svcs, eTierSel, eFilmSel),
       hasFacet: eFacet, facetTypeMm: eFacet ? eFacetMm : null,
-      hasHoles: eHoles, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
+      hasHoles: eHoles, holes: eHoles ? normalizeHoles(eHoleGroups) : [], hasCutouts: eCutouts > 0, cutouts: eCutouts, shape: eCurved ? 'curved' : 'rect', hasSandblast: eSandblast,
       hasTriplex: eTriplex, triplexLayers: eTriplexLayers, triplexPrice,
       triplexExtraGlasses: eTriplex ? triplexExtras(mat, eTriplexLayers, eTriplexMat2, eTriplexMat3) : [],
       applyMinPrice: eMinPrice, comment: eComment || undefined,
@@ -1976,7 +1988,8 @@ export default function B2BCalculatorPage() {
               </div>
             </div>
 
-            {/* Отход + Закалка */}
+            {/* Основа расчёта: отход и минимальная цена. Не обработка — поэтому
+                отдельной строкой, а не вперемешку с фацетом и сверловкой. */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">
@@ -1985,133 +1998,138 @@ export default function B2BCalculatorPage() {
                     ? <span className="ml-1 text-orange-500 normal-case font-normal text-[10px]">фикс.</span>
                     : <span className="ml-1 normal-case font-normal text-emerald-600 text-[10px]">по раскрою</span>}
                 </label>
-                {selectedMaterial?.passthrough ? (
-                  <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-orange-600 font-semibold">
-                    10% — проходной
-                  </div>
-                ) : (
-                  // Расход считается автоматически из раскроя деталей заказа (по
-                  // материалу). Ручной ввод убран — он «перекладывал» в одних местах
-                  // и «недокладывал» в других. Число видно в позициях после добавления.
-                  <div className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-2 py-1.5 text-[12px] text-[#6e6e73]">
-                    авто по раскрою
-                  </div>
-                )}
+                <div className={`w-full border rounded-lg px-3 min-h-[44px] flex items-center text-[12px] ${
+                  selectedMaterial?.passthrough
+                    ? 'bg-[#f8f8f7] border-[#e4e4e0] text-orange-600 font-semibold'
+                    : 'bg-[#f8f8f7] border-[#e4e4e0] text-[#6e6e73]'}`}>
+                  {selectedMaterial?.passthrough ? '10% — проходной' : 'авто по раскрою'}
+                </div>
               </div>
-              {fSuperCat === 'стекло' && (
-                <div>
-                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Закалка</label>
-                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTempering ? 'border-orange-300 bg-orange-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                    <input type="checkbox" checked={fTempering} onChange={e => setFTempering(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className={`text-[13px] font-medium ${fTempering ? 'text-orange-700' : 'text-[#111110]'}`}>
-                      {fTempering ? 'Закалённое' : 'Без закалки'}
-                    </span>
+              <div>
+                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Минимальная цена</label>
+                <TreatToggle on={fMinPrice} onChange={setFMinPrice} tone="indigo"
+                  label={fMinPrice ? 'Учитывать' : 'Чистый расчёт'} />
+              </div>
+            </div>
+
+            {/* Обработка. Собрана в один блок, потому что все эти признаки делают одно:
+                строят маршрут изделия по цеху. Не отметил — этап не создастся, и человек
+                на станции изделия не увидит. Раньше они были размазаны по трём рядам
+                вперемешку с отходом и минимальной ценой. */}
+            <div className="rounded-xl border border-[#e4e4e0] bg-[#fbfbfa] p-3 space-y-2.5">
+              <div className="flex items-baseline justify-between gap-2 flex-wrap">
+                <p className="text-[13px] font-semibold text-[#111110]">Обработка</p>
+                <p className="text-[11px] text-[#9a9a95]">определяет маршрут в цеху</p>
+              </div>
+
+              {/* Две колонки, а НЕ три на широком экране. Тремя «Криволинейка» вылезала
+                  за ячейку на 26 px: колонка формы узкая (324 px), а брейкпоинт sm
+                  смотрит на ширину ОКНА, не контейнера — на большом мониторе он
+                  срабатывал там, где места всё равно нет. Измерено на проде
+                  диапазоном по тексту: сравнение границ коробок этого не показывает,
+                  потому что min-w-0 даёт коробке сжаться, а слово из неё вылезает. */}
+              <div className="grid grid-cols-2 gap-2">
+                {fSuperCat === 'стекло' && (
+                  <TreatToggle on={fTempering} onChange={setFTempering} label="Закалка" tone="orange" />
+                )}
+                {facetPrices.length > 0 && (
+                  <TreatToggle on={fFacet} onChange={setFFacet} label="Фацет" tone="purple" />
+                )}
+                <TreatToggle on={fCurved} onChange={setFCurved} label="Криволинейка" tone="teal" />
+                <TreatToggle on={fSandblast} onChange={setFSandblast} label="Песочка" tone="violet" />
+                <TreatToggle on={fTriplex} onChange={setFTriplex} label="Триплекс" tone="indigo" />
+              </div>
+
+              {/* Отверстия и вырезы — одна работа одного человека (сверловщик), и
+                  включают они один и тот же этап маршрута. Порознь они читались как
+                  два несвязанных признака: вырезы стояли в конце сетки, через две
+                  обработки от отверстий. Теперь это один блок, и видно, к кому он ведёт. */}
+              <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-2.5 space-y-2">
+                <p className="text-[11px] font-medium text-blue-900">Сверловка · одна станция</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <TreatToggle on={fHoles} onChange={setFHoles} label="Отверстия" tone="blue" />
+                  <label className={`flex items-center gap-2 min-h-[44px] px-2.5 py-1.5 border rounded-lg ${
+                    fCutouts > 0 ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] bg-white'}`}>
+                    <input type="number" min="0" value={fCutouts || ''} placeholder="0"
+                      onChange={e => setFCutouts(Math.max(0, Number(e.target.value) || 0))}
+                      className="w-9 bg-transparent text-[13px] outline-none flex-shrink-0" />
+                    <span className={`text-[13px] leading-tight min-w-0 ${fCutouts > 0 ? 'text-blue-700 font-semibold' : 'text-[#6b6b66] font-medium'}`}>Вырезы</span>
                   </label>
                 </div>
+
+              {/* Подробности включённых обработок — под сеткой во всю ширину.
+                  Раньше они раскрывались внутри ячейки и ломали ряды. */}
+              {fFacet && (
+                <select
+                  className="w-full bg-white border border-purple-300 rounded-lg px-3 min-h-[44px] text-[13px] text-[#111110] outline-none focus:border-purple-500"
+                  value={fFacetMm} onChange={e => setFFacetMm(Number(e.target.value))}>
+                  {facetPrices.map(f => (
+                    <option key={f.type_mm} value={f.type_mm}>Фацет {f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
+                  ))}
+                </select>
               )}
-              {facetPrices.length > 0 && (
-                <div>
-                  <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Фацет</label>
-                  <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fFacet ? 'border-purple-300 bg-purple-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                    <input type="checkbox" checked={fFacet} onChange={e => setFFacet(e.target.checked)}
-                      className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                    <span className={`text-[13px] font-medium ${fFacet ? 'text-purple-700' : 'text-[#111110]'}`}>
-                      {fFacet ? 'Фацет' : 'Без фацета'}
-                    </span>
-                  </label>
-                  {fFacet && (
-                    <select
-                      className="mt-1 w-full bg-white border border-purple-300 rounded-lg px-2 py-1.5 text-[12px] text-[#111110] outline-none focus:border-purple-500"
-                      value={fFacetMm} onChange={e => setFFacetMm(Number(e.target.value))}>
-                      {facetPrices.map(f => (
-                        <option key={f.type_mm} value={f.type_mm}>{f.type_mm} мм — {f.sale_price} ₽/м.п.</option>
+
+                {fHoles && (
+                <div className="rounded-lg border border-blue-200 bg-white p-2.5">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <p className="text-[12px] font-medium text-blue-900">
+                      Отверстия{fHoleGroups.length > 0 ? ` · всего ${totalHoles(normalizeHoles(fHoleGroups))}` : ''}
+                    </p>
+                    <button type="button" onClick={() => setFHoleGroups(prev => [...prev, { d: 0, n: 1 }])}
+                      className="text-[12px] px-2.5 py-1.5 rounded-lg border border-blue-300 text-blue-800 hover:bg-blue-100">+ группа</button>
+                  </div>
+                  {fHoleGroups.length === 0 ? (
+                    <p className="text-[11px] text-blue-800">Сколько отверстий и какого диаметра. Без этого сверловщик получит деталь без размеров.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {fHoleGroups.map((g, i) => (
+                        <div key={i} className="flex items-center gap-2">
+                          <input type="number" min="1" value={g.n || ''} placeholder="шт"
+                            onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, n: Number(e.target.value) || 0 } : x))}
+                            className="w-16 bg-white border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] outline-none focus:border-[#111110]" />
+                          <span className="text-[12px] text-[#6b6b66] whitespace-nowrap">шт · ⌀</span>
+                          <input type="number" min="1" value={g.d || ''} placeholder="мм"
+                            onChange={e => setFHoleGroups(prev => prev.map((x, j) => j === i ? { ...x, d: Number(e.target.value) || 0 } : x))}
+                            className="w-20 bg-white border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] outline-none focus:border-[#111110]" />
+                          <span className="text-[12px] text-[#6b6b66] whitespace-nowrap">мм</span>
+                          <button type="button" onClick={() => setFHoleGroups(prev => prev.filter((_, j) => j !== i))}
+                            className="ml-auto text-[12px] text-[#9a9a95] hover:text-red-600 px-2 py-1.5">удалить</button>
+                        </div>
                       ))}
-                    </select>
+                    </div>
                   )}
                 </div>
-              )}
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Сверловка</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fHoles ? 'border-blue-300 bg-blue-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                  <input type="checkbox" checked={fHoles} onChange={e => setFHoles(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fHoles ? 'text-blue-700' : 'text-[#111110]'}`}>
-                    {fHoles ? 'Есть отверстия' : 'Без отверстий'}
-                  </span>
-                </label>
+                )}
               </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Криволинейка</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fCurved ? 'border-teal-300 bg-teal-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                  <input type="checkbox" checked={fCurved} onChange={e => setFCurved(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fCurved ? 'text-teal-700' : 'text-[#111110]'}`}>
-                    {fCurved ? 'Криволинейный рез' : 'Прямой рез'}
-                  </span>
-                </label>
-              </div>
-              <div>
-                {/* Песочка — отдельный этап цеха со своей оснасткой (макет → оракал →
-                    наклейка → пескоструй). Нажали здесь — деталь пойдёт через него;
-                    не нажали — не пойдёт. Маршрут строится из просчёта, а не угадывается. */}
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Песочка</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fSandblast ? 'border-violet-300 bg-violet-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                  <input type="checkbox" checked={fSandblast} onChange={e => setFSandblast(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fSandblast ? 'text-violet-700' : 'text-[#111110]'}`}>
-                    {fSandblast ? 'С песочкой' : 'Без песочки'}
-                  </span>
-                </label>
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Мин. цена</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fMinPrice ? 'border-emerald-300 bg-emerald-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                  <input type="checkbox" checked={fMinPrice} onChange={e => setFMinPrice(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fMinPrice ? 'text-emerald-700' : 'text-[#111110]'}`}>
-                    {fMinPrice ? 'Учитывать мин.' : 'Чистый расчёт'}
-                  </span>
-                </label>
-              </div>
-              <div>
-                <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Триплекс</label>
-                <label className={`flex items-center gap-2 h-[34px] px-3 border rounded-lg cursor-pointer transition-all ${fTriplex ? 'border-indigo-300 bg-indigo-50' : 'border-[#e4e4e0] hover:border-[#c4c4be]'}`}>
-                  <input type="checkbox" checked={fTriplex} onChange={e => setFTriplex(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded accent-[#111110]" />
-                  <span className={`text-[13px] font-medium ${fTriplex ? 'text-indigo-700' : 'text-[#111110]'}`}>
-                    {fTriplex ? `Триплекс` : 'Без триплекса'}
-                  </span>
-                </label>
-                {fTriplex && (() => {
-                  const glassCats = SUPER_CATS[0].cats as readonly string[]
-                  const glassOpts = materials.filter(m => glassCats.includes(m.category) && (m.sale_price ?? 0) > 0)
-                    .sort((a, b) => a.thickness - b.thickness || a.name.localeCompare(b.name))
-                  const layerSelect = (val: number | null, set: (v: number | null) => void, label: string) => (
+
+              {fTriplex && (() => {
+                const glassCats = SUPER_CATS[0].cats as readonly string[]
+                const glassOpts = materials.filter(m => glassCats.includes(m.category) && (m.sale_price ?? 0) > 0)
+                  .sort((a, b) => a.thickness - b.thickness || a.name.localeCompare(b.name))
+                const layerSelect = (val: number | null, set: (v: number | null) => void, label: string) => (
+                  <select
+                    className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] text-[13px] outline-none focus:border-indigo-400"
+                    value={val ?? ''} onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}>
+                    <option value="">{label}: как основное</option>
+                    {glassOpts.map(m => <option key={m.id} value={m.id}>{label}: {m.name} {m.thickness} мм</option>)}
+                  </select>
+                )
+                return (
+                  <div className="space-y-1.5">
                     <select
-                      className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
-                      value={val ?? ''} onChange={e => set(e.target.value === '' ? null : Number(e.target.value))}>
-                      <option value="">{label}: как основное</option>
-                      {glassOpts.map(m => <option key={m.id} value={m.id}>{label}: {m.name} {m.thickness} мм</option>)}
+                      className="w-full bg-white border border-indigo-200 rounded-lg px-3 min-h-[44px] text-[13px] outline-none focus:border-indigo-400"
+                      value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
+                      <option value={2}>Триплекс: 2 стекла</option>
+                      <option value={3}>Триплекс: 3 стекла</option>
                     </select>
-                  )
-                  return (
-                    <>
-                      <select
-                        className="mt-1.5 w-full bg-white border border-indigo-200 rounded-lg px-2 py-1.5 text-[12px] outline-none focus:border-indigo-400"
-                        value={fTriplexLayers} onChange={e => setFTriplexLayers(Number(e.target.value) === 3 ? 3 : 2)}>
-                        <option value={2}>2 стекла</option>
-                        <option value={3}>3 стекла</option>
-                      </select>
-                      {layerSelect(fTriplexMat2, setFTriplexMat2, 'Стекло 2')}
-                      {fTriplexLayers === 3 && layerSelect(fTriplexMat3, setFTriplexMat3, 'Стекло 3')}
-                      {!triplexPrice && (
-                        <p className="mt-1 text-[10px] text-amber-600">⚠ В справочнике услуг нет «Триплекс» (₽/м²) — склейка посчитается по 0 ₽</p>
-                      )}
-                    </>
-                  )
-                })()}
-              </div>
+                    {layerSelect(fTriplexMat2, setFTriplexMat2, 'Стекло 2')}
+                    {fTriplexLayers === 3 && layerSelect(fTriplexMat3, setFTriplexMat3, 'Стекло 3')}
+                    {!triplexPrice && (
+                      <p className="text-[11px] text-amber-700">⚠ В справочнике услуг нет «Триплекс» (₽/м²) — склейка посчитается по 0 ₽</p>
+                    )}
+                  </div>
+                )
+              })()}
             </div>
 
             {/* Комментарий к позиции */}
