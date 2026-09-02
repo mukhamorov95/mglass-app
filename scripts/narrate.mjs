@@ -24,6 +24,17 @@ if (!scriptPath || !outDir) {
   process.exit(1)
 }
 
+// Длительность куска спрашиваем у afinfo, а не считаем из размера файла.
+// Первая версия делила байты на 22050 × 2 канала × 2 байта — но `say` пишет МОНО,
+// и каждый слайд получал ровно половину нужного времени: картинка уезжала, пока
+// голос ещё говорил. Файл при этом создавался, и по нему казалось, что всё сошлось.
+function durationSeconds(path) {
+  const out = execFileSync('afinfo', [path]).toString()
+  const m = out.match(/estimated duration:\s*([\d.]+)\s*sec/)
+  if (!m) throw new Error(`afinfo не отдал длительность для ${path}:\n${out}`)
+  return Math.round(Number(m[1]) * 10) / 10
+}
+
 const slides = JSON.parse(readFileSync(scriptPath, 'utf8'))
 mkdirSync(outDir, { recursive: true })
 
@@ -34,9 +45,7 @@ for (const s of slides) {
   const m4a  = join(outDir, `${s.id}.m4a`)
   execFileSync('say', ['-v', VOICE, '-r', String(RATE), '-o', aiff, s.text])
   execFileSync('afconvert', ['-f', 'm4af', '-d', 'aac', aiff, m4a])
-  // Длительность из aiff: 2 канала × 2 байта × 22050 Гц — формат, в котором пишет say.
-  const bytes = execFileSync('stat', ['-f', '%z', aiff]).toString().trim()
-  const seconds = Math.max(1, Math.round((Number(bytes) - 54) / (22050 * 2 * 2) * 10) / 10)
+  const seconds = durationSeconds(m4a)
   rmSync(aiff)
   manifest.push({ id: s.id, seconds, chars: s.text.length })
   console.log(`  ${s.id}  ${seconds}s  ${s.text.slice(0, 50)}…`)
