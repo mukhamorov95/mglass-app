@@ -249,9 +249,13 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
   if (doorWidths.length && profilePieces.length) {
     barPieces.cap = doorWidths.flatMap(w => hasTopProfile ? [w + capMargin, w + capMargin] : [w + capMargin])
   }
+  // Уплотнители — по КАЖДОЙ створке (распашной И раздвижной): вертикальные по высоте,
+  // нижний по ширине. Геометрия даёт длину; ЧТО из этого войдёт в изделие, решает Вера
+  // составом ролей в комплекте, а не моё правило «магнитный только на распашную».
   if (doors.length) {
-    const vertical = doors.slice(0, swingDoors).map(d => mm(d.size[1]))
-    if (vertical.length) { barPieces['seal-magnet'] = vertical; barPieces['seal-hinge'] = [...vertical] }
+    const vertical = doors.map(d => mm(d.size[1]))
+    barPieces['seal-magnet'] = vertical
+    barPieces['seal-hinge'] = [...vertical]
     barPieces['seal-bottom'] = doors.map(d => mm(d.size[0]))
   }
   // Торцевая заглушка закрывает открытый торец НАПОЛЬНОГО профиля — тот, что видно
@@ -434,6 +438,22 @@ export function resolveQty(rule: QtyRule, role: RoleId, q: KitQuantities, opts: 
 // (цена в выбранном цвете) и куски раскроя. Один источник для computeKitPrice и для
 // общего раскроя на заказ (П7) — чтобы обе стороны кроили одинаково.
 export type BarConsumption = { role: RoleId; itemId: string; name: string; stocks: Stock[]; splice: boolean; pieces: number[] }
+// Куски bar-роли с учётом ПРАВИЛА КОЛИЧЕСТВА, заданного Верой у записи. По умолчанию
+// (mode role) — точные куски геометрии (лучший раскрой). Фикс/выбор клиента: N кусков
+// характерной длины (высота створки) — чтобы Вера могла задать «магнитный = 1» на угловой,
+// где геометрия по-створочно дала бы 2. Owner: состав и количество определяет менеджер.
+export function barPiecesFor(role: RoleId, kit: ModelKit, q: KitQuantities, rule: QtyRule, opts: KitOptions = {}): number[] {
+  const geom = piecesForRole(q, kit, role)
+  if (rule.mode === 'role') return geom
+  const rep = geom.length ? Math.max(...geom) : 0
+  if (rep <= 0) return geom            // нечем задать длину — оставляем как есть
+  let n = geom.length
+  if (rule.mode === 'fixed') n = Math.max(0, rule.n)
+  else if (rule.mode === 'per') n = Math.max(0, Math.round(rule.k * (q.roleQty[rule.of] ?? 0)))
+  else if (rule.mode === 'client') { const w = opts.qtyChoice?.[role]; n = w != null && rule.options.includes(w) ? w : rule.def }
+  return Array.from({ length: n }, () => rep)
+}
+
 export function barConsumption(
   q: KitQuantities, lib: Library, kit: ModelKit, finishId: string, opts: KitOptions = {},
 ): BarConsumption[] {
@@ -446,10 +466,10 @@ export function barConsumption(
     const active = slot.select === 'one'
       ? [entries.find(e => e.itemId === opts.choice?.[slot.role]) ?? entries.find(e => e.primary) ?? entries[0]]
       : entries
-    const pieces = piecesForRole(q, kit, slot.role)
-    if (pieces.length === 0) continue
     for (const e of active) {
       const it = byId.get(e.itemId)!
+      const pieces = barPiecesFor(slot.role, kit, q, e.qty, opts)
+      if (pieces.length === 0) continue
       const stocks: Stock[] = (it.stocks ?? [])
         .map(st => ({ len: st.len, price: st.prices?.[finishId] ?? st.prices?.chrome ?? 0 }))
         .filter(st => st.len > 0 && st.price > 0)
@@ -497,10 +517,10 @@ export function computeKitPrice(
       // У хлыстовой роли «количество» — это куски раскроя. Считать их через roleQty нельзя:
       // общий слот «Профиль» собирает куски сторон (profile-wall/floor), а под своим
       // ключом у него пусто — позиция молча выпадала из спецификации как «нет цены».
-      const qty = meta.kind === 'bar' ? piecesForRole(q, kit, slot.role).length : resolveQty(e.qty, slot.role, q, opts)
+      const pieces = meta.kind === 'bar' ? barPiecesFor(slot.role, kit, q, e.qty, opts) : []
+      const qty = meta.kind === 'bar' ? pieces.length : resolveQty(e.qty, slot.role, q, opts)
       if (qty <= 0) continue
       if (meta.kind === 'bar') {
-        const pieces = piecesForRole(q, kit, slot.role)
         const stocks: Stock[] = (it.stocks ?? [])
           .map(s => ({ len: s.len, price: s.prices?.[finishId] ?? s.prices?.chrome ?? 0 }))
           .filter(s => s.len > 0 && s.price > 0)
