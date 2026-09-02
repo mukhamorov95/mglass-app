@@ -1,0 +1,42 @@
+[
+  {
+    "id": "s01",
+    "seconds": 3,
+    "chars": 77
+  },
+  {
+    "id": "s02",
+    "seconds": 5.9,
+    "chars": 177
+  },
+  {
+    "id": "s03",
+    "seconds": 8.5,
+    "chars": 239
+  },
+  {
+    "id": "s04",
+    "seconds": 7.7,
+    "chars": 229
+  },
+  {
+    "id": "s05",
+    "seconds": 5.5,
+    "chars": 171
+  },
+  {
+    "id": "s06",
+    "seconds": 7.8,
+    "chars": 225
+  },
+  {
+    "id": "s07",
+    "seconds": 6.9,
+    "chars": 193
+  },
+  {
+    "id": "s08",
+    "seconds": 9.5,
+    "chars": 266
+  }
+]
