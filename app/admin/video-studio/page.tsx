@@ -13,7 +13,7 @@
 // Файлы делает scripts/narrate.mjs голосом macOS.
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { drawSlide, W, H, type Slide } from '@/lib/video/slides'
+import { drawSlide, drawShotSlide, W, H, type Slide } from '@/lib/video/slides'
 
 type Manifest = { id: string; seconds: number }[]
 
@@ -26,6 +26,12 @@ export default function VideoStudioPage() {
   const [note, setNote]       = useState('')
   const [url, setUrl]         = useState<string | null>(null)
   const [cur, setCur]         = useState(0)
+  // Снимки грузим ДО записи: подгрузка в кадре дала бы чёрный экран на секунду.
+  const shots = useRef<Map<string, HTMLImageElement>>(new Map())
+  // Снимки можно не класть в репозиторий, а выбрать прямо здесь: живут в памяти
+  // вкладки до записи. Экраны за логином снять автоматически нельзя — заходить
+  // под чужой учётной записью мы не будем, — а владелец делает снимок за секунду.
+  const [picked, setPicked] = useState<Record<string, string>>({})
 
   const load = useCallback(async () => {
     setState('loading'); setNote(''); setUrl(null)
@@ -35,6 +41,13 @@ export default function VideoStudioPage() {
         fetch(`/narration/${name}/manifest.json`).then(r => r.json()),
       ])
       if (!Array.isArray(sc) || !Array.isArray(mf)) throw new Error('сценарий или озвучка не найдены')
+      // Предзагрузка снимков — без неё первый кадр слайда уходит в чёрное.
+      await Promise.all((sc as Slide[]).filter(x => x.shot).map(x => new Promise<void>(res => {
+        const im = new Image()
+        im.onload = () => { shots.current.set(x.shot!, im); res() }
+        im.onerror = () => res()
+        im.src = x.shot!
+      })))
       setSlides(sc); setManifest(mf); setState('ready')
       setNote(`${sc.length} слайдов · ${mf.reduce((a: number, b: { seconds: number }) => a + b.seconds, 0).toFixed(1)} с озвучки`)
     } catch (e) {
@@ -45,13 +58,31 @@ export default function VideoStudioPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => {}) }, [load])
 
+  // Какой снимок показывать: выбранный руками важнее лежащего в репозитории.
+  const shotFor = useCallback((sl: Slide) =>
+    shots.current.get(`local:${sl.id}`) ?? (sl.shot ? shots.current.get(sl.shot) : undefined), [])
+
   // Предпросмотр первого слайда, чтобы было видно, что получится.
   useEffect(() => {
     const c = canvasRef.current
     if (!c || slides.length === 0 || state === 'recording') return
     const ctx = c.getContext('2d')
-    if (ctx) drawSlide(ctx, slides[Math.min(cur, slides.length - 1)], cur, slides.length, 0)
-  }, [slides, cur, state])
+    if (!ctx) return
+    const sl = slides[Math.min(cur, slides.length - 1)]
+    const img = shotFor(sl)
+    if (img) drawShotSlide(ctx, sl, img, cur, slides.length, 0.3)
+    else drawSlide(ctx, sl, cur, slides.length, 0)
+  }, [slides, cur, state, picked, shotFor])
+
+  function attachShot(slideId: string, file: File) {
+    const url = URL.createObjectURL(file)
+    const im = new Image()
+    im.onload = () => {
+      shots.current.set(`local:${slideId}`, im)
+      setPicked(p => ({ ...p, [slideId]: url }))
+    }
+    im.src = url
+  }
 
   async function record() {
     const c = canvasRef.current
@@ -87,7 +118,9 @@ export default function VideoStudioPage() {
       await new Promise<void>(resolve => {
         const tick = () => {
           const p = Math.min(1, (performance.now() - started) / (secs * 1000))
-          drawSlide(ctx, slides[i], i, slides.length, p)
+          const img = shotFor(slides[i])
+          if (img) drawShotSlide(ctx, slides[i], img, i, slides.length, p)
+          else drawSlide(ctx, slides[i], i, slides.length, p)
           if (p >= 1) { resolve(); return }
           requestAnimationFrame(tick)
         }
@@ -135,6 +168,30 @@ export default function VideoStudioPage() {
 
         <canvas ref={canvasRef} width={W} height={H}
           className="w-full rounded-xl border border-[#e4e4e0] bg-white shadow-sm" />
+
+        {state === 'ready' && slides.some(s2 => s2.shot) && (
+          <div className="rounded-xl border border-[#e4e4e0] bg-white p-3">
+            <p className="text-[13px] font-semibold text-[#111110] mb-1">Снимки экранов</p>
+            <p className="text-[12px] text-[#9a9a95] mb-2.5">
+              Сделай скриншот нужного экрана и выбери его здесь. Файлы никуда не загружаются — живут
+              в этой вкладке до записи.
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {slides.filter(s2 => s2.shot).map(s2 => (
+                <label key={s2.id}
+                  className={`cursor-pointer rounded-lg border px-3 py-2.5 text-[12px] transition-colors ${
+                    picked[s2.id] ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-[#e4e4e0] hover:border-[#111110] text-[#6b6b66]'}`}>
+                  <span className="block font-medium">{picked[s2.id] ? '✓ ' : ''}{s2.title}</span>
+                  <span className="block text-[11px] text-[#9a9a95] mt-0.5">
+                    {picked[s2.id] ? 'снимок выбран' : 'выбрать снимок'}
+                  </span>
+                  <input type="file" accept="image/png,image/jpeg" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) attachShot(s2.id, f); e.target.value = '' }} />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
 
         {state === 'ready' && slides.length > 0 && (
           <div className="flex gap-1.5 flex-wrap">
