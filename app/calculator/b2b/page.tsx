@@ -2022,7 +2022,13 @@ export default function B2BCalculatorPage() {
                 <p className="text-[11px] text-[#9a9a95]">определяет маршрут в цеху</p>
               </div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+              {/* Две колонки, а НЕ три на широком экране. Тремя «Криволинейка» вылезала
+                  за ячейку на 26 px: колонка формы узкая (324 px), а брейкпоинт sm
+                  смотрит на ширину ОКНА, не контейнера — на большом мониторе он
+                  срабатывал там, где места всё равно нет. Измерено на проде
+                  диапазоном по тексту: сравнение границ коробок этого не показывает,
+                  потому что min-w-0 даёт коробке сжаться, а слово из неё вылезает. */}
+              <div className="grid grid-cols-2 gap-2">
                 {fSuperCat === 'стекло' && (
                   <TreatToggle on={fTempering} onChange={setFTempering} label="Закалка" tone="orange" />
                 )}
