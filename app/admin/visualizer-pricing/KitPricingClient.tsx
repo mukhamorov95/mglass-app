@@ -353,7 +353,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
     try {
       const res = await fetch('/api/admin/configurator-kits', {
         method: 'PUT', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tier, library: cur.library, rates: cur.rates, code, kit }),
+        body: JSON.stringify({ tier, library: cur.library, rates: cur.rates, kits: cur.kits }),
       })
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Ошибка сохранения')
       setDirty(false); setMsg('Сохранено')
@@ -377,7 +377,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
           {msg && <span className={`text-[13px] ${msg === 'Сохранено' ? 'text-[#256029]' : 'text-red-600'}`}>{msg}</span>}
           <button onClick={save} disabled={!dirty || saving}
             className={`text-[13px] font-medium px-4 py-2 rounded-lg ${dirty && !saving ? 'bg-[#111110] text-white hover:bg-[#2a2a28]' : 'bg-[#eee] text-[#9a9a95]'}`}>
-            {saving ? 'Сохраняю…' : `Сохранить ${code} · ${tier === 'budget' ? 'Бюджет' : 'Премиум'}`}
+            {saving ? 'Сохраняю…' : `Сохранить ${tier === 'budget' ? 'Бюджет' : 'Премиум'} (все модели)`}
           </button>
         </div>
       </div>
