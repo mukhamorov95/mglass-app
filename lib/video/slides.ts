@@ -11,6 +11,12 @@ export type Slide = {
   sub?:     string
   bullets?: string[]
   text:     string
+  /** Скриншот экрана: путь в /public. Со снимком слайд превращается в показ экрана,
+   *  а подпись уезжает вниз узкой полосой — чтобы не закрывать то, о чём говорим. */
+  shot?:    string
+  /** Куда смотреть на снимке: доля от ширины и высоты, 0..1. Медленный наезд на эту
+   *  точку заменяет запись экрана — глаз сам идёт туда, куда ведёт голос. */
+  focus?:   [number, number]
 }
 
 export const W = 1280
@@ -35,6 +41,56 @@ export function wrap(ctx: CanvasRenderingContext2D, text: string, maxW: number):
   }
   if (cur) lines.push(cur)
   return lines
+}
+
+// Слайд со снимком экрана: медленный наезд на нужное место плюс подпись снизу.
+// Так из статичного скриншота получается то же, что даёт запись экрана, — взгляд
+// ведёт голос, — но без записи: снимать боевые экраны с чужими данными нельзя.
+export function drawShotSlide(
+  ctx: CanvasRenderingContext2D, s: Slide, img: HTMLImageElement,
+  index: number, total: number, progress: number,
+) {
+  ctx.fillStyle = '#0e1012'
+  ctx.fillRect(0, 0, W, H)
+
+  const BAR = 108                       // полоса подписи снизу
+  const viewH = H - BAR
+  const [fx, fy] = s.focus ?? [0.5, 0.4]
+
+  // Наезд с 1.0 до 1.12 за слайд: заметно глазу, не укачивает.
+  const zoom = 1 + 0.12 * progress
+  const base = Math.max(W / img.width, viewH / img.height)
+  const scale = base * zoom
+  const dw = img.width * scale
+  const dh = img.height * scale
+  const dx = (W - dw) * fx
+  const dy = (viewH - dh) * fy
+
+  ctx.save()
+  ctx.beginPath(); ctx.rect(0, 0, W, viewH); ctx.clip()
+  ctx.drawImage(img, dx, dy, dw, dh)
+  ctx.restore()
+
+  ctx.fillStyle = '#15181b'
+  ctx.fillRect(0, viewH, W, BAR)
+  ctx.fillStyle = '#c2410c'
+  ctx.fillRect(0, viewH, W * ((index + progress) / total), 4)
+
+  ctx.fillStyle = '#ffffff'
+  ctx.font = '700 30px -apple-system, Manrope, sans-serif'
+  const line = wrap(ctx, s.title, W - 200)[0] ?? s.title
+  ctx.fillText(line, 48, viewH + 50)
+
+  if (s.sub) {
+    ctx.fillStyle = '#9aa3ab'
+    ctx.font = '400 22px -apple-system, sans-serif'
+    ctx.fillText(wrap(ctx, s.sub, W - 200)[0] ?? s.sub, 48, viewH + 84)
+  }
+
+  ctx.fillStyle = '#6b7480'
+  ctx.font = '500 20px -apple-system, sans-serif'
+  const num = `${index + 1} / ${total}`
+  ctx.fillText(num, W - 48 - ctx.measureText(num).width, viewH + 50)
 }
 
 export function drawSlide(ctx: CanvasRenderingContext2D, s: Slide, index: number, total: number, progress: number) {
