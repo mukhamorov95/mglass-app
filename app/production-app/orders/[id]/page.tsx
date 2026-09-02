@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { normalizeHoles, holesLabel, holesFromComment } from '@/lib/production/holes'
 import { useParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
 import Link from 'next/link'
@@ -22,6 +23,8 @@ type OrderItem = {
   hasFacet?:     boolean
   facetTypeMm?:  number
   hasHoles?:     boolean
+  holes?:        unknown
+  cutouts?:      number
   shape?:        'rect' | 'curved'
   services?:     { name: string; cost: number }[]
   comment?:      string
@@ -316,7 +319,21 @@ function ItemCard({
     ? (item.facetTypeMm ? `Фацет ${item.facetTypeMm} мм` : 'Фацет')
     : null
   const visibleStages = getApplicableStages(item)
-  const tags          = [itemNeedsTempering(item) ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
+  // Отверстия и вырезы в теги: это экран, где жмут «Готово», и до сих пор здесь
+  // из признаков были только закалка, фацет и услуги. Сверловщик закрывал этап,
+  // не видя, что именно сверлить, — диаметры были напечатаны ниже 10-м кеглем
+  // серым курсивом. Формулировки те же, что в очереди (my-queue), чтобы человек
+  // на двух экранах читал одно и то же.
+  const holeGroups    = normalizeHoles(item.holes)
+  const holesInComment= holesFromComment(item.comment)
+  const holesTag      = item.hasHoles === false ? null
+    : holeGroups.length     ? `Отверстия ${holesLabel(holeGroups)}`
+    : holesInComment        ? 'Отверстия — размеры в комментарии'
+    : item.hasHoles         ? 'Отверстия — размеры не указаны'
+    : null
+  const cutouts       = Math.max(0, Number(item.cutouts) || 0)
+  const tags          = [holesTag, cutouts > 0 ? `Вырезы ${cutouts}` : null,
+                         itemNeedsTempering(item) ? 'Закалка' : null, facet, ...svcs].filter(Boolean) as string[]
   const comment       = item.comment?.trim() || null
   const hasProblem    = stages?.problem?.status === 'problem'
 
@@ -377,7 +394,9 @@ function ItemCard({
               <div className="flex flex-wrap gap-1 mt-1.5">
                 {tags.map((tag, ti) => (
                   <span key={ti} className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ${
-                    tag === 'Закалка'
+                    tag === 'Отверстия — размеры не указаны'
+                      ? 'bg-amber-50 text-amber-800 border border-amber-300'
+                      : tag === 'Закалка'
                       ? 'bg-orange-50 text-orange-700 border border-orange-200'
                       : 'bg-blue-50 text-blue-700 border border-blue-200'
                   }`}>{tag}</span>
@@ -386,7 +405,9 @@ function ItemCard({
             )}
 
             {comment && (
-              <p className="mt-1 text-[10px] text-[#8a8a85] italic">{comment}</p>
+              <p className={`mt-1 ${holesInComment
+                ? 'text-[11px] text-[#111110]'
+                : 'text-[10px] text-[#8a8a85] italic'}`}>{comment}</p>
             )}
           </div>
         </div>

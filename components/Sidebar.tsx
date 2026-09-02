@@ -220,6 +220,10 @@ const ADMIN_SYSTEM: NavItem[] = [
   // нашлось четыре живых экрана, на которые не вело ничего, и каждый выглядел как
   // «функция пропала».
   { href: '/admin/video-studio',        label: 'Видеостудия',    icon: '🎥' },
+  // Полнота просчёта: сколько позиций доходит до цеха с отметками, а сколько — вслепую.
+  // Мерилка обучения: без неё эффект ролика не отличить от того, что на неделе
+  // просто пришли другие чертежи.
+  { href: '/admin/quote-quality',       label: 'Полнота просчёта', icon: '📐' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
   { href: '/admin/architecture',        label: 'Карта данных',   icon: '🗺️' },
 ]
@@ -424,7 +428,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
-    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services'])) open.push('system')
+    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
