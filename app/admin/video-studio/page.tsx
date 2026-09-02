@@ -12,14 +12,21 @@
 // звукового графа, и MediaRecorder его не слышит — вышло бы немое видео.
 // Файлы делает scripts/narrate.mjs голосом macOS.
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { drawSlide, drawShotSlide, W, H, type Slide } from '@/lib/video/slides'
 
 type Manifest = { id: string; seconds: number }[]
 
 export default function VideoStudioPage() {
+  return <Suspense fallback={null}><Studio /></Suspense>
+}
+
+function Studio() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [name, setName]       = useState('calc-whats-new')
+  const params = useSearchParams()
+  const [name, setName]       = useState(params.get('name') ?? 'calc-whats-new')
+  const auto = params.get('auto') === '1'
   const [slides, setSlides]   = useState<Slide[]>([])
   const [manifest, setManifest] = useState<Manifest>([])
   const [state, setState]     = useState<'idle' | 'loading' | 'ready' | 'recording' | 'done'>('idle')
@@ -32,6 +39,10 @@ export default function VideoStudioPage() {
   // вкладки до записи. Экраны за логином снять автоматически нельзя — заходить
   // под чужой учётной записью мы не будем, — а владелец делает снимок за секунду.
   const [picked, setPicked] = useState<Record<string, string>>({})
+  // Автоматический режим: /admin/video-studio?name=X&auto=1 — грузит, пишет и
+  // сохраняет файл без единого нажатия. Нужен, чтобы ролик собирался целиком
+  // без человека: раньше конвейер обрывался на кнопке «Скачать».
+  const started = useRef(false)
 
   const load = useCallback(async () => {
     setState('loading'); setNote(''); setUrl(null)
@@ -57,6 +68,14 @@ export default function VideoStudioPage() {
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { load().catch(() => {}) }, [load])
+
+  // Автозапуск ровно один раз: слайды загрузились — пишем.
+  useEffect(() => {
+    if (!auto || state !== 'ready' || started.current) return
+    started.current = true
+    record().catch(() => {})
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [auto, state])
 
   // Какой снимок показывать: выбранный руками важнее лежащего в репозитории.
   const shotFor = useCallback((sl: Slide) =>
@@ -137,6 +156,16 @@ export default function VideoStudioPage() {
     setUrl(URL.createObjectURL(blob))
     setState('done')
     setNote(`готово · ${(blob.size / 1024 / 1024).toFixed(1)} МБ`)
+
+    // В автоматическом режиме сразу кладём файл на диск — иначе запись останется
+    // в памяти вкладки и пропадёт вместе с ней.
+    if (auto) {
+      const r = await fetch(`/api/video-studio/save?name=${encodeURIComponent(name)}`, {
+        method: 'POST', headers: { 'Content-Type': 'video/webm' }, body: blob,
+      }).then(x => x.json()).catch(() => null)
+      setNote(r?.ok ? `сохранено: ${r.path} · ${(r.bytes / 1024 / 1024).toFixed(1)} МБ` : 'запись есть, сохранить не удалось')
+      ;(globalThis as unknown as Record<string, unknown>).__videoDone = r ?? { ok: false }
+    }
   }
 
   return (
