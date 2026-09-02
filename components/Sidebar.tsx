@@ -137,17 +137,6 @@ const SEO_ANALYTICS: NavItem[] = [
   { href: '/ai-sales',      label: 'AI Продажи',    icon: '🤝' },
 ]
 
-const SEO_MARKETING: NavItem[] = [
-  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
-  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
-  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
-  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
-  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
-  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
-  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
-  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
-  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
-]
 
 const SEO_AI: NavItem[] = [
   { href: '/ai-assistant',  label: 'AI Ассистент', icon: '🤖' },
@@ -174,22 +163,6 @@ const CFO_ITEMS: NavItem[] = [
 
 // ─── CEO role ─────────────────────────────────────────────────────────────────
 
-const CEO_OWNER: NavItem[] = [
-  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
-  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
-  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
-  { href: '/cfo',                     label: 'CFO Center',        icon: '💎' },
-  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
-  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
-  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
-  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
-  { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
-  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
-  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
-  { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
-  { href: '/production-app',               label: 'Production App',      icon: '📱' },
-]
 
 const CEO_ANALYTICS: NavItem[] = [
   { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
@@ -210,37 +183,7 @@ const CEO_SYSTEM: NavItem[] = [
 
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
-const ADMIN_OWNER: NavItem[] = [
-  { href: '/admin/progress',          label: 'Прогресс работ',    icon: '🗺️' },
-  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
-  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
-  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
-  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/cfo',              label: 'Финдиректор',      icon: '💰' },
-  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
-  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
-  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
-  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
-  { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
-  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
-  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
-  { href: '/admin/access-check',     label: 'Диагностика прав', icon: '🔎' },
-  { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
-  { href: '/production-app',              label: 'Production App',      icon: '📱' },
-]
 
-const ADMIN_MARKETING: NavItem[] = [
-  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🌐' },
-  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
-  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
-  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
-  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
-  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
-  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
-  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
-  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
-  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
-]
 
 const ADMIN_VLADISLAV: NavItem[] = [
   { href: '/commercial',              label: 'Коммерческий',         icon: '📈' },
@@ -397,6 +340,50 @@ const PRODUCTION_NAV_MONEY_OWNER: NavItem[] = [
 // Показываем только тем, у кого ставка задана: остальным это пустой экран.
 const PRODUCTION_NAV_REFERRAL: NavItem[] = [
   { href: '/production-app/earnings', label: 'Мой заработок', icon: '🤝' },
+]
+
+// Раздел владельца — ОДИН на роли admin и ceo.
+//
+// Было два почти одинаковых списка: CEO_OWNER (14 пунктов) и ADMIN_OWNER (16),
+// из них 13 общих. Разошлись они не по смыслу, а по истории: у владельца есть обе
+// роли, и один и тот же экран честно перечислили в каждом списке. Переключаясь
+// между рабочими местами, он видел одно и то же под одним заголовком и не понимал,
+// где искать. Здесь объединение обоих: ни один экран не потерян.
+const OWNER_CENTER: NavItem[] = [
+  { href: '/admin/progress',              label: 'Прогресс работ',    icon: '📈' },
+  { href: '/admin/ai-control-center',     label: 'AI Control Center', icon: '🎛️' },
+  { href: '/admin/owner',                 label: 'Owner Center',      icon: '👑' },
+  { href: '/admin/dashboard',             label: 'Дашборд',           icon: '📊' },
+  { href: '/cfo',                         label: 'CFO Center',        icon: '💼' },
+  { href: '/admin/cfo',                   label: 'Финдиректор',       icon: '💰' },
+  { href: '/admin/pnl',                   label: 'P&L отчёт',         icon: '📑' },
+  { href: '/admin/analytics-mglass',      label: 'Аналитика',         icon: '📉' },
+  { href: '/admin/bonus-center',          label: 'Bonus Center',      icon: '🎁' },
+  { href: '/admin/sales-center',          label: 'Sales Center',      icon: '🏆' },
+  { href: '/admin/sales-control',         label: 'Контроль продаж',   icon: '🎯' },
+  { href: '/admin/b2b-development',       label: 'B2B Development',   icon: '🚀' },
+  { href: '/admin/org',                   label: 'Оргструктура',      icon: '🏛️' },
+  { href: '/admin/users',                 label: 'Пользователи',      icon: '👥' },
+  { href: '/admin/access-check',          label: 'Диагностика прав',  icon: '🔎' },
+  { href: '/admin/activity-log',          label: 'Лог действий',      icon: '🧾' },
+  { href: '/production-app',              label: 'Production App',    icon: '📱' },
+]
+
+// Маркетинг — ОДИН список на роли admin, ceo и seo.
+//
+// Было два: SEO_MARKETING (9) и ADMIN_MARKETING (10), совпадали полностью, кроме
+// одной строки. Здесь объединение — потерянных экранов нет.
+const MARKETING_CENTER: NavItem[] = [
+  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🔍' },
+  { href: '/marketing',               label: 'Marketing Center',   icon: '📣' },
+  { href: '/marketing/content',       label: 'Контент-план',       icon: '📅' },
+  { href: '/marketing/video-factory', label: 'AI Video Factory',   icon: '🎬' },
+  { href: '/marketing/media-library', label: 'Медиабиблиотека',    icon: '🖼️' },
+  { href: '/marketing/daily',         label: 'Дневной план AI',    icon: '☀️' },
+  { href: '/marketing/partners',      label: 'Партнёры',           icon: '🤝' },
+  { href: '/marketing/promos',        label: 'Акции',              icon: '🏷️' },
+  { href: '/marketing/tasks',         label: 'Задачи',             icon: '✅' },
+  { href: '/marketing/ai',            label: 'AI-маркетолог',      icon: '🤖' },
 ]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
@@ -867,7 +854,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     if (role === 'seo') return (
       <>
         {accordion('analytics', 'Аналитика',      'text-blue-600',   'text-blue-400',   SEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('marketing', 'Маркетинг',       'text-rose-600',   'text-rose-400',   SEO_MARKETING, 'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('marketing', 'Маркетинг',       'text-rose-600',   'text-rose-400',   MARKETING_CENTER, 'bg-rose-50 text-rose-700 font-medium')}
         {accordion('ai',        'AI Инструменты',  'text-violet-600', 'text-violet-400', SEO_AI,        'bg-violet-50 text-violet-700 font-medium')}
       </>
     )
@@ -875,7 +862,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     // CEO
     if (role === 'ceo') return (
       <>
-        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', OWNER_CENTER,  'bg-purple-50 text-purple-700 font-medium')}
         {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
         {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-medium')}
       </>
@@ -911,8 +898,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
 
     if (viewMode === 'ceo') return (
       <>
-        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-medium')}
-        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', OWNER_CENTER,       'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   MARKETING_CENTER,   'bg-rose-50 text-rose-700 font-medium')}
         {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-medium')}
         {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-medium')}
         {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-medium')}
