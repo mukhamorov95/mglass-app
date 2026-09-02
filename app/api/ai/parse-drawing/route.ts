@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { createClient } from '@/lib/supabase-server'
+import { countHoleSignals, logDrawingParse } from '@/lib/ai/parseLog'
 
 // 5-страничный PDF + большой tool-JSON на десятки деталей — дефолтного времени не хватает.
 export const maxDuration = 120
@@ -69,9 +70,23 @@ export async function POST(req: Request) {
   const { data: { user } } = await sb.auth.getUser()
   if (!user) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
+  // Запуск разбора пишем в лог — и удачный, и любой из отказов. До 02.09.2026
+  // записей не было вовсе, и на вопрос «разбор не запускали или запускали и он
+  // ничего не нашёл» ответить было нечем.
+  const startedAt = Date.now()
+  const { data: prof } = await sb.from('users').select('name').eq('id', user.id).maybeSingle()
+  const who = (prof as { name: string | null } | null)?.name ?? user.email ?? null
+  const note = (ok: boolean, extra: Partial<Parameters<typeof logDrawingParse>[0]> = {}) =>
+    logDrawingParse({ route: 'ai/parse-drawing', userId: user.id, userName: who,
+                      durationMs: Date.now() - startedAt, ok, ...extra })
+
   const form = await req.formData()
   const file = form.get('file') as File | null
-  if (!file) return NextResponse.json({ error: 'file required' }, { status: 400 })
+  if (!file) {
+    await note(false, { error: 'file required' })
+    return NextResponse.json({ error: 'file required' }, { status: 400 })
+  }
+  const fileMeta = { name: file.name, type: file.type, size: file.size }
 
   const buf = Buffer.from(await file.arrayBuffer())
   const b64 = buf.toString('base64')
@@ -81,6 +96,7 @@ export async function POST(req: Request) {
   const isImg = type.startsWith('image/') || /\.(jpe?g|png|webp|gif|heic|heif)$/.test(name)
 
   if (!isPdf && !isImg) {
+    await note(false, { file: fileMeta, error: 'unsupported' })
     return NextResponse.json({ error: 'unsupported', detail: 'Поддерживаются PDF и изображения (фото чертежа).' }, { status: 415 })
   }
 
@@ -100,13 +116,26 @@ export async function POST(req: Request) {
       messages: [{ role: 'user', content: [media, { type: 'text', text: 'Разбери этот чертёж/эскиз в детали для просчёта. Обработай все страницы.' }] }],
     })
     if (msg.stop_reason === 'max_tokens') {
+      await note(false, { file: fileMeta, error: 'truncated' })
       return NextResponse.json({ error: 'truncated', detail: 'Слишком много деталей в файле — разбейте PDF на части и загрузите по отдельности.' }, { status: 502 })
     }
     const tool = msg.content.find(c => c.type === 'tool_use')
-    if (!tool || tool.type !== 'tool_use') return NextResponse.json({ error: 'no_structure' }, { status: 502 })
+    if (!tool || tool.type !== 'tool_use') {
+      await note(false, { file: fileMeta, error: 'no_structure' })
+      return NextResponse.json({ error: 'no_structure' }, { status: 502 })
+    }
+    const parsed = tool.input as { items?: unknown }
+    const items  = Array.isArray(parsed?.items) ? parsed.items : []
+    const sig    = countHoleSignals(items)
+    // Разбор, вернувший ноль деталей, — это тоже результат, а не сбой: файл мог
+    // оказаться не чертежом. Пишем ok:true и ноль найденного, чтобы «не нашёл»
+    // не смешалось с «упал».
+    await note(true, { file: fileMeta, itemsFound: items.length,
+                       itemsWithHoles: sig.withHoles, itemsWithDiameter: sig.withDiameter })
     return NextResponse.json({ parsed: tool.input })
   } catch (e) {
     const d = e instanceof Error ? e.message : String(e)
+    await note(false, { file: fileMeta, error: d.slice(0, 300) })
     return NextResponse.json({ error: 'parse_failed', detail: d.slice(0, 300) }, { status: 502 })
   }
 }
