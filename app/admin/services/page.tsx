@@ -1,191 +1,183 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { createClient } from '@/lib/supabase-browser'
-import { Service } from '@/lib/types'
+// Панель платных сервисов: что подключено, что даёт, во сколько обходится и когда
+// платить. Заведена после 02.09.2026, когда у OpenAI кончились кредиты и это
+// выяснилось только по отказу функции: никто не знал ни про баланс, ни сколько
+// сервисов вообще подключено.
+//
+// Стоимости и даты вводит владелец — у большинства провайдеров биллинг закрыт
+// для API-ключа, взять их автоматически неоткуда. Живая проверка ключей — рядом,
+// но она отвечает на «работает ли», а не на «есть ли деньги»: у OpenAI ключ
+// отвечает и с нулевым балансом.
 
-const EMPTY: Omit<Service, 'id'> = { name: '', short_name: null, unit: 'шт', cost_price: 0, sale_price: null, active: true, comment: null }
+import { useCallback, useEffect, useMemo, useState } from 'react'
 
-export default function ServicesAdminPage() {
-  const [services, setServices] = useState<Service[]>([])
+type Service = {
+  id: number; key: string; name: string; gives: string; breaks_if_off: string | null
+  monthly_cost: number | null; currency: string; billing: string | null
+  next_payment: string | null; balance_note: string | null; critical: boolean
+  status: 'ok' | 'warn' | 'down' | 'unknown' | 'off'; checked_at: string | null; notes: string | null
+}
+
+const STATUS: Record<Service['status'], { label: string; cls: string }> = {
+  ok:      { label: 'работает',    cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  warn:    { label: 'внимание',    cls: 'bg-amber-50 text-amber-700 border-amber-200' },
+  down:    { label: 'не отвечает', cls: 'bg-red-50 text-red-700 border-red-200' },
+  off:     { label: 'не подключен',cls: 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]' },
+  unknown: { label: 'не проверен', cls: 'bg-[#f0f0ec] text-[#9a9a95] border-[#e4e4e0]' },
+}
+const BILLING: Record<string, string> = {
+  subscription: 'подписка', prepaid: 'предоплата', usage: 'по расходу', free: 'бесплатно',
+}
+const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
+
+export default function ServicesPage() {
+  const [items, setItems] = useState<Service[]>([])
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState(EMPTY)
-  const [editingId, setEditingId] = useState<number | null>(null)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [checking, setChecking] = useState(false)
+  const [edit, setEdit] = useState<number | null>(null)
+  // Момент «сейчас» берём один раз при монтировании: Date.now() в расчёте
+  // считается нечистым вызовом при рендере и ломает предсказуемость.
+  const [now, setNow] = useState<number | null>(null)
 
-  useEffect(() => { load().catch(() => setLoading(false)) }, [])
-
-  async function load() {
+  const load = useCallback(async () => {
     setLoading(true)
-    const supabase = createClient()
-    const { data, error } = await supabase.from('services').select('*').order('name')
-    if (error) setError(error.message)
-    else setServices(data ?? [])
+    const r = await fetch('/api/admin/services').then(x => x.json()).catch(() => null)
+    setItems(r?.services ?? [])
     setLoading(false)
-  }
+  }, [])
 
-  async function handleSave() {
-    setSaving(true)
-    setError(null)
-    const supabase = createClient()
-    const payload = {
-      ...form,
-      cost_price: Number(form.cost_price),
-      sale_price: form.sale_price ? Number(form.sale_price) : null,
-    }
-    if (editingId !== null) {
-      const { error } = await supabase.from('services').update(payload).eq('id', editingId)
-      if (error) { setError(error.message); setSaving(false); return }
-      setEditingId(null)
-    } else {
-      const { error } = await supabase.from('services').insert(payload)
-      if (error) { setError(error.message); setSaving(false); return }
-    }
-    setForm(EMPTY)
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setNow(Date.now()); load().catch(() => setLoading(false)) }, [load])
+
+  async function check() {
+    setChecking(true)
+    await fetch('/api/admin/services', { method: 'POST' }).catch(() => {})
     await load()
-    setSaving(false)
+    setChecking(false)
   }
 
-  async function toggleActive(id: number, active: boolean) {
-    const supabase = createClient()
-    await supabase.from('services').update({ active: !active }).eq('id', id)
-    await load()
+  async function save(id: number, patch: Partial<Service>) {
+    setItems(prev => prev.map(s => (s.id === id ? { ...s, ...patch } : s)))
+    await fetch('/api/admin/services', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, ...patch }),
+    }).catch(() => {})
   }
 
-  function startEdit(s: Service) {
-    setEditingId(s.id)
-    setForm({ name: s.name, short_name: s.short_name ?? null, unit: s.unit, cost_price: s.cost_price, sale_price: s.sale_price, active: s.active, comment: s.comment })
-    setError(null)
-  }
+  const totals = useMemo(() => {
+    const known = items.filter(s => s.monthly_cost != null && s.monthly_cost > 0)
+    const sum = known.reduce((a, s) => a + Number(s.monthly_cost), 0)
+    const critNoPrice = items.filter(s => s.critical && (s.monthly_cost == null))
+    const problems = items.filter(s => s.status === 'down' || s.status === 'warn')
+    const soon = now == null ? [] : items.filter(s => s.next_payment && new Date(s.next_payment).getTime() - now < 14 * 86400000)
+    return { sum, known: known.length, critNoPrice, problems, soon }
+  }, [items, now])
 
   return (
-    <div className="max-w-[900px] mx-auto px-6 py-8">
-
-      <div className="mb-6">
-        <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Услуги</h1>
-        <p className="text-[13px] text-[#8a8a85] mt-0.5">{services.filter(s => s.active).length} активных позиций</p>
-      </div>
-
-      <div className={`rounded-xl border p-5 mb-8 transition-all ${editingId !== null ? 'bg-blue-50 border-blue-200' : 'bg-white border-[#e4e4e0]'}`}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-[11px] font-semibold uppercase tracking-widest text-[#8a8a85]">
-            {editingId !== null ? `Редактировать — ID ${editingId}` : 'Добавить услугу'}
-          </h2>
-          {editingId !== null && (
-            <span className="text-[11px] font-semibold text-blue-600 bg-blue-100 px-2 py-0.5 rounded-md">Режим редактирования</span>
-          )}
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Название</label>
-            <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-              value={form.name}
-              onChange={e => setForm({ ...form, name: e.target.value })}
-              placeholder="Название услуги"
-            />
-          </div>
+    <div className="min-h-screen bg-[#f8f8f7] p-6">
+      <div className="max-w-5xl mx-auto space-y-4">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Единица</label>
-            <select
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-              value={form.unit}
-              onChange={e => setForm({ ...form, unit: e.target.value })}>
-              {['шт', 'м²', 'пог.м', 'заказ', 'этаж', 'изделие'].map(u => <option key={u}>{u}</option>)}
-            </select>
+            <h1 className="text-[22px] font-bold text-[#111110] tracking-tight">Платные сервисы</h1>
+            <p className="text-[13px] text-[#9a9a95] mt-0.5">Что подключено, что даёт, сколько стоит и когда платить</p>
           </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Себестоимость (₽)</label>
-            <input type="number"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-              value={form.cost_price}
-              onChange={e => setForm({ ...form, cost_price: Number(e.target.value) })}
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Цена продажи (₽)</label>
-            <input type="number"
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all"
-              value={form.sale_price ?? ''}
-              onChange={e => setForm({ ...form, sale_price: e.target.value ? Number(e.target.value) : null })}
-              placeholder="пусто = по финмодели"
-            />
-          </div>
-          <div className="col-span-2">
-            <label className="block text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Комментарий</label>
-            <input
-              className="w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[14px] text-[#111110] outline-none focus:border-[#111110] transition-all"
-              value={form.comment ?? ''}
-              onChange={e => setForm({ ...form, comment: e.target.value })}
-              placeholder="Необязательно"
-            />
-          </div>
-        </div>
-
-        {error && <p className="mt-3 text-[13px] text-red-600 bg-red-50 px-3 py-2 rounded-lg">{error}</p>}
-
-        <div className="flex gap-2 mt-4">
-          <button onClick={handleSave} disabled={saving || !form.name}
-            className="bg-[#111110] text-white text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#2a2a28] disabled:opacity-40 transition-colors">
-            {saving ? 'Сохранение...' : editingId !== null ? 'Сохранить изменения' : 'Добавить позицию'}
+          <button onClick={check} disabled={checking}
+            className="px-4 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-semibold hover:bg-black disabled:opacity-40">
+            {checking ? 'Проверяю…' : '⟳ Проверить все'}
           </button>
-          {editingId !== null && (
-            <button onClick={() => { setEditingId(null); setForm(EMPTY); setError(null) }}
-              className="bg-[#f0f0ec] text-[#111110] text-[13px] font-medium px-4 py-2 rounded-lg hover:bg-[#e8e8e4] transition-colors">
-              Отмена
-            </button>
-          )}
         </div>
-      </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-xl overflow-hidden">
-        {loading ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Загрузка...</div>
-        ) : services.length === 0 ? (
-          <div className="p-8 text-center text-[13px] text-[#8a8a85]">Нет услуг</div>
-        ) : (
-          <table className="w-full text-[13px]">
-            <thead>
-              <tr className="border-b border-[#f0f0ec]">
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest">Название</th>
-                <th className="text-left px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-20">Ед.</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-36">Себестоимость</th>
-                <th className="text-right px-4 py-2.5 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-widest w-36">Цена продажи</th>
-                <th className="w-36 px-4 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map(s => (
-                <tr key={s.id}
-                  className={`border-b border-[#f8f8f7] last:border-0 transition-colors
-                    ${editingId === s.id ? 'bg-blue-50' : 'hover:bg-[#fafaf9]'}
-                    ${!s.active ? 'opacity-35' : ''}`}>
-                  <td className="px-4 py-3 font-medium text-[#111110]">{s.name}</td>
-                  <td className="px-4 py-3 text-[#6b6b66]">{s.unit}</td>
-                  <td className="px-4 py-3 text-right font-mono font-semibold text-[#111110]">
-                    {s.cost_price.toLocaleString('ru-RU')} ₽
-                  </td>
-                  <td className="px-4 py-3 text-right font-mono text-[#6b6b66]">
-                    {s.sale_price ? `${s.sale_price.toLocaleString('ru-RU')} ₽` : <span className="text-[#c4c4be]">—</span>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-3 justify-end">
-                      <button onClick={() => startEdit(s)}
-                        className="text-[12px] font-semibold text-blue-600 hover:text-blue-800 transition-colors">
-                        Изменить
-                      </button>
-                      <button onClick={() => toggleActive(s.id, s.active)}
-                        className="text-[12px] text-[#9a9a95] hover:text-[#6b6b66] transition-colors">
-                        {s.active ? 'Скрыть' : 'Показать'}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-px bg-[#e4e4e0] border border-[#e4e4e0] rounded-xl overflow-hidden">
+          <div className="bg-white p-4">
+            <p className="text-[24px] font-bold text-[#111110] tabular-nums">{RUB(totals.sum)} ₽</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a9a95] mt-1.5">в месяц · известно по {totals.known}</p>
+          </div>
+          <div className="bg-white p-4">
+            <p className={`text-[24px] font-bold tabular-nums ${totals.critNoPrice.length ? 'text-amber-600' : 'text-[#111110]'}`}>{totals.critNoPrice.length}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a9a95] mt-1.5">критичных без цены</p>
+          </div>
+          <div className="bg-white p-4">
+            <p className={`text-[24px] font-bold tabular-nums ${totals.problems.length ? 'text-red-600' : 'text-emerald-600'}`}>{totals.problems.length}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a9a95] mt-1.5">требуют внимания</p>
+          </div>
+          <div className="bg-white p-4">
+            <p className={`text-[24px] font-bold tabular-nums ${totals.soon.length ? 'text-amber-600' : 'text-[#111110]'}`}>{totals.soon.length}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-[#9a9a95] mt-1.5">платить в 2 недели</p>
+          </div>
+        </div>
+
+        {totals.critNoPrice.length > 0 && (
+          <div className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3">
+            <p className="text-[13px] text-amber-900">
+              <span className="font-semibold">Сумма неполная.</span> У {totals.critNoPrice.length} критичных сервисов цена не указана:{' '}
+              {totals.critNoPrice.map(s => s.name).join(', ')}. Пока их нет в расчёте, «сколько нужно в месяц» — не ответ, а половина ответа.
+            </p>
+          </div>
+        )}
+
+        {loading ? <p className="text-[13px] text-[#9a9a95]">Загрузка…</p> : (
+          <div className="space-y-2">
+            {items.map(s => {
+              const st = STATUS[s.status] ?? STATUS.unknown
+              const open = edit === s.id
+              return (
+                <div key={s.id} className={`bg-white rounded-xl border px-4 py-3 ${s.critical ? 'border-[#d4d4cf]' : 'border-[#eceff1]'}`}>
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-[15px] font-bold text-[#111110]">{s.name}</p>
+                        {s.critical && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-[#111110] text-white">без него встанет работа</span>}
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full border ${st.cls}`}>{st.label}</span>
+                        {s.billing && <span className="text-[11px] text-[#9a9a95]">{BILLING[s.billing] ?? s.billing}</span>}
+                      </div>
+                      <p className="text-[13px] text-[#6b6b66] mt-1">{s.gives}</p>
+                      {s.breaks_if_off && <p className="text-[12px] text-[#9a9a95] mt-0.5">Без него: {s.breaks_if_off}</p>}
+                      {s.balance_note && <p className="text-[11px] text-[#9a9a95] mt-1 font-mono">{s.balance_note}</p>}
+                      {s.notes && <p className="text-[11px] text-[#c4c4be] mt-1">{s.notes}</p>}
+                    </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-[17px] font-bold text-[#111110] tabular-nums">
+                        {s.monthly_cost != null ? `${RUB(Number(s.monthly_cost))} ${s.currency === 'USD' ? '$' : '₽'}` : <span className="text-[#c4c4be] text-[13px] font-normal">цена не указана</span>}
+                      </p>
+                      {s.next_payment && <p className="text-[11px] text-[#9a9a95]">платёж {new Date(s.next_payment).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>}
+                      <button onClick={() => setEdit(open ? null : s.id)}
+                        className="text-[11px] text-[#9a9a95] hover:text-[#111110] underline underline-offset-2 mt-1">
+                        {open ? 'свернуть' : 'указать'}
                       </button>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+
+                  {open && (
+                    <div className="mt-3 pt-3 border-t border-[#f0f0ec] grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <label className="text-[11px] text-[#9a9a95]">₽ в месяц
+                        <input type="number" defaultValue={s.monthly_cost ?? ''} onBlur={e => save(s.id, { monthly_cost: e.target.value === '' ? null : Number(e.target.value) })}
+                          className="mt-1 w-full border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] text-[#111110] outline-none focus:border-[#111110]" />
+                      </label>
+                      <label className="text-[11px] text-[#9a9a95]">Следующий платёж
+                        <input type="date" defaultValue={s.next_payment ?? ''} onBlur={e => save(s.id, { next_payment: e.target.value || null })}
+                          className="mt-1 w-full border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] text-[#111110] outline-none focus:border-[#111110]" />
+                      </label>
+                      <label className="text-[11px] text-[#9a9a95]">Тип оплаты
+                        <select defaultValue={s.billing ?? ''} onChange={e => save(s.id, { billing: e.target.value || null })}
+                          className="mt-1 w-full border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] text-[#111110] outline-none focus:border-[#111110]">
+                          <option value="">—</option>
+                          {Object.entries(BILLING).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+                        </select>
+                      </label>
+                      <label className="text-[11px] text-[#9a9a95]">Критичный
+                        <select defaultValue={s.critical ? '1' : '0'} onChange={e => save(s.id, { critical: e.target.value === '1' })}
+                          className="mt-1 w-full border border-[#e4e4e0] rounded-lg px-2 min-h-[40px] text-[13px] text-[#111110] outline-none focus:border-[#111110]">
+                          <option value="1">да — без него встанет</option>
+                          <option value="0">нет — неудобство</option>
+                        </select>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         )}
       </div>
     </div>
