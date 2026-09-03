@@ -2751,9 +2751,20 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
                     <div><label className={lbl}>Подъём, ₽</label>
                       <input type="number" className={fld} value={mgLift} onChange={e => setMgLift(e.target.value)} placeholder="0" /></div>
                   </div>
+                  {/* Каждое слагаемое итога — видимой строкой (иначе «не сходится» на глаз). */}
                   {install > 0 && (
                     <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
                       <span>Монтаж</span><span className="font-mono">{fmt(install)}</span>
+                    </div>
+                  )}
+                  {deliveryN > 0 && (
+                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
+                      <span>Доставка</span><span className="font-mono">{fmt(deliveryN)}</span>
+                    </div>
+                  )}
+                  {liftN > 0 && (
+                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
+                      <span>Подъём</span><span className="font-mono">{fmt(liftN)}</span>
                     </div>
                   )}
 

@@ -458,6 +458,40 @@ export default function CalculationDetailPage() {
   const statusMeta = getStatusMeta(calc.status)
   const params = buildParams(calc)
 
+  // Быстрый расчёт имеет свою форму cost_breakdown (без lines) и не рендерится этой
+  // детальной страницей (она про товарные калькуляторы). Показываем компактно и ведём
+  // в калькулятор на пересчёт — там его настоящее место. Защита от белого экрана,
+  // если сюда пришли прямой ссылкой (в истории «Открыть» для quick уже ведёт туда).
+  if (calc.product_type === 'quick' || calc.product_type === 'build') {
+    const isBuild = calc.product_type === 'build'
+    const reopen = () => {
+      try { sessionStorage.setItem(isBuild ? 'mglass_build_reopen' : 'mglass_quick_reopen', JSON.stringify({ ...(calc.input_data ?? {}), __parentCalcId: calc.id })) } catch { /* ignore */ }
+      window.location.assign(isBuild ? '/calculator/build' : '/calculator/quick')
+    }
+    return (
+      <div className="min-h-screen bg-[#f5f5f7] py-6 px-4">
+        <div className="max-w-lg mx-auto space-y-4">
+          <Link href="/calculations" className="text-[13px] text-[#6e6e73] hover:text-[#1d1d1f]">← История расчётов</Link>
+          <div className="bg-white rounded-2xl border border-[#e8e8ed] p-6 space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-[#f0f0ec] text-[#6b6b66]">{isBuild ? '📐 Расчёт' : '⚡ Быстрый'}</span>
+              {calc.client_name && <span className="text-[13px] text-[#1d1d1f]">{calc.client_name}</span>}
+            </div>
+            <div className="flex items-baseline justify-between">
+              <span className="text-[13px] text-[#6e6e73]">К оплате</span>
+              <span className="text-[26px] font-bold font-mono text-[#1d1d1f]">{(calc.final_price ?? 0).toLocaleString('ru-RU')} ₽</span>
+            </div>
+            {calc.client_text && <p className="text-[12px] text-[#9a9a95]">{calc.client_text}</p>}
+            <button onClick={reopen}
+              className="w-full px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28]">
+              Открыть в калькуляторе и пересчитать
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   const hasChanges =
     parseInt(editPrice) !== calc.final_price ||
     parseFloat(editDiscount) !== calc.discount ||

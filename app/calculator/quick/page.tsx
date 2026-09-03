@@ -267,6 +267,20 @@ export default function QuickCalcPage() {
               </div>
             </div>
 
+            {/* Клиент — опционально и ВСЕГДА на виду (раньше поля прятались до появления
+                цены, и расчёт уходил осиротевшим). С телефоном/адресом расчёт привяжется
+                к сделке; обязательным не делаем — чтобы поймать расчёт «на бегу». */}
+            <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
+              <p className="text-[13px] font-semibold text-[#111110] mb-3">Клиент <span className="text-[11px] font-normal text-[#9a9a95]">— необязательно, но с ним расчёт попадёт в сделку</span></p>
+              <div className="grid grid-cols-1 gap-3">
+                <div><label className={L}>Имя</label><input className={I} value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Клиент" /></div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><label className={L}>Телефон</label><input className={I} value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="+7…" inputMode="tel" /></div>
+                  <div><label className={L}>Адрес объекта</label><input className={I} value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="улица, квартира" /></div>
+                </div>
+              </div>
+            </div>
+
             {/* Корзина изделий */}
             {cart.length > 0 && (
               <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
@@ -351,22 +365,6 @@ export default function QuickCalcPage() {
               </>
             )}
 
-            {/* Клиент — опционально: расчёт сохранится и без него. С клиентом
-                он позже привяжется к сделке (шаг 2). Обязательным не делаем —
-                иначе не поймать расчёт «на бегу», посреди разговора. */}
-            {grand > 0 && (
-              <div className="mt-3 grid grid-cols-1 gap-1.5">
-                <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Клиент (необязательно)"
-                  className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                <div className="grid grid-cols-2 gap-1.5">
-                  <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="Телефон" inputMode="tel"
-                    className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                  <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта"
-                    className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-2 gap-2 mt-3">
               <button onClick={saveQuick} disabled={grand <= 0 || saving}
                 className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-50">
@@ -377,9 +375,19 @@ export default function QuickCalcPage() {
                 Сформировать КП →
               </button>
             </div>
-            <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
-              {saveMsg ?? 'Сохранённый расчёт появится в истории — его можно открыть и пересчитать'}
-            </p>
+            {saveMsg ? (
+              <p className={`mt-2 text-center text-[13px] font-semibold rounded-lg px-3 py-2 ${
+                saveMsg.includes('✓')
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {saveMsg}
+              </p>
+            ) : (
+              <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
+                Сохранённый расчёт появится в истории — его можно открыть и пересчитать
+              </p>
+            )}
           </div>
         </div>
       </div>
