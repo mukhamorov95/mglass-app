@@ -24,6 +24,7 @@ type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_s
 type Invoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
 type Measure = { id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string }
 type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null }
+type DealFile = { id: number; kind: string; url: string; name: string | null; uploaded_by_name: string | null; created_at: string }
 
 // Слова владельца дословно — не «частичная оплата 1/2/3».
 const PAY_KIND: { key: string; label: string }[] = [
@@ -65,6 +66,7 @@ export default function DealPage() {
   const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
   const [measuring, setMeasuring] = useState(false)
   const [payments, setPayments] = useState<Payment[] | null>(null)
+  const [files, setFiles] = useState<DealFile[] | null>(null)
   const [payForm, setPayForm] = useState({ kind: 'prepay', amount: '', paid_at: new Date().toISOString().slice(0, 10) })
   const [payingSave, setPayingSave] = useState(false)
 
@@ -79,6 +81,7 @@ export default function DealPage() {
       setError(null)
       loadDocs()      // документы и замер грузим сразу — блок замера виден без открытия вкладки
       loadPayments()  // оплаты — для вкладки «Деньги»
+      loadFiles()     // чертёж и файлы сделки
     } catch { setError('Сеть недоступна') } finally { setLoading(false) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -165,6 +168,23 @@ export default function DealPage() {
   async function deletePayment(pid: number) {
     const r = await fetch(`/api/deals/${id}/payments`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_id: pid }) })
     if (r.ok) await loadPayments()
+  }
+
+  async function loadFiles() {
+    try {
+      const r = await fetch(`/api/deals/${id}/files`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setFiles(j.files ?? [])
+    } catch { /* ignore */ }
+  }
+  async function uploadFile(file: File) {
+    const fd = new FormData(); fd.append('file', file); fd.append('kind', 'drawing')
+    const r = await fetch(`/api/deals/${id}/files`, { method: 'POST', body: fd })
+    if (r.ok) await loadFiles()
+  }
+  async function deleteFile(fid: number) {
+    const r = await fetch(`/api/deals/${id}/files`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file_id: fid }) })
+    if (r.ok) await loadFiles()
   }
 
   // «Сделать КП» из карточки: клиент, адрес и позиции из расчётов сделки уже подставлены —
@@ -333,28 +353,64 @@ export default function DealPage() {
       )}
 
       {tab === 'docs' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
-          {docs === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
-          : (docs.kps.length === 0 && docs.contracts.length === 0) ? (
-            <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет документов. Нажмите «Сделать КП» — клиент и позиции подставятся из сделки.</p>
-          ) : (
-            <>
-              {docs.kps.map(d => (
-                <Link key={`kp${d.id}`} href={`/kp/${d.id}/print`} className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-[#fafaf9]">
-                  <div><span className="text-[13px] text-[#111110]">📄 КП №{d.number}</span>
-                    <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.manager_name ? ` · ${d.manager_name}` : ''}</p></div>
-                  <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
-                </Link>
-              ))}
-              {docs.contracts.map(d => (
-                <div key={`c${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
-                  <div><span className="text-[13px] text-[#111110]">📝 Договор №{d.number}</span>
-                    <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.kp_id ? ` · из КП` : ''}</p></div>
-                  <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
-                </div>
-              ))}
-            </>
-          )}
+        <div className="space-y-4">
+          <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
+            {docs === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+            : (docs.kps.length === 0 && docs.contracts.length === 0) ? (
+              <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет документов. Нажмите «Сделать КП» — клиент и позиции подставятся из сделки.</p>
+            ) : (
+              <>
+                {docs.kps.map(d => (
+                  <div key={`kp${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div><span className="text-[13px] text-[#111110]">📄 КП №{d.number}</span>
+                      <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.manager_name ? ` · ${d.manager_name}` : ''}</p></div>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                      <Link href={`/kp/${d.id}/print`} className="text-[12px] text-[#6b6b66] hover:underline whitespace-nowrap">Открыть</Link>
+                      {/* Итоговое КП — правкой этого (не заново): откроется на редактирование. */}
+                      <Link href={`/kp?edit=${d.id}`} className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">Изменить</Link>
+                    </div>
+                  </div>
+                ))}
+                {docs.contracts.map(d => (
+                  <div key={`c${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <div><span className="text-[13px] text-[#111110]">📝 Договор №{d.number}</span>
+                      <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.kp_id ? ` · из КП` : ''}</p></div>
+                    <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+
+          {/* Чертёж и файлы сделки — видны менеджеру (и цеху по роли). */}
+          <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
+              <p className="text-[12px] font-semibold text-[#9a9a95] uppercase tracking-wider">Чертёж и файлы</p>
+              <label className="text-[12px] text-blue-600 hover:underline cursor-pointer">
+                + приложить
+                <input type="file" accept="image/*,application/pdf" className="hidden"
+                  onChange={e => { const f = e.target.files?.[0]; if (f) uploadFile(f); e.target.value = '' }} />
+              </label>
+            </div>
+            {files === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+            : files.length === 0 ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Файлов нет. Приложите чертёж — он будет виден в сделке.</p>
+            : (
+              <div className="divide-y divide-[#f0f0ec]">
+                {files.map(f => (
+                  <div key={f.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                    <a href={f.url} target="_blank" rel="noopener noreferrer" className="text-[13px] text-blue-600 hover:underline truncate">
+                      📐 {f.name || 'файл'}
+                    </a>
+                    <div className="flex items-center gap-3">
+                      <span className="text-[11px] text-[#9a9a95] whitespace-nowrap">{date(f.created_at)}{f.uploaded_by_name ? ` · ${f.uploaded_by_name}` : ''}</span>
+                      <button onClick={() => deleteFile(f.id)} title="Удалить" className="text-[#c4c4be] hover:text-red-500">✕</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       )}
 

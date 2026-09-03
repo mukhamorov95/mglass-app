@@ -138,6 +138,17 @@ export default function KpPage() {
     } catch { /* ignore */ }
   }, [])
 
+  // Итоговое КП делается ПРАВКОЙ первичного (владелец: «из архива вытащить, изменить/
+  // добавить»). Карточка сделки ведёт сюда с ?edit=ID — открываем это КП на редактирование.
+  useEffect(() => {
+    const editId = Number(new URLSearchParams(window.location.search).get('edit'))
+    if (!editId) return
+    fetch('/api/kp').then(r => r.json()).then(d => {
+      const row = (Array.isArray(d.items) ? d.items : []).find((x: HistoryRow) => x.id === editId)
+      if (row) editRow(row)
+    }).catch(() => {})
+  }, [])
+
   const set = (patch: Partial<Form>) => { setForm(f => ({ ...f, ...patch })); setSavedId(null) }
 
   async function loadHistory() {
