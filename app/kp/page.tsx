@@ -88,6 +88,7 @@ async function pdfFirstPageToPng(file: File): Promise<Blob | null> {
 export default function KpPage() {
   const [tab, setTab] = useState<'new' | 'history'>('new')
   const [form, setForm] = useState<Form>(emptyForm())
+  const dealIdRef = useRef<number | null>(null)   // КП из карточки сделки несёт связь в commercial_proposals
   const [editingId, setEditingId] = useState<number | null>(null)
   const [savedId, setSavedId] = useState<number | null>(null)
   const [transcript, setTranscript] = useState('')
@@ -115,12 +116,16 @@ export default function KpPage() {
       const raw = sessionStorage.getItem('mglass_kp_prefill')
       if (!raw) return
       sessionStorage.removeItem('mglass_kp_prefill')
-      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number }
+      const p = JSON.parse(raw) as { title?: string; items?: { name: string; qty?: number; price?: number; sum?: number }[]; subtotal?: number; total?: number; deal_id?: number; client_name?: string; client_phone?: string; client_address?: string }
+      // Из карточки сделки: клиент и связь уже подставлены — менеджер их не вводит заново.
+      if (typeof p.deal_id === 'number') dealIdRef.current = p.deal_id
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTab('new')
       setForm(f => ({
         ...f,
         title: p.title ?? f.title,
+        client_name: p.client_name ?? f.client_name,
+        client_phone: p.client_phone ?? f.client_phone,
         items: Array.isArray(p.items) ? p.items.map(it => ({
           name: String(it.name ?? ''),
           qty: it.qty != null ? String(it.qty) : '',
@@ -273,7 +278,7 @@ export default function KpPage() {
         if (res.ok) setSavedId(editingId)
         else setSaveError(data.error || `Ошибка ${res.status}`)
       } else {
-        const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content }) })
+        const res = await fetch('/api/kp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ content, ...(dealIdRef.current ? { deal_id: dealIdRef.current } : {}) }) })
         const data = await res.json().catch(() => ({}))
         if (res.ok && data.id) {
           setEditingId(data.id)

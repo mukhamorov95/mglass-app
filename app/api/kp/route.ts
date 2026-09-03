@@ -61,7 +61,7 @@ export async function DELETE(req: Request) {
 export async function POST(req: Request) {
   const u = await authUser()
   if (!u) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  const body = await req.json() as { content?: Record<string, unknown> }
+  const body = await req.json() as { content?: Record<string, unknown>; deal_id?: number }
   const content = body.content ?? {}
   const svc = createServiceClient()
 
@@ -83,6 +83,8 @@ export async function POST(req: Request) {
     manager_id: u.id,
     manager_name: u.name,
     status: 'draft',
+    // Связь со сделкой ставится в момент создания из карточки (не задним числом).
+    ...(body.deal_id ? { deal_id: body.deal_id } : {}),
   }).select('id, number').single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
