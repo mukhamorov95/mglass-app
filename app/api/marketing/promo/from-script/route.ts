@@ -28,9 +28,11 @@ export async function POST(req: NextRequest) {
   if (!scriptId) return NextResponse.json({ error: 'Не указан сценарий' }, { status: 400 })
 
   const sb = createServiceClient()
+  // Схема marketing_scripts плоская: shots, narrator_text и остальное — это
+  // отдельные колонки, а не вложенный объект. Читаем их напрямую.
   const { data: script, error } = await sb
     .from('marketing_scripts')
-    .select('id, title, content, status')
+    .select('id, title, shots, narrator_text, subtitle_moments, cover_idea, status')
     .eq('id', scriptId)
     .single()
   if (error || !script) return NextResponse.json({ error: 'Сценарий не найден' }, { status: 404 })
@@ -39,8 +41,7 @@ export async function POST(req: NextRequest) {
   const { data: exists } = await sb.from('promo_jobs').select('id').eq('script_id', scriptId).maybeSingle()
   if (exists) return NextResponse.json({ id: exists.id, already: true })
 
-  const c = (script.content ?? {}) as Record<string, unknown>
-  const rawShots = Array.isArray(c.shots) ? (c.shots as Shot[]) : []
+  const rawShots = Array.isArray(script.shots) ? (script.shots as Shot[]) : []
   const shots = rawShots.map((s, i) => ({
     order: s.order ?? i + 1,
     description: s.description ?? '',
@@ -57,11 +58,11 @@ export async function POST(req: NextRequest) {
 
   const { data: job, error: insErr } = await sb.from('promo_jobs').insert({
     script_id: scriptId,
-    title: (c.title as string) || script.title || `Сценарий #${scriptId}`,
+    title: script.title || `Сценарий #${scriptId}`,
     shots,
-    narrator_text: (c.narrator_text as string) ?? null,
-    subtitle_moments: Array.isArray(c.subtitle_moments) ? c.subtitle_moments : [],
-    cover_idea: (c.cover_idea as string) ?? null,
+    narrator_text: script.narrator_text ?? null,
+    subtitle_moments: Array.isArray(script.subtitle_moments) ? script.subtitle_moments : [],
+    cover_idea: script.cover_idea ?? null,
   }).select('id').single()
   if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 })
 
