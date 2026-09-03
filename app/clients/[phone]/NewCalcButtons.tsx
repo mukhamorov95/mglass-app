@@ -8,8 +8,6 @@ import { useRouter } from 'next/navigation'
 // Префилл кладём в sessionStorage — тем же механизмом, каким работает «Пересчитать».
 
 const TARGETS = [
-  { key: 'mirror', label: '🪞 Зеркало', href: '/calculator/mirror', store: 'mglass_mirror_prefill' },
-  { key: 'shower', label: '🚿 Душевая', href: '/calculator/shower', store: 'mglass_shower_prefill' },
   { key: 'quick',  label: '⚡ Быстрый расчёт', href: '/calculator/quick', store: null },
 ] as const
 
