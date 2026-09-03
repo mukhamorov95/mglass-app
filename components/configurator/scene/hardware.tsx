@@ -306,6 +306,7 @@ export function Hardware({ model, shape, material, flatTube }: { model: Hardware
     case 'mount-glass': return <GlassToRailClamp material={material} flatTube={flatTube} />
     case 'mount-wall': return <KP002 material={material} flatTube={flatTube} />
     case 'mount-corner': return <RailEndClamp material={material} flatTube={flatTube} />
+    case 'mount-rail-end': return <RailEndClamp material={material} flatTube={flatTube} />
     case 'mount-diag45': return <MountDiag45 material={material} />
     case 'mount-stabilizer': return <MountStabilizer material={material} />
     case 'connector': return <TubeConnector material={material} />
