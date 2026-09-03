@@ -189,6 +189,14 @@ export type GlassTint = { color: string; attenuation: string; distance: number }
 
 const DOOR_OPEN_DEG = 32       // распашная приоткрыта заметнее (визуальное разведение со стационаром)
 const SLIDE_OPEN = 0.28        // раздвижная приоткрыта: доля длины створки, сдвинутой вдоль штанги
+const ROLLER_EDGE_MM = 80      // от кромки створки до ОСИ ролика — стандарт монтажа
+
+// Срез угла пятигранника. Диагональ равна ширине двери: раньше срез был жёстко
+// половиной меньшей стороны, дверь выходила короче диагонали, и между дверью и
+// стационаром оставалась щель (при 1000×1000 и двери 600 — ровно 107 мм).
+// Ограничение — срез не больше 60% меньшей стороны, иначе стационары вырождаются.
+const trapCut = (W: number, W2: number, doorMm?: number) =>
+  Math.min(((doorMm ?? 600) * M) / Math.SQRT2, Math.min(W, W2) * 0.6)
 type P = [number, number]   // точка плана [x, z], метры
 
 export function buildFromModel(model: MModel, dims: MDims, thickness: number, doorOpen = true, choice: HardwareChoice = {}, variant: MVariant = {}): Assembly {
@@ -257,7 +265,10 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     if (!L) return
     const ox = -out[0] * SLIDE_GAP, oz = -out[1] * SLIDE_GAP
     const at = (f: number, y: number) => [A[0] + ux * L * f + ox, y, A[1] + uz * L * f + oz] as [number, number, number]
-    ;[0.24, 0.76].forEach((f, i) => {
+    // Ролики стоят на фиксированном отступе от кромки створки, а не на долях её
+    // длины: у широкой створки доли уводили каретки к середине.
+    const edge = Math.min(ROLLER_EDGE_MM * M / L, 0.4)
+    ;[edge, 1 - edge].forEach((f, i) => {
       hardware.push({ key: `${key}-r${i}`, model: 'roller', rotY, pos: at(f, tubeYSlide) })
     })
     hardware.push({ key: `${key}-kupe`, model: 'kupe', rotY, pos: at(0.82, H / 2) })
@@ -339,7 +350,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     runs.push({ kp: 'f', A: [0, 0], B: [W, 0], out: [0, -1], segs: front!.segs })
   } else { // trap — пятигранник: срез угла диагональю 135°
     depth = W2; walls = { back: true, left: true, right: false }
-    const c = Math.min(W, W2) * 0.5
+    const c = trapCut(W, W2, dims.doorWidth)
     runs.push({ kp: 'r', A: [W, W2], B: [W, c], out: [1, 0], segs: [{ t: 'fixed' }] })
     runs.push({ kp: 'd', A: [W, c], B: [W - c, 0], out: [0.707, -0.707], segs: [{ t: 'door', hinge: 'a' }] })
     runs.push({ kp: 'g', A: [W - c, 0], B: [0, 0], out: [0, -1], segs: [{ t: 'fixed' }] })
@@ -370,7 +381,11 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const doorMask = run.segs.map(s => s.t === 'door' && doorW0 > 0)
     const doorCount = doorMask.filter(Boolean).length
     const flexCount = n - doorCount
-    const doorW = doorCount > 0 ? Math.min(doorW0, (rL * 0.85) / doorCount) : 0
+    // Ран без стационаров (диагональ пятигранника) двери обязаны закрыть целиком,
+    // иначе остаётся щель между дверью и соседним полотном.
+    const doorW = doorCount === 0 ? 0
+      : flexCount === 0 ? rL / doorCount
+      : Math.min(doorW0, (rL * 0.85) / doorCount)
     const flexEach = flexCount > 0 ? (rL - doorW * doorCount) / flexCount : rL
     const segLen = doorMask.map(u => (u ? doorW : flexEach))
     let segAcc = 0
@@ -392,7 +407,9 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
       else if (sg.t === 'slide') {
         // приоткрываем створку вдоль штанги к началу рана: перекрывает соседний
         // стационар (спереди) и открывает проём — читается как раздвижная.
-        const shift = (rL / n) * SLIDE_OPEN
+        // Кнопка «открыть/закрыть» работает и на раздвижной: закрытая створка
+        // стоит в своём проёме, открытая наезжает на соседний стационар.
+        const shift = doorOpen ? (rL / n) * SLIDE_OPEN : 0
         const oa: P = [sa[0] - rux * shift, sa[1] - ruz * shift]
         const ob: P = [sb[0] - rux * shift, sb[1] - ruz * shift]
         addGlass(key, oa, ob, 'door', SLIDE_GAP, run.out); addSlideDoor(key, oa, ob, run.out)
@@ -405,7 +422,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
   }
   // Трапеция: соединители труб на углах + КП-002 на внешних торцах (у стен).
   if (model.shape === 'trap') {
-    const c = Math.min(W, W2) * 0.5
+    const c = trapCut(W, W2, dims.doorWidth)
     const dir = (a: P, b: P): P => { const dx = b[0] - a[0], dz = b[1] - a[1], L = Math.hypot(dx, dz) || 1; return [dx / L, dz / L] }
     const rotOf = (d: P) => Math.atan2(-d[1], d[0])
     const outs: Record<string, P> = { r: [1, 0], d: [0.707, -0.707], g: [0, -1] }
