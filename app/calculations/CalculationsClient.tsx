@@ -365,10 +365,9 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
           </div>
           <div className="flex gap-1.5">
             {[
-              { href: '/calculator/shower', label: '🚿 Душевая' },
-              { href: '/calculator/mirror', label: '🪞 Зеркало' },
-              { href: '/calculator/loft',   label: '🏗️ Лофт' },
-              { href: '/calculator/railing', label: '🪜 Ограждение' },
+              // Остальные калькуляторы убраны из доступа 03.09.2026; из истории
+              // начинают новый расчёт быстрым — единственным оставшимся.
+              { href: '/calculator/quick', label: 'Быстрый расчёт' },
             ].map(l => (
               <Link key={l.href} href={l.href}
                 className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">

@@ -69,7 +69,11 @@ describe('accessMatrix — изоляция данных между ролями
 // кнопка «КП (PDF)» открывает /cart/print, а /cart не было в allowlist → access-denied.
 describe('accessMatrix — менеджер проходит весь путь продажи (класс бага Веры)', () => {
   const salesPaths = [
-    '/calculator/mirror', '/calculator/shower', '/calculator/loft', '/calculator/b2b', '/calculator/quick',
+    // Зеркало, душевая, лофт и ограждение убраны из доступа 03.09.2026 — решение
+    // владельца: экраны «не отображают честную картину» (у душевой фурнитура
+    // бралась из вписанных руками чисел, а не из справочника цен). Путь продажи
+    // проверяется на оставшихся: быстрый расчёт и B2B.
+    '/calculator/b2b', '/calculator/quick',
     '/cart', '/cart/print',          // корзина мультизаказа + КП (PDF)
     '/calculations', '/calculations/123', '/calculations/123/print',
     '/kp', '/contracts', '/crm', '/sales', '/orders', '/clients',
@@ -100,7 +104,7 @@ describe('explainAccess синхронен с canAccessRoute (диагности
 })
 
 describe('accessMatrix — закупщик с manager_workspace (Вера) получает менеджерский контур', () => {
-  const managerPaths = ['/crm', '/kp', '/orders', '/clients', '/calendar', '/installations', '/calculator/mirror', '/sales', '/contracts', '/manager', '/measure-requests']
+  const managerPaths = ['/crm', '/kp', '/orders', '/clients', '/calendar', '/installations', '/calculator/quick', '/sales', '/contracts', '/manager', '/measure-requests']
   // Пути, которых у закупщика нет в собственном allowlist (для проверки «закрыто без флага»).
   // '/orders' исключён — он есть и у buyer штатно (логист видит заказы).
   const managerOnlyPaths = managerPaths.filter(p => p !== '/orders')

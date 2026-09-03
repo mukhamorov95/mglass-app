@@ -197,9 +197,6 @@ export default function ManagerPage() {
           <p className="text-[10px] font-semibold uppercase tracking-widest text-[#9a9a95] mb-3">Быстрые действия</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              { href: '/calculator/mirror', icon: '🪞', label: 'Зеркало' },
-              { href: '/calculator/shower', icon: '🚿', label: 'Душевая' },
-              { href: '/calculator/loft',   icon: '🏗️', label: 'Лофт' },
               { href: '/calculations',      icon: '📋', label: 'История КП' },
             ].map(l => (
               <Link key={l.href} href={l.href}
