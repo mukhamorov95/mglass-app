@@ -1,0 +1,4 @@
+[    5962ms] [LOG] 1 @ https://steklo17.ru/sroki-izgotovleniya/:993
+[    5985ms] TypeError: Cannot read properties of null (reading 'dataset')
+    at HTMLDocument.<anonymous> (https://steklo17.ru/bitrix/cache/js/d1/dev/template_10c65fd2f03dbac72312eed9d26d9845/template_10c65fd2f03dbac72312eed9d26d9845_v1.js?1787666867396825:39:24)
+[   13512ms] [ERROR] Failed to load resource: net::ERR_CERT_AUTHORITY_INVALID @ https://hdrc.yandex.net/:0

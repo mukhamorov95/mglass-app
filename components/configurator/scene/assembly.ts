@@ -181,6 +181,7 @@ export function buildAssembly(config: Configuration): Assembly {
 // Стёкла — вертикальные панели вдоль «ранов»; распашная дверь открывается НАРУЖУ
 // (в сторону outward-нормали рана); петля на своей стороне (к стеклу/стене).
 export type MDims = { width: number; height: number; width2?: number; doorWidth?: number; trayDepth?: number; ceilingHeight?: number }
+export const HANDLE_CENTER_MM = 950   // от низа стекла до центра ручки — стандарт монтажа M-Glass
 export const M1_TRAY_DEPTH_DEFAULT = 1000   // стандарт глубины поддона (мм) для perp90, если клиент не ввёл
 
 // Тон стекла (тип/цвет): прозрачное / осветлённое / тонированное бронза/графит.
@@ -299,7 +300,11 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const nOut: P = [outward[0] * ca - dc[0] * sa, outward[1] * ca - dc[1] * sa]
     const hShape = choice.handle ?? 'handle-bar'
     const hPart = getPart(hShape)
-    const face = surfaces.glassFace([cx, H / 2, cz], nOut, od, thickness, L * 0.32, H / 2)
+    // Высота ручки: 950 мм от низа полотна до ЦЕНТРА ручки (у кноба — до оси
+    // отверстия). Раньше стояла на половине высоты: при H=2000 почти совпадало,
+    // на высокой двери уезжало вверх. На низкой двери держим её в пределах полотна.
+    const hy = Math.min(Math.max(HANDLE_CENTER_MM * M, 0.3), H - 0.3)
+    const face = surfaces.glassFace([cx, H / 2, cz], nOut, od, thickness, L * 0.32, hy)
     if (hPart) {
       const r = placePart(hPart, face)
       if (r.ok) {

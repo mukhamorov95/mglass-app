@@ -1,0 +1,294 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e2]:
+    - link "К основному контенту" [ref=f21e3] [cursor=pointer]:
+      - /url: "#t-main-content"
+    - banner [ref=f21e4]:
+      - navigation [ref=f21e8]:
+        - list [ref=f21e9]:
+          - listitem [ref=f21e10]:
+            - link "О компании" [ref=f21e11] [cursor=pointer]:
+              - /url: "#submenu:company"
+          - listitem [ref=f21e12]:
+            - link "Услуги" [ref=f21e13] [cursor=pointer]:
+              - /url: "#submenu:services"
+          - listitem [ref=f21e14]:
+            - link "Доставка" [ref=f21e15] [cursor=pointer]:
+              - /url: https://dostavka17.ru/
+          - listitem [ref=f21e16]:
+            - link "Информация" [ref=f21e17] [cursor=pointer]:
+              - /url: "#submenu:info"
+          - listitem [ref=f21e18]:
+            - link "Каталоги и презентации" [ref=f21e19] [cursor=pointer]:
+              - /url: /company/catalog/
+          - listitem [ref=f21e20]:
+            - link "Контакты" [ref=f21e21] [cursor=pointer]:
+              - /url: /contact/
+          - listitem [ref=f21e22]:
+            - link "Интернет-магазин" [ref=f21e23] [cursor=pointer]:
+              - /url: https://nagornaya17.ru/
+          - listitem [ref=f21e24]:
+            - link "Личный кабинет" [ref=f21e25] [cursor=pointer]:
+              - /url: https://mzf-zakaz.ru/
+      - generic [ref=f21e28]:
+        - generic [ref=f21e29]:
+          - link [ref=f21e31] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f21e32]
+          - generic [ref=f21e34]:
+            - strong [ref=f21e35]: Московская Зеркальная Фабрика
+            - strong [ref=f21e36]: НАГОРНАЯ 17
+            - strong [ref=f21e37]: Душевые ограждения на заказ
+        - generic [ref=f21e38]:
+          - generic [ref=f21e44]:
+            - strong
+            - link "+7 (495) 640-11-79" [ref=f21e45] [cursor=pointer]:
+              - /url: tel:+7 (495) 640-11-79
+          - generic [ref=f21e49]:
+            - strong
+            - text: Время работыКАЖДЫЙ ДЕНЬ10:00 до 19:00
+          - button "Перезвонить" [ref=f21e51] [cursor=pointer]
+      - generic [ref=f21e55]:
+        - link "ВИДЫ ДУШЕВЫХ" [ref=f21e59] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f21e62]:
+          - link "ДУШЕВЫЕ ДВЕРИ" [ref=f21e63] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f21e70]:
+            - generic:
+              - link [ref=f21e72] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/raspashnye/
+                - paragraph [ref=f21e74]: Душевая дверь распашная
+              - link [ref=f21e76] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/razdvizhnye/
+                - paragraph [ref=f21e78]: Раздвижные душевые двери
+              - link [ref=f21e80] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/skladnaya/
+                - paragraph [ref=f21e82]: Складная душевая дверь
+              - link [ref=f21e84] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/radiusnye/
+                - paragraph [ref=f21e86]: Радиусные душевые двери
+              - link [ref=f21e88] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/polukruglye/
+                - paragraph [ref=f21e90]: Душевые двери полукруглые
+        - generic [ref=f21e91]:
+          - link "СТЕКЛО ДЛЯ ДУШЕВОЙ" [ref=f21e92] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f21e99]:
+            - generic:
+              - link [ref=f21e101] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/obyichnoe-steklo/
+                - paragraph [ref=f21e103]: Обычное стекло
+              - link [ref=f21e105] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/matovoe-steklo/
+                - paragraph [ref=f21e107]: Матовое стекло
+              - link [ref=f21e109] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/steklo-s-risunkom/
+                - paragraph [ref=f21e111]: Рисунки на стекле
+              - link [ref=f21e113] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/osvetlennoe-steklo/
+                - paragraph [ref=f21e115]: Осветленное стекло
+              - link [ref=f21e117] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/bezopasnoe-steklo/
+                - paragraph [ref=f21e119]: Закаленное стекло
+              - link [ref=f21e121] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/czvetnoe-steklo/
+                - paragraph [ref=f21e123]: Цветное стекло
+              - link [ref=f21e125] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/decorativnoe-steklo/
+                - paragraph [ref=f21e127]: Декоративное стекло
+        - link "ФУРНИТУРА ДЛЯ ДУШЕВЫХ" [ref=f21e129] [cursor=pointer]:
+          - /url: /furnitura-dlya-dushevyix-kabin/
+        - link "ПРОИЗВОДСТВО" [ref=f21e133] [cursor=pointer]:
+          - /url: "#submenu:production"
+        - link "УСЛУГИ" [ref=f21e137] [cursor=pointer]:
+          - /url: "#submenu:services"
+  - generic:
+    - generic:
+      - generic [ref=f21e140]:
+        - button "Навигационное меню" [ref=f21e142] [cursor=pointer]
+        - generic [ref=f21e147]: ВСЯ ПРОДУКЦИЯ МЗФ
+      - generic [ref=f21e152]:
+        - generic [ref=f21e153]:
+          - link [ref=f21e156] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f21e157]
+          - generic [ref=f21e158]:
+            - textbox "Поиск" [ref=f21e161]
+            - generic [ref=f21e163]:
+              - link "Стекло" [ref=f21e166] [cursor=pointer]:
+                - /url: https://steklo17.ru/
+              - link "Витраж" [ref=f21e169] [cursor=pointer]:
+                - /url: https://vitrag17.ru/
+              - link "Скинали" [ref=f21e172] [cursor=pointer]:
+                - /url: https://skinali17.ru/
+              - link "Душевые" [ref=f21e175] [cursor=pointer]:
+                - /url: /
+              - link "Ограждения" [ref=f21e178] [cursor=pointer]:
+                - /url: https://peregorodki17.ru/
+              - link "Двери" [ref=f21e181] [cursor=pointer]:
+                - /url: https://dver17.ru/
+              - link "Зеркала" [ref=f21e184] [cursor=pointer]:
+                - /url: https://zerkala.ru/
+              - link "Багет" [ref=f21e187] [cursor=pointer]:
+                - /url: https://baget17.ru/
+              - link "Металл" [ref=f21e190] [cursor=pointer]:
+                - /url: https://metall17.ru/
+        - generic [ref=f21e191]: Московская Зеркальная Фабрика
+  - generic [ref=f21e193] [cursor=pointer]
+  - generic [ref=f21e199]:
+    - generic [ref=f21e200]: Московская Фабрика Зеркал
+    - heading "Гарантия" [level=1] [ref=f21e201]
+  - generic [ref=f21e204]:
+    - generic:
+      - generic [ref=f21e206]:
+        - text: Фирма-изготовитель гарантирует соответствие изделий требованиям
+        - link "ТУ (Технических Условий)." [ref=f21e207] [cursor=pointer]:
+          - /url: https://dysh17.ru/uslugi/tehnicheskie-usloviya/
+        - text: Гарантийный срок на изделие – 25 лет* со дня изготовления при соблюдении условий эксплуатации, хранения, монтажа и транспортирования.
+      - generic [ref=f21e208]: В течение гарантийного периода ООО «ЗЕРКАЛЬНО-СТЕКОЛЬНАЯ КОМПАНИЯ» бесплатно устраняет путем ремонта или замены производственные дефекты, вызванные отклонением от значений физико-механических характеристик материалов (появление свили, инородных включений, следов выщелачивания, внутренних пузырей и т.п.) в рамках ГОСТов Р 54170-2010, Р 54161-2010 или дефектов, вызванных недостаточным качеством обработки материалов в рамках ТУ ООО «ЗЕРКАЛЬНО-СТЕКОЛЬНАЯ КОМПАНИЯ».
+  - generic [ref=f21e214]:
+    - strong [ref=f21e215]: "Гарантия ПРЕДОСТАВЛЯЕТСЯ:"
+    - list [ref=f21e216]:
+      - listitem [ref=f21e217]: При условии сохранения кассового чека и заказ-наряда в течение всего гарантийного срока.
+      - listitem [ref=f21e218]: На изделия, которые использовались в соответствии с правилами эксплуатации.
+    - strong [ref=f21e219]: "Гарантия НЕ ПРЕДОСТАВЛЯЕТСЯ в случае:"
+    - list [ref=f21e220]:
+      - listitem [ref=f21e221]: Механических повреждений (царапины, потертости, сколы, щербины, и т.п.)
+      - listitem [ref=f21e222]: Дефекты, вызванные механическим, химическим, тепловым и др. воздействиями, не предусмотренными правилами эксплуатации для данного вида изделий.
+      - listitem [ref=f21e223]: Воздействия агрессивной среды, загрязнения, окисления
+      - listitem [ref=f21e224]: Внесения заказчиком технических изменений в конструкцию изделия, либо его комплектующих
+      - listitem [ref=f21e225]: Нарушения правил эксплуатации
+      - listitem [ref=f21e226]: Естественного износа изделия
+      - listitem [ref=f21e227]: Заказчик предпочел ультрафиолетовую печать без цветопробы и недоволен результатом цветопередачи (яркость, оттенок цвета и т.п.)
+      - listitem [ref=f21e228]: Несоблюдения инструкции по монтажу
+      - listitem [ref=f21e229]: Монтаж изделий не рекомендованными представителями ООО «МФЗ»
+      - listitem [ref=f21e230]: Монтажа иным способом, кроме рекомендуемого по ГОСТ Р 54161-2010 и Европейскому стандарту CEN
+    - text: "* Гарантийный срок на амальгаму, ультрафиолетовую печать, ультрафиолетовую склейку, изделия со стразами, витражи, триплекс, комплектующие, фурнитуру, нагревательный элемент для зеркал и багет составляет 12 месяцев со дня изготовления изделия, при соблюдении правил эксплуатации, хранения, транспортирования и монтажа.* Гарантийный срок на амальгаму зеркал с улучшенным покрытием составляет 24 месяца со дня изготовления изделия, при соблюдении правил эксплуатации, хранения, транспортирования и монтажа."
+    - strong [ref=f21e231]: СЛУЖБА СЕРВИСА
+    - text: Служба сервиса проводит товарную экспертизу выявленных недостатков, определяет характер дефекта — заводской брак или результат неправильной эксплуатации. После проведения экспертизы и дальнейшего экспертного заключения товар с заводским браком подлежит гарантийному ремонту. Если ремонт невозможен, то при предъявлении экспертного заключения Продавец производит обмен товара с заводским дефектом на товар надлежащего качества.
+    - strong [ref=f21e232]: При бережном отношении наши изделия будут служить Вам долгие годы.
+  - button "Оставить заявку" [ref=f21e238] [cursor=pointer]
+  - contentinfo [ref=f21e240]:
+    - generic [ref=f21e243]:
+      - generic [ref=f21e244]:
+        - link [ref=f21e246] [cursor=pointer]:
+          - /url: /
+          - img "Московская зеркальная фабрика" [ref=f21e247]
+        - generic [ref=f21e248]: "Режим работы: Пн-Вс 10:00-19:00"
+      - generic [ref=f21e249]:
+        - link "dysh17@1mzf.ru" [ref=f21e253] [cursor=pointer]:
+          - /url: mailto:dysh17@1mzf.ru
+        - link "+7 (495) 640-11-79" [ref=f21e257] [cursor=pointer]:
+          - /url: tel:+7 (495) 640-11-79
+        - button "Заказать звонок" [ref=f21e259] [cursor=pointer]
+    - navigation [ref=f21e264]:
+      - list [ref=f21e265]:
+        - listitem [ref=f21e266]:
+          - link "Стекло" [ref=f21e267] [cursor=pointer]:
+            - /url: https://steklo17.ru/
+        - listitem [ref=f21e268]:
+          - link "Витраж" [ref=f21e269] [cursor=pointer]:
+            - /url: https://vitrag17.ru/
+        - listitem [ref=f21e270]:
+          - link "Скинали" [ref=f21e271] [cursor=pointer]:
+            - /url: https://skinali17.ru/
+        - listitem [ref=f21e272]:
+          - link "Душевые" [ref=f21e273] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f21e274]:
+          - link "Ограждения" [ref=f21e275] [cursor=pointer]:
+            - /url: https://peregorodki17.ru/
+        - listitem [ref=f21e276]:
+          - link "Двери" [ref=f21e277] [cursor=pointer]:
+            - /url: https://dver17.ru/
+        - listitem [ref=f21e278]:
+          - link "Зеркала" [ref=f21e279] [cursor=pointer]:
+            - /url: https://zerkala.ru/
+        - listitem [ref=f21e280]:
+          - link "Багет" [ref=f21e281] [cursor=pointer]:
+            - /url: https://baget17.ru/
+        - listitem [ref=f21e282]:
+          - link "Металл" [ref=f21e283] [cursor=pointer]:
+            - /url: https://metall17.ru/
+    - generic [ref=f21e286]:
+      - generic [ref=f21e287]:
+        - generic [ref=f21e288]: О КОМПАНИИ
+        - list [ref=f21e290]:
+          - listitem [ref=f21e291]:
+            - link "О нас" [ref=f21e292] [cursor=pointer]:
+              - /url: /company/about/
+          - listitem [ref=f21e293]:
+            - link "Производство" [ref=f21e294] [cursor=pointer]:
+              - /url: /company/manufacture/
+          - listitem [ref=f21e295]:
+            - link "Карьера" [ref=f21e296] [cursor=pointer]:
+              - /url: /company/career/
+          - listitem [ref=f21e297]:
+            - link "Статьи" [ref=f21e298] [cursor=pointer]:
+              - /url: /article/
+          - listitem [ref=f21e299]:
+            - link "Каталоги и презентации" [ref=f21e300] [cursor=pointer]:
+              - /url: /company/catalog/
+      - generic [ref=f21e301]:
+        - generic [ref=f21e302]: УСЛУГИ
+        - list [ref=f21e304]:
+          - listitem [ref=f21e305]:
+            - link "Замеры и консультации" [ref=f21e306] [cursor=pointer]:
+              - /url: /services/vyizov-menedzhera/
+          - listitem [ref=f21e307]:
+            - link "Разработка дизайн-проекта" [ref=f21e308] [cursor=pointer]:
+              - /url: /services/razrabotka-dizajn-proekta/
+          - listitem [ref=f21e309]:
+            - link "Конструкторское бюро" [ref=f21e310] [cursor=pointer]:
+              - /url: /services/kb/
+          - listitem [ref=f21e311]:
+            - link "Доставка" [ref=f21e312] [cursor=pointer]:
+              - /url: /services/delivery/
+      - generic:
+        - generic [ref=f21e313]:
+          - generic [ref=f21e314]: ИНФОРМАЦИЯ
+          - list [ref=f21e316]:
+            - listitem [ref=f21e317]:
+              - link "Технические условия" [ref=f21e318] [cursor=pointer]:
+                - /url: /info/tehnicheskie-usloviya/
+            - listitem [ref=f21e319]:
+              - link "Информация клиенту" [ref=f21e320] [cursor=pointer]:
+                - /url: /info/faq/
+            - listitem [ref=f21e321]:
+              - link "Сроки изготовления" [ref=f21e322] [cursor=pointer]:
+                - /url: /info/sroki-izgotovleniya/
+            - listitem [ref=f21e323]:
+              - link "Гарантия" [ref=f21e324] [cursor=pointer]:
+                - /url: /info/garanty/
+        - generic [ref=f21e325]:
+          - button "Перезвоните мне" [ref=f21e327] [cursor=pointer]
+          - form [ref=f21e328]:
+            - generic [ref=f21e329]:
+              - generic [ref=f21e330]:
+                - textbox "Ваш номер" [ref=f21e332]
+                - button [ref=f21e334] [cursor=pointer]
+              - generic [ref=f21e338] [cursor=pointer]:
+                - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f21e339]
+                - generic [ref=f21e340]:
+                  - text: Даю согласие на обработку моих персональных данных.
+                  - link "Подробнее" [ref=f21e341]:
+                    - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - textbox
+          - list "Соц. сети" [ref=f21e343]:
+            - listitem [ref=f21e344]:
+              - link "vk" [ref=f21e345] [cursor=pointer]:
+                - /url: https://vk.com/moskovskaya_zerkalnaya_fabrika
+            - listitem [ref=f21e347]:
+              - link "ok" [ref=f21e348] [cursor=pointer]:
+                - /url: https://ok.ru/moskovskaya.zerkalnaya.fabrika
+    - generic [ref=f21e354]:
+      - text: Если вас не устраивает работа персонального менеджера обратитесь в службу поддержки клиентов | Мы всегда на связиОбращаем ваше внимание на то, что данный интернет-сайт носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 (2) Гражданского кодекса Российской Федерации. Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефону в Москве +7 (495) 640-11-79 info@1mzf.ru
+      - link "Правовая информация и политики сайта" [ref=f21e355] [cursor=pointer]:
+        - /url: /info/
+      - text: ООО "СПЕКТРУМАРТ" info@spektrumart.ru | +7 (495) 797-53-73
+    - generic [ref=f21e356]:
+      - generic [ref=f21e357]:
+        - text: Мы используем файлы cookie и сервисы веб-аналитики (Яндекс.Метрика, Comagic) для сбора статистики, анализа посещаемости и улучшения работы сайта. Продолжая использовать сайт, вы даете согласие на обработку данных в указанных целях.
+        - link "Подробнее" [ref=f21e358] [cursor=pointer]:
+          - /url: /info/
+      - button "Принять и закрыть" [ref=f21e359] [cursor=pointer]

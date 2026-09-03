@@ -1,0 +1,363 @@
+- main [ref=f67e2]:
+  - generic [ref=f67e3]:
+    - generic [ref=f67e4]:
+      - generic [ref=f67e5]:
+        - link "Переход на главную" [ref=f67e6] [cursor=pointer]:
+          - /url: /
+          - img "Логотип компании" [ref=f67e7]
+        - link "Продукция" [ref=f67e8] [cursor=pointer]:
+          - /url: /product_catalog/
+        - link "Виды стекла" [ref=f67e9] [cursor=pointer]:
+          - /url: /glass-types/
+        - generic [ref=f67e10]: Личный кабинет
+      - generic [ref=f67e11]:
+        - link "+7 (495) 733-53-73" [ref=f67e12] [cursor=pointer]:
+          - /url: tel:+74957335373
+        - paragraph [ref=f67e14] [cursor=pointer]: Заказать расчет
+        - paragraph [ref=f67e18] [cursor=pointer]: Меню
+    - generic:
+      - link "Переход на главную":
+        - /url: /
+        - img "Логотип компании"
+      - generic: Скрыть
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic: Личный кабинет
+              - generic:
+                - link "ЛК клиента":
+                  - /url: https://mzf-zakaz.ru/
+                - link "ЛК дизайнера":
+                  - /url: https://zerkala.ru/lk-designer/
+            - generic:
+              - generic: Виды стекла
+              - generic:
+                - link "Обычное стекло":
+                  - /url: /glass-types/normal_steklo/
+                - link "Закаленное стекло":
+                  - /url: /glass-types/zakalennoe-steklo/
+                - link "Матовое стекло":
+                  - /url: /glass-types/matovoe/
+                - link "Рифленое стекло":
+                  - /url: /glass-types/riflenoe/
+                - link "Осветленное стекло":
+                  - /url: /glass-types/osvet_stecklo/
+                - link "Триплекс стекло":
+                  - /url: /glass-types/tripleks-steklo/
+                - link "Тонированное стекло":
+                  - /url: /glass-types/tonirovannoe-steklo/
+                - link "Стемалит":
+                  - /url: /glass-types/ctemalit/
+                - link "Лакобель":
+                  - /url: /glass-types/lakobel/
+                - link "Дихроичное стекло":
+                  - /url: /glass-types/dihroichnoe-steklo/
+                - link "Стекло с рисунком":
+                  - /url: /glass-types/steklo-s-matovym-risunkom/
+                - link "Стекло с алмазной гравировкой":
+                  - /url: /glass-types/steklo-s-gravirovkoj/
+                - link "Стекло с УФ-печатью":
+                  - /url: /glass-types/steklo-uf-pechatyu/
+                - link "Гизелла":
+                  - /url: /glass-types/gezella/
+                - link "Жаростойкое стекло":
+                  - /url: /glass-types/zharostojkoe-steklo/
+                - link "Стекло с лазерной гравировкой":
+                  - /url: /glass-types/steklo-s-gravirovkoj-2/
+                - link "Все виды стекла":
+                  - /url: /glass-types/
+            - generic:
+              - generic: Продукция
+              - generic:
+                - link "Перегородки из стекла":
+                  - /url: /product_catalog/peregorodki-iz-stekla/
+                - link "Душевые ограждения":
+                  - /url: /product_catalog/dushevye-ograzhdeniya/
+                - link "Стеклопакет":
+                  - /url: /product_catalog/steklopaket/
+                - link "Стекло для мебели":
+                  - /url: /product_catalog/steklo-dlya-mebeli/
+                - link "Мебель из стекла":
+                  - /url: /product_catalog/mebel-iz-stekla/
+                - link "Лестницы":
+                  - /url: /product_catalog/lestnitsy/
+                - link "Двери из стекла":
+                  - /url: /product_catalog/dveri-iz-stekla/
+                - link "Витражи":
+                  - /url: /product_catalog/vitrazhi/
+                - link "Стеклянные витрины":
+                  - /url: /product_catalog/steklyannye-vitriny/
+                - link "Скинали (фартук)":
+                  - /url: /product_catalog/skinali-fartuk/
+                - link "Жаростойкое":
+                  - /url: /product_catalog/zharostoykoe/
+                - link "Триплекс":
+                  - /url: /product_catalog/tripleks/
+                - link "Вся продукция из стекла":
+                  - /url: /product_catalog/
+                - link "Другая продукция":
+                  - /url: /catalog-link/
+                - link "Каталоги и презентации":
+                  - /url: /product_catalog_pdf/
+            - generic:
+              - generic: О компании
+              - generic:
+                - link "О нас":
+                  - /url: /o-kompanii/
+                - link "Производство":
+                  - /url: /proizvodstvo/
+                - link "Блог":
+                  - /url: /blog/
+                - link "Вакансии":
+                  - /url: /vakansii/
+                - link "Информация":
+                  - /url: /informatsiya/
+                - link "Контакты":
+                  - /url: /contacts/
+            - generic:
+              - generic: Портфолио
+              - generic:
+                - link "Заказы физических лиц":
+                  - /url: /portfolio-fiz/
+                - link "Корпоративные заказы":
+                  - /url: /portfolio/
+            - generic:
+              - generic:
+                - link "steklo17@1mzf.ru":
+                  - /url: mailto:steklo17@1mzf.ru
+                - paragraph: 117186, Москва, Нагорная 17
+                - paragraph: "Время работы: 10:00 — 19:00"
+              - generic:
+                - link "Переход на страницу Московской Зеркальной Фабрики Вконтакте":
+                  - /url: https://vk.com/moskovskaya_zerkalnaya_fabrika
+                - link "Переход на страницу Московской Зеркальной Фабрики в Дзене":
+                  - /url: https://dzen.ru/mzf___17
+  - generic [ref=f67e25]:
+    - heading "сроки изготовления" [level=1] [ref=f67e31]
+    - paragraph [ref=f67e34]: Нагорная, 17
+  - generic [ref=f67e36]:
+    - heading "Стандартные сроки изготовления" [level=2] [ref=f67e37]
+    - generic [ref=f67e38]:
+      - generic [ref=f67e39]:
+        - generic [ref=f67e40]:
+          - text: "Стандартный срок изготовления индивидуальных стеклоизделий по размерам заказчика составляет от 1 до 10 дней, но не более 30 календарных дней – такой диапазон дат является следствием сложного технологического процесса и напрямую зависит от характера и объемов, поступающих на производство индивидуальных заказов. Процесс и сроки изготовления индивидуального заказа по размерам заказчика состоит из нескольких взаимосвязанных технологических этапов, которые в свою очередь жестко привязаны к временным производственным и финансовым циклам: 1. Этап – из выбранного и оплаченного вами материала вырезаются заготовки. 2. Этап – Обработка заготовок для получения готового изделия: полировка торцов заготовок, сверление отверстий, закалка и другие операции, выбранные и оплаченные вами при размещении заказа. Процесс обработки заготовок также является многоэтапным и последовательным и напрямую зависит от количества требуемых операций. После каждой операции, которые выполняются в строгой технологической последовательности мастера осуществляют проверку качества выполнения работ, что также влияет на общее время исполнения заказа. 1. Этап – финишная проверка изготовленного изделия Отделом Контроля Качества на соответствие, указанным в заказе параметрам и качества выполнения работ. 2. Этап – по мере поступления заказанной и предоплаченной под ваш заказ фурнитуры от сторонних поставщиков комплектация заказа (при наличии в заказе). 3. Этап – упаковка изделий. 4. Этап – Транспортировка до пункта выдачи на Нагорной д. 17. Поскольку описанные выше процессы требуют значительных временных затрат, для выполнения всех взятых на себя обязательств по срокам выполнения заказов в нашей компании внедрен полностью автоматизированный процесс изготовления заказных изделий, который подразумевает незамедлительное начало выполнение работ по вырезанию заготовок сразу после подтверждения оплаты(предоплаты). В случае выбора Вами материалов и/или комплектующих, не находящихся на наших складах (качество и наличие, которых мы можем Вам гарантировать со 100% уверенностью) и требующих производить закупку у сторонних поставщиков, срок выполнения комплектации может быть продлен до 3-х календарных месяцев, поскольку зачастую закупка таких материалов производится в странах Евросоюза и требует значительных временных затрат на транспортировку и таможенную очистку. К сожалению, Зеркальная Фабрика и ее сотрудники не могут влиять на скорость работы компаний поставщиков, перевозчиков и таможенных терминалов РФ. В связи с этим, для предоставления Вам максимально достоверной информации, точные даты поставки товара наши сотрудники могут сообщить ТОЛЬКО после поступления комплектующих на НАШ склад. Но при оформлении каждого индивидуального заказа, мы делаем все возможное для ускорения поставки комплектующих от поставщиков, а также максимально возможно быстрой комплектации Вашего заказа. По готовности заказа, Вы получите смс-уведомление, также отслеживать ход и готовность вашего заказа Вы всегда можете в личном кабинете. В случае поступления некорректной информации или нарушении, указанных в договоре сроков изготовления, Вы можете обраться в службу техподдержки, написав сообщение с номером заказа в личном кабинете. В случае нарушения сроков, предусмотренных договором, Вам будет выплачена неустойка в рамках действующего договора. Сроки согласования макетов и чертежей"
+          - paragraph [ref=f67e41]: В связи со сжатыми сроками и полностью автоматизированным процессом изготовления стеклоизделий, а также во исполнение взятых на себя обязательств, Вам необходимо ознакомиться (или произвести корректировку) чертежей/макетов данного заказа в трехдневный срок. При отсутствии с Вашей стороны письменных корректировок и противоречий первоначально оформленным чертежам и макетам, заказ автоматически передается в производство без дополнительного уведомления
+        - generic: Тариф ПРИОРИТИ - Стеклоизделия по данной категории заказа изготавливаются с помощью оснасток, приспособлений, цветопроб без дополнительного взимания денег; проходят индивидуальный ручной многоуровневый контроль качества; производится первичная индивидуальная выборка материалов и комплектующих; изготовление таких изделий осуществляется приоритетно вне зависимости от загруженности производственного цикла, поставка фурнитуры осуществляется в минимально возможные сроки посредством использования исключительно экспресс-услуг по доставке материалов и комплектующих при необходимости с помощью авиасообщения. Заказ размещенный по тарифу ПРИОРИТИ подразумевает, что на момент оформления заказа клиент ознакомлен с полным предлагаемым ассортиментом, и главным критерием для клиента являются повышенные требования к качеству материалов, комплектующих, и срокам изготовления индивидуальных изделий. Сроки изготовления стеклоизделий по тарифу ПРИОРИТИ – осуществляются в максимально возможные сжатые сроки насколько это позволяет технологический процесс. Сроки поставок фурнитуры и комплектующих оговариваются в момент оплаты клиентом заказа. В случае отсутствия возможности осуществить поставку комплектующих, в оговоренные сроки с клиентом, компанией производится возврат разницы в стоимости между тарифами ПРИОРИТИ и ЭКОНОМ.
+      - generic [ref=f67e42]:
+        - generic [ref=f67e43] [cursor=pointer]: Стандартные сроки изготовления
+        - generic [ref=f67e44] [cursor=pointer]: Срочные заказы
+  - generic [ref=f67e49]:
+    - paragraph [ref=f67e51]: еще мы производим зеркала
+    - link "перейти в каталог зеркал" [ref=f67e57] [cursor=pointer]:
+      - /url: https://zerkala.ru/
+      - paragraph [ref=f67e58]: перейти в каталог зеркал
+  - generic [ref=f67e61]:
+    - generic [ref=f67e62]:
+      - text: Мы используем файлы cookie и сервисы веб-аналитики (Яндекс.Метрика, Comagic) для сбора статистики, анализа посещаемости и улучшения работы сайта. Продолжая использовать сайт, вы даете согласие на обработку данных в указанных целях.
+      - link "Подробнее" [ref=f67e63] [cursor=pointer]:
+        - /url: /info/
+    - button "Принять и закрыть" [ref=f67e64] [cursor=pointer]
+  - paragraph [ref=f67e66] [cursor=pointer]: Заказатьзвонок
+  - generic [ref=f67e73]:
+    - generic [ref=f67e74]:
+      - generic [ref=f67e77]:
+        - generic [ref=f67e78]:
+          - generic [ref=f67e79]:
+            - generic [ref=f67e80]: о компании
+            - generic [ref=f67e84]:
+              - link "Производство" [ref=f67e85] [cursor=pointer]:
+                - /url: /proizvodstvo/
+              - link "О компании" [ref=f67e86] [cursor=pointer]:
+                - /url: /o-kompanii/
+              - link "Блог" [ref=f67e87] [cursor=pointer]:
+                - /url: /blog/
+              - link "Вакансии" [ref=f67e88] [cursor=pointer]:
+                - /url: /vakansii/
+              - link "Информация" [ref=f67e89] [cursor=pointer]:
+                - /url: /informatsiya/
+              - link "Контакты" [ref=f67e90] [cursor=pointer]:
+                - /url: /contacts/
+            - link "портфолио" [ref=f67e91] [cursor=pointer]:
+              - /url: /portfolio/
+          - generic [ref=f67e92]:
+            - generic [ref=f67e93]: Продукция
+            - generic [ref=f67e97]:
+              - link "Продукция из стекла" [ref=f67e98] [cursor=pointer]:
+                - /url: /product_catalog/
+              - link "Другая продукция" [ref=f67e99] [cursor=pointer]:
+                - /url: /catalog-link/
+              - link "Каталоги и презентации" [ref=f67e100] [cursor=pointer]:
+                - /url: /product_catalog_pdf/
+            - link "виды стекла" [ref=f67e101] [cursor=pointer]:
+              - /url: /glass-types/
+          - generic [ref=f67e102]:
+            - generic [ref=f67e103]: информация
+            - generic [ref=f67e107]:
+              - link "Тех. условия" [ref=f67e108] [cursor=pointer]:
+                - /url: /tekh-usloviya/
+              - link "Сроки изготовления" [ref=f67e109] [cursor=pointer]:
+                - /url: /sroki-izgotovleniya/
+              - link "Гарантия" [ref=f67e110] [cursor=pointer]:
+                - /url: /garantiya/
+              - link "Доставка" [ref=f67e111] [cursor=pointer]:
+                - /url: /dostavka/
+        - generic [ref=f67e112]:
+          - paragraph [ref=f67e113]: ИНТЕРНЕТ–МАГАЗИН
+          - link "московкая зеркальная фабрика" [ref=f67e114] [cursor=pointer]:
+            - /url: https://nagornaya17.ru/
+      - list [ref=f67e115]:
+        - listitem [ref=f67e116]:
+          - paragraph [ref=f67e117]: Адрес
+          - paragraph [ref=f67e118]: 117186, Москва, Нагорная 17
+        - listitem [ref=f67e119]:
+          - paragraph [ref=f67e120]: Телефон
+          - link "+7 (495) 733-53-73" [ref=f67e121] [cursor=pointer]:
+            - /url: tel:+74957335373
+        - listitem [ref=f67e122]:
+          - paragraph [ref=f67e123]: Email
+          - link "steklo17@1mzf.ru" [ref=f67e124] [cursor=pointer]:
+            - /url: mailto:steklo17@1mzf.ru
+    - generic [ref=f67e125]:
+      - paragraph [ref=f67e126]: Правила и условия
+      - paragraph [ref=f67e127]: Если вас не устраивает работа персонального менеджера обратитесь в службу поддержки клиентов | Мы всегда на связи. Обращаем ваше внимание на то, что данный интернет-сайт носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 (2) Гражданского кодекса Российской Федерации. Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефону в Москве.
+      - paragraph [ref=f67e128]:
+        - link "Правовая информация и политики сайта" [ref=f67e129] [cursor=pointer]:
+          - /url: /pravovaya-informatsiya/
+      - paragraph [ref=f67e130]: ООО "СПЕКТРУМАРТ" | info@spektrumart.ru | +7 (495) 797-53-73
+  - generic:
+    - generic:
+      - generic:
+        - generic: Заявка успешно отправлена
+        - paragraph: Скоро с вами свяжется наш менеджер
+      - generic:
+        - paragraph: Закрыть окно
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic: Заявка на расчет
+          - generic:
+            - generic:
+              - generic:
+                - paragraph: размеры
+                - generic:
+                  - generic:
+                    - generic: Высота
+                    - spinbutton "Высота"
+                  - generic:
+                    - generic: Ширина
+                    - spinbutton "Ширина"
+                  - generic:
+                    - generic: Толщина
+                    - spinbutton "Толщина"
+              - generic:
+                - generic:
+                  - paragraph: изделие
+                  - generic:
+                    - combobox
+                    - generic:
+                      - generic:
+                        - combobox "Перегородки":
+                          - textbox "Перегородки"
+                - generic:
+                  - paragraph: Материал
+                  - generic:
+                    - combobox
+                    - generic:
+                      - generic:
+                        - combobox "Стекло Clear":
+                          - textbox "Стекло Clear"
+              - generic:
+                - generic:
+                  - paragraph: назначение
+                  - generic:
+                    - combobox
+                    - generic:
+                      - generic:
+                        - combobox "Ванная":
+                          - textbox "Ванная"
+                - generic:
+                  - paragraph: кол-во продукции
+                  - generic:
+                    - generic: шт.
+                    - spinbutton "шт.": "1"
+              - generic:
+                - generic:
+                  - paragraph: дополнительно
+                  - generic:
+                    - generic:
+                      - radio "полировка" [checked]
+                      - generic: полировка
+                    - generic:
+                      - radio "шлифовка"
+                      - generic: шлифовка
+              - generic:
+                - paragraph: комментарий
+                - generic:
+                  - generic: введите комметарий
+                  - textbox "введите комметарий":
+                    - /placeholder: Опишите детально требования (необязательно)
+              - generic:
+                - generic:
+                  - paragraph: Добавить фото
+                  - paragraph: Вы можете приложить фото или чертеж желаемого изделия
+                - generic:
+                  - generic:
+                    - generic: Загрузить
+                    - generic: Нажмите для загрузки
+                    - button "Загрузить Нажмите для загрузки"
+              - generic:
+                - paragraph: ваши данные
+                - generic:
+                  - generic:
+                    - generic: Имя
+                    - textbox "Имя":
+                      - /placeholder: Введите ваше имя
+                  - generic:
+                    - generic: Телефон
+                    - textbox "Телефон":
+                      - /placeholder: введите ваш телефон
+                  - generic:
+                    - generic: EMAIL
+                    - textbox "EMAIL":
+                      - /placeholder: введите почту
+            - generic:
+              - generic:
+                - generic:
+                  - checkbox "Даю согласие на обработку моих персональных данных. Подробнее"
+                  - paragraph:
+                    - text: Даю согласие на обработку моих персональных данных.
+                    - link "Подробнее":
+                      - /url: /pravovaya-informatsiya/
+              - button "Отправить":
+                - paragraph: Отправить
+  - generic:
+    - generic:
+      - generic:
+        - generic:
+          - generic: Заказать звонок
+          - generic:
+            - generic:
+              - generic:
+                - generic: Имя
+                - textbox "Имя":
+                  - /placeholder: Введите ваше имя
+              - generic:
+                - generic: Телефон
+                - textbox "Телефон":
+                  - /placeholder: Введите ваш телефон
+              - generic:
+                - generic: E-mail
+                - textbox "E-mail":
+                  - /placeholder: Введите адрес вашей эл. почты
+            - generic:
+              - generic:
+                - generic:
+                  - checkbox "Даю согласие на обработку моих персональных данных. Подробнее"
+                  - paragraph:
+                    - text: Даю согласие на обработку моих персональных данных.
+                    - link "Подробнее":
+                      - /url: /pravovaya-informatsiya/
+              - button "Отправить":
+                - paragraph: Отправить

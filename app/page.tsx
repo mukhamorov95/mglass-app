@@ -10,31 +10,11 @@ const MONTHS = ['января','февраля','марта','апреля','м�
 
 function fmt(n: number) { return n.toLocaleString('ru-RU') + ' ₽' }
 
+  // Зеркало, душевая, лофт, ограждение и скан дизайн-проекта убраны из доступа
+  // 03.09.2026 (решение владельца: «не отображает честную картину»). Оставлять
+  // кнопку на закрытый маршрут нельзя — она ведёт в «нет доступа» и читается
+  // как поломка. Код экранов на месте.
 const CALC_CARDS = [
-  {
-    href: '/calculator/shower',
-    emoji: '🚿',
-    label: 'Душевая',
-    desc: 'Любая модель, стекло, фурнитура',
-    color: 'from-cyan-500 to-cyan-600',
-    bg: 'bg-cyan-50 border-cyan-200 hover:border-cyan-400',
-  },
-  {
-    href: '/calculator/mirror',
-    emoji: '🪞',
-    label: 'Зеркало',
-    desc: 'LED, форма, пескоструй, допы',
-    color: 'from-blue-500 to-blue-600',
-    bg: 'bg-blue-50 border-blue-200 hover:border-blue-400',
-  },
-  {
-    href: '/calculator/loft',
-    emoji: '🏗️',
-    label: 'Лофт',
-    desc: 'Секции, фурнитура, покраска',
-    color: 'from-orange-500 to-orange-600',
-    bg: 'bg-orange-50 border-orange-200 hover:border-orange-400',
-  },
   {
     href: '/calculator/b2b',
     emoji: '🏢',

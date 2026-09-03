@@ -1,0 +1,557 @@
+- generic [active] [ref=f32e1]:
+  - generic [ref=f32e2]:
+    - link "К основному контенту" [ref=f32e3] [cursor=pointer]:
+      - /url: "#t-main-content"
+    - banner [ref=f32e4]:
+      - navigation [ref=f32e8]:
+        - list [ref=f32e9]:
+          - listitem [ref=f32e10]:
+            - link "О компании" [ref=f32e11] [cursor=pointer]:
+              - /url: "#submenu:company"
+          - listitem [ref=f32e12]:
+            - link "Услуги" [ref=f32e13] [cursor=pointer]:
+              - /url: "#submenu:services"
+          - listitem [ref=f32e14]:
+            - link "Доставка" [ref=f32e15] [cursor=pointer]:
+              - /url: https://dostavka17.ru/
+          - listitem [ref=f32e16]:
+            - link "Информация" [ref=f32e17] [cursor=pointer]:
+              - /url: "#submenu:info"
+          - listitem [ref=f32e18]:
+            - link "Каталоги и презентации" [ref=f32e19] [cursor=pointer]:
+              - /url: /company/catalog/
+          - listitem [ref=f32e20]:
+            - link "Контакты" [ref=f32e21] [cursor=pointer]:
+              - /url: /contact/
+          - listitem [ref=f32e22]:
+            - link "Интернет-магазин" [ref=f32e23] [cursor=pointer]:
+              - /url: https://nagornaya17.ru/
+          - listitem [ref=f32e24]:
+            - link "Личный кабинет" [ref=f32e25] [cursor=pointer]:
+              - /url: https://mzf-zakaz.ru/
+      - generic [ref=f32e28]:
+        - generic [ref=f32e29]:
+          - link [ref=f32e31] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f32e32]
+          - generic [ref=f32e34]:
+            - strong [ref=f32e35]: Московская Зеркальная Фабрика
+            - strong [ref=f32e36]: НАГОРНАЯ 17
+            - strong [ref=f32e37]: Душевые ограждения на заказ
+        - generic [ref=f32e38]:
+          - generic [ref=f32e44]:
+            - strong
+            - link "+7 (495) 021-16-79" [ref=f32e45] [cursor=pointer]:
+              - /url: tel:+74950211679
+          - generic [ref=f32e49]:
+            - strong
+            - text: Время работыКАЖДЫЙ ДЕНЬ10:00 до 19:00
+          - button "Перезвонить" [ref=f32e51] [cursor=pointer]
+      - generic [ref=f32e55]:
+        - link "ВИДЫ ДУШЕВЫХ" [ref=f32e59] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f32e62]:
+          - link "ДУШЕВЫЕ ДВЕРИ" [ref=f32e63] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f32e70]:
+            - generic:
+              - link [ref=f32e72] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/raspashnye/
+                - paragraph [ref=f32e74]: Душевая дверь распашная
+              - link [ref=f32e76] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/razdvizhnye/
+                - paragraph [ref=f32e78]: Раздвижные душевые двери
+              - link [ref=f32e80] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/skladnaya/
+                - paragraph [ref=f32e82]: Складная душевая дверь
+              - link [ref=f32e84] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/radiusnye/
+                - paragraph [ref=f32e86]: Радиусные душевые двери
+              - link [ref=f32e88] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/polukruglye/
+                - paragraph [ref=f32e90]: Душевые двери полукруглые
+        - generic [ref=f32e91]:
+          - link "СТЕКЛО ДЛЯ ДУШЕВОЙ" [ref=f32e92] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f32e99]:
+            - generic:
+              - link [ref=f32e101] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/obyichnoe-steklo/
+                - paragraph [ref=f32e103]: Обычное стекло
+              - link [ref=f32e105] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/matovoe-steklo/
+                - paragraph [ref=f32e107]: Матовое стекло
+              - link [ref=f32e109] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/steklo-s-risunkom/
+                - paragraph [ref=f32e111]: Рисунки на стекле
+              - link [ref=f32e113] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/osvetlennoe-steklo/
+                - paragraph [ref=f32e115]: Осветленное стекло
+              - link [ref=f32e117] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/bezopasnoe-steklo/
+                - paragraph [ref=f32e119]: Закаленное стекло
+              - link [ref=f32e121] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/czvetnoe-steklo/
+                - paragraph [ref=f32e123]: Цветное стекло
+              - link [ref=f32e125] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/decorativnoe-steklo/
+                - paragraph [ref=f32e127]: Декоративное стекло
+        - link "ФУРНИТУРА ДЛЯ ДУШЕВЫХ" [ref=f32e129] [cursor=pointer]:
+          - /url: /furnitura-dlya-dushevyix-kabin/
+        - link "ПРОИЗВОДСТВО" [ref=f32e133] [cursor=pointer]:
+          - /url: "#submenu:production"
+        - link "УСЛУГИ" [ref=f32e137] [cursor=pointer]:
+          - /url: "#submenu:services"
+  - generic:
+    - generic:
+      - generic [ref=f32e140]:
+        - button "Навигационное меню" [ref=f32e142] [cursor=pointer]
+        - generic [ref=f32e147]: ВСЯ ПРОДУКЦИЯ МЗФ
+      - generic [ref=f32e152]:
+        - generic [ref=f32e153]:
+          - link [ref=f32e156] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f32e157]
+          - generic [ref=f32e158]:
+            - textbox "Поиск" [ref=f32e161]
+            - generic [ref=f32e163]:
+              - link "Стекло" [ref=f32e166] [cursor=pointer]:
+                - /url: https://steklo17.ru/
+              - link "Витраж" [ref=f32e169] [cursor=pointer]:
+                - /url: https://vitrag17.ru/
+              - link "Скинали" [ref=f32e172] [cursor=pointer]:
+                - /url: https://skinali17.ru/
+              - link "Душевые" [ref=f32e175] [cursor=pointer]:
+                - /url: /
+              - link "Ограждения" [ref=f32e178] [cursor=pointer]:
+                - /url: https://peregorodki17.ru/
+              - link "Двери" [ref=f32e181] [cursor=pointer]:
+                - /url: https://dver17.ru/
+              - link "Зеркала" [ref=f32e184] [cursor=pointer]:
+                - /url: https://zerkala.ru/
+              - link "Багет" [ref=f32e187] [cursor=pointer]:
+                - /url: https://baget17.ru/
+              - link "Металл" [ref=f32e190] [cursor=pointer]:
+                - /url: https://metall17.ru/
+        - generic [ref=f32e191]: Московская Зеркальная Фабрика
+  - generic [ref=f32e193] [cursor=pointer]
+  - generic [ref=f32e197]:
+    - generic [ref=f32e202]:
+      - generic [ref=f32e204]:
+        - generic [ref=f32e205]:
+          - generic [ref=f32e206]: ЗАЯВКА НА РАСЧЁТ
+          - generic [ref=f32e208]: Заполните форму - мы свяжемся с Вами и проконсультируем, как правильно выбрать фурнитуру для душевой кабины.
+        - form [ref=f32e210]:
+          - generic [ref=f32e211]:
+            - generic [ref=f32e212]:
+              - generic [ref=f32e213]: Класс фурнитуры
+              - combobox "Класс фурнитуры" [ref=f32e216] [cursor=pointer]:
+                - option "выберите нужное" [selected]
+                - option "Бюджет"
+                - option "Эконом"
+                - option "Стандарт"
+                - option "Премиум"
+            - generic [ref=f32e217]:
+              - generic [ref=f32e218]: Фурнитура для
+              - combobox "Фурнитура для" [ref=f32e221] [cursor=pointer]:
+                - option "выберите нужное" [selected]
+                - option "Шторки для ванной"
+                - option "Душевой перегородки"
+                - option "Угловой душевой кабины"
+                - option "П-образной душевой кабины"
+                - option "Душевой кабины трапеция"
+                - option "Круглой душевой кабины"
+                - option "Акваслайдер"
+            - textbox "Ваше имя" [ref=f32e224]
+            - textbox "Ваш email" [ref=f32e227]
+            - generic [ref=f32e230]:
+              - generic [ref=f32e231] [cursor=pointer]: "+7"
+              - textbox "(000) 000-00-00" [ref=f32e235]
+            - generic [ref=f32e238] [cursor=pointer]:
+              - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f32e239]
+              - generic [ref=f32e241]:
+                - text: Даю согласие на обработку моих персональных данных.
+                - link "Подробнее" [ref=f32e242]:
+                  - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - button "Заказать →" [ref=f32e244] [cursor=pointer]
+          - textbox
+      - generic [ref=f32e247]:
+        - generic [ref=f32e248]: Московская Зеркальная Фабрика
+        - heading "Фурнитура для стеклянных душевых кабин" [level=1] [ref=f32e249]
+        - generic [ref=f32e250]: "От фурнитуры зависит многое: степень герметичности, срок эксплуатации и плавность хода подвижных элементов. Что лучше - алюминиевый профиль или коннекторы? Какие угловые петли выбрать? Наш консультант готов ответить на Ваши вопросы прямо сейчас!"
+    - generic [ref=f32e252] [cursor=pointer]
+  - generic [ref=f32e259]:
+    - heading "Каталог фурнитуры" [level=2] [ref=f32e260]
+    - generic [ref=f32e261]: Мы собрали самую популярную фурнитуру для душевых кабин в электронном каталоге.
+  - heading "Петли" [level=3] [ref=f32e266]
+  - generic [ref=f32e269]:
+    - link "Петля MZF-0023002 Петля стена-стекло 90˚ декоративными крышками на защелках." [ref=f32e272] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e275]:
+        - generic [ref=f32e276]: Петля MZF-0023002
+        - generic [ref=f32e277]: Петля стена-стекло 90˚ декоративными крышками на защелках.
+    - link "Петля MZF-0023097 Петля маятникового типа. стекло-стекло 180˚." [ref=f32e280] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e283]:
+        - generic [ref=f32e284]: Петля MZF-0023097
+        - generic [ref=f32e285]: Петля маятникового типа. стекло-стекло 180˚.
+    - link "Петля MZF-0023917 Стекло-стекло 90˚ с регулировкой 0-положения." [ref=f32e288] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e291]:
+        - generic [ref=f32e292]: Петля MZF-0023917
+        - generic [ref=f32e293]: Стекло-стекло 90˚ с регулировкой 0-положения.
+    - link "Петля MZF-0023802 Стекло-стекло 135˚,декор.крышки,(гл.хром), рег-ка 0." [ref=f32e296] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e299]:
+        - generic [ref=f32e300]: Петля MZF-0023802
+        - generic [ref=f32e301]: Стекло-стекло 135˚,декор.крышки,(гл.хром), рег-ка 0.
+    - link "Петля MZF-0023800 Стекло-стекло 180˚ с регулировкой 0-положения." [ref=f32e304] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e307]:
+        - generic [ref=f32e308]: Петля MZF-0023800
+        - generic [ref=f32e309]: Стекло-стекло 180˚ с регулировкой 0-положения.
+    - link "Петля MZF-0023788 Стена-стекло 90˚ с регулировкой 0-положения." [ref=f32e312] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e315]:
+        - generic [ref=f32e316]: Петля MZF-0023788
+        - generic [ref=f32e317]: Стена-стекло 90˚ с регулировкой 0-положения.
+    - link "Петля MZF-0024701 Стекло-стекло 180˚ с регулировкой 0-положения." [ref=f32e320] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e323]:
+        - generic [ref=f32e324]: Петля MZF-0024701
+        - generic [ref=f32e325]: Стекло-стекло 180˚ с регулировкой 0-положения.
+    - link "Петля MZF-0027544 Петля стена-стекло 90° с декоративными крышками на защелках." [ref=f32e328] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e331]:
+        - generic [ref=f32e332]: Петля MZF-0027544
+        - generic [ref=f32e333]: Петля стена-стекло 90° с декоративными крышками на защелках.
+  - heading "Штанги" [level=3] [ref=f32e338]
+  - generic [ref=f32e341]:
+    - link "Штанга MZF-0019424 Штанга 30×10×3000 мм нерж. сталь полированная." [ref=f32e344] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e347]:
+        - generic [ref=f32e348]: Штанга MZF-0019424
+        - generic [ref=f32e349]: Штанга 30×10×3000 мм нерж. сталь полированная.
+    - link [ref=f32e352] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e355]:
+        - generic [ref=f32e356]: Штанга MZF-0017960
+        - generic [ref=f32e357]: Штанга 15х15×3000 мм, нерж. сталь полированная.
+    - link "Штанга MZF-0000014 Штанга 19×3000 мм нерж. сталь полированная." [ref=f32e360] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e363]:
+        - generic [ref=f32e364]: Штанга MZF-0000014
+        - generic [ref=f32e365]: Штанга 19×3000 мм нерж. сталь полированная.
+    - link [ref=f32e368] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e371]:
+        - generic [ref=f32e372]: Штанга MZF-0027545/MZF-0027604
+        - generic [ref=f32e373]: Угловой стабилизатор, стена-стекло 90˚ правый/левый.
+  - heading "Ручки" [level=3] [ref=f32e378]
+  - generic [ref=f32e381]:
+    - link [ref=f32e384] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e387]:
+        - generic [ref=f32e388]: Ручка MZF-0027506
+        - generic [ref=f32e389]: Ручка-скоба двусторонняя для стеклянной двери. Межосевое расстояние 400 мм.
+    - link [ref=f32e392] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e395]:
+        - generic [ref=f32e396]: Ручка MZF-0025815
+        - generic [ref=f32e397]: Ручка-полотенцедержатель с кнобом квадратная, для стеклянной двери душевых ограждений.
+    - link [ref=f32e400] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e403]:
+        - generic [ref=f32e404]: Ручка MZF-0027550
+        - generic [ref=f32e405]: Ручка-полотенцедержатель квадратная, двусторонняя, для стеклянной двери душевых ограждений.
+    - link "Ручка MZF-0024323 Ручка-полотенцедержатель двойная, квадратная, для стеклянных душевых ограждений." [ref=f32e408] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e411]:
+        - generic [ref=f32e412]: Ручка MZF-0024323
+        - generic [ref=f32e413]: Ручка-полотенцедержатель двойная, квадратная, для стеклянных душевых ограждений.
+    - link "Ручка MZF-0027077 Ручка-купе для стеклянных раздвижных дверей." [ref=f32e416] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e419]:
+        - generic [ref=f32e420]: Ручка MZF-0027077
+        - generic [ref=f32e421]: Ручка-купе для стеклянных раздвижных дверей.
+    - link "Ручка MZF-0027078 Ручка-купе квадратная для стеклянных раздвижных дверей." [ref=f32e424] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e427]:
+        - generic [ref=f32e428]: Ручка MZF-0027078
+        - generic [ref=f32e429]: Ручка-купе квадратная для стеклянных раздвижных дверей.
+    - link "Ручка MZF-0022455 Ручка-купе сквозная для стеклянных раздвижных дверей." [ref=f32e432] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e435]:
+        - generic [ref=f32e436]: Ручка MZF-0022455
+        - generic [ref=f32e437]: Ручка-купе сквозная для стеклянных раздвижных дверей.
+    - link "Ручка MZF-0024931 Ручка-скоба квадратного сечения, двусторонняя, для стеклянной двери душевых ограждений." [ref=f32e440] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e443]:
+        - generic [ref=f32e444]: Ручка MZF-0024931
+        - generic [ref=f32e445]: Ручка-скоба квадратного сечения, двусторонняя, для стеклянной двери душевых ограждений.
+    - link "Ручка MZF-0027551 Ручка-скоба двусторонняя, для стеклянной двери душевых ограждений." [ref=f32e448] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e451]:
+        - generic [ref=f32e452]: Ручка MZF-0027551
+        - generic [ref=f32e453]: Ручка-скоба двусторонняя, для стеклянной двери душевых ограждений.
+    - link "Кноб MZF-0021629 Двусторонняя ручка кноб для стеклянной двери." [ref=f32e456] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e459]:
+        - generic [ref=f32e460]: Кноб MZF-0021629
+        - generic [ref=f32e461]: Двусторонняя ручка кноб для стеклянной двери.
+    - link "Кноб MZF-0027552 Двусторонняя ручка кноб для стеклянной двери." [ref=f32e464] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e467]:
+        - generic [ref=f32e468]: Кноб MZF-0027552
+        - generic [ref=f32e469]: Двусторонняя ручка кноб для стеклянной двери.
+    - link "Кноб MZF-0023789 Двусторонняя ручка-кноб с резиновыми накладками и демпфером для стеклянной двери." [ref=f32e472] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e475]:
+        - generic [ref=f32e476]: Кноб MZF-0023789
+        - generic [ref=f32e477]: Двусторонняя ручка-кноб с резиновыми накладками и демпфером для стеклянной двери.
+    - link "Кноб MZF-0024563 Двусторонняя ручка кноб для стеклянной двери." [ref=f32e480] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e483]:
+        - generic [ref=f32e484]: Кноб MZF-0024563
+        - generic [ref=f32e485]: Двусторонняя ручка кноб для стеклянной двери.
+  - heading "Коннекторы для стекла" [level=3] [ref=f32e490]
+  - generic [ref=f32e493]:
+    - link "Коннектор MZF-0023107 Коннектор стена-стекло 90˚." [ref=f32e496] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e499]:
+        - generic [ref=f32e500]: Коннектор MZF-0023107
+        - generic [ref=f32e501]: Коннектор стена-стекло 90˚.
+    - link "Коннектор MZF-0027546 Коннектор стекло-стекло 180˚." [ref=f32e504] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e507]:
+        - generic [ref=f32e508]: Коннектор MZF-0027546
+        - generic [ref=f32e509]: Коннектор стекло-стекло 180˚.
+    - link "Коннектор MZF-0024702 Коннектор стена-стекло 90˚." [ref=f32e512] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e515]:
+        - generic [ref=f32e516]: Коннектор MZF-0024702
+        - generic [ref=f32e517]: Коннектор стена-стекло 90˚.
+    - link "Коннектор MZF-0025863 Коннектор стекло-стекло 90˚." [ref=f32e520] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e523]:
+        - generic [ref=f32e524]: Коннектор MZF-0025863
+        - generic [ref=f32e525]: Коннектор стекло-стекло 90˚.
+    - link "Коннектор MZF-0024920 Коннектор стена-стекло 90˚." [ref=f32e528] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e531]:
+        - generic [ref=f32e532]: Коннектор MZF-0024920
+        - generic [ref=f32e533]: Коннектор стена-стекло 90˚.
+    - link "Коннектор MZF-0027547 Коннектор стекло-стекло 180˚." [ref=f32e536] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e539]:
+        - generic [ref=f32e540]: Коннектор MZF-0027547
+        - generic [ref=f32e541]: Коннектор стекло-стекло 180˚.
+    - link "Коннектор MZF-0027549 Коннектор стекло-стекло 135˚." [ref=f32e544] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e547]:
+        - generic [ref=f32e548]: Коннектор MZF-0027549
+        - generic [ref=f32e549]: Коннектор стекло-стекло 135˚.
+    - link "Коннектор MZF-0027548 Коннектор стекло-стекло 90˚." [ref=f32e552] [cursor=pointer]:
+      - /url: "#prodpopup"
+      - generic [ref=f32e555]:
+        - generic [ref=f32e556]: Коннектор MZF-0027548
+        - generic [ref=f32e557]: Коннектор стекло-стекло 90˚.
+  - generic [ref=f32e559]:
+    - heading "Виды душевых из стекла" [level=2] [ref=f32e562]
+    - generic [ref=f32e563]:
+      - generic [ref=f32e564] [cursor=pointer]:
+        - generic [ref=f32e565]:
+          - img "штора для ванной стеклянная" [ref=f32e567]
+          - generic [ref=f32e568]:
+            - generic [ref=f32e569]: от 6 820 руб.
+            - link "Стеклянные шторы для ванной Перейти в раздел" [ref=f32e571]:
+              - /url: /vidyi-dushevyix/steklyannyie-shtoryi-dlya-vannoj/
+              - text: Стеклянные шторы для ванной
+            - generic [ref=f32e572]: Ограждения из закаленного стекла толщиной от 6 мм с креплением на ванну. Защищает от попадания брызг на 60%. Изготавливается за 7-10 дней по Вашим индивидуальным размерам и дизайну.
+        - generic [ref=f32e573]:
+          - generic [ref=f32e574]: Перейти в раздел
+          - button "Заказать" [ref=f32e576]
+      - generic [ref=f32e578] [cursor=pointer]:
+        - generic [ref=f32e579]:
+          - img "душевые перегородки для ниши" [ref=f32e581]
+          - generic [ref=f32e582]:
+            - generic [ref=f32e583]: от 15 180 руб.
+            - link "ДУШЕВАЯ В НИШУ Перейти в раздел" [ref=f32e585]:
+              - /url: /options/dushevyie-peregorodki-v-nishy/
+              - text: ДУШЕВАЯ В НИШУ
+            - generic [ref=f32e586]: Стеклянное ограждение вида «дверь» или «дверь с добором». Доступны варианты конструктива с раздвижным и распашным механизмом. Используется фурнитура эконом, стандарт и премиум-класса.
+        - generic [ref=f32e587]:
+          - generic [ref=f32e588]: Перейти в раздел
+          - button "Заказать" [ref=f32e590]
+      - generic [ref=f32e592] [cursor=pointer]:
+        - generic [ref=f32e593]:
+          - img "душевая перегородка из стекла" [ref=f32e595]
+          - generic [ref=f32e596]:
+            - generic [ref=f32e597]: от 16 110 руб.
+            - link "Душевые ограждения Перейти в раздел" [ref=f32e599]:
+              - /url: /vidyi-dushevyix/dushevyie-peregorodki/
+              - text: Душевые ограждения
+            - generic [ref=f32e600]: Ограждения из закаленного стекла под любой тип планировки. Надежный конструктив, защищающий от попадания брызг до 95%. Дизайнерская обработка и изготовление за 7-10 дней.
+        - generic [ref=f32e601]:
+          - generic [ref=f32e602]: Перейти в раздел
+          - button "Заказать" [ref=f32e604]
+      - generic [ref=f32e606] [cursor=pointer]:
+        - generic [ref=f32e607]:
+          - img "стеклянные двери душевой" [ref=f32e609]
+          - generic [ref=f32e610]:
+            - generic [ref=f32e611]: от 17 135 руб.
+            - link "Стеклянные двери для душевой Перейти в раздел" [ref=f32e613]:
+              - /url: /vidy-dushevyx-dverei/steklyannyie-dushevyie-dveri/
+              - text: Стеклянные двери для душевой
+            - generic [ref=f32e614]: Дверь из закаленного стекла для установки в нишу. Доступны варианты распашного и раздвижного механизма открывания. В комплект также входят уплотнители и направляющая (при раздвижном типе).
+        - generic [ref=f32e615]:
+          - generic [ref=f32e616]: Перейти в раздел
+          - button "Заказать" [ref=f32e618]
+      - generic [ref=f32e620] [cursor=pointer]:
+        - generic [ref=f32e621]:
+          - img "стеклянные душевые кабины" [ref=f32e623]
+          - generic [ref=f32e624]:
+            - generic [ref=f32e625]: от 32 540 руб.
+            - link "П-образная Душевая кабина Перейти в раздел" [ref=f32e627]:
+              - /url: /vidyi-dushevyix/p-dushevyie-kabinyi/
+              - text: П-образная Душевая кабина
+            - generic [ref=f32e628]: Конструктив представляет собой 2 створки и дверь из закаленного стекла толщиной от 8 мм. Уровень брызгозащищенности до 95%. В комплект входят уплотнители и фурнитура от ведущих производителей.
+        - generic [ref=f32e629]:
+          - generic [ref=f32e630]: Перейти в раздел
+          - button "Заказать" [ref=f32e632]
+      - generic [ref=f32e634] [cursor=pointer]:
+        - generic [ref=f32e635]:
+          - img "угловая душевая кабина" [ref=f32e637]
+          - generic [ref=f32e638]:
+            - generic [ref=f32e639]: от 35 280 руб.
+            - link "Угловые душевые кабины Перейти в раздел" [ref=f32e641]:
+              - /url: /vidyi-dushevyix/uglovyie-dushevyie-kabinyi/
+              - text: Угловые душевые кабины
+            - generic [ref=f32e642]: Конструктив представляет собой створку и дверь из закаленного стекла. При изготовлении используется нержавеющая фурнитура. Доступны все варианты художественной обработки.
+        - generic [ref=f32e643]:
+          - generic [ref=f32e644]: Перейти в раздел
+          - button "Заказать" [ref=f32e646]
+  - contentinfo [ref=f32e648]:
+    - generic [ref=f32e651]:
+      - generic [ref=f32e652]:
+        - link [ref=f32e654] [cursor=pointer]:
+          - /url: /
+          - img "Московская зеркальная фабрика" [ref=f32e655]
+        - generic [ref=f32e656]: "Режим работы: Пн-Вс 10:00-19:00"
+      - generic [ref=f32e657]:
+        - link "dysh17@1mzf.ru" [ref=f32e661] [cursor=pointer]:
+          - /url: mailto:dysh17@1mzf.ru
+        - link "+7 (495) 021-16-79" [ref=f32e665] [cursor=pointer]:
+          - /url: tel:+74950211679
+        - button "Заказать звонок" [ref=f32e667] [cursor=pointer]
+    - navigation [ref=f32e672]:
+      - list [ref=f32e673]:
+        - listitem [ref=f32e674]:
+          - link "Стекло" [ref=f32e675] [cursor=pointer]:
+            - /url: https://steklo17.ru/
+        - listitem [ref=f32e676]:
+          - link "Витраж" [ref=f32e677] [cursor=pointer]:
+            - /url: https://vitrag17.ru/
+        - listitem [ref=f32e678]:
+          - link "Скинали" [ref=f32e679] [cursor=pointer]:
+            - /url: https://skinali17.ru/
+        - listitem [ref=f32e680]:
+          - link "Душевые" [ref=f32e681] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f32e682]:
+          - link "Ограждения" [ref=f32e683] [cursor=pointer]:
+            - /url: https://peregorodki17.ru/
+        - listitem [ref=f32e684]:
+          - link "Двери" [ref=f32e685] [cursor=pointer]:
+            - /url: https://dver17.ru/
+        - listitem [ref=f32e686]:
+          - link "Зеркала" [ref=f32e687] [cursor=pointer]:
+            - /url: https://zerkala.ru/
+        - listitem [ref=f32e688]:
+          - link "Багет" [ref=f32e689] [cursor=pointer]:
+            - /url: https://baget17.ru/
+        - listitem [ref=f32e690]:
+          - link "Металл" [ref=f32e691] [cursor=pointer]:
+            - /url: https://metall17.ru/
+    - generic [ref=f32e694]:
+      - generic [ref=f32e695]:
+        - generic [ref=f32e696]: О КОМПАНИИ
+        - list [ref=f32e698]:
+          - listitem [ref=f32e699]:
+            - link "О нас" [ref=f32e700] [cursor=pointer]:
+              - /url: /company/about/
+          - listitem [ref=f32e701]:
+            - link "Производство" [ref=f32e702] [cursor=pointer]:
+              - /url: /company/manufacture/
+          - listitem [ref=f32e703]:
+            - link "Карьера" [ref=f32e704] [cursor=pointer]:
+              - /url: /company/career/
+          - listitem [ref=f32e705]:
+            - link "Статьи" [ref=f32e706] [cursor=pointer]:
+              - /url: /article/
+          - listitem [ref=f32e707]:
+            - link "Каталоги и презентации" [ref=f32e708] [cursor=pointer]:
+              - /url: /company/catalog/
+      - generic [ref=f32e709]:
+        - generic [ref=f32e710]: УСЛУГИ
+        - list [ref=f32e712]:
+          - listitem [ref=f32e713]:
+            - link "Замеры и консультации" [ref=f32e714] [cursor=pointer]:
+              - /url: /services/vyizov-menedzhera/
+          - listitem [ref=f32e715]:
+            - link "Разработка дизайн-проекта" [ref=f32e716] [cursor=pointer]:
+              - /url: /services/razrabotka-dizajn-proekta/
+          - listitem [ref=f32e717]:
+            - link "Конструкторское бюро" [ref=f32e718] [cursor=pointer]:
+              - /url: /services/kb/
+          - listitem [ref=f32e719]:
+            - link "Доставка" [ref=f32e720] [cursor=pointer]:
+              - /url: /services/delivery/
+      - generic:
+        - generic [ref=f32e721]:
+          - generic [ref=f32e722]: ИНФОРМАЦИЯ
+          - list [ref=f32e724]:
+            - listitem [ref=f32e725]:
+              - link "Технические условия" [ref=f32e726] [cursor=pointer]:
+                - /url: /info/tehnicheskie-usloviya/
+            - listitem [ref=f32e727]:
+              - link "Информация клиенту" [ref=f32e728] [cursor=pointer]:
+                - /url: /info/faq/
+            - listitem [ref=f32e729]:
+              - link "Сроки изготовления" [ref=f32e730] [cursor=pointer]:
+                - /url: /info/sroki-izgotovleniya/
+            - listitem [ref=f32e731]:
+              - link "Гарантия" [ref=f32e732] [cursor=pointer]:
+                - /url: /info/garanty/
+        - generic [ref=f32e733]:
+          - button "Перезвоните мне" [ref=f32e735] [cursor=pointer]
+          - form [ref=f32e736]:
+            - generic [ref=f32e737]:
+              - generic [ref=f32e738]:
+                - textbox "Ваш номер" [ref=f32e740]
+                - button [ref=f32e742] [cursor=pointer]
+              - generic [ref=f32e746] [cursor=pointer]:
+                - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f32e747]
+                - generic [ref=f32e748]:
+                  - text: Даю согласие на обработку моих персональных данных.
+                  - link "Подробнее" [ref=f32e749]:
+                    - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - textbox
+          - list "Соц. сети" [ref=f32e751]:
+            - listitem [ref=f32e752]:
+              - link "vk" [ref=f32e753] [cursor=pointer]:
+                - /url: https://vk.com/moskovskaya_zerkalnaya_fabrika
+            - listitem [ref=f32e755]:
+              - link "ok" [ref=f32e756] [cursor=pointer]:
+                - /url: https://ok.ru/moskovskaya.zerkalnaya.fabrika
+    - generic [ref=f32e762]:
+      - text: Если вас не устраивает работа персонального менеджера обратитесь в службу поддержки клиентов | Мы всегда на связиОбращаем ваше внимание на то, что данный интернет-сайт носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 (2) Гражданского кодекса Российской Федерации. Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефону в Москве +7 (495) 021-16-79 info@1mzf.ru
+      - link "Правовая информация и политики сайта" [ref=f32e763] [cursor=pointer]:
+        - /url: /info/
+      - text: ООО "СПЕКТРУМАРТ" info@spektrumart.ru | +7 (495) 797-53-73
+    - generic [ref=f32e764]:
+      - generic [ref=f32e765]:
+        - text: Мы используем файлы cookie и сервисы веб-аналитики (Яндекс.Метрика, Comagic) для сбора статистики, анализа посещаемости и улучшения работы сайта. Продолжая использовать сайт, вы даете согласие на обработку данных в указанных целях.
+        - link "Подробнее" [ref=f32e766] [cursor=pointer]:
+          - /url: /info/
+      - button "Принять и закрыть" [ref=f32e767] [cursor=pointer]

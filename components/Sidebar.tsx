@@ -29,18 +29,24 @@ const MANAGER_AMO: NavItem[] = [
 
 const MANAGER_MGLASS: NavEntry[] = [
   { groupLabel: 'Калькуляторы' },
+  // Зеркало, душевая, лофт-перегородка, лестничное ограждение и скан дизайн-проекта
+  // убраны 03.09.2026 по решению владельца: «оно сейчас не отображает честную
+  // картину». У душевой фурнитура в бюджетном тире бралась не из справочника цен,
+  // а из вписанных руками чисел. Код экранов на месте; вернуть = вернуть пункты
+  // сюда и маршруты в ROLE_ALLOWED.
   { href: '/calculator/quick',  label: 'Быстрый расчёт',   icon: '⚡' },
-  { href: '/design-scan',       label: 'Скан дизайн-проекта', icon: '🔍' },
-  { href: '/calculator/mirror', label: 'Зеркало',          icon: '🪞' },
-  { href: '/calculator/shower', label: 'Душевая',          icon: '🚿' },
+  // «Расчёт B2B» — тот же B2B-калькулятор в контуре розницы: без выбора клиента
+  // и срока производства, справа панель цены клиенту. Итог B2B с НДС ложится
+  // в себестоимость как есть: M-Glass покупает у своего производства по той же
+  // цене, что и любой B2B-клиент, — это две сделки, а не двойной счёт.
+  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',  icon: '🧾' },
   { href: '/configurator',      label: 'Визуализатор 3D',  icon: '🧊' },
-  { href: '/calculator/loft',   label: 'Лофт-перегородка', icon: '🏗️' },
-  { href: '/calculator/railing', label: 'Лестн. ограждение', icon: '🪜' },
   { groupLabel: 'Продажи' },
   { href: '/crm',           label: 'CRM · Продажи',    icon: '📊' },
   { href: '/sales',         label: 'Отдел продаж',     icon: '💰' },
   { href: '/kp',            label: 'КП',               icon: '📄' },
   { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
+  { href: '/deals',         label: 'Сделки',          icon: '🤝' },
   { href: '/calculations',  label: 'История расчётов', icon: '📋' },
   { href: '/orders',        label: 'Заказы',           icon: '📦' },
   { href: '/inventory',     label: 'Склад (остатки)',  icon: '🏬' },
@@ -401,7 +407,6 @@ const MARKETING_CENTER: NavItem[] = [
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
 const MGLASS_PATHS = [
-  '/calculator/mirror', '/calculator/shower', '/calculator/loft', '/calculator/railing', '/design-scan',
   '/calculations', '/orders', '/clients', '/calendar', '/measurer', '/measure-requests', '/measure-calendar', '/my-earnings',
 ]
 const B2B_PATHS = [

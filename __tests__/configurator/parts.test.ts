@@ -5,6 +5,7 @@ import { allParts, getPart, partProblems } from '@/lib/configurator/parts/regist
 import { SD_210_L230 } from '@/lib/configurator/parts/catalog/sd-210'
 import { buildFromModel } from '@/components/configurator/scene/assembly'
 import { computeKitQuantities } from '@/lib/configurator/kit'
+import { inferShape } from '@/lib/configurator/hardwareShapes'
 import { getModel } from '@/lib/configurator/arrangement'
 import type { PartSpec } from '@/lib/configurator/parts/types'
 
@@ -119,8 +120,8 @@ describe('ручка SD-210 в сборке', () => {
     expect(mm(d)).toBe(8)
   })
 
-  it('стоит на середине высоты и не в центре полотна, а у свободной кромки', () => {
-    expect(mm(handles[0].pos[1])).toBe(1000)
+  it('центр ручки — 950 мм от низа полотна, у свободной кромки', () => {
+    expect(mm(handles[0].pos[1])).toBe(950)
     const door = asm.glass.find(g => g.role === 'door')!
     const off = Math.hypot(handles[0].pos[0] - door.pos[0], handles[0].pos[2] - door.pos[2])
     expect(off).toBeGreaterThan(0.1)   // раньше смещение по Z умножалось на ноль
@@ -132,10 +133,39 @@ describe('ручка SD-210 в сборке', () => {
   })
 })
 
+describe('кноб FDR-30', () => {
+  it('заведён и ставится двумя половинами — он сквозной', () => {
+    const asm = buildFromModel(getModel('М2'), { width: 1200, height: 2000, doorWidth: 600 }, 8, true, { handle: 'handle-knob' })
+    const h = asm.hardware.filter(x => x.key.includes('handle'))
+    expect(h.length).toBe(2)
+    expect(h[0].part).toBe('handle-knob')
+    expect(mm(h[0].pos[1])).toBe(950)
+  })
+  it('в комплекте считается одной позицией', () => {
+    const model = getModel('М2')
+    const asm = buildFromModel(model, { width: 1200, height: 2000, doorWidth: 600 }, 8, true, { handle: 'handle-knob' })
+    expect(computeKitQuantities(asm, 8, model).roleQty.handle).toBe(1)
+  })
+})
+
+// Реальные названия позиций из комплекта М7 (справочник Веры, поле «вид» пустое):
+// форма берётся из названия, и она обязана быть кнобом, а не скобой по умолчанию.
+describe('форма по названию позиции комплекта', () => {
+  it('«Ручка кноб FDR-30 квадратная, алюминий/хром» — это кноб', () => {
+    expect(inferShape('Ручка кноб FDR-30 квадратная, алюминий/хром')).toBe('handle-knob')
+  })
+  it('«Петля Европа FDP-115 стекло-стекло 180°» — это петля стекло-стекло', () => {
+    expect(inferShape('Петля Европа FDP-115 стекло-стекло 180° без крыш')).toBe('hinge-glass')
+  })
+  it('скоба остаётся скобой', () => {
+    expect(inferShape('Ручка-скоба SD-210/L230')).toBe('handle-bar')
+  })
+})
+
 describe('деталь без паспорта не ломает сцену', () => {
   it('неизвестная форма рисуется прежним способом', () => {
-    expect(getPart('handle-knob')).toBeNull()
-    const asm = buildFromModel(getModel('М2'), { width: 1200, height: 2000, doorWidth: 600 }, 8, true, { handle: 'handle-knob' })
+    expect(getPart('handle-inset')).toBeNull()   // купе ещё на старой форме
+    const asm = buildFromModel(getModel('М2'), { width: 1200, height: 2000, doorWidth: 600 }, 8, true, { handle: 'handle-inset' })
     const handles = asm.hardware.filter(h => h.key.includes('handle'))
     expect(handles.length).toBe(1)
     expect(handles[0].part).toBeUndefined()

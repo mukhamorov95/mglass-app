@@ -4,16 +4,6 @@ import { useState, useRef, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
 
-interface ISpeechRecognition extends EventTarget {
-  lang: string; continuous: boolean; interimResults: boolean
-  start(): void; stop(): void
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  onresult: ((e: any) => void) | null
-  onerror: (() => void) | null
-  onend: (() => void) | null
-}
-type SRWindow = { SpeechRecognition?: new () => ISpeechRecognition; webkitSpeechRecognition?: new () => ISpeechRecognition }
-
 const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]/g, '')); return isFinite(n) ? n : 0 }
 const RUB = (n: number) => Math.round(n).toLocaleString('ru-RU')
 
@@ -48,27 +38,15 @@ export default function QuickCalcPage() {
   const [extraMode, setExtraMode] = useState<'pct' | 'sum'>('pct')
   const [extraVal, setExtraVal] = useState('')
 
-  const [recording, setRecording] = useState(false)
-  const [transcript, setTranscript] = useState('')
-  const [interim, setInterim] = useState('')
-  const [busy, setBusy] = useState<string | null>(null)
-  const [speechSupported, setSpeechSupported] = useState(true)
   // Клиент — опционально: расчёт сохраняется и без него, но с ним попадёт в сделку.
   const [clientName, setClientName]   = useState('')
   const [clientPhone, setClientPhone] = useState('')
   const [objectAddress, setObjectAddress] = useState('')
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
-  const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const lastSavedSigRef = useRef('')   // сигнатура последнего сохранённого снимка — гард от дублей
-  const transcriptRef = useRef('')
-  // eslint-disable-next-line react-hooks/refs
-  transcriptRef.current = transcript
-
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setSpeechSupported(typeof window !== 'undefined' && ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window))
-  }, [])
+  const parentCalcIdRef = useRef<number | null>(null)  // первичный расчёт (при пересчёте из карточки)
+  const reopenDealIdRef = useRef<number | null>(null)  // сделка пересчёта — вторичный ложится в неё же
 
   // Список изделий, переданный со «Скана дизайн-проекта» — показываем справкой.
   const [scanRef, setScanRef] = useState('')
@@ -100,6 +78,9 @@ export default function QuickCalcPage() {
       set(s('clientName'), setClientName); set(s('clientPhone'), setClientPhone); set(s('objectAddress'), setObjectAddress)
       if (p.designer === 10 || p.designer === 15) setDesigner(p.designer)
       if (p.extraMode === 'pct' || p.extraMode === 'sum') setExtraMode(p.extraMode)
+      // Контекст пересчёта: связь с первичным и сделкой (см. карточку /deal).
+      if (typeof p.__parentCalcId === 'number') parentCalcIdRef.current = p.__parentCalcId
+      if (typeof p.__dealId === 'number') reopenDealIdRef.current = p.__dealId
     } catch { /* ignore */ }
   }, [])
 
@@ -127,56 +108,11 @@ export default function QuickCalcPage() {
     : Math.min(afterMeasure, Math.max(0, numOr(extraVal)))
   const finalGrand = Math.max(0, afterMeasure - extraDisc)
 
-  // ── voice ──────────────────────────────────────────────
-  function startRec() {
-    const w = window as unknown as SRWindow
-    const SR = w.SpeechRecognition || w.webkitSpeechRecognition
-    if (!SR) { setBusy('Голос не поддерживается — впишите вручную'); setTimeout(() => setBusy(null), 3000); return }
-    const rec = new SR()
-    rec.lang = 'ru-RU'; rec.continuous = true; rec.interimResults = true
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rec.onresult = (e: any) => {
-      let intr = '', fin2 = ''
-      for (let i = e.resultIndex; i < e.results.length; i++) {
-        const tr = e.results[i][0].transcript
-        if (e.results[i].isFinal) fin2 += tr; else intr += tr
-      }
-      if (fin2) setTranscript(p => (p && !p.endsWith(' ') ? p + ' ' : p) + fin2)
-      setInterim(intr)
-    }
-    rec.onerror = () => { setRecording(false); setInterim('') }
-    rec.onend = () => { setRecording(false); setInterim('') }
-    recognitionRef.current = rec
-    rec.start(); setRecording(true); setBusy(null)
-  }
-  function stopRec() {
-    recognitionRef.current?.stop(); setRecording(false); setInterim('')
-    setTimeout(() => { const t = transcriptRef.current.trim(); if (t) parseVoice(t) }, 350)
-  }
-  async function parseVoice(t: string) {
-    setBusy('Разбираю…')
-    try {
-      const r = await fetch('/api/ai/quick-parse', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ transcript: t }) }).then(x => x.json())
-      const f = r.fields
-      if (!f) { setBusy(r.error || 'не распознано'); setTimeout(() => setBusy(null), 2500); return }
-      if (f.title != null) setTitle(String(f.title))
-      if (f.glass_cost != null) setGlass(String(f.glass_cost))
-      if (f.hw_cost != null) setHw(String(f.hw_cost))
-      if (f.per_section != null) setPerSection(String(f.per_section))
-      if (f.sections != null) setSections(String(f.sections))
-      if (f.delivery != null) setDelivery(String(f.delivery))
-      if (f.lift != null) setLift(String(f.lift))
-      if (f.margin != null) setMargin(String(f.margin))
-      if (f.tax != null) setTax(String(f.tax))
-      setBusy('✓ разобрано'); setTimeout(() => setBusy(null), 1500)
-    } catch { setBusy('ошибка сети'); setTimeout(() => setBusy(null), 2500) }
-  }
-
   // ── cart ───────────────────────────────────────────────
   function addToCart() {
     if (!curHasData) return
     setCart(c => [...c, { title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total }])
-    setTitle(''); setGlass(''); setHw(''); setPerSection(''); setSections('1'); setDelivery(''); setLift(''); setTranscript('')
+    setTitle(''); setGlass(''); setHw(''); setPerSection(''); setSections('1'); setDelivery(''); setLift('')
   }
   const removeCart = (i: number) => setCart(c => c.filter((_, j) => j !== i))
 
@@ -249,11 +185,36 @@ export default function QuickCalcPage() {
         client_text: [label, objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,
+        // Связь первичный→вторичный: пересчёт из карточки помнит родителя.
+        parent_calc_id: parentCalcIdRef.current ?? undefined,
       })
       const ok = !!(res && 'id' in res && res.id)
-      if (ok) lastSavedSigRef.current = sig
-      if (!silent) setSaveMsg(ok ? 'Сохранено в историю расчётов ✓' : (res && 'error' in res ? res.error! : 'Не удалось сохранить'))
-      return ok
+      if (!ok) { if (!silent) setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return false }
+      lastSavedSigRef.current = sig
+      const newId = (res as { id: number }).id
+      let createdDeal = false
+      if (reopenDealIdRef.current) {
+        // Пересчёт из карточки — тот же объект: кладём вторичный в ту же сделку,
+        // не спрашивая (человек уже выбрал объект, открыв карточку).
+        try {
+          await fetch(`/api/deals/${reopenDealIdRef.current}/attach`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calc_id: newId }),
+          })
+        } catch { /* привяжется вручную из «требуют привязки» */ }
+      } else if (clientPhone.trim() || objectAddress.trim()) {
+        // Новый расчёт с телефоном/адресом: сервер решает создать/спросить/осиротеть
+        // (/api/deals/ensure). Создание ≠ склейка — молча только новый объект.
+        try {
+          const er = await fetch('/api/deals/ensure', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
+          }).then(x => x.json()).catch(() => null)
+          createdDeal = !!er?.created
+        } catch { /* заведём позже вручную из «требуют привязки» */ }
+      }
+      if (!silent) setSaveMsg(createdDeal ? 'Сохранено, заведена сделка ✓' : 'Сохранено в историю расчётов ✓')
+      return true
     } finally {
       if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
     }
@@ -265,7 +226,7 @@ export default function QuickCalcPage() {
       <div className="max-w-4xl mx-auto">
         <div className="mb-5">
           <h1 className="text-[18px] font-semibold text-[#111110]">Быстрый расчёт</h1>
-          <p className="text-[12px] text-[#9a9a95] mt-0.5">Прозрачный расчёт по формуле: себестоимость → рекомендованная цена. Можно надиктовать голосом и добавить несколько изделий.</p>
+          <p className="text-[12px] text-[#9a9a95] mt-0.5">Прозрачный расчёт по формуле: себестоимость → рекомендованная цена. Можно добавить несколько изделий.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-[1fr_360px] gap-4 items-start">
@@ -277,22 +238,9 @@ export default function QuickCalcPage() {
                   <button onClick={() => setScanRef('')} className="text-[12px] text-amber-700 hover:text-amber-900">✕ Скрыть</button>
                 </div>
                 <pre className="text-[12px] whitespace-pre-wrap font-sans text-[#6b6b66] max-h-52 overflow-y-auto">{scanRef}</pre>
-                <p className="text-[11px] text-amber-700 mt-1.5">Считай изделия по одному: надиктуй или впиши себестоимость — список останется здесь для сверки.</p>
+                <p className="text-[11px] text-amber-700 mt-1.5">Считай изделия по одному: впиши себестоимость — список останется здесь для сверки.</p>
               </div>
             )}
-            {/* Голос */}
-            <div className="bg-white border border-dashed border-[#d8d8d3] rounded-xl p-4">
-              <div className="flex items-center gap-3 flex-wrap">
-                <button onClick={recording ? stopRec : startRec}
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-[13px] font-semibold ${recording ? 'bg-red-600 text-white animate-pulse' : 'bg-[#E1442E] text-white hover:bg-[#c93a26]'}`}>
-                  {recording ? '⏹ Остановить и разобрать' : '🎤 Надиктовать изделие'}
-                </button>
-                {busy && <span className="text-[12px] text-[#6b6b66]">{busy}</span>}
-                {recording && <span className="text-[12px] text-red-500">● говорите: наименование, себестоимость стекла и фурнитуры, монтаж за секцию, кол-во секций…</span>}
-              </div>
-              {!speechSupported && <p className="text-[12px] text-amber-600 mt-2">Голос недоступен в этом браузере — впишите вручную.</p>}
-              {(transcript || interim) && <p className="text-[12px] text-[#9a9a95] mt-2 italic">{transcript}{interim ? ' ' + interim : ''}</p>}
-            </div>
 
             {/* Изделие */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">

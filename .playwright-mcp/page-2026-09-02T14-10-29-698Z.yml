@@ -1,0 +1,269 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - link "MG MGlass" [ref=f1e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f1e6]: MG
+          - generic [ref=f1e8]: MGlass
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]:
+            - button "СЕО" [ref=f1e11]
+            - button "CFO" [ref=f1e12]
+            - button "Админ" [ref=f1e13]
+          - generic [ref=f1e14]:
+            - button "Менеджер" [ref=f1e15]
+            - button "Произв." [ref=f1e16]
+            - button "Замерщик" [ref=f1e17]
+      - navigation [ref=f1e18]:
+        - link "🔒 Влад" [ref=f1e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f1e21]: 🔒
+          - generic [ref=f1e22]: Влад
+        - button "MGlass" [ref=f1e24]
+        - generic [ref=f1e31]:
+          - button "B2B" [ref=f1e32]
+          - generic [ref=f1e38]:
+            - link "☀️ Мой день · B2B" [ref=f1e39] [cursor=pointer]:
+              - /url: /b2b-today
+              - generic [ref=f1e40]: ☀️
+              - generic [ref=f1e41]: Мой день · B2B
+            - link "🧮 B2B Калькулятор" [ref=f1e42] [cursor=pointer]:
+              - /url: /calculator/b2b
+              - generic [ref=f1e43]: 🧮
+              - generic [ref=f1e44]: B2B Калькулятор
+            - link "📝 B2B Просчёты" [ref=f1e45] [cursor=pointer]:
+              - /url: /b2b-quotes
+              - generic [ref=f1e46]: 📝
+              - generic [ref=f1e47]: B2B Просчёты
+            - link "📦 B2B Заказы" [ref=f1e48] [cursor=pointer]:
+              - /url: /b2b-orders
+              - generic [ref=f1e49]: 📦
+              - generic [ref=f1e50]: B2B Заказы
+            - link "📒 Счета B2B" [ref=f1e51] [cursor=pointer]:
+              - /url: /b2b-invoices
+              - generic [ref=f1e52]: 📒
+              - generic [ref=f1e53]: Счета B2B
+            - link "🏢 B2B Клиенты" [ref=f1e54] [cursor=pointer]:
+              - /url: /b2b-crm
+              - generic [ref=f1e55]: 🏢
+              - generic [ref=f1e56]: B2B Клиенты
+            - link "✂️ Раскрой стекла" [ref=f1e57] [cursor=pointer]:
+              - /url: /b2b-cutting
+              - generic [ref=f1e58]: ✂️
+              - generic [ref=f1e59]: Раскрой стекла
+            - link "📱 Production App" [ref=f1e60] [cursor=pointer]:
+              - /url: /production-app
+              - generic [ref=f1e61]: 📱
+              - generic [ref=f1e62]: Production App
+      - generic [ref=f1e63]:
+        - generic [ref=f1e64]:
+          - generic [ref=f1e65]: A
+          - paragraph [ref=f1e67]: admin@mglass.ru
+        - button "Выйти" [ref=f1e68]
+    - main [ref=f1e69]:
+      - generic [ref=f1e72]:
+        - heading "Просчёт заказа" [level=1] [ref=f1e74]
+        - generic [ref=f1e75]:
+          - generic [ref=f1e76]:
+            - generic [ref=f1e77]:
+              - generic [ref=f1e78]:
+                - generic [ref=f1e79]: Клиент
+                - button "+ Новый клиент" [ref=f1e80]
+              - combobox [ref=f1e81]:
+                - option "— Выберите клиента —" [selected]
+                - option "Артур (−10%)"
+                - option "MR GLASS (ООО ЛЮДИ) (−10%)"
+                - option "M GLASS (−20%)"
+                - option "ИП Жданова (−10%)"
+                - option "АлексГласс (−10%)"
+                - option "ИП Шуракова (−10%)"
+                - option "ИП Боровлев (−10%)"
+                - option "СпецМонтаж (−10%)"
+                - option "LoLegko (−10%)"
+                - option "Алексей Ф (−10%)"
+                - option "AveoGlass (−10%)"
+                - option "Дмитрий Воронеж PROSTEKLO (−10%)"
+                - option "Расчет"
+                - option "ДРУГОЕ ИЗМЕРЕНИЕ (−10%)"
+                - option "ShowerGlass (−10%)"
+                - option "ГлассДекор (−10%)"
+                - option "Александр Емельянов (−10%)"
+                - option "ModulGlass (−10%)"
+                - option "ИП ГАПОНОВ ЕВГЕНИЙ ВАЛЕРЬЕВИЧ (−10%)"
+                - option "Сослан (−10%)"
+                - option "Валентин"
+                - option "GlassLuxury (−10%)"
+                - option "Фаррух (−10%)"
+                - option "ООО «Краснодеревщик» (−10%)"
+                - option "ИП Кудинова Марина ( Константин)"
+                - option "Алексей М (ИП ДАНИЛЕНКО) (−10%)"
+                - option "ИП Столяренко Борис Андреевич"
+                - option "Игорь (адилет) (−10%)"
+                - option "Подольск (−10%)"
+                - option "Денис (−10%)"
+                - option "ИП Кокин (−10%)"
+                - option "ИП РОСЛОВА ЕКАТЕРИНА НИКОЛАЕВНА (−10%)"
+                - option "NewGlas (Новое Стекло) (−10%)"
+                - option "Николай (−10%)"
+                - option "ИП АЛЁШКИН ВАЛЕРИЙ БОРИСОВИЧ"
+                - option "ИП Мишуров В.П"
+                - option "ДАЛЕР (−10%)"
+                - option "Вера (−10%)"
+                - option "М гласс (−20%)"
+                - option "Игорь (−10%)"
+                - option "Сергей Витраж (−10%)"
+                - option "Виталий Мальцев (−10%)"
+                - option "ООО МОСПРОМЗНАК (−10%)"
+                - option "ООО «ТМ ЭНВИО» (−10%)"
+                - option "Алексей новый (−10%)"
+                - option "Андрей Воронеж (−10%)"
+                - option "воронеж 2 (−10%)"
+                - option "ВЛАДИМИР"
+                - option "пупупу"
+                - option "СЕРГЕЙ GG (−10%)"
+                - option "Николай - Адилет"
+                - option "GraceInGlass (−10%)"
+                - option "ВЛАДИМИР Воронеж (−10%)"
+                - option "Глеб (−10%)"
+                - option "Евгений от Алексея"
+                - option "Ильхом"
+                - option "ИП Бруй А.М (−10%)"
+                - option "ИП Горбова Елена Сергеевна (−10%)"
+                - option "ИП Ларионова (−10%)"
+                - option "Марат Монтажник"
+                - option "ООО ВАНДЕР (−10%)"
+                - option "Офис Для Офиса"
+                - option "Подольск_ 1 (−10%)"
+                - option "ТМЭМВИО"
+                - option "ЭЛИТФинанс"
+            - generic [ref=f1e82]:
+              - generic [ref=f1e83]:
+                - generic [ref=f1e84]: Наш номер — пусто = авто (05xxx)
+                - textbox "авто при запуске" [ref=f1e85]
+              - generic [ref=f1e86]:
+                - generic [ref=f1e87]: № клиента
+                - textbox "необязательно" [ref=f1e88]
+            - generic [ref=f1e89]:
+              - generic [ref=f1e90]: Срок производства, дней
+              - spinbutton [ref=f1e91]: "7"
+            - generic [ref=f1e93]:
+              - generic [ref=f1e94]: Тип позиции
+              - generic [ref=f1e95]:
+                - button "Стекло / зеркало" [ref=f1e96]
+                - button "Зеркало+свет/рама" [ref=f1e97]
+                - button "Лофт" [ref=f1e98]
+            - generic [ref=f1e99]:
+              - generic [ref=f1e100]: "Есть чертёж? Прикрепи — добавлю каждое стекло отдельной позицией:"
+              - generic [ref=f1e101] [cursor=pointer]: Чертёж (PDF/фото)
+            - generic [ref=f1e102]:
+              - generic [ref=f1e103]: Материал
+              - generic [ref=f1e104]:
+                - button "Стекло" [ref=f1e105]
+                - button "Зеркало" [ref=f1e106]
+            - generic [ref=f1e107]:
+              - generic [ref=f1e108]:
+                - generic [ref=f1e109]: Толщина
+                - combobox [ref=f1e110]:
+                  - option "4 мм"
+                  - option "5 мм"
+                  - option "6 мм"
+                  - option "8 мм" [selected]
+                  - option "10 мм"
+                  - option "12 мм"
+              - generic [ref=f1e111]:
+                - generic [ref=f1e112]: Тип
+                - combobox [ref=f1e113]:
+                  - option "Прозрачное М1" [selected]
+                  - option "Осветлённое CrystalVision"
+                  - option "Сатинированное бесцветное"
+                  - option "CrystalVision Matelux"
+                  - option "Тонированное (бронза/графит)"
+                  - option "Сатин тонированный"
+                  - option "МОРУ БРОНЗА тонированное в массе"
+                  - option "Мору Crystal Clear"
+            - generic [ref=f1e115]:
+              - generic [ref=f1e116]: Размеры и количество
+              - generic [ref=f1e117]:
+                - generic [ref=f1e118]:
+                  - spinbutton "Ширина" [ref=f1e119]: "800"
+                  - generic: мм
+                - generic [ref=f1e120]:
+                  - spinbutton "Высота" [ref=f1e121]: "2000"
+                  - generic: мм
+                - generic [ref=f1e122]:
+                  - spinbutton "Кол-во" [ref=f1e123]: "1"
+                  - generic: шт
+            - generic [ref=f1e124]:
+              - generic [ref=f1e125]:
+                - generic [ref=f1e126]: Отходпо раскрою
+                - generic [ref=f1e127]: авто по раскрою
+              - generic [ref=f1e128]:
+                - generic [ref=f1e129]: Минимальная цена
+                - generic [ref=f1e130] [cursor=pointer]:
+                  - checkbox "Учитывать" [checked] [ref=f1e131]
+                  - generic [ref=f1e132]: Учитывать
+            - generic [ref=f1e133]:
+              - generic [ref=f1e134]:
+                - paragraph [ref=f1e135]: Обработка
+                - paragraph [ref=f1e136]: определяет маршрут в цеху
+              - generic [ref=f1e137]:
+                - generic [ref=f1e138] [cursor=pointer]:
+                  - checkbox "Закалка" [checked] [ref=f1e139]
+                  - generic [ref=f1e140]: Закалка
+                - generic [ref=f1e141] [cursor=pointer]:
+                  - checkbox "Фацет" [ref=f1e142]
+                  - generic [ref=f1e143]: Фацет
+                - generic [ref=f1e144] [cursor=pointer]:
+                  - checkbox "Криволинейка" [ref=f1e145]
+                  - generic [ref=f1e146]: Криволинейка
+                - generic [ref=f1e147] [cursor=pointer]:
+                  - checkbox "Песочка" [ref=f1e148]
+                  - generic [ref=f1e149]: Песочка
+                - generic [ref=f1e150] [cursor=pointer]:
+                  - checkbox "Триплекс" [ref=f1e151]
+                  - generic [ref=f1e152]: Триплекс
+              - generic [ref=f1e153]:
+                - paragraph [ref=f1e154]: Сверловка · одна станция
+                - generic [ref=f1e155]:
+                  - generic [ref=f1e156] [cursor=pointer]:
+                    - checkbox "Отверстия" [checked] [ref=f1e157]
+                    - generic [ref=f1e158]: Отверстия
+                  - generic [ref=f1e159]:
+                    - spinbutton "Вырезы" [ref=f1e160]
+                    - generic [ref=f1e161]: Вырезы
+                - generic [ref=f1e162]:
+                  - generic [ref=f1e163]:
+                    - paragraph [ref=f1e164]: Отверстия · всего 6
+                    - button "+ группа" [ref=f1e165]
+                  - generic [ref=f1e166]:
+                    - generic [ref=f1e167]:
+                      - spinbutton "шт" [ref=f1e168]: "4"
+                      - generic [ref=f1e169]: шт · ⌀
+                      - spinbutton "мм" [ref=f1e170]: "12"
+                      - generic [ref=f1e171]: мм
+                      - button "удалить" [ref=f1e172]
+                    - generic [ref=f1e173]:
+                      - spinbutton "шт" [ref=f1e174]: "2"
+                      - generic [ref=f1e175]: шт · ⌀
+                      - spinbutton "мм" [ref=f1e176]: "20"
+                      - generic [ref=f1e177]: мм
+                      - button "удалить" [ref=f1e178]
+            - textbox "Комментарий к позиции (опционально)" [ref=f1e186]
+            - button "+ Добавить позицию" [ref=f1e187]
+            - generic [ref=f1e188]: 📎 Файл клиента (PDF/фото) → позиции
+            - group [ref=f1e190]:
+              - generic "Доп. услуги ▼" [ref=f1e191] [cursor=pointer]:
+                - generic [ref=f1e192]: Доп. услуги
+                - generic [ref=f1e193]: ▼
+            - generic [ref=f1e195]:
+              - generic [ref=f1e196]: Чертёж / файл клиента
+              - button "📎 Прикрепить файл" [ref=f1e197]
+            - group [ref=f1e198]:
+              - generic "▶ Примечание к заказу" [ref=f1e199] [cursor=pointer]:
+                - generic [ref=f1e200]: ▶
+                - text: Примечание к заказу
+          - generic [ref=f1e202]:
+            - generic [ref=f1e203]: Позиции
+            - generic [ref=f1e206]: Добавьте первую позицию
+  - alert [ref=f1e71]

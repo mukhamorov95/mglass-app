@@ -1,0 +1,174 @@
+- generic [ref=f5e2]:
+  - link "К основному контенту" [ref=f5e3] [cursor=pointer]:
+    - /url: "#t-main-content"
+  - banner [ref=f5e4]:
+    - generic [ref=f5e7]:
+      - img [ref=f5e11] [cursor=pointer]
+      - link "контакты" [ref=f5e13] [cursor=pointer]:
+        - /url: "#contacts"
+      - link "наши работы" [ref=f5e17] [cursor=pointer]:
+        - /url: "#our_works"
+      - link "калькулятор стоимости" [ref=f5e21] [cursor=pointer]:
+        - /url: "#calculator"
+      - link "фурнитура" [ref=f5e25] [cursor=pointer]:
+        - /url: "#hardware"
+      - link "виды стекла" [ref=f5e29] [cursor=pointer]:
+        - /url: "#types_of_glass"
+      - link "каталог" [ref=f5e33] [cursor=pointer]:
+        - /url: "#submenu:more"
+      - img [ref=f5e37] [cursor=pointer]
+      - img [ref=f5e39] [cursor=pointer]
+      - generic [ref=f5e40]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+      - link "+7 (495) 540-43-41" [ref=f5e43] [cursor=pointer]:
+        - /url: tel:+74955404341
+      - link [ref=f5e55] [cursor=pointer]:
+        - /url: "#menuopen"
+      - link [ref=f5e57] [cursor=pointer]:
+        - /url: "#menuopen"
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - link "контакты":
+              - /url: "#contacts"
+          - generic:
+            - link "наши работы":
+              - /url: "#our_works"
+          - generic:
+            - link "калькулятор стоимости":
+              - /url: "#calculator"
+          - generic:
+            - link "фурнитура":
+              - /url: "#hardware"
+          - generic:
+            - link "виды стекла":
+              - /url: "#types_of_glass"
+          - generic:
+            - link "каталог":
+              - /url: "#submenu:more"
+          - generic: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+          - generic:
+            - link "+7 (495) 540-43-41":
+              - /url: tel:+74955404341
+          - generic:
+            - link:
+              - /url: "#menuopen"
+          - generic:
+            - link:
+              - /url: "#menuopen"
+    - generic [ref=f5e58]:
+      - button "Close menu" [ref=f5e59] [cursor=pointer]
+      - generic [ref=f5e63]:
+        - generic [ref=f5e64]:
+          - link [ref=f5e66] [cursor=pointer]:
+            - /url: /
+            - img "Душ на заказ" [ref=f5e67]
+          - navigation [ref=f5e68]:
+            - list [ref=f5e69]:
+              - listitem [ref=f5e70]:
+                - link "Виды продукции" [ref=f5e71] [cursor=pointer]:
+                  - /url: "#submenu:more"
+              - listitem [ref=f5e72]:
+                - link "Виды стекла" [ref=f5e73] [cursor=pointer]:
+                  - /url: "#types_of_glass"
+              - listitem [ref=f5e74]:
+                - link "Фурнитура" [ref=f5e75] [cursor=pointer]:
+                  - /url: "#hardware"
+              - listitem [ref=f5e76]:
+                - link "Каклькулятор стоимости" [ref=f5e77] [cursor=pointer]:
+                  - /url: "#calculator"
+              - listitem [ref=f5e78]:
+                - link "Как мы работаем?" [ref=f5e79] [cursor=pointer]:
+                  - /url: "#how_we_work"
+              - listitem [ref=f5e80]:
+                - link "Наши работы" [ref=f5e81] [cursor=pointer]:
+                  - /url: "#our_works"
+              - listitem [ref=f5e82]:
+                - link "Контакты" [ref=f5e83] [cursor=pointer]:
+                  - /url: "#contacts"
+              - listitem [ref=f5e84]:
+                - link "+7 (495) 540-43-41" [ref=f5e85] [cursor=pointer]:
+                  - /url: tel:+74955404341
+              - listitem [ref=f5e86]:
+                - link "zakaz@dushnazakaz.ru" [ref=f5e87] [cursor=pointer]:
+                  - /url: mailto:zakaz@dushnazakaz.ru
+        - generic [ref=f5e89]:
+          - generic [ref=f5e90]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+          - list "Соц. сети" [ref=f5e94]:
+            - listitem [ref=f5e95]:
+              - link "whatsapp" [ref=f5e96] [cursor=pointer]:
+                - /url: https://wa.me/79067068599
+            - listitem [ref=f5e98]:
+              - link "telegram" [ref=f5e99] [cursor=pointer]:
+                - /url: https://t.me/pavel_pozdnukhov
+          - link "+7 (495) 540-43-41" [ref=f5e104] [cursor=pointer]:
+            - /url: tel:+74955404341
+  - heading "О компании" [level=1] [ref=f5e110]
+  - generic [ref=f5e115]:
+    - text: Dushnazakaz.ru — Мы создаем уникальные решения для тех, кто ценит комфорт, качество и индивидуальный подход.Почему выбирают нас
+    - list [ref=f5e116]:
+      - listitem [ref=f5e117]: Индивидуальный подход. Каждая душевая кабина создается с учетом пожеланий клиента и особенностей помещения.
+      - listitem [ref=f5e118]: Высокое качество. Мы используем только проверенные материалы от ведущих производителей.
+      - listitem [ref=f5e119]: Профессиональный монтаж. Наши мастера имеют многолетний опыт установки душевых кабин любой сложности.
+      - listitem [ref=f5e120]: Доступные цены. Мы предлагаем оптимальное соотношение цены и качества.
+    - text: "Свяжитесь с нами прямо сейчас! Наши специалисты ответят на все вопросы и помогут воплотить ваши идеи в реальность.Телефон:"
+    - link "+7 495 540-43-41" [ref=f5e121] [cursor=pointer]:
+      - /url: tel:+74955404341
+    - text: "Email:"
+    - link "zakaz@dushnazakaz.ru" [ref=f5e122] [cursor=pointer]:
+      - /url: mailto:zakaz@dushnazakaz.ru
+    - text: Доверьте создание душевой кабины профессионалам — и наслаждайтесь комфортом каждый день!
+  - contentinfo [ref=f5e123]:
+    - generic [ref=f5e124] [cursor=pointer]:
+      - generic [ref=f5e125]: Есть вопросы?
+      - button [ref=f5e126]
+    - generic [ref=f5e129]:
+      - generic [ref=f5e130]: Мы используем cookies для улучшения работы сайта. Продолжая пользоваться сайтом, вы даёте согласие на использование файлов cookies. Вы можете отозвать своё согласие, написав на zakaz@dushnazakaz.ru
+      - generic [ref=f5e131] [cursor=pointer]: OK
+    - list [ref=f5e140]:
+      - listitem [ref=f5e141]:
+        - link "Душевые кабины" [ref=f5e142] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f5e143]:
+        - link "Душевые ограждения" [ref=f5e144] [cursor=pointer]:
+          - /url: /ograzhdeniya
+      - listitem [ref=f5e145]:
+        - link "Душевые уголки" [ref=f5e146] [cursor=pointer]:
+          - /url: /ugolki
+      - listitem [ref=f5e147]:
+        - link "Душевые перегородки" [ref=f5e148] [cursor=pointer]:
+          - /url: /peregorodki
+      - listitem [ref=f5e149]:
+        - link "Стеклянные шторки для ванны" [ref=f5e150] [cursor=pointer]:
+          - /url: /steklyannaya-shtorka-na-vannu
+      - listitem [ref=f5e151]:
+        - link "Стеклянная дверь в душевую" [ref=f5e152] [cursor=pointer]:
+          - /url: /steklyannyye-dveri-v-dushevuyu
+      - listitem [ref=f5e153]:
+        - link "Контакты" [ref=f5e154] [cursor=pointer]:
+          - /url: /contacts
+      - listitem [ref=f5e155]:
+        - link "О компании" [ref=f5e156] [cursor=pointer]:
+          - /url: /o-kompanii
+      - listitem [ref=f5e157]:
+        - link "Доставка" [ref=f5e158] [cursor=pointer]:
+          - /url: /dostavka
+      - listitem [ref=f5e159]:
+        - link "Оплата" [ref=f5e160] [cursor=pointer]:
+          - /url: /oplata
+      - listitem [ref=f5e161]:
+        - link "Статьи" [ref=f5e162] [cursor=pointer]:
+          - /url: /blog
+    - generic [ref=f5e167]:
+      - list "Social media links" [ref=f5e169]:
+        - listitem [ref=f5e170]:
+          - link "whatsapp" [ref=f5e171] [cursor=pointer]:
+            - /url: https://wa.me/79067068599
+        - listitem [ref=f5e173]:
+          - link "telegram" [ref=f5e174] [cursor=pointer]:
+            - /url: https://t.me/pavel_pozdnukhov
+        - listitem [ref=f5e176]:
+          - link "vk" [ref=f5e177] [cursor=pointer]:
+            - /url: https://vk.com/dushnazakaz
+      - separator [ref=f5e180]
+      - generic [ref=f5e181]: "2016-2025 © Душназаказ, стеклянные двери в душ. Все права защищены. Любое использование либо копирование материалов или подборки материалов сайта, элементов дизайна и оформления допускается лишь с разрешения правообладателя и только со ссылкой на источник: https://dushnazakaz.ru"

@@ -1,0 +1,10 @@
+[    5941ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://store2.tildaapi.com/api/discounts/v1/getactive/:0
+[    5944ms] [ERROR] Fetch error: TypeError: Failed to fetch
+    at https://static.tildacdn.com/js/tilda-cart-1.1.min.js:3:38809
+    at _catch$b (https://static.tildacdn.com/js/tilda-cart-1.1.min.js:3:36734)
+    at t (https://static.tildacdn.com/js/tilda-cart-1.1.min.js:3:38409)
+    at t (https://static.tildacdn.com/js/tilda-cart-1.1.min.js:3:37475)
+    at https://static.tildacdn.com/js/tilda-cart-1.1.min.js:3:38000 @ https://static.tildacdn.com/js/tilda-cart-1.1.min.js:2
+[    5951ms] [ERROR] Can't load active discounts with error: TypeError: Failed to fetch @ https://static.tildacdn.com/js/tilda-cart-1.1.min.js:2
+[   30179ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://sysstat.tildacdn.com/api/img/speed/?img_d=[{%22time%22:3,%22st%22:%22y%22},{%22time%22:3,%22st%22:%22y%22},{%22time%22:240,%22th%22:%22y%22}]:0
+[   30182ms] [ERROR] Failed to load resource: net::ERR_TIMED_OUT @ https://sysstat.tildacdn.com/api/performance/?{%22FP%22:460,%22FCP%22:460,%22LCP%22:576,%22TTFB%22:158,%22domInteractive%22:556,%22DOMloaded%22:565,%22isMob%22:%22n%22,%22hasZB%22:%22y%22,%22hasCCode%22:%22y%22,%22url%22:%22https://dushnazakaz.ru/peregorodki%22,%22speed%22:7.55,%22connectionType%22:%224g%22}:0

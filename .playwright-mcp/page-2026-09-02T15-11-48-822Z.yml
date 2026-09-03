@@ -1,0 +1,126 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - complementary [ref=f1e3]:
+      - generic [ref=f1e4]:
+        - link "MG MGlass" [ref=f1e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f1e6]: MG
+          - generic [ref=f1e8]: MGlass
+        - generic [ref=f1e9]:
+          - generic [ref=f1e10]:
+            - button "СЕО" [ref=f1e11]
+            - button "CFO" [ref=f1e12]
+            - button "Админ" [ref=f1e13]
+          - generic [ref=f1e14]:
+            - button "Менеджер" [ref=f1e15]
+            - button "Произв." [ref=f1e16]
+            - button "Замерщик" [ref=f1e17]
+      - navigation [ref=f1e18]:
+        - link "🔒 Влад" [ref=f1e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f1e21]: 🔒
+          - generic [ref=f1e22]: Влад
+        - button "MGlass" [ref=f1e24]
+        - button "B2B" [ref=f1e32]
+      - generic [ref=f1e38]:
+        - generic [ref=f1e39]:
+          - generic [ref=f1e40]: A
+          - paragraph [ref=f1e42]: admin@mglass.ru
+        - button "Выйти" [ref=f1e43]
+    - main [ref=f1e44]:
+      - generic [ref=f1e45]:
+        - generic [ref=f1e46]:
+          - heading "B2B Материалы" [level=1] [ref=f1e47]
+          - paragraph [ref=f1e48]: 0 активных позиций
+        - generic [ref=f1e49]:
+          - heading "Добавить материал" [level=2] [ref=f1e51]
+          - generic [ref=f1e52]:
+            - generic [ref=f1e53]:
+              - generic [ref=f1e54]: Название
+              - textbox "М1 прозрачное" [ref=f1e55]
+            - generic [ref=f1e56]:
+              - generic [ref=f1e57]: Категория
+              - combobox [ref=f1e58]:
+                - option "Стекло прозрачное" [selected]
+                - option "Зеркало"
+                - option "Тонированное"
+                - option "Сатинированное"
+                - option "Рифлёное"
+                - option "Декоративное"
+            - generic [ref=f1e59]:
+              - generic [ref=f1e60]: Толщина (мм)
+              - combobox [ref=f1e61]:
+                - option "3 мм"
+                - option "4 мм"
+                - option "5 мм"
+                - option "6 мм" [selected]
+                - option "8 мм"
+                - option "10 мм"
+                - option "12 мм"
+            - generic [ref=f1e62]:
+              - generic [ref=f1e63]: Цена продажи (₽/м²)
+              - spinbutton [ref=f1e64]: "0"
+            - generic [ref=f1e65]:
+              - generic [ref=f1e66]: Закупка материала (₽/м²)
+              - spinbutton [ref=f1e67]: "0"
+            - generic [ref=f1e68]:
+              - generic [ref=f1e69]: НДС (%)
+              - spinbutton [ref=f1e70]: "22"
+            - generic [ref=f1e71]:
+              - generic [ref=f1e72]: Отход (%)
+              - spinbutton [ref=f1e73]: "15"
+            - generic [ref=f1e75] [cursor=pointer]:
+              - checkbox "Проходной материал — отход всегда 10%" [ref=f1e76]
+              - generic [ref=f1e77]: Проходной материал
+              - generic [ref=f1e78]: — отход всегда 10%
+            - generic [ref=f1e79]:
+              - generic [ref=f1e80]: Раскрой листа
+              - generic [ref=f1e81]:
+                - generic [ref=f1e82]:
+                  - generic [ref=f1e83]: Длина листа, мм
+                  - spinbutton [ref=f1e84]: "3210"
+                - generic [ref=f1e85]:
+                  - generic [ref=f1e86]: Ширина листа, мм
+                  - spinbutton [ref=f1e87]: "2250"
+                - generic [ref=f1e88]:
+                  - generic [ref=f1e89]: Направление рисунка
+                  - combobox [ref=f1e90]:
+                    - option "Нет направления" [selected]
+                    - option "Волна по длине (3210)"
+                    - option "Волна по ширине (2250)"
+              - generic [ref=f1e91]:
+                - generic [ref=f1e92]: Остаток на складе, листов
+                - spinbutton [ref=f1e93]: "0"
+            - generic [ref=f1e94]:
+              - generic [ref=f1e95]: Поставщик
+              - generic [ref=f1e96]:
+                - generic [ref=f1e97]:
+                  - generic [ref=f1e98]: Поставщик
+                  - generic [ref=f1e99]:
+                    - combobox [ref=f1e100]:
+                      - option "— не выбран —" [selected]
+                    - link "+ поставщик" [ref=f1e101] [cursor=pointer]:
+                      - /url: /admin/suppliers
+                  - paragraph [ref=f1e102]:
+                    - text: Нет поставщиков типа «Стекло и зеркала».
+                    - link "Назначьте тип поставщика" [ref=f1e103] [cursor=pointer]:
+                      - /url: /admin/suppliers
+                    - text: .
+                - generic [ref=f1e104]:
+                  - generic [ref=f1e105]: Наименование у поставщика
+                  - textbox "Как называется у поставщика" [ref=f1e106]
+            - generic [ref=f1e107]:
+              - generic [ref=f1e108]: Примечание
+              - textbox "Необязательно" [ref=f1e109]
+          - button "Добавить" [disabled] [ref=f1e111]
+        - generic [ref=f1e112]:
+          - button "Все" [ref=f1e113]
+          - button "Стекло прозрачное" [ref=f1e114]
+          - button "Зеркало" [ref=f1e115]
+          - button "Тонированное" [ref=f1e116]
+          - button "Сатинированное" [ref=f1e117]
+          - button "Рифлёное" [ref=f1e118]
+          - button "Декоративное" [ref=f1e119]
+        - generic [ref=f1e120]: Загрузка...
+        - paragraph [ref=f1e122]: Себест./м² нетто = закупка × (1 + отход%) + закалка по толщине (для стекла). Маржа ₽ — без НДС.
+  - alert [ref=f1e123]

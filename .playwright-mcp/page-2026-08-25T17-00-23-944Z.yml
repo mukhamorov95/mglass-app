@@ -1,0 +1,174 @@
+- generic [ref=f11e2]:
+  - banner [ref=f11e3]:
+    - generic [ref=f11e6]:
+      - img [ref=f11e10] [cursor=pointer]
+      - link "контакты" [ref=f11e12] [cursor=pointer]:
+        - /url: "#contacts"
+      - link "наши работы" [ref=f11e16] [cursor=pointer]:
+        - /url: "#our_works"
+      - link "калькулятор стоимости" [ref=f11e20] [cursor=pointer]:
+        - /url: "#calculator"
+      - link "фурнитура" [ref=f11e24] [cursor=pointer]:
+        - /url: "#hardware"
+      - link "виды стекла" [ref=f11e28] [cursor=pointer]:
+        - /url: "#types_of_glass"
+      - link "каталог" [ref=f11e32] [cursor=pointer]:
+        - /url: "#submenu:more"
+      - img [ref=f11e36] [cursor=pointer]
+      - img [ref=f11e38] [cursor=pointer]
+      - generic [ref=f11e39]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+      - link "+7 (495) 540-43-41" [ref=f11e42] [cursor=pointer]:
+        - /url: tel:+74955404341
+      - link [ref=f11e54] [cursor=pointer]:
+        - /url: "#menuopen"
+      - link [ref=f11e56] [cursor=pointer]:
+        - /url: "#menuopen"
+    - generic:
+      - generic:
+        - generic:
+          - generic:
+            - link "контакты":
+              - /url: "#contacts"
+          - generic:
+            - link "наши работы":
+              - /url: "#our_works"
+          - generic:
+            - link "калькулятор стоимости":
+              - /url: "#calculator"
+          - generic:
+            - link "фурнитура":
+              - /url: "#hardware"
+          - generic:
+            - link "виды стекла":
+              - /url: "#types_of_glass"
+          - generic:
+            - link "каталог":
+              - /url: "#submenu:more"
+          - generic: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+          - generic:
+            - link "+7 (495) 540-43-41":
+              - /url: tel:+74955404341
+          - generic:
+            - link:
+              - /url: "#menuopen"
+          - generic:
+            - link:
+              - /url: "#menuopen"
+    - generic [ref=f11e57]:
+      - button "Close menu" [ref=f11e58] [cursor=pointer]
+      - generic [ref=f11e62]:
+        - generic [ref=f11e63]:
+          - link [ref=f11e65] [cursor=pointer]:
+            - /url: /
+            - img "Душ на заказ" [ref=f11e66]
+          - navigation [ref=f11e67]:
+            - list [ref=f11e68]:
+              - listitem [ref=f11e69]:
+                - link "Виды продукции" [ref=f11e70] [cursor=pointer]:
+                  - /url: "#submenu:more"
+              - listitem [ref=f11e71]:
+                - link "Виды стекла" [ref=f11e72] [cursor=pointer]:
+                  - /url: "#types_of_glass"
+              - listitem [ref=f11e73]:
+                - link "Фурнитура" [ref=f11e74] [cursor=pointer]:
+                  - /url: "#hardware"
+              - listitem [ref=f11e75]:
+                - link "Каклькулятор стоимости" [ref=f11e76] [cursor=pointer]:
+                  - /url: "#calculator"
+              - listitem [ref=f11e77]:
+                - link "Как мы работаем?" [ref=f11e78] [cursor=pointer]:
+                  - /url: "#how_we_work"
+              - listitem [ref=f11e79]:
+                - link "Наши работы" [ref=f11e80] [cursor=pointer]:
+                  - /url: "#our_works"
+              - listitem [ref=f11e81]:
+                - link "Контакты" [ref=f11e82] [cursor=pointer]:
+                  - /url: "#contacts"
+              - listitem [ref=f11e83]:
+                - link "+7 (495) 540-43-41" [ref=f11e84] [cursor=pointer]:
+                  - /url: tel:+74955404341
+              - listitem [ref=f11e85]:
+                - link "zakaz@dushnazakaz.ru" [ref=f11e86] [cursor=pointer]:
+                  - /url: mailto:zakaz@dushnazakaz.ru
+        - generic [ref=f11e88]:
+          - generic [ref=f11e89]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+          - list "Соц. сети" [ref=f11e93]:
+            - listitem [ref=f11e94]:
+              - link "whatsapp" [ref=f11e95] [cursor=pointer]:
+                - /url: https://wa.me/79067068599
+            - listitem [ref=f11e97]:
+              - link "telegram" [ref=f11e98] [cursor=pointer]:
+                - /url: https://t.me/pavel_pozdnukhov
+          - link "+7 (495) 540-43-41" [ref=f11e103] [cursor=pointer]:
+            - /url: tel:+74955404341
+  - generic [ref=f11e108]:
+    - heading "Контакты" [level=1] [ref=f11e109]
+    - generic [ref=f11e111]:
+      - text: "Тел.:"
+      - link "+7 495 540-43-41" [ref=f11e112] [cursor=pointer]:
+        - /url: tel:+74955404341
+      - text: "Консультации по телефону:ежедневно с 10:00 до 18:00E-mail:"
+      - link "zakaz@dushnazakaz.ru" [ref=f11e113] [cursor=pointer]:
+        - /url: mailto:zakaz@dushnazakaz.ru
+      - text: Адрес:г. Москва, БЦ Румянцево,блок Д, этаж 7Режим работы:по будням с 10:00 до 16:30Реквизиты:ИП "ПОЗДНУХОВ ПАВЕЛ СЕРГЕЕВИЧ"ОГРНИП - 309500311800030ИНН - 500307084981
+    - list "Соц. сети" [ref=f11e115]:
+      - listitem [ref=f11e116]:
+        - link "whatsapp" [ref=f11e117] [cursor=pointer]:
+          - /url: https://wa.me/79067068599
+      - listitem [ref=f11e119]:
+        - link "telegram" [ref=f11e120] [cursor=pointer]:
+          - /url: https://t.me/pavel_pozdnukhov
+  - contentinfo [ref=f11e124]:
+    - generic [ref=f11e125] [cursor=pointer]:
+      - generic [ref=f11e126]: Есть вопросы?
+      - button [ref=f11e127]
+    - generic [ref=f11e130]:
+      - generic [ref=f11e131]: Мы используем cookies для улучшения работы сайта. Продолжая пользоваться сайтом, вы даёте согласие на использование файлов cookies. Вы можете отозвать своё согласие, написав на zakaz@dushnazakaz.ru
+      - generic [ref=f11e132] [cursor=pointer]: OK
+    - list [ref=f11e141]:
+      - listitem [ref=f11e142]:
+        - link "Душевые кабины" [ref=f11e143] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f11e144]:
+        - link "Душевые ограждения" [ref=f11e145] [cursor=pointer]:
+          - /url: /ograzhdeniya
+      - listitem [ref=f11e146]:
+        - link "Душевые уголки" [ref=f11e147] [cursor=pointer]:
+          - /url: /ugolki
+      - listitem [ref=f11e148]:
+        - link "Душевые перегородки" [ref=f11e149] [cursor=pointer]:
+          - /url: /peregorodki
+      - listitem [ref=f11e150]:
+        - link "Стеклянные шторки для ванны" [ref=f11e151] [cursor=pointer]:
+          - /url: /steklyannaya-shtorka-na-vannu
+      - listitem [ref=f11e152]:
+        - link "Стеклянная дверь в душевую" [ref=f11e153] [cursor=pointer]:
+          - /url: /steklyannyye-dveri-v-dushevuyu
+      - listitem [ref=f11e154]:
+        - link "Контакты" [ref=f11e155] [cursor=pointer]:
+          - /url: /contacts
+      - listitem [ref=f11e156]:
+        - link "О компании" [ref=f11e157] [cursor=pointer]:
+          - /url: /o-kompanii
+      - listitem [ref=f11e158]:
+        - link "Доставка" [ref=f11e159] [cursor=pointer]:
+          - /url: /dostavka
+      - listitem [ref=f11e160]:
+        - link "Оплата" [ref=f11e161] [cursor=pointer]:
+          - /url: /oplata
+      - listitem [ref=f11e162]:
+        - link "Статьи" [ref=f11e163] [cursor=pointer]:
+          - /url: /blog
+    - generic [ref=f11e168]:
+      - list "Social media links" [ref=f11e170]:
+        - listitem [ref=f11e171]:
+          - link "whatsapp" [ref=f11e172] [cursor=pointer]:
+            - /url: https://wa.me/79067068599
+        - listitem [ref=f11e174]:
+          - link "telegram" [ref=f11e175] [cursor=pointer]:
+            - /url: https://t.me/pavel_pozdnukhov
+        - listitem [ref=f11e177]:
+          - link "vk" [ref=f11e178] [cursor=pointer]:
+            - /url: https://vk.com/dushnazakaz
+      - separator [ref=f11e181]
+      - generic [ref=f11e182]: "2016-2025 © Душназаказ, стеклянные двери в душ. Все права защищены. Любое использование либо копирование материалов или подборки материалов сайта, элементов дизайна и оформления допускается лишь с разрешения правообладателя и только со ссылкой на источник: https://dushnazakaz.ru"

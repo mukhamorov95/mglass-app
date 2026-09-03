@@ -1,0 +1,38 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - link "MG MGlass" [ref=e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=e6]: MG
+          - generic [ref=e8]: MGlass
+        - generic [ref=e9]:
+          - generic [ref=e10]:
+            - button "СЕО" [ref=e11]
+            - button "CFO" [ref=e12]
+            - button "Админ" [ref=e13]
+          - generic [ref=e14]:
+            - button "Менеджер" [ref=e15]
+            - button "Произв." [ref=e16]
+            - button "Замерщик" [ref=e17]
+      - navigation [ref=e18]:
+        - link "🔒 Влад" [ref=e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=e21]: 🔒
+          - generic [ref=e22]: Влад
+        - button "MGlass" [ref=e24]
+        - button "B2B" [ref=e32]
+      - generic [ref=e38]:
+        - generic [ref=e39]:
+          - generic [ref=e40]: A
+          - paragraph [ref=e42]: admin@mglass.ru
+        - button "Выйти" [ref=e43]
+    - main [ref=e44]:
+      - generic [ref=e45]:
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - heading "Сделки" [level=1] [ref=e48]
+            - paragraph [ref=e49]: "Карточка по объекту: расчёты, замер, документы, деньги в одном месте."
+          - 'textbox "Поиск: телефон, адрес, клиент" [ref=e50]'
+        - paragraph [ref=e51]: Загрузка…
+  - alert [ref=e52]

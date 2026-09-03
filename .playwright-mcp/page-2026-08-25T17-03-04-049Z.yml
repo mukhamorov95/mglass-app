@@ -1,0 +1,318 @@
+- generic [active] [ref=f28e1]:
+  - generic [ref=f28e2]:
+    - link "К основному контенту" [ref=f28e3] [cursor=pointer]:
+      - /url: "#t-main-content"
+    - banner [ref=f28e4]:
+      - navigation [ref=f28e8]:
+        - list [ref=f28e9]:
+          - listitem [ref=f28e10]:
+            - link "О компании" [ref=f28e11] [cursor=pointer]:
+              - /url: "#submenu:company"
+          - listitem [ref=f28e12]:
+            - link "Услуги" [ref=f28e13] [cursor=pointer]:
+              - /url: "#submenu:services"
+          - listitem [ref=f28e14]:
+            - link "Доставка" [ref=f28e15] [cursor=pointer]:
+              - /url: https://dostavka17.ru/
+          - listitem [ref=f28e16]:
+            - link "Информация" [ref=f28e17] [cursor=pointer]:
+              - /url: "#submenu:info"
+          - listitem [ref=f28e18]:
+            - link "Каталоги и презентации" [ref=f28e19] [cursor=pointer]:
+              - /url: /company/catalog/
+          - listitem [ref=f28e20]:
+            - link "Контакты" [ref=f28e21] [cursor=pointer]:
+              - /url: /contact/
+          - listitem [ref=f28e22]:
+            - link "Интернет-магазин" [ref=f28e23] [cursor=pointer]:
+              - /url: https://nagornaya17.ru/
+          - listitem [ref=f28e24]:
+            - link "Личный кабинет" [ref=f28e25] [cursor=pointer]:
+              - /url: https://mzf-zakaz.ru/
+      - generic [ref=f28e28]:
+        - generic [ref=f28e29]:
+          - link [ref=f28e31] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f28e32]
+          - generic [ref=f28e34]:
+            - strong [ref=f28e35]: Московская Зеркальная Фабрика
+            - strong [ref=f28e36]: НАГОРНАЯ 17
+            - strong [ref=f28e37]: Душевые ограждения на заказ
+        - generic [ref=f28e38]:
+          - generic [ref=f28e44]:
+            - strong
+            - link "+7 (495) 640-11-79" [ref=f28e45] [cursor=pointer]:
+              - /url: tel:+7 (495) 640-11-79
+          - generic [ref=f28e49]:
+            - strong
+            - text: Время работыКАЖДЫЙ ДЕНЬ10:00 до 19:00
+          - button "Перезвонить" [ref=f28e51] [cursor=pointer]
+      - generic [ref=f28e55]:
+        - link "ВИДЫ ДУШЕВЫХ" [ref=f28e59] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f28e62]:
+          - link "ДУШЕВЫЕ ДВЕРИ" [ref=f28e63] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f28e70]:
+            - generic:
+              - link [ref=f28e72] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/raspashnye/
+                - paragraph [ref=f28e74]: Душевая дверь распашная
+              - link [ref=f28e76] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/razdvizhnye/
+                - paragraph [ref=f28e78]: Раздвижные душевые двери
+              - link [ref=f28e80] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/skladnaya/
+                - paragraph [ref=f28e82]: Складная душевая дверь
+              - link [ref=f28e84] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/radiusnye/
+                - paragraph [ref=f28e86]: Радиусные душевые двери
+              - link [ref=f28e88] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/polukruglye/
+                - paragraph [ref=f28e90]: Душевые двери полукруглые
+        - generic [ref=f28e91]:
+          - link "СТЕКЛО ДЛЯ ДУШЕВОЙ" [ref=f28e92] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f28e99]:
+            - generic:
+              - link [ref=f28e101] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/obyichnoe-steklo/
+                - paragraph [ref=f28e103]: Обычное стекло
+              - link [ref=f28e105] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/matovoe-steklo/
+                - paragraph [ref=f28e107]: Матовое стекло
+              - link [ref=f28e109] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/steklo-s-risunkom/
+                - paragraph [ref=f28e111]: Рисунки на стекле
+              - link [ref=f28e113] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/osvetlennoe-steklo/
+                - paragraph [ref=f28e115]: Осветленное стекло
+              - link [ref=f28e117] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/bezopasnoe-steklo/
+                - paragraph [ref=f28e119]: Закаленное стекло
+              - link [ref=f28e121] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/czvetnoe-steklo/
+                - paragraph [ref=f28e123]: Цветное стекло
+              - link [ref=f28e125] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/decorativnoe-steklo/
+                - paragraph [ref=f28e127]: Декоративное стекло
+        - link "ФУРНИТУРА ДЛЯ ДУШЕВЫХ" [ref=f28e129] [cursor=pointer]:
+          - /url: /furnitura-dlya-dushevyix-kabin/
+        - link "ПРОИЗВОДСТВО" [ref=f28e133] [cursor=pointer]:
+          - /url: "#submenu:production"
+        - link "УСЛУГИ" [ref=f28e137] [cursor=pointer]:
+          - /url: "#submenu:services"
+  - generic:
+    - generic:
+      - generic [ref=f28e140]:
+        - button "Навигационное меню" [ref=f28e142] [cursor=pointer]
+        - generic [ref=f28e147]: ВСЯ ПРОДУКЦИЯ МЗФ
+      - generic [ref=f28e152]:
+        - generic [ref=f28e153]:
+          - link [ref=f28e156] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f28e157]
+          - generic [ref=f28e158]:
+            - textbox "Поиск" [ref=f28e161]
+            - generic [ref=f28e163]:
+              - link "Стекло" [ref=f28e166] [cursor=pointer]:
+                - /url: https://steklo17.ru/
+              - link "Витраж" [ref=f28e169] [cursor=pointer]:
+                - /url: https://vitrag17.ru/
+              - link "Скинали" [ref=f28e172] [cursor=pointer]:
+                - /url: https://skinali17.ru/
+              - link "Душевые" [ref=f28e175] [cursor=pointer]:
+                - /url: /
+              - link "Ограждения" [ref=f28e178] [cursor=pointer]:
+                - /url: https://peregorodki17.ru/
+              - link "Двери" [ref=f28e181] [cursor=pointer]:
+                - /url: https://dver17.ru/
+              - link "Зеркала" [ref=f28e184] [cursor=pointer]:
+                - /url: https://zerkala.ru/
+              - link "Багет" [ref=f28e187] [cursor=pointer]:
+                - /url: https://baget17.ru/
+              - link "Металл" [ref=f28e190] [cursor=pointer]:
+                - /url: https://metall17.ru/
+        - generic [ref=f28e191]: Московская Зеркальная Фабрика
+  - generic [ref=f28e193] [cursor=pointer]
+  - generic [ref=f28e197]:
+    - generic [ref=f28e202]:
+      - generic [ref=f28e204]:
+        - generic [ref=f28e205]: Московская Зеркальная Фабрика
+        - heading "Замеры и консультации" [level=1] [ref=f28e206]
+        - generic [ref=f28e209]:
+          - strong [ref=f28e210]: Вызов менеджера на дом
+          - text: Привыкли заказывать в интернете? Это, безусловно, удобно, но иногда лучше увидеть материалы своими глазами и потрогать их текстуру.Если у Вас нет времени посетить офис "Московской Зеркальной Фабрики", наш менеджер с удовольствием приедет к Вам с каталогами и образцами продукции.
+          - strong [ref=f28e211]: Для уточнения всех деталей позвоните нам по телефону
+          - link "+7 (495) 640-11-79" [ref=f28e212] [cursor=pointer]:
+            - /url: tel:+7 (495) 640-11-79
+          - strong [ref=f28e213]: и закажите выезд менеджера прямо сейчас.
+          - strong [ref=f28e214]: Вызов замерщика на дом
+          - text: Зачем откладывать мечту на потом? Станьте к ней на шаг ближе и пригласите профессиональных замерщиков.- Снимем замеры и сделаем чертёж- Поможем выбрать тип конструкции
+      - generic [ref=f28e216]:
+        - generic [ref=f28e217]: Заказать услугу
+        - form [ref=f28e219]:
+          - generic [ref=f28e220]:
+            - generic [ref=f28e221]:
+              - generic [ref=f28e222]: Желаемая дата визита
+              - textbox "Желаемая дата визита" [ref=f28e225]
+            - generic [ref=f28e226]:
+              - generic [ref=f28e227]: Какой продукт Вас интересует?
+              - combobox "Какой продукт Вас интересует?" [ref=f28e230] [cursor=pointer]:
+                - option "выберите нужное" [selected]
+                - option "Шторки для ванной"
+                - option "Душевой перегородки"
+                - option "Угловой душевой кабины"
+                - option "П-образной душевой кабины"
+                - option "Душевой кабины трапеция"
+                - option "Круглой душевой кабины"
+                - option "Акваслайдер"
+            - generic [ref=f28e231]:
+              - generic [ref=f28e232]: Какая услуга Вас интересует
+              - combobox "Какая услуга Вас интересует" [ref=f28e235] [cursor=pointer]:
+                - option "Выберите нужное" [selected]
+                - option "Выезд замерщика"
+                - option "Выезд менеджера"
+            - textbox "Ваше имя" [ref=f28e238]
+            - textbox "Ваш email" [ref=f28e241]
+            - generic [ref=f28e244]:
+              - generic [ref=f28e245] [cursor=pointer]: "+7"
+              - textbox "(000) 000-00-00" [ref=f28e249]
+            - generic [ref=f28e253] [cursor=pointer]:
+              - checkbox "Соглашаюсь на обработку персональных данных" [ref=f28e254]
+              - generic [ref=f28e256]:
+                - text: Соглашаюсь на
+                - link "обработку персональных данных" [ref=f28e257]:
+                  - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - button "Заказать →" [ref=f28e259] [cursor=pointer]
+          - textbox
+    - generic [ref=f28e262] [cursor=pointer]
+  - generic [ref=f28e272]:
+    - text: Позвоните нам по телефону
+    - link "+7 (495) 640-11-79" [ref=f28e273] [cursor=pointer]:
+      - /url: tel:+7 (495) 640-11-79
+    - text: и закажите выезд менеджера прямо сейчас.
+  - contentinfo [ref=f28e276]:
+    - generic [ref=f28e279]:
+      - generic [ref=f28e280]:
+        - link [ref=f28e282] [cursor=pointer]:
+          - /url: /
+          - img "Московская зеркальная фабрика" [ref=f28e283]
+        - generic [ref=f28e284]: "Режим работы: Пн-Вс 10:00-19:00"
+      - generic [ref=f28e285]:
+        - link "dysh17@1mzf.ru" [ref=f28e289] [cursor=pointer]:
+          - /url: mailto:dysh17@1mzf.ru
+        - link "+7 (495) 640-11-79" [ref=f28e293] [cursor=pointer]:
+          - /url: tel:+7 (495) 640-11-79
+        - button "Заказать звонок" [ref=f28e295] [cursor=pointer]
+    - navigation [ref=f28e300]:
+      - list [ref=f28e301]:
+        - listitem [ref=f28e302]:
+          - link "Стекло" [ref=f28e303] [cursor=pointer]:
+            - /url: https://steklo17.ru/
+        - listitem [ref=f28e304]:
+          - link "Витраж" [ref=f28e305] [cursor=pointer]:
+            - /url: https://vitrag17.ru/
+        - listitem [ref=f28e306]:
+          - link "Скинали" [ref=f28e307] [cursor=pointer]:
+            - /url: https://skinali17.ru/
+        - listitem [ref=f28e308]:
+          - link "Душевые" [ref=f28e309] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f28e310]:
+          - link "Ограждения" [ref=f28e311] [cursor=pointer]:
+            - /url: https://peregorodki17.ru/
+        - listitem [ref=f28e312]:
+          - link "Двери" [ref=f28e313] [cursor=pointer]:
+            - /url: https://dver17.ru/
+        - listitem [ref=f28e314]:
+          - link "Зеркала" [ref=f28e315] [cursor=pointer]:
+            - /url: https://zerkala.ru/
+        - listitem [ref=f28e316]:
+          - link "Багет" [ref=f28e317] [cursor=pointer]:
+            - /url: https://baget17.ru/
+        - listitem [ref=f28e318]:
+          - link "Металл" [ref=f28e319] [cursor=pointer]:
+            - /url: https://metall17.ru/
+    - generic [ref=f28e322]:
+      - generic [ref=f28e323]:
+        - generic [ref=f28e324]: О КОМПАНИИ
+        - list [ref=f28e326]:
+          - listitem [ref=f28e327]:
+            - link "О нас" [ref=f28e328] [cursor=pointer]:
+              - /url: /company/about/
+          - listitem [ref=f28e329]:
+            - link "Производство" [ref=f28e330] [cursor=pointer]:
+              - /url: /company/manufacture/
+          - listitem [ref=f28e331]:
+            - link "Карьера" [ref=f28e332] [cursor=pointer]:
+              - /url: /company/career/
+          - listitem [ref=f28e333]:
+            - link "Статьи" [ref=f28e334] [cursor=pointer]:
+              - /url: /article/
+          - listitem [ref=f28e335]:
+            - link "Каталоги и презентации" [ref=f28e336] [cursor=pointer]:
+              - /url: /company/catalog/
+      - generic [ref=f28e337]:
+        - generic [ref=f28e338]: УСЛУГИ
+        - list [ref=f28e340]:
+          - listitem [ref=f28e341]:
+            - link "Замеры и консультации" [ref=f28e342] [cursor=pointer]:
+              - /url: /services/vyizov-menedzhera/
+          - listitem [ref=f28e343]:
+            - link "Разработка дизайн-проекта" [ref=f28e344] [cursor=pointer]:
+              - /url: /services/razrabotka-dizajn-proekta/
+          - listitem [ref=f28e345]:
+            - link "Конструкторское бюро" [ref=f28e346] [cursor=pointer]:
+              - /url: /services/kb/
+          - listitem [ref=f28e347]:
+            - link "Доставка" [ref=f28e348] [cursor=pointer]:
+              - /url: /services/delivery/
+      - generic:
+        - generic [ref=f28e349]:
+          - generic [ref=f28e350]: ИНФОРМАЦИЯ
+          - list [ref=f28e352]:
+            - listitem [ref=f28e353]:
+              - link "Технические условия" [ref=f28e354] [cursor=pointer]:
+                - /url: /info/tehnicheskie-usloviya/
+            - listitem [ref=f28e355]:
+              - link "Информация клиенту" [ref=f28e356] [cursor=pointer]:
+                - /url: /info/faq/
+            - listitem [ref=f28e357]:
+              - link "Сроки изготовления" [ref=f28e358] [cursor=pointer]:
+                - /url: /info/sroki-izgotovleniya/
+            - listitem [ref=f28e359]:
+              - link "Гарантия" [ref=f28e360] [cursor=pointer]:
+                - /url: /info/garanty/
+        - generic [ref=f28e361]:
+          - button "Перезвоните мне" [ref=f28e363] [cursor=pointer]
+          - form [ref=f28e364]:
+            - generic [ref=f28e365]:
+              - generic [ref=f28e366]:
+                - textbox "Ваш номер" [ref=f28e368]
+                - button [ref=f28e370] [cursor=pointer]
+              - generic [ref=f28e374] [cursor=pointer]:
+                - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f28e375]
+                - generic [ref=f28e376]:
+                  - text: Даю согласие на обработку моих персональных данных.
+                  - link "Подробнее" [ref=f28e377]:
+                    - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - textbox
+          - list "Соц. сети" [ref=f28e379]:
+            - listitem [ref=f28e380]:
+              - link "vk" [ref=f28e381] [cursor=pointer]:
+                - /url: https://vk.com/moskovskaya_zerkalnaya_fabrika
+            - listitem [ref=f28e383]:
+              - link "ok" [ref=f28e384] [cursor=pointer]:
+                - /url: https://ok.ru/moskovskaya.zerkalnaya.fabrika
+    - generic [ref=f28e390]:
+      - text: Если вас не устраивает работа персонального менеджера обратитесь в службу поддержки клиентов | Мы всегда на связиОбращаем ваше внимание на то, что данный интернет-сайт носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 (2) Гражданского кодекса Российской Федерации. Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефону в Москве +7 (495) 640-11-79 info@1mzf.ru
+      - link "Правовая информация и политики сайта" [ref=f28e391] [cursor=pointer]:
+        - /url: /info/
+      - text: ООО "СПЕКТРУМАРТ" info@spektrumart.ru | +7 (495) 797-53-73
+    - generic [ref=f28e392]:
+      - generic [ref=f28e393]:
+        - text: Мы используем файлы cookie и сервисы веб-аналитики (Яндекс.Метрика, Comagic) для сбора статистики, анализа посещаемости и улучшения работы сайта. Продолжая использовать сайт, вы даете согласие на обработку данных в указанных целях.
+        - link "Подробнее" [ref=f28e394] [cursor=pointer]:
+          - /url: /info/
+      - button "Принять и закрыть" [ref=f28e395] [cursor=pointer]

@@ -1,0 +1,1592 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - link "К основному контенту" [ref=e3] [cursor=pointer]:
+      - /url: "#t-main-content"
+    - banner [ref=e4]:
+      - generic [ref=e7]:
+        - img [ref=e11] [cursor=pointer]
+        - link "контакты" [ref=e13] [cursor=pointer]:
+          - /url: "#contacts"
+        - link "наши работы" [ref=e17] [cursor=pointer]:
+          - /url: "#our_works"
+        - link "калькулятор стоимости" [ref=e21] [cursor=pointer]:
+          - /url: "#calculator"
+        - link "фурнитура" [ref=e25] [cursor=pointer]:
+          - /url: "#hardware"
+        - link "виды стекла" [ref=e29] [cursor=pointer]:
+          - /url: "#types_of_glass"
+        - link "каталог" [ref=e33] [cursor=pointer]:
+          - /url: "#submenu:more"
+        - img [ref=e37] [cursor=pointer]
+        - img [ref=e39] [cursor=pointer]
+        - generic [ref=e40]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+        - link "+7 (495) 540-43-41" [ref=e43] [cursor=pointer]:
+          - /url: tel:+74955404341
+        - link [ref=e55] [cursor=pointer]:
+          - /url: "#menuopen"
+        - link [ref=e57] [cursor=pointer]:
+          - /url: "#menuopen"
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - link "контакты":
+                - /url: "#contacts"
+            - generic:
+              - link "наши работы":
+                - /url: "#our_works"
+            - generic:
+              - link "калькулятор стоимости":
+                - /url: "#calculator"
+            - generic:
+              - link "фурнитура":
+                - /url: "#hardware"
+            - generic:
+              - link "виды стекла":
+                - /url: "#types_of_glass"
+            - generic:
+              - link "каталог":
+                - /url: "#submenu:more"
+            - generic: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+            - generic:
+              - link "+7 (495) 540-43-41":
+                - /url: tel:+74955404341
+            - generic:
+              - link:
+                - /url: "#menuopen"
+            - generic:
+              - link:
+                - /url: "#menuopen"
+      - generic [ref=e58]:
+        - button "Close menu" [ref=e59] [cursor=pointer]
+        - generic [ref=e63]:
+          - generic [ref=e64]:
+            - link [ref=e66] [cursor=pointer]:
+              - /url: /
+              - img "Душ на заказ" [ref=e67]
+            - navigation [ref=e68]:
+              - list [ref=e69]:
+                - listitem [ref=e70]:
+                  - link "Виды продукции" [ref=e71] [cursor=pointer]:
+                    - /url: "#submenu:more"
+                - listitem [ref=e72]:
+                  - link "Виды стекла" [ref=e73] [cursor=pointer]:
+                    - /url: "#types_of_glass"
+                - listitem [ref=e74]:
+                  - link "Фурнитура" [ref=e75] [cursor=pointer]:
+                    - /url: "#hardware"
+                - listitem [ref=e76]:
+                  - link "Каклькулятор стоимости" [ref=e77] [cursor=pointer]:
+                    - /url: "#calculator"
+                - listitem [ref=e78]:
+                  - link "Как мы работаем?" [ref=e79] [cursor=pointer]:
+                    - /url: "#how_we_work"
+                - listitem [ref=e80]:
+                  - link "Наши работы" [ref=e81] [cursor=pointer]:
+                    - /url: "#our_works"
+                - listitem [ref=e82]:
+                  - link "Контакты" [ref=e83] [cursor=pointer]:
+                    - /url: "#contacts"
+                - listitem [ref=e84]:
+                  - link "+7 (495) 540-43-41" [ref=e85] [cursor=pointer]:
+                    - /url: tel:+74955404341
+                - listitem [ref=e86]:
+                  - link "zakaz@dushnazakaz.ru" [ref=e87] [cursor=pointer]:
+                    - /url: mailto:zakaz@dushnazakaz.ru
+          - generic [ref=e89]:
+            - generic [ref=e90]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+            - list "Соц. сети" [ref=e94]:
+              - listitem [ref=e95]:
+                - link "whatsapp" [ref=e96] [cursor=pointer]:
+                  - /url: https://wa.me/79067068599
+              - listitem [ref=e98]:
+                - link "telegram" [ref=e99] [cursor=pointer]:
+                  - /url: https://t.me/pavel_pozdnukhov
+            - link "+7 (495) 540-43-41" [ref=e104] [cursor=pointer]:
+              - /url: tel:+74955404341
+    - generic [ref=e108]:
+      - img "душевая кабина из стекла" [ref=e113]
+      - heading "Душевые кабины на заказ из стекла" [level=1] [ref=e120]
+      - generic [ref=e121]: Оставьте заявку на просчет и мы перезвоним вам для консультации и расчета вашей душевой кабины
+      - form [ref=e125]:
+        - generic [ref=e126]:
+          - textbox "name" [ref=e129]:
+            - /placeholder: Имя
+          - textbox "phone" [ref=e132]:
+            - /placeholder: Телефон
+          - button "ПЕРЕЗВОНИТЕ МНЕ" [ref=e134] [cursor=pointer]
+    - heading "Изготавливаем душевые кабины из стекла по индивидуальным размерам" [level=2] [ref=e157]
+    - generic [ref=e162]:
+      - text: Мы предлагаем стильные и мультифункциональные душевые кабины на заказ из стекла. Множество вариантов отделки и комплектации удовлетворят любые ваши запросы.У нас вы также можете заказать стеклянные душевые
+      - link "уголки" [ref=e163] [cursor=pointer]:
+        - /url: https://dushnazakaz.ru/ugolki
+      - text: ","
+      - link "ограждения" [ref=e164] [cursor=pointer]:
+        - /url: https://dushnazakaz.ru/ograzhdeniya
+      - text: и
+      - link "перегородки" [ref=e165] [cursor=pointer]:
+        - /url: https://dushnazakaz.ru/peregorodki
+      - text: .
+    - generic [ref=e170]:
+      - generic [ref=e171]:
+        - link [ref=e172] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-586060768792-uglovie-dushevie-kabini
+        - generic [ref=e176]:
+          - link "Угловые душевые кабины от 45 000 р. С распашными дверками, глухим или неподвижным стеклом Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e178] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-586060768792-uglovie-dushevie-kabini
+            - generic [ref=e179]:
+              - generic [ref=e180]: Угловые душевые кабины
+              - generic [ref=e182]:
+                - text: от
+                - generic [ref=e183]: 45 000
+                - generic [ref=e184]: р.
+              - generic [ref=e185]: С распашными дверками, глухим или неподвижным стеклом
+              - generic [ref=e186]:
+                - generic [ref=e187]:
+                  - generic [ref=e188]: Стекло
+                  - generic [ref=e189]: Закаленное 8 мм
+                - generic [ref=e190]:
+                  - generic [ref=e191]: Цвет стекла
+                  - generic [ref=e192]:
+                    - generic "Обычное" [ref=e193]
+                    - generic "Бронзовое" [ref=e194]
+                    - generic "Осветленное" [ref=e195]
+                    - generic "Особое" [ref=e196]
+                - generic [ref=e197]:
+                  - generic [ref=e198]: Фурнитура
+                  - generic [ref=e199]: Стандарт / Премиум
+                - generic [ref=e200]:
+                  - generic [ref=e201]: Цвет фурнитуры
+                  - generic [ref=e202]:
+                    - generic "Полированный хром" [ref=e203]
+                    - generic "Матовый хром" [ref=e204]
+                    - generic "Нержавеющая сталь" [ref=e205]
+                    - generic "Золото" [ref=e206]
+                    - generic "Бронза" [ref=e207]
+                    - generic "Черная" [ref=e208]
+                - generic [ref=e209]: Собственное производство
+          - link "Подробнее" [ref=e211] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-586060768792-uglovie-dushevie-kabini
+      - generic [ref=e213]:
+        - link [ref=e214] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-711751609432-razdvizhnie-dushevie-kabini
+        - generic [ref=e218]:
+          - link "Раздвижные душевые кабины от 38 000 р. Угловые или трапециевидные душевые кабины с раздвижными дверками Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e220] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-711751609432-razdvizhnie-dushevie-kabini
+            - generic [ref=e221]:
+              - generic [ref=e222]: Раздвижные душевые кабины
+              - generic [ref=e224]:
+                - text: от
+                - generic [ref=e225]: 38 000
+                - generic [ref=e226]: р.
+              - generic [ref=e227]: Угловые или трапециевидные душевые кабины с раздвижными дверками
+              - generic [ref=e228]:
+                - generic [ref=e229]:
+                  - generic [ref=e230]: Стекло
+                  - generic [ref=e231]: Закаленное 8 мм
+                - generic [ref=e232]:
+                  - generic [ref=e233]: Цвет стекла
+                  - generic [ref=e234]:
+                    - generic "Обычное" [ref=e235]
+                    - generic "Бронзовое" [ref=e236]
+                    - generic "Осветленное" [ref=e237]
+                    - generic "Особое" [ref=e238]
+                - generic [ref=e239]:
+                  - generic [ref=e240]: Фурнитура
+                  - generic [ref=e241]: Стандарт / Премиум
+                - generic [ref=e242]:
+                  - generic [ref=e243]: Цвет фурнитуры
+                  - generic [ref=e244]:
+                    - generic "Полированный хром" [ref=e245]
+                    - generic "Матовый хром" [ref=e246]
+                    - generic "Нержавеющая сталь" [ref=e247]
+                    - generic "Золото" [ref=e248]
+                    - generic "Бронза" [ref=e249]
+                    - generic "Черная" [ref=e250]
+                - generic [ref=e251]: Собственное производство
+          - link "Подробнее" [ref=e253] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-711751609432-razdvizhnie-dushevie-kabini
+      - generic [ref=e255]:
+        - link [ref=e256] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-144044692542-shtorki-na-vannu
+        - generic [ref=e260]:
+          - link "Шторки на ванну от 18 000 р. Душевая шторка на ванну с креплением к стене с неподвижным стеклом Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e262] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-144044692542-shtorki-na-vannu
+            - generic [ref=e263]:
+              - generic [ref=e264]: Шторки на ванну
+              - generic [ref=e266]:
+                - text: от
+                - generic [ref=e267]: 18 000
+                - generic [ref=e268]: р.
+              - generic [ref=e269]: Душевая шторка на ванну с креплением к стене с неподвижным стеклом
+              - generic [ref=e270]:
+                - generic [ref=e271]:
+                  - generic [ref=e272]: Стекло
+                  - generic [ref=e273]: Закаленное 8 мм
+                - generic [ref=e274]:
+                  - generic [ref=e275]: Цвет стекла
+                  - generic [ref=e276]:
+                    - generic "Обычное" [ref=e277]
+                    - generic "Бронзовое" [ref=e278]
+                    - generic "Осветленное" [ref=e279]
+                    - generic "Особое" [ref=e280]
+                - generic [ref=e281]:
+                  - generic [ref=e282]: Фурнитура
+                  - generic [ref=e283]: Стандарт / Премиум
+                - generic [ref=e284]:
+                  - generic [ref=e285]: Цвет фурнитуры
+                  - generic [ref=e286]:
+                    - generic "Полированный хром" [ref=e287]
+                    - generic "Матовый хром" [ref=e288]
+                    - generic "Нержавеющая сталь" [ref=e289]
+                    - generic "Золото" [ref=e290]
+                    - generic "Бронза" [ref=e291]
+                    - generic "Черная" [ref=e292]
+                - generic [ref=e293]: Собственное производство
+          - link "Подробнее" [ref=e295] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-144044692542-shtorki-na-vannu
+      - generic [ref=e297]:
+        - link [ref=e298] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-469608989612-dverki-v-nishu
+        - generic [ref=e302]:
+          - link "Дверки в нишу от 27 000 р. Душевая кабина в нишу с распашной или раздвижной дверкой Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e304] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-469608989612-dverki-v-nishu
+            - generic [ref=e305]:
+              - generic [ref=e306]: Дверки в нишу
+              - generic [ref=e308]:
+                - text: от
+                - generic [ref=e309]: 27 000
+                - generic [ref=e310]: р.
+              - generic [ref=e311]: Душевая кабина в нишу с распашной или раздвижной дверкой
+              - generic [ref=e312]:
+                - generic [ref=e313]:
+                  - generic [ref=e314]: Стекло
+                  - generic [ref=e315]: Закаленное 8 мм
+                - generic [ref=e316]:
+                  - generic [ref=e317]: Цвет стекла
+                  - generic [ref=e318]:
+                    - generic "Обычное" [ref=e319]
+                    - generic "Бронзовое" [ref=e320]
+                    - generic "Осветленное" [ref=e321]
+                    - generic "Особое" [ref=e322]
+                - generic [ref=e323]:
+                  - generic [ref=e324]: Фурнитура
+                  - generic [ref=e325]: Стандарт / Премиум
+                - generic [ref=e326]:
+                  - generic [ref=e327]: Цвет фурнитуры
+                  - generic [ref=e328]:
+                    - generic "Полированный хром" [ref=e329]
+                    - generic "Матовый хром" [ref=e330]
+                    - generic "Нержавеющая сталь" [ref=e331]
+                    - generic "Золото" [ref=e332]
+                    - generic "Бронза" [ref=e333]
+                    - generic "Черная" [ref=e334]
+                - generic [ref=e335]: Собственное производство
+          - link "Подробнее" [ref=e337] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/kakoj-dushevoj-ugolok-vybrat/tproduct/2181622231-469608989612-dverki-v-nishu
+    - generic [ref=e343]:
+      - generic [ref=e344]:
+        - link [ref=e345] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-357949738772-steklyannie-dveri-v-dushevuyu-kabinu
+        - generic [ref=e349]:
+          - link "Стеклянные двери в душевую кабину 45 000 р. С распашными или раздвижными дверками, глухим или неподвижным стеклом (Стеклянные двери в душевую) Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e351] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-357949738772-steklyannie-dveri-v-dushevuyu-kabinu
+            - generic [ref=e352]:
+              - generic [ref=e353]: Стеклянные двери в душевую кабину
+              - generic [ref=e355]:
+                - generic [ref=e356]: 45 000
+                - generic [ref=e357]: р.
+              - generic [ref=e358]: С распашными или раздвижными дверками, глухим или неподвижным стеклом (Стеклянные двери в душевую)
+              - generic [ref=e359]:
+                - generic [ref=e360]:
+                  - generic [ref=e361]: Стекло
+                  - generic [ref=e362]: Закаленное 8 мм
+                - generic [ref=e363]:
+                  - generic [ref=e364]: Цвет стекла
+                  - generic [ref=e365]:
+                    - generic "Обычное" [ref=e366]
+                    - generic "Бронзовое" [ref=e367]
+                    - generic "Осветленное" [ref=e368]
+                    - generic "Особое" [ref=e369]
+                - generic [ref=e370]:
+                  - generic [ref=e371]: Фурнитура
+                  - generic [ref=e372]: Стандарт / Премиум
+                - generic [ref=e373]:
+                  - generic [ref=e374]: Цвет фурнитуры
+                  - generic [ref=e375]:
+                    - generic "Полированный хром" [ref=e376]
+                    - generic "Матовый хром" [ref=e377]
+                    - generic "Нержавеющая сталь" [ref=e378]
+                    - generic "Золото" [ref=e379]
+                    - generic "Бронза" [ref=e380]
+                    - generic "Черная" [ref=e381]
+                - generic [ref=e382]: Собственное производство
+          - link "Подробнее" [ref=e384] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-357949738772-steklyannie-dveri-v-dushevuyu-kabinu
+      - generic [ref=e386]:
+        - link [ref=e387] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-683697870472-uglovoe-dushevoe-ograzhdenie-iz-stekla
+        - generic [ref=e390]:
+          - link "Угловое душевое ограждение из стекла 44 000 р. Угловое душевое ограждение из стекла на заказ Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e392] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-683697870472-uglovoe-dushevoe-ograzhdenie-iz-stekla
+            - generic [ref=e393]:
+              - generic [ref=e394]: Угловое душевое ограждение из стекла
+              - generic [ref=e396]:
+                - generic [ref=e397]: 44 000
+                - generic [ref=e398]: р.
+              - generic [ref=e399]: Угловое душевое ограждение из стекла на заказ
+              - generic [ref=e400]:
+                - generic [ref=e401]:
+                  - generic [ref=e402]: Стекло
+                  - generic [ref=e403]: Закаленное 8 мм
+                - generic [ref=e404]:
+                  - generic [ref=e405]: Цвет стекла
+                  - generic [ref=e406]:
+                    - generic "Обычное" [ref=e407]
+                    - generic "Бронзовое" [ref=e408]
+                    - generic "Осветленное" [ref=e409]
+                    - generic "Особое" [ref=e410]
+                - generic [ref=e411]:
+                  - generic [ref=e412]: Фурнитура
+                  - generic [ref=e413]: Стандарт / Премиум
+                - generic [ref=e414]:
+                  - generic [ref=e415]: Цвет фурнитуры
+                  - generic [ref=e416]:
+                    - generic "Полированный хром" [ref=e417]
+                    - generic "Матовый хром" [ref=e418]
+                    - generic "Нержавеющая сталь" [ref=e419]
+                    - generic "Золото" [ref=e420]
+                    - generic "Бронза" [ref=e421]
+                    - generic "Черная" [ref=e422]
+                - generic [ref=e423]: Собственное производство
+          - link "Подробнее" [ref=e425] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-683697870472-uglovoe-dushevoe-ograzhdenie-iz-stekla
+      - generic [ref=e427]:
+        - link [ref=e428] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-753076536182-steklyannoe-ograzhdenie-dlya-dusha
+        - generic [ref=e431]:
+          - link "Стеклянное ограждение для душа 48 000 р. Стеклянное ограждение для душа на заказ по вашим размерам Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e433] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-753076536182-steklyannoe-ograzhdenie-dlya-dusha
+            - generic [ref=e434]:
+              - generic [ref=e435]: Стеклянное ограждение для душа
+              - generic [ref=e437]:
+                - generic [ref=e438]: 48 000
+                - generic [ref=e439]: р.
+              - generic [ref=e440]: Стеклянное ограждение для душа на заказ по вашим размерам
+              - generic [ref=e441]:
+                - generic [ref=e442]:
+                  - generic [ref=e443]: Стекло
+                  - generic [ref=e444]: Закаленное 8 мм
+                - generic [ref=e445]:
+                  - generic [ref=e446]: Цвет стекла
+                  - generic [ref=e447]:
+                    - generic "Обычное" [ref=e448]
+                    - generic "Бронзовое" [ref=e449]
+                    - generic "Осветленное" [ref=e450]
+                    - generic "Особое" [ref=e451]
+                - generic [ref=e452]:
+                  - generic [ref=e453]: Фурнитура
+                  - generic [ref=e454]: Стандарт / Премиум
+                - generic [ref=e455]:
+                  - generic [ref=e456]: Цвет фурнитуры
+                  - generic [ref=e457]:
+                    - generic "Полированный хром" [ref=e458]
+                    - generic "Матовый хром" [ref=e459]
+                    - generic "Нержавеющая сталь" [ref=e460]
+                    - generic "Золото" [ref=e461]
+                    - generic "Бронза" [ref=e462]
+                    - generic "Черная" [ref=e463]
+                - generic [ref=e464]: Собственное производство
+          - link "Подробнее" [ref=e466] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-753076536182-steklyannoe-ograzhdenie-dlya-dusha
+      - generic [ref=e468]:
+        - link [ref=e469] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-806670657632-dushevoe-ograzhdenie-iz-stekla
+        - generic [ref=e472]:
+          - link "Душевое ограждение из стекла 46 000 р. Душевое ограждение из стекла на заказ по размерам Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e474] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-806670657632-dushevoe-ograzhdenie-iz-stekla
+            - generic [ref=e475]:
+              - generic [ref=e476]: Душевое ограждение из стекла
+              - generic [ref=e478]:
+                - generic [ref=e479]: 46 000
+                - generic [ref=e480]: р.
+              - generic [ref=e481]: Душевое ограждение из стекла на заказ по размерам
+              - generic [ref=e482]:
+                - generic [ref=e483]:
+                  - generic [ref=e484]: Стекло
+                  - generic [ref=e485]: Закаленное 8 мм
+                - generic [ref=e486]:
+                  - generic [ref=e487]: Цвет стекла
+                  - generic [ref=e488]:
+                    - generic "Обычное" [ref=e489]
+                    - generic "Бронзовое" [ref=e490]
+                    - generic "Осветленное" [ref=e491]
+                    - generic "Особое" [ref=e492]
+                - generic [ref=e493]:
+                  - generic [ref=e494]: Фурнитура
+                  - generic [ref=e495]: Стандарт / Премиум
+                - generic [ref=e496]:
+                  - generic [ref=e497]: Цвет фурнитуры
+                  - generic [ref=e498]:
+                    - generic "Полированный хром" [ref=e499]
+                    - generic "Матовый хром" [ref=e500]
+                    - generic "Нержавеющая сталь" [ref=e501]
+                    - generic "Золото" [ref=e502]
+                    - generic "Бронза" [ref=e503]
+                    - generic "Черная" [ref=e504]
+                - generic [ref=e505]: Собственное производство
+          - link "Подробнее" [ref=e507] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-806670657632-dushevoe-ograzhdenie-iz-stekla
+      - generic [ref=e509]:
+        - link [ref=e510] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-457094483622-trapetsievidnoe-dushevoe-ograzhdenie-s-d
+        - generic [ref=e514]:
+          - link "Трапециевидное душевое ограждение с дверкой 52 000 р. Трапециевидное ограждение с дверкой и неподвижными стеклами (Стеклянные двери в душевую) Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e516] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-457094483622-trapetsievidnoe-dushevoe-ograzhdenie-s-d
+            - generic [ref=e517]:
+              - generic [ref=e518]: Трапециевидное душевое ограждение с дверкой
+              - generic [ref=e520]:
+                - generic [ref=e521]: 52 000
+                - generic [ref=e522]: р.
+              - generic [ref=e523]: Трапециевидное ограждение с дверкой и неподвижными стеклами (Стеклянные двери в душевую)
+              - generic [ref=e524]:
+                - generic [ref=e525]:
+                  - generic [ref=e526]: Стекло
+                  - generic [ref=e527]: Закаленное 8 мм
+                - generic [ref=e528]:
+                  - generic [ref=e529]: Цвет стекла
+                  - generic [ref=e530]:
+                    - generic "Обычное" [ref=e531]
+                    - generic "Бронзовое" [ref=e532]
+                    - generic "Осветленное" [ref=e533]
+                    - generic "Особое" [ref=e534]
+                - generic [ref=e535]:
+                  - generic [ref=e536]: Фурнитура
+                  - generic [ref=e537]: Стандарт / Премиум
+                - generic [ref=e538]:
+                  - generic [ref=e539]: Цвет фурнитуры
+                  - generic [ref=e540]:
+                    - generic "Полированный хром" [ref=e541]
+                    - generic "Матовый хром" [ref=e542]
+                    - generic "Нержавеющая сталь" [ref=e543]
+                    - generic "Золото" [ref=e544]
+                    - generic "Бронза" [ref=e545]
+                    - generic "Черная" [ref=e546]
+                - generic [ref=e547]: Собственное производство
+          - link "Подробнее" [ref=e549] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-457094483622-trapetsievidnoe-dushevoe-ograzhdenie-s-d
+      - generic [ref=e551]:
+        - link [ref=e552] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-797863035722-trapetsievidnoe-ograzhdenie-dlya-dusha-s
+        - generic [ref=e555]:
+          - link "Трапециевидное ограждение для душа с дверкой из стекла 53 000 р. Ограждение для душа с дверкой из стекла. Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e557] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-797863035722-trapetsievidnoe-ograzhdenie-dlya-dusha-s
+            - generic [ref=e558]:
+              - generic [ref=e559]: Трапециевидное ограждение для душа с дверкой из стекла
+              - generic [ref=e561]:
+                - generic [ref=e562]: 53 000
+                - generic [ref=e563]: р.
+              - generic [ref=e564]: Ограждение для душа с дверкой из стекла.
+              - generic [ref=e565]:
+                - generic [ref=e566]:
+                  - generic [ref=e567]: Стекло
+                  - generic [ref=e568]: Закаленное 8 мм
+                - generic [ref=e569]:
+                  - generic [ref=e570]: Цвет стекла
+                  - generic [ref=e571]:
+                    - generic "Обычное" [ref=e572]
+                    - generic "Бронзовое" [ref=e573]
+                    - generic "Осветленное" [ref=e574]
+                    - generic "Особое" [ref=e575]
+                - generic [ref=e576]:
+                  - generic [ref=e577]: Фурнитура
+                  - generic [ref=e578]: Стандарт / Премиум
+                - generic [ref=e579]:
+                  - generic [ref=e580]: Цвет фурнитуры
+                  - generic [ref=e581]:
+                    - generic "Полированный хром" [ref=e582]
+                    - generic "Матовый хром" [ref=e583]
+                    - generic "Нержавеющая сталь" [ref=e584]
+                    - generic "Золото" [ref=e585]
+                    - generic "Бронза" [ref=e586]
+                    - generic "Черная" [ref=e587]
+                - generic [ref=e588]: Собственное производство
+          - link "Подробнее" [ref=e590] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-797863035722-trapetsievidnoe-ograzhdenie-dlya-dusha-s
+      - generic [ref=e592]:
+        - link [ref=e593] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-283865205122-dushevoe-ograzhdenie-so-shtangoi
+        - generic [ref=e596]:
+          - link "Душевое ограждение со штангой 25 000 р. Душевое ограждение со стабилизирующей штангой (Стеклянные двери в душевую) Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e598] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-283865205122-dushevoe-ograzhdenie-so-shtangoi
+            - generic [ref=e599]:
+              - generic [ref=e600]: Душевое ограждение со штангой
+              - generic [ref=e602]:
+                - generic [ref=e603]: 25 000
+                - generic [ref=e604]: р.
+              - generic [ref=e605]: Душевое ограждение со стабилизирующей штангой (Стеклянные двери в душевую)
+              - generic [ref=e606]:
+                - generic [ref=e607]:
+                  - generic [ref=e608]: Стекло
+                  - generic [ref=e609]: Закаленное 8 мм
+                - generic [ref=e610]:
+                  - generic [ref=e611]: Цвет стекла
+                  - generic [ref=e612]:
+                    - generic "Обычное" [ref=e613]
+                    - generic "Бронзовое" [ref=e614]
+                    - generic "Осветленное" [ref=e615]
+                    - generic "Особое" [ref=e616]
+                - generic [ref=e617]:
+                  - generic [ref=e618]: Фурнитура
+                  - generic [ref=e619]: Стандарт / Премиум
+                - generic [ref=e620]:
+                  - generic [ref=e621]: Цвет фурнитуры
+                  - generic [ref=e622]:
+                    - generic "Полированный хром" [ref=e623]
+                    - generic "Матовый хром" [ref=e624]
+                    - generic "Нержавеющая сталь" [ref=e625]
+                    - generic "Золото" [ref=e626]
+                    - generic "Бронза" [ref=e627]
+                    - generic "Черная" [ref=e628]
+                - generic [ref=e629]: Собственное производство
+          - link "Подробнее" [ref=e631] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-283865205122-dushevoe-ograzhdenie-so-shtangoi
+      - generic [ref=e633]:
+        - link [ref=e634] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-624269258162-dushevoe-ograzhdenie-v-nishu
+        - generic [ref=e637]:
+          - link "Душевое ограждение в нишу 39 000 р. Душевое ограждение в нишу с распашной или раздвижной дверкой (Стеклянные двери в душевую) Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e639] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-624269258162-dushevoe-ograzhdenie-v-nishu
+            - generic [ref=e640]:
+              - generic [ref=e641]: Душевое ограждение в нишу
+              - generic [ref=e643]:
+                - generic [ref=e644]: 39 000
+                - generic [ref=e645]: р.
+              - generic [ref=e646]: Душевое ограждение в нишу с распашной или раздвижной дверкой (Стеклянные двери в душевую)
+              - generic [ref=e647]:
+                - generic [ref=e648]:
+                  - generic [ref=e649]: Стекло
+                  - generic [ref=e650]: Закаленное 8 мм
+                - generic [ref=e651]:
+                  - generic [ref=e652]: Цвет стекла
+                  - generic [ref=e653]:
+                    - generic "Обычное" [ref=e654]
+                    - generic "Бронзовое" [ref=e655]
+                    - generic "Осветленное" [ref=e656]
+                    - generic "Особое" [ref=e657]
+                - generic [ref=e658]:
+                  - generic [ref=e659]: Фурнитура
+                  - generic [ref=e660]: Стандарт / Премиум
+                - generic [ref=e661]:
+                  - generic [ref=e662]: Цвет фурнитуры
+                  - generic [ref=e663]:
+                    - generic "Полированный хром" [ref=e664]
+                    - generic "Матовый хром" [ref=e665]
+                    - generic "Нержавеющая сталь" [ref=e666]
+                    - generic "Золото" [ref=e667]
+                    - generic "Бронза" [ref=e668]
+                    - generic "Черная" [ref=e669]
+                - generic [ref=e670]: Собственное производство
+          - link "Подробнее" [ref=e672] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/steklyannyye-dveri-v-dushevuyu/tproduct/1314546211-624269258162-dushevoe-ograzhdenie-v-nishu
+    - generic [ref=e678]:
+      - generic [ref=e679]:
+        - link [ref=e680] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-352945082012-pryamougolnoe-dushevoe-ograzhdenie
+        - generic [ref=e684]:
+          - link "Прямоугольное душевое ограждение 45 000 р. С распашными дверками внутрь или наружу и глухим стеклом Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e686] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-352945082012-pryamougolnoe-dushevoe-ograzhdenie
+            - generic [ref=e687]:
+              - generic [ref=e688]: Прямоугольное душевое ограждение
+              - generic [ref=e690]:
+                - generic [ref=e691]: 45 000
+                - generic [ref=e692]: р.
+              - generic [ref=e693]: С распашными дверками внутрь или наружу и глухим стеклом
+              - generic [ref=e694]:
+                - generic [ref=e695]:
+                  - generic [ref=e696]: Стекло
+                  - generic [ref=e697]: Закаленное 8 мм
+                - generic [ref=e698]:
+                  - generic [ref=e699]: Цвет стекла
+                  - generic [ref=e700]:
+                    - generic "Обычное" [ref=e701]
+                    - generic "Бронзовое" [ref=e702]
+                    - generic "Осветленное" [ref=e703]
+                    - generic "Особое" [ref=e704]
+                - generic [ref=e705]:
+                  - generic [ref=e706]: Фурнитура
+                  - generic [ref=e707]: Стандарт / Премиум
+                - generic [ref=e708]:
+                  - generic [ref=e709]: Цвет фурнитуры
+                  - generic [ref=e710]:
+                    - generic "Полированный хром" [ref=e711]
+                    - generic "Матовый хром" [ref=e712]
+                    - generic "Нержавеющая сталь" [ref=e713]
+                    - generic "Золото" [ref=e714]
+                    - generic "Бронза" [ref=e715]
+                    - generic "Черная" [ref=e716]
+                - generic [ref=e717]: Собственное производство
+          - link "Подробнее" [ref=e719] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-352945082012-pryamougolnoe-dushevoe-ograzhdenie
+      - generic [ref=e721]:
+        - link [ref=e722] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-723556162812-pryamougolnoe-ograzhdenie-na-zakaz
+        - generic [ref=e725]:
+          - link "Прямоугольное ограждение на заказ 49 000 р. Прямоугольное ограждение на заказ из стекла Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e727] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-723556162812-pryamougolnoe-ograzhdenie-na-zakaz
+            - generic [ref=e728]:
+              - generic [ref=e729]: Прямоугольное ограждение на заказ
+              - generic [ref=e731]:
+                - generic [ref=e732]: 49 000
+                - generic [ref=e733]: р.
+              - generic [ref=e734]: Прямоугольное ограждение на заказ из стекла
+              - generic [ref=e735]:
+                - generic [ref=e736]:
+                  - generic [ref=e737]: Стекло
+                  - generic [ref=e738]: Закаленное 8 мм
+                - generic [ref=e739]:
+                  - generic [ref=e740]: Цвет стекла
+                  - generic [ref=e741]:
+                    - generic "Обычное" [ref=e742]
+                    - generic "Бронзовое" [ref=e743]
+                    - generic "Осветленное" [ref=e744]
+                    - generic "Особое" [ref=e745]
+                - generic [ref=e746]:
+                  - generic [ref=e747]: Фурнитура
+                  - generic [ref=e748]: Стандарт / Премиум
+                - generic [ref=e749]:
+                  - generic [ref=e750]: Цвет фурнитуры
+                  - generic [ref=e751]:
+                    - generic "Полированный хром" [ref=e752]
+                    - generic "Матовый хром" [ref=e753]
+                    - generic "Нержавеющая сталь" [ref=e754]
+                    - generic "Золото" [ref=e755]
+                    - generic "Бронза" [ref=e756]
+                    - generic "Черная" [ref=e757]
+                - generic [ref=e758]: Собственное производство
+          - link "Подробнее" [ref=e760] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-723556162812-pryamougolnoe-ograzhdenie-na-zakaz
+      - generic [ref=e762]:
+        - link [ref=e763] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-393366779962-pryamougolnoe-steklyannoe-ograzhdenie
+        - generic [ref=e766]:
+          - link "Прямоугольное стеклянное ограждение 47 000 р. Прямоугольное ограждение в душевую из стекла Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e768] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-393366779962-pryamougolnoe-steklyannoe-ograzhdenie
+            - generic [ref=e769]:
+              - generic [ref=e770]: Прямоугольное стеклянное ограждение
+              - generic [ref=e772]:
+                - generic [ref=e773]: 47 000
+                - generic [ref=e774]: р.
+              - generic [ref=e775]: Прямоугольное ограждение в душевую из стекла
+              - generic [ref=e776]:
+                - generic [ref=e777]:
+                  - generic [ref=e778]: Стекло
+                  - generic [ref=e779]: Закаленное 8 мм
+                - generic [ref=e780]:
+                  - generic [ref=e781]: Цвет стекла
+                  - generic [ref=e782]:
+                    - generic "Обычное" [ref=e783]
+                    - generic "Бронзовое" [ref=e784]
+                    - generic "Осветленное" [ref=e785]
+                    - generic "Особое" [ref=e786]
+                - generic [ref=e787]:
+                  - generic [ref=e788]: Фурнитура
+                  - generic [ref=e789]: Стандарт / Премиум
+                - generic [ref=e790]:
+                  - generic [ref=e791]: Цвет фурнитуры
+                  - generic [ref=e792]:
+                    - generic "Полированный хром" [ref=e793]
+                    - generic "Матовый хром" [ref=e794]
+                    - generic "Нержавеющая сталь" [ref=e795]
+                    - generic "Золото" [ref=e796]
+                    - generic "Бронза" [ref=e797]
+                    - generic "Черная" [ref=e798]
+                - generic [ref=e799]: Собственное производство
+          - link "Подробнее" [ref=e801] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-393366779962-pryamougolnoe-steklyannoe-ograzhdenie
+      - generic [ref=e803]:
+        - link [ref=e804] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-680279556172-pryamougolnoe-ograzhdenie-dlya-dusha-iz
+        - generic [ref=e807]:
+          - link "Прямоугольное ограждение для душа из стекла 46 000 р. Прямоугольное ограждение для душа из стекла Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e809] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-680279556172-pryamougolnoe-ograzhdenie-dlya-dusha-iz
+            - generic [ref=e810]:
+              - generic [ref=e811]: Прямоугольное ограждение для душа из стекла
+              - generic [ref=e813]:
+                - generic [ref=e814]: 46 000
+                - generic [ref=e815]: р.
+              - generic [ref=e816]: Прямоугольное ограждение для душа из стекла
+              - generic [ref=e817]:
+                - generic [ref=e818]:
+                  - generic [ref=e819]: Стекло
+                  - generic [ref=e820]: Закаленное 8 мм
+                - generic [ref=e821]:
+                  - generic [ref=e822]: Цвет стекла
+                  - generic [ref=e823]:
+                    - generic "Обычное" [ref=e824]
+                    - generic "Бронзовое" [ref=e825]
+                    - generic "Осветленное" [ref=e826]
+                    - generic "Особое" [ref=e827]
+                - generic [ref=e828]:
+                  - generic [ref=e829]: Фурнитура
+                  - generic [ref=e830]: Стандарт / Премиум
+                - generic [ref=e831]:
+                  - generic [ref=e832]: Цвет фурнитуры
+                  - generic [ref=e833]:
+                    - generic "Полированный хром" [ref=e834]
+                    - generic "Матовый хром" [ref=e835]
+                    - generic "Нержавеющая сталь" [ref=e836]
+                    - generic "Золото" [ref=e837]
+                    - generic "Бронза" [ref=e838]
+                    - generic "Черная" [ref=e839]
+                - generic [ref=e840]: Собственное производство
+          - link "Подробнее" [ref=e842] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-680279556172-pryamougolnoe-ograzhdenie-dlya-dusha-iz
+      - generic [ref=e844]:
+        - link [ref=e845] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-712214339042-trapetsievidnoe-dushevoe-ograzhdenie
+        - generic [ref=e849]:
+          - link "Трапециевидное душевое ограждение 52 000 р. Трапециевидный уголок с дверкой и неподвижными стеклами Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e851] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-712214339042-trapetsievidnoe-dushevoe-ograzhdenie
+            - generic [ref=e852]:
+              - generic [ref=e853]: Трапециевидное душевое ограждение
+              - generic [ref=e855]:
+                - generic [ref=e856]: 52 000
+                - generic [ref=e857]: р.
+              - generic [ref=e858]: Трапециевидный уголок с дверкой и неподвижными стеклами
+              - generic [ref=e859]:
+                - generic [ref=e860]:
+                  - generic [ref=e861]: Стекло
+                  - generic [ref=e862]: Закаленное 8 мм
+                - generic [ref=e863]:
+                  - generic [ref=e864]: Цвет стекла
+                  - generic [ref=e865]:
+                    - generic "Обычное" [ref=e866]
+                    - generic "Бронзовое" [ref=e867]
+                    - generic "Осветленное" [ref=e868]
+                    - generic "Особое" [ref=e869]
+                - generic [ref=e870]:
+                  - generic [ref=e871]: Фурнитура
+                  - generic [ref=e872]: Стандарт / Премиум
+                - generic [ref=e873]:
+                  - generic [ref=e874]: Цвет фурнитуры
+                  - generic [ref=e875]:
+                    - generic "Полированный хром" [ref=e876]
+                    - generic "Матовый хром" [ref=e877]
+                    - generic "Нержавеющая сталь" [ref=e878]
+                    - generic "Золото" [ref=e879]
+                    - generic "Бронза" [ref=e880]
+                    - generic "Черная" [ref=e881]
+                - generic [ref=e882]: Собственное производство
+          - link "Подробнее" [ref=e884] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-712214339042-trapetsievidnoe-dushevoe-ograzhdenie
+      - generic [ref=e886]:
+        - link [ref=e887] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-426453904502-razdvizhnoe-dushevoe-ograzhdenie
+        - generic [ref=e891]:
+          - link "Раздвижное душевое ограждение 51 000 р. Душевой уголок с раздвижными дверками открытого или закрытого типа Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство" [ref=e893] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-426453904502-razdvizhnoe-dushevoe-ograzhdenie
+            - generic [ref=e894]:
+              - generic [ref=e895]: Раздвижное душевое ограждение
+              - generic [ref=e897]:
+                - generic [ref=e898]: 51 000
+                - generic [ref=e899]: р.
+              - generic [ref=e900]: Душевой уголок с раздвижными дверками открытого или закрытого типа
+              - generic [ref=e901]:
+                - generic [ref=e902]:
+                  - generic [ref=e903]: Стекло
+                  - generic [ref=e904]: Закаленное 8 мм
+                - generic [ref=e905]:
+                  - generic [ref=e906]: Цвет стекла
+                  - generic [ref=e907]:
+                    - generic "Обычное" [ref=e908]
+                    - generic "Бронзовое" [ref=e909]
+                    - generic "Осветленное" [ref=e910]
+                    - generic "Особое" [ref=e911]
+                - generic [ref=e912]:
+                  - generic [ref=e913]: Фурнитура
+                  - generic [ref=e914]: Стандарт / Премиум
+                - generic [ref=e915]:
+                  - generic [ref=e916]: Цвет фурнитуры
+                  - generic [ref=e917]:
+                    - generic "Полированный хром" [ref=e918]
+                    - generic "Матовый хром" [ref=e919]
+                    - generic "Нержавеющая сталь" [ref=e920]
+                    - generic "Золото" [ref=e921]
+                    - generic "Бронза" [ref=e922]
+                    - generic "Черная" [ref=e923]
+                - generic [ref=e924]: Собственное производство
+          - link "Подробнее" [ref=e926] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1429291561-426453904502-razdvizhnoe-dushevoe-ograzhdenie
+    - generic [ref=e932]:
+      - generic [ref=e933]:
+        - link [ref=e934] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-211832128022-dushevaya-peregorodka-na-vannu
+        - generic [ref=e938]:
+          - link "Душевая перегородка на ванну Перегородка-ширма на ванну с распашной или складной дверкой Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 18 000 р." [ref=e940] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-211832128022-dushevaya-peregorodka-na-vannu
+            - generic [ref=e941]:
+              - generic [ref=e942]: Душевая перегородка на ванну
+              - generic [ref=e943]: Перегородка-ширма на ванну с распашной или складной дверкой
+              - generic [ref=e944]:
+                - generic [ref=e945]:
+                  - generic [ref=e946]: Стекло
+                  - generic [ref=e947]: Закаленное 8 мм
+                - generic [ref=e948]:
+                  - generic [ref=e949]: Цвет стекла
+                  - generic [ref=e950]:
+                    - generic "Обычное" [ref=e951]
+                    - generic "Бронзовое" [ref=e952]
+                    - generic "Осветленное" [ref=e953]
+                    - generic "Особое" [ref=e954]
+                - generic [ref=e955]:
+                  - generic [ref=e956]: Фурнитура
+                  - generic [ref=e957]: Стандарт / Премиум
+                - generic [ref=e958]:
+                  - generic [ref=e959]: Цвет фурнитуры
+                  - generic [ref=e960]:
+                    - generic "Полированный хром" [ref=e961]
+                    - generic "Матовый хром" [ref=e962]
+                    - generic "Нержавеющая сталь" [ref=e963]
+                    - generic "Золото" [ref=e964]
+                    - generic "Бронза" [ref=e965]
+                    - generic "Черная" [ref=e966]
+                - generic [ref=e967]: Собственное производство
+              - generic [ref=e969]:
+                - generic [ref=e970]: 18 000
+                - generic [ref=e971]: р.
+          - link "Подробнее" [ref=e973] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-211832128022-dushevaya-peregorodka-na-vannu
+      - generic [ref=e975]:
+        - link [ref=e976] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-500213613752-dushevaya-peregorodka-iz-stekla
+        - generic [ref=e979]:
+          - link "Душевая перегородка из стекла Душевая перегородка из стекла на заказ Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 19 000 р." [ref=e981] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-500213613752-dushevaya-peregorodka-iz-stekla
+            - generic [ref=e982]:
+              - generic [ref=e983]: Душевая перегородка из стекла
+              - generic [ref=e984]: Душевая перегородка из стекла на заказ
+              - generic [ref=e985]:
+                - generic [ref=e986]:
+                  - generic [ref=e987]: Стекло
+                  - generic [ref=e988]: Закаленное 8 мм
+                - generic [ref=e989]:
+                  - generic [ref=e990]: Цвет стекла
+                  - generic [ref=e991]:
+                    - generic "Обычное" [ref=e992]
+                    - generic "Бронзовое" [ref=e993]
+                    - generic "Осветленное" [ref=e994]
+                    - generic "Особое" [ref=e995]
+                - generic [ref=e996]:
+                  - generic [ref=e997]: Фурнитура
+                  - generic [ref=e998]: Стандарт / Премиум
+                - generic [ref=e999]:
+                  - generic [ref=e1000]: Цвет фурнитуры
+                  - generic [ref=e1001]:
+                    - generic "Полированный хром" [ref=e1002]
+                    - generic "Матовый хром" [ref=e1003]
+                    - generic "Нержавеющая сталь" [ref=e1004]
+                    - generic "Золото" [ref=e1005]
+                    - generic "Бронза" [ref=e1006]
+                    - generic "Черная" [ref=e1007]
+                - generic [ref=e1008]: Собственное производство
+              - generic [ref=e1010]:
+                - generic [ref=e1011]: 19 000
+                - generic [ref=e1012]: р.
+          - link "Подробнее" [ref=e1014] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-500213613752-dushevaya-peregorodka-iz-stekla
+      - generic [ref=e1016]:
+        - link [ref=e1017] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-377094602652-dushevaya-peregorodka-v-nishu
+        - generic [ref=e1021]:
+          - link "Душевая перегородка в нишу Перегородка в нишу с распашной или раздвижной дверкой Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 27 000 р." [ref=e1023] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-377094602652-dushevaya-peregorodka-v-nishu
+            - generic [ref=e1024]:
+              - generic [ref=e1025]: Душевая перегородка в нишу
+              - generic [ref=e1026]: Перегородка в нишу с распашной или раздвижной дверкой
+              - generic [ref=e1027]:
+                - generic [ref=e1028]:
+                  - generic [ref=e1029]: Стекло
+                  - generic [ref=e1030]: Закаленное 8 мм
+                - generic [ref=e1031]:
+                  - generic [ref=e1032]: Цвет стекла
+                  - generic [ref=e1033]:
+                    - generic "Обычное" [ref=e1034]
+                    - generic "Бронзовое" [ref=e1035]
+                    - generic "Осветленное" [ref=e1036]
+                    - generic "Особое" [ref=e1037]
+                - generic [ref=e1038]:
+                  - generic [ref=e1039]: Фурнитура
+                  - generic [ref=e1040]: Стандарт / Премиум
+                - generic [ref=e1041]:
+                  - generic [ref=e1042]: Цвет фурнитуры
+                  - generic [ref=e1043]:
+                    - generic "Полированный хром" [ref=e1044]
+                    - generic "Матовый хром" [ref=e1045]
+                    - generic "Нержавеющая сталь" [ref=e1046]
+                    - generic "Золото" [ref=e1047]
+                    - generic "Бронза" [ref=e1048]
+                    - generic "Черная" [ref=e1049]
+                - generic [ref=e1050]: Собственное производство
+              - generic [ref=e1052]:
+                - generic [ref=e1053]: 27 000
+                - generic [ref=e1054]: р.
+          - link "Подробнее" [ref=e1056] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-377094602652-dushevaya-peregorodka-v-nishu
+      - generic [ref=e1058]:
+        - link [ref=e1059] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-120708749492-steklyannaya-dushevaya-peregorodka
+        - generic [ref=e1062]:
+          - link "Стеклянная душевая перегородка Стеклянная душевая перегородка на заказ по размерам Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 29 000 р." [ref=e1064] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-120708749492-steklyannaya-dushevaya-peregorodka
+            - generic [ref=e1065]:
+              - generic [ref=e1066]: Стеклянная душевая перегородка
+              - generic [ref=e1067]: Стеклянная душевая перегородка на заказ по размерам
+              - generic [ref=e1068]:
+                - generic [ref=e1069]:
+                  - generic [ref=e1070]: Стекло
+                  - generic [ref=e1071]: Закаленное 8 мм
+                - generic [ref=e1072]:
+                  - generic [ref=e1073]: Цвет стекла
+                  - generic [ref=e1074]:
+                    - generic "Обычное" [ref=e1075]
+                    - generic "Бронзовое" [ref=e1076]
+                    - generic "Осветленное" [ref=e1077]
+                    - generic "Особое" [ref=e1078]
+                - generic [ref=e1079]:
+                  - generic [ref=e1080]: Фурнитура
+                  - generic [ref=e1081]: Стандарт / Премиум
+                - generic [ref=e1082]:
+                  - generic [ref=e1083]: Цвет фурнитуры
+                  - generic [ref=e1084]:
+                    - generic "Полированный хром" [ref=e1085]
+                    - generic "Матовый хром" [ref=e1086]
+                    - generic "Нержавеющая сталь" [ref=e1087]
+                    - generic "Золото" [ref=e1088]
+                    - generic "Бронза" [ref=e1089]
+                    - generic "Черная" [ref=e1090]
+                - generic [ref=e1091]: Собственное производство
+              - generic [ref=e1093]:
+                - generic [ref=e1094]: 29 000
+                - generic [ref=e1095]: р.
+          - link "Подробнее" [ref=e1097] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-120708749492-steklyannaya-dushevaya-peregorodka
+      - generic [ref=e1099]:
+        - link [ref=e1100] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-855779120352-dushevaya-peregorodka-odinarnaya
+        - generic [ref=e1104]:
+          - link "Душевая перегородка одинарная Душевая перегородка со стабилизирующей штангой Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 25 000 р." [ref=e1106] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-855779120352-dushevaya-peregorodka-odinarnaya
+            - generic [ref=e1107]:
+              - generic [ref=e1108]: Душевая перегородка одинарная
+              - generic [ref=e1109]: Душевая перегородка со стабилизирующей штангой
+              - generic [ref=e1110]:
+                - generic [ref=e1111]:
+                  - generic [ref=e1112]: Стекло
+                  - generic [ref=e1113]: Закаленное 8 мм
+                - generic [ref=e1114]:
+                  - generic [ref=e1115]: Цвет стекла
+                  - generic [ref=e1116]:
+                    - generic "Обычное" [ref=e1117]
+                    - generic "Бронзовое" [ref=e1118]
+                    - generic "Осветленное" [ref=e1119]
+                    - generic "Особое" [ref=e1120]
+                - generic [ref=e1121]:
+                  - generic [ref=e1122]: Фурнитура
+                  - generic [ref=e1123]: Стандарт / Премиум
+                - generic [ref=e1124]:
+                  - generic [ref=e1125]: Цвет фурнитуры
+                  - generic [ref=e1126]:
+                    - generic "Полированный хром" [ref=e1127]
+                    - generic "Матовый хром" [ref=e1128]
+                    - generic "Нержавеющая сталь" [ref=e1129]
+                    - generic "Золото" [ref=e1130]
+                    - generic "Бронза" [ref=e1131]
+                    - generic "Черная" [ref=e1132]
+                - generic [ref=e1133]: Собственное производство
+              - generic [ref=e1135]:
+                - generic [ref=e1136]: 25 000
+                - generic [ref=e1137]: р.
+          - link "Подробнее" [ref=e1139] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-855779120352-dushevaya-peregorodka-odinarnaya
+      - generic [ref=e1141]:
+        - link [ref=e1142] [cursor=pointer]:
+          - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-724553187992-peregorodka-dlya-dusha-iz-stekla
+        - generic [ref=e1145]:
+          - link "Перегородка для душа из стекла Перегородка для душа из стекла на заказ Стекло Закаленное 8 мм Цвет стекла Обычное Бронзовое Осветленное Особое Фурнитура Стандарт / Премиум Цвет фурнитуры Полированный хром Матовый хром Нержавеющая сталь Золото Бронза Черная Собственное производство 26 000 р." [ref=e1147] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-724553187992-peregorodka-dlya-dusha-iz-stekla
+            - generic [ref=e1148]:
+              - generic [ref=e1149]: Перегородка для душа из стекла
+              - generic [ref=e1150]: Перегородка для душа из стекла на заказ
+              - generic [ref=e1151]:
+                - generic [ref=e1152]:
+                  - generic [ref=e1153]: Стекло
+                  - generic [ref=e1154]: Закаленное 8 мм
+                - generic [ref=e1155]:
+                  - generic [ref=e1156]: Цвет стекла
+                  - generic [ref=e1157]:
+                    - generic "Обычное" [ref=e1158]
+                    - generic "Бронзовое" [ref=e1159]
+                    - generic "Осветленное" [ref=e1160]
+                    - generic "Особое" [ref=e1161]
+                - generic [ref=e1162]:
+                  - generic [ref=e1163]: Фурнитура
+                  - generic [ref=e1164]: Стандарт / Премиум
+                - generic [ref=e1165]:
+                  - generic [ref=e1166]: Цвет фурнитуры
+                  - generic [ref=e1167]:
+                    - generic "Полированный хром" [ref=e1168]
+                    - generic "Матовый хром" [ref=e1169]
+                    - generic "Нержавеющая сталь" [ref=e1170]
+                    - generic "Золото" [ref=e1171]
+                    - generic "Бронза" [ref=e1172]
+                    - generic "Черная" [ref=e1173]
+                - generic [ref=e1174]: Собственное производство
+              - generic [ref=e1176]:
+                - generic [ref=e1177]: 26 000
+                - generic [ref=e1178]: р.
+          - link "Подробнее" [ref=e1180] [cursor=pointer]:
+            - /url: https://dushnazakaz.ru/peregorodki/tproduct/1183285596-724553187992-peregorodka-dlya-dusha-iz-stekla
+    - generic [ref=e1182]: Кликните на кнопку «Подробнее», чтобы посмотреть фотографии выполненных работ
+    - generic [ref=e1195]:
+      - generic [ref=e1200]: Зачем ждать?Теперь доступна рассрочка!
+      - generic [ref=e1202]: подробности уточняйте у менеджеров
+    - generic [ref=e1213]:
+      - generic [ref=e1214]: Так же мы изготавливаем
+      - list [ref=e1217]:
+        - listitem [ref=e1218] [cursor=pointer]:
+          - generic [ref=e1224]:
+            - button "Стеклянные полочки Оставить заявку" [ref=e1227]: Стеклянные полочки
+            - generic [ref=e1228]: Оставить заявку
+        - listitem [ref=e1232] [cursor=pointer]:
+          - generic [ref=e1238]:
+            - button "Стеклянные фартуки Оставить заявку" [ref=e1241]: Стеклянные фартуки
+            - generic [ref=e1242]: Оставить заявку
+        - listitem [ref=e1246] [cursor=pointer]:
+          - generic [ref=e1252]:
+            - button "Стеклянная мебель Оставить заявку" [ref=e1255]: Стеклянная мебель
+            - generic [ref=e1256]: Оставить заявку
+    - generic [ref=e1260]: Душевые кабины любой сложности
+    - tablist [ref=e1269]:
+      - tab "Угловые" [selected] [ref=e1270]
+      - tab "Ограждения" [ref=e1272] [cursor=pointer]
+      - tab "В нишу" [ref=e1274] [cursor=pointer]
+      - tab "Раздвижные" [ref=e1276] [cursor=pointer]
+      - tab "Шторки" [ref=e1278] [cursor=pointer]
+    - tabpanel "Угловые" [ref=e1280]:
+      - generic [ref=e1283]:
+        - generic [ref=e1286]:
+          - generic [ref=e1287]: Душевой уголок из стекла
+          - generic [ref=e1288]: От 45.000р
+        - generic [ref=e1291]:
+          - generic [ref=e1292]: Душевая кабина угловая
+          - generic [ref=e1293]: От 46.000р
+        - generic [ref=e1296]:
+          - generic [ref=e1297]: Душевая кабина угловая стеклянная
+          - generic [ref=e1298]: От 45.500р
+    - generic [ref=e1300]:
+      - generic [ref=e1301]: Наши преимущества
+      - list [ref=e1304]:
+        - listitem [ref=e1305]:
+          - generic [ref=e1306]:
+            - generic [ref=e1307]: Собственное производство
+            - generic [ref=e1308]: Изготавливаем стекло для наших изделийи держим в наличии большой ассортимент фурнитуры
+        - listitem [ref=e1309]:
+          - generic [ref=e1310]:
+            - generic [ref=e1311]: Безопасное закаленное стекло
+            - generic [ref=e1312]: Толщиной 8 мм, стекло меньшей толщиныне используем, не считаем его безопасным
+        - listitem [ref=e1313]:
+          - generic [ref=e1314]:
+            - generic [ref=e1315]: Минимальные сроки изготовления
+            - generic [ref=e1316]: До 10 дней от заказа до установки, стараемся сделать все в самые кратчайшие сроки
+        - listitem [ref=e1317]:
+          - generic [ref=e1318]:
+            - generic [ref=e1319]: Высокое качество материалов
+            - generic [ref=e1320]: Мы не стремимся удешевить наши изделияи ценим баланс в цене и качестве
+        - listitem [ref=e1321]:
+          - generic [ref=e1322]:
+            - generic [ref=e1323]: Гарантия на нашу продукцию
+            - generic [ref=e1324]: В зависимости от выбранных материалов,гарантия на наши изделия до 3х лет
+        - listitem [ref=e1325]:
+          - generic [ref=e1326]:
+            - generic [ref=e1327]: Профессиональный монтаж
+            - generic [ref=e1328]: Высококвалифицированные специалисты,влюбленные в свою работу
+    - generic [ref=e1333]:
+      - generic [ref=e1338]: Вы можете выбрать любой из 8 видов стекла
+      - generic [ref=e1340]: Все стекло закаленное и безопасное, толщиной 8 мм.Выдерживает удары и высокие температуры. Может быть как прозрачным, так и матовым, а еще цветным или с рисунком.
+    - generic [ref=e1342]: Наведите на картинку, чтобы посмотреть, как выглядит каждое из стекол в матовом исполнении + пескоструйный рисунок :)
+    - generic [ref=e1355]:
+      - generic [ref=e1361]:
+        - generic [ref=e1362]: Обычное
+        - generic [ref=e1363]: Стекло с зеленоватым оттенком (прозрачное или матовое)
+      - generic [ref=e1369]:
+        - generic [ref=e1370]: Осветленное
+        - generic [ref=e1371]: Прозрачное, бесцветное стекло (прозрачное или матовое)
+      - generic [ref=e1377]:
+        - generic [ref=e1378]: Бронзовое
+        - generic [ref=e1379]: Темное, стильное стекло (прозрачное или матовое)
+      - generic [ref=e1385]:
+        - generic [ref=e1386]: Особое
+        - generic [ref=e1387]: Цветное стекло, нанесение пескоструйного рисунка
+    - generic [ref=e1391]:
+      - generic [ref=e1393]:
+        - heading "Укажите, какую душевую кабину из стекла вы хотите заказать" [level=2] [ref=e1394]
+        - generic [ref=e1396]: Таким образом мы быстрее сможем сориентировать вас по стоимости вашей кабины для душа :)
+      - form [ref=e1401]:
+        - generic [ref=e1402]:
+          - radiogroup "Конструкция" [ref=e1403]:
+            - generic [ref=e1406]:
+              - generic [ref=e1407] [cursor=pointer]:
+                - radio "Шторка одинарная" [checked] [ref=e1408]
+                - generic [ref=e1410]: Шторка одинарная
+              - generic [ref=e1411] [cursor=pointer]:
+                - radio "Шторка с добором (глухое + дверь)" [ref=e1412]
+                - generic [ref=e1414]: Шторка с добором (глухое + дверь)
+              - generic [ref=e1415] [cursor=pointer]:
+                - radio "Дверка в нишу одинарная распашная" [ref=e1416]
+                - generic [ref=e1418]: Дверка в нишу одинарная распашная
+              - generic [ref=e1419] [cursor=pointer]:
+                - radio "Дверка в нишу с добором (глухое + дверь)" [ref=e1420]
+                - generic [ref=e1422]: Дверка в нишу с добором (глухое + дверь)
+              - generic [ref=e1423] [cursor=pointer]:
+                - radio "Перегородка" [ref=e1424]
+                - generic [ref=e1426]: Перегородка
+              - generic [ref=e1427] [cursor=pointer]:
+                - radio "Г-образная угловая (глухое + дверь)" [ref=e1428]
+                - generic [ref=e1430]: Г-образная угловая (глухое + дверь)
+              - generic [ref=e1431] [cursor=pointer]:
+                - radio "Г-образная угловая (глухое + дверь + добор)" [ref=e1432]
+                - generic [ref=e1434]: Г-образная угловая (глухое + дверь + добор)
+              - generic [ref=e1435] [cursor=pointer]:
+                - radio "Г-образная угловая распашная (2 глухих + 2 двери)" [ref=e1436]
+                - generic [ref=e1438]: Г-образная угловая распашная (2 глухих + 2 двери)
+              - generic [ref=e1439] [cursor=pointer]:
+                - radio "Раздвижка прямая (2 стекла)" [ref=e1440]
+                - generic [ref=e1442]: Раздвижка прямая (2 стекла)
+              - generic [ref=e1443] [cursor=pointer]:
+                - radio "Раздвижка угловая (3 стекла, одна дверка)" [ref=e1444]
+                - generic [ref=e1446]: Раздвижка угловая (3 стекла, одна дверка)
+              - generic [ref=e1447] [cursor=pointer]:
+                - radio "Раздвижка угловая (4 стекла, две дверки)" [ref=e1448]
+                - generic [ref=e1450]: Раздвижка угловая (4 стекла, две дверки)
+              - generic [ref=e1451] [cursor=pointer]:
+                - radio "Трапеция (3 стекла)" [ref=e1452]
+                - generic [ref=e1454]: Трапеция (3 стекла)
+              - generic [ref=e1455] [cursor=pointer]:
+                - radio "Перегородка распашная (3 стекла)" [ref=e1456]
+                - generic [ref=e1458]: Перегородка распашная (3 стекла)
+              - generic [ref=e1459] [cursor=pointer]:
+                - radio "Перегородка раздвижная (3 стекла)" [ref=e1460]
+                - generic [ref=e1462]: Перегородка раздвижная (3 стекла)
+          - generic [ref=e1463]:
+            - generic [ref=e1464]: Высота
+            - generic [ref=e1466]:
+              - button "Минус" [ref=e1467] [cursor=pointer]
+              - spinbutton "Высота" [ref=e1470]
+              - button "Плюс" [ref=e1471] [cursor=pointer]
+          - generic [ref=e1474]:
+            - generic [ref=e1475]: Ширина
+            - generic [ref=e1477]:
+              - button "Минус" [ref=e1478] [cursor=pointer]
+              - spinbutton "Ширина" [ref=e1481]
+              - button "Плюс" [ref=e1482] [cursor=pointer]
+          - radiogroup "Толщина стекла" [ref=e1485]:
+            - generic [ref=e1489] [cursor=pointer]:
+              - radio "8 мм" [checked] [ref=e1490]
+              - generic [ref=e1492]: 8 мм
+          - generic [ref=e1493]:
+            - generic [ref=e1494]: Тип стекла
+            - combobox "Тип стекла" [ref=e1497] [cursor=pointer]:
+              - option "Бесцветное" [selected]
+              - option "Осветленное"
+              - option "Тонированное"
+              - option "Матовое"
+          - generic [ref=e1498]:
+            - generic [ref=e1499]: Цвет фурнитуры
+            - combobox "Цвет фурнитуры" [ref=e1502] [cursor=pointer]:
+              - option "Глянцевый хром" [selected]
+              - option "Матовый хром"
+              - option "Черный"
+              - option "Бронза"
+              - option "Золото"
+          - radiogroup "Класс фурнитуры" [ref=e1503]:
+            - generic [ref=e1506]:
+              - generic [ref=e1507] [cursor=pointer]:
+                - radio "Стандарт (китайская фурнитура отличного качества, латунь)" [checked] [ref=e1508]
+                - generic [ref=e1510]: Стандарт (китайская фурнитура отличного качества, латунь)
+              - generic [ref=e1511] [cursor=pointer]:
+                - radio "Премиум (немецкая фурнитура наивысшего качества, латунь)" [ref=e1512]
+                - generic [ref=e1514]: Премиум (немецкая фурнитура наивысшего качества, латунь)
+          - generic [ref=e1515]:
+            - generic [ref=e1516]: Установка
+            - generic [ref=e1518] [cursor=pointer]:
+              - checkbox "Нужен монтаж" [ref=e1519]
+              - generic [ref=e1521]: Нужен монтаж
+          - generic [ref=e1522]:
+            - generic [ref=e1523]: Доставка
+            - generic [ref=e1525] [cursor=pointer]:
+              - checkbox "Нужна доставка" [ref=e1526]
+              - generic [ref=e1528]: Нужна доставка
+          - generic [ref=e1529]:
+            - generic [ref=e1530]: Рассрочка
+            - generic [ref=e1532] [cursor=pointer]:
+              - checkbox "Нужна рассрочка" [ref=e1533]
+              - generic [ref=e1535]: Нужна рассрочка
+          - generic [ref=e1536]:
+            - generic [ref=e1537]: Имя
+            - textbox "Имя" [ref=e1539]
+          - generic [ref=e1540]:
+            - generic [ref=e1541]: Телефон
+            - textbox "Телефон" [ref=e1543]
+          - button "ОТПРАВИТЬ ЗАЯВКУ" [ref=e1545] [cursor=pointer]
+    - generic [ref=e1549]:
+      - generic [ref=e1554]: Закажите сейчас –а платите потом
+      - generic [ref=e1556]: подробности уточняйте у менеджеров
+    - generic [ref=e1570]:
+      - generic [ref=e1573]: Не знаете, что лучше заказать?
+      - generic [ref=e1575]: Бесплатно проконсультируем по заказу стеклянной душевой кабины по вашим размерам.
+      - button "ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ" [ref=e1578] [cursor=pointer]
+      - img "душевая кабина на заказ" [ref=e1583]
+    - generic [ref=e1587]:
+      - heading "Какую фурнитуру мы предлагаем?" [level=2] [ref=e1588]
+      - generic [ref=e1589]: "Мы подберем фурнитуру для вашей душевой кабины, в зависимости от вкусовых предпочтений и бюджета. На выбор у нас есть 2 ценовые линейки фурнитуры:"
+    - generic [ref=e1594]:
+      - generic [ref=e1600]:
+        - generic [ref=e1601]: Стандарт
+        - generic [ref=e1602]: "Латунная фурнитура линейки «Стандарт» — это оптимальное соотношение доступной цены и высокого качества. От «Премиума» отличается более скромным дизайном, но и здесь есть выбор из 5 разных коллекций. Петли открываются плавно и бесшумно. Удобная и качественная конструкция.Гарантия 1 год. Производитель: Китай.Отличное решение для людей, ценящих практичность и надежность."
+      - generic [ref=e1608]:
+        - generic [ref=e1609]: Премиум
+        - generic [ref=e1610]: "Преимущества данной линейки — элегантный дизайн и безупречное качество. Болты закрыты декоративными крышками, фурнитура смотрится легко и изящно. Благодаря узкому зазору петель вероятность протечки сведена к минимуму. Функция самозакрывания держит душевую кабину всегда в закрытом положении и обеспечивает плавный, мягкий, практически бесшумный ход петель. В линейке «Премиум» представлено 9 коллекций, различающихся по дизайну.Гарантия 3 года. Производитель: Германия.Великолепный выбор для тех, кому важна эстетичность дизайна, комфорт и качество."
+    - generic [ref=e1614]:
+      - heading "Выберите цвет фурнитуры на ваш вкус" [level=2] [ref=e1615]
+      - generic [ref=e1617]: "Для вашего удобства фурнитура линеек «Стандарт» и «Премиум» составлена из коллекций, различных по дизайну и цветовому исполнению.Мы предлагаем как классическую палитру: полированный/матовый хром, золото и бронзу, так и модные решения: черную матовую и под нержавеющую сталь.Вы легко подберете фурнитуру, соответствующую общему интерьеру помещения."
+    - generic [ref=e1622]:
+      - generic [ref=e1628]:
+        - generic [ref=e1629]: Оставьте заявку на расчет стеклянной душевой кабины
+        - generic [ref=e1631]: Стеклянные душевые кабины изготавливаются на заказ по индивидуальным размерам. Если вы знаете размеры — сделаем расчет по ним, либо приедем на замер к вам :)
+      - link "НАПИСАТЬ В WHATSAPP" [ref=e1634] [cursor=pointer]:
+        - /url: https://wa.me/79067068599
+      - form [ref=e1639]:
+        - generic [ref=e1640]:
+          - textbox "name" [ref=e1643]:
+            - /placeholder: Имя
+          - textbox "phone" [ref=e1646]:
+            - /placeholder: Телефон
+          - button "ЗАКАЗАТЬ РАСЧЕТ" [ref=e1648] [cursor=pointer]
+    - generic [ref=e1653]:
+      - heading [level=2] [ref=e1654]:
+        - generic [ref=e1655]: Производим бесплатный замер в пределах МКАДпри заключении договора
+      - generic [ref=e1656]: В иных случаях замер платный, в пределах МКАД стоимость замера 2000 руб. В зависимости от удаленности от МКАД стоимость рассчитывается индивидуально.
+    - generic [ref=e1664]:
+      - generic [ref=e1665]: На замер мы всегда выезжаем с образцами стекла и фурнитуры, чтобы вам было проще сделать правильный выбор.
+      - generic [ref=e1666]: "Все важные моменты учитываются при замере: плитка с неровной поверхностью; декоративные вставки; неровные стены и прочее."
+      - button "ВЫЗВАТЬ ЗАМЕРЩИКА" [ref=e1669] [cursor=pointer]
+    - generic [ref=e1672]:
+      - generic [ref=e1673]: Как мы работаем?
+      - generic [ref=e1677]:
+        - generic [ref=e1681]:
+          - generic [ref=e1682]: Заявка
+          - generic [ref=e1683]: Вы оставляете заявку на замер, либо звоните нам
+        - generic [ref=e1693]:
+          - generic [ref=e1694]: Замер
+          - generic [ref=e1695]: Мы производим замер и заключаем договор
+        - generic [ref=e1705]:
+          - generic [ref=e1706]: Изготовление
+          - generic [ref=e1707]: Изготавливаем заготовкипо снятым ранее размерам
+        - generic [ref=e1717]:
+          - generic [ref=e1718]: Доставка и установка
+          - generic [ref=e1719]: Доставляем и монтируемвашу душевую кабину
+    - generic [ref=e1722]:
+      - generic [ref=e1724]:
+        - list:
+          - listitem [ref=e1725] [cursor=pointer]:
+            - button "Предыдущий слайд" [ref=e1726]
+          - listitem [ref=e1729] [cursor=pointer]:
+            - button "Следующий слайд" [ref=e1730]
+        - generic [ref=e1733]:
+          - generic [ref=e1734]:
+            - group [ref=e1735]
+            - group "1 из 3" [ref=e1741]
+            - group [ref=e1747]
+            - group [ref=e1753]
+            - group [ref=e1759]
+          - list [ref=e1765]:
+            - listitem [ref=e1766] [cursor=pointer]:
+              - button "Перейти к слайду 1" [ref=e1767]
+            - listitem [ref=e1768] [cursor=pointer]:
+              - button "Перейти к слайду 2" [ref=e1769]
+            - listitem [ref=e1770] [cursor=pointer]:
+              - button "Перейти к слайду 3" [ref=e1771]
+      - generic [ref=e1772]:
+        - generic [ref=e1773]: Качественный монтаж – гарантия безупречной службы
+        - generic [ref=e1774]: Монтаж душевой кабины выполняют мастера, прошедшие специальную подготовку и имеющие большой опыт в данной области. Наши сотрудники не боятся сложностей, даже если в ванной комнате неровные стены или пол, постелена дизайнерская плитка или поддон выполнен из капризных материалов, а само помещение нестандартной формы. В любом случае кабина для душа будет смонтирована надежно и аккуратно.Мы применяем прозрачный силиконовый герметик европейского качества, предназначенный для профессионального использования, который не продается в обычных строительных масс-маркетах.
+    - generic [ref=e1776]:
+      - heading "Преимущества душевых из стекла" [level=2] [ref=e1779]
+      - generic [ref=e1780]:
+        - generic [ref=e1781]:
+          - heading "Подходят под любой дизайн интерьера" [level=3] [ref=e1784]
+          - heading "Визуально увеличивают пространство ванной" [level=3] [ref=e1789]
+          - heading "Легко очищаются от загрязнений" [level=3] [ref=e1794]
+        - generic [ref=e1799]:
+          - heading "Срок службы более 15 лет" [level=3] [ref=e1804]
+          - heading "Не боятся влаги и перепадов температур" [level=3] [ref=e1809]
+          - heading "Изготавливаются по индивидуальным размерам" [level=3] [ref=e1814]
+    - heading "Наши работы" [level=2] [ref=e1830]
+    - generic [ref=e1864]:
+      - generic [ref=e1865]: Часто задаваемые вопросы
+      - generic [ref=e1868]:
+        - button "Что такое душевые из стекла на заказ?" [ref=e1873] [cursor=pointer]
+        - button "Каковы преимущества душевых из стекла?" [ref=e1889] [cursor=pointer]
+        - button "Как осуществляется установка душевой из стекла?" [ref=e1905] [cursor=pointer]
+        - button "Как выбрать стекло для душевой?" [ref=e1921] [cursor=pointer]
+        - button "Как узнать стоимость и заказать душевую кабину?" [ref=e1937] [cursor=pointer]
+        - button "Какие сроки изготовления и как происходит оплата?" [ref=e1953] [cursor=pointer]
+        - button "Сколько стоит замер?" [ref=e1969] [cursor=pointer]
+        - button "Монтаж душевой кабины входит в стоимость?" [ref=e1985] [cursor=pointer]
+        - button "Какое у вас стекло для душевых?" [ref=e2001] [cursor=pointer]
+        - button "Гарантию на душевую кабину даете?" [ref=e2017] [cursor=pointer]
+        - button "Наносите ли вы водоотталкивающее покрытие на стекло?" [ref=e2033] [cursor=pointer]
+        - button "У меня не ровная стена, что делать?" [ref=e2049] [cursor=pointer]
+        - button "А что с поддонами, тоже делаете?" [ref=e2065] [cursor=pointer]
+        - button "Не испортится ли ванна после установки душевой шторки?" [ref=e2081] [cursor=pointer]
+        - button "Есть ли возможность покупки душевой в рассрочку?" [ref=e2097] [cursor=pointer]
+        - button "Типовые размеры душевых кабин из стекла" [ref=e2113] [cursor=pointer]
+        - button "Таблица основных характеристик стекла" [ref=e2129] [cursor=pointer]
+        - button "Этапы производства душевых кабин из стекла" [ref=e2145] [cursor=pointer]
+    - heading "Наше производство" [level=2] [ref=e2163]
+    - generic [ref=e2176]:
+      - generic [ref=e2177]:
+        - heading "Реальные проекты и стоимость" [level=2] [ref=e2178]
+        - paragraph [ref=e2179]: Ниже представлены примеры выполненных душевых перегородок из закаленного стекла 8 мм. Все конструкции изготовлены по индивидуальным размерам заказчиков.
+      - generic [ref=e2180]:
+        - generic [ref=e2181]:
+          - generic [ref=e2182]: 58 400 ₽
+          - heading "Душевая перегородка в нишу 120×90 см" [level=3] [ref=e2183]
+          - generic [ref=e2184]:
+            - paragraph [ref=e2185]:
+              - strong [ref=e2186]: "Задача:"
+              - text: организовать удобную душевую зону без поддона в ванной комнате площадью 6 м².
+            - paragraph [ref=e2187]:
+              - strong [ref=e2188]: "Решение:"
+              - text: изготовлена перегородка из закаленного стекла 8 мм с черной матовой фурнитурой.
+            - paragraph [ref=e2189]:
+              - strong [ref=e2190]: "Срок изготовления:"
+              - text: 7 рабочих дней.
+            - paragraph [ref=e2191]:
+              - strong [ref=e2192]: "Результат:"
+              - text: клиент получил герметичную душевую зону, которая визуально сохранила ощущение пространства.
+        - generic [ref=e2193]:
+          - generic [ref=e2194]: 54 900 ₽
+          - heading "Угловая душевая перегородка 100×100 см" [level=3] [ref=e2195]
+          - generic [ref=e2196]:
+            - paragraph [ref=e2197]:
+              - strong [ref=e2198]: "Задача:"
+              - text: заменить старую душевую кабину на современное стеклянное решение.
+            - paragraph [ref=e2199]:
+              - strong [ref=e2200]: "Решение:"
+              - text: изготовлена угловая конструкция из закаленного стекла 8 мм с хромированной фурнитурой.
+            - paragraph [ref=e2201]:
+              - strong [ref=e2202]: "Срок изготовления:"
+              - text: 6 рабочих дней.
+            - paragraph [ref=e2203]:
+              - strong [ref=e2204]: "Результат:"
+              - text: ванная комната стала визуально больше и светлее.
+        - generic [ref=e2205]:
+          - generic [ref=e2206]: 63 700 ₽
+          - heading "Душевая без поддона 140×90 см" [level=3] [ref=e2207]
+          - generic [ref=e2208]:
+            - paragraph [ref=e2209]:
+              - strong [ref=e2210]: "Задача:"
+              - text: создать современную душевую в стиле минимализм.
+            - paragraph [ref=e2211]:
+              - strong [ref=e2212]: "Решение:"
+              - text: перегородка из прозрачного закаленного стекла 8 мм по индивидуальным размерам.
+            - paragraph [ref=e2213]:
+              - strong [ref=e2214]: "Срок изготовления:"
+              - text: 8 рабочих дней.
+            - paragraph [ref=e2215]:
+              - strong [ref=e2216]: "Результат:"
+              - text: удобная душевая зона с легким уходом и максимальной визуальной открытостью пространства.
+    - generic [ref=e2218]:
+      - generic [ref=e2219]:
+        - generic [ref=e2220]: Отзывы
+        - generic [ref=e2224]:
+          - generic:
+            - button "Previous slide" [ref=e2225] [cursor=pointer]
+            - button "Next slide" [ref=e2227] [cursor=pointer]
+      - generic [ref=e2230]:
+        - group "1 of 6" [ref=e2231]:
+          - generic [ref=e2232]:
+            - generic [ref=e2233]: Анна Смирнова
+            - generic [ref=e2236]: Обратились за изготовлением душевой кабины из стекла по индивидуальному проекту — и не прогадали. Мастера учли все наши пожелания, помогли с выбором дизайна и материалов. Работа выполнена в срок, кабина выглядит стильно и надёжно. Рекомендуем!
+        - group "2 of 6" [ref=e2237]:
+          - generic [ref=e2238]:
+            - generic [ref=e2239]: Мария Иванова
+            - generic [ref=e2242]: Заказывала душевую кабину из стекла на заказ — осталась в полном восторге! Качество материалов на высоте, стекло закалённое, сборка выполнена профессионально. Очень довольны выбором!
+        - group "3 of 6" [ref=e2243]:
+          - generic [ref=e2244]:
+            - generic [ref=e2245]: Дмитрий Кузнецов
+            - generic [ref=e2248]: Заказывали душевой уголок на заказ из стекла — результат превзошёл ожидания! Стекло толстое и прочное, конструкция очень устойчивая. Мастера сделали всё аккуратно, без сколов и неровностей. Уголок идеально вписался в нашу ванную комнату. Спасибо!
+        - group "4 of 6" [ref=e2249]:
+          - generic [ref=e2250]:
+            - generic [ref=e2251]: Сергей Попов
+            - generic [ref=e2254]: Порадовало, что мастера сами приехали на замеры, а потом ещё и проконсультировали по уходу за стеклом. Ожидали, что будет шумно при монтаже, но ребята работали аккуратно — даже плитку не поцарапали. Получилось стильно и функционально. Спасибо за индивидуальный подход!
+        - group "5 of 6" [ref=e2255]:
+          - generic [ref=e2256]:
+            - generic [ref=e2257]: Елена Васильева
+            - generic [ref=e2260]: "Заказали душевое ограждение на заказ! Специалисты предложили нестандартное решение для нашей маленькой ванной. Удивило, что даже фурнитуру подобрали в тон смесителю. Работали оперативно: от замера до установки прошло всего 10 дней. Спасибо!"
+        - group "6 of 6" [ref=e2261]:
+          - generic [ref=e2262]:
+            - generic [ref=e2263]: Александр Михайлов
+            - generic [ref=e2266]: Заказывали душевой уголок из стекла - и это было лучшее решение для нашей ванной! Мастера учли наш запрос на матовое стекло в зоне душевой лейки - получилось стильно и приватно. Уголок установили за 3 часа, без пыли и грязи. Уже месяц пользуемся - никаких нареканий!
+    - generic [ref=e2274]:
+      - heading [level=2] [ref=e2275]:
+        - generic [ref=e2276]: Получите 3 варианта сметыдля вашей душевой кабины из стекла
+      - generic [ref=e2277]: Мы подберем для вас 3 варианта, основываясь на ваших пожеланияхи предполагаемом бюджете в течение 24 часов.
+      - form [ref=e2280]:
+        - generic [ref=e2281]:
+          - textbox "Имя" [ref=e2284]
+          - textbox "Телефон" [ref=e2287]
+          - button "ОСТАВИТЬ ЗАВКУ" [ref=e2289] [cursor=pointer]
+      - generic [ref=e2291]: Ваши персональные данные находятся в безопасности
+    - generic [ref=e2294]:
+      - heading "Полезные статьи" [level=2] [ref=e2297]
+      - generic [ref=e2298]:
+        - list [ref=e2299]:
+          - listitem [ref=e2300] [cursor=pointer]:
+            - generic [ref=e2304]:
+              - link "Душевая кабина матовая или прозрачная" [ref=e2306]:
+                - /url: dushevaya-kabina-matovaya-ili-prozrachnaya
+              - generic [ref=e2307]: Правильный выбор стекла для душевого уголка определяет уровень комфорта и безопасности в санузле. Нельзя однозначно ответить, какая будет лучше душевая кабина — матовая или прозрачная.
+              - generic [ref=e2308]: 17.08.2026
+          - listitem [ref=e2310] [cursor=pointer]:
+            - generic [ref=e2315]:
+              - link "Какое стекло лучше триплекс или закаленное" [ref=e2317]:
+                - /url: kakoe-steklo-luchshe-tripleks-ili-zakalennoe
+              - generic [ref=e2318]: На рынке строительных материалов стекло занимает лидирующие позиции. Оно используется в автопроме и на мебельных производствах. Из него изготавливают офисные перегородки, предметы декора, выставочные и магазинные витрины.
+              - generic [ref=e2319]: 27.07.2026
+          - listitem [ref=e2321] [cursor=pointer]:
+            - generic [ref=e2326]:
+              - 'link "Что лучше: шторка или стекло для ванной?" [ref=e2328]':
+                - /url: chto-luchshe-shtorka-ili-steklo-dlya-vannoj
+              - generic [ref=e2329]: В малогабаритных квартирах самый трудный момент — ремонт санузла. Владельцам предстоит ответить на вопрос, что лучше, шторка или стекло для ванной?
+              - generic [ref=e2330]: 24.06.2026
+        - button "Загрузить еще" [ref=e2333] [cursor=pointer]
+    - generic [ref=e2340]:
+      - heading "Контакты" [level=2] [ref=e2341]
+      - generic [ref=e2343]:
+        - text: "Тел.:"
+        - link "+7 495 540-43-41" [ref=e2344] [cursor=pointer]:
+          - /url: tel:+74955404341
+        - text: "Консультации по телефону:ежедневно с 10:00 до 18:00E-mail:"
+        - link "zakaz@dushnazakaz.ru" [ref=e2345] [cursor=pointer]:
+          - /url: mailto:zakaz@dushnazakaz.ru
+        - text: Адрес:г. Москва, БЦ Румянцево,блок Д, этаж 7Режим работы:по будням с 10:00 до 16:30
+      - list "Соц. сети" [ref=e2347]:
+        - listitem [ref=e2348]:
+          - link "whatsapp" [ref=e2349] [cursor=pointer]:
+            - /url: https://wa.me/79067068599
+        - listitem [ref=e2351]:
+          - link "telegram" [ref=e2352] [cursor=pointer]:
+            - /url: https://t.me/pavel_pozdnukhov
+    - heading "Душевые кабины на заказ" [level=2] [ref=e2360]
+    - generic [ref=e2361]: Душевые кабины по индивидуальным размерам — мечта современного потребителя. Они позволяют максимально эргономично использовать пространство даже самой крошечной ванной комнаты. Угловые или прямоугольные образцы занимают мало места. Они органично вписываются в интерьер, словно сливаясь со стенами. Наша компания Душ на заказ занимается производством современных и качественных душевых кабин на заказ в Москве.
+    - heading "Эксклюзивные проекты душевых кабин" [level=2] [ref=e2371]
+    - generic [ref=e2372]: "Наша компания выполняет проектирование и установку любой модели. При изготовлении стеклянной душевой кабины учитываются все особенности планировки помещения: выступы, местонахождение раковины и других сантехнических атрибутов. Во время разработки специалисты ориентируются также на положение душевой кабинки относительно входной двери или окна (при наличии такового).Наши продукты отличаются высокой функциональностью. Базовая комплектация включает все необходимое для комфортного проведения водных процедур. Но по желанию клиента выполняется дооснащение дополнительными комплектующими."
+    - heading [level=2] [ref=e2382]:
+      - strong [ref=e2383]: Лучший материал душевых кабин на заказ
+    - generic [ref=e2389]:
+      - text: "Стеклянные душевые кабины практичны и эстетичны одновременно. Они визуально расширяют пространство, наполняя его воздушной легкостью и приятным блеском. Гигиенические процедуры станут настоящим релаксом как в душевой, так и за стеклянной шторкой для ванны.Преимущества стекла как рабочего материала:"
+      - list [ref=e2390]:
+        - listitem [ref=e2391]: термостойкость;
+        - listitem [ref=e2392]: сопротивляемость к перепаду температур;
+        - listitem [ref=e2393]: гигиеничность;
+        - listitem [ref=e2394]: устойчивость к ударной нагрузке;
+        - listitem [ref=e2395]: невосприимчивость к царапинам.
+      - text: Душевые кабинки с матовым стеклом вписываются в любой интерьер — от классического до современного минималистического. В то же время они не только изящны, но и очень практичны.Закаленное стекло толщиной 8 мм позволяет создать достаточно прочную конструкцию. Это полностью герметичная система, поскольку в работе наши профессионалы используют фирменный прозрачный силиконовый герметик.Края конструкции укрепляются уплотнителем из ПВХ. Это обеспечивает ей дополнительную устойчивость.Душ на заказ воплотит любой проект. Вы получите идеальную стеклянную душевую кабину безупречного качества и по разумной цене.
+    - heading "Как выбрать форму кабинки?" [level=2] [ref=e2400]
+    - generic [ref=e2406]:
+      - text: "Изготовление душевых кабин из стекла на заказ начинается с замеров и составления план-схемы. На нем графически обозначаются все выступы в стенах и полу. Отдельно указывается расположение сантехнического оборудования, не подлежащего перемещению. Далее намечается контур будущей конструкции. На схеме вы увидите:"
+      - list [ref=e2407]:
+        - listitem [ref=e2408]: Какую сторону можно удлинить.
+        - listitem [ref=e2409]: Есть ли возможность расширения или сужения прохода.
+        - listitem [ref=e2410]: Подходящий способ открывания.
+      - text: "Мы изготавливаем распашные или раздвижные системы дверей. Для первой понадобится дополнительное пространство рядом. Вторая более эргономична. Заказывая душевую кабину под размер по предварительно составленному эскизу, вы получите удобную кабинку даже в самой малогабаритной ванной. Этим индивидуальное проектирование отличается от типовых образцов. Стеклянная конструкция может иметь форму:"
+      - list [ref=e2411]:
+        - listitem [ref=e2412]: Пристенную (прямоугольник или квадрат). Состоит из двух перегородок и одной дверцы. Обычно это П-образный контур.
+        - listitem [ref=e2413]: Угловую. Самый эргономичный вариант. Подходит для маленьких санузлов. Угол помещения отсекается навесной стеклянной дверью.
+        - listitem [ref=e2414]: Интегрированную в нишу. В качестве ограждающей панели служит дверца. Этот вариант относится к наиболее прочным, поскольку две капитальные стены — это часть конструкции. В них можно вмонтировать и душевую стойку, и дополнительное оборудование.
+        - listitem [ref=e2415]: Овальную. Будучи разновидностью пристенных моделей, закругленные кабинки наименее травмоопасны из-за отсутствия углов.
+      - text: Самый экзотический вариант — круглый душ. Технически его можно установить в любой части ванной комнаты. Поскольку стеклянное полотно легко поддается обработке, ему можно придать форму полуовала. Однако на практике этот вариант используется крайне редко. Он не подходит для типовых городских квартир. Его монтируют в просторных загородных особняках, где нет недостатка в полезной площади.
+    - heading "Фурнитура" [level=2] [ref=e2420]
+    - generic [ref=e2426]:
+      - text: "От качества крепежей и соединителей зависит срок годности уголка и его функциональность. В нашем магазине есть две линейки фурнитуры:"
+      - list [ref=e2427]:
+        - listitem [ref=e2428]: «Стандарт» (Китай). Все 5 коллекций имеют сертификат качества. Петли предназначены для эксплуатации в условиях повышенной влажности. Защитный слой продлевает срок их годности. Дизайн отличается лаконичностью и элегантностью. Гарантия — 1 год.
+        - listitem [ref=e2429]: «Премиум» (Германия). Элементы с напылением в разных цветовых оттенках выглядят как интерьерный декор. Вместе с этим немецкий производитель уделяет большое внимание качеству исполнения. Зазоры в петлях самые минимальные. Это исключает протечки и гарантирует герметичное прилегание. Всего в каталоге 9 сертифицированных коллекций этой серии. В них отражается баланс разумной цены и безупречного качества. Гарантия — 3 года.
+      - text: Фурнитура обеих линеек обеспечивает плавное закрывание дверец без стука.
+    - heading "Профессиональное изготовление стеклянной кабины в душевую" [level=2] [ref=e2434]
+    - generic [ref=e2440]:
+      - text: "Вид стекла должен соответствовать дизайну помещения. Желательно, чтобы прозрачные ограждения вписывались в концепцию оформления и соответствовали выбранному стилю. Мы выполняем эти условия, являясь производителем полного цикла. Душевые кабины под ключ — услуга, включающая полный комплекс работ. В него входит замер, дизайн-проект, изготовление стеклянного полотна и подбор фурнитуры. Доставка материалов, подъем на этаж и монтаж также выполняются силами нашей компании. Остекление душевых кабин на заказ выполняется с учетом практических нюансов:"
+      - list [ref=e2441]:
+        - listitem [ref=e2442]: Общей площади санузла.
+        - listitem [ref=e2443]: Состояния полового покрытия.
+        - listitem [ref=e2444]: Особенностей рельефа стен.
+        - listitem [ref=e2445]: Качества коммуникаций.
+        - listitem [ref=e2446]: Наличия поддона.
+      - text: При заключении договора важна также локация объекта. Среди наших клиентов много жителей Москвы и Московской области. Бесплатный замер доступен проживающим в пределах МКАД. Чтобы сделать заказ, позвоните по указанному телефону. Вам гарантируется бесплатная исчерпывающая консультация.
+    - contentinfo [ref=e2447]:
+      - generic [ref=e2448] [cursor=pointer]:
+        - generic [ref=e2449]: Есть вопросы?
+        - button [ref=e2450]
+      - generic [ref=e2453]:
+        - generic [ref=e2454]: Мы используем cookies для улучшения работы сайта. Продолжая пользоваться сайтом, вы даёте согласие на использование файлов cookies. Вы можете отозвать своё согласие, написав на zakaz@dushnazakaz.ru
+        - generic [ref=e2455] [cursor=pointer]: OK
+      - list [ref=e2464]:
+        - listitem [ref=e2465]:
+          - link "Душевые кабины" [ref=e2466] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=e2467]:
+          - link "Душевые ограждения" [ref=e2468] [cursor=pointer]:
+            - /url: /ograzhdeniya
+        - listitem [ref=e2469]:
+          - link "Душевые уголки" [ref=e2470] [cursor=pointer]:
+            - /url: /ugolki
+        - listitem [ref=e2471]:
+          - link "Душевые перегородки" [ref=e2472] [cursor=pointer]:
+            - /url: /peregorodki
+        - listitem [ref=e2473]:
+          - link "Стеклянные шторки для ванны" [ref=e2474] [cursor=pointer]:
+            - /url: /steklyannaya-shtorka-na-vannu
+        - listitem [ref=e2475]:
+          - link "Стеклянная дверь в душевую" [ref=e2476] [cursor=pointer]:
+            - /url: /steklyannyye-dveri-v-dushevuyu
+        - listitem [ref=e2477]:
+          - link "Контакты" [ref=e2478] [cursor=pointer]:
+            - /url: /contacts
+        - listitem [ref=e2479]:
+          - link "О компании" [ref=e2480] [cursor=pointer]:
+            - /url: /o-kompanii
+        - listitem [ref=e2481]:
+          - link "Доставка" [ref=e2482] [cursor=pointer]:
+            - /url: /dostavka
+        - listitem [ref=e2483]:
+          - link "Оплата" [ref=e2484] [cursor=pointer]:
+            - /url: /oplata
+        - listitem [ref=e2485]:
+          - link "Статьи" [ref=e2486] [cursor=pointer]:
+            - /url: /blog
+      - generic [ref=e2491]:
+        - list "Social media links" [ref=e2493]:
+          - listitem [ref=e2494]:
+            - link "whatsapp" [ref=e2495] [cursor=pointer]:
+              - /url: https://wa.me/79067068599
+          - listitem [ref=e2497]:
+            - link "telegram" [ref=e2498] [cursor=pointer]:
+              - /url: https://t.me/pavel_pozdnukhov
+          - listitem [ref=e2500]:
+            - link "vk" [ref=e2501] [cursor=pointer]:
+              - /url: https://vk.com/dushnazakaz
+        - separator [ref=e2504]
+        - generic [ref=e2505]: "2016-2025 © Душназаказ, стеклянные двери в душ. Все права защищены. Любое использование либо копирование материалов или подборки материалов сайта, элементов дизайна и оформления допускается лишь с разрешения правообладателя и только со ссылкой на источник: https://dushnazakaz.ru"
+  - generic: 8+ видов безопасного, закаленного стекла толщиной 8-10 мм на выбор

@@ -1,0 +1,685 @@
+- generic [active] [ref=f48e1]:
+  - generic [ref=f48e2]:
+    - generic [ref=f48e3]:
+      - banner [ref=f48e4]:
+        - generic [ref=f48e7]:
+          - list [ref=f48e10]:
+            - listitem [ref=f48e11]:
+              - link "О нас" [ref=f48e12] [cursor=pointer]:
+                - /url: o-nas/
+            - listitem [ref=f48e13]:
+              - link "Услуги" [ref=f48e14] [cursor=pointer]:
+                - /url: uslugi/
+            - listitem [ref=f48e15]:
+              - link "Сотрудничество" [ref=f48e16] [cursor=pointer]:
+                - /url: sotrudnichestvo/
+            - listitem [ref=f48e17]:
+              - link "Оплата" [ref=f48e18] [cursor=pointer]:
+                - /url: oplata/
+            - listitem [ref=f48e19]:
+              - link "Отзывы" [ref=f48e20] [cursor=pointer]:
+                - /url: otzyivyi/
+            - listitem [ref=f48e21]:
+              - link "Акции" [ref=f48e22] [cursor=pointer]:
+                - /url: akczii/
+            - listitem [ref=f48e23]:
+              - link "Доставка" [ref=f48e24] [cursor=pointer]:
+                - /url: dostavka/
+            - listitem [ref=f48e25]:
+              - link "Шоу-рум" [ref=f48e26] [cursor=pointer]:
+                - /url: showroom/
+            - listitem [ref=f48e27]:
+              - link "Контакты" [ref=f48e28] [cursor=pointer]:
+                - /url: kontaktyi/
+          - generic [ref=f48e30]:
+            - generic [ref=f48e31]: Нахимовский пр-т., дом 24, стр. 4, 215 кабинет
+            - generic [ref=f48e34]: "Пн. - Пт.: с 10:00 до 18:00"
+        - generic [ref=f48e35]:
+          - generic [ref=f48e37]:
+            - link [ref=f48e40] [cursor=pointer]:
+              - /url: /
+              - img "title" [ref=f48e41]
+            - generic [ref=f48e44]:
+              - link "+7(495)205-36-33" [ref=f48e47] [cursor=pointer]:
+                - /url: tel:+74952053633
+              - link "+7(495)205-39-33" [ref=f48e48] [cursor=pointer]:
+                - /url: tel:+74952053933
+            - generic [ref=f48e50]:
+              - generic [ref=f48e53]:
+                - textbox "Поиск товара" [ref=f48e54]
+                - button [ref=f48e55] [cursor=pointer]
+              - generic [ref=f48e58]:
+                - link "zakaz@rumar.pro" [ref=f48e59] [cursor=pointer]:
+                  - /url: mailto:zakaz@rumar.pro
+                - link "Обратный звонок" [ref=f48e62] [cursor=pointer]:
+                  - /url: javascript:;
+          - list [ref=f48e64]:
+            - listitem [ref=f48e65]:
+              - link "Душевые ограждения" [ref=f48e66] [cursor=pointer]:
+                - /url: dushevyie-ograzhdeniya/
+            - listitem [ref=f48e67]:
+              - link "Остекление сауны/хаммам" [ref=f48e68] [cursor=pointer]:
+                - /url: steklyannyie-saunyi-xamam/
+            - listitem [ref=f48e69]:
+              - link "Стеклянные ограждения" [ref=f48e70] [cursor=pointer]:
+                - /url: izdeliya-iz-stekla/lestnichnyie-ograzhdeniya-iz-stekla/
+            - listitem [ref=f48e71]:
+              - link "Зеркала с подсветкой" [ref=f48e72] [cursor=pointer]:
+                - /url: zerkala-s-podsvetkoj/
+            - listitem [ref=f48e73]:
+              - link "Стекло" [ref=f48e74] [cursor=pointer]:
+                - /url: tipyi-stekla/
+            - listitem [ref=f48e75]:
+              - link "Зеркала" [ref=f48e76] [cursor=pointer]:
+                - /url: tipyi-zerkal/
+            - listitem [ref=f48e77]:
+              - link "Наши работы" [ref=f48e78] [cursor=pointer]:
+                - /url: nashi-rabotyi/
+      - generic [ref=f48e80]:
+        - generic [ref=f48e82]:
+          - link "Вызов замерщика на дом Вызов замерщика на дом" [ref=f48e84] [cursor=pointer]:
+            - /url: javascript:;
+            - generic [ref=f48e85]: Вызов замерщика на дом
+            - img "Вызов замерщика на дом" [ref=f48e86]
+          - link "Заявка на рассчет стоимости Заявка на рассчет" [ref=f48e88] [cursor=pointer]:
+            - /url: javascript:;
+            - generic [ref=f48e89]: Заявка на рассчет стоимости
+            - img "Заявка на рассчет" [ref=f48e90]
+          - link "Видео готовых работ Заявка на рассчет" [ref=f48e92] [cursor=pointer]:
+            - /url: https://dzen.ru/id/6433254d5951555cfab92cae?tab=suites
+            - generic [ref=f48e93]: Видео готовых работ
+            - img "Заявка на рассчет" [ref=f48e94]
+        - main [ref=f48e97]:
+          - list [ref=f48e101]:
+            - listitem [ref=f48e102]:
+              - link "Главная" [ref=f48e103] [cursor=pointer]:
+                - /url: /
+            - listitem [ref=f48e104]: /
+            - listitem [ref=f48e105]: Контакты
+          - heading "Контакты" [level=1] [ref=f48e107]
+          - generic [ref=f48e108]:
+            - generic [ref=f48e110]:
+              - paragraph
+              - generic [ref=f48e111]:
+                - generic [ref=f48e112]:
+                  - generic [ref=f48e113]: Телефоны
+                  - generic [ref=f48e117]:
+                    - paragraph [ref=f48e118]:
+                      - link "+7(495)205-36-33" [ref=f48e119] [cursor=pointer]:
+                        - /url: tel:+74952053633
+                    - paragraph [ref=f48e120]:
+                      - link "+7(495)205-39-33" [ref=f48e121] [cursor=pointer]:
+                        - /url: tel:+74952053933
+                - generic [ref=f48e122]:
+                  - generic [ref=f48e123]: Почта
+                  - paragraph [ref=f48e128]:
+                    - link "zakaz@rumar.pro" [ref=f48e129] [cursor=pointer]:
+                      - /url: mailto:zakaz@rumar.pro
+                - generic [ref=f48e130]:
+                  - generic [ref=f48e131]: Адрес
+                  - paragraph [ref=f48e136]: Нахимовский пр-т., дом 24, стр. 4, 215 кабинет
+                - generic [ref=f48e137]:
+                  - generic [ref=f48e138]: Время работы
+                  - generic [ref=f48e142]:
+                    - paragraph [ref=f48e143]: "Пн. - Пт.: с 10:00 до 18:00"
+                    - paragraph [ref=f48e144]: "Сб. – Вс.: дежурный менеджер"
+                - iframe [ref=f48e146]:
+                  - generic [ref=f52e2]:
+                    - generic:
+                      - generic:
+                        - generic [ref=f52e3]: RUMAR
+                        - generic:
+                          - generic:
+                            - generic:
+                              - generic [ref=f52e13]:
+                                - generic [ref=f52e14]:
+                                  - button [ref=f52e17] [cursor=pointer]
+                                  - button "Пробки" [ref=f52e19] [cursor=pointer]
+                                - iframe [ref=f52e23]:
+                                  
+                              - generic [ref=f52e24]:
+                                - generic [ref=f52e27]:
+                                  - button "Приблизить" [ref=f52e29] [cursor=pointer]
+                                  - button "Отдалить" [ref=f52e31] [cursor=pointer]
+                                - iframe [ref=f52e32]:
+                                  
+                              - generic [ref=f52e33]:
+                                - button "Моё местоположение" [ref=f52e36] [cursor=pointer]
+                                - iframe [ref=f52e37]:
+                                  
+                              - generic [ref=f52e38]:
+                                - button "Открыть в Яндекс Картах" [ref=f52e41] [cursor=pointer]
+                                - iframe [ref=f52e43]:
+                                  
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button "Открыть в Картах"
+                                - iframe [ref=f52e44]:
+                                  
+                              - generic:
+                                - generic:
+                                  - generic:
+                                    - button
+                                - iframe [ref=f52e45]:
+                                  
+                            - generic:
+                              - generic:
+                                - contentinfo:
+                                  - generic [ref=f52e47]:
+                                    - link "Условия использования" [ref=f52e48] [cursor=pointer]:
+                                      - /url: https://yandex.ru/legal/maps_termsofuse/?lang=ru
+                                    - link "Конфиденциальность" [ref=f52e49] [cursor=pointer]:
+                                      - /url: https://yandex.ru/legal/confidential/?lang=ru
+                              - generic: 800 м
+                            - iframe [ref=f52e50]:
+                              
+                        - iframe [ref=f52e51]:
+                          
+                - generic [ref=f48e147]:
+                  - heading "Реквизиты" [level=2] [ref=f48e149]
+                  - table [ref=f48e151]:
+                    - rowgroup [ref=f48e152]:
+                      - row [ref=f48e153]:
+                        - columnheader [ref=f48e154]
+                        - columnheader [ref=f48e155]
+                    - rowgroup [ref=f48e156]:
+                      - row [ref=f48e157]:
+                        - cell "Индивидуальный предприниматель" [ref=f48e158]
+                        - cell "ФЕЙЗРАХМАНОВ РУСЛАН ФЯРИТОВИЧ" [ref=f48e159]
+                      - row [ref=f48e160]:
+                        - cell "ИНН" [ref=f48e161]
+                        - cell "772573179066" [ref=f48e162]
+                      - row [ref=f48e163]:
+                        - cell "БИК" [ref=f48e164]
+                        - cell "044525225" [ref=f48e165]
+                      - row [ref=f48e166]:
+                        - cell "ОГРН/ОГРНИП" [ref=f48e167]
+                        - cell "319774600335060" [ref=f48e168]
+                      - row [ref=f48e169]:
+                        - cell "Наименование банка" [ref=f48e170]
+                        - cell "ПАО СБЕРБАНК , г. Москва" [ref=f48e171]
+                      - row [ref=f48e172]:
+                        - cell "Расчетный счет" [ref=f48e173]
+                        - cell "40802810438000143229" [ref=f48e174]
+                      - row [ref=f48e175]:
+                        - cell "Корреспондентский счет" [ref=f48e176]
+                        - cell "30101810400000000225" [ref=f48e177]
+              - paragraph
+              - paragraph [ref=f48e178]: "Мы изготавливаем душевые ограждения и изделия из стекла на заказ. Наше производство находится в Москве, доставка возможно по Москве и Области. Также мы готовы рассмотреть варианты доставки и вдругие города. Ниже представлены города и районы, где мы выполняли свои работы:"
+              - list [ref=f48e179]:
+                - listitem [ref=f48e180]:
+                  - link "Королев" [ref=f48e181] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/korolev/
+                - listitem [ref=f48e182]:
+                  - link "Красногорск" [ref=f48e183] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/krasnogorsk/
+                - listitem [ref=f48e184]:
+                  - link "Мытищи" [ref=f48e185] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/myitishhi/
+                - listitem [ref=f48e186]:
+                  - link "Щелково" [ref=f48e187] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/shhelkovo/
+                - listitem [ref=f48e188]:
+                  - link "Химки" [ref=f48e189] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/ximki/
+                - listitem [ref=f48e190]:
+                  - link "Апрелевка" [ref=f48e191] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/aprelevka/
+                - listitem [ref=f48e192]:
+                  - link "Балашиха" [ref=f48e193] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/balashixa
+                - listitem [ref=f48e194]:
+                  - link "Броницы" [ref=f48e195] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/bronniczyi/
+                - listitem [ref=f48e196]:
+                  - link "Видное" [ref=f48e197] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/vidnoe/
+                - listitem [ref=f48e198]:
+                  - link "Волоколамск" [ref=f48e199] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/volokolamsk/
+                - listitem [ref=f48e200]:
+                  - link "Воскресенск" [ref=f48e201] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/voskresensk/
+                - listitem [ref=f48e202]:
+                  - link "Галицыно" [ref=f48e203] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/galiczyino/
+                - listitem [ref=f48e204]:
+                  - link "Дедовск" [ref=f48e205] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/dedovsk/
+                - listitem [ref=f48e206]:
+                  - link "Дзержинский" [ref=f48e207] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/dzerzhinskij
+                - listitem [ref=f48e208]:
+                  - link "Дмитров" [ref=f48e209] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/dmitrov/
+                - listitem [ref=f48e210]:
+                  - link "Долгопрудный" [ref=f48e211] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/dolgoprudnyij
+                - listitem [ref=f48e212]:
+                  - link "Домодедово" [ref=f48e213] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/domodedovo
+                - listitem [ref=f48e214]:
+                  - link "ЦАО Москвы" [ref=f48e215] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/czao/
+                - listitem [ref=f48e216]:
+                  - link "САО Москвы" [ref=f48e217] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/sao/
+                - listitem [ref=f48e218]:
+                  - link "ВАО Москвы" [ref=f48e219] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/vao/
+                - listitem [ref=f48e220]:
+                  - link "СВАО Москвы" [ref=f48e221] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/svao/
+                - listitem [ref=f48e222]:
+                  - link "ЮВАО Москвы" [ref=f48e223] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/yuvao/
+                - listitem [ref=f48e224]:
+                  - link "ЮАО Москвы" [ref=f48e225] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/yuao/
+                - listitem [ref=f48e226]:
+                  - link "ЮЗАО Москвы" [ref=f48e227] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/yuzao/
+                - listitem [ref=f48e228]:
+                  - link "ЗАО Москвы" [ref=f48e229] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/zao/
+                - listitem [ref=f48e230]:
+                  - link "СЗАО Москвы" [ref=f48e231] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/szao/
+                - listitem [ref=f48e232]:
+                  - link "Академический район" [ref=f48e233] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/akademicheskij/
+                - listitem [ref=f48e234]:
+                  - link "Алексеевский район" [ref=f48e235] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/alekseevskij/
+                - listitem [ref=f48e236]:
+                  - link "Бабушкинский район" [ref=f48e237] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/babushkinskij/
+                - listitem [ref=f48e238]:
+                  - link "Вешняки" [ref=f48e239] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/veshnyaki/
+                - listitem [ref=f48e240]:
+                  - link "Даниловский район" [ref=f48e241] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/danilovskij/
+                - listitem [ref=f48e242]:
+                  - link "Гагаринский район" [ref=f48e243] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/gagarinskij/
+                - listitem [ref=f48e244]:
+                  - link "Даниловский район" [ref=f48e245] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/danilovskij/
+                - listitem [ref=f48e246]:
+                  - link "Замоскворечье" [ref=f48e247] [cursor=pointer]:
+                    - /url: dushevyie-ograzhdeniya/zamoskvoreche/
+            - generic [ref=f48e250]:
+              - heading "Остались вопросы?" [level=3] [ref=f48e251]
+              - paragraph [ref=f48e252]: Заполните поля ниже и наш менеджер перезвонит Вам в ближайшее время
+              - generic [ref=f48e254]:
+                - textbox "Имя" [ref=f48e258]
+                - textbox "Номер телефона" [ref=f48e262]
+                - button "Отправить" [ref=f48e266] [cursor=pointer]
+            - generic [ref=f48e267]:
+              - generic [ref=f48e269]:
+                - generic [ref=f48e271] [cursor=pointer]
+                - generic [ref=f48e272] [cursor=pointer]
+                - generic [ref=f48e273] [cursor=pointer]
+                - generic [ref=f48e274] [cursor=pointer]
+                - generic [ref=f48e275] [cursor=pointer]
+              - generic [ref=f48e276]: Рейтинг 5 /5 - Всего 1 голосов
+      - generic [ref=f48e278]:
+        - paragraph [ref=f48e280]: Наши работы
+        - generic [ref=f48e281]:
+          - img [ref=f48e282] [cursor=pointer]: ←
+          - generic [ref=f48e285]:
+            - generic [ref=f48e286]:
+              - link [ref=f48e287] [cursor=pointer]:
+                - /url: dushevyie-razdvizhnyie/
+                - generic [ref=f48e290]: Раздвижные душевые ограждения
+              - link [ref=f48e291] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e292]:
+              - link [ref=f48e293] [cursor=pointer]:
+                - /url: dushevyie-pyatiugolnyie-(trapecziya)/
+                - generic [ref=f48e296]: Пятиугольные душевые (трапеция)
+              - link [ref=f48e297] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e298]:
+              - link [ref=f48e299] [cursor=pointer]:
+                - /url: nepodvizhnyie-paneli-(walk-in)/
+                - generic [ref=f48e302]: Неподвижные панели (Walk In)
+              - link [ref=f48e303] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e304]:
+              - link [ref=f48e305] [cursor=pointer]:
+                - /url: osteklenie-saunyi-i-xamama/
+                - generic [ref=f48e308]: Остекление Сауны и Хамама
+              - link [ref=f48e309] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e310]:
+              - link "1 Душевая гармошка" [ref=f48e311] [cursor=pointer]:
+                - /url: dushevaya-garmoshka/
+                - img "1" [ref=f48e313]
+                - generic [ref=f48e314]: Душевая гармошка
+              - link "Заказать" [ref=f48e315] [cursor=pointer]:
+                - /url: javascript:;
+            - generic [ref=f48e316]:
+              - link "1 Стеклянные двери в коробке" [ref=f48e317] [cursor=pointer]:
+                - /url: steklyannyie-dveri-v-korobke/
+                - img "1" [ref=f48e319]
+                - generic [ref=f48e320]: Стеклянные двери в коробке
+              - link "Заказать" [ref=f48e321] [cursor=pointer]:
+                - /url: javascript:;
+            - generic [ref=f48e322]:
+              - link "1 Ограждения из стекла" [ref=f48e323] [cursor=pointer]:
+                - /url: ograzhdeniya-iz-stekla/
+                - img "1" [ref=f48e325]
+                - generic [ref=f48e326]: Ограждения из стекла
+              - link "Заказать" [ref=f48e327] [cursor=pointer]:
+                - /url: javascript:;
+            - generic [ref=f48e328]:
+              - link "1 Зеркала" [ref=f48e329] [cursor=pointer]:
+                - /url: zerkala/
+                - img "1" [ref=f48e331]
+                - generic [ref=f48e332]: Зеркала
+              - link "Заказать" [ref=f48e333] [cursor=pointer]:
+                - /url: javascript:;
+            - generic [ref=f48e334]:
+              - link [ref=f48e335] [cursor=pointer]:
+                - /url: dushevyie-s-chyornyimi-komplektuyushhimi-(black-edition)/
+                - generic [ref=f48e338]: Душевые (Black edition)
+              - link [ref=f48e339] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e340]:
+              - link [ref=f48e341] [cursor=pointer]:
+                - /url: dushevyie-pryamyie/
+                - generic [ref=f48e344]: Душевые двери
+              - link [ref=f48e345] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e346]:
+              - link [ref=f48e347] [cursor=pointer]:
+                - /url: dushevyie-p-obraznyie/
+                - generic [ref=f48e350]: П-образные душевые ограждения
+              - link [ref=f48e351] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e352]:
+              - link [ref=f48e353] [cursor=pointer]:
+                - /url: dushevyie-uglovyie/
+                - generic [ref=f48e356]: Угловые душевые ограждения
+              - link [ref=f48e357] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e358]:
+              - link [ref=f48e359] [cursor=pointer]:
+                - /url: dushevyie-razdvizhnyie/
+                - generic [ref=f48e362]: Раздвижные душевые ограждения
+              - link [ref=f48e363] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e364]:
+              - link [ref=f48e365] [cursor=pointer]:
+                - /url: dushevyie-pyatiugolnyie-(trapecziya)/
+                - generic [ref=f48e368]: Пятиугольные душевые (трапеция)
+              - link [ref=f48e369] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e370]:
+              - link [ref=f48e371] [cursor=pointer]:
+                - /url: nepodvizhnyie-paneli-(walk-in)/
+                - generic [ref=f48e374]: Неподвижные панели (Walk In)
+              - link [ref=f48e375] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e376]:
+              - link [ref=f48e377] [cursor=pointer]:
+                - /url: osteklenie-saunyi-i-xamama/
+                - generic [ref=f48e380]: Остекление Сауны и Хамама
+              - link [ref=f48e381] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e382]:
+              - link [ref=f48e383] [cursor=pointer]:
+                - /url: dushevaya-garmoshka/
+                - generic [ref=f48e386]: Душевая гармошка
+              - link [ref=f48e387] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e388]:
+              - link [ref=f48e389] [cursor=pointer]:
+                - /url: steklyannyie-dveri-v-korobke/
+                - generic [ref=f48e392]: Стеклянные двери в коробке
+              - link [ref=f48e393] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e394]:
+              - link [ref=f48e395] [cursor=pointer]:
+                - /url: ograzhdeniya-iz-stekla/
+                - generic [ref=f48e398]: Ограждения из стекла
+              - link [ref=f48e399] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e400]:
+              - link [ref=f48e401] [cursor=pointer]:
+                - /url: zerkala/
+                - generic [ref=f48e404]: Зеркала
+              - link [ref=f48e405] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e406]:
+              - link [ref=f48e407] [cursor=pointer]:
+                - /url: dushevyie-s-chyornyimi-komplektuyushhimi-(black-edition)/
+                - generic [ref=f48e410]: Душевые (Black edition)
+              - link [ref=f48e411] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e412]:
+              - link [ref=f48e413] [cursor=pointer]:
+                - /url: dushevyie-pryamyie/
+                - generic [ref=f48e416]: Душевые двери
+              - link [ref=f48e417] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e418]:
+              - link [ref=f48e419] [cursor=pointer]:
+                - /url: dushevyie-p-obraznyie/
+                - generic [ref=f48e422]: П-образные душевые ограждения
+              - link [ref=f48e423] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e424]:
+              - link [ref=f48e425] [cursor=pointer]:
+                - /url: dushevyie-uglovyie/
+                - generic [ref=f48e428]: Угловые душевые ограждения
+              - link [ref=f48e429] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e430]:
+              - link [ref=f48e431] [cursor=pointer]:
+                - /url: dushevyie-razdvizhnyie/
+                - generic [ref=f48e434]: Раздвижные душевые ограждения
+              - link [ref=f48e435] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e436]:
+              - link [ref=f48e437] [cursor=pointer]:
+                - /url: dushevyie-pyatiugolnyie-(trapecziya)/
+                - generic [ref=f48e440]: Пятиугольные душевые (трапеция)
+              - link [ref=f48e441] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e442]:
+              - link [ref=f48e443] [cursor=pointer]:
+                - /url: nepodvizhnyie-paneli-(walk-in)/
+                - generic [ref=f48e446]: Неподвижные панели (Walk In)
+              - link [ref=f48e447] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+            - generic [ref=f48e448]:
+              - link [ref=f48e449] [cursor=pointer]:
+                - /url: osteklenie-saunyi-i-xamama/
+                - generic [ref=f48e452]: Остекление Сауны и Хамама
+              - link [ref=f48e453] [cursor=pointer]:
+                - /url: javascript:;
+                - text: Заказать
+          - img [ref=f48e454] [cursor=pointer]: →
+        - link "Все работы" [ref=f48e456] [cursor=pointer]:
+          - /url: nashi-rabotyi/
+      - generic [ref=f48e457]:
+        - heading "по своим размерам" [level=2] [ref=f48e459]
+        - generic [ref=f48e460]:
+          - generic [ref=f48e461]: Сделайте ваше изделие эксклюзивным!
+          - paragraph [ref=f48e462]: Укажите Ваш планируемый бюджет, размеры изделия и контактные данные.
+          - paragraph [ref=f48e463]: Наш дизайнер подберет оригинальный и необычный вариант
+          - generic [ref=f48e465]:
+            - generic [ref=f48e466]:
+              - generic [ref=f48e467]: "Ваш бюджет: 20000.00 руб"
+              - generic [ref=f48e469]:
+                - slider [ref=f48e472]
+                - generic [ref=f48e473]:
+                  - generic [ref=f48e475]: "0"
+                  - generic [ref=f48e526]: "250000"
+                  - generic [ref=f48e577]: "500000"
+            - textbox "Размеры и пожелания" [ref=f48e580]
+            - textbox "Ваше имя *" [ref=f48e583]
+            - textbox "Телефон *" [ref=f48e586]
+            - button "Отправить" [ref=f48e589] [cursor=pointer]
+      - generic [ref=f48e593]:
+        - paragraph [ref=f48e595]: Наши контакты
+        - generic [ref=f48e600]:
+          - generic [ref=f48e601]:
+            - generic [ref=f48e602]: Наши контакты
+            - generic [ref=f48e603]:
+              - paragraph [ref=f48e604]: Нахимовский пр-т., дом 24, стр. 4, 215 кабинет
+              - paragraph [ref=f48e605]: +7(495)205-36-33
+              - paragraph [ref=f48e606]: +7(495)205-39-33
+              - paragraph [ref=f48e607]: zakaz@rumar.pro
+          - generic [ref=f48e608]:
+            - generic [ref=f48e609]: Время работы
+            - paragraph [ref=f48e611]: "Пн. - Пт.: с 10:00 до 18:00"
+          - generic [ref=f48e612]:
+            - generic [ref=f48e613]: Мы в соц. сетях
+            - generic [ref=f48e615]:
+              - link [ref=f48e616] [cursor=pointer]:
+                - /url: https://www.instagram.com/rumar.pro/?r=nametag
+              - link [ref=f48e619] [cursor=pointer]:
+                - /url: https://vk.com/rumar_pro
+              - link [ref=f48e622] [cursor=pointer]:
+                - /url: https://www.facebook.com/rumarpro-112055843498984/
+              - link [ref=f48e625] [cursor=pointer]:
+                - /url: "https://ok.ru/group/57055703662811 "
+                - img "одноклассники" [ref=f48e626]
+              - link [ref=f48e627] [cursor=pointer]:
+                - /url: https://www.youtube.com/channel/UCQmDBu6gOp6IAhDx8tQVRlg/
+      - contentinfo [ref=f48e630]:
+        - paragraph [ref=f48e631]:
+          - link "Политика обработки персональных данных" [ref=f48e632] [cursor=pointer]:
+            - /url: https://rumar.pro/politika-konfidenczialnosti/
+        - generic [ref=f48e634]:
+          - generic [ref=f48e635]:
+            - link [ref=f48e636] [cursor=pointer]:
+              - /url: /
+              - img "Higer logo" [ref=f48e637]
+            - generic [ref=f48e638]: Все права защищены. Любое копирование без письменного согласия и активной ссылки на сайт https://rumar.pro/ запрещено.
+          - navigation [ref=f48e640]:
+            - generic [ref=f48e641]: Каталог
+            - list [ref=f48e642]:
+              - listitem [ref=f48e643]:
+                - link "Душевые ограждения" [ref=f48e644] [cursor=pointer]:
+                  - /url: dushevyie-ograzhdeniya/
+              - listitem [ref=f48e645]:
+                - link "Стеклянные ограждения" [ref=f48e646] [cursor=pointer]:
+                  - /url: izdeliya-iz-stekla/
+              - listitem [ref=f48e647]:
+                - link "ЗЕРКАЛА" [ref=f48e648] [cursor=pointer]:
+                  - /url: izdeliya-iz-zerkal/
+              - listitem [ref=f48e649]:
+                - link "Зеркала с подсветкой" [ref=f48e650] [cursor=pointer]:
+                  - /url: zerkala-s-podsvetkoj/
+              - listitem [ref=f48e651]:
+                - link "Стекло" [ref=f48e652] [cursor=pointer]:
+                  - /url: tipyi-stekla/
+              - listitem [ref=f48e653]:
+                - link "Зеркала" [ref=f48e654] [cursor=pointer]:
+                  - /url: tipyi-zerkal/
+              - listitem [ref=f48e655]:
+                - link "Аксессуары" [ref=f48e656] [cursor=pointer]:
+                  - /url: aksessuaryi/
+              - listitem [ref=f48e657]:
+                - link "Зеркала и зеркальное панно" [ref=f48e658] [cursor=pointer]:
+                  - /url: zerkalnoe-panno/
+              - listitem [ref=f48e659]:
+                - link "Статьи" [ref=f48e660] [cursor=pointer]:
+                  - /url: statiy/
+              - listitem [ref=f48e661]:
+                - link "Остекление сауны/хаммам" [ref=f48e662] [cursor=pointer]:
+                  - /url: steklyannyie-saunyi-xamam/
+          - navigation [ref=f48e664]:
+            - generic [ref=f48e665]: Меню
+            - list [ref=f48e666]:
+              - listitem [ref=f48e667]:
+                - link "О нас" [ref=f48e668] [cursor=pointer]:
+                  - /url: o-nas/
+              - listitem [ref=f48e669]:
+                - link "Услуги" [ref=f48e670] [cursor=pointer]:
+                  - /url: uslugi/
+              - listitem [ref=f48e671]:
+                - link "Сотрудничество" [ref=f48e672] [cursor=pointer]:
+                  - /url: sotrudnichestvo/
+              - listitem [ref=f48e673]:
+                - link "Оплата" [ref=f48e674] [cursor=pointer]:
+                  - /url: oplata/
+              - listitem [ref=f48e675]:
+                - link "Отзывы" [ref=f48e676] [cursor=pointer]:
+                  - /url: otzyivyi/
+              - listitem [ref=f48e677]:
+                - link "Акции" [ref=f48e678] [cursor=pointer]:
+                  - /url: akczii/
+              - listitem [ref=f48e679]:
+                - link "Производство" [ref=f48e680] [cursor=pointer]:
+                  - /url: proizvodstvo/
+              - listitem [ref=f48e681]:
+                - link "Доставка" [ref=f48e682] [cursor=pointer]:
+                  - /url: dostavka/
+              - listitem [ref=f48e683]:
+                - link "Шоу-рум" [ref=f48e684] [cursor=pointer]:
+                  - /url: showroom/
+              - listitem [ref=f48e685]:
+                - link "Контакты" [ref=f48e686] [cursor=pointer]:
+                  - /url: kontaktyi/
+          - generic [ref=f48e688]:
+            - generic [ref=f48e689]: контакты
+            - generic [ref=f48e690]:
+              - paragraph [ref=f48e691]: Нахимовский пр-т., дом 24, стр. 4, 215 кабинет
+              - paragraph [ref=f48e692]: "Пн. - Пт.: с 10:00 до 18:00"
+              - paragraph
+              - paragraph [ref=f48e693]: +7(495)205-36-33
+              - paragraph [ref=f48e694]: +7(495)205-39-33
+              - paragraph [ref=f48e695]: zakaz@rumar.pro
+            - generic [ref=f48e696]: Мы в соц. сетях
+            - generic [ref=f48e698]:
+              - link [ref=f48e699] [cursor=pointer]:
+                - /url: https://www.instagram.com/rumar.pro/?r=nametag
+              - link [ref=f48e702] [cursor=pointer]:
+                - /url: https://vk.com/rumar_pro
+              - link [ref=f48e705] [cursor=pointer]:
+                - /url: https://www.facebook.com/rumarpro-112055843498984/
+              - link [ref=f48e708] [cursor=pointer]:
+                - /url: "https://ok.ru/group/57055703662811 "
+                - img "одноклассники" [ref=f48e709]
+              - link [ref=f48e710] [cursor=pointer]:
+                - /url: https://www.youtube.com/channel/UCQmDBu6gOp6IAhDx8tQVRlg/
+        - link "Вернуться наверх" [ref=f48e713] [cursor=pointer]:
+          - /url: "#"
+    - link "Получите скидку" [ref=f48e715] [cursor=pointer]:
+      - /url: "#popup:marquiz_5e6b65fca8e900004489c4a5"
+    - iframe [ref=f48e723]:
+      - generic [ref=f53e6]:
+        - text: 70I8B0 >B A?0<0
+        - strong [ref=f53e7]: reCAPTCHA
+  - button "Online-чат" [ref=f48e724] [cursor=pointer]:
+    - generic: Напишите нам, мы онлайн!

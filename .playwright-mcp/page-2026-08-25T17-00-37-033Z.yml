@@ -1,0 +1,529 @@
+- generic [ref=f16e2]:
+  - link "К основному контенту" [ref=f16e3] [cursor=pointer]:
+    - /url: "#t-main-content"
+  - banner [ref=f16e4]:
+    - generic [ref=f16e7]:
+      - img [ref=f16e11] [cursor=pointer]
+      - link "контакты" [ref=f16e13] [cursor=pointer]:
+        - /url: "#contacts"
+      - link "наши работы" [ref=f16e17] [cursor=pointer]:
+        - /url: "#our_works"
+      - link "калькулятор стоимости" [ref=f16e21] [cursor=pointer]:
+        - /url: "#calculator"
+      - link "фурнитура" [ref=f16e25] [cursor=pointer]:
+        - /url: "#hardware"
+      - link "виды стекла" [ref=f16e29] [cursor=pointer]:
+        - /url: "#types_of_glass"
+      - link "каталог" [ref=f16e33] [cursor=pointer]:
+        - /url: "#submenu:more"
+      - img [ref=f16e37] [cursor=pointer]
+      - img [ref=f16e39] [cursor=pointer]
+      - generic [ref=f16e40]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+      - link "+7 (495) 540-43-41" [ref=f16e43] [cursor=pointer]:
+        - /url: tel:+74955404341
+      - link [ref=f16e55] [cursor=pointer]:
+        - /url: "#menuopen"
+      - link [ref=f16e57] [cursor=pointer]:
+        - /url: "#menuopen"
+    - generic [ref=f16e58]:
+      - button "Close menu" [ref=f16e59] [cursor=pointer]
+      - generic [ref=f16e63]:
+        - generic [ref=f16e64]:
+          - link [ref=f16e66] [cursor=pointer]:
+            - /url: /
+            - img "Душ на заказ" [ref=f16e67]
+          - navigation [ref=f16e68]:
+            - list [ref=f16e69]:
+              - listitem [ref=f16e70]:
+                - link "Виды продукции" [ref=f16e71] [cursor=pointer]:
+                  - /url: "#submenu:more"
+              - listitem [ref=f16e72]:
+                - link "Виды стекла" [ref=f16e73] [cursor=pointer]:
+                  - /url: "#types_of_glass"
+              - listitem [ref=f16e74]:
+                - link "Фурнитура" [ref=f16e75] [cursor=pointer]:
+                  - /url: "#hardware"
+              - listitem [ref=f16e76]:
+                - link "Каклькулятор стоимости" [ref=f16e77] [cursor=pointer]:
+                  - /url: "#calculator"
+              - listitem [ref=f16e78]:
+                - link "Как мы работаем?" [ref=f16e79] [cursor=pointer]:
+                  - /url: "#how_we_work"
+              - listitem [ref=f16e80]:
+                - link "Наши работы" [ref=f16e81] [cursor=pointer]:
+                  - /url: "#our_works"
+              - listitem [ref=f16e82]:
+                - link "Контакты" [ref=f16e83] [cursor=pointer]:
+                  - /url: "#contacts"
+              - listitem [ref=f16e84]:
+                - link "+7 (495) 540-43-41" [ref=f16e85] [cursor=pointer]:
+                  - /url: tel:+74955404341
+              - listitem [ref=f16e86]:
+                - link "zakaz@dushnazakaz.ru" [ref=f16e87] [cursor=pointer]:
+                  - /url: mailto:zakaz@dushnazakaz.ru
+        - generic [ref=f16e89]:
+          - generic [ref=f16e90]: "Консультации по телефону: ежедневно с 10:00 до 18:00"
+          - list "Соц. сети" [ref=f16e94]:
+            - listitem [ref=f16e95]:
+              - link "whatsapp" [ref=f16e96] [cursor=pointer]:
+                - /url: https://wa.me/79067068599
+            - listitem [ref=f16e98]:
+              - link "telegram" [ref=f16e99] [cursor=pointer]:
+                - /url: https://t.me/pavel_pozdnukhov
+          - link "+7 (495) 540-43-41" [ref=f16e104] [cursor=pointer]:
+            - /url: tel:+74955404341
+  - generic [ref=f16e108]:
+    - img "душевая кабина из стекла" [ref=f16e113]
+    - heading "Душевые перегородки из стекла на заказ" [level=1] [ref=f16e120]: Душевые перегородкииз стекла на заказ
+    - generic [ref=f16e121]: Оставьте заявку на просчет и мы перезвоним вам для консультации и расчета вашей душевой перегородки
+    - form [ref=f16e125]:
+      - generic [ref=f16e126]:
+        - textbox "name" [ref=f16e129]:
+          - /placeholder: Имя
+        - textbox "phone" [ref=f16e132]:
+          - /placeholder: Телефон
+        - button "ПЕРЕЗВОНИТЕ МНЕ" [ref=f16e134] [cursor=pointer]
+  - list [ref=f16e158]:
+    - listitem [ref=f16e159]:
+      - link "Главная" [ref=f16e161] [cursor=pointer]:
+        - /url: https://dushnazakaz.ru/
+      - generic [ref=f16e162]: »
+    - listitem [ref=f16e163]:
+      - generic [ref=f16e164]: Душевые перегородки из стекла
+  - heading "Изготавливаем душевые перегородки из стекла по индивидуальным размерам" [level=2] [ref=f16e170]
+  - generic [ref=f16e171]: Ниже приведены примеры стеклянных перегородок для душа выполненных на заказ. Варианты — не ограничены, в зависимости от типа вашего помещения.
+  - generic [ref=f16e250]:
+    - generic [ref=f16e255]: Зачем ждать?Теперь доступна рассрочка!
+    - generic [ref=f16e257]: подробности уточняйте у менеджеров
+  - generic [ref=f16e268]:
+    - generic [ref=f16e269]: Наши преимущества
+    - list [ref=f16e272]:
+      - listitem [ref=f16e273]:
+        - generic [ref=f16e274]:
+          - generic [ref=f16e275]: Собственное производство
+          - generic [ref=f16e276]: Изготавливаем стекло для наших изделийи держим в наличии большой ассортимент фурнитуры
+      - listitem [ref=f16e277]:
+        - generic [ref=f16e278]:
+          - generic [ref=f16e279]: Безопасное закаленное стекло
+          - generic [ref=f16e280]: Толщиной 8 мм, стекло меньшей толщиныне используем, не считаем его безопасным
+      - listitem [ref=f16e281]:
+        - generic [ref=f16e282]:
+          - generic [ref=f16e283]: Минимальные сроки изготовления
+          - generic [ref=f16e284]: До 10 дней от заказа до установки, стараемся сделать все в самые кратчайшие сроки
+      - listitem [ref=f16e285]:
+        - generic [ref=f16e286]:
+          - generic [ref=f16e287]: Высокое качество материалов
+          - generic [ref=f16e288]: Мы не стремимся удешевить наши изделияи ценим баланс в цене и качестве
+      - listitem [ref=f16e289]:
+        - generic [ref=f16e290]:
+          - generic [ref=f16e291]: Гарантия на нашу продукцию
+          - generic [ref=f16e292]: В зависимости от выбранных материалов,гарантия на наши изделия до 3х лет
+      - listitem [ref=f16e293]:
+        - generic [ref=f16e294]:
+          - generic [ref=f16e295]: Профессиональный монтаж
+          - generic [ref=f16e296]: Высококвалифицированные специалисты,влюбленные в свою работу
+  - generic [ref=f16e301]:
+    - generic [ref=f16e306]: Вы можете выбрать любой из 8 видов стекла
+    - generic [ref=f16e308]: Все стекло закаленное и безопасное, толщиной 8 мм.Выдерживает удары и высокие температуры. Может быть как прозрачным, так и матовым, а еще цветным или с рисунком.
+  - generic [ref=f16e310]: Наведите на картинку, чтобы посмотреть, как выглядит каждое из стекол в матовом исполнении + пескоструйный рисунок :)
+  - generic [ref=f16e323]:
+    - generic [ref=f16e329]:
+      - generic [ref=f16e330]: Обычное
+      - generic [ref=f16e331]: Стекло с зеленоватым оттенком (прозрачное или матовое)
+    - generic [ref=f16e337]:
+      - generic [ref=f16e338]: Осветленное
+      - generic [ref=f16e339]: Прозрачное, бесцветное стекло (прозрачное или матовое)
+    - generic [ref=f16e345]:
+      - generic [ref=f16e346]: Бронзовое
+      - generic [ref=f16e347]: Темное, стильное стекло (прозрачное или матовое)
+    - generic [ref=f16e353]:
+      - generic [ref=f16e354]: Особое
+      - generic [ref=f16e355]: Цветное стекло, нанесение пескоструйного рисунка
+  - generic [ref=f16e359]:
+    - generic [ref=f16e361]:
+      - heading "Укажите, какую душевую кабину из стекла вы хотите заказать" [level=2] [ref=f16e362]
+      - generic [ref=f16e364]: Таким образом мы быстрее сможем сориентировать вас по стоимости вашей кабины для душа :)
+    - form [ref=f16e369]:
+      - generic [ref=f16e370]:
+        - radiogroup "Конструкция" [ref=f16e371]:
+          - generic [ref=f16e374]:
+            - generic [ref=f16e375] [cursor=pointer]:
+              - radio "Шторка одинарная" [checked] [ref=f16e376]
+              - generic [ref=f16e378]: Шторка одинарная
+            - generic [ref=f16e379] [cursor=pointer]:
+              - radio "Шторка с добором (глухое + дверь)" [ref=f16e380]
+              - generic [ref=f16e382]: Шторка с добором (глухое + дверь)
+            - generic [ref=f16e383] [cursor=pointer]:
+              - radio "Дверка в нишу одинарная распашная" [ref=f16e384]
+              - generic [ref=f16e386]: Дверка в нишу одинарная распашная
+            - generic [ref=f16e387] [cursor=pointer]:
+              - radio "Дверка в нишу с добором (глухое + дверь)" [ref=f16e388]
+              - generic [ref=f16e390]: Дверка в нишу с добором (глухое + дверь)
+            - generic [ref=f16e391] [cursor=pointer]:
+              - radio "Перегородка" [ref=f16e392]
+              - generic [ref=f16e394]: Перегородка
+            - generic [ref=f16e395] [cursor=pointer]:
+              - radio "Г-образная угловая (глухое + дверь)" [ref=f16e396]
+              - generic [ref=f16e398]: Г-образная угловая (глухое + дверь)
+            - generic [ref=f16e399] [cursor=pointer]:
+              - radio "Г-образная угловая (глухое + дверь + добор)" [ref=f16e400]
+              - generic [ref=f16e402]: Г-образная угловая (глухое + дверь + добор)
+            - generic [ref=f16e403] [cursor=pointer]:
+              - radio "Г-образная угловая распашная (2 глухих + 2 двери)" [ref=f16e404]
+              - generic [ref=f16e406]: Г-образная угловая распашная (2 глухих + 2 двери)
+            - generic [ref=f16e407] [cursor=pointer]:
+              - radio "Раздвижка прямая (2 стекла)" [ref=f16e408]
+              - generic [ref=f16e410]: Раздвижка прямая (2 стекла)
+            - generic [ref=f16e411] [cursor=pointer]:
+              - radio "Раздвижка угловая (3 стекла, одна дверка)" [ref=f16e412]
+              - generic [ref=f16e414]: Раздвижка угловая (3 стекла, одна дверка)
+            - generic [ref=f16e415] [cursor=pointer]:
+              - radio "Раздвижка угловая (4 стекла, две дверки)" [ref=f16e416]
+              - generic [ref=f16e418]: Раздвижка угловая (4 стекла, две дверки)
+            - generic [ref=f16e419] [cursor=pointer]:
+              - radio "Трапеция (3 стекла)" [ref=f16e420]
+              - generic [ref=f16e422]: Трапеция (3 стекла)
+            - generic [ref=f16e423] [cursor=pointer]:
+              - radio "Перегородка распашная (3 стекла)" [ref=f16e424]
+              - generic [ref=f16e426]: Перегородка распашная (3 стекла)
+            - generic [ref=f16e427] [cursor=pointer]:
+              - radio "Перегородка раздвижная (3 стекла)" [ref=f16e428]
+              - generic [ref=f16e430]: Перегородка раздвижная (3 стекла)
+        - generic [ref=f16e431]:
+          - generic [ref=f16e432]: Высота
+          - generic [ref=f16e434]:
+            - button "Минус" [ref=f16e435] [cursor=pointer]
+            - spinbutton "Высота" [ref=f16e438]
+            - button "Плюс" [ref=f16e439] [cursor=pointer]
+        - generic [ref=f16e442]:
+          - generic [ref=f16e443]: Ширина
+          - generic [ref=f16e445]:
+            - button "Минус" [ref=f16e446] [cursor=pointer]
+            - spinbutton "Ширина" [ref=f16e449]
+            - button "Плюс" [ref=f16e450] [cursor=pointer]
+        - radiogroup "Толщина стекла" [ref=f16e453]:
+          - generic [ref=f16e457] [cursor=pointer]:
+            - radio "8 мм" [checked] [ref=f16e458]
+            - generic [ref=f16e460]: 8 мм
+        - generic [ref=f16e461]:
+          - generic [ref=f16e462]: Тип стекла
+          - combobox "Тип стекла" [ref=f16e465] [cursor=pointer]:
+            - option "Бесцветное" [selected]
+            - option "Осветленное"
+            - option "Тонированное"
+            - option "Матовое"
+        - generic [ref=f16e466]:
+          - generic [ref=f16e467]: Цвет фурнитуры
+          - combobox "Цвет фурнитуры" [ref=f16e470] [cursor=pointer]:
+            - option "Глянцевый хром" [selected]
+            - option "Матовый хром"
+            - option "Черный"
+            - option "Бронза"
+            - option "Золото"
+        - radiogroup "Класс фурнитуры" [ref=f16e471]:
+          - generic [ref=f16e474]:
+            - generic [ref=f16e475] [cursor=pointer]:
+              - radio "Стандарт (китайская фурнитура отличного качества, латунь)" [checked] [ref=f16e476]
+              - generic [ref=f16e478]: Стандарт (китайская фурнитура отличного качества, латунь)
+            - generic [ref=f16e479] [cursor=pointer]:
+              - radio "Премиум (немецкая фурнитура наивысшего качества, латунь)" [ref=f16e480]
+              - generic [ref=f16e482]: Премиум (немецкая фурнитура наивысшего качества, латунь)
+        - generic [ref=f16e483]:
+          - generic [ref=f16e484]: Установка
+          - generic [ref=f16e486] [cursor=pointer]:
+            - checkbox "Нужен монтаж" [ref=f16e487]
+            - generic [ref=f16e489]: Нужен монтаж
+        - generic [ref=f16e490]:
+          - generic [ref=f16e491]: Доставка
+          - generic [ref=f16e493] [cursor=pointer]:
+            - checkbox "Нужна доставка" [ref=f16e494]
+            - generic [ref=f16e496]: Нужна доставка
+        - generic [ref=f16e497]:
+          - generic [ref=f16e498]: Рассрочка
+          - generic [ref=f16e500] [cursor=pointer]:
+            - checkbox "Нужна рассрочка" [ref=f16e501]
+            - generic [ref=f16e503]: Нужна рассрочка
+        - generic [ref=f16e504]:
+          - generic [ref=f16e505]: Имя
+          - textbox "Имя" [ref=f16e507]
+        - generic [ref=f16e508]:
+          - generic [ref=f16e509]: Телефон
+          - textbox "Телефон" [ref=f16e511]
+        - button "ОТПРАВИТЬ ЗАЯВКУ" [ref=f16e513] [cursor=pointer]
+  - generic [ref=f16e517]:
+    - generic [ref=f16e522]: Закажите сейчас –а платите потом
+    - generic [ref=f16e524]: подробности уточняйте у менеджеров
+  - generic [ref=f16e538]:
+    - generic [ref=f16e541]: Не знаете, что лучше заказать?
+    - generic [ref=f16e543]: Оставьте заявку на расчет стеклянной душевой перегородки и наши специалисты проконсультируют вас
+    - button "ПОЛУЧИТЬ КОНСУЛЬТАЦИЮ" [ref=f16e546] [cursor=pointer]
+    - img "душевая кабина на заказ" [ref=f16e551]
+  - generic [ref=f16e552]: Душевые перегородки любой сложности
+  - tablist [ref=f16e561]:
+    - tab "Угловые" [selected] [ref=f16e562]
+    - tab "Ограждения" [ref=f16e564] [cursor=pointer]
+    - tab "В нишу" [ref=f16e566] [cursor=pointer]
+    - tab "Раздвижные" [ref=f16e568] [cursor=pointer]
+    - tab "Шторки" [ref=f16e570] [cursor=pointer]
+  - tabpanel "Угловые" [ref=f16e572]:
+    - generic [ref=f16e575]:
+      - generic [ref=f16e578]:
+        - generic [ref=f16e579]: Душевой уголок из стекла
+        - generic [ref=f16e580]: От 45.000р
+      - generic [ref=f16e583]:
+        - generic [ref=f16e584]: Душевая кабина угловая
+        - generic [ref=f16e585]: От 46.000р
+      - generic [ref=f16e588]:
+        - generic [ref=f16e589]: Душевая кабина угловая стеклянная
+        - generic [ref=f16e590]: От 45.500р
+  - generic [ref=f16e596]:
+    - heading "Какую фурнитуру мы предлагаем для душевых перегородок?" [level=2] [ref=f16e597]
+    - generic [ref=f16e598]: "Мы подберем фурнитуру для стеклянной перегородки в душевую, в зависимости от вкусовых предпочтений и бюджета. На выбор у нас есть 2 ценовые линейки фурнитуры:"
+  - generic [ref=f16e601]:
+    - generic [ref=f16e607]:
+      - generic [ref=f16e608]: Стандарт
+      - generic [ref=f16e609]: Недорогая линейка фурнитуры из латуни. Качественная сборка, приятный дизайн. Петли плавно открываются, без скрипов и посторонних звуков. Внешне уступают премиальной линейке, но значительно выигрывают за счет своей стоимости. Оптимальный вариант по соотношению цена/качество. Всего в этой линейке 5 коллекций разного дизайна.Гарантия 1 год. Производитель — Китай.Если для вас в первую очередь важна практичность и конечная стоимость изделия, то выбирайте эту линейку.
+    - generic [ref=f16e615]:
+      - generic [ref=f16e616]: Премиум
+      - generic [ref=f16e617]: Изысканная фурнитура высочайшего качества. Крепежные болты скрыты декоративными крышками, что делает эту линейку более утонченной. Петли обладают минимальным зазором, который исключает вероятность протечки, а так же оснащены функцией самозакрывания и исключительно плавно открываются. Всего в этой линейке 9 коллекций разного дизайна.Гарантия 3 года. Производитель — Германия.Эта линейка подойдет вам, если для вас помимо всего прочего не менее важен внешний вид и эстетика.
+  - generic [ref=f16e621]:
+    - heading "Виды цветового решения для фурнитуры" [level=2] [ref=f16e622]
+    - generic [ref=f16e625]:
+      - text: "Фурнитура для стеклянных перегородок в ванную в обеих линейках поделена на коллекции, поэтому вы сможете выбрать именно ту, которая больше всего подойдет вам по дизайну и визуальным предпочтениям.Фурнитура бывает в разном исполнении:"
+      - list [ref=f16e626]:
+        - listitem [ref=f16e627]: полированный / матовый хром
+        - listitem [ref=f16e628]: под нержавеющую сталь
+        - listitem [ref=f16e629]: под золото
+        - listitem [ref=f16e630]: под бронзу
+        - listitem [ref=f16e631]: черная матовая
+  - generic [ref=f16e635]:
+    - generic [ref=f16e641]:
+      - generic [ref=f16e642]: Оставьте заявку на расчет душевой перегородки из стекла
+      - generic [ref=f16e644]: Душевые стеклянные перегородки изготавливаются на заказ по индивидуальным размерам. Если вы знаете размеры — сделаем расчет по ним, либо приедем на замер к вам :)
+    - link "НАПИСАТЬ В WHATSAPP" [ref=f16e647] [cursor=pointer]:
+      - /url: https://wa.me/79067068599
+    - form [ref=f16e652]:
+      - generic [ref=f16e653]:
+        - textbox "name" [ref=f16e656]:
+          - /placeholder: Имя
+        - textbox "phone" [ref=f16e659]:
+          - /placeholder: Телефон
+        - button "ЗАКАЗАТЬ РАСЧЕТ" [ref=f16e661] [cursor=pointer]
+  - generic [ref=f16e666]:
+    - heading [level=2] [ref=f16e667]:
+      - generic [ref=f16e668]: Производим бесплатный замер в пределах МКАДпри заключении договора
+    - generic [ref=f16e669]: В иных случаях замер платный, в пределах МКАД стоимость замера 2000 руб. В зависимости от удаленности от МКАД стоимость рассчитывается индивидуально.
+  - generic [ref=f16e677]:
+    - generic [ref=f16e678]: На замер мы всегда выезжаем с образцами стекла и фурнитуры, чтобы вам было проще сделать правильный выбор.
+    - generic [ref=f16e679]: "Все важные моменты учитываются при замере: плитка с неровной поверхностью; декоративные вставки; неровные стены и прочее."
+    - button "ВЫЗВАТЬ ЗАМЕРЩИКА" [ref=f16e682] [cursor=pointer]
+  - generic [ref=f16e685]:
+    - generic [ref=f16e686]: Как мы работаем?
+    - generic [ref=f16e690]:
+      - generic [ref=f16e694]:
+        - generic [ref=f16e695]: Заявка
+        - generic [ref=f16e696]: Вы оставляете заявку на замер, либо звоните нам
+      - generic [ref=f16e706]:
+        - generic [ref=f16e707]: Замер
+        - generic [ref=f16e708]: Мы производим замер и заключаем договор
+      - generic [ref=f16e718]:
+        - generic [ref=f16e719]: Изготовление
+        - generic [ref=f16e720]: Изготавливаем заготовкипо снятым ранее размерам
+      - generic [ref=f16e730]:
+        - generic [ref=f16e731]: Доставка и установка
+        - generic [ref=f16e732]: Доставляем и монтируемвашу душевую перегородку
+  - generic [ref=f16e733]: Стекло под каждый проект изготавливается индивидуально на автоматическом станке с ЧПУ.Наши монтажники используют в работе только качественный электрический инструмент мировых брендов, с применением трубчатых сверл с алмазным напылением во избежании трещин и сколов плитки, мозаики и остальных материалов.
+  - generic [ref=f16e746]:
+    - generic [ref=f16e748]:
+      - list:
+        - listitem [ref=f16e749] [cursor=pointer]:
+          - button "Предыдущий слайд" [ref=f16e750]
+        - listitem [ref=f16e753] [cursor=pointer]:
+          - button "Следующий слайд" [ref=f16e754]
+      - generic [ref=f16e757]:
+        - generic [ref=f16e758]:
+          - group [ref=f16e759]
+          - group "1 из 3" [ref=f16e765]
+          - group [ref=f16e771]
+          - group [ref=f16e777]
+          - group [ref=f16e783]
+        - list [ref=f16e789]:
+          - listitem [ref=f16e790] [cursor=pointer]:
+            - button "Перейти к слайду 1" [ref=f16e791]
+          - listitem [ref=f16e792] [cursor=pointer]:
+            - button "Перейти к слайду 2" [ref=f16e793]
+          - listitem [ref=f16e794] [cursor=pointer]:
+            - button "Перейти к слайду 3" [ref=f16e795]
+    - generic [ref=f16e796]:
+      - generic [ref=f16e797]: Залог долгой службы – качественный монтаж душевых перегородок
+      - generic [ref=f16e798]: "Наши монтажники установят вашу душевую перегородку так, как установили бы для себя. Имеют большой опыт при установке в нестандартных помещениях и сложных условиях: неровные стены/пол, декоративные элементы, дизайнерская плитка, поддоны из разных материалов.При монтаже используется силиконовый прозрачный герметик европейского качества, который не купить в обычном магазине."
+  - generic [ref=f16e811]:
+    - generic [ref=f16e812]: "При заказе душевых перегородок из стекла по индивидуальным размерам важно учесть следующие моменты:"
+    - generic [ref=f16e815]:
+      - button "Тип конструкции" [ref=f16e819] [cursor=pointer]
+      - button "Материал и толщина стекла" [ref=f16e826] [cursor=pointer]
+      - button "Способ открывания дверей" [ref=f16e833] [cursor=pointer]
+      - button "Фурнитура и комплектующие" [ref=f16e840] [cursor=pointer]
+      - button "Размеры и форма" [ref=f16e847] [cursor=pointer]
+  - heading "Наши работы" [level=2] [ref=f16e857]
+  - heading "Наше производство" [level=2] [ref=f16e895]
+  - generic [ref=f16e905]:
+    - generic [ref=f16e906]: Ответы на часто задаваемые вопросы по душевым перегородкам
+    - generic [ref=f16e909]:
+      - button "Что такое душевые перегородки из стекла на заказ?" [ref=f16e914] [cursor=pointer]
+      - button "Как выбрать подходящий дизайн душевой перегородки?" [ref=f16e930] [cursor=pointer]
+      - button "Как ухаживать за душевыми перегородками из стекла?" [ref=f16e946] [cursor=pointer]
+      - button "Как узнать стоимость и заказать душевую перегородку?" [ref=f16e962] [cursor=pointer]
+      - button "Какие сроки изготовления душевых перегородок и как происходит оплата?" [ref=f16e978] [cursor=pointer]
+      - button "Сколько стоит замер?" [ref=f16e994] [cursor=pointer]
+      - button "Монтаж душевых перегородок входит в стоимость?" [ref=f16e1010] [cursor=pointer]
+      - button "Какое у вас стекло для душевых перегородок?" [ref=f16e1026] [cursor=pointer]
+      - button "Гарантию на душевые перегородки даете?" [ref=f16e1042] [cursor=pointer]
+      - button "Наносите ли вы водоотталкивающее покрытие на стекло?" [ref=f16e1058] [cursor=pointer]
+      - button "У меня не ровная стена, что делать?" [ref=f16e1074] [cursor=pointer]
+      - button "А что с поддонами, тоже делаете?" [ref=f16e1090] [cursor=pointer]
+      - button "Не испортится ли ванна после установки душевой шторки?" [ref=f16e1106] [cursor=pointer]
+      - button "Есть ли возможность покупки в рассрочку?" [ref=f16e1122] [cursor=pointer]
+      - button "Типовые размеры душевых перегородок в зависимости от площади помещения" [ref=f16e1138] [cursor=pointer]
+      - button "Этапы производства душевых перегородок из стекла" [ref=f16e1154] [cursor=pointer]
+      - button "Таблица основных характеристик стекла" [ref=f16e1170] [cursor=pointer]
+  - generic [ref=f16e1184]:
+    - generic [ref=f16e1185]:
+      - generic [ref=f16e1186]: Отзывы
+      - generic [ref=f16e1190]:
+        - generic:
+          - button "Previous slide" [ref=f16e1191] [cursor=pointer]
+          - button "Next slide" [ref=f16e1193] [cursor=pointer]
+    - generic [ref=f16e1196]:
+      - group "1 of 6" [ref=f16e1197]:
+        - generic [ref=f16e1198]:
+          - generic [ref=f16e1199]: Анна Смирнова
+          - generic [ref=f16e1202]: Обратились за изготовлением душевой кабины из стекла по индивидуальному проекту — и не прогадали. Мастера учли все наши пожелания, помогли с выбором дизайна и материалов. Работа выполнена в срок, кабина выглядит стильно и надёжно. Рекомендуем!
+      - group "2 of 6" [ref=f16e1203]:
+        - generic [ref=f16e1204]:
+          - generic [ref=f16e1205]: Мария Иванова
+          - generic [ref=f16e1208]: Заказывала душевую кабину из стекла на заказ — осталась в полном восторге! Качество материалов на высоте, стекло закалённое, сборка выполнена профессионально. Очень довольны выбором!
+      - group "3 of 6" [ref=f16e1209]:
+        - generic [ref=f16e1210]:
+          - generic [ref=f16e1211]: Дмитрий Кузнецов
+          - generic [ref=f16e1214]: Заказывали душевой уголок на заказ из стекла — результат превзошёл ожидания! Стекло толстое и прочное, конструкция очень устойчивая. Мастера сделали всё аккуратно, без сколов и неровностей. Уголок идеально вписался в нашу ванную комнату. Спасибо!
+      - group "4 of 6" [ref=f16e1215]:
+        - generic [ref=f16e1216]:
+          - generic [ref=f16e1217]: Сергей Попов
+          - generic [ref=f16e1220]: Порадовало, что мастера сами приехали на замеры, а потом ещё и проконсультировали по уходу за стеклом. Ожидали, что будет шумно при монтаже, но ребята работали аккуратно — даже плитку не поцарапали. Получилось стильно и функционально. Спасибо за индивидуальный подход!
+      - group "5 of 6" [ref=f16e1221]:
+        - generic [ref=f16e1222]:
+          - generic [ref=f16e1223]: Елена Васильева
+          - generic [ref=f16e1226]: "Заказали душевое ограждение на заказ! Специалисты предложили нестандартное решение для нашей маленькой ванной. Удивило, что даже фурнитуру подобрали в тон смесителю. Работали оперативно: от замера до установки прошло всего 10 дней. Спасибо!"
+      - group "6 of 6" [ref=f16e1227]:
+        - generic [ref=f16e1228]:
+          - generic [ref=f16e1229]: Александр Михайлов
+          - generic [ref=f16e1232]: Заказывали душевой уголок из стекла - и это было лучшее решение для нашей ванной! Мастера учли наш запрос на матовое стекло в зоне душевой лейки - получилось стильно и приватно. Уголок установили за 3 часа, без пыли и грязи. Уже месяц пользуемся - никаких нареканий!
+  - generic [ref=f16e1240]:
+    - heading [level=2] [ref=f16e1241]:
+      - generic [ref=f16e1242]: Получите 3 варианта сметыдля вашей стеклянной перегородки в душ на заказ
+    - generic [ref=f16e1243]: Мы подберем для вас 3 варианта, основываясь на ваших пожеланияхи предполагаемом бюджете. В течение 24 часов.
+    - form [ref=f16e1247]:
+      - generic [ref=f16e1248]:
+        - textbox "Имя" [ref=f16e1251]
+        - textbox "Телефон" [ref=f16e1254]
+        - button "ОСТАВИТЬ ЗАВКУ" [ref=f16e1256] [cursor=pointer]
+    - generic [ref=f16e1258]: Ваши персональные данные находятся в безопасности
+  - generic [ref=f16e1261]:
+    - heading "Полезные статьи" [level=2] [ref=f16e1264]
+    - generic [ref=f16e1265]:
+      - list
+      - generic [ref=f16e1294]:
+        - button "Загрузить еще"
+  - generic [ref=f16e1300]:
+    - heading "Контакты" [level=2] [ref=f16e1301]
+    - generic [ref=f16e1303]:
+      - text: "Тел.:"
+      - link "+7 495 540-43-41" [ref=f16e1304] [cursor=pointer]:
+        - /url: tel:+74955404341
+      - text: "Консультации по телефону:ежедневно с 10:00 до 18:00E-mail:"
+      - link "zakaz@dushnazakaz.ru" [ref=f16e1305] [cursor=pointer]:
+        - /url: mailto:zakaz@dushnazakaz.ru
+      - text: Адрес:г. Москва, БЦ Румянцево,блок Д, этаж 7Режим работы:по будням с 10:00 до 16:30
+    - list "Соц. сети" [ref=f16e1307]:
+      - listitem [ref=f16e1308]:
+        - link "whatsapp" [ref=f16e1309] [cursor=pointer]:
+          - /url: https://wa.me/79067068599
+      - listitem [ref=f16e1311]:
+        - link "telegram" [ref=f16e1312] [cursor=pointer]:
+          - /url: https://t.me/pavel_pozdnukhov
+  - generic [ref=f16e1316]: Душевые перегородки из стекла на заказ
+  - generic [ref=f16e1321]: Компания «Душ на заказ» принимает заказы на проектирование и установку душевых перегородок. Клиенты могут выбрать типовой вариант или заказать эксклюзивный проект. Мы выполняем работу любой сложности с учетом всех технических и эстетических предпочтений заказчика.
+  - generic [ref=f16e1327]: Стильные решения душевых перегородок
+  - generic [ref=f16e1337]:
+    - text: "Сделать ванную комнату более уютной и функциональной помогут изящные перегородки из стекла. Они свободно пропускают свет, поэтому интерьер не утяжеляется. Он становится невесомым и наполняется ненавязчивым посверкиванием.Стекло — самый стильный и современный материал. Оно обладает не только эстетическими свойствами. Новейшие технологические методики придают ему необычайную прочность.Сохраняя свою воздушность, полотно обретает множество полезных свойств:"
+    - list [ref=f16e1338]:
+      - listitem [ref=f16e1339]: устойчивость к механическому воздействию;
+      - listitem [ref=f16e1340]: сопротивляемость к появлению царапин и пятен;
+      - listitem [ref=f16e1341]: термостойкость;
+      - listitem [ref=f16e1342]: устойчивость к перепаду температур.
+    - text: "В своих проектах наши специалисты используют не только классическое прозрачное стекло для перегородок. Большой популярностью пользуются конструкции для ванных из бронзового или осветленного полотна. Каждое из них может быть матовым.Особой дизайнерской утонченностью обладают перегородки для душа из стекла с орнаментом. Рисунок наносится по пескоструйной технологии. В результате получается изящная полупрозрачная композиция для ванной.Практическое назначение стеклянных перегородок — блокировка брызг. Стены и пол будут всегда защищены, что позволит поддерживать гигиеническую норму и упростит уборку в санузле.Преимущества душевых перегородок из стекла:"
+    - list [ref=f16e1343]:
+      - listitem [ref=f16e1344]: индивидуальный декор;
+      - listitem [ref=f16e1345]: прочность и устойчивость;
+      - listitem [ref=f16e1346]: простота в уходе;
+      - listitem [ref=f16e1347]: длительный срок эксплуатации;
+      - listitem [ref=f16e1348]: герметичность;
+      - listitem [ref=f16e1349]: эстетичность.
+    - text: Количество конфигураций практически неисчерпаемо. Проект перегородки формируется от габаритов и архитектурных особенностей помещения.
+  - generic [ref=f16e1350]: Душевые перегородки на заказ
+  - generic [ref=f16e1355]: Алгоритм работы с заказчиками отработан многолетней практикой. После получения заявки на изготовление перегородки в душ наш менеджер отправляется для выполнения замеров. Данная услуга — бесплатная, но она имеет принципиальное значение. От точности замеров зависит качество монтажа стеклянной конструкции. Клиент принимает участие в разработке проекта. Чтобы конструкция была гармоничной, мы предлагаем консультационные услуги профессиональных дизайнеров. Каждое полотно изготавливается индивидуально. Завершающий этап — доставка и монтажные работы.
+  - contentinfo [ref=f16e1363]:
+    - generic [ref=f16e1364] [cursor=pointer]:
+      - generic [ref=f16e1365]: Есть вопросы?
+      - button [ref=f16e1366]
+    - generic [ref=f16e1369]:
+      - generic [ref=f16e1370]: Мы используем cookies для улучшения работы сайта. Продолжая пользоваться сайтом, вы даёте согласие на использование файлов cookies. Вы можете отозвать своё согласие, написав на zakaz@dushnazakaz.ru
+      - generic [ref=f16e1371] [cursor=pointer]: OK
+    - list [ref=f16e1380]:
+      - listitem [ref=f16e1381]:
+        - link "Душевые кабины" [ref=f16e1382] [cursor=pointer]:
+          - /url: /
+      - listitem [ref=f16e1383]:
+        - link "Душевые ограждения" [ref=f16e1384] [cursor=pointer]:
+          - /url: /ograzhdeniya
+      - listitem [ref=f16e1385]:
+        - link "Душевые уголки" [ref=f16e1386] [cursor=pointer]:
+          - /url: /ugolki
+      - listitem [ref=f16e1387]:
+        - link "Душевые перегородки" [ref=f16e1388] [cursor=pointer]:
+          - /url: /peregorodki
+      - listitem [ref=f16e1389]:
+        - link "Стеклянные шторки для ванны" [ref=f16e1390] [cursor=pointer]:
+          - /url: /steklyannaya-shtorka-na-vannu
+      - listitem [ref=f16e1391]:
+        - link "Стеклянная дверь в душевую" [ref=f16e1392] [cursor=pointer]:
+          - /url: /steklyannyye-dveri-v-dushevuyu
+      - listitem [ref=f16e1393]:
+        - link "Контакты" [ref=f16e1394] [cursor=pointer]:
+          - /url: /contacts
+      - listitem [ref=f16e1395]:
+        - link "О компании" [ref=f16e1396] [cursor=pointer]:
+          - /url: /o-kompanii
+      - listitem [ref=f16e1397]:
+        - link "Доставка" [ref=f16e1398] [cursor=pointer]:
+          - /url: /dostavka
+      - listitem [ref=f16e1399]:
+        - link "Оплата" [ref=f16e1400] [cursor=pointer]:
+          - /url: /oplata
+      - listitem [ref=f16e1401]:
+        - link "Статьи" [ref=f16e1402] [cursor=pointer]:
+          - /url: /blog
+    - generic [ref=f16e1407]:
+      - list "Social media links" [ref=f16e1409]:
+        - listitem [ref=f16e1410]:
+          - link "whatsapp" [ref=f16e1411] [cursor=pointer]:
+            - /url: https://wa.me/79067068599
+        - listitem [ref=f16e1413]:
+          - link "telegram" [ref=f16e1414] [cursor=pointer]:
+            - /url: https://t.me/pavel_pozdnukhov
+        - listitem [ref=f16e1416]:
+          - link "vk" [ref=f16e1417] [cursor=pointer]:
+            - /url: https://vk.com/dushnazakaz
+      - separator [ref=f16e1420]
+      - generic [ref=f16e1421]: "2016-2025 © Душназаказ, стеклянные двери в душ. Все права защищены. Любое использование либо копирование материалов или подборки материалов сайта, элементов дизайна и оформления допускается лишь с разрешения правообладателя и только со ссылкой на источник: https://dushnazakaz.ru"
