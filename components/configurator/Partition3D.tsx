@@ -7,7 +7,7 @@ import {
   MeshTransmissionMaterial, Edges, RoundedBox,
 } from '@react-three/drei'
 import { EffectComposer, N8AO, Bloom, Vignette, SMAA } from '@react-three/postprocessing'
-import { Suspense, useMemo } from 'react'
+import { Suspense, useMemo, useState, useRef, useEffect, useCallback } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { nodeRole } from '@/lib/configurator/kit'
 import { getPart } from '@/lib/configurator/parts/registry'
@@ -139,14 +139,45 @@ function tiledMaps(maps: TileMaps, uM: number, vM: number): TileMaps {
   return { color: cl(maps.color), height: cl(maps.height), rough: cl(maps.rough) }
 }
 
-// Поддон отдельным узлом — акрил со скруглёнными кромками и мокрым подблеском.
+// R5 · Поддон: акрил с бортиком и утопленным полем, а не плита.
+// Собран из тел, а не вырезан булевой операцией: основание чуть ниже верха, по
+// периметру — четыре бортика. Верх основания и есть утопленное поле, поэтому
+// лишней геометрии нет, а бортик читается кромкой и тенью.
+const TRAY_RIM = 0.035        // ширина бортика, м
+const TRAY_RECESS = 0.012     // на сколько поле утоплено относительно бортика
+
 function Tray({ w, depth, trayH }: { w: number; depth: number; trayH: number }) {
-  return (
-    <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
-      position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
-      <meshPhysicalMaterial color="#f4f2ee" roughness={0.14} metalness={0.02}
-        clearcoat={0.6} clearcoatRoughness={0.12} envMapIntensity={1.0} />
+  const TW = w + 0.05, TD = depth + 0.05
+  const x0 = -0.025, z0 = -0.025
+  const baseH = trayH - TRAY_RECESS
+  const rimY = baseH + TRAY_RECESS / 2
+  const acrylic = (
+    <meshPhysicalMaterial color="#f6f5f2" roughness={0.12} metalness={0.02}
+      clearcoat={0.7} clearcoatRoughness={0.1} envMapIntensity={1.0} />
+  )
+  const rim = (args: [number, number, number], pos: [number, number, number], key: string) => (
+    <RoundedBox key={key} args={args} radius={Math.min(TRAY_RECESS * 0.4, 0.005)} smoothness={3}
+      position={pos} castShadow receiveShadow>
+      {acrylic}
     </RoundedBox>
+  )
+  return (
+    <group>
+      {/* основание; его верх — утопленное поле поддона */}
+      <RoundedBox args={[TW, baseH, TD]} radius={Math.min(baseH * 0.3, 0.01)} smoothness={3}
+        position={[w / 2, baseH / 2, depth / 2]} castShadow receiveShadow>
+        {acrylic}
+      </RoundedBox>
+      {rim([TW, TRAY_RECESS, TRAY_RIM], [w / 2, rimY, z0 + TRAY_RIM / 2], 'front')}
+      {rim([TW, TRAY_RECESS, TRAY_RIM], [w / 2, rimY, z0 + TD - TRAY_RIM / 2], 'back')}
+      {rim([TRAY_RIM, TRAY_RECESS, TD - TRAY_RIM * 2], [x0 + TRAY_RIM / 2, rimY, depth / 2], 'left')}
+      {rim([TRAY_RIM, TRAY_RECESS, TD - TRAY_RIM * 2], [x0 + TW - TRAY_RIM / 2, rimY, depth / 2], 'right')}
+      {/* слив — без него утопленное поле выглядит просто ступенькой */}
+      <mesh position={[w / 2, baseH + 0.0008, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+        <circleGeometry args={[0.045, 28]} />
+        <meshPhysicalMaterial color="#c8ccce" metalness={0.95} roughness={0.25} envMapIntensity={1.2} />
+      </mesh>
+    </group>
   )
 }
 
@@ -203,9 +234,37 @@ function NicheMesh({ niche }: { niche: Niche }) {
   )
 }
 
-function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole }: {
+// R6 · Накопительный кадр. Пока клиент крутит модель — дешёвый режим: важна
+// отзывчивость. Отпустил — сцена «доводится»: растут сэмплы стекла, разрешение
+// буфера преломления, плотность пикселей и качество затенения. Именно количество
+// сэмплов, а не формулы, отличает каталожный рендер от вида в браузере.
+//
+// Порог 400 мс: короче — режим дёргается на инерции орбиты, длиннее — читается
+// как задержка.
+function useSettled(deps: unknown[], delay = 400) {
+  // Ключ описывает, ЧТО сейчас в кадре. «Кадр сел» — это не отдельный флаг, а
+  // совпадение ключа с тем, для которого таймер успел досчитать: любая смена
+  // сцены сбрасывает состояние сама, без setState внутри эффекта.
+  const key = JSON.stringify(deps)
+  const [settledKey, setSettledKey] = useState<string | null>(null)
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const arm = useCallback((k: string) => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => setSettledKey(k), delay)
+  }, [delay])
+  useEffect(() => {
+    arm(key)
+    return () => { if (timer.current) clearTimeout(timer.current) }
+  }, [key, arm])
+  // Движение камеры: обработчик события, не эффект. Повторный null — no-op для React.
+  const disturb = useCallback(() => { setSettledKey(null); arm(key) }, [arm, key])
+  return { settled: settledKey === key, disturb }
+}
+
+function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole, settled }: {
   assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint
   onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
+  settled?: boolean        // кадр «сел»: можно тратиться на сэмплы
 }) {
   const pickable = !!onPick
   const lit = (key: string, role: string | null) => key === pickedKey || (!!role && role === pickedRole)
@@ -228,8 +287,8 @@ function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRo
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
-            samples={6}
-            resolution={512}
+            samples={settled ? 16 : 4}
+            resolution={settled ? 1024 : 256}
             color={glassTint.color}
             attenuationColor={glassTint.attenuation}
             attenuationDistance={glassTint.distance}
@@ -340,12 +399,15 @@ export default function Partition3D(
   const camDist = frameH / 2 / Math.tan((FOV / 2) * Math.PI / 180)
   const ty = assembly.niche.trayH + h * 0.42
   const eye = assembly.niche.trayH + 1.5                     // рост смотрящего
+  // Кадр «садится» через 400 мс после последнего движения; смена модели, размеров,
+  // стекла или цвета фурнитуры сбрасывает счёт — считать надо заново.
+  const { settled, disturb } = useSettled([model.code, dims, glassTint, finishId, doorOpen])
 
   return (
     <div className="w-full h-[420px] md:h-[480px] rounded-xl overflow-hidden bg-gradient-to-b from-[#f2f1ee] to-[#e4e2dd]">
       <Canvas
         shadows="soft"
-        dpr={[1, 2]}
+        dpr={settled ? [1, 2] : [1, 1.25]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
         // Камера стоит ВНУТРИ комнаты, в её открытом углу (+X / −Z): раскладка ставит
@@ -365,12 +427,14 @@ export default function Partition3D(
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.38} color="#e6eeff" />
           <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.26} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
-          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} />
-          <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
+          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} settled={settled} />
+          <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2}
+            resolution={settled ? 1024 : 384} frames={settled ? Infinity : 1} />
           <Studio />
           <OrbitControls
             makeDefault
             enablePan={false}
+            onChange={disturb}
             minPolarAngle={0.2}
             maxPolarAngle={Math.PI / 2.05}
             minDistance={span * 0.9}
@@ -379,7 +443,7 @@ export default function Partition3D(
           />
           {/* V1 AO + V8 bloom/виньетка + V9 SMAA — «рендерный» финиш */}
           <EffectComposer enableNormalPass multisampling={0}>
-            <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes quality="medium" />
+            <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes={!settled} quality={settled ? 'high' : 'low'} />
             <Bloom intensity={0.16} luminanceThreshold={0.96} luminanceSmoothing={0.12} mipmapBlur />
             <Vignette offset={0.28} darkness={0.32} />
             <SMAA />
