@@ -163,6 +163,38 @@ function GlassToRailClamp({ material, flatTube }: { material: THREE.Material; fl
   )
 }
 
+// КП-001 на ТОРЦЕ штанги: труба приходит к перпендикулярному стеклу (М7).
+// Здесь ось трубы — локальный X, а стекло стоит поперёк в точке установки,
+// поэтому корпус сидит НА трубе (без выноса), а стекло зажимается щеками.
+function RailEndClamp({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
+  const tubeH = (flatTube ? 10 : 30) * M
+  const tubeW = (flatTube ? 30 : 10) * M
+  const wall = 5 * M
+  const bodyX = 34 * M
+  const bodyY = tubeH + wall * 2
+  const bodyZ = tubeW + wall * 2
+  const screwR = 2.6 * M
+  return (
+    <group>
+      {/* корпус надет на конец штанги, отступив от стекла */}
+      <RoundedBox args={[bodyX, bodyY, bodyZ]} radius={2 * M} smoothness={3}
+        position={[-bodyX / 2 - 3 * M, 0, 0]} material={material} castShadow />
+      {/* стопорные винты сверху корпуса */}
+      {[-8 * M, 8 * M].map((dx, i) => (
+        <mesh key={i} position={[-bodyX / 2 - 3 * M + dx, bodyY / 2, 0]} material={material} castShadow>
+          <cylinderGeometry args={[screwR, screwR, 2.5 * M, 14]} />
+        </mesh>
+      ))}
+      {/* щеки, зажимающие стекло с обеих сторон (стекло в плоскости точки установки) */}
+      {[-7 * M, 7 * M].map((x, i) => (
+        <mesh key={i} position={[x, 0, 0]} material={material} castShadow>
+          <boxGeometry args={[4 * M, bodyY * 0.92, bodyZ * 0.92]} />
+        </mesh>
+      ))}
+    </group>
+  )
+}
+
 // КП-002 — крепёж трубы к СТЕНЕ. Ось трубы — локальный X, стена за торцом (+X).
 // Два тела: плоский фланец, прижатый к стене, и обойма, надетая на трубу.
 // Сечение обоймы следует ориентации трубы: лежит «на пузе» (10×30) или на ребре (30×10).
@@ -273,7 +305,7 @@ export function Hardware({ model, shape, material, flatTube }: { model: Hardware
     case 'roller': return <SlidingRoller material={material} />
     case 'mount-glass': return <GlassToRailClamp material={material} flatTube={flatTube} />
     case 'mount-wall': return <KP002 material={material} flatTube={flatTube} />
-    case 'mount-corner': return <GlassToRailClamp material={material} flatTube={flatTube} />
+    case 'mount-corner': return <RailEndClamp material={material} flatTube={flatTube} />
     case 'mount-diag45': return <MountDiag45 material={material} />
     case 'mount-stabilizer': return <MountStabilizer material={material} />
     case 'connector': return <TubeConnector material={material} />
