@@ -22,13 +22,18 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: 'Нет доступа' }, { status: 403 })
   }
 
-  const b = await req.json().catch(() => ({})) as { scope?: string; notes?: string }
+  const b = await req.json().catch(() => ({})) as { scope?: string; notes?: string; address?: string }
+
+  // Адрес обязателен — замерщику некуда ехать без него. Берём из сделки, иначе из тела
+  // (карточка спрашивает при отправке и заодно записывает в сделку).
+  const address = (b.address?.trim() || (deal.address as string) || '').trim()
+  if (!address) return NextResponse.json({ error: 'Адрес объекта обязателен для замера' }, { status: 400 })
 
   const { data, error } = await svc.from('measure_requests').insert({
     deal_id: dealId,
     client_name: (deal.client_name as string) || '',
     phone: (deal.phone as string) || null,
-    address: (deal.address as string) || null,
+    address,
     scope: b.scope?.trim() || null,
     notes: b.notes?.trim() || null,
     manager_id: actor.userId,
