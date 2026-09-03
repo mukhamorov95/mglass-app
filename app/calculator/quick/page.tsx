@@ -53,7 +53,14 @@ export default function QuickCalcPage() {
   const [interim, setInterim] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [speechSupported, setSpeechSupported] = useState(true)
+  // Клиент — опционально: расчёт сохраняется и без него, но с ним попадёт в сделку.
+  const [clientName, setClientName]   = useState('')
+  const [clientPhone, setClientPhone] = useState('')
+  const [objectAddress, setObjectAddress] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
+  const lastSavedSigRef = useRef('')   // сигнатура последнего сохранённого снимка — гард от дублей
   const transcriptRef = useRef('')
   // eslint-disable-next-line react-hooks/refs
   transcriptRef.current = transcript
@@ -70,6 +77,29 @@ export default function QuickCalcPage() {
       const p = sessionStorage.getItem('quickcalc-prefill')
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (p) { setScanRef(p); sessionStorage.removeItem('quickcalc-prefill') }
+    } catch { /* ignore */ }
+  }, [])
+
+  // Переоткрытие сохранённого расчёта: снимок из истории/сделки кладётся сюда,
+  // здесь восстанавливаем все поля, чтобы можно было пересчитать, а не только смотреть.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('mglass_quick_reopen')
+      if (!raw) return
+      sessionStorage.removeItem('mglass_quick_reopen')
+      const p = JSON.parse(raw) as Record<string, unknown>
+      const s = (k: string) => p[k] != null ? String(p[k]) : undefined
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (Array.isArray(p.cart)) setCart(p.cart as CartItem[])
+      const set = (v: string | undefined, f: (x: string) => void) => { if (v != null) f(v) }
+      set(s('title'), setTitle); set(s('glass'), setGlass); set(s('hw'), setHw)
+      set(s('margin'), setMargin); set(s('tax'), setTax)
+      set(s('perSection'), setPerSection); set(s('sections'), setSections)
+      set(s('delivery'), setDelivery); set(s('lift'), setLift)
+      set(s('measureDiscount'), setMeasureDiscount); set(s('extraVal'), setExtraVal)
+      set(s('clientName'), setClientName); set(s('clientPhone'), setClientPhone); set(s('objectAddress'), setObjectAddress)
+      if (p.designer === 10 || p.designer === 15) setDesigner(p.designer)
+      if (p.extraMode === 'pct' || p.extraMode === 'sum') setExtraMode(p.extraMode)
     } catch { /* ignore */ }
   }, [])
 
@@ -150,10 +180,20 @@ export default function QuickCalcPage() {
   }
   const removeCart = (i: number) => setCart(c => c.filter((_, j) => j !== i))
 
-  function toKp() {
+  // Текущий состав: cart + незакоммиченное текущее изделие, если в нём есть данные.
+  function currentList(): CartItem[] {
     const list: CartItem[] = [...cart]
     if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total })
+    return list
+  }
+
+  async function toKp() {
+    const list = currentList()
     if (!list.length) return
+    // Расчёт, который менеджер понёс в КП, он точно считает настоящим — сохраняем
+    // его в историю автоматически, без отдельного действия. Так история наполняется
+    // сама на дошедших до клиента расчётах, а не зависит от привычки жать «Сохранить».
+    await persistCalc({ silent: true })
     const multi = list.length > 1
     // Надбавку дизайнера закладываем в цены изделий (клиент видит уже с ней).
     const k = 1 + designerMarkupPct / 100
@@ -171,6 +211,54 @@ export default function QuickCalcPage() {
     try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(content)) } catch { /* ignore */ }
     router.push('/kp')
   }
+
+  // Единая точка сохранения в историю (calculations). Зовёт и кнопка (silent=false,
+  // с сообщением), и переход в КП (silent=true, без шума). Раньше быстрый расчёт
+  // нигде не сохранялся: посчитал → закрыл вкладку → всё пропало. Снимок всех
+  // входных данных (+ cart) и итог ложатся в calculations, откуда расчёт можно
+  // открыть и пересчитать.
+  //
+  // Гард по сигнатуре снимка: «Сохранить» + переход в КП по тем же данным не
+  // создают дубль; повторный переход в КП без изменений — тоже. Изменил параметр —
+  // сигнатура другая, сохранится новый расчёт (первичный остаётся).
+  async function persistCalc({ silent }: { silent: boolean }): Promise<boolean> {
+    const list = currentList()
+    if (!list.length) { if (!silent) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500) } return false }
+    const snapshot = {
+      cart: list, title, glass, hw, margin, tax, perSection, sections,
+      delivery, lift, designer, measureDiscount, extraMode, extraVal,
+      clientName, clientPhone, objectAddress,
+    }
+    const sig = JSON.stringify(snapshot) + '|' + finalGrand
+    if (sig === lastSavedSigRef.current) { if (!silent) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500) } return true }
+    if (!silent) { setSaving(true); setSaveMsg(null) }
+    try {
+      const { saveCalculation } = await import('@/lib/saveCalculation')
+      const label = list.length === 1 ? list[0].title : `Быстрый расчёт (${list.length} изд.)`
+      const res = await saveCalculation({
+        product_type: 'quick',
+        input_data: snapshot,
+        cost_breakdown: { directCost, productPrice, installTotal, delivery: deliveryN, lift: liftN },
+        financial_breakdown: { marginPct: marginN, taxPct: taxN, designerMarkupPct, measureDisc, extraDisc, grand, finalGrand },
+        base_price: grand,
+        discount: measureDisc + extraDisc,
+        partner_percent: 0,
+        final_price: finalGrand,
+        margin: marginN,
+        profit: Math.max(0, Math.round(finalGrand - directCost)),
+        client_text: [label, objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
+        client_name: clientName.trim() || undefined,
+        client_phone: clientPhone.trim() || undefined,
+      })
+      const ok = !!(res && 'id' in res && res.id)
+      if (ok) lastSavedSigRef.current = sig
+      if (!silent) setSaveMsg(ok ? 'Сохранено в историю расчётов ✓' : (res && 'error' in res ? res.error! : 'Не удалось сохранить'))
+      return ok
+    } finally {
+      if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
+    }
+  }
+  const saveQuick = () => persistCalc({ silent: false })
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
@@ -315,11 +403,35 @@ export default function QuickCalcPage() {
               </>
             )}
 
-            <button onClick={toKp} disabled={grand <= 0}
-              className="w-full mt-3 px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-50">
-              Сформировать КП →
-            </button>
-            <p className="text-[11px] text-[#9a9a95] mt-2 text-center">Данные подтянутся в редактор КП</p>
+            {/* Клиент — опционально: расчёт сохранится и без него. С клиентом
+                он позже привяжется к сделке (шаг 2). Обязательным не делаем —
+                иначе не поймать расчёт «на бегу», посреди разговора. */}
+            {grand > 0 && (
+              <div className="mt-3 grid grid-cols-1 gap-1.5">
+                <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Клиент (необязательно)"
+                  className="w-full bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="Телефон" inputMode="tel"
+                    className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                  <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта"
+                    className="bg-[#f8f8f7] border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+                </div>
+              </div>
+            )}
+
+            <div className="grid grid-cols-2 gap-2 mt-3">
+              <button onClick={saveQuick} disabled={grand <= 0 || saving}
+                className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-50">
+                {saving ? 'Сохраняю…' : '💾 Сохранить расчёт'}
+              </button>
+              <button onClick={toKp} disabled={grand <= 0}
+                className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-50">
+                Сформировать КП →
+              </button>
+            </div>
+            <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
+              {saveMsg ?? 'Сохранённый расчёт появится в истории — его можно открыть и пересчитать'}
+            </p>
           </div>
         </div>
       </div>
