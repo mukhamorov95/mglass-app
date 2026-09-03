@@ -7,6 +7,26 @@ export type HardwareShape =
   | 'handle-bar' | 'handle-knob' | 'handle-inset'   // ручки: скоба / кноб / купе (врезная)
   | 'roller' | 'mount-glass' | 'mount-wall' | 'mount-corner' | 'connector' | 'cap'
   | 'mount-diag45' | 'mount-stabilizer'             // крепления штанги M1: 45°-коннектор / стабилизатор
+  | 'mount-rail-end'                                // торец штанги у перпендикулярного стекла
+
+// ЕДИНЫЙ список форм: и рендер, и выбор в админке берут его отсюда. Раньше админка
+// держала свою копию, и новые формы в выпадающий список просто не попадали.
+export const SHAPE_LIST: { id: HardwareShape; label: string; hint: string }[] = [
+  { id: 'hinge-glass',      label: 'Петля стекло-стекло',        hint: 'две пятки + барабан-ось' },
+  { id: 'hinge-wall',       label: 'Петля стекло-стена',          hint: 'пятка на стекле + кронштейн к стене' },
+  { id: 'handle-bar',       label: 'Ручка-скоба',                 hint: 'два плеча + хват' },
+  { id: 'handle-knob',      label: 'Ручка-кноб',                  hint: 'круглый набалдашник' },
+  { id: 'handle-inset',     label: 'Ручка-купе врезная',          hint: 'утопленная чаша' },
+  { id: 'roller',           label: 'Ролик раздвижной',            hint: 'каретка на штанге' },
+  { id: 'mount-glass',      label: 'Крепление стекло↔штанга',     hint: 'кубик на штанге, прорезь под стекло (КП-001)' },
+  { id: 'mount-rail-end',   label: 'Крепление торца штанги',      hint: 'корпус на конце штанги + щеки на стекло' },
+  { id: 'mount-wall',       label: 'Крепление штанги к стене',    hint: 'фланец на стене + обойма на трубе' },
+  { id: 'mount-corner',     label: 'Крепление угловое',           hint: 'труба перпендикулярно к стеклу' },
+  { id: 'mount-diag45',     label: 'Крепление 45° (люкс)',        hint: 'шарнир: диск + шар + хомут' },
+  { id: 'mount-stabilizer', label: 'Крепление стабилизатора',     hint: 'настенный фланец + муфта' },
+  { id: 'connector',        label: 'Соединитель штанги',          hint: 'стык двух отрезков под углом' },
+  { id: 'cap',              label: 'Заглушка штанги',             hint: 'колпачок на торец' },
+]
 
 // Код модели геометрии → форма по умолчанию (обратная совместимость со старым рендером).
 export function shapeForModel(model: string): HardwareShape {
