@@ -68,9 +68,18 @@ export async function POST(req: Request) {
   const f = flat(content)
   const finalContent = { ...content, number: (content.number as string) || number }
 
+  // Договор НАСЛЕДУЕТ связь со сделкой от своего КП — иначе цепочка расчёт→КП→договор
+  // рвётся на втором звене. Явный deal_id (создание прямо из карточки) в приоритете.
+  let dealId: number | null = typeof content.deal_id === 'number' ? content.deal_id : null
+  if (!dealId && f.kp_id) {
+    const { data: kp } = await svc.from('commercial_proposals').select('deal_id').eq('id', f.kp_id).maybeSingle()
+    dealId = typeof kp?.deal_id === 'number' ? kp.deal_id : null
+  }
+
   const { data, error } = await svc.from('contracts').insert({
     number: (content.number as string) || number,
     kp_id: f.kp_id,
+    ...(dealId ? { deal_id: dealId } : {}),
     date: (content.date_iso as string) || null,
     customer_type: f.customer_type,
     customer: f.customer,
