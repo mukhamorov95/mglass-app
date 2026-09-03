@@ -60,6 +60,7 @@ export default function QuickCalcPage() {
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
+  const lastSavedSigRef = useRef('')   // сигнатура последнего сохранённого снимка — гард от дублей
   const transcriptRef = useRef('')
   // eslint-disable-next-line react-hooks/refs
   transcriptRef.current = transcript
@@ -179,10 +180,20 @@ export default function QuickCalcPage() {
   }
   const removeCart = (i: number) => setCart(c => c.filter((_, j) => j !== i))
 
-  function toKp() {
+  // Текущий состав: cart + незакоммиченное текущее изделие, если в нём есть данные.
+  function currentList(): CartItem[] {
     const list: CartItem[] = [...cart]
     if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total })
+    return list
+  }
+
+  async function toKp() {
+    const list = currentList()
     if (!list.length) return
+    // Расчёт, который менеджер понёс в КП, он точно считает настоящим — сохраняем
+    // его в историю автоматически, без отдельного действия. Так история наполняется
+    // сама на дошедших до клиента расчётах, а не зависит от привычки жать «Сохранить».
+    await persistCalc({ silent: true })
     const multi = list.length > 1
     // Надбавку дизайнера закладываем в цены изделий (клиент видит уже с ней).
     const k = 1 + designerMarkupPct / 100
@@ -201,22 +212,28 @@ export default function QuickCalcPage() {
     router.push('/kp')
   }
 
-  // Сохранить расчёт в историю. Раньше быстрый расчёт нигде не сохранялся:
-  // посчитал → закрыл вкладку → всё пропало. Теперь снимок всех входных данных
-  // (+ cart) и итог ложатся в calculations, откуда расчёт можно открыть и пересчитать.
-  async function saveQuick() {
-    const list: CartItem[] = [...cart]
-    if (curHasData) list.push({ title: title.trim() || 'Изделие', productPrice, installTotal, sections: numOr(sections), perSection: numOr(perSection), delivery: deliveryN, lift: liftN, total })
-    if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
-    setSaving(true); setSaveMsg(null)
+  // Единая точка сохранения в историю (calculations). Зовёт и кнопка (silent=false,
+  // с сообщением), и переход в КП (silent=true, без шума). Раньше быстрый расчёт
+  // нигде не сохранялся: посчитал → закрыл вкладку → всё пропало. Снимок всех
+  // входных данных (+ cart) и итог ложатся в calculations, откуда расчёт можно
+  // открыть и пересчитать.
+  //
+  // Гард по сигнатуре снимка: «Сохранить» + переход в КП по тем же данным не
+  // создают дубль; повторный переход в КП без изменений — тоже. Изменил параметр —
+  // сигнатура другая, сохранится новый расчёт (первичный остаётся).
+  async function persistCalc({ silent }: { silent: boolean }): Promise<boolean> {
+    const list = currentList()
+    if (!list.length) { if (!silent) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500) } return false }
+    const snapshot = {
+      cart: list, title, glass, hw, margin, tax, perSection, sections,
+      delivery, lift, designer, measureDiscount, extraMode, extraVal,
+      clientName, clientPhone, objectAddress,
+    }
+    const sig = JSON.stringify(snapshot) + '|' + finalGrand
+    if (sig === lastSavedSigRef.current) { if (!silent) { setSaveMsg('Уже сохранено ✓'); setTimeout(() => setSaveMsg(null), 2500) } return true }
+    if (!silent) { setSaving(true); setSaveMsg(null) }
     try {
       const { saveCalculation } = await import('@/lib/saveCalculation')
-      // Полный снимок входных данных — чтобы расчёт восстанавливался «Открыть».
-      const snapshot = {
-        cart: list, title, glass, hw, margin, tax, perSection, sections,
-        delivery, lift, designer, measureDiscount, extraMode, extraVal,
-        clientName, clientPhone, objectAddress,
-      }
       const label = list.length === 1 ? list[0].title : `Быстрый расчёт (${list.length} изд.)`
       const res = await saveCalculation({
         product_type: 'quick',
@@ -233,13 +250,15 @@ export default function QuickCalcPage() {
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,
       })
-      if (res && 'id' in res && res.id) { setSaveMsg('Сохранено в историю расчётов ✓') }
-      else { setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить') }
+      const ok = !!(res && 'id' in res && res.id)
+      if (ok) lastSavedSigRef.current = sig
+      if (!silent) setSaveMsg(ok ? 'Сохранено в историю расчётов ✓' : (res && 'error' in res ? res.error! : 'Не удалось сохранить'))
+      return ok
     } finally {
-      setSaving(false)
-      setTimeout(() => setSaveMsg(null), 4000)
+      if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
     }
   }
+  const saveQuick = () => persistCalc({ silent: false })
 
   return (
     <div className="min-h-screen bg-[#f5f5f3] p-6">
