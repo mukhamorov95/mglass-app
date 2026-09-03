@@ -396,6 +396,7 @@ const OWNER_CENTER: NavItem[] = [
 // в ветку роли seo НЕ добавляется.
 const PROMO_CENTER: NavItem[] = [
   { href: '/marketing/promo',       label: 'Пульт продвижения', icon: '💲' },
+  { href: '/marketing/promo/pipeline', label: 'Конвейер роликов', icon: '🏭' },
   { href: '/marketing/promo/guide', label: 'Регламент',         icon: '📖' },
 ]
 

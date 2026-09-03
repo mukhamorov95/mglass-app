@@ -85,6 +85,9 @@ export default async function PromoDashboard() {
           <Link href="/marketing/video-factory" className="px-4 py-2 rounded-lg bg-[#111110] text-white text-[13px] font-medium">
             AI Video Factory →
           </Link>
+          <Link href="/marketing/promo/pipeline" className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[13px]">
+            Конвейер роликов
+          </Link>
           <Link href="/marketing/promo/guide" className="px-4 py-2 rounded-lg border border-[#e4e4e0] bg-white text-[13px]">
             Регламент
           </Link>
