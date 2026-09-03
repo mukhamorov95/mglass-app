@@ -221,7 +221,7 @@ export default function BuildCalcPage() {
                   return (
                     <button key={mm.id} onClick={() => setModelId(mm.id)}
                       className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${active ? 'border-[#111110] bg-[#f0f0ec]' : 'border-[#e4e4e0] hover:border-[#c7c7cc]'}`}>
-                      <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[120px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
+                      <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[170px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
                         <ModelThumb id={mm.id} active={active} />
                       </div>
                       <div className="flex items-center justify-between">
