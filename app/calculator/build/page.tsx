@@ -27,6 +27,16 @@ const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all'
 const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
 
+// Иконка модели — фотореалистичный рендер из /public/models/<код>.jpg (снимки настоящего
+// 3D-визуализатора). Пока файла нет — откат на схематичную иконку, чтобы пикер работал,
+// а картинки добавлялись по мере готовности.
+function ModelThumb({ id, active }: { id: ShowerModelId; active: boolean }) {
+  const [err, setErr] = useState(false)
+  if (err) return <ShowerModelIcon modelId={id} active={active} />
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={`/models/${id.toLowerCase()}.jpg`} alt="" onError={() => setErr(true)} className="w-full h-full object-cover" />
+}
+
 export default function BuildCalcPage() {
   const router = useRouter()
   const [modelId, setModelId] = useState<ShowerModelId>('M2')
@@ -211,8 +221,8 @@ export default function BuildCalcPage() {
                   return (
                     <button key={mm.id} onClick={() => setModelId(mm.id)}
                       className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${active ? 'border-[#111110] bg-[#f0f0ec]' : 'border-[#e4e4e0] hover:border-[#c7c7cc]'}`}>
-                      <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[80px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
-                        <ShowerModelIcon modelId={mm.id} active={active} />
+                      <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[120px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
+                        <ModelThumb id={mm.id} active={active} />
                       </div>
                       <div className="flex items-center justify-between">
                         <span className={`text-[12px] font-bold ${active ? 'text-[#111110]' : 'text-[#1d1d1f]'}`}>{mm.label}</span>
