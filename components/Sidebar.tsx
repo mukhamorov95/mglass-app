@@ -28,36 +28,35 @@ const MANAGER_AMO: NavItem[] = [
 // ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
 
 const MANAGER_MGLASS: NavEntry[] = [
-  { groupLabel: 'Калькуляторы' },
-  // Зеркало, душевая, лофт-перегородка, лестничное ограждение и скан дизайн-проекта
-  // убраны 03.09.2026 по решению владельца: «оно сейчас не отображает честную
-  // картину». У душевой фурнитура в бюджетном тире бралась не из справочника цен,
-  // а из вписанных руками чисел. Код экранов на месте; вернуть = вернуть пункты
-  // сюда и маршруты в ROLE_ALLOWED.
-  { href: '/calculator/quick',  label: 'Быстрый расчёт',   icon: '⚡' },
-  // «Расчёт B2B» — тот же B2B-калькулятор в контуре розницы: без выбора клиента
-  // и срока производства, справа панель цены клиенту. Итог B2B с НДС ложится
-  // в себестоимость как есть: M-Glass покупает у своего производства по той же
-  // цене, что и любой B2B-клиент, — это две сделки, а не двойной счёт.
-  { href: '/calculator/build',   label: 'Расчёт',           icon: '🚿' },
-  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',  icon: '🧾' },
-  { href: '/configurator',      label: 'Визуализатор 3D',  icon: '🧊' },
-  { groupLabel: 'Продажи' },
-  { href: '/crm',           label: 'CRM · Продажи',    icon: '📊' },
-  { href: '/sales',         label: 'Отдел продаж',     icon: '💰' },
-  { href: '/kp',            label: 'КП',               icon: '📄' },
-  { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
-  { href: '/deals',         label: 'Сделки',          icon: '🤝' },
-  { href: '/calculations',  label: 'История расчётов', icon: '📋' },
-  { href: '/orders',        label: 'Заказы',           icon: '📦' },
-  { href: '/inventory',     label: 'Склад (остатки)',  icon: '🏬' },
-  { href: '/clients',       label: 'Клиенты',          icon: '👤' },
-  { href: '/calendar',      label: 'Календарь',        icon: '📅' },
-  { href: '/measure-requests', label: 'Заявки на замер', icon: '📐' },
-  { href: '/installations', label: 'Монтажи',          icon: '🔧' },
-  { href: '/measure-calendar', label: 'Календарь замеров', icon: '🗓️' },
-  { href: '/measurer',      label: 'Форма замера',      icon: '📋' },
-  { href: '/my-earnings',   label: 'Мои заработки',    icon: '💰' },
+  // Двадцать пунктов свёрнуты в пять — 04.09.2026, после того как карточка сделки
+  // стала центром работы. Всё, что ушло из первого уровня, достижимо оттуда:
+  // КП и договор делаются кнопкой из карточки, замер отправляется оттуда же,
+  // оплаты и файлы живут её вкладками. Меню перестало быть списком экранов
+  // и стало списком дел.
+  //
+  // Ничего не удалено: разделы ниже, в «Ещё». Права не тронуты — маршруты
+  // остались в ROLE_ALLOWED, прямые ссылки и закладки работают как раньше.
+  { href: '/my-day',            label: 'Мой день',     icon: '☀️' },
+  { href: '/deals',             label: 'Сделки',       icon: '🤝' },
+  { href: '/calculator/build',  label: 'Новый расчёт', icon: '🚿' },
+  { href: '/my-earnings',       label: 'Мои деньги',   icon: '💰' },
+  { groupLabel: 'Ещё' },
+  { href: '/calculator/quick',      label: 'Быстрый расчёт',   icon: '⚡' },
+  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',       icon: '🧾' },
+  { href: '/configurator',          label: 'Визуализатор 3D',  icon: '🧊' },
+  { href: '/calculations',      label: 'История расчётов', icon: '📋' },
+  { href: '/kp',                label: 'КП',               icon: '📄' },
+  { href: '/contracts',         label: 'Договор/Счёт',     icon: '📃' },
+  { href: '/clients',           label: 'Клиенты',          icon: '👤' },
+  { href: '/crm',               label: 'CRM · Продажи',    icon: '📊' },
+  { href: '/sales',             label: 'Отдел продаж',     icon: '💰' },
+  { href: '/orders',            label: 'Заказы',           icon: '📦' },
+  { href: '/measure-requests',  label: 'Заявки на замер',  icon: '📐' },
+  { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
+  { href: '/measurer',          label: 'Форма замера',     icon: '📋' },
+  { href: '/installations',     label: 'Монтажи',          icon: '🔧' },
+  { href: '/calendar',          label: 'Календарь',        icon: '📅' },
+  { href: '/inventory',         label: 'Склад (остатки)',  icon: '🏬' },
 ]
 
 // ─── Manager: B2B ─────────────────────────────────────────────────────────────
