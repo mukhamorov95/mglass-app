@@ -1,5 +1,7 @@
 import type { Configuration } from '@/lib/configurator/catalog'
 import type { MModel, Seg } from '@/lib/configurator/arrangement'
+import { getPart } from '@/lib/configurator/parts/registry'
+import { placePart, surfaces } from '@/lib/configurator/parts/mount'
 
 // Чистый билдер 3D-геометрии из параметрической конфигурации.
 // Топология зеркалит проверенный изо-рендер (PartitionIso): фронт вдоль X,
@@ -38,6 +40,8 @@ export type HardwarePlacement = {
   shape?: string                 // форма для 3D (выбор клиента); нет → берётся по model
   spec?: string                  // код узла для прайса (штучное): mount-wall/mount-corner/mount-glass/mount-diag45/mount-stabilizer
   flatTube?: boolean             // труба лежит «на пузе» (10 высота × 30 глубина) — крепёж садится на неё иначе
+  part?: string                  // id паспорта (lib/configurator/parts) — рисуется по данным, своя рамка
+  mirrorOf?: string              // вторая половина сквозной детали: только вид, в комплект НЕ считается
   pos: [number, number, number]
   rotY: number
 }
@@ -177,6 +181,7 @@ export function buildAssembly(config: Configuration): Assembly {
 // Стёкла — вертикальные панели вдоль «ранов»; распашная дверь открывается НАРУЖУ
 // (в сторону outward-нормали рана); петля на своей стороне (к стеклу/стене).
 export type MDims = { width: number; height: number; width2?: number; doorWidth?: number; trayDepth?: number; ceilingHeight?: number }
+export const HANDLE_CENTER_MM = 950   // от низа стекла до центра ручки — стандарт монтажа M-Glass
 export const M1_TRAY_DEPTH_DEFAULT = 1000   // стандарт глубины поддона (мм) для perp90, если клиент не ввёл
 
 // Тон стекла (тип/цвет): прозрачное / осветлённое / тонированное бронза/графит.
@@ -289,10 +294,29 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const ys = n === 2 ? [0.28, H - 0.28] : [0.28, H / 2, H - 0.28]
     for (let i = 0; i < ys.length; i++)
       hardware.push({ key: `${key}-h${i}`, model: hingeModel, shape: choice.hinge, rotY, pos: [Ph[0], ys[i], Ph[1]] })
-    // ручка у внешней кромки, с наружной стороны двери
-    const hx = Ph[0] + od[0] * L * 0.82, hz = Ph[1] + od[1] * L * 0.82
-    const nx = -od[1], nz = od[0]
-    hardware.push({ key: `${key}-handle`, model: 'sd210', shape: choice.handle, rotY, pos: [hx + nx * outward[0] * 0.02, H / 2, hz + nz * 0] })
+    // Ручка у внешней кромки, с наружной стороны двери. Нормаль открытой двери
+    // поворачивается вместе с полотном — считаем её, а не подставляем знаки руками
+    // (прежняя арифметика давала смещение по X и НОЛЬ по Z: высота верная, посадка мимо).
+    const nOut: P = [outward[0] * ca - dc[0] * sa, outward[1] * ca - dc[1] * sa]
+    const hShape = choice.handle ?? 'handle-bar'
+    const hPart = getPart(hShape)
+    // Высота ручки: 950 мм от низа полотна до ЦЕНТРА ручки (у кноба — до оси
+    // отверстия). Раньше стояла на половине высоты: при H=2000 почти совпадало,
+    // на высокой двери уезжало вверх. На низкой двери держим её в пределах полотна.
+    const hy = Math.min(Math.max(HANDLE_CENTER_MM * M, 0.3), H - 0.3)
+    const face = surfaces.glassFace([cx, H / 2, cz], nOut, od, thickness, L * 0.32, hy)
+    if (hPart) {
+      const r = placePart(hPart, face)
+      if (r.ok) {
+        const { pos, rotY: pr, mirror } = r.placement
+        hardware.push({ key: `${key}-handle`, model: 'sd210', shape: hShape, part: hPart.id, rotY: pr, pos })
+        // Двусторонняя скоба: половина с изнанки — это вид, а не вторая позиция прайса.
+        if (mirror) hardware.push({ key: `${key}-handle-b`, model: 'sd210', shape: hShape, part: hPart.id, mirrorOf: `${key}-handle`, rotY: mirror.rotY, pos: mirror.pos })
+      }
+    } else {
+      // Паспорта нет — рисуем прежней формой, но по той же поверхности, а не «на глаз».
+      hardware.push({ key: `${key}-handle`, model: 'sd210', shape: choice.handle, rotY, pos: face.point })
+    }
   }
 
   // Раны плана по форме модели.

@@ -173,8 +173,12 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   }, [code, tier, mVariant, dims])
   // выбранная позиция → shape для 3D (петля/ручка)
   const hwChoice = useMemo<HardwareChoice>(() => {
+    // Выбрал клиент — его форма; не выбирал — та, что стоит в комплекте модели.
+    // Раньше второго не было: у роли без выбора форма не доходила до 3D, и вместо
+    // заведённого Верой кноба рисовалась скоба по умолчанию.
     const shapeOf = (role: string) =>
       kitChoices?.variants.find(v => v.role === role)?.options.find(o => o.itemId === choice[role])?.shape
+      ?? kitChoices?.forms.find(f => f.role === role)?.shape
     return { hinge: shapeOf('hinge'), handle: shapeOf('handle') }
   }, [kitChoices, choice])
 

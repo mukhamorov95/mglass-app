@@ -239,6 +239,9 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 
   const roleQty = Object.fromEntries(ROLES.map(r => [r, 0])) as Record<RoleId, number>
   for (const h of assembly.hardware) {
+    // Вторая половина сквозной детали (двусторонняя ручка) — только вид: одна
+    // позиция прайса, две нарисованные половины.
+    if ((h as { mirrorOf?: string }).mirrorOf) continue
     const spec = (h as { spec?: string }).spec
     const fallback = PLACEMENT_ROLE[h.model]
     if (!spec && !fallback) continue
@@ -625,17 +628,24 @@ export const inferShapeOf = (it: LibraryItem) => it.shape || autoShapeForRole(it
 export type KitChoiceOption = { itemId: string; name: string; shape: string; primary: boolean }
 export type KitChoices = {
   variants: { role: RoleId; label: string; options: KitChoiceOption[] }[]
+  // Форма КАЖДОЙ роли, что реально стоит в комплекте, даже когда выбора у клиента нет:
+  // без этого 3D не знало, что в модели кноб, и рисовало скобу по умолчанию.
+  forms: { role: RoleId; itemId: string; name: string; shape: string }[]
   quantities: { role: RoleId; label: string; options: number[]; def: number }[]
 }
 export function kitChoices(lib: Library, kit: ModelKit, q: KitQuantities): KitChoices {
   const byId = new Map(lib.items.map(i => [i.id, i]))
   const variants: KitChoices['variants'] = []
   const quantities: KitChoices['quantities'] = []
+  const forms: KitChoices['forms'] = []
   for (const slot of kit.slots) {
     if ((q.roleQty[slot.role] ?? 0) <= 0) continue
     const opts = slot.entries
       .map(e => { const it = byId.get(e.itemId); return it ? { itemId: it.id, name: it.name, shape: it.shape || inferShape(it.name), primary: !!e.primary } : null })
       .filter((o): o is KitChoiceOption => o !== null)
+    // Что стоит по умолчанию: помеченная владельцем ★, иначе первая позиция слота.
+    const eff = opts.find(o => o.primary) ?? opts[0]
+    if (eff) forms.push({ role: slot.role, itemId: eff.itemId, name: eff.name, shape: eff.shape })
     if (slot.select === 'one' && opts.length > 1) {
       // ★ по умолчанию идёт первой в списке у клиента, дальше — заданный владельцем порядок
       const ordered = [...opts].sort((a, b) => Number(b.primary) - Number(a.primary))
@@ -646,7 +656,7 @@ export function kitChoices(lib: Library, kit: ModelKit, q: KitQuantities): KitCh
       quantities.push({ role: slot.role, label: slot.title || ROLE_META[slot.role].label, options: client.qty.options, def: client.qty.def })
     }
   }
-  return { variants, quantities }
+  return { variants, quantities, forms }
 }
 
 export type KitStore = { library: Library; kits: Record<string, ModelKit>; rates: KitRates }

@@ -10,6 +10,8 @@ import { EffectComposer, N8AO, Bloom, Vignette, SMAA } from '@react-three/postpr
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
 import { nodeRole } from '@/lib/configurator/kit'
+import { getPart } from '@/lib/configurator/parts/registry'
+import { Part } from './scene/Part'
 import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
 import { Hardware } from './scene/hardware'
 
@@ -202,7 +204,13 @@ function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRo
         const role = nodeRole({ spec: h.spec, model: h.model })
         return (
         <group key={h.key} position={h.pos} rotation={[0, h.rotY, 0]}>
-          <Hardware model={h.model} shape={h.shape} material={metalMat} flatTube={h.flatTube} />
+          {/* Есть паспорт — рисуем по данным (своя рамка посадки); нет — прежней формой. */}
+          {(() => {
+            const spec = getPart(h.part)
+            return spec
+              ? <Part spec={spec} material={metalMat} />
+              : <Hardware model={h.model} shape={h.shape} material={metalMat} flatTube={h.flatTube} />
+          })()}
           {/* Зона захвата: сама деталь 20–40 мм, мышью в неё не попасть. Невидимая
               сфера ловит клик. Прозрачная, а не visible=false — иначе raycast её минует. */}
           {pickable && (

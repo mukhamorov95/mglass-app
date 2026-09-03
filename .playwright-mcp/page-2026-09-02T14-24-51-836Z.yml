@@ -1,0 +1,98 @@
+- generic [ref=f5e1]:
+  - generic [ref=f5e2]:
+    - complementary [ref=f5e3]:
+      - generic [ref=f5e4]:
+        - link "MG MGlass" [ref=f5e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f5e6]: MG
+          - generic [ref=f5e8]: MGlass
+        - generic [ref=f5e9]:
+          - generic [ref=f5e10]:
+            - button "СЕО" [ref=f5e11]
+            - button "CFO" [ref=f5e12]
+            - button "Админ" [ref=f5e13]
+          - generic [ref=f5e14]:
+            - button "Менеджер" [ref=f5e15]
+            - button "Произв." [ref=f5e16]
+            - button "Замерщик" [ref=f5e17]
+      - navigation [ref=f5e18]:
+        - link "🔒 Влад" [ref=f5e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f5e21]: 🔒
+          - generic [ref=f5e22]: Влад
+        - button "Owner Center" [ref=f5e58]
+        - button "Маркетинг" [ref=f5e63]
+        - button "Vladislav AI" [ref=f5e68]
+        - button "Product Line" [ref=f5e73]
+        - generic [ref=f5e77]:
+          - button "Система" [ref=f5e78]
+          - generic [ref=f5e82]:
+            - link "🔗 Центр данных" [ref=f5e83] [cursor=pointer]:
+              - /url: /admin/data-hub
+              - generic [ref=f5e84]: 🔗
+              - generic [ref=f5e85]: Центр данных
+            - link "📖 Pricing Manual" [ref=f5e86] [cursor=pointer]:
+              - /url: /admin/pricing-manual
+              - generic [ref=f5e87]: 📖
+              - generic [ref=f5e88]: Pricing Manual
+            - link "🎯 Стратегия" [ref=f5e89] [cursor=pointer]:
+              - /url: /admin/owner-questionnaire
+              - generic [ref=f5e90]: 🎯
+              - generic [ref=f5e91]: Стратегия
+            - link "🗺️ Roadmap" [ref=f5e92] [cursor=pointer]:
+              - /url: /admin/roadmap
+              - generic [ref=f5e93]: 🗺️
+              - generic [ref=f5e94]: Roadmap
+            - link "📈 Внедрение" [ref=f5e95] [cursor=pointer]:
+              - /url: /admin/adoption
+              - generic [ref=f5e96]: 📈
+              - generic [ref=f5e97]: Внедрение
+            - link "⚙️ Техцентр" [ref=f5e98] [cursor=pointer]:
+              - /url: /admin/infrastructure
+              - generic [ref=f5e99]: ⚙️
+              - generic [ref=f5e100]: Техцентр
+            - link "💳 Платные сервисы" [ref=f5e101] [cursor=pointer]:
+              - /url: /admin/services
+              - generic [ref=f5e102]: 💳
+              - generic [ref=f5e103]: Платные сервисы
+            - link "🖼️ Media Library" [ref=f5e104] [cursor=pointer]:
+              - /url: /admin/shower-images
+              - generic [ref=f5e105]: 🖼️
+              - generic [ref=f5e106]: Media Library
+            - link "🎥 Видеостудия" [ref=f5e107] [cursor=pointer]:
+              - /url: /admin/video-studio
+              - generic [ref=f5e108]: 🎥
+              - generic [ref=f5e109]: Видеостудия
+            - link "📐 Полнота просчёта" [ref=f5e110] [cursor=pointer]:
+              - /url: /admin/quote-quality
+              - generic [ref=f5e111]: 📐
+              - generic [ref=f5e112]: Полнота просчёта
+            - link "⚡ AI-агенты" [ref=f5e113] [cursor=pointer]:
+              - /url: /admin/agents
+              - generic [ref=f5e114]: ⚡
+              - generic [ref=f5e115]: AI-агенты
+            - link "🗺️ Карта данных" [ref=f5e116] [cursor=pointer]:
+              - /url: /admin/architecture
+              - generic [ref=f5e117]: 🗺️
+              - generic [ref=f5e118]: Карта данных
+      - generic [ref=f5e38]:
+        - generic [ref=f5e39]:
+          - generic [ref=f5e40]: A
+          - paragraph [ref=f5e42]: admin@mglass.ru
+        - button "Выйти" [ref=f5e43]
+    - main [ref=f5e44]:
+      - generic [ref=f5e46]:
+        - generic [ref=f5e47]:
+          - heading "Видеостудия" [level=1] [ref=f5e48]
+          - paragraph [ref=f5e49]:
+            - text: Сценарий и озвучка собираются в готовый файл прямо здесь. Озвучку делает
+            - code [ref=f5e50]: scripts/narrate.mjs
+            - text: .
+        - generic [ref=f5e51]:
+          - textbox "имя ролика" [ref=f5e52]: prochet-a-ya
+          - button "Загрузить" [ref=f5e53]
+          - button "⏺ Записать" [ref=f5e121]
+          - link "↓ Скачать" [active] [ref=f5e122] [cursor=pointer]:
+            - /url: blob:https://mglass-app.vercel.app/ed159a28-1b2a-4b5d-9738-cc663607dd78
+          - generic [ref=f5e120]: готово · 27.4 МБ
+  - alert [ref=f5e56]

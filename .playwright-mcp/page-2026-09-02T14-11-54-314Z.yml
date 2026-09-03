@@ -1,0 +1,74 @@
+- generic [active] [ref=f3e1]:
+  - generic [ref=f3e2]:
+    - complementary [ref=f3e3]:
+      - generic [ref=f3e4]:
+        - link "MG MGlass" [ref=f3e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f3e6]: MG
+          - generic [ref=f3e8]: MGlass
+        - generic [ref=f3e9]:
+          - generic [ref=f3e10]:
+            - button "СЕО" [ref=f3e11]
+            - button "CFO" [ref=f3e12]
+            - button "Админ" [ref=f3e13]
+          - generic [ref=f3e14]:
+            - button "Менеджер" [ref=f3e15]
+            - button "Произв." [ref=f3e16]
+            - button "Замерщик" [ref=f3e17]
+      - navigation [ref=f3e18]:
+        - link "🔒 Влад" [ref=f3e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f3e21]: 🔒
+          - generic [ref=f3e22]: Влад
+        - generic [ref=f3e23]: Производство
+        - generic [ref=f3e24]:
+          - button "Цех" [ref=f3e25]
+          - generic [ref=f3e29]:
+            - link "✅ Мои задачи" [ref=f3e30] [cursor=pointer]:
+              - /url: /production-app/my-queue
+              - generic [ref=f3e31]: ✅
+              - generic [ref=f3e32]: Мои задачи
+            - link "📋 Заказы" [ref=f3e33] [cursor=pointer]:
+              - /url: /production-app/orders
+              - generic [ref=f3e34]: 📋
+              - generic [ref=f3e35]: Заказы
+            - link "⚠️ Проблемы" [ref=f3e36] [cursor=pointer]:
+              - /url: /production-app/problems
+              - generic [ref=f3e37]: ⚠️
+              - generic [ref=f3e38]: Проблемы
+            - link "🔧 Обзор цеха" [ref=f3e39] [cursor=pointer]:
+              - /url: /production-app/board
+              - generic [ref=f3e40]: 🔧
+              - generic [ref=f3e41]: Обзор цеха
+            - link "📦 Отгрузка" [ref=f3e42] [cursor=pointer]:
+              - /url: /production-app/shipping
+              - generic [ref=f3e43]: 📦
+              - generic [ref=f3e44]: Отгрузка
+            - link "🚚 Доставка в Воронеж" [ref=f3e45] [cursor=pointer]:
+              - /url: /production-app/voronezh
+              - generic [ref=f3e46]: 🚚
+              - generic [ref=f3e47]: Доставка в Воронеж
+            - link "📷 Скан" [ref=f3e48] [cursor=pointer]:
+              - /url: /production-app/scan
+              - generic [ref=f3e49]: 📷
+              - generic [ref=f3e50]: Скан
+            - link "👥 Кто что делал" [ref=f3e51] [cursor=pointer]:
+              - /url: /production-app/activity
+              - generic [ref=f3e52]: 👥
+              - generic [ref=f3e53]: Кто что делал
+            - link "📈 Метрики цеха" [ref=f3e54] [cursor=pointer]:
+              - /url: /production-app/metrics
+              - generic [ref=f3e55]: 📈
+              - generic [ref=f3e56]: Метрики цеха
+        - button "Материал и документы" [ref=f3e58]
+        - button "Команда" [ref=f3e63]
+        - button "Обучение" [ref=f3e68]
+        - button "Деньги" [ref=f3e73]
+      - generic [ref=f3e77]:
+        - generic [ref=f3e78]:
+          - generic [ref=f3e79]: A
+          - paragraph [ref=f3e81]: admin@mglass.ru
+        - button "Выйти" [ref=f3e82]
+    - main [ref=f3e83]:
+      - generic [ref=f3e84]: Загрузка…
+  - alert [ref=f3e85]

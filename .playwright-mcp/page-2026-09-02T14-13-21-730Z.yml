@@ -1,0 +1,66 @@
+- generic [active] [ref=f4e1]:
+  - generic [ref=f4e2]:
+    - complementary [ref=f4e3]:
+      - generic [ref=f4e4]:
+        - link "MG MGlass" [ref=f4e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f4e6]: MG
+          - generic [ref=f4e8]: MGlass
+        - generic [ref=f4e9]:
+          - generic [ref=f4e10]:
+            - button "СЕО" [ref=f4e11]
+            - button "CFO" [ref=f4e12]
+            - button "Админ" [ref=f4e13]
+          - generic [ref=f4e14]:
+            - button "Менеджер" [ref=f4e15]
+            - button "Произв." [ref=f4e16]
+            - button "Замерщик" [ref=f4e17]
+      - navigation [ref=f4e18]:
+        - link "🔒 Влад" [ref=f4e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f4e21]: 🔒
+          - generic [ref=f4e22]: Влад
+        - button "MGlass" [ref=f4e24]
+        - generic [ref=f4e31]:
+          - button "B2B" [ref=f4e32]
+          - generic [ref=f4e38]:
+            - link "☀️ Мой день · B2B" [ref=f4e39] [cursor=pointer]:
+              - /url: /b2b-today
+              - generic [ref=f4e40]: ☀️
+              - generic [ref=f4e41]: Мой день · B2B
+            - link "🧮 B2B Калькулятор" [ref=f4e42] [cursor=pointer]:
+              - /url: /calculator/b2b
+              - generic [ref=f4e43]: 🧮
+              - generic [ref=f4e44]: B2B Калькулятор
+            - link "📝 B2B Просчёты" [ref=f4e45] [cursor=pointer]:
+              - /url: /b2b-quotes
+              - generic [ref=f4e46]: 📝
+              - generic [ref=f4e47]: B2B Просчёты
+            - link "📦 B2B Заказы" [ref=f4e48] [cursor=pointer]:
+              - /url: /b2b-orders
+              - generic [ref=f4e49]: 📦
+              - generic [ref=f4e50]: B2B Заказы
+            - link "📒 Счета B2B" [ref=f4e51] [cursor=pointer]:
+              - /url: /b2b-invoices
+              - generic [ref=f4e52]: 📒
+              - generic [ref=f4e53]: Счета B2B
+            - link "🏢 B2B Клиенты" [ref=f4e54] [cursor=pointer]:
+              - /url: /b2b-crm
+              - generic [ref=f4e55]: 🏢
+              - generic [ref=f4e56]: B2B Клиенты
+            - link "✂️ Раскрой стекла" [ref=f4e57] [cursor=pointer]:
+              - /url: /b2b-cutting
+              - generic [ref=f4e58]: ✂️
+              - generic [ref=f4e59]: Раскрой стекла
+            - link "📱 Production App" [ref=f4e60] [cursor=pointer]:
+              - /url: /production-app
+              - generic [ref=f4e61]: 📱
+              - generic [ref=f4e62]: Production App
+      - generic [ref=f4e63]:
+        - generic [ref=f4e64]:
+          - generic [ref=f4e65]: A
+          - paragraph [ref=f4e67]: admin@mglass.ru
+        - button "Выйти" [ref=f4e68]
+    - main [ref=f4e69]:
+      - generic [ref=f4e70]: Загрузка...
+  - alert [ref=f4e71]

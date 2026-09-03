@@ -1,0 +1,294 @@
+- generic [active] [ref=f26e1]:
+  - generic [ref=f26e2]:
+    - link "К основному контенту" [ref=f26e3] [cursor=pointer]:
+      - /url: "#t-main-content"
+    - banner [ref=f26e4]:
+      - navigation [ref=f26e8]:
+        - list [ref=f26e9]:
+          - listitem [ref=f26e10]:
+            - link "О компании" [ref=f26e11] [cursor=pointer]:
+              - /url: "#submenu:company"
+          - listitem [ref=f26e12]:
+            - link "Услуги" [ref=f26e13] [cursor=pointer]:
+              - /url: "#submenu:services"
+          - listitem [ref=f26e14]:
+            - link "Доставка" [ref=f26e15] [cursor=pointer]:
+              - /url: https://dostavka17.ru/
+          - listitem [ref=f26e16]:
+            - link "Информация" [ref=f26e17] [cursor=pointer]:
+              - /url: "#submenu:info"
+          - listitem [ref=f26e18]:
+            - link "Каталоги и презентации" [ref=f26e19] [cursor=pointer]:
+              - /url: /company/catalog/
+          - listitem [ref=f26e20]:
+            - link "Контакты" [ref=f26e21] [cursor=pointer]:
+              - /url: /contact/
+          - listitem [ref=f26e22]:
+            - link "Интернет-магазин" [ref=f26e23] [cursor=pointer]:
+              - /url: https://nagornaya17.ru/
+          - listitem [ref=f26e24]:
+            - link "Личный кабинет" [ref=f26e25] [cursor=pointer]:
+              - /url: https://mzf-zakaz.ru/
+      - generic [ref=f26e28]:
+        - generic [ref=f26e29]:
+          - link [ref=f26e31] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f26e32]
+          - generic [ref=f26e34]:
+            - strong [ref=f26e35]: Московская Зеркальная Фабрика
+            - strong [ref=f26e36]: НАГОРНАЯ 17
+            - strong [ref=f26e37]: Душевые ограждения на заказ
+        - generic [ref=f26e38]:
+          - generic [ref=f26e44]:
+            - strong
+            - link "+7 (495) 021-16-79" [ref=f26e45] [cursor=pointer]:
+              - /url: tel:+74950211679
+          - generic [ref=f26e49]:
+            - strong
+            - text: Время работыКАЖДЫЙ ДЕНЬ10:00 до 19:00
+          - button "Перезвонить" [ref=f26e51] [cursor=pointer]
+      - generic [ref=f26e55]:
+        - link "ВИДЫ ДУШЕВЫХ" [ref=f26e59] [cursor=pointer]:
+          - /url: /
+        - generic [ref=f26e62]:
+          - link "ДУШЕВЫЕ ДВЕРИ" [ref=f26e63] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f26e70]:
+            - generic:
+              - link [ref=f26e72] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/raspashnye/
+                - paragraph [ref=f26e74]: Душевая дверь распашная
+              - link [ref=f26e76] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/razdvizhnye/
+                - paragraph [ref=f26e78]: Раздвижные душевые двери
+              - link [ref=f26e80] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/skladnaya/
+                - paragraph [ref=f26e82]: Складная душевая дверь
+              - link [ref=f26e84] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/radiusnye/
+                - paragraph [ref=f26e86]: Радиусные душевые двери
+              - link [ref=f26e88] [cursor=pointer]:
+                - /url: /vidy-dushevyx-dverei/polukruglye/
+                - paragraph [ref=f26e90]: Душевые двери полукруглые
+        - generic [ref=f26e91]:
+          - link "СТЕКЛО ДЛЯ ДУШЕВОЙ" [ref=f26e92] [cursor=pointer]:
+            - /url: /
+          - generic [ref=f26e99]:
+            - generic:
+              - link [ref=f26e101] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/obyichnoe-steklo/
+                - paragraph [ref=f26e103]: Обычное стекло
+              - link [ref=f26e105] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/matovoe-steklo/
+                - paragraph [ref=f26e107]: Матовое стекло
+              - link [ref=f26e109] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/steklo-s-risunkom/
+                - paragraph [ref=f26e111]: Рисунки на стекле
+              - link [ref=f26e113] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/osvetlennoe-steklo/
+                - paragraph [ref=f26e115]: Осветленное стекло
+              - link [ref=f26e117] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/bezopasnoe-steklo/
+                - paragraph [ref=f26e119]: Закаленное стекло
+              - link [ref=f26e121] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/czvetnoe-steklo/
+                - paragraph [ref=f26e123]: Цветное стекло
+              - link [ref=f26e125] [cursor=pointer]:
+                - /url: /steklo-i-xudozhestvennaya-obrabotka/decorativnoe-steklo/
+                - paragraph [ref=f26e127]: Декоративное стекло
+        - link "ФУРНИТУРА ДЛЯ ДУШЕВЫХ" [ref=f26e129] [cursor=pointer]:
+          - /url: /furnitura-dlya-dushevyix-kabin/
+        - link "ПРОИЗВОДСТВО" [ref=f26e133] [cursor=pointer]:
+          - /url: "#submenu:production"
+        - link "УСЛУГИ" [ref=f26e137] [cursor=pointer]:
+          - /url: "#submenu:services"
+  - generic:
+    - generic:
+      - generic [ref=f26e140]:
+        - button "Навигационное меню" [ref=f26e142] [cursor=pointer]
+        - generic [ref=f26e147]: ВСЯ ПРОДУКЦИЯ МЗФ
+      - generic [ref=f26e152]:
+        - generic [ref=f26e153]:
+          - link [ref=f26e156] [cursor=pointer]:
+            - /url: /
+            - img "Душевая кабина на заказ" [ref=f26e157]
+          - generic [ref=f26e158]:
+            - textbox "Поиск" [ref=f26e161]
+            - generic [ref=f26e163]:
+              - link "Стекло" [ref=f26e166] [cursor=pointer]:
+                - /url: https://steklo17.ru/
+              - link "Витраж" [ref=f26e169] [cursor=pointer]:
+                - /url: https://vitrag17.ru/
+              - link "Скинали" [ref=f26e172] [cursor=pointer]:
+                - /url: https://skinali17.ru/
+              - link "Душевые" [ref=f26e175] [cursor=pointer]:
+                - /url: /
+              - link "Ограждения" [ref=f26e178] [cursor=pointer]:
+                - /url: https://peregorodki17.ru/
+              - link "Двери" [ref=f26e181] [cursor=pointer]:
+                - /url: https://dver17.ru/
+              - link "Зеркала" [ref=f26e184] [cursor=pointer]:
+                - /url: https://zerkala.ru/
+              - link "Багет" [ref=f26e187] [cursor=pointer]:
+                - /url: https://baget17.ru/
+              - link "Металл" [ref=f26e190] [cursor=pointer]:
+                - /url: https://metall17.ru/
+        - generic [ref=f26e191]: Московская Зеркальная Фабрика
+  - generic [ref=f26e193] [cursor=pointer]
+  - generic [ref=f26e204]:
+    - generic [ref=f26e205]: МОСКОВСКАЯ ЗЕРКАЛЬНАЯ ФАБРИКА
+    - heading "О КОМПАНИИ" [level=1] [ref=f26e206]
+  - generic [ref=f26e209]:
+    - generic:
+      - generic [ref=f26e210]:
+        - generic [ref=f26e211]: Московская Зеркальная Фабрика основана в 1961 году
+        - generic [ref=f26e212]: Более пятидесяти лет фабрика считается непревзойденным лидером по производству самой разнообразной продукции, изготовленной из стекла и зеркал.
+        - generic [ref=f26e213]: На сегодня, компания владеет всеми видами технологий по изготовлению зеркал, продукции из зеркального и стеклянного полотна. "Московская Зеркальная Фабрика" отслеживает все инновации в зеркально-стекольном секторе и предлагает своим потребителям самую современную и качественную продукцию.
+      - generic [ref=f26e214]: Наша система многоуровневого контроля отслеживает, чтобы качество выпускаемой продукции соответствовало всем международным и европейским стандартам. Полностью компьютеризированный процесс от оформления заказа до его выдачи позволяет точно отслеживать весь производственный цикл и максимально сокращает время изготовления любых, даже самых сложных и нестандартных заказов на изготовление зеркал и стеклоизделий.Душевые ограждения от "Московской Зеркальной Фабрики" производятся на собственном заводе в г.Чехов. Полностью автоматизированный процесс и новейшее европейское оборудование позволяют выполнять заказы любой сложности. Мы работаем напрямую с лидирующими поставщиками стекла и фурнитуры, не отдаём работу на "подряд", благодаря чему предлагаем клиентам доступные цены на продукцию.
+  - generic [ref=f26e218]:
+    - generic [ref=f26e219]: Презентация Московской Зеркальной Фабрики
+    - generic [ref=f26e222]: Отзыв о Московской Зеркальной Фабрики
+  - generic [ref=f26e225]: Партнеры — это подтверждение накопленного опыта и знаний, качества продукции и оказываемых услуг.
+  - tablist [ref=f26e236]:
+    - tab "Звездные клиенты" [selected] [ref=f26e237]
+    - tab "Партнеры МЗФ" [ref=f26e238] [cursor=pointer]
+  - tabpanel "Звездные клиенты" [ref=f26e239]:
+    - img "Евгений Князев" [ref=f26e245]
+  - heading "Оставить заявку" [level=3] [ref=f26e261]
+  - form [ref=f26e266]:
+    - generic [ref=f26e267]:
+      - textbox "Имя" [ref=f26e270]
+      - textbox "Email" [ref=f26e273]
+      - textbox "Телефон" [ref=f26e276]
+      - generic [ref=f26e279] [cursor=pointer]:
+        - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f26e280]
+        - generic [ref=f26e282]:
+          - text: Даю согласие на обработку моих персональных данных.
+          - link "Подробнее" [ref=f26e283]:
+            - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+      - button "Отправить" [ref=f26e285] [cursor=pointer]
+    - textbox
+  - contentinfo [ref=f26e287]:
+    - generic [ref=f26e290]:
+      - generic [ref=f26e291]:
+        - link [ref=f26e293] [cursor=pointer]:
+          - /url: /
+          - img "Московская зеркальная фабрика" [ref=f26e294]
+        - generic [ref=f26e295]: "Режим работы: Пн-Вс 10:00-19:00"
+      - generic [ref=f26e296]:
+        - link "dysh17@1mzf.ru" [ref=f26e300] [cursor=pointer]:
+          - /url: mailto:dysh17@1mzf.ru
+        - link "+7 (495) 021-16-79" [ref=f26e304] [cursor=pointer]:
+          - /url: tel:+74950211679
+        - button "Заказать звонок" [ref=f26e306] [cursor=pointer]
+    - navigation [ref=f26e311]:
+      - list [ref=f26e312]:
+        - listitem [ref=f26e313]:
+          - link "Стекло" [ref=f26e314] [cursor=pointer]:
+            - /url: https://steklo17.ru/
+        - listitem [ref=f26e315]:
+          - link "Витраж" [ref=f26e316] [cursor=pointer]:
+            - /url: https://vitrag17.ru/
+        - listitem [ref=f26e317]:
+          - link "Скинали" [ref=f26e318] [cursor=pointer]:
+            - /url: https://skinali17.ru/
+        - listitem [ref=f26e319]:
+          - link "Душевые" [ref=f26e320] [cursor=pointer]:
+            - /url: /
+        - listitem [ref=f26e321]:
+          - link "Ограждения" [ref=f26e322] [cursor=pointer]:
+            - /url: https://peregorodki17.ru/
+        - listitem [ref=f26e323]:
+          - link "Двери" [ref=f26e324] [cursor=pointer]:
+            - /url: https://dver17.ru/
+        - listitem [ref=f26e325]:
+          - link "Зеркала" [ref=f26e326] [cursor=pointer]:
+            - /url: https://zerkala.ru/
+        - listitem [ref=f26e327]:
+          - link "Багет" [ref=f26e328] [cursor=pointer]:
+            - /url: https://baget17.ru/
+        - listitem [ref=f26e329]:
+          - link "Металл" [ref=f26e330] [cursor=pointer]:
+            - /url: https://metall17.ru/
+    - generic [ref=f26e333]:
+      - generic [ref=f26e334]:
+        - generic [ref=f26e335]: О КОМПАНИИ
+        - list [ref=f26e337]:
+          - listitem [ref=f26e338]:
+            - link "О нас" [ref=f26e339] [cursor=pointer]:
+              - /url: /company/about/
+          - listitem [ref=f26e340]:
+            - link "Производство" [ref=f26e341] [cursor=pointer]:
+              - /url: /company/manufacture/
+          - listitem [ref=f26e342]:
+            - link "Карьера" [ref=f26e343] [cursor=pointer]:
+              - /url: /company/career/
+          - listitem [ref=f26e344]:
+            - link "Статьи" [ref=f26e345] [cursor=pointer]:
+              - /url: /article/
+          - listitem [ref=f26e346]:
+            - link "Каталоги и презентации" [ref=f26e347] [cursor=pointer]:
+              - /url: /company/catalog/
+      - generic [ref=f26e348]:
+        - generic [ref=f26e349]: УСЛУГИ
+        - list [ref=f26e351]:
+          - listitem [ref=f26e352]:
+            - link "Замеры и консультации" [ref=f26e353] [cursor=pointer]:
+              - /url: /services/vyizov-menedzhera/
+          - listitem [ref=f26e354]:
+            - link "Разработка дизайн-проекта" [ref=f26e355] [cursor=pointer]:
+              - /url: /services/razrabotka-dizajn-proekta/
+          - listitem [ref=f26e356]:
+            - link "Конструкторское бюро" [ref=f26e357] [cursor=pointer]:
+              - /url: /services/kb/
+          - listitem [ref=f26e358]:
+            - link "Доставка" [ref=f26e359] [cursor=pointer]:
+              - /url: /services/delivery/
+      - generic:
+        - generic [ref=f26e360]:
+          - generic [ref=f26e361]: ИНФОРМАЦИЯ
+          - list [ref=f26e363]:
+            - listitem [ref=f26e364]:
+              - link "Технические условия" [ref=f26e365] [cursor=pointer]:
+                - /url: /info/tehnicheskie-usloviya/
+            - listitem [ref=f26e366]:
+              - link "Информация клиенту" [ref=f26e367] [cursor=pointer]:
+                - /url: /info/faq/
+            - listitem [ref=f26e368]:
+              - link "Сроки изготовления" [ref=f26e369] [cursor=pointer]:
+                - /url: /info/sroki-izgotovleniya/
+            - listitem [ref=f26e370]:
+              - link "Гарантия" [ref=f26e371] [cursor=pointer]:
+                - /url: /info/garanty/
+        - generic [ref=f26e372]:
+          - button "Перезвоните мне" [ref=f26e374] [cursor=pointer]
+          - form [ref=f26e375]:
+            - generic [ref=f26e376]:
+              - generic [ref=f26e377]:
+                - textbox "Ваш номер" [ref=f26e379]
+                - button [ref=f26e381] [cursor=pointer]
+              - generic [ref=f26e385] [cursor=pointer]:
+                - checkbox "Даю согласие на обработку моих персональных данных. Подробнее" [ref=f26e386]
+                - generic [ref=f26e387]:
+                  - text: Даю согласие на обработку моих персональных данных.
+                  - link "Подробнее" [ref=f26e388]:
+                    - /url: https://dysh17.ru/info/soglasie-na-obrabotku-personalnyix-dannyix/
+            - textbox
+          - list "Соц. сети" [ref=f26e390]:
+            - listitem [ref=f26e391]:
+              - link "vk" [ref=f26e392] [cursor=pointer]:
+                - /url: https://vk.com/moskovskaya_zerkalnaya_fabrika
+            - listitem [ref=f26e394]:
+              - link "ok" [ref=f26e395] [cursor=pointer]:
+                - /url: https://ok.ru/moskovskaya.zerkalnaya.fabrika
+    - generic [ref=f26e401]:
+      - text: Если вас не устраивает работа персонального менеджера обратитесь в службу поддержки клиентов | Мы всегда на связиОбращаем ваше внимание на то, что данный интернет-сайт носит исключительно информационный характер и ни при каких условиях не является публичной офертой, определяемой положениями Статьи 437 (2) Гражданского кодекса Российской Федерации. Для получения подробной информации о наличии и стоимости указанных товаров и (или) услуг, пожалуйста, обращайтесь к менеджеру сайта с помощью специальной формы связи или по телефону в Москве +7 (495) 021-16-79 info@1mzf.ru
+      - link "Правовая информация и политики сайта" [ref=f26e402] [cursor=pointer]:
+        - /url: /info/
+      - text: ООО "СПЕКТРУМАРТ" info@spektrumart.ru | +7 (495) 797-53-73
+    - generic [ref=f26e403]:
+      - generic [ref=f26e404]:
+        - text: Мы используем файлы cookie и сервисы веб-аналитики (Яндекс.Метрика, Comagic) для сбора статистики, анализа посещаемости и улучшения работы сайта. Продолжая использовать сайт, вы даете согласие на обработку данных в указанных целях.
+        - link "Подробнее" [ref=f26e405] [cursor=pointer]:
+          - /url: /info/
+      - button "Принять и закрыть" [ref=f26e406] [cursor=pointer]

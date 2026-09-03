@@ -1,0 +1,19 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic "M-Glass" [ref=e6]
+        - generic [ref=e12]: M‑GLASS
+      - paragraph [ref=e13]: Система расчёта заказов
+      - generic [ref=e14]:
+        - heading "Вход в систему" [level=2] [ref=e15]
+        - generic [ref=e16]:
+          - generic [ref=e17]:
+            - generic [ref=e18]: Email
+            - textbox "email@mglass.ru" [ref=e19]
+          - generic [ref=e20]:
+            - generic [ref=e21]: Пароль
+            - textbox "••••••••" [ref=e22]
+          - button "Войти" [ref=e23] [cursor=pointer]
+        - button "Забыли пароль?" [ref=e24] [cursor=pointer]
+  - alert [ref=e25]

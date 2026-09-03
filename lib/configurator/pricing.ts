@@ -52,7 +52,12 @@ export function computeQuantities(assembly: Assembly, thickness: number): Quanti
   // Штанга 30×10: верхние рельсы (kind rail, длина = size[0]).
   const tubePieces = assembly.metal.filter(m => m.kind === 'rail').map(m => mm(m.size[0])).filter(l => l > 0)
   const hardware: Record<string, number> = {}
-  for (const h of assembly.hardware) hardware[h.model] = (hardware[h.model] ?? 0) + 1
+  // mirrorOf — вторая половина сквозной детали (двусторонняя ручка): её рисуют,
+  // но покупают одну. Считать половины штуками значило бы удвоить позицию в прайсе.
+  for (const h of assembly.hardware) {
+    if (h.mirrorOf) continue
+    hardware[h.model] = (hardware[h.model] ?? 0) + 1
+  }
   // Заглушки на профиль: 2 на каждый кусок (верх/низ). Магнитный уплотнитель: на каждую распашную створку.
   if (profilePieces.length > 0) hardware.cap = (hardware.cap ?? 0) + profilePieces.length * 2
   if ((hardware.sd210 ?? 0) > 0) hardware.seal = (hardware.seal ?? 0) + hardware.sd210
