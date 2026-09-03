@@ -106,6 +106,16 @@ const PLACEMENT_ROLE: Record<string, RoleId> = {
 const specRole = (spec: string | undefined, fallback: RoleId): RoleId =>
   spec && isRole(spec) ? spec : fallback
 
+// Узел сцены → роль комплекта. Та же логика, что в подсчёте количеств ниже: клик по
+// детали и строка прайса обязаны сойтись на одной роли, иначе разметка врёт.
+export function nodeRole(n: { spec?: string; model?: string; metalKind?: string }): RoleId | null {
+  const fallback = n.model
+    ? PLACEMENT_ROLE[n.model]
+    : (n.metalKind === 'rail' ? 'tube' : 'profile') as RoleId
+  if (!n.spec && !fallback) return null
+  return specRole(n.spec, fallback)
+}
+
 // Название позиции справочника → роль (подсказка при вставке; правится вручную).
 export function inferRole(text: string): RoleId | null {
   const t = (text || '').toLowerCase()

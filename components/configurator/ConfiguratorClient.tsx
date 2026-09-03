@@ -1,11 +1,12 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Partition3DView } from '@/components/configurator/Partition3DView'
+import { Partition3DView, type PickedNode } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, M1_TRAY_DEPTH_DEFAULT, type MDims, type GlassTint, type HardwareChoice, type MVariant } from '@/components/configurator/scene/assembly'
 import { computeQuantities, totalMeters, HARDWARE_LABEL } from '@/lib/configurator/pricing'
+import { ROLE_META, isRole } from '@/lib/configurator/kit'
 import type { KitPriceResult, KitChoices } from '@/lib/configurator/kit'
 
 type Quote = { full: boolean; price?: KitPriceResult; total?: number; clientFrom?: number; complete?: boolean }
@@ -109,6 +110,10 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [choice, setChoice] = useState<Record<string, string>>({})       // роль → itemId позиции
   const [qtyChoice, setQtyChoice] = useState<Record<string, number>>({}) // роль → количество (петли 2/3)
   const [m1var, setM1var] = useState<MVariant>({ mount: 'perp90', profileFrame: 'partial' })
+  // Разметка (только внутренний режим): клик по детали → что это за узел и чем он нарисован.
+  const [picked, setPicked] = useState<PickedNode | null>(null)
+  // Строка комплекта, подсвеченная в сцене (клик по строке цены → деталь загорается).
+  const [pickedRole, setPickedRole] = useState<string | null>(null)
   // Фотореалистичный кадр: скриншот сцены → сервер (Gemini img2img) → журнальный рендер.
   const sceneRef = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState<{ loading: boolean; image?: string; error?: string } | null>(null)
@@ -130,6 +135,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     setCode(c)
     setDims(defaultsFor(getModel(c)))
     setM1var({ mount: 'perp90', profileFrame: 'partial' })
+    setPicked(null)
     setModelOpen(false)   // выбрал → сворачиваем список, освобождаем экран
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
@@ -284,7 +290,9 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
         <div className="order-1 lg:order-none min-w-0 lg:sticky lg:top-4 space-y-2">
           <div ref={sceneRef} className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
-              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant} />
+              finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant}
+              onPick={embed ? undefined : n => { setPicked(n); setPickedRole(n.role ?? null) }}
+              pickedKey={picked?.key ?? null} pickedRole={pickedRole} />
           </div>
           <div className="flex items-center justify-center gap-3 flex-wrap">
             <p className="text-[12px] text-[#9a9a95]">
@@ -304,6 +312,48 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             </button>
           </div>
           {photo?.error && <p className="text-center text-[12px] text-[#9a5a2a]">{photo.error}</p>}
+
+          {/* Разметка узла: клик по детали → роль в комплекте, подставленная позиция и
+              задан ли вид. Роль считается той же функцией, что и в прайсе (kit.nodeRole),
+              поэтому подсветка строки и цена не могут разъехаться. */}
+          {!embed && (picked ? (() => {
+            const role = picked.role ?? null
+            const meta = role && isRole(role) ? ROLE_META[role] : null
+            const line = role ? price?.lines.find(l => l.role === role) : undefined
+            const variant = role ? kitChoices?.variants.find(v => v.role === role) : undefined
+            const chosen = variant?.options.find(o => o.itemId === choice[role!])
+              ?? variant?.options.find(o => o.primary) ?? variant?.options[0]
+            const position = line?.label ?? chosen?.name ?? null
+            const shapeSet = !!picked.shape
+            return (
+              <div className="bg-white border border-[#e4e4e0] rounded-xl p-3 text-[12px]">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-semibold text-[#111110]">{meta?.label ?? (picked.kind === 'metal' ? 'Профиль / штанга' : 'Узел фурнитуры')}</p>
+                    <p className="text-[#9a9a95] text-[11px]">{meta?.hint ?? picked.key}</p>
+                  </div>
+                  <button onClick={() => { setPicked(null); setPickedRole(null) }} className="text-[#9a9a95] hover:text-[#111110] text-[15px] leading-none shrink-0">×</button>
+                </div>
+                <div className="mt-2 space-y-1">
+                  <Row label="Позиция в комплекте" value={position ?? 'не задана'} muted={!position} />
+                  {line && <Row label="В комплекте" value={`${line.qty} ${line.unit}`} muted />}
+                  <Row label="Вид в 3D" value={shapeSet ? 'задан' : 'угадан по названию'} muted={!shapeSet} />
+                </div>
+                {!position && (
+                  <p className="mt-2 text-[11px] text-[#9a5a2a]">
+                    Для этого узла в комплекте модели нет позиции — цена посчитана без него. Добавить: админка «Себестоимость визуализатора».
+                  </p>
+                )}
+                {position && !shapeSet && (
+                  <p className="mt-2 text-[11px] text-[#9a5a2a]">
+                    Вид не задан — модель угадывает форму по названию позиции. Задать: админка «Себестоимость визуализатора» → эта позиция → поле «вид».
+                  </p>
+                )}
+              </div>
+            )
+          })() : (
+            <p className="text-center text-[11px] text-[#9a9a95]">Кликните по детали в модели — покажу, что это за узел и какая позиция комплекта за ним стоит</p>
+          ))}
         </div>
 
         {/* ── Параметры + спецификация + цена ── на мобильном последним */}
@@ -452,8 +502,14 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
                 </div>
               )}
               <Row label="Себестоимость стекла" value={rub(price.glassCost)} muted />
+              {/* Строка комплекта ↔ деталь в сцене: наведение подсвечивает узел в 3D. */}
               {price.lines.map(l => (
-                <Row key={l.role + l.itemId} label={`${l.label} · ${l.qty} ${l.unit}${l.chosen ? ' · выбор' : ''}`} value={rub(l.total)} muted />
+                <div key={l.role + l.itemId}
+                  onMouseEnter={() => !embed && setPickedRole(l.role)}
+                  onMouseLeave={() => !embed && setPickedRole(picked?.role ?? null)}
+                  className={`-mx-1 px-1 rounded ${!embed ? 'cursor-default hover:bg-[#faf6ee]' : ''} ${pickedRole === l.role ? 'bg-[#fdf3ec]' : ''}`}>
+                  <Row label={`${l.label} · ${l.qty} ${l.unit}${l.chosen ? ' · выбор' : ''}`} value={rub(l.total)} muted />
+                </div>
               ))}
               <Row label={`Цена изделия (маржа ${price.marginPct}% / налог ${price.taxPct}%)`} value={rub(price.itemPrice)} />
               <Row label={`Монтаж (${price.sections} секц.)`} value={rub(price.installCost)} muted />

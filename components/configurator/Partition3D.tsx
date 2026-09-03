@@ -9,8 +9,20 @@ import {
 import { EffectComposer, N8AO, Bloom, Vignette, SMAA } from '@react-three/postprocessing'
 import { Suspense, useMemo } from 'react'
 import type { MModel } from '@/lib/configurator/arrangement'
+import { nodeRole } from '@/lib/configurator/kit'
 import { buildFromModel, type Assembly, type Niche, type MDims, type GlassTint, type HardwareChoice, type MVariant } from './scene/assembly'
 import { Hardware } from './scene/hardware'
+
+// Что вернёт клик по детали: узел геометрии + как он нарисован. Позицию комплекта
+// и цену сюда НЕ тащим — их знает вызывающий (у него есть варианты из /options).
+export type PickedNode = {
+  key: string
+  kind: 'hardware' | 'metal'
+  spec?: string          // код узла для прайса (mount-wall, tube-perp90, …)
+  model?: string         // внутренний код геометрии
+  shape?: string         // форма задана явно; пусто → угадана по названию позиции
+  role?: string | null   // роль в комплекте — считает kit.nodeRole, тем же правилом, что и прайс
+}
 
 // Матовые финиши — выше шероховатость (меньше зеркальность).
 const MATTE = new Set(['satin', 'black', 'gunmetal', 'brgold', 'brrose'])
@@ -140,7 +152,12 @@ function NicheMesh({ niche }: { niche: Niche }) {
   )
 }
 
-function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint }) {
+function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole }: {
+  assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint
+  onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
+}) {
+  const pickable = !!onPick
+  const lit = (key: string, role: string | null) => key === pickedKey || (!!role && role === pickedRole)
   // Кабина поднята на поддон.
   return (
     <group position={[0, assembly.niche.trayH, 0]}>
@@ -164,22 +181,48 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
             clearcoat={0.9}
             clearcoatRoughness={0.04}
           />
-          {/* V2: полированная кромка стекла — тонкая световая линия по рёбрам, читается толщина */}
-          <Edges threshold={15}>
-            <lineBasicMaterial color="#eaf6ef" transparent opacity={0.5} depthWrite={false} />
-          </Edges>
+          {/* V2: полированная кромка стекла — тонкая световая линия по рёбрам, читается толщина.
+              Цвет и прозрачность — пропсами: Edges это Line2, вложенный материал он игнорирует. */}
+          <Edges threshold={15} color="#eaf6ef" lineWidth={1} transparent opacity={0.5} depthWrite={false} />
         </mesh>
       ))}
-      {assembly.metal.map(m => (
-        <mesh key={m.key} position={m.pos} rotation={[0, m.rotY, 0]} material={metalMat} castShadow>
-          <boxGeometry args={m.size} />
-        </mesh>
-      ))}
-      {assembly.hardware.map(h => (
+      {assembly.metal.map(m => {
+        const role = nodeRole({ spec: m.spec, metalKind: m.kind })
+        return (
+          <mesh key={m.key} position={m.pos} rotation={[0, m.rotY, 0]} material={metalMat} castShadow
+            onClick={pickable ? (e => { e.stopPropagation(); onPick!({ key: m.key, kind: 'metal', spec: m.spec, role }) }) : undefined}
+            onPointerOver={pickable ? (e => { e.stopPropagation(); document.body.style.cursor = 'pointer' }) : undefined}
+            onPointerOut={pickable ? (() => { document.body.style.cursor = 'auto' }) : undefined}>
+            <boxGeometry args={m.size} />
+            {lit(m.key, role) && <Edges scale={1.04} color="#f0a500" lineWidth={2.5} depthTest={false} renderOrder={999} />}
+          </mesh>
+        )
+      })}
+      {assembly.hardware.map(h => {
+        const role = nodeRole({ spec: h.spec, model: h.model })
+        return (
         <group key={h.key} position={h.pos} rotation={[0, h.rotY, 0]}>
           <Hardware model={h.model} shape={h.shape} material={metalMat} flatTube={h.flatTube} />
+          {/* Зона захвата: сама деталь 20–40 мм, мышью в неё не попасть. Невидимая
+              сфера ловит клик. Прозрачная, а не visible=false — иначе raycast её минует. */}
+          {pickable && (
+            <mesh onClick={e => { e.stopPropagation(); onPick!({ key: h.key, kind: 'hardware', spec: h.spec, model: h.model, shape: h.shape, role }) }}
+              onPointerOver={e => { e.stopPropagation(); document.body.style.cursor = 'pointer' }}
+              onPointerOut={() => { document.body.style.cursor = 'auto' }}>
+              <sphereGeometry args={[0.05, 10, 8]} />
+              <meshBasicMaterial transparent opacity={0} depthWrite={false} />
+            </mesh>
+          )}
+          {/* маркер выбранного узла — виден сквозь стекло */}
+          {lit(h.key, role) && (
+            <mesh renderOrder={999}>
+              <sphereGeometry args={[0.035, 16, 12]} />
+              <meshBasicMaterial color="#f0a500" transparent opacity={0.45} depthTest={false} />
+            </mesh>
+          )}
         </group>
-      ))}
+        )
+      })}
     </group>
   )
 }
@@ -209,8 +252,8 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant, onPick, pickedKey, pickedRole }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant; onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null },
 ) {
   const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice, variant), [model, dims, thickness, doorOpen, choice, variant])
   // PBR-материал финиша для профилей и фурнитуры. Профиль цвета → MeshPhysicalMaterial
@@ -251,7 +294,7 @@ export default function Partition3D(
           <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.6} color="#e6eeff" />
           <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.4} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
-          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} />
+          <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} />
           <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
           <Studio />
           <OrbitControls
