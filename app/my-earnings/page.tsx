@@ -210,6 +210,18 @@ export default function MyEarningsPage() {
     status:    'pending',
   })
 
+  // Команда: поступления по менеджерам за текущий месяц из deal_payments (шаг 3 пути
+  // сделки). Только владельцу/РОП — API гейтит ролью; менеджеру придёт 403, income=null.
+  type TeamIncome = { managers: { manager_id: string; name: string; total: number; count: number }[]; totals: { total: number; count: number } }
+  const [income, setIncome] = useState<TeamIncome | null>(null)
+  useEffect(() => {
+    const owner = role === 'admin' || role === 'ceo' || role === 'owner'
+    if (!owner) return
+    let alive = true
+    fetch('/api/commercial/deal-income').then(r => (r.ok ? r.json() : null)).then(j => { if (alive && j) setIncome(j as TeamIncome) }).catch(() => {})
+    return () => { alive = false }
+  }, [role])
+
   useEffect(() => {
     async function load() {
       const supabase = createClient()
@@ -868,27 +880,42 @@ export default function MyEarningsPage() {
               </div>
             </div>
             <p className="text-[11px] text-[#6b6b66] leading-snug mb-3">
-              Рейтинг будет строиться по подтверждённой оплаченной B2C-выручке менеджеров (по фактическим поступлениям денег). Сейчас подключён личный localStorage-режим, поэтому доступны только ваши данные. Следующий этап — таблица <span className="font-mono">manager_sales</span> в Supabase и общая админ-панель.
+              Фактические поступления менеджеров за текущий месяц (предоплата · остаток · остаток за монтаж, отмеченные в сделках). Комиссия — по прогрессивной шкале от суммы поступлений.
             </p>
             <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-1.5 bg-[#fafaf9] border-y border-[#e4e4e0]">
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase">Менеджер</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">B2C-поступления</span>
               <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Комиссия</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Заказов</span>
-              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. чек</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Платежей</span>
+              <span className="text-[10px] font-semibold text-[#9a9a95] uppercase text-right">Ср. платёж</span>
             </div>
-            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3]">
-              <span className="text-[11px] text-[#4b4b47]">Вы (текущий месяц)</span>
-              <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(curRevenue)}</span>
-              <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(curCommission.totalCommission)}</span>
-              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{curDeals}</span>
-              <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">
-                {curDeals > 0 ? fmt(Math.round(curRevenue / curDeals)) : '—'}
-              </span>
-            </div>
-            <p className="text-[10px] text-[#c4c4be] mt-3 text-center leading-snug">
-              Данные других менеджеров появятся после переноса учёта поступлений в Supabase. Пока нет — не показываем, чтобы не вводить в заблуждение.
-            </p>
+            {income === null ? (
+              <p className="px-3 py-3 text-[11px] text-[#9a9a95]">Загрузка…</p>
+            ) : income.managers.length === 0 ? (
+              <p className="px-3 py-3 text-[11px] text-[#9a9a95]">За текущий месяц поступлений по сделкам нет.</p>
+            ) : (
+              <>
+                {income.managers.map(m => {
+                  const c = calculateProgressiveCommission(m.total, effTiers).totalCommission
+                  return (
+                    <div key={m.manager_id} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 border-b border-[#f5f5f3]">
+                      <span className="text-[11px] text-[#4b4b47]">{m.name}</span>
+                      <span className="text-[11px] font-mono text-[#4b4b47] text-right whitespace-nowrap">{fmt(m.total)}</span>
+                      <span className="text-[11px] font-mono text-emerald-700 text-right whitespace-nowrap">{fmt(c)}</span>
+                      <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.count}</span>
+                      <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{m.count > 0 ? fmt(Math.round(m.total / m.count)) : '—'}</span>
+                    </div>
+                  )
+                })}
+                <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-x-3 px-3 py-2 bg-[#fafaf9] font-semibold">
+                  <span className="text-[11px] text-[#111110]">Итого</span>
+                  <span className="text-[11px] font-mono text-[#111110] text-right whitespace-nowrap">{fmt(income.totals.total)}</span>
+                  <span className="text-[11px] text-right"></span>
+                  <span className="text-[11px] font-mono text-[#9a9a95] text-right whitespace-nowrap">{income.totals.count}</span>
+                  <span></span>
+                </div>
+              </>
+            )}
           </div>
         )}
 

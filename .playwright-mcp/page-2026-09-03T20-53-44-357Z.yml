@@ -1,0 +1,62 @@
+- generic [active] [ref=f47e1]:
+  - generic [ref=f47e2]:
+    - complementary [ref=f47e3]:
+      - generic [ref=f47e4]:
+        - link "MG MGlass" [ref=f47e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f47e6]: MG
+          - generic [ref=f47e8]: MGlass
+        - generic [ref=f47e9]:
+          - generic [ref=f47e10]:
+            - button "СЕО" [ref=f47e11]
+            - button "CFO" [ref=f47e12]
+            - button "Админ" [ref=f47e13]
+          - generic [ref=f47e14]:
+            - button "Менеджер" [ref=f47e15]
+            - button "Произв." [ref=f47e16]
+            - button "Замерщик" [ref=f47e17]
+      - navigation [ref=f47e18]:
+        - link "🔒 Влад" [ref=f47e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f47e21]: 🔒
+          - generic [ref=f47e22]: Влад
+        - button "MGlass" [ref=f47e24]
+        - button "B2B" [ref=f47e32]
+      - generic [ref=f47e38]:
+        - generic [ref=f47e39]:
+          - generic [ref=f47e40]: A
+          - paragraph [ref=f47e42]: admin@mglass.ru
+        - button "Выйти" [ref=f47e43]
+    - main [ref=f47e44]:
+      - generic [ref=f47e45]:
+        - link "← Сделки" [ref=f47e47] [cursor=pointer]:
+          - /url: /deals
+        - generic [ref=f47e49]:
+          - generic [ref=f47e50]:
+            - generic [ref=f47e51]:
+              - heading "Татьяна" [level=1] [ref=f47e52]
+              - generic [ref=f47e53]: Просчёт
+            - paragraph [ref=f47e54]: +7 (913) 513-58-88
+            - paragraph [ref=f47e55]: создана 03.09.2026 · Администратор
+          - generic [ref=f47e56]:
+            - paragraph [ref=f47e57]: 26 486 ₽
+            - button "Изменить" [ref=f47e58]
+        - generic [ref=f47e59]:
+          - button "📄 Сделать КП" [ref=f47e60]
+          - link "📝 Договор" [ref=f47e61] [cursor=pointer]:
+            - /url: /contracts
+          - button "Отправляю…" [disabled] [ref=f47e62]
+        - generic [ref=f47e63]:
+          - button "Расчёты (1)" [ref=f47e64]
+          - button "Документы (0)" [ref=f47e65]
+          - button "Деньги" [ref=f47e66]
+        - generic [ref=f47e69]:
+          - generic [ref=f47e70]:
+            - generic [ref=f47e71]:
+              - generic [ref=f47e72]: 🪞 Зеркало
+              - generic [ref=f47e73]: Черновик
+            - paragraph [ref=f47e74]: 18.05.2026
+          - generic [ref=f47e75]:
+            - generic [ref=f47e76]: 26 486 ₽
+            - button "✕" [ref=f47e77]
+  - alert [ref=f47e78]

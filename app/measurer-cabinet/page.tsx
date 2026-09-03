@@ -29,6 +29,7 @@ type MReq = {
   issue_solution: string | null
   measurer_fee: number
   fee_status: string
+  photos: string[] | null
   created_at: string
 }
 
@@ -111,6 +112,16 @@ export default function MeasurerCabinetPage() {
         patch.issue_text = issue; patch.issue_solution = solution
       }
       await sb.from('measure_requests').update(patch).eq('id', r.id)
+      await load()
+    } finally { setBusy(null) }
+  }
+
+  // Файл замера (чертёж/фото) с объекта → measure_requests.photos, виден в карточке сделки.
+  async function attachFile(r: MReq, file: File) {
+    setBusy(r.id)
+    try {
+      const fd = new FormData(); fd.append('file', file)
+      await fetch(`/api/measure-requests/${r.id}/photo`, { method: 'POST', body: fd })
       await load()
     } finally { setBusy(null) }
   }
@@ -200,9 +211,15 @@ export default function MeasurerCabinetPage() {
                           {' '}{r.client_name}{isOwnerView && r.measurer_name ? ` · ${r.measurer_name}` : ''}
                         </p>
                         {r.address && <p className="text-[10px] text-[#9a9a95]">📍 {r.address}</p>}
-                        <div className="flex gap-1 mt-0.5">
+                        <div className="flex items-center gap-1 mt-0.5">
                           <button onClick={() => setStatus(r, 'done')} className="text-[10px] bg-emerald-600 text-white rounded px-1.5 py-0.5">✅</button>
                           <button onClick={() => setStatus(r, 'issue')} className="text-[10px] border border-red-200 text-red-600 rounded px-1.5 py-0.5">⚠️</button>
+                          <label className="text-[10px] border border-[#e4e4e0] text-[#4b4b47] rounded px-1.5 py-0.5 cursor-pointer hover:bg-[#f0f0ec]">
+                            📎 файл
+                            <input type="file" accept="image/*,application/pdf" className="hidden"
+                              onChange={e => { const f = e.target.files?.[0]; if (f) attachFile(r, f); e.target.value = '' }} />
+                          </label>
+                          {Array.isArray(r.photos) && r.photos.length > 0 && <span className="text-[10px] text-[#9a9a95]">{r.photos.length} 📎</span>}
                         </div>
                       </div>
                     ))}
