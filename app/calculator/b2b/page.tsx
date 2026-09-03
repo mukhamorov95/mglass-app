@@ -1,7 +1,8 @@
 'use client'
 
-import { useEffect, useState, useMemo, useRef } from 'react'
+import { useEffect, useState, useMemo, useRef, Suspense } from 'react'
 import { normalizeHoles, totalHoles, type HoleGroup } from '@/lib/production/holes'
+import { calcFinancialModel } from '@/lib/pricing/financialModel'
 import { TreatToggle } from './TreatToggle'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase-browser'
@@ -133,7 +134,10 @@ function parseSalePrice(m: B2BMaterial): B2BMaterial {
 }
 
 
-export default function B2BCalculatorPage() {
+// variant='b2b' — внешний B2B-контур (как было). variant='mglass' — вкладка «Расчёт B2B»
+// внутри M-Glass: клиент зафиксирован на M GLASS (выбор скрыт), срок производства скрыт,
+// справа добавлена панель быстрого расчёта (себестоимость без НДС → маржа/налог → цена).
+export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mglass' }) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const [clients, setClients]     = useState<B2BClient[]>([])
@@ -163,6 +167,15 @@ export default function B2BCalculatorPage() {
   const [managerCode, setManagerCode]   = useState<number | null>(null)
   const [managerName, setManagerName]   = useState<string | null>(null)
   const [mglassOnly, setMglassOnly]     = useState(false)
+  // Правая панель быстрого расчёта (только variant='mglass'): B2B даёт себестоимость
+  // без НДС → здесь наценка+налог → цена изделия + монтаж/доставка/подъём. Маржа/налог
+  // редактируемы, но НЕ сохраняются как умолчание: на новом просчёте снова 40/12.
+  const [mgMargin, setMgMargin]     = useState('40')
+  const [mgTax, setMgTax]           = useState('12')
+  const [mgPerSection, setMgPerSection] = useState('')
+  const [mgSections, setMgSections] = useState('1')
+  const [mgDelivery, setMgDelivery] = useState('')
+  const [mgLift, setMgLift]         = useState('')
   const [isAdmin, setIsAdmin]           = useState(false)
   const [maxDiscount, setMaxDiscount]   = useState<number>(100)
   const { strategy } = useOwnerStrategy()
@@ -330,7 +343,9 @@ export default function B2BCalculatorPage() {
           userIsAdmin = profile?.role === 'admin' || profile?.role === 'ceo'
           const perms = (profile?.permissions ?? null) as UserPermissions | null
           // owners are never scope-restricted, even if the JSON says so
-          userMGlassOnly = !userIsAdmin && isMGlassOnlyUser(perms)
+          // Вкладка «Расчёт B2B» (variant='mglass') принудительно фиксирует M GLASS —
+          // клиента внутри контура не выбираем. Переиспользуем всю логику mglass_only.
+          userMGlassOnly = variant === 'mglass' || (!userIsAdmin && isMGlassOnlyUser(perms))
           // Buyers are normally blocked from the B2B calculator (procurement
           // doesn't sell). Exception: a buyer with an explicit b2b_client_scope
           // (mglass_only — locked to M GLASS; all_clients — quotes for everyone)
@@ -448,7 +463,8 @@ export default function B2BCalculatorPage() {
       setLoading(false)
     }, 12000)
     return () => clearTimeout(guard)
-  }, [])
+    // variant — стабильный проп маршрута (b2b/mglass), в перезапуске не участвует.
+  }, [variant])
 
   // ── Check draft / orderId after data loads ──
   useEffect(() => {
@@ -506,6 +522,14 @@ export default function B2BCalculatorPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     if (mg) setClientId(mg.id)
   }, [mglassOnly, clientId, clients])
+
+  // Новый просчёт (корзина пуста) → маржа/налог возвращаются к 40/12. Правка живёт
+  // внутри текущего просчёта, умолчанием не становится (требование владельца).
+  useEffect(() => {
+    if (variant !== 'mglass' || items.length > 0) return
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setMgMargin('40'); setMgTax('12')
+  }, [variant, items.length])
 
   // А12: прайс клиента подтягиваем при смене клиента. Уже набранные позиции
   // пересчитываем — иначе цена зависела бы от того, в каком порядке менеджер
@@ -1552,7 +1576,8 @@ export default function B2BCalculatorPage() {
               </div>
             </div>
 
-            {/* Дней производства */}
+            {/* Дней производства — во внутреннем контуре M-Glass не спрашиваем. */}
+            {variant !== 'mglass' && (
             <div>
               <label className="block text-[13px] font-medium text-[#6e6e73] mb-1">Срок производства, дней</label>
               <input type="number" min="1" max="90"
@@ -1561,6 +1586,7 @@ export default function B2BCalculatorPage() {
                 onChange={e => setFProductionDays(Math.max(1, Number(e.target.value) || 1))}
               />
             </div>
+            )}
 
             <div className="h-px bg-[#f0f0ec]" />
 
@@ -2659,6 +2685,81 @@ export default function B2BCalculatorPage() {
               </details>
             )}
 
+            {/* Панель быстрого расчёта (Расчёт B2B): себестоимость без НДС из B2B →
+                наценка/налог → цена изделия + монтаж/доставка/подъём. */}
+            {variant === 'mglass' && totals && (() => {
+              // Себестоимость для розницы M-Glass = ИТОГ B2B-расчёта С НДС: это реальная цена,
+              // по которой M-Glass покупает у своего производства (две сделки, две маржи —
+              // не двойной счёт). Поэтому totalAfterDiscount (сумма effectiveItemTotal), не ex-VAT.
+              const b2bTotal = totals.totalAfterDiscount
+              const m = Number(mgMargin) || 0, tx = Number(mgTax) || 0
+              const denom = 1 - m / 100 - tx / 100
+              const finM = calcFinancialModel({ directCost: b2bTotal, marginPercent: m, taxPercent: tx })
+              const productPrice = finM ? finM.basePrice : 0
+              const install = (Number(mgPerSection) || 0) * (Number(mgSections) || 0)
+              const deliveryN = Number(mgDelivery) || 0, liftN = Number(mgLift) || 0
+              const grand = Math.round(productPrice + install + deliveryN + liftN)
+              const blocked = denom <= 0
+              const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all'
+              const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
+              return (
+                <div className="ac-card p-6 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-[15px] font-semibold text-[#111110]">Быстрый расчёт</h3>
+                    <span className="text-[11px] text-[#9a9a95]">маржа/налог на новом просчёте → 40/12</span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-[#6b6b66]">Себестоимость изделия <span className="text-[#9a9a95]">(из расчёта B2B, с НДС — почём для M-Glass)</span></span>
+                    <span className="font-mono font-semibold text-[#111110]">{fmt(b2bTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-[13px]">
+                    <span className="text-[#6b6b66]">Фурнитура</span>
+                    <span className="font-mono text-[#9a9a95]" title="Входит в себестоимость B2B (зеркало — под ключ). Считается только монтаж за секцию.">—</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className={lbl}>Маржа, %</label>
+                      <input type="number" className={fld} value={mgMargin} onChange={e => setMgMargin(e.target.value)} /></div>
+                    <div><label className={lbl}>Налог, %</label>
+                      <input type="number" className={fld} value={mgTax} onChange={e => setMgTax(e.target.value)} /></div>
+                  </div>
+
+                  {blocked ? (
+                    <p className="text-[12px] text-red-600">Маржа + налог ≥ 100% — цена не считается.</p>
+                  ) : (
+                    <div className="flex items-center justify-between text-[13px] pt-1">
+                      <span className="text-[#6b6b66]">Цена изделия <span className="text-[#9a9a95]">= себест ÷ (1 − {m}% − {tx}%)</span></span>
+                      <span className="font-mono font-semibold text-[#111110]">{fmt(productPrice)}</span>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-[#f0f0ec]" />
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><label className={lbl}>Монтаж за секцию, ₽</label>
+                      <input type="number" className={fld} value={mgPerSection} onChange={e => setMgPerSection(e.target.value)} placeholder="0" /></div>
+                    <div><label className={lbl}>Секций</label>
+                      <input type="number" className={fld} value={mgSections} onChange={e => setMgSections(e.target.value)} /></div>
+                    <div><label className={lbl}>Доставка, ₽</label>
+                      <input type="number" className={fld} value={mgDelivery} onChange={e => setMgDelivery(e.target.value)} placeholder="0" /></div>
+                    <div><label className={lbl}>Подъём, ₽</label>
+                      <input type="number" className={fld} value={mgLift} onChange={e => setMgLift(e.target.value)} placeholder="0" /></div>
+                  </div>
+                  {install > 0 && (
+                    <div className="flex items-center justify-between text-[12px] text-[#6b6b66]">
+                      <span>Монтаж</span><span className="font-mono">{fmt(install)}</span>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-[#f0f0ec]" />
+                  <div className="flex items-center justify-between">
+                    <span className="text-[14px] font-semibold text-[#111110]">К оплате</span>
+                    <span className="text-[22px] font-bold font-mono text-[#111110]">{fmt(grand)}</span>
+                  </div>
+                </div>
+              )
+            })()}
+
             {/* Итоговый блок + кнопка сохранить */}
             {totals && (
               <div className="ac-card p-6 space-y-4">
@@ -3447,4 +3548,8 @@ export default function B2BCalculatorPage() {
       )}
     </>
   )
+}
+
+export default function Page() {
+  return <Suspense fallback={null}><B2BCalculatorPage variant="b2b" /></Suspense>
 }
