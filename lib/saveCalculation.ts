@@ -26,7 +26,7 @@ function assertPayloadIntegrity(p: {
 }
 
 type SavePayload = {
-  product_type: 'mirror' | 'loft' | 'shower' | 'railing'
+  product_type: 'mirror' | 'loft' | 'shower' | 'railing' | 'quick'
   input_data: Record<string, unknown>
   cost_breakdown: Record<string, unknown>
   financial_breakdown: Record<string, unknown>
