@@ -1,0 +1,33 @@
+- generic [active] [ref=f10e1]:
+  - generic [ref=f10e2]:
+    - complementary [ref=f10e3]:
+      - generic [ref=f10e4]:
+        - link "MG MGlass" [ref=f10e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f10e6]: MG
+          - generic [ref=f10e8]: MGlass
+        - generic [ref=f10e9]:
+          - generic [ref=f10e10]:
+            - button "СЕО" [ref=f10e11]
+            - button "CFO" [ref=f10e12]
+            - button "Админ" [ref=f10e13]
+          - generic [ref=f10e14]:
+            - button "Менеджер" [ref=f10e15]
+            - button "Произв." [ref=f10e16]
+            - button "Замерщик" [ref=f10e17]
+      - navigation [ref=f10e18]:
+        - link "🔒 Влад" [ref=f10e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f10e21]: 🔒
+          - generic [ref=f10e22]: Влад
+        - button "Справочники" [ref=f10e24]
+        - button "B2B" [ref=f10e29]
+        - button "Операции" [ref=f10e34]
+      - generic [ref=f10e38]:
+        - generic [ref=f10e39]:
+          - generic [ref=f10e40]: A
+          - paragraph [ref=f10e42]: admin@mglass.ru
+        - button "Выйти" [ref=f10e43]
+    - main [ref=f10e44]:
+      - generic [ref=f10e45]: Загрузка...
+  - alert [ref=f10e46]

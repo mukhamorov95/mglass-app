@@ -1,0 +1,72 @@
+- generic [active] [ref=f24e1]:
+  - generic [ref=f24e2]:
+    - complementary [ref=f24e3]:
+      - generic [ref=f24e4]:
+        - link "MG MGlass" [ref=f24e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f24e6]: MG
+          - generic [ref=f24e8]: MGlass
+        - generic [ref=f24e9]:
+          - generic [ref=f24e10]:
+            - button "СЕО" [ref=f24e11]
+            - button "CFO" [ref=f24e12]
+            - button "Админ" [ref=f24e13]
+          - generic [ref=f24e14]:
+            - button "Менеджер" [ref=f24e15]
+            - button "Произв." [ref=f24e16]
+            - button "Замерщик" [ref=f24e17]
+      - navigation [ref=f24e18]:
+        - link "🔒 Влад" [ref=f24e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f24e21]: 🔒
+          - generic [ref=f24e22]: Влад
+        - button "MGlass" [ref=f24e24]
+        - button "B2B" [ref=f24e32]
+      - generic [ref=f24e38]:
+        - generic [ref=f24e39]:
+          - generic [ref=f24e40]: A
+          - paragraph [ref=f24e42]: admin@mglass.ru
+        - button "Выйти" [ref=f24e43]
+    - main [ref=f24e44]:
+      - generic [ref=f24e46]:
+        - generic [ref=f24e47]:
+          - heading "Пульт продвижения" [level=1] [ref=f24e48]
+          - paragraph [ref=f24e49]: "Производство контента: сценарий → кадры → озвучка → монтаж → публикация."
+        - generic [ref=f24e50]:
+          - generic [ref=f24e51]:
+            - generic [ref=f24e52]: Higgsfield · производство кадров и озвучки
+            - generic [ref=f24e53]: проверено 3 сент., 20:03
+          - paragraph [ref=f24e54]: 0,44 кредита · план free · одна озвученная фраза стоит 0,3 — на производство не хватает
+          - paragraph [ref=f24e55]: Пока баланса не хватает, генерация кадров и озвучки не запускается. Сценарии и раскадровка при этом делаются как обычно — они не стоят кредитов.
+          - link "Все платные сервисы →" [ref=f24e56] [cursor=pointer]:
+            - /url: /admin/services
+        - generic [ref=f24e57]:
+          - heading "Что в работе" [level=2] [ref=f24e58]
+          - generic [ref=f24e59]:
+            - generic [ref=f24e60]:
+              - paragraph [ref=f24e61]: "0"
+              - paragraph [ref=f24e62]: Идея
+              - paragraph [ref=f24e63]: заведена, сценария нет
+            - generic [ref=f24e64]:
+              - paragraph [ref=f24e65]: "2"
+              - paragraph [ref=f24e66]: Сценарий
+              - paragraph [ref=f24e67]: готов, ждёт кадров
+            - generic [ref=f24e68]:
+              - paragraph [ref=f24e69]: "0"
+              - paragraph [ref=f24e70]: Кадры
+              - paragraph [ref=f24e71]: генерация изображений
+            - generic [ref=f24e72]:
+              - paragraph [ref=f24e73]: "0"
+              - paragraph [ref=f24e74]: Монтаж
+              - paragraph [ref=f24e75]: сборка и субтитры
+            - generic [ref=f24e76]:
+              - paragraph [ref=f24e77]: "0"
+              - paragraph [ref=f24e78]: Опубликован
+        - generic [ref=f24e79]:
+          - link "AI Video Factory →" [ref=f24e80] [cursor=pointer]:
+            - /url: /marketing/video-factory
+          - link "Регламент" [ref=f24e81] [cursor=pointer]:
+            - /url: /marketing/promo/guide
+          - link "Медиабиблиотека" [ref=f24e82] [cursor=pointer]:
+            - /url: /marketing/media-library
+  - alert [ref=f24e83]
