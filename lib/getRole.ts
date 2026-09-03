@@ -154,6 +154,12 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/calculator/loft',
     '/calculator/railing',
     '/calculations',
+    // Сделка (B2C) — карточка, в которую собираются просчёты, КП, замер, чертёж,
+    // документы и деньги по одному объекту. Заводится на первом просчёте, когда
+    // заказа ещё нет; у одного клиента их может быть несколько. Права открыты
+    // до появления экранов — иначе менеджер увидит «нет доступа» в день выката.
+    '/deals',
+    '/deal',
     '/cart',            // корзина мультизаказа B2C + «КП (PDF)» (/cart/print) — без неё менеджер не сформирует КП
     '/orders',
     '/clients',
@@ -228,6 +234,10 @@ export const ROLE_ALLOWED: Record<Role, string[]> = {
     '/commercial',
     '/b2b-invoices',
     '/b2b-deal',
+    // B2C-сделки рядом с B2B: коммерческий смотрит воронку целиком, иначе
+    // половина её просто не видна.
+    '/deals',
+    '/deal',
     '/inventory',
     '/b2b-growth',
     '/installations',
