@@ -56,7 +56,7 @@ describe('kit — количества из геометрии', () => {
     expect(q.roleQty['mount-wall']).toBeGreaterThan(0)
     expect(q.roleQty['mount-glass']).toBeGreaterThan(0)
     expect(q.roleQty['mount-corner']).toBeGreaterThan(0)
-    expect(q.roleQty['cap-end']).toBe(2)                            // торцевые — по открытому торцу напольного профиля
+    expect(q.roleQty['cap-end']).toBe(0)                            // торцевая — только вручную, геометрия её не требует
     expect(q.barPieces.cap).toEqual([650])                          // погонная — только проём двери 600 + запас
     expect(q.roleQty.roller).toBe(0)          // распашная — роликов нет
   })
@@ -69,11 +69,14 @@ describe('kit — количества из геометрии', () => {
     expect(q.barPieces['seal-bottom']).toEqual([600])    // ширина двери
   })
 
-  it('М10 (раздвижная): ролики есть, петель нет', () => {
+  it('М10 (раздвижная): ролики есть, петель нет; нижний уплотнитель и крепления НЕ требуются', () => {
     const q = computeKitQuantities(buildFromModel(getModel('М10'), { width: 1400, height: 2000 }, 8), 8, getModel('М10'))
     expect(q.roleQty.roller).toBeGreaterThan(0)
     expect(q.roleQty.hinge).toBe(0)
     expect(q.slideDoors).toBe(1)
+    expect(q.roleQty['seal-bottom']).toBe(0)      // нижний — только распашные
+    expect(q.roleQty['mount-wall']).toBe(0)       // входит в раздвижной комплект
+    expect(q.roleQty['mount-glass']).toBe(0)
   })
 
   it('петель больше на широкой и высокой двери', () => {
@@ -170,10 +173,10 @@ describe('kit — расчёт по комплекту модели', () => {
   it('роль помечена «не используется» — предупреждения нет', () => {
     const q = computeKitQuantities(m7(), 8, getModel('М7'))
     const kit = kitM7()
-    kit.slots = kit.slots.filter(s => s.role !== 'cap-end')
-    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(true)
-    kit.excluded = ['cap-end']
-    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'cap-end')).toBe(false)
+    kit.slots = kit.slots.filter(s => s.role !== 'seal-bottom')     // нижний уплотнитель геометрия требует
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'seal-bottom')).toBe(true)
+    kit.excluded = ['seal-bottom']
+    expect(computeKitPrice(q, LIB, kit, RATES, FIN, { finishId: 'chrome' }).missing.some(m => m.role === 'seal-bottom')).toBe(false)
   })
 
   it('роль модели нужна, а слота нет — попадает в missing (не уедет дешевле себестоимости)', () => {
@@ -376,8 +379,40 @@ describe('kit — профиль одним слотом и торцевая з�
     expect(p.missing.some(m => m.role === 'profile')).toBe(false)
   })
 
-  it('М1: торцевая заглушка одна — на открытый торец напольного профиля', () => {
+  it('М1: торцевая заглушка НЕ авто-требуется (ставится вручную)', () => {
     const q = computeKitQuantities(buildFromModel(getModel('М1'), { width: 1000, height: 2000 }, 8), 8, getModel('М1'))
-    expect(q.roleQty['cap-end']).toBe(1)
+    expect(q.roleQty['cap-end']).toBe(0)   // торцевая больше не авто-требуется даже у стационара
+  })
+})
+
+describe('kit — уплотнители по КАЖДОЙ створке (решает состав ролей, не геометрия)', () => {
+  it('раздвижная М8: магнитный и петлевой доступны по створкам, не только нижний', () => {
+    const c = getModel('М8').constraints
+    const q = computeKitQuantities(buildFromModel(getModel('М8'), { width: 1200, height: 2000, width2: c.needsWidth2 ? 1200 : undefined }, 8), 8, getModel('М8'))
+    expect(q.slideDoors).toBeGreaterThan(0)
+    expect((q.barPieces['seal-magnet'] ?? []).length).toBeGreaterThan(0)   // раньше было пусто — теперь по створкам
+    expect((q.barPieces['seal-hinge'] ?? []).length).toBeGreaterThan(0)
+    expect((q.barPieces['seal-bottom'] ?? []).length).toBe(0)             // нижний на раздвижную НЕ ставится
+    expect(q.barPieces['seal-magnet']!.every(v => v === 2000)).toBe(true) // вертикальные — по высоте створки
+  })
+
+  it('Вера задаёт «фиксированное 1» магнитному на угловой М8 — один кусок, не по-створочно', () => {
+    const c = getModel('М8').constraints
+    const q = computeKitQuantities(buildFromModel(getModel('М8'), { width: 1200, height: 2000, width2: c.needsWidth2 ? 1200 : undefined }, 8), 8, getModel('М8'))
+    const lib: Library = { items: [{ id: 'm', name: 'Магнитный', role: 'seal-magnet', stocks: [{ len: 2200, prices: { chrome: 1028 } }] }] }
+    const perDoor: ModelKit = { slots: [{ role: 'seal-magnet', select: 'one', entries: [{ itemId: 'm', qty: { mode: 'role' }, primary: true }] }] }
+    const fixedOne: ModelKit = { slots: [{ role: 'seal-magnet', select: 'one', entries: [{ itemId: 'm', qty: { mode: 'fixed', n: 1 }, primary: true }] }] }
+    const pPer = computeKitPrice(q, lib, perDoor, RATES, FIN, { finishId: 'chrome' })
+    const pOne = computeKitPrice(q, lib, fixedOne, RATES, FIN, { finishId: 'chrome' })
+    expect(pPer.lines[0].plan!.reduce((s, b) => s + b.pieces.length, 0)).toBe(2)   // по-створочно = 2
+    expect(pOne.lines[0].plan!.reduce((s, b) => s + b.pieces.length, 0)).toBe(1)   // Вера задала 1
+    expect(pOne.total).toBeLessThan(pPer.total)
+  })
+
+  it('распашная М7 не изменилась: три уплотнителя как были', () => {
+    const q = computeKitQuantities(m7(), 8, getModel('М7'))
+    expect(q.barPieces['seal-magnet']).toEqual([2000])
+    expect(q.barPieces['seal-hinge']).toEqual([2000])
+    expect(q.barPieces['seal-bottom']).toEqual([600])
   })
 })

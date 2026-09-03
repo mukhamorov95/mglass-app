@@ -22,7 +22,7 @@ type View = 'quotes' | 'inwork' | 'shipped'
 
 const ARCHIVE_DAYS = 14
 const fmtMoney = (n: number) => n > 0 ? Math.round(n).toLocaleString('ru-RU') + ' ₽' : '—'
-const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+const fmtDate = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 const ageDays = (s: string) => (Date.now() - new Date(s).getTime()) / 86400000
 
 const LANE_LABEL: Record<Lane, string> = {

@@ -78,7 +78,7 @@ export default function MeasureCalendarPage() {
             <div key={d.toISOString()}
               className={`rounded-lg p-2.5 border ${isToday ? 'border-[#111110] bg-white' : items.length ? 'border-[#e4e4e0] bg-white' : 'border-[#f0f0ec] bg-[#fafaf8]'}`}>
               <p className="text-[11px] font-bold capitalize">
-                {d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' })}
+                {d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'short', day: 'numeric', month: 'short' })}
                 {isToday && <span className="ml-1.5 text-[9px] font-bold uppercase tracking-wider text-emerald-600">сегодня</span>}
               </p>
               {items.length === 0 ? <p className="text-[11px] text-[#c4c4be] mt-1">свободно</p> : (
@@ -86,7 +86,7 @@ export default function MeasureCalendarPage() {
                   {items.map(r => (
                     <div key={r.id} className="border-l-2 border-[#111110] pl-2">
                       <p className="text-[11px] font-semibold">
-                        <span className="font-mono">{new Date(r.scheduled_at!).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span className="font-mono">{new Date(r.scheduled_at!).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}</span>
                         {' '}{r.status === 'done' ? '✅' : r.status === 'issue' ? '⚠️' : ''} {r.deal_number || `#${r.id}`} · {r.client_name}
                       </p>
                       {r.measurer_name && <p className="text-[10px] text-[#6b6b66]">📏 {r.measurer_name}</p>}

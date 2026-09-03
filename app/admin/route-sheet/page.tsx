@@ -22,7 +22,7 @@ export default async function RouteSheetPage() {
     .not('delivery_address', 'is', null)
     .order('created_at', { ascending: true })
 
-  const today = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const today = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
   type RouteOrder = {
     id: number; number: string; client_name: string | null; client_phone: string | null
     delivery_address: string | null; total_sale_price: number; payment_status: string | null

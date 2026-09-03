@@ -37,7 +37,7 @@ const dayLabel = (d: string) => {
   if (d === TODAY) return 'Сегодня'
   const date = new Date(d + 'T00:00:00')
   const tomorrow = new Date(new Date(TODAY + 'T00:00:00').getTime() + 86400000).toISOString().slice(0, 10)
-  const label = date.toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })
+  const label = date.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long' })
   return (d === tomorrow ? 'Завтра · ' : '') + label.charAt(0).toUpperCase() + label.slice(1)
 }
 

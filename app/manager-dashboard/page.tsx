@@ -360,7 +360,7 @@ export default function ManagerDashboardPage() {
                       <span className="text-[12px] w-24 shrink-0 text-[#6b6b66]">{KIND_LABEL[t.kind] ?? t.kind}</span>
                       <span className="text-[13px] text-[#111110] flex-1 truncate">{t.title}{t.crm_leads?.name ? ` · ${t.crm_leads.name}` : ''}</span>
                       <span className={`text-[11px] shrink-0 ${od ? 'text-red-600 font-semibold' : 'text-[#9a9a95]'}`}>
-                        {od ? 'просрочено' : new Date(t.due_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}
+                        {od ? 'просрочено' : new Date(t.due_at).toLocaleTimeString('ru-RU', { timeZone: 'Europe/Moscow', hour: '2-digit', minute: '2-digit' })}
                       </span>
                     </Link>
                   )
@@ -446,7 +446,7 @@ export default function ManagerDashboardPage() {
                       <div>
                         <p className="text-[13px] font-medium text-[#111110]">{q.client_name}</p>
                         <p className="text-[11px] text-[#9a9a95] mt-0.5">
-                          {new Date(q.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' })}
+                          {new Date(q.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'short' })}
                         </p>
                         {manager && !myOnly && (
                           <p className="text-[10px] text-[#c4c4be] mt-0.5">{manager}</p>

@@ -66,6 +66,19 @@ export async function saveKit(tier: Tier, code: string, kit: ModelKit, updatedBy
   if (error) throw new Error(error.message)
 }
 
+// Сохранить ВСЕ комплекты тарифа разом. Нужно, потому что правки «во все модели» и
+// «заполнить из другого тарифа» меняют не одну модель — при сохранении только текущей
+// остальные терялись бы при перезагрузке. Одним upsert'ом всё, что реально изменил владелец.
+export async function saveAllKits(tier: Tier, kits: Record<string, ModelKit>, updatedBy: string): Promise<void> {
+  const rows = Object.entries(kits).map(([code, kit]) => ({
+    tier, model_code: code, kit, updated_by: updatedBy, updated_at: new Date().toISOString(),
+  }))
+  if (rows.length === 0) return
+  const supabase = createServiceClient()
+  const { error } = await supabase.from('configurator_model_kits').upsert(rows, { onConflict: 'tier,model_code' })
+  if (error) throw new Error(error.message)
+}
+
 export async function getKitStore(tier: Tier): Promise<{ library: Library; rates: KitRates; kits: Record<string, ModelKit>; seeded: boolean }> {
   const { library, rates, seeded } = await getLibrary(tier)
   return { library: library ?? emptyLibrary(), rates, kits: await getAllKits(tier, library), seeded }

@@ -280,7 +280,7 @@ function getDeadlineStatus(order: Order): {
   const today   = new Date(); today.setHours(0, 0, 0, 0)
   const planDay = new Date(planned); planDay.setHours(0, 0, 0, 0)
   const daysDiff = Math.round((planDay.getTime() - today.getTime()) / 86400000)
-  const plannedReadyDate = planned.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  const plannedReadyDate = planned.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   if (daysDiff < 0)  return { status: 'overdue',  label: `Просрочен на ${Math.abs(daysDiff)} дн.`, plannedReadyDate, daysDiff }
   if (daysDiff === 0) return { status: 'today',   label: 'Срок сегодня',                           plannedReadyDate, daysDiff }
   if (daysDiff === 1) return { status: 'tomorrow', label: 'Срок завтра',                            plannedReadyDate, daysDiff }
@@ -300,7 +300,7 @@ function requiresDeadlineControl(order: Order): boolean {
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
 const fmt = (n: number) => (n ?? 0).toLocaleString('ru-RU') + ' ₽'
 function fmtDate(s: string) {
-  return new Date(s).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 }
 
 function tomorrowDateStr() {
@@ -1614,7 +1614,7 @@ export default function B2BOrdersPage() {
     const quoteDate = fmtDate(order.created_at)
     const launchedDate = pn.launched_at ? fmtDate(pn.launched_at) : null
     const deadline = getDeadline(pn.launched_at, pn.production_days)
-    const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' }) : null
+    const deadlineStr = deadline ? deadline.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' }) : null
     const daysLeft = deadline && nowTs ? Math.ceil((deadline.getTime() - nowTs) / 86400000) : null
     const isShipped = !!pn.stages?.shipped
     const finalPrice = getFinalPrice(order)
@@ -1897,7 +1897,7 @@ export default function B2BOrdersPage() {
                   {stage.label}
                   {done && doneDate && (
                     <span className="text-[8px] font-normal opacity-60 leading-none">
-                      {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                      {new Date(doneDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                     </span>
                   )}
                 </button>
@@ -2183,7 +2183,7 @@ export default function B2BOrdersPage() {
           const last = pn.bulk_actions[pn.bulk_actions.length - 1]
           return (
             <p className="text-[10px] text-[#b0b0aa]">
-              Массово отгружен: {new Date(last.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })} · {formatMonthKey(last.month_key)} · {last.created_by}
+              Массово отгружен: {new Date(last.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })} · {formatMonthKey(last.month_key)} · {last.created_by}
             </p>
           )
         })()}
@@ -2437,7 +2437,7 @@ export default function B2BOrdersPage() {
                             {dc.next_action && <span>→ {dc.next_action}</span>}
                             {dc.responsible && <span className="font-medium text-[#111110]">{dc.responsible}</span>}
                             {dc.next_check_date && (
-                              <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}</span>
+                              <span>📅 {new Date(dc.next_check_date + 'T00:00:00').toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}</span>
                             )}
                           </div>
                         )}
@@ -2650,7 +2650,7 @@ export default function B2BOrdersPage() {
                             {stage.label}
                             {done && doneDate && (
                               <span className="text-[8px] font-normal opacity-60 leading-none">
-                                {new Date(doneDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                                {new Date(doneDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                               </span>
                             )}
                           </button>

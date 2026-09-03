@@ -53,7 +53,7 @@ const orderNo = (o: OrderLite | undefined, id: number) => o?.custom_number?.trim
 const fmtDateTime = (s: string | null) => {
   if (!s) return ''
   const d = new Date(s)
-  return isNaN(d.getTime()) ? '' : d.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
+  return isNaN(d.getTime()) ? '' : d.toLocaleString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
 function specLine(item?: Partial<B2BOrderItem>): string {

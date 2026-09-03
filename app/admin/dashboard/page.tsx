@@ -198,7 +198,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="text-[20px] font-semibold text-[#111110]">Дашборд</h1>
           <p className="text-[13px] text-[#8a8a85] mt-0.5">
-            {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' })}
+            {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long' })}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -400,7 +400,7 @@ export default function DashboardPage() {
                       {c.manager && <span className="text-[10px] text-[#b4b4b0] truncate">{c.manager}</span>}
                     </div>
                     <p className="text-[11px] text-[#9a9a95]">
-                      {new Date(c.created_at).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}
+                      {new Date(c.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}
                     </p>
                   </div>
                   <div className="text-right flex-shrink-0">

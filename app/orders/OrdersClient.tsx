@@ -190,7 +190,7 @@ export default function OrdersClient({ orders, isAdmin, usersMap }: Props) {
                       </span>
                     </p>
                     <p className="text-[11px] text-[#b4b4b0] mt-0.5">
-                      {new Date(order.created_at).toLocaleDateString('ru-RU')}
+                      {new Date(order.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
                     </p>
                   </div>
                 </div>

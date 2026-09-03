@@ -1,4 +1,5 @@
 import ProductionTabs from '@/components/ProductionTabs'
+import { mskTime, mskDayShort, mskDayKey, mskDayKeyAgo } from '@/lib/time'
 import CrewInviteButton from './CrewInviteButton'
 import { getUserProfile, isOwnerRole } from '@/lib/getRole'
 import { createServiceClient } from '@/lib/supabase-service'
@@ -20,29 +21,33 @@ import { stageLabel } from '@/lib/productionStages'
 
 export const dynamic = 'force-dynamic'
 
-type Row = { stage_key: string; completed_at: string; completed_by_name: string | null; order_id: number }
+type Row = { stage_key: string; completed_at: string; completed_by_name: string | null; order_id: number; auto_closed: boolean | null }
 type Crew = {
   user_id: string; name: string | null; stations: string[] | null
   last_sign_in: string | null; marks_total: number; marks_7d: number; queue_open: number
 }
 
-const NO_NAME = 'Без имени'
-function dayKey(iso: string): string { return iso.slice(0, 10) }
-function todayKey(): string { return new Date().toISOString().slice(0, 10) }
-function daysAgoKey(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10) }
+// Каскад — не человек. Когда мастер закрывает свой этап, все предыдущие этапы
+// детали закрываются автоматически и БЕЗ исполнителя: их физически никто не
+// отмечал, приписать их кому-то — исказить выработку. Но на этом экране такая
+// строка выглядела как работник по имени «Без имени», и владелец принял её за
+// Адилета: «проверь, это он?». Не он — это закалка и полировка, закрытые
+// каскадом от упаковки Никиты.
+const CASCADE_ROW = 'Закрыто автоматически'
+// Всё время — московское. Экран рендерится на сервере, а он в UTC: getHours()
+// показывал цеху 07:43 вместо 10:43, а группировка по iso.slice(0,10) относила
+// вечернюю отметку к предыдущему дню.
+const dayKey = mskDayKey
+const todayKey = (): string => mskDayKey()
+const daysAgoKey = (n: number): string => mskDayKeyAgo(n)
 function daysAgoISO(n: number): string { return new Date(Date.now() - n * 86_400_000).toISOString() }
-function fmtDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
-}
-function timeOf(iso: string): string {
-  const d = new Date(iso)
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-}
+const fmtDay = mskDayShort
+const timeOf = mskTime
 
 export default async function ShopActivityPage() {
   const svc = createServiceClient()
   const { data } = await svc.from('production_tasks')
-    .select('stage_key, completed_at, completed_by_name, order_id')
+    .select('stage_key, completed_at, completed_by_name, order_id, auto_closed')
     .not('completed_at', 'is', null)
     .gte('completed_at', daysAgoISO(7))
     .order('completed_at', { ascending: false })
@@ -68,7 +73,7 @@ export default async function ShopActivityPage() {
   // Кто сколько закрыл: сегодня / вчера / за неделю + разбивка по этапам за сегодня.
   const byPerson = new Map<string, { today: number; yest: number; week: number; stages: Map<string, number> }>()
   for (const r of rows) {
-    const who = r.completed_by_name?.trim() || NO_NAME
+    const who = r.auto_closed ? CASCADE_ROW : (r.completed_by_name?.trim() || CASCADE_ROW)
     let p = byPerson.get(who)
     if (!p) { p = { today: 0, yest: 0, week: 0, stages: new Map() }; byPerson.set(who, p) }
     p.week++
@@ -135,7 +140,11 @@ export default async function ShopActivityPage() {
                     <span className="text-[11px] text-[#9a9a95] w-20 text-right shrink-0 tabular-nums">
                       {c.queue_open > 0 ? `${c.queue_open} в очереди` : ''}
                     </span>
-                    {isOwner && never && <CrewInviteButton userId={c.user_id} name={c.name ?? 'сотрудника'} />}
+                    {/* Ссылка нужна не только тем, кто НИ РАЗУ не входил. Адилет заходил
+                        один раз 10.07 и с тех пор ни одной отметки: для него кнопки не было,
+                        хотя именно он и не может войти. Показываем всем, кто в приложении
+                        не работает — не заходил вовсе либо заходил, но не отмечает. */}
+                    {isOwner && (never || silent) && <CrewInviteButton userId={c.user_id} name={c.name ?? 'сотрудника'} />}
                   </div>
                 )
               })}
@@ -191,7 +200,7 @@ export default async function ShopActivityPage() {
               {feed.map((r, i) => (
                 <div key={i} className="flex items-center gap-2.5 text-[12.5px] py-1 border-b border-[#f5f5f3] last:border-0">
                   <span className="font-mono text-[#9a9a95] tabular-nums w-11 shrink-0">{timeOf(r.completed_at)}</span>
-                  <span className="text-[#111110] font-medium w-24 shrink-0 truncate">{r.completed_by_name?.trim() || NO_NAME}</span>
+                  <span className={`w-24 shrink-0 truncate ${r.auto_closed ? 'text-[#9a9a95] italic' : 'text-[#111110] font-medium'}`}>{r.auto_closed ? 'каскад' : (r.completed_by_name?.trim() || 'каскад')}</span>
                   <span className="text-[#6b6b66] flex-1 truncate">{stageLabel(r.stage_key)}</span>
                   <span className="font-mono text-[#9a9a95] shrink-0">#{r.order_id}</span>
                 </div>

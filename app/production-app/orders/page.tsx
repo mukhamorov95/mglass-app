@@ -21,7 +21,7 @@ type Me = { role: string | null; production_stations: string[] | null; productio
 
 const OWNER = new Set(['admin', 'ceo'])
 const OWNER_EMAIL = 'admin@mglass.ru'  // владелец опознаётся по email (см. lib/getRole)
-const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) }
+const fmtShort = (s: string | null) => { if (!s) return null; const d = new Date(s); return isNaN(d.getTime()) ? null : d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' }) }
 const itemsArr = (v: unknown): Item[] => Array.isArray(v) ? v as Item[] : []
 function specLine(it?: Item): string {
   if (!it) return ''

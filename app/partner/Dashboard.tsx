@@ -29,7 +29,7 @@ function ago(iso: string): string {
   if (days <= 0) return 'сегодня'
   if (days === 1) return 'вчера'
   if (days < 30) return `${days} ${plural(days, 'день', 'дня', 'дней')} назад`
-  return d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: '2-digit' })
+  return d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: '2-digit' })
 }
 
 function pill(o: Order): { cls: string; label: string } {

@@ -138,7 +138,7 @@ export default async function ClientsPage() {
                     </div>
                     {c.phone && <p className="text-[13px] text-[#9a9a95] mt-0.5">{c.phone}</p>}
                     <p className="text-[12px] text-[#b4b4b0] mt-0.5">
-                      Активность: {new Date(c.lastActivityAt).toLocaleDateString('ru-RU')}
+                      Активность: {new Date(c.lastActivityAt).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
                     </p>
                   </div>
                   <div className="text-right">

@@ -58,7 +58,7 @@ function marginColor(v: number | null) {
   if (v < 0.35) return 'text-amber-600'
   return 'text-emerald-600'
 }
-function dateRu(s: string | null) { return s ? new Date(s).toLocaleDateString('ru-RU') : '—' }
+function dateRu(s: string | null) { return s ? new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—' }
 
 export default function GlassPriceListsPage() {
   const [lists, setLists] = useState<PriceList[]>([])

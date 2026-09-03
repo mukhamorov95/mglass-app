@@ -9,7 +9,7 @@ import type { UserPermissions } from '@/lib/permissions'
 import { DEFAULT_PERMISSIONS } from '@/lib/permissions'
 import { hasB2BSalesScope, isAllClientsScope } from '@/lib/b2bScope'
 
-type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions }
+type Props = { userEmail: string; role: Role | null; permissions?: UserPermissions; canViewMoney?: boolean; referralRate?: number | null }
 type SyncState = 'idle' | 'loading' | 'ok' | 'error'
 type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
@@ -137,17 +137,6 @@ const SEO_ANALYTICS: NavItem[] = [
   { href: '/ai-sales',      label: 'AI Продажи',    icon: '🤝' },
 ]
 
-const SEO_MARKETING: NavItem[] = [
-  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
-  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
-  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
-  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
-  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
-  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
-  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
-  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
-  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
-]
 
 const SEO_AI: NavItem[] = [
   { href: '/ai-assistant',  label: 'AI Ассистент', icon: '🤖' },
@@ -174,22 +163,6 @@ const CFO_ITEMS: NavItem[] = [
 
 // ─── CEO role ─────────────────────────────────────────────────────────────────
 
-const CEO_OWNER: NavItem[] = [
-  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
-  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
-  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
-  { href: '/cfo',                     label: 'CFO Center',        icon: '💎' },
-  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
-  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
-  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
-  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
-  { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
-  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
-  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
-  { href: '/admin/activity-log',     label: 'Лог действий',   icon: '📋' },
-  { href: '/production-app',               label: 'Production App',      icon: '📱' },
-]
 
 const CEO_ANALYTICS: NavItem[] = [
   { href: '/marketing/seo', label: 'SEO · Заявки сайта', icon: '🌐' },
@@ -210,37 +183,7 @@ const CEO_SYSTEM: NavItem[] = [
 
 // ─── Admin mode: CEO view ─────────────────────────────────────────────────────
 
-const ADMIN_OWNER: NavItem[] = [
-  { href: '/admin/progress',          label: 'Прогресс работ',    icon: '🗺️' },
-  { href: '/admin/ai-control-center', label: 'AI Control Center', icon: '🧠' },
-  { href: '/admin/owner',             label: 'Owner Center',      icon: '👑' },
-  { href: '/admin/dashboard',         label: 'Дашборд',           icon: '📊' },
-  { href: '/admin/pnl',              label: 'P&L отчёт',       icon: '📈' },
-  { href: '/admin/cfo',              label: 'Финдиректор',      icon: '💰' },
-  { href: '/admin/analytics-mglass', label: 'Аналитика',       icon: '🔍' },
-  { href: '/admin/bonus-center',     label: 'Bonus Center',    icon: '🎁' },
-  { href: '/admin/sales-center',     label: 'Sales Center',    icon: '📣' },
-  { href: '/admin/sales-control',    label: 'Контроль продаж', icon: '📊' },
-  { href: '/admin/b2b-development',  label: 'B2B Development', icon: '🤝' },
-  { href: '/admin/org',              label: 'Оргструктура',    icon: '🏗️' },
-  { href: '/admin/users',            label: 'Пользователи',    icon: '👥' },
-  { href: '/admin/access-check',     label: 'Диагностика прав', icon: '🔎' },
-  { href: '/admin/activity-log',          label: 'Лог действий',        icon: '📋' },
-  { href: '/production-app',              label: 'Production App',      icon: '📱' },
-]
 
-const ADMIN_MARKETING: NavItem[] = [
-  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🌐' },
-  { href: '/marketing',               label: 'Marketing Center', icon: '📣' },
-  { href: '/marketing/content',       label: 'Контент-план',     icon: '📅' },
-  { href: '/marketing/video-factory', label: 'AI Video Factory', icon: '🎬' },
-  { href: '/marketing/media-library', label: 'Медиабиблиотека',  icon: '🖼️' },
-  { href: '/marketing/daily',         label: 'Дневной план AI',  icon: '✨' },
-  { href: '/marketing/partners',      label: 'Партнёры',         icon: '🤝' },
-  { href: '/marketing/promos',        label: 'Акции',            icon: '🎁' },
-  { href: '/marketing/tasks',         label: 'Задачи',           icon: '✅' },
-  { href: '/marketing/ai',            label: 'AI-маркетолог',    icon: '🤖' },
-]
 
 const ADMIN_VLADISLAV: NavItem[] = [
   { href: '/commercial',              label: 'Коммерческий',         icon: '📈' },
@@ -268,7 +211,19 @@ const ADMIN_SYSTEM: NavItem[] = [
   { href: '/admin/roadmap',             label: 'Roadmap',        icon: '🗺️' },
   { href: '/admin/adoption',            label: 'Внедрение',      icon: '📈' },
   { href: '/admin/infrastructure',      label: 'Техцентр',       icon: '⚙️' },
+  // Платные сервисы: что подключено, что даёт, сколько стоит и когда платить.
+  // Завели после 02.09.2026 — кредиты OpenAI кончились, и это выяснилось только
+  // по отказу функции. Сервис, о котором узнают в момент отказа, — сюрприз, а не сервис.
+  { href: '/admin/services',            label: 'Платные сервисы', icon: '💳' },
   { href: '/admin/shower-images',       label: 'Media Library',  icon: '🖼️' },
+  // Видеостудия: сценарий + озвучка → готовый файл. Ссылку ставим сразу — за неделю
+  // нашлось четыре живых экрана, на которые не вело ничего, и каждый выглядел как
+  // «функция пропала».
+  { href: '/admin/video-studio',        label: 'Видеостудия',    icon: '🎥' },
+  // Полнота просчёта: сколько позиций доходит до цеха с отметками, а сколько — вслепую.
+  // Мерилка обучения: без неё эффект ролика не отличить от того, что на неделе
+  // просто пришли другие чертежи.
+  { href: '/admin/quote-quality',       label: 'Полнота просчёта', icon: '📐' },
   { href: '/admin/agents',              label: 'AI-агенты',      icon: '⚡' },
   { href: '/admin/architecture',        label: 'Карта данных',   icon: '🗺️' },
 ]
@@ -322,6 +277,11 @@ const ADMIN_OPERATIONS: NavItem[] = [
   { href: '/admin/brigades',       label: 'Бригады',         icon: '👷' },
   { href: '/admin/delivery-zones', label: 'Зоны доставки',   icon: '🚗' },
   { href: '/admin/ideas',          label: 'Идеи цеха',       icon: '💡' },
+  // Выдача доступа в кабинет заказчику. Ссылки на этот экран не было НИ ОТКУДА:
+  // он открывался только по прямому адресу, которого никто не знал. Итог — 66
+  // клиентов B2B, 51 из них заказывал за последние 90 дней, а кабинет заведён
+  // у одного. Канал сбыта стоял закрытым не по решению, а по недосмотру.
+  { href: '/admin/b2b-access',     label: 'Доступ в кабинет клиенту', icon: '🔑' },
   { href: '/admin/referrals',      label: 'Реферальная программа', icon: '🤝' },
   { href: '/admin/referral-stats', label: 'Партнёры — сводка', icon: '📊' },
   { href: '/admin/security',       label: 'Безопасность',    icon: '🛡️' },
@@ -337,6 +297,7 @@ const PRODUCTION_NAV_SHOP: NavItem[] = [
   { href: '/production-app/orders',   label: 'Заказы',           icon: '📋' },
   { href: '/production-app/problems', label: 'Проблемы',         icon: '⚠️' },
   { href: '/production-app/board',    label: 'Обзор цеха',       icon: '🔧' },
+  { href: '/production-app/shipping', label: 'Отгрузка',            icon: '📦' },
   { href: '/production-app/voronezh', label: 'Доставка в Воронеж', icon: '🚚' },
   { href: '/production-app/scan',     label: 'Скан',             icon: '📷' },
   { href: '/production-app/activity', label: 'Кто что делал',    icon: '👥' },
@@ -363,8 +324,79 @@ const PRODUCTION_NAV_LEARN: NavItem[] = [
   { href: '/production-app/guide',    label: 'Регламент работы',      icon: '📘' },
 ]
 
-// Группа «Деньги» в навигации цеха убрана (П6): витрина финмодели CFO к работе смены
-// не относится. Экран /production-app/money на месте, доступен по прямому адресу.
+// Группа «Деньги» цеха. 26.08 её убрали из навигации с доводом «витрина финмодели
+// CFO к работе смены не относится». Обращение №4 от цеха (Бекмурза, 28.08) показало,
+// что довод неверен: по плану выручки формируется бонус, то есть к работе смены это
+// относится напрямую. Экран всё это время был на месте — но только по прямому адресу,
+// которого рабочий не знает; для него раздел просто исчез.
+// Ссылка возвращается ТОЛЬКО тем, кому владелец выдал право (users.can_view_money):
+// доступ никому не расширяется, восстанавливается лишь видимость уже выданного.
+const PRODUCTION_NAV_MONEY: NavItem[] = [
+  { href: '/production-app/money', label: 'Деньги и план', icon: '💰' },
+]
+
+// Партнёрка глазами владельца. Экраны существуют давно, но лежат в разделе
+// «Операции» — а владелец, стоя в рабочем месте «Производство», их там не видит
+// и считает, что их нет. Третий такой случай за неделю после «Денег» цеха и
+// кабинета Адилета: страница жива, попасть некуда.
+// Только владельцу: рабочие видят в этой же группе лишь «Деньги и план».
+const PRODUCTION_NAV_MONEY_OWNER: NavItem[] = [
+  { href: '/admin/referral-stats', label: 'Партнёры — сводка',      icon: '📊' },
+  { href: '/admin/referrals',      label: 'Реферальная программа',  icon: '🤝' },
+]
+
+// «Мой заработок» — кабинет партнёра: его клиенты, их оборот и начисление по ставке.
+// Ссылки на него не было в меню ВООБЩЕ, и Адилет сказал, что кабинет «пропал»:
+// страница жива, ставка 1% на месте, шесть приведённых им клиентов на месте —
+// попасть было некуда. Та же болезнь, что у «Денег» цеха.
+// Показываем только тем, у кого ставка задана: остальным это пустой экран.
+const PRODUCTION_NAV_REFERRAL: NavItem[] = [
+  { href: '/production-app/earnings', label: 'Мой заработок', icon: '🤝' },
+]
+
+// Раздел владельца — ОДИН на роли admin и ceo.
+//
+// Было два почти одинаковых списка: CEO_OWNER (14 пунктов) и ADMIN_OWNER (16),
+// из них 13 общих. Разошлись они не по смыслу, а по истории: у владельца есть обе
+// роли, и один и тот же экран честно перечислили в каждом списке. Переключаясь
+// между рабочими местами, он видел одно и то же под одним заголовком и не понимал,
+// где искать. Здесь объединение обоих: ни один экран не потерян.
+const OWNER_CENTER: NavItem[] = [
+  { href: '/admin/progress',              label: 'Прогресс работ',    icon: '📈' },
+  { href: '/admin/ai-control-center',     label: 'AI Control Center', icon: '🎛️' },
+  { href: '/admin/owner',                 label: 'Owner Center',      icon: '👑' },
+  { href: '/admin/dashboard',             label: 'Дашборд',           icon: '📊' },
+  { href: '/cfo',                         label: 'CFO Center',        icon: '💼' },
+  { href: '/admin/cfo',                   label: 'Финдиректор',       icon: '💰' },
+  { href: '/admin/pnl',                   label: 'P&L отчёт',         icon: '📑' },
+  { href: '/admin/analytics-mglass',      label: 'Аналитика',         icon: '📉' },
+  { href: '/admin/bonus-center',          label: 'Bonus Center',      icon: '🎁' },
+  { href: '/admin/sales-center',          label: 'Sales Center',      icon: '🏆' },
+  { href: '/admin/sales-control',         label: 'Контроль продаж',   icon: '🎯' },
+  { href: '/admin/b2b-development',       label: 'B2B Development',   icon: '🚀' },
+  { href: '/admin/org',                   label: 'Оргструктура',      icon: '🏛️' },
+  { href: '/admin/users',                 label: 'Пользователи',      icon: '👥' },
+  { href: '/admin/access-check',          label: 'Диагностика прав',  icon: '🔎' },
+  { href: '/admin/activity-log',          label: 'Лог действий',      icon: '🧾' },
+  { href: '/production-app',              label: 'Production App',    icon: '📱' },
+]
+
+// Маркетинг — ОДИН список на роли admin, ceo и seo.
+//
+// Было два: SEO_MARKETING (9) и ADMIN_MARKETING (10), совпадали полностью, кроме
+// одной строки. Здесь объединение — потерянных экранов нет.
+const MARKETING_CENTER: NavItem[] = [
+  { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🔍' },
+  { href: '/marketing',               label: 'Marketing Center',   icon: '📣' },
+  { href: '/marketing/content',       label: 'Контент-план',       icon: '📅' },
+  { href: '/marketing/video-factory', label: 'AI Video Factory',   icon: '🎬' },
+  { href: '/marketing/media-library', label: 'Медиабиблиотека',    icon: '🖼️' },
+  { href: '/marketing/daily',         label: 'Дневной план AI',    icon: '☀️' },
+  { href: '/marketing/partners',      label: 'Партнёры',           icon: '🤝' },
+  { href: '/marketing/promos',        label: 'Акции',              icon: '🏷️' },
+  { href: '/marketing/tasks',         label: 'Задачи',             icon: '✅' },
+  { href: '/marketing/ai',            label: 'AI-маркетолог',      icon: '🤖' },
+]
 
 // ─── Path helpers ─────────────────────────────────────────────────────────────
 
@@ -396,11 +428,11 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
-    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images'])) open.push('system')
+    if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
     if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
-    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
+    if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
   }
   return open
 }
@@ -458,7 +490,7 @@ function detectModeFromPath(pathname: string): ViewMode {
     pathname.startsWith('/admin/users') || pathname.startsWith('/admin/product-line') ||
     pathname.startsWith('/admin/b2b-presentation') || pathname.startsWith('/admin/roadmap') ||
     pathname.startsWith('/admin/pricing-manual') || pathname.startsWith('/admin/owner-questionnaire') ||
-    pathname.startsWith('/admin/infrastructure') || pathname.startsWith('/admin/shower-images') ||
+    pathname.startsWith('/admin/infrastructure') || pathname.startsWith('/admin/services') || pathname.startsWith('/admin/shower-images') || pathname.startsWith('/admin/video-studio') ||
     pathname.startsWith('/marketing') || pathname.startsWith('/vladislav') ||
     pathname.startsWith('/ai-stats')  || pathname.startsWith('/amo-analysis')
   ) return 'ceo'
@@ -468,7 +500,9 @@ function detectModeFromPath(pathname: string): ViewMode {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: Props) {
+export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, canViewMoney = false, referralRate = null }: Props) {
+  // Владелец видит в «Деньгах» цеха ещё и партнёрку — рабочие только план и ТБ.
+  const isOwner = role === 'admin' || role === 'ceo'
   const router   = useRouter()
   const pathname = usePathname()
 
@@ -823,6 +857,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', isOwner ? [...PRODUCTION_NAV_MONEY, ...PRODUCTION_NAV_MONEY_OWNER] : PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
+        {referralRate != null && accordion('prod_ref', 'Партнёрство', 'text-violet-700', 'text-violet-500', PRODUCTION_NAV_REFERRAL, 'bg-violet-50 text-violet-800 font-medium')}
       </>
     )
 
@@ -830,7 +866,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     if (role === 'seo') return (
       <>
         {accordion('analytics', 'Аналитика',      'text-blue-600',   'text-blue-400',   SEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
-        {accordion('marketing', 'Маркетинг',       'text-rose-600',   'text-rose-400',   SEO_MARKETING, 'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('marketing', 'Маркетинг',       'text-rose-600',   'text-rose-400',   MARKETING_CENTER, 'bg-rose-50 text-rose-700 font-medium')}
         {accordion('ai',        'AI Инструменты',  'text-violet-600', 'text-violet-400', SEO_AI,        'bg-violet-50 text-violet-700 font-medium')}
       </>
     )
@@ -838,7 +874,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
     // CEO
     if (role === 'ceo') return (
       <>
-        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', CEO_OWNER,     'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('owner',     'Owner Center', 'text-purple-600', 'text-purple-400', OWNER_CENTER,  'bg-purple-50 text-purple-700 font-medium')}
         {accordion('analytics', 'Аналитика',    'text-blue-600',   'text-blue-400',   CEO_ANALYTICS, 'bg-blue-50 text-blue-700 font-medium')}
         {accordion('system',    'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  CEO_SYSTEM,    'bg-[#f5f5f3] text-[#111110] font-medium')}
       </>
@@ -874,8 +910,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
 
     if (viewMode === 'ceo') return (
       <>
-        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', ADMIN_OWNER,        'bg-purple-50 text-purple-700 font-medium')}
-        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   ADMIN_MARKETING,    'bg-rose-50 text-rose-700 font-medium')}
+        {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', OWNER_CENTER,       'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   MARKETING_CENTER,   'bg-rose-50 text-rose-700 font-medium')}
         {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-medium')}
         {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-medium')}
         {accordion('system',      'Система',      'text-[#6b6b66]',  'text-[#c4c4be]',  ADMIN_SYSTEM,       'bg-[#f5f5f3] text-[#111110] font-medium')}
@@ -900,6 +936,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS }: 
         {accordion('prod_supply', 'Материал и документы', 'text-orange-600', 'text-orange-400', PRODUCTION_NAV_SUPPLY, 'bg-[#fff1e8] text-[#c2410c] font-medium')}
         {accordion('prod_team',   'Команда',              'text-emerald-600', 'text-emerald-400', PRODUCTION_NAV_TEAM, 'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('prod_learn',  'Обучение',             'text-blue-600',   'text-blue-400',   PRODUCTION_NAV_LEARN,  'bg-blue-50 text-blue-700 font-medium')}
+        {canViewMoney && accordion('prod_money', 'Деньги', 'text-emerald-700', 'text-emerald-500', isOwner ? [...PRODUCTION_NAV_MONEY, ...PRODUCTION_NAV_MONEY_OWNER] : PRODUCTION_NAV_MONEY, 'bg-emerald-50 text-emerald-800 font-medium')}
+        {referralRate != null && accordion('prod_ref', 'Партнёрство', 'text-violet-700', 'text-violet-500', PRODUCTION_NAV_REFERRAL, 'bg-violet-50 text-violet-800 font-medium')}
       </>
     )
 

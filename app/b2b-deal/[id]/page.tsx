@@ -16,7 +16,7 @@ import { parseNotes } from '@/lib/b2b/publicQuote'
 const ALLOWED = ['admin', 'ceo', 'manager', 'commercial', 'buyer', 'cfo']
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
-const dt = (v: string | null | undefined) => v ? new Date(v).toLocaleDateString('ru-RU') : '—'
+const dt = (v: string | null | undefined) => v ? new Date(v).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (

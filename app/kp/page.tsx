@@ -484,7 +484,7 @@ export default function KpPage() {
                         <div key={r.id} className="flex items-center justify-between px-4 py-2.5 hover:bg-[#fafaf9]">
                           <div className="min-w-0">
                             <p className="text-[13px] font-semibold text-[#111110] truncate">№ {r.number} · {(r.content?.title as string) ?? r.client_name ?? 'без названия'}</p>
-                            <p className="text-[11px] text-[#9a9a95]">{r.client_name ?? ''} · {r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU')}</p>
+                            <p className="text-[11px] text-[#9a9a95]">{r.client_name ?? ''} · {r.manager_name ?? ''} · {new Date(r.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
                           </div>
                           <div className="flex items-center gap-3 flex-shrink-0">
                             <span className="text-[13px] font-semibold text-[#111110]">{RUB(r.total ?? 0)} ₽</span>

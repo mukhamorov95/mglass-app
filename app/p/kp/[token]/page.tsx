@@ -8,7 +8,7 @@ import type { PublicQuote } from '@/lib/b2b/publicQuote'
 // прилетает менеджеру в просчёт (статус + комментарий).
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
-const date = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+const date = (iso: string) => new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
 
 function itemTitle(it: PublicQuote['items'][number]): string {
   const parts = [it.materialName || 'Стекло']

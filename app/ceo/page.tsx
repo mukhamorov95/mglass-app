@@ -47,7 +47,7 @@ export default function CeoPage() {
           <div>
             <h1 className="text-[16px] font-semibold text-[#111110] tracking-tight">CEO — Обзор бизнеса</h1>
             <p className="text-[12px] text-[#9a9a95] mt-0.5">
-              {new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              {new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             </p>
           </div>
           <Link href="/commercial"

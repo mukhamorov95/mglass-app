@@ -101,7 +101,7 @@ function ShipmentCard({ s, orders, clientNames, canMoney, onShipped, onDelete, o
       <div className="flex flex-wrap items-center gap-2 justify-between">
         <div>
           <span className="font-medium text-[#111110]">{s.title ?? `Партия ${s.id}`}</span>
-          {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU')}</span>}
+          {s.shipped_at && <span className="ml-2 text-[13px] text-emerald-700">отправлена {new Date(s.shipped_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</span>}
         </div>
         <div className="flex items-center gap-x-3 gap-y-1.5 text-[13px] flex-wrap">
           <span className="font-mono font-medium">
@@ -196,7 +196,7 @@ function readinessOf(parsed: NotesData, nowMs: number): Readiness {
   const days = Math.round((new Date(deadline).setHours(0, 0, 0, 0) - new Date(nowMs).setHours(0, 0, 0, 0)) / 86400000)
   if (days < 0) return { label: `Просрочен ${Math.abs(days)} дн.`, cls: 'bg-red-50 text-red-600 border-red-200' }
   if (days <= 1) return { label: days === 0 ? 'Срок сегодня' : 'Срок завтра', cls: 'bg-amber-50 text-amber-700 border-amber-200' }
-  return { label: `Готов ~${deadline.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`, cls: 'bg-[#f5f5f3] text-[#4b4b47] border-[#e4e4e0]' }
+  return { label: `Готов ~${deadline.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit' })}`, cls: 'bg-[#f5f5f3] text-[#4b4b47] border-[#e4e4e0]' }
 }
 
 export default function VoronezhPage() {
@@ -336,7 +336,7 @@ export default function VoronezhPage() {
     if (!newTripDate) return
     setSaving(true)
     const sb = createClient()
-    const title = `Воронеж к ${new Date(newTripDate).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })}`
+    const title = `Воронеж к ${new Date(newTripDate).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })}`
     const { data: ship, error } = await sb.from('delivery_shipments')
       .insert({ region: REGION, title, ship_date: newTripDate })
       .select('id')

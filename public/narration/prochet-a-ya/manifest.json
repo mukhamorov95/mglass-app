@@ -1,0 +1,86 @@
+[
+  {
+    "id": "a01",
+    "seconds": 8.6,
+    "chars": 117,
+    "source": "a01.wav"
+  },
+  {
+    "id": "a02",
+    "seconds": 18.4,
+    "chars": 156,
+    "source": "a02.wav"
+  },
+  {
+    "id": "a03",
+    "seconds": 16.9,
+    "chars": 216,
+    "source": "a03.wav"
+  },
+  {
+    "id": "a04",
+    "seconds": 32.3,
+    "chars": 355,
+    "source": "a04.wav"
+  },
+  {
+    "id": "a05",
+    "seconds": 28.6,
+    "chars": 277,
+    "source": "a05.wav"
+  },
+  {
+    "id": "a06",
+    "seconds": 11.4,
+    "chars": 143,
+    "source": "a06.wav"
+  },
+  {
+    "id": "a07",
+    "seconds": 12.4,
+    "chars": 188,
+    "source": "a07.wav"
+  },
+  {
+    "id": "a08",
+    "seconds": 26.1,
+    "chars": 241,
+    "source": "a08.wav"
+  },
+  {
+    "id": "a09",
+    "seconds": 15.8,
+    "chars": 167,
+    "source": "a09.wav"
+  },
+  {
+    "id": "a10",
+    "seconds": 14,
+    "chars": 162,
+    "source": "a10.wav"
+  },
+  {
+    "id": "a11",
+    "seconds": 16.7,
+    "chars": 225,
+    "source": "a11.wav"
+  },
+  {
+    "id": "a12",
+    "seconds": 15,
+    "chars": 150,
+    "source": "a12.wav"
+  },
+  {
+    "id": "a13",
+    "seconds": 27.7,
+    "chars": 325,
+    "source": "a13.wav"
+  },
+  {
+    "id": "a14",
+    "seconds": 16,
+    "chars": 162,
+    "source": "a14.wav"
+  }
+]

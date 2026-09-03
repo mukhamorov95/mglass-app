@@ -120,7 +120,7 @@ function formatDate(value: unknown): string {
   if (typeof value !== 'string' || !value) return '—'
   const d = new Date(value)
   if (Number.isNaN(d.getTime())) return '—'
-  return d.toLocaleDateString('ru-RU')
+  return d.toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
 }
 
 function paymentBadge(amount: number | null, paid: number | null): { label: string; cls: string } {
@@ -273,7 +273,7 @@ function buildSupplierPdfHtml(items: unknown): string {
   const totalArea   = list.reduce((sum, item) => sum + (sheetAreaTotal(item) ?? 0), 0)
   const totalWeight = list.reduce((sum, item) => sum + (sheetWeightTotal(item) ?? 0), 0)
 
-  const today = new Date().toLocaleDateString('ru-RU')
+  const today = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
 
   const tableRows = rows.map(row =>
     `<tr>

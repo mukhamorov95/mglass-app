@@ -32,7 +32,7 @@ export default function CartPrintPage() {
   if (items.length === 0) return <div className="flex items-center justify-center min-h-screen text-gray-400">Корзина пуста</div>
 
   const summary = aggregateOrder(items)
-  const date = new Date().toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' })
+  const date = new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', year: 'numeric' })
 
   return (
     <>

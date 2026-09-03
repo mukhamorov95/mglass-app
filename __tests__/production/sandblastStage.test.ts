@@ -35,6 +35,22 @@ describe('песочка как этап маршрута', () => {
   })
 })
 
+describe('вырезы ведут на станцию сверловки', () => {
+  it('вырез без отверстий всё равно доводит деталь до сверловщика', () => {
+    // Раньше признак ставился только по отверстиям, и такая деталь проходила мимо него.
+    expect(keys({ hasHoles: false, hasCutouts: true })).toContain('drilling')
+  })
+
+  it('ни отверстий, ни вырезов — сверловка отпадает', () => {
+    expect(keys({ hasHoles: false, hasCutouts: false })).not.toContain('drilling')
+  })
+
+  it('отверстия и вырезы вместе дают ОДНУ задачу, а не две', () => {
+    const r = keys({ hasHoles: true, hasCutouts: true })
+    expect(r.filter(k => k === 'drilling')).toHaveLength(1)
+  })
+})
+
 describe('признаки изделия определяют маршрут', () => {
   it('криволинейка только при shape=curved', () => {
     expect(keys({ shape: 'curved' })).toContain('curved')

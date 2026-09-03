@@ -93,17 +93,19 @@ export const STAGE_LABELS: Record<DetailStageKey, string> = {
 // Returns applicable stages for an item.
 // - tempering: только каленое и не зеркало.
 // - drilling: `!== false` (старые записи без поля hasHoles сохраняют сверловку — без регрессии).
+//   Вырезы ведут на ту же станцию: у сверловщика это его работа, и деталь с вырезом,
+//   но без отверстий, иначе прошла бы мимо него совсем.
 // - curved: только явно криволинейные изделия (shape === 'curved'); по умолчанию НЕ применяется.
 // - facet: только если у детали есть фацет (hasFacet === true).
 // - sandblast: песочка. Отдельная работа со своей оснасткой (макет → оракал → наклейка
 //   → пескоструй), идёт ДО закалки: закалённое стекло не пескоструят.
 // - triplex: только если деталь триплексная (hasTriplex === true).
 export function getApplicableStages(
-  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean },
+  item: { hasTempering?: boolean; materialName?: string; category?: string; hasHoles?: boolean; hasCutouts?: boolean; shape?: string; hasFacet?: boolean; hasTriplex?: boolean; hasSandblast?: boolean },
 ) {
   return PRODUCTION_STAGES.filter(s => {
     if (s.key === 'tempering') return itemNeedsTempering(item)
-    if (s.key === 'drilling')  return item.hasHoles !== false
+    if (s.key === 'drilling')  return item.hasHoles !== false || item.hasCutouts === true
     if (s.key === 'curved')    return item.shape === 'curved'
     if (s.key === 'facet')     return item.hasFacet === true
     if (s.key === 'sandblast') return item.hasSandblast === true
@@ -171,4 +173,14 @@ export function calcOrderProgress(
   const hasProblems    = itemList.some(p => p.hasProblem)
   const progressPct    = totalItems > 0 ? Math.round((completedItems / totalItems) * 100) : 0
   return { items: itemList, totalItems, completedItems, packedItems, progressPct, hasProblems }
+}
+
+// Подпись счётчика этапов на кнопке цеха. Живёт здесь, а не в компоненте:
+// её проверяет тест, и своя копия рядом с тестом разошлась бы с той, что видит
+// рабочий, — эту болезнь мы уже ловили на списке станций в админке.
+export function stageCountLabel(n: number): string {
+  const word = n % 10 === 1 && n % 100 !== 11 ? 'этап'
+    : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 'этапа'
+    : 'этапов'
+  return `${n} ${word}`
 }

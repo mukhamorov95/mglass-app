@@ -67,7 +67,7 @@ export default function PackingListPage() {
           </div>
           <div className="text-right text-[12px] text-[#6b6b66]">
             <p>M-GLASS</p>
-            <p>{new Date().toLocaleDateString('ru-RU')}</p>
+            <p>{new Date().toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
           </div>
         </div>
 
@@ -82,7 +82,7 @@ export default function PackingListPage() {
           </div>
           <div className="text-right">
             <p className="text-[#9a9a95]">Дата отгрузки</p>
-            <p className="font-semibold">{delivery.date ? new Date(delivery.date).toLocaleDateString('ru-RU') : '—'}</p>
+            <p className="font-semibold">{delivery.date ? new Date(delivery.date).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' }) : '—'}</p>
             <p className="text-[#9a9a95] mt-1.5">Позиций / штук / вес</p>
             <p className="font-semibold">
               {order.items.length} / {totalPcs} / {(order.total_weight ?? 0).toLocaleString('ru-RU', { maximumFractionDigits: 1 })} кг

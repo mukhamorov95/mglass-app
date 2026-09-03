@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { requireRole } from '@/lib/apiAuth'
 import { createClient } from '@/lib/supabase-server'
-import { getKitStore, saveLibrary, saveKit } from '@/lib/configurator/kitStore'
+import { getKitStore, saveLibrary, saveKit, saveAllKits } from '@/lib/configurator/kitStore'
 import { isRole, type Library, type ModelKit, type KitRates } from '@/lib/configurator/kit'
 import { M_MODELS } from '@/lib/configurator/arrangement'
 import type { Tier } from '@/lib/configurator/pricing'
@@ -25,6 +25,7 @@ export async function PUT(req: NextRequest) {
   if (guard instanceof NextResponse) return guard
   const body = await req.json().catch(() => null) as {
     tier?: string; library?: Library; rates?: KitRates; code?: string; kit?: ModelKit
+    kits?: Record<string, ModelKit>
   } | null
   if (!body || !isTier(body.tier ?? null)) return NextResponse.json({ error: 'tier обязателен' }, { status: 400 })
   const tier = body.tier as Tier
@@ -33,16 +34,21 @@ export async function PUT(req: NextRequest) {
   if (body.library?.items.some(i => !i.id || !i.name || !isRole(i.role))) {
     return NextResponse.json({ error: 'у позиции нужны id, name и известная роль' }, { status: 400 })
   }
+  const validKit = (code: string, kit: ModelKit) =>
+    M_MODELS.some(m => m.code === code) && Array.isArray(kit.slots) && !kit.slots.some(s => !isRole(s.role))
   if (body.kit) {
-    if (!body.code || !M_MODELS.some(m => m.code === body.code)) return NextResponse.json({ error: 'code: М1…М12' }, { status: 400 })
-    if (!Array.isArray(body.kit.slots) || body.kit.slots.some(s => !isRole(s.role))) {
-      return NextResponse.json({ error: 'kit.slots — массив слотов с известной ролью' }, { status: 400 })
+    if (!body.code || !validKit(body.code, body.kit)) return NextResponse.json({ error: 'code/kit: М1…М12 + слоты с известной ролью' }, { status: 400 })
+  }
+  if (body.kits) {
+    for (const [code, kit] of Object.entries(body.kits)) {
+      if (!validKit(code, kit)) return NextResponse.json({ error: `kits[${code}]: неизвестная модель или роль` }, { status: 400 })
     }
   }
 
   const { data: { user } } = await (await createClient()).auth.getUser()
   const by = user?.email ?? 'owner'
   if (body.library && body.rates) await saveLibrary(tier, body.library, body.rates, by)
-  if (body.kit && body.code) await saveKit(tier, body.code, body.kit, by)
+  if (body.kits) await saveAllKits(tier, body.kits, by)          // все комплекты разом («во все модели», копирование тарифа)
+  else if (body.kit && body.code) await saveKit(tier, body.code, body.kit, by)
   return NextResponse.json({ ok: true })
 }

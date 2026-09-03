@@ -371,12 +371,12 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             <div className="mt-4 pt-4 border-t border-[#f0f0ec] grid grid-cols-2 md:grid-cols-4 gap-4 text-[12px]">
               <div>
                 <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Создан</p>
-                <p className="text-[#111110]">{new Date(order.created_at).toLocaleDateString('ru-RU')}</p>
+                <p className="text-[#111110]">{new Date(order.created_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
               </div>
               {order.launched_at && (
                 <div>
                   <p className="text-[#9a9a95] uppercase tracking-widest text-[10px] font-bold mb-0.5">Запущен</p>
-                  <p className="text-[#111110]">{new Date(order.launched_at).toLocaleDateString('ru-RU')}</p>
+                  <p className="text-[#111110]">{new Date(order.launched_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}</p>
                   {daysInWork && <p className="text-[#9a9a95]">{daysInWork} дн. в работе</p>}
                 </div>
               )}
@@ -388,7 +388,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
                     daysToDeadline < 0  ? 'text-red-600' :
                     daysToDeadline <= 3 ? 'text-amber-600' : 'text-[#111110]'
                   }`}>
-                    {new Date(order.deadline).toLocaleDateString('ru-RU')}
+                    {new Date(order.deadline).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
                     {daysToDeadline !== null && (
                       <span className="ml-1.5 text-[11px]">
                         {daysToDeadline < 0 ? `(просрочка ${Math.abs(daysToDeadline)} дн.)` :
@@ -750,7 +750,7 @@ export default function OrderDetailClient({ order, lines, isAdmin, managerName }
             <div className="bg-white rounded-xl border border-[#e4e4e0] px-5 py-4">
               <p className="text-[11px] font-bold text-[#9a9a95] uppercase tracking-widest mb-1">Одобрение</p>
               <p className="text-[13px] text-emerald-700">
-                Одобрено {new Date(order.approved_at).toLocaleDateString('ru-RU')}
+                Одобрено {new Date(order.approved_at).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })}
               </p>
               {order.approval_notes && (
                 <p className="text-[12px] text-[#6b6b66] mt-0.5">{order.approval_notes}</p>

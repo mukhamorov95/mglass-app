@@ -34,7 +34,7 @@ function formatUsd(val: number): string {
 
 function formatCbrDate(iso: string): string {
   try {
-    return new Date(iso).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric' })
+    return new Date(iso).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric' })
   } catch {
     return iso
   }
