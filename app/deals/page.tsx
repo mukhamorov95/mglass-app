@@ -86,10 +86,16 @@ export default function DealsPage() {
           <h1 className="text-[24px] font-bold text-[#111110]">Сделки</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5">Карточка по объекту: расчёты, замер, документы, деньги в одном месте.</p>
         </div>
-        <input
-          value={q} onChange={e => setQ(e.target.value)}
-          placeholder="Поиск: телефон, адрес, клиент"
-          className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-72 outline-none focus:border-[#111110] transition-colors" />
+        <div className="flex items-center gap-2">
+          <input
+            value={q} onChange={e => setQ(e.target.value)}
+            placeholder="Поиск: телефон, адрес, клиент"
+            className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
+          <div className="flex bg-white border border-[#e4e4e0] rounded-xl p-0.5">
+            <span className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] bg-[#111110] text-white">Список</span>
+            <Link href="/deals/board" className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Доска</Link>
+          </div>
+        </div>
       </div>
 
       {loading ? (

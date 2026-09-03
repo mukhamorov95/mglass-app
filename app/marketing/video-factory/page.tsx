@@ -88,6 +88,21 @@ function ScriptCard({ script, onUpdate, onDelete }: {
           {script.hook && <p className="text-[12px] text-[#6b6b66] mt-0.5 line-clamp-1">&quot;{script.hook}&quot;</p>}
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
+          {script.status === 'script' && (
+            // Шов между сценарием и производством: раскадровка уже сгенерирована
+            // вместе со сценарием, но никуда не уходила. Кнопка разворачивает её
+            // в задание с промптами на кадры, текстом диктора и субтитрами.
+            <button onClick={async () => {
+              const r = await fetch('/api/marketing/promo/from-script', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ script_id: script.id }),
+              }).then(x => x.json()).catch(() => null)
+              if (r && r.id) { onUpdate(script.id, { status: 'filming' }); location.href = '/marketing/promo/pipeline' }
+            }}
+              className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 transition-colors whitespace-nowrap">
+              → В производство
+            </button>
+          )}
           {script.status !== 'published' && (
             <button onClick={nextStatus}
               className="text-[11px] px-2.5 py-1 rounded-lg bg-[#f4f4f0] text-[#6b6b66] hover:bg-[#e4e4e0] transition-colors">
