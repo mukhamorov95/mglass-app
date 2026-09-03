@@ -67,6 +67,10 @@ export default function BuildCalcPage() {
 
   const [price, setPrice] = useState<Price | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
+  // Ключ параметров, под которые посчитана текущая цена. Пока не совпадает с текущими
+  // параметрами — цена «не догнала», кнопки сохранения блокируем (иначе запишется новый
+  // размер со старой ценой). Считаем от glass.b2b (а не glassId) — цена зависит от него.
+  const [pricedKey, setPricedKey] = useState('')
 
   // Правая панель — числа владельца. Сброс к умолчаниям на новом изделии.
   const [margin, setMargin] = useState('40')
@@ -89,6 +93,8 @@ export default function BuildCalcPage() {
   const finish = FINISHES.find(f => f.id === finishId) ?? FINISHES[0]
   const glass = GLASS_TYPES.find(g => g.id === glassId) ?? GLASS_TYPES[0]
   const mVariant = useMemo<MVariant>(() => (code === 'М1' ? { mount: 'perp90', profileFrame: 'partial' } : {}), [code])
+  const paramsKey = useMemo(() => JSON.stringify({ code, dims, finishId, g: glass.b2b, choice, qtyChoice }), [code, dims, finishId, glass.b2b, choice, qtyChoice])
+  const priceDirty = pricedKey !== paramsKey   // цена ещё не догнала параметры
 
   function pickModel(c: string) {
     setCode(c); setDims(defaultsFor(c)); setChoice({}); setQtyChoice({}); setKitChoices(null); setPrice(null)
@@ -153,6 +159,7 @@ export default function BuildCalcPage() {
   useEffect(() => {
     if (screen !== 'detail') return
     const w = numOr(String(dims.width)), h = numOr(String(dims.height))
+    const key = paramsKey   // под какие параметры считаем — фиксируем на момент запроса
     const ctrl = new AbortController()
     const t = setTimeout(() => {
       if (w <= 0 || h <= 0) { setPrice(null); setState('idle'); return }
@@ -162,12 +169,13 @@ export default function BuildCalcPage() {
         body: JSON.stringify({ model: code, thickness: THICKNESS, finishId, glassType: glass.b2b, dims, choice, qtyChoice }),
       }).then(r => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((res: { full?: boolean; price?: Price }) => {
-          if (res.full && res.price) { setPrice(res.price); setState('idle') }
+          // Только последний запрос доживает (остальные оборваны abort), значит key актуален.
+          if (res.full && res.price) { setPrice(res.price); setPricedKey(key); setState('idle') }
           else { setPrice(null); setState('error') }
         }).catch((e: unknown) => { if ((e as Error)?.name !== 'AbortError') { setPrice(null); setState('error') } })
     }, 400)
     return () => { clearTimeout(t); ctrl.abort() }
-  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice])
+  }, [screen, code, dims, finishId, glass.b2b, choice, qtyChoice, paramsKey])
 
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
@@ -403,16 +411,17 @@ export default function BuildCalcPage() {
               <span className="text-[14px] font-semibold text-[#111110]">К оплате{cart.length ? ` (изделие ${cart.length + 1})` : ''}</span>
               <span className="text-[22px] font-bold font-mono text-[#111110]">{RUB(grand)}</span>
             </div>
-            {state === 'loading' && <p className="text-[11px] text-[#9a9a95]">считаю…</p>}
-            {price && !usable && price.missing.length > 0 && (
+            {(priceDirty || state === 'loading') && <p className="text-[11px] text-[#9a9a95]">пересчёт цены…</p>}
+            {!priceDirty && state !== 'loading' && price && !usable && price.missing.length > 0 && (
               <p className="text-[11px] text-[#c2410c]">Цена не заведена: {price.missing.map(x => x.label).join(', ')}.</p>
             )}
             <div className="grid grid-cols-2 gap-2">
-              <button onClick={addMore} disabled={!usable || grand <= 0}
+              {/* Пока цена не догнала параметры — не сохраняем (иначе новый размер, старая цена). */}
+              <button onClick={addMore} disabled={!usable || grand <= 0 || priceDirty || state === 'loading'}
                 className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">
                 + Ещё изделие
               </button>
-              <button onClick={save} disabled={saving || (!usable && cart.length === 0)}
+              <button onClick={save} disabled={saving || priceDirty || state === 'loading' || (!usable && cart.length === 0)}
                 className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
                 {saving ? 'Сохраняю…' : 'Сохранить → КП'}
               </button>
