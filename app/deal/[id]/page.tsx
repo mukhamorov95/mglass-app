@@ -19,6 +19,19 @@ type Calc = {
   status: string; created_at: string; client_name: string | null; client_phone: string | null; parent_calc_id: number | null
   input_data?: Record<string, unknown>
 }
+type Doc = { id: number; number: string; total: number; status: string; manager_name: string | null; created_at: string }
+type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_sum: number | null }
+type Invoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
+type Measure = { id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string }
+
+const DOC_STATUS: Record<string, string> = { draft: 'Черновик', final: 'Готово', sent: 'Отправлен', signed: 'Подписан', issued: 'Выставлен', paid: 'Оплачен', cancelled: 'Отменён' }
+const MEASURE_STATUS: Record<string, { label: string; tone: string; emoji: string }> = {
+  new:       { label: 'Заявка отправлена', tone: 'bg-amber-50 text-amber-700',   emoji: '🆕' },
+  scheduled: { label: 'Замер назначен',    tone: 'bg-blue-50 text-blue-700',     emoji: '🗓' },
+  done:      { label: 'Замер выполнен',    tone: 'bg-emerald-50 text-emerald-700', emoji: '✅' },
+  issue:     { label: 'Проблема на замере', tone: 'bg-red-50 text-red-700',       emoji: '⚠️' },
+  cancelled: { label: 'Замер отменён',     tone: 'bg-[#f0f0ec] text-[#6b6b66]',   emoji: '✕' },
+}
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const date = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
@@ -39,6 +52,9 @@ export default function DealPage() {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '' })
   const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
+  const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
+  const [measuring, setMeasuring] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -49,6 +65,7 @@ export default function DealPage() {
       setDeal(j.deal); setCalcs(j.calculations ?? [])
       setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '' })
       setError(null)
+      loadDocs()   // документы и замер грузим сразу — блок замера виден без открытия вкладки
     } catch { setError('Сеть недоступна') } finally { setLoading(false) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -76,6 +93,49 @@ export default function DealPage() {
   async function detach(calcId: number) {
     await fetch(`/api/deals/${id}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: calcId, detach: true }) })
     await load()
+  }
+
+  async function loadDocs() {
+    try {
+      const r = await fetch(`/api/deals/${id}/documents`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setDocs({ kps: j.kps ?? [], contracts: j.contracts ?? [], invoices: j.invoices ?? [], measures: j.measures ?? [] })
+    } catch { /* ignore */ }
+  }
+  function openTab(k: 'calcs' | 'docs' | 'money') { setTab(k) }
+
+  // Отправить на замер: заявка с данными сделки. Замерщик увидит её в своём кабинете;
+  // отметка и файлы вернутся сюда через deal_id.
+  async function sendMeasure() {
+    setMeasuring(true)
+    try {
+      const r = await fetch(`/api/deals/${id}/measure`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      if (r.ok) await loadDocs()
+    } finally { setMeasuring(false) }
+  }
+  async function attachMeasure(reqId: number, file: File) {
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch(`/api/measure-requests/${reqId}/photo`, { method: 'POST', body: fd })
+    if (r.ok) await loadDocs()
+  }
+
+  // «Сделать КП» из карточки: клиент, адрес и позиции из расчётов сделки уже подставлены —
+  // менеджер их вводил при просчёте, повторно не заставляем. deal_id несёт связь в КП.
+  function makeKp() {
+    if (!deal) return
+    const items = calcs.map(c => {
+      const name = (PRODUCT[c.product_type] ?? c.product_type) + (c.parent_calc_id ? ' (пересчёт)' : '')
+      const sum = Math.round(Number(c.final_price) || 0)
+      return { name, qty: 1, price: sum, sum }
+    })
+    const total = items.reduce((s, i) => s + i.sum, 0)
+    const prefill = {
+      title: (deal.client_name || 'Коммерческое предложение').toUpperCase(),
+      items, subtotal: total, total,
+      deal_id: deal.id, client_name: deal.client_name, client_phone: deal.phone, client_address: deal.address,
+    }
+    try { sessionStorage.setItem('mglass_kp_prefill', JSON.stringify(prefill)) } catch { /* ignore */ }
+    window.location.assign('/kp')
   }
 
   if (loading) return <div className="p-6 text-[13px] text-[#9a9a95]">Загрузка…</div>
@@ -136,37 +196,132 @@ export default function DealPage() {
         )}
       </div>
 
-      <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden">
-        <div className="px-5 py-3 border-b border-[#f0f0ec]">
-          <p className="text-[12px] font-semibold text-[#9a9a95] uppercase tracking-wider">Расчёты ({calcs.length})</p>
-        </div>
-        {calcs.length === 0 ? (
-          <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет расчётов по этой сделке.</p>
-        ) : (
-          <div className="divide-y divide-[#f0f0ec]">
-            {calcs.map((c, i) => (
-              <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] text-[#111110]">{PRODUCT[c.product_type] ?? c.product_type}</span>
-                    <span className="text-[10px] text-[#9a9a95] bg-[#f5f5f3] px-1.5 py-0.5 rounded">{CALC_STATUS[c.status] ?? c.status}</span>
-                    {i === 0 && calcs.length > 1 && <span className="text-[10px] text-[#9a9a95]">первичный</span>}
-                    {c.parent_calc_id && <span className="text-[10px] text-blue-600">пересчёт</span>}
-                  </div>
-                  <p className="text-[11px] text-[#9a9a95] mt-0.5">{date(c.created_at)}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-[13px] font-semibold font-mono text-[#111110] whitespace-nowrap">{fmt(Number(c.final_price) || 0)}</span>
-                  {c.product_type === 'quick' && (
-                    <button onClick={() => reopenQuick(c)} className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">Открыть</button>
-                  )}
-                  <button onClick={() => detach(c.id)} title="Убрать из сделки" className="text-[#c4c4be] hover:text-red-500">✕</button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+      {/* Действия по сделке — документы и замер делаются отсюда, клиент уже подставлен. */}
+      <div className="flex flex-wrap gap-2">
+        <button onClick={makeKp} disabled={calcs.length === 0}
+          className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+          📄 Сделать КП
+        </button>
+        <Link href="/contracts" className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
+          📝 Договор
+        </Link>
+        <button onClick={sendMeasure} disabled={measuring}
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
+          {measuring ? 'Отправляю…' : '📐 Отправить на замер'}
+        </button>
       </div>
+
+      {/* Замер — состояние возвращается сюда через deal_id; файл прикладывается тут же. */}
+      {docs && docs.measures.length > 0 && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-4 space-y-2">
+          {docs.measures.map(m => {
+            const st = MEASURE_STATUS[m.status] ?? { label: m.status, tone: 'bg-[#f0f0ec] text-[#6b6b66]', emoji: '📐' }
+            return (
+              <div key={m.id} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full ${st.tone}`}>{st.emoji} {st.label}</span>
+                  <span className="text-[11px] text-[#9a9a95]">
+                    {m.scheduled_at ? `на ${date(m.scheduled_at)}` : date(m.created_at)}{m.measurer_name ? ` · ${m.measurer_name}` : ''}
+                  </span>
+                </div>
+                {m.scope && <p className="text-[12px] text-[#6b6b66]">{m.scope}</p>}
+                {Array.isArray(m.photos) && m.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {m.photos.map((u, i) => (
+                      <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-[12px] text-blue-600 hover:underline">📎 файл {i + 1}</a>
+                    ))}
+                  </div>
+                )}
+                <label className="inline-block text-[12px] text-blue-600 hover:underline cursor-pointer">
+                  + приложить файл замера
+                  <input type="file" accept="image/*,application/pdf" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) attachMeasure(m.id, f); e.target.value = '' }} />
+                </label>
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Вкладки */}
+      <div className="flex gap-1 border-b border-[#e4e4e0]">
+        {([['calcs', `Расчёты (${calcs.length})`], ['docs', `Документы${docs ? ` (${docs.kps.length + docs.contracts.length})` : ''}`], ['money', 'Деньги']] as const).map(([k, label]) => (
+          <button key={k} onClick={() => openTab(k)}
+            className={`text-[13px] px-4 py-2 -mb-px border-b-2 transition-colors ${tab === k ? 'border-[#111110] text-[#111110] font-semibold' : 'border-transparent text-[#9a9a95] hover:text-[#6b6b66]'}`}>
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'calcs' && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden">
+          {calcs.length === 0 ? (
+            <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет расчётов по этой сделке.</p>
+          ) : (
+            <div className="divide-y divide-[#f0f0ec]">
+              {calcs.map((c, i) => (
+                <div key={c.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-[13px] text-[#111110]">{PRODUCT[c.product_type] ?? c.product_type}</span>
+                      <span className="text-[10px] text-[#9a9a95] bg-[#f5f5f3] px-1.5 py-0.5 rounded">{CALC_STATUS[c.status] ?? c.status}</span>
+                      {i === 0 && calcs.length > 1 && <span className="text-[10px] text-[#9a9a95]">первичный</span>}
+                      {c.parent_calc_id && <span className="text-[10px] text-blue-600">пересчёт</span>}
+                    </div>
+                    <p className="text-[11px] text-[#9a9a95] mt-0.5">{date(c.created_at)}</p>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[13px] font-semibold font-mono text-[#111110] whitespace-nowrap">{fmt(Number(c.final_price) || 0)}</span>
+                    {c.product_type === 'quick' && (
+                      <button onClick={() => reopenQuick(c)} className="text-[12px] text-blue-600 hover:underline whitespace-nowrap">Открыть</button>
+                    )}
+                    <button onClick={() => detach(c.id)} title="Убрать из сделки" className="text-[#c4c4be] hover:text-red-500">✕</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab === 'docs' && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
+          {docs === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
+          : (docs.kps.length === 0 && docs.contracts.length === 0) ? (
+            <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Пока нет документов. Нажмите «Сделать КП» — клиент и позиции подставятся из сделки.</p>
+          ) : (
+            <>
+              {docs.kps.map(d => (
+                <Link key={`kp${d.id}`} href={`/kp/${d.id}/print`} className="px-5 py-3 flex items-center justify-between gap-3 hover:bg-[#fafaf9]">
+                  <div><span className="text-[13px] text-[#111110]">📄 КП №{d.number}</span>
+                    <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.manager_name ? ` · ${d.manager_name}` : ''}</p></div>
+                  <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                </Link>
+              ))}
+              {docs.contracts.map(d => (
+                <div key={`c${d.id}`} className="px-5 py-3 flex items-center justify-between gap-3">
+                  <div><span className="text-[13px] text-[#111110]">📝 Договор №{d.number}</span>
+                    <p className="text-[11px] text-[#9a9a95]">{date(d.created_at)} · {DOC_STATUS[d.status] ?? d.status}{d.kp_id ? ` · из КП` : ''}</p></div>
+                  <span className="text-[13px] font-semibold font-mono">{fmt(Number(d.total) || 0)}</span>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+
+      {tab === 'money' && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-6">
+          {/* Розничного денежного контура в базе пока нет — оплаты заведём прямо на
+              сделке (предоплата · остаток · остаток за монтаж) на шаге 3. Пустой список
+              счетов тут не показываем: он был бы пуст всегда (invoices — B2B-регистр). */}
+          <p className="text-[13px] font-semibold text-[#111110]">Оплаты по сделке</p>
+          <p className="text-[12px] text-[#9a9a95] mt-1">
+            Предоплата · остаток · остаток за монтаж будут отмечаться здесь, с суммой и датой.
+            Раздел в работе.
+          </p>
+        </div>
+      )}
     </div>
   )
 }
