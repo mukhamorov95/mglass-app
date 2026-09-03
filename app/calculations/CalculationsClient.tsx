@@ -47,6 +47,7 @@ const PRODUCT_LABELS: Record<string, { label: string; color: string; emoji: stri
   shower_budget:   { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
   order:           { label: 'Заказ',    color: 'bg-purple-50 text-purple-700', emoji: '📦' },
   quick:           { label: 'Быстрый',  color: 'bg-[#f0f0ec] text-[#6b6b66]',  emoji: '⚡' },
+  build:           { label: 'Расчёт',   color: 'bg-cyan-50 text-cyan-700',     emoji: '📐' },
 }
 
 // Sales flow statuses
@@ -98,6 +99,10 @@ function getDesc(c: Calc): string {
     const cart = Array.isArray(d.cart) ? d.cart as { title?: string }[] : []
     if (cart.length > 1) return `${cart.length} изделий`
     return (cart[0]?.title as string) || (d.title as string) || 'быстрый расчёт'
+  }
+  if (c.product_type === 'build') {
+    const dims = d.width2 ? `${d.width}×${d.width2}×${d.height}` : `${d.width}×${d.height}`
+    return `${(d.modelId as string) ?? ''} ${dims} мм`.trim()
   }
   return ''
 }
@@ -259,16 +264,22 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
     setCalcs(prev => prev.map(c => c.order_group_id === groupId ? { ...c, status } : c))
   }
 
-  // Быстрый расчёт «Открыть» → в калькулятор для ПЕРЕСЧЁТА (владелец: «открыть и
-  // пересчитать»), а не в read-only деталь /calculations/[id]: у quick другая форма
-  // cost_breakdown (нет lines), деталь на нём падает. Снимок в sessionStorage, как
-  // из карточки сделки; __parentCalcId связывает пересчёт с оригиналом.
-  function reopenQuick(c: Calc) {
+  // «Открыть» для quick/build → в калькулятор для ПЕРЕСЧЁТА (владелец: «открыть и
+  // пересчитать»), а не в read-only деталь /calculations/[id]: у них своя форма
+  // cost_breakdown (нет lines), деталь на них падает. Снимок в sessionStorage;
+  // __parentCalcId связывает пересчёт с оригиналом.
+  const REOPEN: Record<string, { key: string; dest: string }> = {
+    quick: { key: 'mglass_quick_reopen', dest: '/calculator/quick' },
+    build: { key: 'mglass_build_reopen', dest: '/calculator/build' },
+  }
+  function reopenInCalculator(c: Calc) {
+    const r = REOPEN[c.product_type]
+    if (!r) return
     try {
       const snap = (c.input_data ?? {}) as Record<string, unknown>
-      sessionStorage.setItem('mglass_quick_reopen', JSON.stringify({ ...snap, __parentCalcId: c.id }))
+      sessionStorage.setItem(r.key, JSON.stringify({ ...snap, __parentCalcId: c.id }))
     } catch { /* ignore */ }
-    window.location.assign('/calculator/quick')
+    window.location.assign(r.dest)
   }
 
   async function duplicateCalc(c: Calc) {
@@ -766,8 +777,8 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        {c.product_type === 'quick' ? (
-                          <button onClick={() => reopenQuick(c)}
+                        {(c.product_type === 'quick' || c.product_type === 'build') ? (
+                          <button onClick={() => reopenInCalculator(c)}
                             className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
                             Открыть
                           </button>
