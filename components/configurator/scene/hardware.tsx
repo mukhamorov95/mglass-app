@@ -125,19 +125,25 @@ function SlidingRoller({ material }: { material: THREE.Material }) {
   )
 }
 
-// КП-006 — крепёж трубы к СТЕКЛУ (L-кронштейн 87×40×18.5 по чертежу). П-зажим на
-// верхнюю кромку стекла (у z=0) + вынос к трубе (+Z), который смещает трубу от
-// стекла. Ширина 18.5 мм вдоль трубы (X).
-function KP006({ material }: { material: THREE.Material }) {
+// КП-006 — крепёж трубы к СТЕКЛУ. П-зажим сидит на верхней кромке стекла (у z=0),
+// вынос идёт к трубе (+Z). Зажим не поворачивается вслед за трубой — стекло всегда
+// вертикально; подстраивается только седло, в которое ложится труба.
+function KP006({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
   const w = 18.5 * M
   const arm = 44 * M
+  const tubeH = (flatTube ? 10 : 30) * M
+  const tubeW = (flatTube ? 30 : 10) * M
+  const wall = 3.5 * M
   return (
     <group>
-      {/* вынос-планка к трубе (вдоль +Z, сверху) */}
-      <mesh position={[0, 8 * M, arm / 2]} material={material} castShadow>
-        <boxGeometry args={[w, 16 * M, arm]} />
+      {/* вынос-планка от зажима к трубе */}
+      <mesh position={[0, 4 * M, arm / 2]} material={material} castShadow>
+        <boxGeometry args={[w, 14 * M, arm]} />
       </mesh>
-      {/* П-зажим на кромке стекла: две щеки по граням стекла (у z=0) */}
+      {/* седло СТРОГО на оси трубы (y=0) — иначе труба легла бы по краю обоймы */}
+      <RoundedBox args={[w, tubeH + wall * 2, tubeW + wall * 2]} radius={1.5 * M} smoothness={3}
+        position={[0, 0, arm]} material={material} castShadow />
+      {/* П-зажим на кромке стекла: две щеки по граням */}
       {[-6 * M, 6 * M].map((z, i) => (
         <mesh key={i} position={[0, -6 * M, z]} material={material} castShadow>
           <boxGeometry args={[w, 26 * M, 4 * M]} />
@@ -150,26 +156,46 @@ function KP006({ material }: { material: THREE.Material }) {
   )
 }
 
-// КП-002 — крепёж трубы к СТЕНЕ (блок 31×40×18 по чертежу). Труба входит в паз,
-// блок винтом к стене. X — вдоль трубы, +Z — к стене.
-function KP002({ material }: { material: THREE.Material }) {
+// КП-002 — крепёж трубы к СТЕНЕ. Ось трубы — локальный X, стена за торцом (+X).
+// Два тела: плоский фланец, прижатый к стене, и обойма, надетая на трубу.
+// Сечение обоймы следует ориентации трубы: лежит «на пузе» (10×30) или на ребре (30×10).
+function KP002({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
+  const tubeH = (flatTube ? 10 : 30) * M          // высота сечения трубы
+  const tubeW = (flatTube ? 30 : 10) * M          // ширина сечения трубы
+  const wall = 4 * M                              // стенка обоймы
+  const clampH = tubeH + wall * 2, clampW = tubeW + wall * 2
+  const flange = Math.max(clampH, clampW) + 10 * M
   return (
-    <RoundedBox args={[18 * M, 40 * M, 31 * M]} radius={2.5 * M} smoothness={3} material={material} castShadow />
+    <group>
+      {/* фланец на стене (плоскость YZ), прижат к торцу */}
+      <RoundedBox args={[5 * M, flange, flange]} radius={1.5 * M} smoothness={3}
+        position={[11 * M, 0, 0]} material={material} castShadow />
+      {/* обойма на трубе — труба входит в неё, а не протыкает блок */}
+      <RoundedBox args={[22 * M, clampH, clampW]} radius={2 * M} smoothness={3}
+        position={[-2 * M, 0, 0]} material={material} castShadow />
+    </group>
   )
 }
 
-// КП-001 — крепёж угла (М7): труба приходит перпендикулярно к боковому стеклу.
-// Блок 36×32 с пазом под трубу 30×11 + U-скоба снизу, одевается на кромку
-// перпендикулярного стекла. По чертежу.
-function KP001({ material }: { material: THREE.Material }) {
+// КП-001 — угловой крепёж (М7): труба приходит перпендикулярно к боковому стеклу.
+// Обойма на трубе (по её ориентации) + U-скоба, севшая на кромку стекла.
+function KP001({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
+  const tubeH = (flatTube ? 10 : 30) * M
+  const tubeW = (flatTube ? 30 : 10) * M
+  const wall = 4 * M
+  const clampH = tubeH + wall * 2, clampW = tubeW + wall * 2
   return (
     <group>
-      {/* тело блока (принимает трубу перпендикулярно) */}
-      <RoundedBox args={[36 * M, 32 * M, 22 * M]} radius={2.5 * M} smoothness={3} position={[0, 5 * M, 0]} material={material} castShadow />
-      {/* U-скоба снизу — на кромку бокового стекла (две щеки по граням) */}
-      {[-6 * M, 6 * M].map((x, i) => (
-        <mesh key={i} position={[x, -16 * M, 0]} material={material} castShadow>
-          <boxGeometry args={[4 * M, 22 * M, 22 * M]} />
+      {/* обойма, надетая на конец трубы */}
+      <RoundedBox args={[26 * M, clampH, clampW]} radius={2 * M} smoothness={3}
+        position={[-4 * M, 0, 0]} material={material} castShadow />
+      {/* переходник к стеклу */}
+      <RoundedBox args={[14 * M, clampH, 14 * M]} radius={1.5 * M} smoothness={3}
+        position={[12 * M, 0, 0]} material={material} castShadow />
+      {/* U-скоба на кромку стекла: две щеки по его граням */}
+      {[-6 * M, 6 * M].map((z, i) => (
+        <mesh key={i} position={[20 * M, 0, z]} material={material} castShadow>
+          <boxGeometry args={[10 * M, clampH * 0.9, 4 * M]} />
         </mesh>
       ))}
     </group>
@@ -253,7 +279,7 @@ function MountStabilizer({ material }: { material: THREE.Material }) {
   )
 }
 
-export function Hardware({ model, shape, material }: { model: HardwareModel; shape?: string; material: THREE.Material }) {
+export function Hardware({ model, shape, material, flatTube }: { model: HardwareModel; shape?: string; material: THREE.Material; flatTube?: boolean }) {
   const sh = (shape as HardwareShape) || shapeForModel(model)
   const hingePlate = model === 'dessau' ? 'dessau' : 'balge'
   switch (sh) {
@@ -262,9 +288,9 @@ export function Hardware({ model, shape, material }: { model: HardwareModel; sha
     case 'handle-knob': return <HandleKnob material={material} />
     case 'handle-inset': return <KupeHandle material={material} />
     case 'roller': return <SlidingRoller material={material} />
-    case 'mount-glass': return <KP006 material={material} />
-    case 'mount-wall': return <KP002 material={material} />
-    case 'mount-corner': return <KP001 material={material} />
+    case 'mount-glass': return <KP006 material={material} flatTube={flatTube} />
+    case 'mount-wall': return <KP002 material={material} flatTube={flatTube} />
+    case 'mount-corner': return <KP001 material={material} flatTube={flatTube} />
     case 'mount-diag45': return <MountDiag45 material={material} />
     case 'mount-stabilizer': return <MountStabilizer material={material} />
     case 'connector': return <TubeConnector material={material} />

@@ -177,7 +177,7 @@ function Assembly3D({ assembly, metalMat, glassTint }: { assembly: Assembly; met
       ))}
       {assembly.hardware.map(h => (
         <group key={h.key} position={h.pos} rotation={[0, h.rotY, 0]}>
-          <Hardware model={h.model} shape={h.shape} material={metalMat} />
+          <Hardware model={h.model} shape={h.shape} material={metalMat} flatTube={h.flatTube} />
         </group>
       ))}
     </group>
