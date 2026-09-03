@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
+import { buildPhotorealPrompt } from '@/lib/configurator/photorealPrompt'
 
 // Фотореалистичный кадр конфигурации (NanoBanana = Gemini 2.5 Flash Image, img2img).
 // Скриншот нашей 3D-сцены идёт КАРКАСОМ: модель не придумывает изделие, а только
@@ -20,24 +21,6 @@ function rateLimited(ip: string): boolean {
   list.push(now); hits.set(ip, list)
   if (hits.size > 500) for (const [k, v] of hits) if (!v.some(t => t > hourAgo)) hits.delete(k)
   return false
-}
-
-function buildPrompt(cfg: Record<string, unknown>): string {
-  const parts = [
-    'Photorealistic interior photograph of this exact shower enclosure, professional architectural visualization.',
-    'CRITICAL: keep the geometry EXACTLY as in the reference image — same number of glass panels, same door position and opening, same hardware placement (hinges, handle, brackets, rail), same proportions and the same camera angle.',
-    'Do NOT add, remove or move any panel, door, profile or hardware. Do not invent extra fixtures.',
-    'Improve only realism: real ceramic tiles with natural grout, realistic tempered glass with subtle reflections and refraction, polished metal hardware with accurate specular highlights, soft natural bathroom lighting, contact shadows, clean modern bathroom interior.',
-    'No text, no watermark, no people.',
-  ]
-  const meta: string[] = []
-  if (cfg.model) meta.push(`model ${cfg.model}`)
-  if (cfg.width) meta.push(`width ${cfg.width} mm`)
-  if (cfg.height) meta.push(`height ${cfg.height} mm`)
-  if (cfg.glass) meta.push(`glass: ${cfg.glass}`)
-  if (cfg.finish) meta.push(`hardware finish: ${cfg.finish}`)
-  if (meta.length) parts.push(`Product spec (for material accuracy only): ${meta.join(', ')}.`)
-  return parts.join(' ')
 }
 
 export async function POST(req: NextRequest) {
@@ -66,7 +49,7 @@ export async function POST(req: NextRequest) {
     body: JSON.stringify({
       contents: [{
         parts: [
-          { text: buildPrompt(body?.config ?? {}) },
+          { text: buildPhotorealPrompt(body?.config ?? {}) },
           { inline_data: { mime_type: mime, data: b64 } },
         ],
       }],

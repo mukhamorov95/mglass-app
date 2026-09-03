@@ -214,7 +214,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           image: shot,
           config: {
             model: `${model.code} ${model.name}`, width: dims.width, height: dims.height,
-            glass: glass.label, finish: finish.label,
+            glass: glass.label, finish: finish.label, finishId: finish.id,
           },
         }),
       })
