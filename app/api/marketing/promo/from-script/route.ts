@@ -16,7 +16,8 @@ import { createServiceClient } from '@/lib/supabase-service'
 const STYLE = 'Фотореалистично, интерьерная съёмка, мягкий естественный свет, ' +
   'без людей в кадре, без текста и водяных знаков, чистая композиция'
 
-type Shot = { order?: number; description?: string; tip?: string }
+type Shot = { order?: number; description?: string; tip?: string
+             shot_size?: string; motion?: string; duration_sec?: number; prompt?: string }
 
 export async function POST(req: NextRequest) {
   const guard = await requireOwner()
@@ -44,7 +45,13 @@ export async function POST(req: NextRequest) {
     order: s.order ?? i + 1,
     description: s.description ?? '',
     tip: s.tip ?? '',
-    prompt: [s.description, s.tip].filter(Boolean).join('. ') + '. ' + STYLE,
+    shot_size: s.shot_size ?? null,
+    motion: s.motion ?? null,
+    duration_sec: s.duration_sec ?? null,
+    // Промпт от генератора сценария лучше склейки: он написан для генерации,
+    // на английском и с ракурсом. Склейка описания с подсказкой — запасной путь
+    // для старых сценариев, где поля prompt ещё не было.
+    prompt: s.prompt || ([s.description, s.tip].filter(Boolean).join('. ') + '. ' + STYLE),
     url: null as string | null,
   }))
 
