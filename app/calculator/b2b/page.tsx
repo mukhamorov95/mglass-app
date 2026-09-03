@@ -614,6 +614,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }
 
   const selectedClient   = clients.find(c => c.id === clientId) ?? null
+  // Скидка из карточки клиента. В mglass-режиме клиент = M GLASS, у него 20% —
+  // это НЕ баг и не «забыли обнулить»: M-Glass реально покупает у своего производства
+  // со скидкой 20% (условие внутренней сделки), применяется как у любого клиента.
+  // 20% заложены в прайс — средняя маржа цеха по заказам M GLASS ~49%, не съедаются.
   const discount         = selectedClient?.discount_percent ?? 0
   const selectedMaterial = materials.find(m => m.id === fMatId) ?? null
   const selectedServices = services.filter(s => fServiceIds.includes(s.id))
