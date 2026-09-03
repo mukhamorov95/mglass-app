@@ -255,19 +255,15 @@ export default function DealPage() {
       )}
 
       {tab === 'money' && (
-        <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden divide-y divide-[#f0f0ec]">
-          {docs === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
-          : docs.invoices.length === 0 ? (
-            <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Счетов по сделке нет. Оплаты по частям (предоплата · остаток · остаток за монтаж) появятся здесь.</p>
-          ) : (
-            docs.invoices.map(v => (
-              <div key={v.id} className="px-5 py-3 flex items-center justify-between gap-3">
-                <div><span className="text-[13px] text-[#111110]">🧾 Счёт №{v.invoice_no}</span>
-                  <p className="text-[11px] text-[#9a9a95]">{v.issued_at ? date(v.issued_at) : ''} · {DOC_STATUS[v.status] ?? v.status}</p></div>
-                <span className="text-[13px] font-semibold font-mono">{fmt(Number(v.amount) || 0)}</span>
-              </div>
-            ))
-          )}
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-6">
+          {/* Розничного денежного контура в базе пока нет — оплаты заведём прямо на
+              сделке (предоплата · остаток · остаток за монтаж) на шаге 3. Пустой список
+              счетов тут не показываем: он был бы пуст всегда (invoices — B2B-регистр). */}
+          <p className="text-[13px] font-semibold text-[#111110]">Оплаты по сделке</p>
+          <p className="text-[12px] text-[#9a9a95] mt-1">
+            Предоплата · остаток · остаток за монтаж будут отмечаться здесь, с суммой и датой.
+            Раздел в работе.
+          </p>
         </div>
       )}
     </div>
