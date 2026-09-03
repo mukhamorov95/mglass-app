@@ -377,9 +377,19 @@ export default function QuickCalcPage() {
                 Сформировать КП →
               </button>
             </div>
-            <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
-              {saveMsg ?? 'Сохранённый расчёт появится в истории — его можно открыть и пересчитать'}
-            </p>
+            {saveMsg ? (
+              <p className={`mt-2 text-center text-[13px] font-semibold rounded-lg px-3 py-2 ${
+                saveMsg.includes('✓')
+                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  : 'bg-amber-50 text-amber-700 border border-amber-200'
+              }`}>
+                {saveMsg}
+              </p>
+            ) : (
+              <p className="text-[11px] text-[#9a9a95] mt-2 text-center">
+                Сохранённый расчёт появится в истории — его можно открыть и пересчитать
+              </p>
+            )}
           </div>
         </div>
       </div>
