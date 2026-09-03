@@ -1,7 +1,7 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { Partition3DView, type PickedNode } from '@/components/configurator/Partition3DView'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Partition3DView, type PickedNode, type CaptureFn } from '@/components/configurator/Partition3DView'
 import { FINISHES, type FinishId } from '@/lib/configurator/catalog'
 import { M_MODELS, getModel, doorAttachment, type MModel } from '@/lib/configurator/arrangement'
 import { buildFromModel, M1_TRAY_DEPTH_DEFAULT, type MDims, type GlassTint, type HardwareChoice, type MVariant } from '@/components/configurator/scene/assembly'
@@ -115,8 +115,28 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [m1var, setM1var] = useState<MVariant>({ mount: 'perp90', profileFrame: 'partial' })
   // Разметка (только внутренний режим): клик по детали → что это за узел и чем он нарисован.
   const [picked, setPicked] = useState<PickedNode | null>(null)
+  // R7 · Кадр на печать: тот же вид, но в высоком разрешении — для КП и каталога.
+  const captureApi = useRef<CaptureFn | null>(null)
+  const holdCapture = useCallback((fn: CaptureFn | null) => { captureApi.current = fn }, [])
+  const [shooting, setShooting] = useState(false)
   // Строка комплекта, подсвеченная в сцене (клик по строке цены → деталь загорается).
   const [pickedRole, setPickedRole] = useState<string | null>(null)
+  // Кадр на печать: сцена та же, разрешение выше в 4 раза. Без AI и без оплаты за
+  // картинку — то же изделие, тот же ракурс, просто больше пикселей.
+  async function shootPrintFrame() {
+    if (!captureApi.current || shooting) return
+    setShooting(true)
+    try {
+      const url = await captureApi.current(1)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `mglass-${code}-${dims.width}x${dims.height}.png`
+      a.click()
+    } finally {
+      setShooting(false)
+    }
+  }
+
   // Фотореалистичный кадр: скриншот сцены → сервер (Gemini img2img) → журнальный рендер.
   const sceneRef = useRef<HTMLDivElement>(null)
   const [photo, setPhoto] = useState<{ loading: boolean; image?: string; error?: string } | null>(null)
@@ -298,6 +318,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
           <div ref={sceneRef} className="bg-[#fafaf9] border border-[#e4e4e0] rounded-xl p-3">
             <Partition3DView model={model} dims={dims} thickness={THICKNESS}
               finishHex={finish.hex} finishId={finish.id} glassTint={glass.tint} doorOpen={doorOpen} choice={hwChoice} variant={mVariant}
+              onCapture={embed ? undefined : holdCapture}
               onPick={embed ? undefined : n => { setPicked(n); setPickedRole(n.role ?? null) }}
               pickedKey={picked?.key ?? null} pickedRole={pickedRole} />
           </div>
@@ -317,6 +338,14 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
               }`}>
               {photo?.loading ? 'Создаём вид…' : '✨ Фотореалистичный вид'}
             </button>
+            {!embed && (
+              <button onClick={shootPrintFrame} disabled={shooting}
+                className={`text-[12px] font-medium rounded-lg px-3 py-1 border ${
+                  shooting ? 'border-[#e4e4e0] text-[#9a9a95]' : 'border-[#e4e4e0] text-[#4b4b47] hover:border-[#111110] hover:text-[#111110]'
+                }`}>
+                {shooting ? 'Снимаем…' : 'Кадр на печать'}
+              </button>
+            )}
           </div>
           {photo?.error && <p className="text-center text-[12px] text-[#9a5a2a]">{photo.error}</p>}
 
