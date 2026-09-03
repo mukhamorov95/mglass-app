@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { SHOWER_MODELS, type ShowerModelId } from '@/lib/showerCalculator'
-import { ShowerModelIcon } from '@/components/ShowerModelIcon'
 import { configuratorCode } from '@/lib/configurator/legacyModelMap'
 import { getModel } from '@/lib/configurator/arrangement'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
@@ -31,10 +30,18 @@ const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
 // (снимки настоящего 3D-визуализатора). Остальным — схема, БЕЗ попытки загрузить
 // картинку (иначе браузер рисует «битое фото»). Добавили новый файл — впиши код сюда.
 const PHOTO_MODELS = new Set<string>(['M1', 'M2', 'M4', 'M7', 'M8', 'M9', 'M10', 'M12'])
-function ModelThumb({ id, active }: { id: ShowerModelId; active: boolean }) {
-  if (!PHOTO_MODELS.has(id)) return <ShowerModelIcon modelId={id} active={active} />
-  // eslint-disable-next-line @next/next/no-img-element
-  return <img src={`/models/${id.toLowerCase()}.jpg`} alt="" className="w-full h-full object-cover" />
+function ModelThumb({ id }: { id: ShowerModelId }) {
+  if (PHOTO_MODELS.has(id)) {
+    // eslint-disable-next-line @next/next/no-img-element
+    return <img src={`/models/${id.toLowerCase()}.jpg`} alt="" className="w-full h-full object-cover" />
+  }
+  // Фото ещё нет — аккуратная нейтральная заглушка (не грубая схема), пока рендер не заведён.
+  return (
+    <div className="w-full h-full flex flex-col items-center justify-center gap-1 text-[#c4c4be]">
+      <span className="text-[22px]">🚿</span>
+      <span className="text-[10px]">фото скоро</span>
+    </div>
+  )
 }
 
 export default function BuildCalcPage() {
@@ -214,20 +221,18 @@ export default function BuildCalcPage() {
             {/* Модель */}
             <div className="bg-white border border-[#e4e4e0] rounded-xl p-4">
               <label className={lbl}>Модель</label>
-              <div className="grid grid-cols-4 gap-1.5">
-                {SHOWER_MODELS.map(mm => {
+              {/* Только реальный ряд: модели с заведённым комплектом (configuratorCode).
+                  М3/М5/М6 «без кита» не считаются — в пикере их не показываем. */}
+              <div className="grid grid-cols-3 gap-1.5">
+                {SHOWER_MODELS.filter(mm => configuratorCode(mm.id)).map(mm => {
                   const active = modelId === mm.id
-                  const mapped = !!configuratorCode(mm.id)
                   return (
                     <button key={mm.id} onClick={() => setModelId(mm.id)}
                       className={`flex flex-col items-stretch p-2 rounded-xl border text-left transition-all ${active ? 'border-[#111110] bg-[#f0f0ec]' : 'border-[#e4e4e0] hover:border-[#c7c7cc]'}`}>
                       <div className={`rounded-lg mb-1.5 overflow-hidden flex items-center justify-center h-[170px] ${active ? 'bg-white' : 'bg-[#f5f5f7]'}`}>
-                        <ModelThumb id={mm.id} active={active} />
+                        <ModelThumb id={mm.id} />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className={`text-[12px] font-bold ${active ? 'text-[#111110]' : 'text-[#1d1d1f]'}`}>{mm.label}</span>
-                        {!mapped && <span className="text-[9px] text-[#c2410c]" title="Комплект не заведён">без кита</span>}
-                      </div>
+                      <span className={`text-[12px] font-bold ${active ? 'text-[#111110]' : 'text-[#1d1d1f]'}`}>{mm.label}</span>
                       <span className="text-[9px] text-[#86868b] leading-tight">{mm.desc}</span>
                     </button>
                   )
