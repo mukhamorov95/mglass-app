@@ -2,11 +2,12 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { formatPhone } from '@/lib/b2c/phoneKey'
+import { formatPhone, phoneKey } from '@/lib/b2c/phoneKey'
 
-// Доска сделок — тот же список /deals, но по этажам пути: просчёт → КП → замер →
+// Доска сделок — тот же список /deals, но по этажам пути денег: просчёт → КП →
 // договор → оплата → готово. Этаж приходит с сервера вычисленным по реальным
 // артефактам (см. /api/deals/board), руками ничего не двигают. Карточка → /deal/[id].
+// Замер — не этаж, а факт на карточке: он и КП в нашем деле не упорядочены.
 
 type Measure = { status: string | null; scheduled_at: string | null }
 type Card = {
@@ -19,9 +20,9 @@ type Stage = { key: string; label: string }
 type Kpis = { inWork: number; awaitingPay: number; stalled: number; receivedThisMonth: number }
 
 // Цвет этажа: точка + верхняя граница колонки. Семантика (не акцент): синий=КП,
-// фиолетовый=замер, янтарь=договор, фирменный красный=оплата, зелёный=готово.
+// янтарь=договор, фирменный красный=оплата, зелёный=готово.
 const STAGE_HEX: Record<string, string> = {
-  new: '#9a9a95', quote: '#9a988f', kp: '#2f6fb0', measure: '#8a63c0',
+  new: '#9a9a95', quote: '#9a988f', kp: '#2f6fb0',
   contract: '#b7791f', pay: '#E1442E', done: '#2f8f5b',
 }
 
@@ -50,13 +51,19 @@ export default function DealBoardPage() {
     return () => { alive = false }
   }, [])
 
+  // Телефон ищем по тем же правилам, что и список: сравниваем цифры, а не строку,
+  // иначе «8926…» не находит сделку, записанную как «+7 926…».
   const filtered = useMemo(() => {
     const s = q.trim().toLowerCase()
     if (!s) return cards
-    return cards.filter(c =>
-      c.phone.toLowerCase().includes(s) ||
-      c.address.toLowerCase().includes(s) ||
-      c.client_name.toLowerCase().includes(s))
+    const digits = s.replace(/\D/g, '')
+    const qKey = digits.length >= 10 ? (phoneKey(digits) ?? digits) : digits
+    return cards.filter(c => {
+      if (c.address.toLowerCase().includes(s) || c.client_name.toLowerCase().includes(s)) return true
+      if (digits.length < 3) return false
+      const cKey = phoneKey(c.phone) ?? c.phone.replace(/\D/g, '')
+      return cKey.includes(qKey)
+    })
   }, [cards, q])
 
   const byStage = useMemo(() => {
@@ -72,7 +79,7 @@ export default function DealBoardPage() {
         <div>
           <h1 className="text-[24px] font-bold text-[#111110]">Сделки</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
-            Каждая карточка идёт по этажам пути: просчёт → КП → замер → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
+            Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -126,7 +133,7 @@ export default function DealBoardPage() {
           </div>
 
           <p className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch]">
-            <b className="text-[#4b4b47] font-semibold">Этаж = реальный артефакт.</b> Есть оплата → «Оплата», подписан договор → «Договор», отправлено КП → «КП отправлено». Ничего не перетаскивают руками — доска не врёт.
+            <b className="text-[#4b4b47] font-semibold">Этаж = реальный артефакт.</b> Есть оплата → «Оплата», подписан договор → «Договор», отправлено КП → «КП отправлено». Замер — не этаж, а метка на карточке: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию в сделке: деньгам, КП, договору, замеру, чертежу. Ничего не перетаскивают руками — доска не врёт.
             {!seeAll && <span> Показаны ваши сделки.</span>}
           </p>
         </>
@@ -156,9 +163,14 @@ function DealCard({ c }: { c: Card }) {
   const showPay = c.stage === 'pay' || c.stage === 'done'
   const pct = c.value > 0 ? Math.min(100, Math.round((c.paid / c.value) * 100)) : 0
   const full = c.stage === 'done'
+  const amoHref = c.amo_lead_id ? `https://mglass.amocrm.ru/leads/detail/${c.amo_lead_id}` : null
+  // Ссылка на карточку тянется на всю плитку слоем под содержимым: так внутри
+  // помещается отдельная ссылка в АМО (вложенная <a> в <a> недопустима).
   return (
-    <Link href={`/deal/${c.id}`}
-      className="block bg-white border border-[#e4e4e0] rounded-xl px-3.5 py-3 hover:border-[#111110] hover:-translate-y-px transition-all">
+    <div className="relative bg-white border border-[#e4e4e0] rounded-xl px-3.5 py-3 hover:border-[#111110] hover:-translate-y-px transition-all">
+      <Link href={`/deal/${c.id}`} aria-label={`Сделка ${c.client_name || c.id}`}
+        className="absolute inset-0 rounded-xl z-0" />
+      <div className="relative z-10 pointer-events-none">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-[13.5px] font-semibold text-[#111110] truncate">{c.client_name || 'Без имени'}</span>
         {c.value > 0 && <span className="text-[13px] font-semibold text-[#111110] tabular-nums whitespace-nowrap">{fmt(c.value)}</span>}
@@ -168,7 +180,7 @@ function DealCard({ c }: { c: Card }) {
       <div className="flex flex-wrap gap-1.5 mt-2">
         {c.calcCount > 0 && <Chip>⚡ {c.calcCount > 1 ? `Расчёт ×${c.calcCount}` : 'Расчёт'}</Chip>}
         {c.hasKp && <Chip tone="info">📄 КП</Chip>}
-        {c.measure && <Chip tone={c.measure.scheduled_at ? 'warn' : 'good'}>📐 {measureLabel(c.measure)}</Chip>}
+        {c.measure && <Chip tone={measureTone(c.measure)}>📐 {measureLabel(c.measure)}</Chip>}
         {c.hasDrawing && <Chip tone="good">📎 чертёж</Chip>}
         {c.hasContract && <Chip tone="good">📝 договор</Chip>}
       </div>
@@ -190,23 +202,40 @@ function DealCard({ c }: { c: Card }) {
         </div>
       )}
 
-      <div className="flex items-center justify-between mt-2.5 pt-2 border-t border-[#f0f0ec]">
+      <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[#f0f0ec]">
         <span className="text-[11.5px] text-[#9a9a95]">{c.phone ? formatPhone(c.phone) : '—'}</span>
-        <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
-          {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
+        <span className="flex items-center gap-2">
+          {amoHref && (
+            <a href={amoHref} target="_blank" rel="noopener noreferrer" title="Открыть сделку в АМО"
+              className="pointer-events-auto text-[11px] font-semibold text-[#4b4b47] px-1.5 py-0.5 rounded-md border border-[#e4e4e0] hover:border-[#111110] hover:text-[#111110] transition-colors">
+              АМО ↗
+            </a>
+          )}
+          <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
+            {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
+          </span>
         </span>
       </div>
-    </Link>
+      </div>
+    </div>
   )
 }
 
+// Замер: заявка отправлена ≠ замер проведён. Зелёный только на «проведён»,
+// назначенный — янтарь, просто заявка — нейтральный.
+function measureTone(m: Measure): 'plain' | 'warn' | 'good' {
+  if (m.status === 'done' || m.status === 'completed') return 'good'
+  if (m.scheduled_at || m.status === 'scheduled') return 'warn'
+  return 'plain'
+}
+
 function measureLabel(m: Measure) {
+  if (m.status === 'done' || m.status === 'completed') return 'замер ✓'
   if (m.scheduled_at) {
     const d = new Date(m.scheduled_at)
     if (!Number.isNaN(d.getTime())) return `замер ${d.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit', timeZone: 'Europe/Moscow' })}`
   }
-  if (m.status === 'done' || m.status === 'completed') return 'замер ✓'
-  return 'замер'
+  return 'замер заявлен'
 }
 
 const CHIP_TONE: Record<string, string> = {
