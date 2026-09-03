@@ -41,6 +41,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/sales',         label: 'Отдел продаж',     icon: '💰' },
   { href: '/kp',            label: 'КП',               icon: '📄' },
   { href: '/contracts',     label: 'Договор/Счёт',     icon: '📃' },
+  { href: '/deals',         label: 'Сделки',          icon: '🤝' },
   { href: '/calculations',  label: 'История расчётов', icon: '📋' },
   { href: '/orders',        label: 'Заказы',           icon: '📦' },
   { href: '/inventory',     label: 'Склад (остатки)',  icon: '🏬' },

@@ -251,9 +251,23 @@ export default function QuickCalcPage() {
         client_phone: clientPhone.trim() || undefined,
       })
       const ok = !!(res && 'id' in res && res.id)
-      if (ok) lastSavedSigRef.current = sig
-      if (!silent) setSaveMsg(ok ? 'Сохранено в историю расчётов ✓' : (res && 'error' in res ? res.error! : 'Не удалось сохранить'))
-      return ok
+      if (!ok) { if (!silent) setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return false }
+      lastSavedSigRef.current = sig
+      // Кабинет менеджера: расчёт с телефоном/адресом заводит сделку по объекту.
+      // Решение «создать/спросить/осиротеть» принимает сервер (/api/deals/ensure);
+      // best-effort — сохранение расчёта не блокируем, если сделка не завелась.
+      let createdDeal = false
+      if (clientPhone.trim() || objectAddress.trim()) {
+        try {
+          const er = await fetch('/api/deals/ensure', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calc_id: (res as { id: number }).id, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
+          }).then(x => x.json()).catch(() => null)
+          createdDeal = !!er?.created
+        } catch { /* заведём позже вручную из «требуют привязки» */ }
+      }
+      if (!silent) setSaveMsg(createdDeal ? 'Сохранено, заведена сделка ✓' : 'Сохранено в историю расчётов ✓')
+      return true
     } finally {
       if (!silent) { setSaving(false); setTimeout(() => setSaveMsg(null), 4000) }
     }
