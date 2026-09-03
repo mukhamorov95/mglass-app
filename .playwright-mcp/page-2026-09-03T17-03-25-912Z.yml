@@ -1,0 +1,51 @@
+- generic [active] [ref=f21e1]:
+  - generic [ref=f21e2]:
+    - complementary [ref=f21e3]:
+      - generic [ref=f21e4]:
+        - link "MG MGlass" [ref=f21e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f21e6]: MG
+          - generic [ref=f21e8]: MGlass
+        - generic [ref=f21e9]:
+          - generic [ref=f21e10]:
+            - button "СЕО" [ref=f21e11]
+            - button "CFO" [ref=f21e12]
+            - button "Админ" [ref=f21e13]
+          - generic [ref=f21e14]:
+            - button "Менеджер" [ref=f21e15]
+            - button "Произв." [ref=f21e16]
+            - button "Замерщик" [ref=f21e17]
+      - navigation [ref=f21e18]:
+        - link "🔒 Влад" [ref=f21e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f21e21]: 🔒
+          - generic [ref=f21e22]: Влад
+        - button "MGlass" [ref=f21e24]
+        - button "B2B" [ref=f21e32]
+      - generic [ref=f21e38]:
+        - generic [ref=f21e39]:
+          - generic [ref=f21e40]: A
+          - paragraph [ref=f21e42]: admin@mglass.ru
+        - button "Выйти" [ref=f21e43]
+    - main [ref=f21e44]:
+      - generic [ref=f21e46]:
+        - generic [ref=f21e47]:
+          - generic [ref=f21e48]:
+            - heading "Платные сервисы" [level=1] [ref=f21e49]
+            - paragraph [ref=f21e50]: Что подключено, что даёт, сколько стоит и когда платить
+          - button "⟳ Проверить все" [ref=f21e51]
+        - generic [ref=f21e52]:
+          - generic [ref=f21e53]:
+            - paragraph [ref=f21e54]: 0 ₽
+            - paragraph [ref=f21e55]: в месяц · известно по 0
+          - generic [ref=f21e56]:
+            - paragraph [ref=f21e57]: "0"
+            - paragraph [ref=f21e58]: критичных без цены
+          - generic [ref=f21e59]:
+            - paragraph [ref=f21e60]: "0"
+            - paragraph [ref=f21e61]: требуют внимания
+          - generic [ref=f21e62]:
+            - paragraph [ref=f21e63]: "0"
+            - paragraph [ref=f21e64]: платить в 2 недели
+        - paragraph [ref=f21e65]: Загрузка…
+  - alert [ref=f21e66]

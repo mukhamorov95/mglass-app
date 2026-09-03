@@ -1,0 +1,114 @@
+- generic [active] [ref=f25e1]:
+  - generic [ref=f25e2]:
+    - complementary [ref=f25e3]:
+      - generic [ref=f25e4]:
+        - link "MG MGlass" [ref=f25e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f25e6]: MG
+          - generic [ref=f25e8]: MGlass
+        - generic [ref=f25e9]:
+          - generic [ref=f25e10]:
+            - button "СЕО" [ref=f25e11]
+            - button "CFO" [ref=f25e12]
+            - button "Админ" [ref=f25e13]
+          - generic [ref=f25e14]:
+            - button "Менеджер" [ref=f25e15]
+            - button "Произв." [ref=f25e16]
+            - button "Замерщик" [ref=f25e17]
+      - navigation [ref=f25e18]:
+        - link "🔒 Влад" [ref=f25e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f25e21]: 🔒
+          - generic [ref=f25e22]: Влад
+        - button "MGlass" [ref=f25e24]
+        - button "B2B" [ref=f25e32]
+      - generic [ref=f25e38]:
+        - generic [ref=f25e39]:
+          - generic [ref=f25e40]: A
+          - paragraph [ref=f25e42]: admin@mglass.ru
+        - button "Выйти" [ref=f25e43]
+    - main [ref=f25e44]:
+      - generic [ref=f25e46]:
+        - generic [ref=f25e47]:
+          - link "← Пульт продвижения" [ref=f25e48] [cursor=pointer]:
+            - /url: /marketing/promo
+          - heading "Регламент продвижения" [level=1] [ref=f25e49]
+          - paragraph [ref=f25e50]: От идеи до разбора. Шаги с пометкой «нужны кредиты» упрутся в баланс Higgsfield.
+        - generic [ref=f25e51]:
+          - generic [ref=f25e52]:
+            - generic [ref=f25e53]: "0"
+            - generic [ref=f25e54]:
+              - heading "Проверка ресурсов" [level=2] [ref=f25e56]
+              - paragraph [ref=f25e57]: "Открыть «Платные сервисы» и посмотреть баланс Higgsfield. Если кредитов меньше порога — пополнить: иначе генерация упадёт на первом кадре, а сценарий уже будет написан."
+              - paragraph [ref=f25e58]: Норма расхода на ролик станет известна после первых десяти — тогда порог и заведём.
+          - generic [ref=f25e59]:
+            - generic [ref=f25e60]: "1"
+            - generic [ref=f25e61]:
+              - heading "Идея" [level=2] [ref=f25e63]
+              - paragraph [ref=f25e64]: "Приходит из «Дневного плана AI» или заводится руками. Одна идея — одна карточка. Без карточки работа не начинается: иначе ролик живёт в голове и теряется."
+          - generic [ref=f25e65]:
+            - generic [ref=f25e66]: "2"
+            - generic [ref=f25e67]:
+              - heading "Сценарий" [level=2] [ref=f25e69]
+              - paragraph [ref=f25e70]: Генерится в AI Video Factory. Хук и призыв к действию вычитывает владелец — это два места, где машина чаще всего промахивается по тону. Остальное можно оставить как есть.
+          - generic [ref=f25e71]:
+            - generic [ref=f25e72]: "3"
+            - generic [ref=f25e73]:
+              - generic [ref=f25e74]:
+                - heading "Кадры" [level=2] [ref=f25e75]
+                - generic [ref=f25e76]: нужны кредиты
+              - paragraph [ref=f25e77]: "Раскадровка из сценария уходит в генерацию. Для товара — студийная съёмка, для абстрактных сцен — прямая генерация. Референсы своих реальных изделий грузить обязательно: иначе стекло получится стоковым, а не нашим."
+              - paragraph [ref=f25e78]: Брак перегенерировать точечно, а не весь набор — каждый кадр стоит денег.
+          - generic [ref=f25e79]:
+            - generic [ref=f25e80]: "4"
+            - generic [ref=f25e81]:
+              - generic [ref=f25e82]:
+                - heading "Анимация" [level=2] [ref=f25e83]
+                - generic [ref=f25e84]: нужны кредиты
+              - paragraph [ref=f25e85]: "Отобранные кадры оживляются. Движение медленное: стекло и зеркало плохо переносят резкие панорамы — на бликах вылезают артефакты."
+          - generic [ref=f25e86]:
+            - generic [ref=f25e87]: "5"
+            - generic [ref=f25e88]:
+              - generic [ref=f25e89]:
+                - heading "Озвучка" [level=2] [ref=f25e90]
+                - generic [ref=f25e91]: нужны кредиты
+              - paragraph [ref=f25e92]: "Текст диктора из сценария. Голос выбирается один раз и фиксируется здесь же: узнаваемость канала важнее разнообразия."
+          - generic [ref=f25e93]:
+            - generic [ref=f25e94]: "6"
+            - generic [ref=f25e95]:
+              - generic [ref=f25e96]:
+                - heading "Монтаж" [level=2] [ref=f25e97]
+                - generic [ref=f25e98]: нужны кредиты
+              - paragraph [ref=f25e99]: Сборка кадров, озвучки и титров по заметкам из сценария. Своё телефонное видео подмешивается на этом шаге.
+              - paragraph [ref=f25e100]: Для своего видео нужен ffmpeg — на машине его сейчас нет.
+          - generic [ref=f25e101]:
+            - generic [ref=f25e102]: "7"
+            - generic [ref=f25e103]:
+              - generic [ref=f25e104]:
+                - heading "Субтитры" [level=2] [ref=f25e105]
+                - generic [ref=f25e106]: нужны кредиты
+              - paragraph [ref=f25e107]: "Вшиваются в кадр. Не пропускать: без субтитров рилс теряет досмотры — большинство смотрит без звука."
+          - generic [ref=f25e108]:
+            - generic [ref=f25e109]: "8"
+            - generic [ref=f25e110]:
+              - generic [ref=f25e111]:
+                - heading "Обложка" [level=2] [ref=f25e112]
+                - generic [ref=f25e113]: нужны кредиты
+              - paragraph [ref=f25e114]: Делается по идее обложки из сценария.
+          - generic [ref=f25e115]:
+            - generic [ref=f25e116]: "9"
+            - generic [ref=f25e117]:
+              - heading "Проверка" [level=2] [ref=f25e119]
+              - paragraph [ref=f25e120]: Прогнать ролик через оценку до публикации. Низкая оценка — вернуться к шагу 2 и переписать хук, а не публиковать как есть.
+          - generic [ref=f25e121]:
+            - generic [ref=f25e122]: "10"
+            - generic [ref=f25e123]:
+              - heading "Публикация" [level=2] [ref=f25e125]
+              - paragraph [ref=f25e126]: "TikTok — напрямую, с трендовым звуком. Остальные площадки — выгрузка файла и ручная заливка. Ссылка и метрики заносятся в карточку: просмотры, заявки, сохранения."
+          - generic [ref=f25e127]:
+            - generic [ref=f25e128]: "11"
+            - generic [ref=f25e129]:
+              - heading "Разбор" [level=2] [ref=f25e131]
+              - paragraph [ref=f25e132]: "Раз в неделю: какие хуки дали заявки. Победившие формулировки возвращаются в генератор сценариев — так он умнеет. Без этого шага каждый следующий ролик начинается с нуля."
+        - paragraph [ref=f25e133]: Шаги 1, 2, 9 и 11 работают без кредитов — идея, сценарий, проверка и разбор. Это половина процесса, и она не ждёт пополнения баланса.
+  - alert [ref=f25e134]

@@ -55,70 +55,119 @@ function onCanvasCreated(state: RootState) {
   w.__r3fRender = () => state.gl.render(state.scene, state.camera)
 }
 
-// Процедурная плитка ниши: одна крупная плитка с тонким швом (CanvasTexture,
-// офлайн). Repeat тиражирует её в аккуратную сетку — без резкой «шахматки».
-function makeTileTexture(): THREE.CanvasTexture {
-  const S = 512
+// R2 · Плитка: крупноформатный керамогранит 600×1200 со смещённой раскладкой.
+// Ячейка текстуры — 1200×2400 мм (2×2 плитки, нижний ряд сдвинут на половину),
+// поэтому шов не выстраивается в сплошную сетку и не читается «кафелем 10×10».
+// Три карты вместо одной: цвет, рельеф (только шов) и шероховатость (шов матовее).
+// Раньше рельеф брался с карты цвета — и прожилки камня выдавливались как борозды.
+const TILE_W = 0.6, TILE_H = 1.2          // м
+const CELL_W = TILE_W * 2, CELL_H = TILE_H * 2
+const GROUT_MM = 3                        // тонкий шов, как в каталожных рендерах
+
+type TileMaps = { color: THREE.CanvasTexture; height: THREE.CanvasTexture; rough: THREE.CanvasTexture }
+
+function drawTileCell(kind: 'color' | 'height' | 'rough'): HTMLCanvasElement {
+  const PX = 1024                                   // пикселей на 1200 мм ширины ячейки
   const c = document.createElement('canvas')
-  c.width = c.height = S
+  c.width = PX; c.height = PX * (CELL_H / CELL_W)
   const ctx = c.getContext('2d')!
-  const grout = 7
-  // шов — тёмный, с мягким градиентом → глубина затирки
-  ctx.fillStyle = '#a7a39b'
-  ctx.fillRect(0, 0, S, S)
-  // тело плитки (тёплый off-white, диагональный градиент)
-  const g = ctx.createLinearGradient(0, 0, S * 0.75, S)
-  g.addColorStop(0, '#f1f0eb'); g.addColorStop(0.5, '#eae8e2'); g.addColorStop(1, '#e2e0d9')
-  ctx.fillStyle = g
-  ctx.fillRect(0, 0, S - grout, S - grout)
-  // мягкая фаска-тень у шва (низ/право) — плитка «утоплена»
-  const bevel = 26
-  const sh = ctx.createLinearGradient(S - grout - bevel, 0, S - grout, 0)
-  sh.addColorStop(0, 'rgba(120,116,108,0)'); sh.addColorStop(1, 'rgba(120,116,108,0.22)')
-  ctx.fillStyle = sh; ctx.fillRect(S - grout - bevel, 0, bevel, S - grout)
-  const sv = ctx.createLinearGradient(0, S - grout - bevel, 0, S - grout)
-  sv.addColorStop(0, 'rgba(120,116,108,0)'); sv.addColorStop(1, 'rgba(120,116,108,0.22)')
-  ctx.fillStyle = sv; ctx.fillRect(0, S - grout - bevel, S - grout, bevel)
-  // блик у верх/лево кромки — противоположная фаска (объём)
-  ctx.fillStyle = 'rgba(255,255,255,0.35)'
-  ctx.fillRect(0, 0, S - grout, 2); ctx.fillRect(0, 0, 2, S - grout)
-  // прожилки мрамора (низкая заметность)
-  ctx.strokeStyle = 'rgba(150,147,140,0.14)'; ctx.lineWidth = 2.4
-  const V = S / 256
-  const veins = [[30, 70, 130, 30, 210, 120], [200, 20, 150, 130, 230, 230], [40, 200, 120, 170, 90, 250], [120, 40, 60, 150, 180, 210]]
-  for (const [x1, y1, cx, cy, x2, y2] of veins) {
-    ctx.beginPath(); ctx.moveTo(x1 * V, y1 * V); ctx.quadraticCurveTo(cx * V, cy * V, x2 * V, y2 * V); ctx.stroke()
+  const mm = PX / (CELL_W * 1000)                   // пикселей на миллиметр
+  const g = GROUT_MM * mm
+  const tw = TILE_W * 1000 * mm, th = TILE_H * 1000 * mm
+
+  const groutFill = kind === 'color' ? '#c3bcae' : kind === 'height' ? '#000000' : '#ffffff'
+  ctx.fillStyle = groutFill
+  ctx.fillRect(0, 0, c.width, c.height)
+
+  const paintTile = (x: number, y: number, seed: number) => {
+    const x0 = x + g / 2, y0 = y + g / 2, w = tw - g, h = th - g
+    if (kind === 'height') { ctx.fillStyle = '#ffffff'; ctx.fillRect(x0, y0, w, h); return }
+    if (kind === 'rough')  { ctx.fillStyle = '#b4b4b4'; ctx.fillRect(x0, y0, w, h); return }
+    // цвет: тёплый бежевый с очень слабым уходом тона по диагонали
+    const grd = ctx.createLinearGradient(x0, y0, x0 + w, y0 + h)
+    const a = 4 + ((seed * 7) % 5)
+    grd.addColorStop(0, `rgb(${232 - a},${227 - a},${216 - a})`)
+    grd.addColorStop(0.55, `rgb(${226 - a},${220 - a},${208 - a})`)
+    grd.addColorStop(1, `rgb(${219 - a},${213 - a},${200 - a})`)
+    ctx.fillStyle = grd
+    ctx.fillRect(x0, y0, w, h)
+    // Прожилки камня. Держим их НА ГРАНИ ЗАМЕТНОСТИ: сплошная жилка через всю
+    // плитку читается как полоса ткани, а не как керамогранит. Короткие отрезки,
+    // разные у каждой плитки, прозрачность в пределах шума.
+    ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, w, h); ctx.clip()
+    ctx.lineWidth = Math.max(1, w * 0.004)
+    for (let i = 0; i < 4; i++) {
+      const k = seed * 5 + i * 13
+      const sx = x0 + ((k * 137) % 100) / 100 * w
+      const sy = y0 + ((k * 71) % 100) / 100 * h
+      const len = h * (0.18 + ((k * 29) % 30) / 100)
+      const bend = w * (((k * 17) % 20) - 10) / 100
+      ctx.strokeStyle = `rgba(172,166,153,${0.035 + ((k * 11) % 3) / 100})`
+      ctx.beginPath()
+      ctx.moveTo(sx, sy)
+      ctx.quadraticCurveTo(sx + bend, sy + len * 0.5, sx + bend * 0.3, sy + len)
+      ctx.stroke()
+    }
+    ctx.restore()
   }
-  const tex = new THREE.CanvasTexture(c)
-  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-  tex.anisotropy = 8
-  return tex
+
+  // верхний ряд — без сдвига, нижний — на половину плитки (кирпичная раскладка)
+  for (let i = -1; i <= 2; i++) paintTile(i * tw, 0, i + 2)
+  for (let i = -1; i <= 2; i++) paintTile(i * tw + tw / 2, th, i + 7)
+  return c
 }
 
-const TILE_M = 0.34   // видимый размер плитки, м (крупный формат)
+function makeTileMaps(): TileMaps {
+  const mk = (kind: 'color' | 'height' | 'rough') => {
+    const tex = new THREE.CanvasTexture(drawTileCell(kind))
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+    tex.anisotropy = 8
+    return tex
+  }
+  return { color: mk('color'), height: mk('height'), rough: mk('rough') }
+}
 
-function tiledMaterial(base: THREE.CanvasTexture, uM: number, vM: number) {
-  const t = base.clone()
-  t.needsUpdate = true
-  t.repeat.set(Math.max(1, uM / TILE_M), Math.max(1, vM / TILE_M))
-  return t
+// Размножение ячейки по поверхности. Ячейка — 2×2 плитки, поэтому делим на CELL,
+// а не на размер плитки: иначе смещённый ряд рвался бы на стыке повторов.
+function tiledMaps(maps: TileMaps, uM: number, vM: number): TileMaps {
+  const cl = (tex: THREE.CanvasTexture) => {
+    const c = tex.clone()
+    c.needsUpdate = true
+    c.repeat.set(Math.max(1, uM / CELL_W), Math.max(1, vM / CELL_H))
+    return c
+  }
+  return { color: cl(maps.color), height: cl(maps.height), rough: cl(maps.rough) }
+}
+
+// Поддон отдельным узлом — акрил со скруглёнными кромками и мокрым подблеском.
+function Tray({ w, depth, trayH }: { w: number; depth: number; trayH: number }) {
+  return (
+    <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
+      position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
+      <meshPhysicalMaterial color="#f4f2ee" roughness={0.14} metalness={0.02}
+        clearcoat={0.6} clearcoatRoughness={0.12} envMapIntensity={1.0} />
+    </RoundedBox>
+  )
 }
 
 function NicheMesh({ niche }: { niche: Niche }) {
-  const { w, depth, wallH, trayH } = niche
-  const base = useMemo(() => makeTileTexture(), [])
-  // R1: комната замкнута в УГОЛ. Раньше облицовывалась одна стена по флагам ниши,
-  // вокруг оставался белый фон — изделие висело в пустоте. Задняя и дальняя боковая
-  // рисуются всегда; ближняя к камере не рисуется никогда, иначе она закроет кадр.
+  const { w, depth, wallH, trayH, walls } = niche
+  const base = useMemo(() => makeTileMaps(), [])
+  // Комната замкнута в УГОЛ. Стены — ТЕ, что объявила раскладка: к ним приходят
+  // профили и стёкла, придуманная стена «где красивее» оставила бы профиль
+  // висеть в пустоте. Стены, обращённые от камеры, отсекаются самим рендером
+  // (плоскость односторонняя), поэтому ближняя обзор не закрывает.
   const WH = wallH + 0.9                    // стены заметно выше кабины
   const EXT = 3.0                           // вынос стен за габарит — угол уходит за кадр
   const FW = w + 7, FD = depth + 7          // пол доходит до камеры и за неё
-  const floorMat = useMemo(() => tiledMaterial(base, FW, FD), [base, FW, FD])
-  const backMat = useMemo(() => tiledMaterial(base, w + EXT, WH), [base, w, WH])
-  const sideMat = useMemo(() => tiledMaterial(base, depth + EXT, WH), [base, depth, WH])
-  // V5: та же текстура как bump-карта — тёмная затирка утоплена → рельеф шва под светом.
-  const tile = (map: THREE.Texture) =>
-    <meshStandardMaterial map={map} bumpMap={map} bumpScale={0.5} color="#e9e5dc" roughness={0.55} metalness={0.04} envMapIntensity={0.75} />
+  const floorMaps = useMemo(() => tiledMaps(base, FW, FD), [base, FW, FD])
+  const backMaps = useMemo(() => tiledMaps(base, w + EXT * 2, WH), [base, w, WH, EXT])
+  const sideMaps = useMemo(() => tiledMaps(base, depth + EXT * 2, WH), [base, depth, WH, EXT])
+  // Рельеф — только по шву (своя карта): раньше рельеф брался с карты цвета, и
+  // прожилки камня выдавливались бороздами. Шов ещё и матовее тела плитки.
+  const tile = (m: TileMaps) =>
+    <meshStandardMaterial map={m.color} bumpMap={m.height} bumpScale={-0.35}
+      roughnessMap={m.rough} roughness={0.9} metalness={0.02} envMapIntensity={0.7} />
 
   return (
     <group>
@@ -128,21 +177,28 @@ function NicheMesh({ niche }: { niche: Niche }) {
         {/* Глянцевая плитка (полированный керамогранит): отражение окружения через
             envMap — без off-screen прохода MeshReflectorMaterial, который конфликтовал
             с MeshTransmissionMaterial стекла и давал чёрный артефакт на части GPU. */}
-        <meshStandardMaterial map={floorMat} color="#e6e2d9" roughness={0.42} metalness={0.05} envMapIntensity={0.85} />
+        <meshStandardMaterial map={floorMaps.color} bumpMap={floorMaps.height} bumpScale={-0.25}
+          roughnessMap={floorMaps.rough} roughness={0.5} metalness={0.04} envMapIntensity={0.9} />
       </mesh>
-      <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
-        <planeGeometry args={[w + EXT * 2, WH]} />
-        {tile(backMat)}
-      </mesh>
-      <mesh position={[w + EXT / 2, WH / 2, depth / 2]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-        <planeGeometry args={[depth + EXT * 2, WH]} />
-        {tile(sideMat)}
-      </mesh>
-      {/* V4: поддон — акрил/камень со скруглёнными кромками и мокрым подблеском (clearcoat) */}
-      <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
-        position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
-        <meshPhysicalMaterial color="#f4f2ee" roughness={0.14} metalness={0.02} clearcoat={0.6} clearcoatRoughness={0.12} envMapIntensity={1.0} />
-      </RoundedBox>
+      {walls.back && (
+        <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
+          <planeGeometry args={[w + EXT * 2, WH]} />
+          {tile(backMaps)}
+        </mesh>
+      )}
+      {walls.right && (
+        <mesh position={[w, WH / 2, depth / 2]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+          <planeGeometry args={[depth + EXT * 2, WH]} />
+          {tile(sideMaps)}
+        </mesh>
+      )}
+      {walls.left && (
+        <mesh position={[0, WH / 2, depth / 2]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
+          <planeGeometry args={[depth + EXT * 2, WH]} />
+          {tile(sideMaps)}
+        </mesh>
+      )}
+      <Tray w={w} depth={depth} trayH={trayH} />
     </group>
   )
 }
@@ -292,7 +348,10 @@ export default function Partition3D(
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
-        camera={{ position: [cx - camDist * 0.42, eye, cz - camDist * 0.92], fov: FOV }}
+        // Камера стоит ВНУТРИ комнаты, в её открытом углу (+X / −Z): раскладка ставит
+        // изделие в угол стен x=0 и z=depth. Снаружи ближняя стена отсекалась как
+        // обратная сторона плоскости, и профиль у стены упирался в белую пустоту.
+        camera={{ position: [cx + camDist * 0.46, eye, cz - camDist * 0.9], fov: FOV }}
         gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.92 }}
         onCreated={onCanvasCreated}
       >

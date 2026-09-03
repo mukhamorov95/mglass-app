@@ -171,3 +171,46 @@ describe('деталь без паспорта не ломает сцену', ()
     expect(handles[0].part).toBeUndefined()
   })
 })
+
+// Правки по замечаниям владельца 03.09: щель в пятиграннике, ролики, раздвижка.
+describe('геометрия по замечаниям владельца', () => {
+  const dims11 = { width: 1000, height: 2000, width2: 1000, doorWidth: 600 }
+
+  it('М11: дверь занимает диагональ целиком — щели между дверью и стационаром нет', () => {
+    const a = buildFromModel(getModel('М11'), dims11, 8, false)
+    const door = a.glass.find(g => g.role === 'door')!
+    const diag = a.metal.find(m => m.key === 'd-bot')!
+    expect(mm(door.size[0])).toBe(mm(diag.size[0]))
+  })
+
+  it('М11: срез следует ширине двери, а не половине стороны', () => {
+    const wide = buildFromModel(getModel('М11'), { ...dims11, doorWidth: 700 }, 8, false)
+    const narrow = buildFromModel(getModel('М11'), { ...dims11, doorWidth: 450 }, 8, false)
+    expect(mm(wide.glass.find(g => g.role === 'door')!.size[0])).toBe(700)
+    expect(mm(narrow.glass.find(g => g.role === 'door')!.size[0])).toBe(450)
+  })
+
+  it('раздвижная: ось ролика в 80 мм от кромки створки', () => {
+    const a = buildFromModel(getModel('М10'), { width: 1400, height: 2000, doorWidth: 700 }, 8, false)
+    const leaf = a.glass.find(g => g.role === 'door')!
+    const rollers = a.hardware.filter(h => h.model === 'roller')
+    expect(rollers.length).toBe(2)
+    const half = leaf.size[0] / 2
+    for (const r of rollers) {
+      const along = Math.abs(r.pos[0] - leaf.pos[0])
+      expect(mm(half - along)).toBe(80)
+    }
+  })
+
+  it('раздвижная закрывается и открывается кнопкой', () => {
+    const dims = { width: 1400, height: 2000, doorWidth: 700 }
+    const closed = buildFromModel(getModel('М10'), dims, 8, false).glass.find(g => g.role === 'door')!
+    const open = buildFromModel(getModel('М10'), dims, 8, true).glass.find(g => g.role === 'door')!
+    expect(mm(closed.pos[0])).not.toBe(mm(open.pos[0]))
+    // закрытая створка примыкает к стационару, открытая наезжает на него
+    const fixed = buildFromModel(getModel('М10'), dims, 8, false).glass.find(g => g.role === 'fixed')!
+    const gap = mm(closed.pos[0] - closed.size[0] / 2) - mm(fixed.pos[0] + fixed.size[0] / 2)
+    expect(Math.abs(gap)).toBeLessThanOrEqual(1)
+    expect(mm(open.pos[0])).toBeLessThan(mm(closed.pos[0]))
+  })
+})

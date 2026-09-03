@@ -1,0 +1,545 @@
+[     791ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[     852ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[     990ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[    1406ms] [LOG] [Fast Refresh] done in 516ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[    1632ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[    1873ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[    3995ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[    5850ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   48535ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   48644ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   48649ms] [LOG] [Fast Refresh] done in 185ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   54032ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   54053ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   54161ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   54325ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   56862ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[   58826ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  126392ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  126926ms] [LOG] [Fast Refresh] done in 560ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  127421ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  129343ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  131483ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  132547ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  132570ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  132680ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  132898ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  134813ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  136719ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  179106ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  179284ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  179297ms] [LOG] [Fast Refresh] done in 241ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  184412ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  184439ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  184529ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  184708ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  187190ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  187267ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  189330ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  233812ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  236533ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  238656ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  277788ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  279206ms] [ERROR] ./components/configurator/Partition3D.tsx:165:155
+Expected '</', got '}'
+  163 |             {/* Общий сэмплер преломления: у каждого стекла свой off-screen буфер, и при
+  164 |                 нескольких полотнах соседнее полотно попадало в буфер пустым — дверь
+> 165 |                 рисовалась белым прямоугольником. Встроенный сэмплер делает один проход. */}
+      |                                                                                            ^
+  166 |             transmissionSampler
+  167 |             transmission={0.96}
+  168 |             thickness={0.008}
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Client Component Browser:
+    ./components/configurator/Partition3D.tsx [Client Component Browser]
+    ./components/configurator/Partition3DView.tsx [Client Component Browser]
+    ./components/configurator/ConfiguratorClient.tsx [Client Component Browser]
+    ./components/configurator/ConfiguratorClient.tsx [Server Component]
+    ./app/configurator/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[  279774ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  280588ms] [ERROR] ./components/configurator/Partition3D.tsx:165:155
+Expected '</', got '}'
+  163 |             {/* Общий сэмплер преломления: у каждого стекла свой off-screen буфер, и при
+  164 |                 нескольких полотнах соседнее полотно попадало в буфер пустым — дверь
+> 165 |                 рисовалась белым прямоугольником. Встроенный сэмплер делает один проход. */}
+      |                                                                                            ^
+  166 |             transmissionSampler
+  167 |             transmission={0.96}
+  168 |             thickness={0.008}
+
+Parsing ecmascript source code failed
+
+Import trace:
+  Client Component Browser:
+    ./components/configurator/Partition3D.tsx [Client Component Browser]
+    ./components/configurator/Partition3DView.tsx [Client Component Browser]
+    ./components/configurator/ConfiguratorClient.tsx [Client Component Browser]
+    ./components/configurator/ConfiguratorClient.tsx [Server Component]
+    ./app/configurator/page.tsx [Server Component] @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[  299227ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  306925ms] [LOG] [Fast Refresh] done in 7745ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  309061ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  309210ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  309960ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  309973ms] [WARNING] WebGL: INVALID_OPERATION: loseContext: context already lost @ http://localhost:3000/_next/static/chunks/node_modules_three_build_three_module_024z3_h.js:11120
+[  339123ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  339162ms] [LOG] [Fast Refresh] done in 142ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  339741ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  339809ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  340154ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  340640ms] [LOG] [Fast Refresh] done in 593ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  341365ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  341882ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  344305ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  347721ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  359745ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  361869ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  363697ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[  386707ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2135123ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2136296ms] [LOG] [Fast Refresh] done in 1276ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2138378ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2138470ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2138754ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2138871ms] [LOG] [Fast Refresh] done in 252ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2138933ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2139592ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2142225ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2142772ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2143076ms] [LOG] [Fast Refresh] done in 403ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2144982ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2161267ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2162589ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2162751ms] [LOG] [Fast Refresh] done in 264ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2165272ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2166288ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2168378ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2214055ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2216075ms] [LOG] [Fast Refresh] done in 2133ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2241025ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2241304ms] [LOG] [Fast Refresh] done in 382ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2360629ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2361076ms] [LOG] [Fast Refresh] done in 494ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2361081ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2363822ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2364048ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2365690ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2365704ms] [LOG] [Fast Refresh] done in 116ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2366200ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2380287ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2380355ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2380359ms] [LOG] [Fast Refresh] done in 143ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2576580ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2577236ms] [LOG] [Fast Refresh] done in 765ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2591570ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2591751ms] [LOG] [Fast Refresh] done in 282ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2592224ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2592255ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2592382ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2592396ms] [LOG] [Fast Refresh] done in 115ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2592500ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2593100ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2595654ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2597525ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2614800ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2617026ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2617161ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2619275ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2619812ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2629922ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2668099ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2668331ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2668345ms] [LOG] [Fast Refresh] done in 286ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2675637ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2675673ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2675800ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2676127ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2678749ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2679163ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2681056ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2696056ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2698249ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2699934ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2701051ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2738625ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2739138ms] [LOG] [Fast Refresh] done in 615ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2761249ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2761674ms] [LOG] [Fast Refresh] done in 526ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2833426ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2835156ms] ReferenceError: makeTileTexture is not defined
+    at NicheMesh.useMemo[base] (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:227:40)
+    at Vi (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9734:25)
+    at Object.useMemo (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13559:32)
+    at exports.useMemo (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:1743:36)
+    at NicheMesh (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:226:191)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13239:32)
+    at It (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9108:25)
+    at ks (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10228:374)
+    at tt (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10559:32)
+    at B (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:7925:70)
+    at Ph (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12451:50)
+    at wh (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12368:36)
+    at Ff (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12359:21)
+    at Lf (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12130:75)
+    at Ap (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8326:35)
+    at Wa (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8270:165)
+    at Ls (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12223:51)
+    at Object.hu [as scheduleRefresh] (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:6623:71)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13
+[ 2834973ms] [LOG] [Fast Refresh] done in 1503ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2835001ms] [ERROR] %o
+
+%s ReferenceError: makeTileTexture is not defined
+    at NicheMesh.useMemo[base] (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:227:40)
+    at Vi (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9734:25)
+    at Object.useMemo (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13559:32)
+    at exports.useMemo (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:1743:36)
+    at NicheMesh (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:226:191)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13239:32)
+    at It (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9108:25)
+    at ks (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10228:374)
+    at tt (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10559:32)
+    at B (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:7925:70)
+    at Ph (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12451:50)
+    at wh (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12368:36)
+    at Ff (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12359:21)
+    at Lf (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12130:75)
+    at Ap (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8326:35)
+    at Wa (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8270:165)
+    at Ls (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12223:51)
+    at Object.hu [as scheduleRefresh] (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:6623:71)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 The above error occurred in the <CanvasImpl> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:3352
+[ 2835164ms] ReferenceError: makeTileTexture is not defined
+    at NicheMesh.useMemo[base] (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:227:40)
+    at ec (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9715:25)
+    at Object.useMemo (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13383:32)
+    at exports.useMemo (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:1743:36)
+    at NicheMesh (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:226:191)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13239:32)
+    at It (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9108:25)
+    at ks (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10228:374)
+    at tt (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10559:32)
+    at B (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:7925:70)
+    at Ph (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12451:50)
+    at wh (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12368:36)
+    at Ff (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12359:21)
+    at Lf (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12130:75)
+    at Tu (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8322:129)
+    at MessagePort.performWorkUntilDeadline (http://localhost:3000/_next/static/chunks/node_modules_09ob06o._.js:362:64)
+[ 2835059ms] [ERROR] ReferenceError: makeTileTexture is not defined
+    at NicheMesh.useMemo[base] (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:227:40)
+    at Vi (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9734:25)
+    at Object.useMemo (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13559:32)
+    at exports.useMemo (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:1743:36)
+    at NicheMesh (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:226:191)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13239:32)
+    at It (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9108:25)
+    at ks (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10228:374)
+    at tt (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10559:32)
+    at B (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:7925:70)
+    at Ph (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12451:50)
+    at wh (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12368:36)
+    at Ff (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12359:21)
+    at Lf (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12130:75)
+    at Ap (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8326:35)
+    at Wa (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8270:165)
+    at Ls (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12223:51)
+    at Object.hu [as scheduleRefresh] (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:6623:71)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[ 2835060ms] [ERROR] ReferenceError: makeTileTexture is not defined
+    at NicheMesh.useMemo[base] (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:227:40)
+    at Vi (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9734:25)
+    at Object.useMemo (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13559:32)
+    at exports.useMemo (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:1743:36)
+    at NicheMesh (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:226:191)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:13239:32)
+    at It (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:9108:25)
+    at ks (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10228:374)
+    at tt (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:10559:32)
+    at B (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:7925:70)
+    at Ph (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12451:50)
+    at wh (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12368:36)
+    at Ff (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12359:21)
+    at Lf (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12130:75)
+    at Ap (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8326:35)
+    at Wa (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:8270:165)
+    at Ls (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:12223:51)
+    at Object.hu [as scheduleRefresh] (http://localhost:3000/_next/static/chunks/node_modules_%40react-three_fiber_dist_0v_agn3._.js:6623:71)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[ 2835447ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2835619ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2836603ms] [LOG] [Fast Refresh] done in 1259ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2884536ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2886454ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2886703ms] [LOG] [Fast Refresh] done in 1623ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2887177ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2892873ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2893070ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2896868ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2935914ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2936096ms] [LOG] [Fast Refresh] done in 287ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2939107ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2939274ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2939702ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2939800ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2940402ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2940460ms] [LOG] [Fast Refresh] done in 935ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2946220ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2947250ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2947395ms] [LOG] [Fast Refresh] done in 249ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2949676ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2976108ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2980206ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2980516ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2981062ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 2982732ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3028105ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3030636ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3030672ms] [LOG] [Fast Refresh] done in 2546ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3034516ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3034923ms] [LOG] [Fast Refresh] done in 511ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3036012ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3036069ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3036348ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3037014ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3040575ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3040666ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3043132ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3056223ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3059354ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3059557ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3061208ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3063168ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3126990ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3127169ms] [ERROR] %o
+
+%s ReferenceError: mirrorMat is not defined
+    at Partition3D (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:1150:39)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15038:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4621:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6082:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6692:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:966:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9556:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9450:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9434:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9099:47)
+    at performSyncWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10264:9)
+    at flushSyncWorkAcrossRoots_impl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10180:316)
+    at flushSyncWork$1 (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9231:86)
+    at Object.scheduleRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:300:13)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 The above error occurred in the <Partition3D> component. It was handled by the <ErrorBoundaryHandler> error boundary. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:3352
+[ 3127173ms] [ERROR] ReferenceError: mirrorMat is not defined
+    at Partition3D (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:1150:39)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15038:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4621:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6082:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6692:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:966:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9556:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9450:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9434:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9099:47)
+    at performSyncWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10264:9)
+    at flushSyncWorkAcrossRoots_impl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10180:316)
+    at flushSyncWork$1 (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9231:86)
+    at Object.scheduleRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:300:13)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[ 3127174ms] [ERROR] ReferenceError: mirrorMat is not defined
+    at Partition3D (http://localhost:3000/_next/static/chunks/_11-afz0._.js?id=%255Bproject%255D%252Fcomponents%252Fconfigurator%252FPartition3D.tsx+%255Bapp-client%255D+%2528ecmascript%2529:1150:39)
+    at Object.react_stack_bottom_frame (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:15038:24)
+    at renderWithHooks (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:4621:24)
+    at updateFunctionComponent (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6082:21)
+    at beginWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:6692:24)
+    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:966:74)
+    at performUnitOfWork (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9556:97)
+    at workLoopSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9450:40)
+    at renderRootSync (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9434:13)
+    at performWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9099:47)
+    at performSyncWorkOnRoot (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10264:9)
+    at flushSyncWorkAcrossRoots_impl (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:10180:316)
+    at flushSyncWork$1 (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:9231:86)
+    at Object.scheduleRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_react-dom_058-ah~._.js:300:13)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:392:33
+    at Set.forEach (<anonymous>)
+    at Object.performReactRefresh (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:385:38)
+    at applyUpdate (http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:879:31)
+    at http://localhost:3000/_next/static/chunks/node_modules_next_dist_compiled_00yae29._.js:887:13 @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1915
+[ 3127178ms] [LOG] [Fast Refresh] done in 269ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3127331ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3127513ms] [LOG] [Fast Refresh] done in 283ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3127684ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3147856ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3148027ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3148078ms] [LOG] [Fast Refresh] done in 231ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3148346ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3150653ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3150808ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3152910ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3165567ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3165591ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3165699ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3165980ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3168252ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3168514ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3170465ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3186234ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3188954ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3190617ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3191230ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3239482ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3240122ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3240946ms] [LOG] [Fast Refresh] done in 412ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3250710ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3250739ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3250847ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3251131ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3253582ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3255539ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3271424ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3273860ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3274136ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3276419ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3276531ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3332280ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3332617ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3333832ms] [LOG] [Fast Refresh] done in 366ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3347929ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3348011ms] [LOG] [Fast Refresh] done in 185ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3348365ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3348405ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3348532ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3348909ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3351385ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3351471ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3353273ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3370298ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3372501ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3374335ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3375306ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3424429ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3426772ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3427008ms] [LOG] [Fast Refresh] done in 2319ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3465364ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3465757ms] [LOG] [Fast Refresh] done in 494ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3466769ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3467065ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3467377ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3467452ms] [LOG] [Fast Refresh] done in 176ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3467469ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3468199ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3468638ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3468677ms] [LOG] [Fast Refresh] done in 140ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3472608ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3475707ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3489425ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3490830ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3490962ms] [LOG] [Fast Refresh] done in 235ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3493496ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3494424ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3495752ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3546928ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3556306ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3556343ms] [LOG] [Fast Refresh] done in 9230ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3557663ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3561875ms] [LOG] [Fast Refresh] done in 4311ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3565542ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3565591ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3565753ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3565801ms] [LOG] [Fast Refresh] done in 150ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3565918ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3566547ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3568831ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3571213ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3615139ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3616675ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3616724ms] [LOG] [Fast Refresh] done in 1488ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3622930ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3622963ms] [LOG] [Fast Refresh] done in 135ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3623327ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3623362ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3623500ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3624081ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3625903ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3627755ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3669614ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3670620ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3671625ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3672644ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3673655ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3678669ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3683674ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3688689ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=xHTANhciHaupFe-7VWiH0' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 3736430ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3795819ms] [LOG] [Client Instrumentation Hook] Slow execution detected: 24ms (Note: Code download overhead is not included in this measurement) @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:703
+[ 3795828ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3795975ms] [LOG] [HMR] connected @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3796451ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3797658ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3800076ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3808393ms] [LOG] [Fast Refresh] done in 12054ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3814310ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3814728ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3817902ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3829404ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3834875ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3840169ms] [LOG] [Fast Refresh] done in 10857ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3840747ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3858179ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3858948ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3859065ms] [LOG] [Fast Refresh] done in 218ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3862219ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3919928ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3922924ms] [LOG] [Fast Refresh] done in 2906ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3922945ms] [WARNING] THREE.Clock: This module has been deprecated. Please use THREE.Timer instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3923661ms] [WARNING] THREE.WebGLShadowMap: PCFSoftShadowMap has been deprecated. Using PCFShadowMap instead. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 3924247ms] [LOG] THREE.WebGLRenderer: Context Lost. @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4537259ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4543440ms] [LOG] [Fast Refresh] done in 6361ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4889149ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4907367ms] [LOG] [Fast Refresh] done in 18315ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4924337ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4924654ms] [LOG] [Fast Refresh] done in 420ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4926734ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 4926811ms] [LOG] [Fast Refresh] done in 178ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 5047073ms] [LOG] [Fast Refresh] rebuilding @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 5049696ms] [LOG] [Fast Refresh] done in 2729ms @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_038ce8_._.js:1074
+[ 5197533ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5198549ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5199565ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5200578ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5201595ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5206612ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5211883ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5217035ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5222799ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5228071ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5233922ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499
+[ 5239595ms] [ERROR] WebSocket connection to 'ws://localhost:3000/_next/webpack-hmr?id=MKfLqfFhxzf2179SxMamG' failed: Error in connection establishment: net::ERR_CONNECTION_REFUSED @ http://localhost:3000/_next/static/chunks/node_modules_next_dist_client_0.0dnbh._.js:14499

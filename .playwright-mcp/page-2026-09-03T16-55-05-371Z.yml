@@ -1,0 +1,112 @@
+- generic [active] [ref=f14e1]:
+  - generic [ref=f14e2]:
+    - complementary [ref=f14e3]:
+      - generic [ref=f14e4]:
+        - link "MG MGlass" [ref=f14e5] [cursor=pointer]:
+          - /url: /
+          - generic [ref=f14e6]: MG
+          - generic [ref=f14e8]: MGlass
+        - generic [ref=f14e9]:
+          - generic [ref=f14e10]:
+            - button "СЕО" [ref=f14e11]
+            - button "CFO" [ref=f14e12]
+            - button "Админ" [ref=f14e13]
+          - generic [ref=f14e14]:
+            - button "Менеджер" [ref=f14e15]
+            - button "Произв." [ref=f14e16]
+            - button "Замерщик" [ref=f14e17]
+      - navigation [ref=f14e18]:
+        - link "🔒 Влад" [ref=f14e20] [cursor=pointer]:
+          - /url: /vlad
+          - generic [ref=f14e21]: 🔒
+          - generic [ref=f14e22]: Влад
+        - generic [ref=f14e23]:
+          - button "MGlass" [ref=f14e24]
+          - generic [ref=f14e30]:
+            - generic [ref=f14e31]: Калькуляторы
+            - link "⚡ Быстрый расчёт" [ref=f14e32] [cursor=pointer]:
+              - /url: /calculator/quick
+              - generic [ref=f14e33]: ⚡
+              - generic [ref=f14e34]: Быстрый расчёт
+            - link "🚿 Расчёт" [ref=f14e35] [cursor=pointer]:
+              - /url: /calculator/build
+              - generic [ref=f14e36]: 🚿
+              - generic [ref=f14e37]: Расчёт
+            - link "🧾 Расчёт B2B" [ref=f14e38] [cursor=pointer]:
+              - /url: /calculator/b2b-mglass
+              - generic [ref=f14e39]: 🧾
+              - generic [ref=f14e40]: Расчёт B2B
+            - link "🧊 Визуализатор 3D" [ref=f14e41] [cursor=pointer]:
+              - /url: /configurator
+              - generic [ref=f14e42]: 🧊
+              - generic [ref=f14e43]: Визуализатор 3D
+            - generic [ref=f14e44]: Продажи
+            - link "📊 CRM · Продажи" [ref=f14e45] [cursor=pointer]:
+              - /url: /crm
+              - generic [ref=f14e46]: 📊
+              - generic [ref=f14e47]: CRM · Продажи
+            - link "💰 Отдел продаж" [ref=f14e48] [cursor=pointer]:
+              - /url: /sales
+              - generic [ref=f14e49]: 💰
+              - generic [ref=f14e50]: Отдел продаж
+            - link "📄 КП" [ref=f14e51] [cursor=pointer]:
+              - /url: /kp
+              - generic [ref=f14e52]: 📄
+              - generic [ref=f14e53]: КП
+            - link "📃 Договор/Счёт" [ref=f14e54] [cursor=pointer]:
+              - /url: /contracts
+              - generic [ref=f14e55]: 📃
+              - generic [ref=f14e56]: Договор/Счёт
+            - link "🤝 Сделки" [ref=f14e57] [cursor=pointer]:
+              - /url: /deals
+              - generic [ref=f14e58]: 🤝
+              - generic [ref=f14e59]: Сделки
+            - link "📋 История расчётов" [ref=f14e60] [cursor=pointer]:
+              - /url: /calculations
+              - generic [ref=f14e61]: 📋
+              - generic [ref=f14e62]: История расчётов
+            - link "📦 Заказы" [ref=f14e63] [cursor=pointer]:
+              - /url: /orders
+              - generic [ref=f14e64]: 📦
+              - generic [ref=f14e65]: Заказы
+            - link "🏬 Склад (остатки)" [ref=f14e66] [cursor=pointer]:
+              - /url: /inventory
+              - generic [ref=f14e67]: 🏬
+              - generic [ref=f14e68]: Склад (остатки)
+            - link "👤 Клиенты" [ref=f14e69] [cursor=pointer]:
+              - /url: /clients
+              - generic [ref=f14e70]: 👤
+              - generic [ref=f14e71]: Клиенты
+            - link "📅 Календарь" [ref=f14e72] [cursor=pointer]:
+              - /url: /calendar
+              - generic [ref=f14e73]: 📅
+              - generic [ref=f14e74]: Календарь
+            - link "📐 Заявки на замер" [ref=f14e75] [cursor=pointer]:
+              - /url: /measure-requests
+              - generic [ref=f14e76]: 📐
+              - generic [ref=f14e77]: Заявки на замер
+            - link "🔧 Монтажи" [ref=f14e78] [cursor=pointer]:
+              - /url: /installations
+              - generic [ref=f14e79]: 🔧
+              - generic [ref=f14e80]: Монтажи
+            - link "🗓️ Календарь замеров" [ref=f14e81] [cursor=pointer]:
+              - /url: /measure-calendar
+              - generic [ref=f14e82]: 🗓️
+              - generic [ref=f14e83]: Календарь замеров
+            - link "📋 Форма замера" [ref=f14e84] [cursor=pointer]:
+              - /url: /measurer
+              - generic [ref=f14e85]: 📋
+              - generic [ref=f14e86]: Форма замера
+            - link "💰 Мои заработки" [ref=f14e87] [cursor=pointer]:
+              - /url: /my-earnings
+              - generic [ref=f14e88]: 💰
+              - generic [ref=f14e89]: Мои заработки
+        - button "B2B" [ref=f14e92]
+      - generic [ref=f14e98]:
+        - generic [ref=f14e99]:
+          - generic [ref=f14e100]: A
+          - paragraph [ref=f14e102]: admin@mglass.ru
+        - button "Выйти" [ref=f14e103]
+    - main [ref=f14e104]:
+      - generic [ref=f14e105]: Загрузка...
+  - alert [ref=f14e106]
