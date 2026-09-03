@@ -172,9 +172,11 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   // редактируемы, но НЕ сохраняются как умолчание: на новом просчёте снова 40/12.
   const [mgMargin, setMgMargin]     = useState('40')
   const [mgTax, setMgTax]           = useState('12')
-  const [mgPerSection, setMgPerSection] = useState('')
+  // Монтаж 6500/секц и доставка 5000 подставлены сразу (владелец: не заставлять
+  // менеджера помнить число), редактируемы; на новом просчёте возвращаются к умолчанию.
+  const [mgPerSection, setMgPerSection] = useState('6500')
   const [mgSections, setMgSections] = useState('1')
-  const [mgDelivery, setMgDelivery] = useState('')
+  const [mgDelivery, setMgDelivery] = useState('5000')
   const [mgLift, setMgLift]         = useState('')
   const [isAdmin, setIsAdmin]           = useState(false)
   const [maxDiscount, setMaxDiscount]   = useState<number>(100)
@@ -528,7 +530,7 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   useEffect(() => {
     if (variant !== 'mglass' || items.length > 0) return
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setMgMargin('40'); setMgTax('12')
+    setMgMargin('40'); setMgTax('12'); setMgPerSection('6500'); setMgSections('1'); setMgDelivery('5000'); setMgLift('')
   }, [variant, items.length])
 
   // А12: прайс клиента подтягиваем при смене клиента. Уже набранные позиции
@@ -612,6 +614,10 @@ export function B2BCalculatorPage({ variant = 'b2b' }: { variant?: 'b2b' | 'mgla
   }
 
   const selectedClient   = clients.find(c => c.id === clientId) ?? null
+  // Скидка из карточки клиента. В mglass-режиме клиент = M GLASS, у него 20% —
+  // это НЕ баг и не «забыли обнулить»: M-Glass реально покупает у своего производства
+  // со скидкой 20% (условие внутренней сделки), применяется как у любого клиента.
+  // 20% заложены в прайс — средняя маржа цеха по заказам M GLASS ~49%, не съедаются.
   const discount         = selectedClient?.discount_percent ?? 0
   const selectedMaterial = materials.find(m => m.id === fMatId) ?? null
   const selectedServices = services.filter(s => fServiceIds.includes(s.id))
