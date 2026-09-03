@@ -39,6 +39,7 @@ const MANAGER_MGLASS: NavEntry[] = [
   // и срока производства, справа панель цены клиенту. Итог B2B с НДС ложится
   // в себестоимость как есть: M-Glass покупает у своего производства по той же
   // цене, что и любой B2B-клиент, — это две сделки, а не двойной счёт.
+  { href: '/calculator/build',   label: 'Расчёт',           icon: '🚿' },
   { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',  icon: '🧾' },
   { href: '/configurator',      label: 'Визуализатор 3D',  icon: '🧊' },
   { groupLabel: 'Продажи' },
