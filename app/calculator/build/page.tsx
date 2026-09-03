@@ -10,7 +10,7 @@ import { calcFinancialModel } from '@/lib/pricing/financialModel'
 // Вкладка «Расчёт»: модель душевой → габариты проёма → реальный BOM фурнитуры и
 // стекло → себестоимость → цена. Фурнитура и количества считаются ЕДИНЫМ движком
 // конфигуратора (buildFromModel→computeKitQuantities→computeKitPrice) через готовый
-// серверный маршрут /api/configurator/quote — здесь только вызов, не дубль арифметики.
+// серверный маршрут /api/calc/build — здесь только вызов, не дубль арифметики.
 // Себестоимость берём из BOM, а маржу/налог/монтаж/доставку — свои, редактируемые
 // в правой панели (числа владельца), поэтому цену из computeKitPrice не используем.
 
@@ -90,11 +90,12 @@ export default function BuildCalcPage() {
       if (w <= 0 || h <= 0) { setPrice(null); setState('idle'); return }
       setState('loading')
       // dims — размеры ПРОЁМА (не стёкол): стёкла из него считает геометрия, лёгкий
-      // запас осознан (владелец). thickness 8 по умолчанию.
-      fetch('/api/configurator/quote', {
+      // запас осознан (владелец). thickness 8 по умолчанию. Роут /api/calc/build:
+      // фурнитура из конфигуратора + стекло из B2B-калькулятора (glassCostOverride).
+      fetch('/api/calc/build', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
         body: JSON.stringify({
-          model: cyr, tier: 'budget', thickness: 8, finishId: hwColor,
+          model: cyr, thickness: 8, finishId: hwColor,
           dims: { width: w, height: h, ...(isCorner && w2 > 0 ? { width2: w2 } : {}) },
         }),
       })
@@ -111,8 +112,8 @@ export default function BuildCalcPage() {
     return () => { clearTimeout(t); ctrl.abort() }
   }, [cyr, isCorner, width, width2, height, hwColor])
 
-  // Себестоимость = стекло + фурнитура из BOM. Стекло пока по флэт-ставке конфигуратора;
-  // на шаге 2 заменится точным b2bCalculator через glassCostOverride.
+  // Себестоимость = стекло + фурнитура. Оба из настоящих движков: фурнитура — BOM
+  // комплекта (конфигуратор), стекло — B2B-калькулятор пер-панельно (роут /api/calc/build).
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
   const usable = !!price && price.complete
