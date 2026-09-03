@@ -46,6 +46,7 @@ const PRODUCT_LABELS: Record<string, { label: string; color: string; emoji: stri
   shower_standard: { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
   shower_budget:   { label: 'Душевая',  color: 'bg-cyan-50 text-cyan-700',     emoji: '🚿' },
   order:           { label: 'Заказ',    color: 'bg-purple-50 text-purple-700', emoji: '📦' },
+  quick:           { label: 'Быстрый',  color: 'bg-[#f0f0ec] text-[#6b6b66]',  emoji: '⚡' },
 }
 
 // Sales flow statuses
@@ -92,6 +93,11 @@ function getDesc(c: Calc): string {
     const dims = (d.dimStr as string) ?? `${d.width}×${d.height} мм`
     const tier = d.tier === 'budget' ? ' · Бюджет' : ''
     return dims + tier
+  }
+  if (c.product_type === 'quick') {
+    const cart = Array.isArray(d.cart) ? d.cart as { title?: string }[] : []
+    if (cart.length > 1) return `${cart.length} изделий`
+    return (cart[0]?.title as string) || (d.title as string) || 'быстрый расчёт'
   }
   return ''
 }
