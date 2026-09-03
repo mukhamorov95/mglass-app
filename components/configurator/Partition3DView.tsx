@@ -1,11 +1,12 @@
 'use client'
 
+import type React from 'react'
 import dynamic from 'next/dynamic'
 import type { MModel } from '@/lib/configurator/arrangement'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from './scene/assembly'
-import type { PickedNode } from './Partition3D'
+import type { PickedNode, CaptureFn } from './Partition3D'
 
-export type { PickedNode }
+export type { PickedNode, CaptureFn }
 
 // Canvas (WebGL) нельзя рендерить на сервере — грузим только на клиенте.
 const Partition3D = dynamic(() => import('./Partition3D'), {
@@ -20,6 +21,7 @@ const Partition3D = dynamic(() => import('./Partition3D'), {
 export function Partition3DView(props: {
   model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant
   onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
+  onCapture?: (fn: CaptureFn | null) => void
 }) {
   return <Partition3D {...props} />
 }

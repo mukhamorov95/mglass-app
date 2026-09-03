@@ -143,21 +143,41 @@ function tiledMaps(maps: TileMaps, uM: number, vM: number): TileMaps {
 // Собран из тел, а не вырезан булевой операцией: основание чуть ниже верха, по
 // периметру — четыре бортика. Верх основания и есть утопленное поле, поэтому
 // лишней геометрии нет, а бортик читается кромкой и тенью.
+// Отражение в полу — трафаретом, а не вторым проходом рендера: off-screen проход
+// (MeshReflectorMaterial) конфликтует с преломляющим стеклом и уже давал чёрный
+// кадр на части видеокарт. Трафарет — состояние материала, лишних проходов нет.
+const FLOOR_STENCIL = 1
+
+// depthTest выключен намеренно: отражённая геометрия лежит НИЖЕ пола и была бы им
+// закрыта. Границу задаёт трафарет, порядок — renderOrder.
+function stencilClip<M extends THREE.Material>(m: M, opacity: number): M {
+  m.stencilWrite = true
+  m.stencilRef = FLOOR_STENCIL
+  m.stencilFunc = THREE.EqualStencilFunc
+  m.depthTest = false
+  m.depthWrite = false
+  m.transparent = true
+  m.opacity = opacity
+  return m
+}
+
 const TRAY_RIM = 0.035        // ширина бортика, м
 const TRAY_RECESS = 0.012     // на сколько поле утоплено относительно бортика
 
-function Tray({ w, depth, trayH }: { w: number; depth: number; trayH: number }) {
+function Tray({ w, depth, trayH, mirror }: { w: number; depth: number; trayH: number; mirror?: boolean }) {
   const TW = w + 0.05, TD = depth + 0.05
   const x0 = -0.025, z0 = -0.025
   const baseH = trayH - TRAY_RECESS
   const rimY = baseH + TRAY_RECESS / 2
-  const acrylic = (
-    <meshPhysicalMaterial color="#f6f5f2" roughness={0.12} metalness={0.02}
-      clearcoat={0.7} clearcoatRoughness={0.1} envMapIntensity={1.0} />
-  )
+  // В отражении поддон матовее и полупрозрачен, и обрезан трафаретом пола.
+  const acrylic = mirror
+    ? <meshPhysicalMaterial color="#f6f5f2" roughness={0.45} metalness={0.02} envMapIntensity={0.4}
+        side={THREE.BackSide} ref={m => { if (m) stencilClip(m, 0.3) }} />
+    : <meshPhysicalMaterial color="#f6f5f2" roughness={0.12} metalness={0.02}
+        clearcoat={0.7} clearcoatRoughness={0.1} envMapIntensity={1.0} />
   const rim = (args: [number, number, number], pos: [number, number, number], key: string) => (
     <RoundedBox key={key} args={args} radius={Math.min(TRAY_RECESS * 0.4, 0.005)} smoothness={3}
-      position={pos} castShadow receiveShadow>
+      position={pos} castShadow={!mirror} receiveShadow={!mirror}>
       {acrylic}
     </RoundedBox>
   )
@@ -165,7 +185,7 @@ function Tray({ w, depth, trayH }: { w: number; depth: number; trayH: number }) 
     <group>
       {/* основание; его верх — утопленное поле поддона */}
       <RoundedBox args={[TW, baseH, TD]} radius={Math.min(baseH * 0.3, 0.01)} smoothness={3}
-        position={[w / 2, baseH / 2, depth / 2]} castShadow receiveShadow>
+        position={[w / 2, baseH / 2, depth / 2]} castShadow={!mirror} receiveShadow={!mirror}>
         {acrylic}
       </RoundedBox>
       {rim([TW, TRAY_RECESS, TRAY_RIM], [w / 2, rimY, z0 + TRAY_RIM / 2], 'front')}
@@ -173,10 +193,10 @@ function Tray({ w, depth, trayH }: { w: number; depth: number; trayH: number }) 
       {rim([TRAY_RIM, TRAY_RECESS, TD - TRAY_RIM * 2], [x0 + TRAY_RIM / 2, rimY, depth / 2], 'left')}
       {rim([TRAY_RIM, TRAY_RECESS, TD - TRAY_RIM * 2], [x0 + TW - TRAY_RIM / 2, rimY, depth / 2], 'right')}
       {/* слив — без него утопленное поле выглядит просто ступенькой */}
-      <mesh position={[w / 2, baseH + 0.0008, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+      {!mirror && <mesh position={[w / 2, baseH + 0.0008, depth / 2]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
         <circleGeometry args={[0.045, 28]} />
         <meshPhysicalMaterial color="#c8ccce" metalness={0.95} roughness={0.25} envMapIntensity={1.2} />
-      </mesh>
+      </mesh>}
     </group>
   )
 }
@@ -208,8 +228,13 @@ function NicheMesh({ niche }: { niche: Niche }) {
         {/* Глянцевая плитка (полированный керамогранит): отражение окружения через
             envMap — без off-screen прохода MeshReflectorMaterial, который конфликтовал
             с MeshTransmissionMaterial стекла и давал чёрный артефакт на части GPU. */}
+        {/* R3: пол помечает себя в трафарете — отражение потом рисуется ТОЛЬКО там,
+            где пол реально виден. Заслонённые поддоном пиксели не проходят тест
+            глубины и в трафарет не попадают, поэтому отражение не лезет на поддон. */}
         <meshStandardMaterial map={floorMaps.color} bumpMap={floorMaps.height} bumpScale={-0.25}
-          roughnessMap={floorMaps.rough} roughness={0.5} metalness={0.04} envMapIntensity={0.9} />
+          roughnessMap={floorMaps.rough} roughness={0.5} metalness={0.04} envMapIntensity={0.9}
+          stencilWrite stencilRef={FLOOR_STENCIL} stencilFunc={THREE.AlwaysStencilFunc}
+          stencilZPass={THREE.ReplaceStencilOp} />
       </mesh>
       {walls.back && (
         <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
@@ -241,6 +266,14 @@ function NicheMesh({ niche }: { niche: Niche }) {
 //
 // Порог 400 мс: короче — режим дёргается на инерции орбиты, длиннее — читается
 // как задержка.
+// R7 · Кадр на печать. Постобработка (AO, блики, сглаживание) следует за размером
+// рендера, поэтому кадр высокого разрешения снимается временным подъёмом плотности
+// пикселей — а не ручным gl.render в обход композитора, который выбросил бы всё,
+// ради чего маршрут и делался.
+export type CaptureFn = (scale: number) => Promise<string>
+
+// Отдаём функцию съёмки наружу колбэком, а не записью в чужой ref: проп менять
+// нельзя, да и владелец ссылки тогда сам решает, где её хранить.
 function useSettled(deps: unknown[], delay = 400) {
   // Ключ описывает, ЧТО сейчас в кадре. «Кадр сел» — это не отдельный флаг, а
   // совпадение ключа с тем, для которого таймер успел досчитать: любая смена
@@ -261,18 +294,28 @@ function useSettled(deps: unknown[], delay = 400) {
   return { settled: settledKey === key, disturb }
 }
 
-function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole, settled }: {
+function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRole, settled, mirror }: {
   assembly: Assembly; metalMat: THREE.Material; glassTint: GlassTint
   onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null
   settled?: boolean        // кадр «сел»: можно тратиться на сэмплы
+  mirror?: boolean         // отражение в полу: дешёвые материалы, обрезка трафаретом
 }) {
-  const pickable = !!onPick
+  const pickable = !!onPick && !mirror
   const lit = (key: string, role: string | null) => key === pickedKey || (!!role && role === pickedRole)
   // Кабина поднята на поддон.
   return (
     <group position={[0, assembly.niche.trayH, 0]}>
-      {assembly.glass.map(g => (
-        <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
+      {/* В отражении стекло — дешёвая полупрозрачная плита: второе преломление
+          стоило бы ещё одного полного прохода, а в полу его всё равно не разобрать. */}
+      {mirror && assembly.glass.map(g => (
+        <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]}>
+          <boxGeometry args={g.size} />
+          <meshPhysicalMaterial color="#eef4f1" roughness={0.25} metalness={0}
+            ref={m => { if (m) stencilClip(m, 0.22) }} />
+        </mesh>
+      ))}
+      {!mirror && assembly.glass.map(g => (
+        <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow renderOrder={2}>
           <boxGeometry args={g.size} />
           {/* Общий сэмплер преломления: у каждого стекла свой off-screen буфер, и при
               нескольких полотнах соседнее попадало в буфер пустым — дверь рисовалась
@@ -372,8 +415,8 @@ function Studio() {
 }
 
 export default function Partition3D(
-  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant, onPick, pickedKey, pickedRole }:
-  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant; onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null },
+  { model, dims, thickness, finishHex, finishId, glassTint, doorOpen = true, choice, variant, onPick, pickedKey, pickedRole, onCapture }:
+  { model: MModel; dims: MDims; thickness: number; finishHex: string; finishId: string; glassTint: GlassTint; doorOpen?: boolean; choice?: HardwareChoice; variant?: MVariant; onPick?: (n: PickedNode) => void; pickedKey?: string | null; pickedRole?: string | null; onCapture?: (fn: CaptureFn | null) => void },
 ) {
   const assembly = useMemo(() => buildFromModel(model, dims, thickness, doorOpen, choice, variant), [model, dims, thickness, doorOpen, choice, variant])
   // PBR-материал финиша для профилей и фурнитуры. Профиль цвета → MeshPhysicalMaterial
@@ -387,6 +430,14 @@ export default function Partition3D(
     })
     return m
   }, [finishId, finishHex])
+  // Металл в отражении: матовее, глуше и обрезан трафаретом пола.
+  const mirrorMat = useMemo(() => {
+    const m = (metalMat as THREE.MeshPhysicalMaterial).clone()
+    m.roughness = Math.min(1, ((metalMat as THREE.MeshPhysicalMaterial).roughness ?? 0.2) + 0.3)
+    m.envMapIntensity = 0.35
+    m.side = THREE.BackSide          // зеркальное отражение выворачивает грани
+    return stencilClip(m, 0.28)
+  }, [metalMat])
   const { w, h, d } = assembly.bounds
   const span = Math.max(w, h, d)
   // R1: кадр каталога, а не обзор комнаты. Камера на уровне глаз, объектив ~50 мм
@@ -402,11 +453,33 @@ export default function Partition3D(
   // Кадр «садится» через 400 мс после последнего движения; смена модели, размеров,
   // стекла или цвета фурнитуры сбрасывает счёт — считать надо заново.
   const { settled, disturb } = useSettled([model.code, dims, glassTint, finishId, doorOpen])
+  // R7 · Кадр на печать. Снимаем холст КАК ЕСТЬ, ничего не переключая.
+  //
+  // Пробовал поднимать разрешение на время съёмки тремя способами — плотностью
+  // пикселей через проп, через setDpr и сменой размера холста. Все три снимают
+  // кадр крупнее, но НИ ОДИН не возвращает сцену обратно: плотность держит
+  // композитор постобработки, и живая сцена остаётся либо вчетверо тяжелее,
+  // либо размытой. Ломать рабочую сцену ради кадра нельзя.
+  //
+  // Поэтому кадр = текущий холст. В покое R6 уже держит двойную плотность, так
+  // что на широком окне это 2000+ пикселей по ширине — для КП и каталога хватает.
+  // Настоящий офскрин-рендер 2–4K — отдельная работа, записана в маршруте.
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const capture = useCallback<CaptureFn>(async () => {
+    // дать кадру «сесть»: после клика по кнопке сцена уже не двигалась
+    await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)))
+    return canvasRef.current?.toDataURL('image/png') ?? ''
+  }, [])
+  useEffect(() => {
+    onCapture?.(capture)
+    return () => onCapture?.(null)
+  }, [onCapture, capture])
 
   return (
     <div className="w-full h-[420px] md:h-[480px] rounded-xl overflow-hidden bg-gradient-to-b from-[#f2f1ee] to-[#e4e2dd]">
       <Canvas
         shadows="soft"
+        ref={canvasRef}
         dpr={settled ? [1, 2] : [1, 1.25]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
@@ -428,6 +501,14 @@ export default function Partition3D(
           <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.26} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} settled={settled} />
+          {/* R3 · Отражение в полированном керамограните. Копия сцены, отражённая
+              через плоскость пола; видна только внутри трафарета, который пол
+              оставил на себе. renderOrder=1 — раньше стекла (2), чтобы отражение
+              не легло поверх полотен. */}
+          <group scale={[1, -1, 1]} position={[0, -0.0015, 0]} renderOrder={1}>
+            <Tray w={assembly.niche.w} depth={assembly.niche.depth} trayH={assembly.niche.trayH} mirror />
+            <Assembly3D assembly={assembly} metalMat={mirrorMat} glassTint={glassTint} mirror />
+          </group>
           <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2}
             resolution={settled ? 1024 : 384} frames={settled ? Infinity : 1} />
           <Studio />
@@ -442,7 +523,7 @@ export default function Partition3D(
             target={[cx, ty, cz]}
           />
           {/* V1 AO + V8 bloom/виньетка + V9 SMAA — «рендерный» финиш */}
-          <EffectComposer enableNormalPass multisampling={0}>
+          <EffectComposer enableNormalPass multisampling={0} stencilBuffer>
             <N8AO aoRadius={0.22} distanceFalloff={1} intensity={2.4} halfRes={!settled} quality={settled ? 'high' : 'low'} />
             <Bloom intensity={0.16} luminanceThreshold={0.96} luminanceSmoothing={0.12} mipmapBlur />
             <Vignette offset={0.28} darkness={0.32} />
