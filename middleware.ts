@@ -129,15 +129,28 @@ export async function middleware(request: NextRequest) {
       })
     } else if (okFor !== deviceId) {
       try {
-        const cls = classifyDevice(request.headers.get('user-agent'))
-        const { data: reg } = await supabase.from('user_devices')
-          .select('device_id')
-          .eq('user_id', user.id).eq('device_class', cls).is('revoked_at', null)
-          .maybeSingle()
-        if (reg && reg.device_id !== deviceId) {
-          const url = request.nextUrl.clone()
-          url.pathname = '/device-limit'
-          return redirect(url)
+        // Владелец от лимита освобождён: он работает с ноутбука, с телефона и
+        // из офиса в один день, и вытеснение сессии мешает, а не защищает.
+        // Роль берём из куки, а если её ещё нет (первый заход с устройства) —
+        // спрашиваем базу: иначе владелец упирался бы в лимит ровно там, где
+        // освобождение и нужно. Пропускаем только саму проверку устройства —
+        // тик активности и проверка маршрута ниже выполняются как обычно.
+        let ownerRole = isOwnerRole(normalizeRole(readScoped(request.cookies.get('user-role')?.value, user.id)))
+        if (!ownerRole && !request.cookies.get('user-role')) {
+          const { data: u } = await supabase.from('users').select('role').eq('id', user.id).maybeSingle()
+          ownerRole = isOwnerRole(normalizeRole((u as { role?: string } | null)?.role))
+        }
+        if (!ownerRole) {
+          const cls = classifyDevice(request.headers.get('user-agent'))
+          const { data: reg } = await supabase.from('user_devices')
+            .select('device_id')
+            .eq('user_id', user.id).eq('device_class', cls).is('revoked_at', null)
+            .maybeSingle()
+          if (reg && reg.device_id !== deviceId) {
+            const url = request.nextUrl.clone()
+            url.pathname = '/device-limit'
+            return redirect(url)
+          }
         }
         // устройство совпадает или ещё не зарегистрировано (legacy-сессия) — пропускаем
         supabaseResponse.cookies.set('device-ok', deviceId, {
