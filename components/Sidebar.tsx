@@ -392,6 +392,14 @@ const OWNER_CENTER: NavItem[] = [
 //
 // Было два: SEO_MARKETING (9) и ADMIN_MARKETING (10), совпадали полностью, кроме
 // одной строки. Здесь объединение — потерянных экранов нет.
+// Продвижение — производство контента. Отдельно от «Маркетинга», потому что
+// здесь баланс платного сервиса и расходы: раздел видит только владелец,
+// в ветку роли seo НЕ добавляется.
+const PROMO_CENTER: NavItem[] = [
+  { href: '/marketing/promo',       label: 'Пульт продвижения', icon: '💲' },
+  { href: '/marketing/promo/guide', label: 'Регламент',         icon: '📖' },
+]
+
 const MARKETING_CENTER: NavItem[] = [
   { href: '/marketing/seo',           label: 'SEO · Заявки сайта', icon: '🔍' },
   { href: '/marketing',               label: 'Marketing Center',   icon: '📣' },
@@ -431,7 +439,10 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/production-app/guide'])) open.push('prod_learn')
   } else if (mode === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
-    if (inSection(pathname, ['/marketing'])) open.push('marketing')
+    // /marketing/promo принадлежит «Продвижению», а не «Маркетингу» —
+    // иначе по общему префиксу раскроется чужая группа.
+    if (inSection(pathname, ['/marketing/promo'])) open.push('promo')
+    else if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/vladislav', '/ai-stats', '/amo-analysis', '/admin/integrations'])) open.push('vladislav')
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
@@ -468,7 +479,10 @@ function autoOpenRole(pathname: string, role: Role): string[] {
     if (inSection(pathname, B2B_PATHS))   open.push('b2b')
   } else if (role === 'seo') {
     if (inSection(pathname, ['/b2b-analytics', '/ai-stats', '/amo-analysis', '/ai-sales'])) open.push('analytics')
-    if (inSection(pathname, ['/marketing'])) open.push('marketing')
+    // /marketing/promo принадлежит «Продвижению», а не «Маркетингу» —
+    // иначе по общему префиксу раскроется чужая группа.
+    if (inSection(pathname, ['/marketing/promo'])) open.push('promo')
+    else if (inSection(pathname, ['/marketing'])) open.push('marketing')
     if (inSection(pathname, ['/ai-assistant', '/kp-generator', '/vladislav'])) open.push('ai')
   } else if (role === 'ceo') {
     if (inSection(pathname, ['/admin/ai-control-center', '/admin/owner', '/admin/dashboard', '/admin/pnl', '/admin/analytics-mglass', '/admin/bonus-center', '/admin/sales-center', '/admin/sales-control', '/admin/b2b-development', '/admin/org', '/admin/users', '/production-app'])) open.push('owner')
@@ -917,6 +931,7 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
     if (viewMode === 'ceo') return (
       <>
         {accordion('owner',       'Owner Center', 'text-purple-600', 'text-purple-400', OWNER_CENTER,       'bg-purple-50 text-purple-700 font-medium')}
+        {accordion('promo',       'Продвижение',  'text-emerald-600','text-emerald-400',PROMO_CENTER,       'bg-emerald-50 text-emerald-700 font-medium')}
         {accordion('marketing',   'Маркетинг',    'text-rose-600',   'text-rose-400',   MARKETING_CENTER,   'bg-rose-50 text-rose-700 font-medium')}
         {accordion('vladislav',   'Vladislav AI', 'text-indigo-600', 'text-indigo-400', ADMIN_VLADISLAV,    'bg-indigo-50 text-indigo-700 font-medium')}
         {accordion('productline', 'Product Line', 'text-violet-600', 'text-violet-400', ADMIN_PRODUCT_LINE, 'bg-violet-50 text-violet-700 font-medium')}
