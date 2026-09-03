@@ -66,7 +66,10 @@ export default function DealPage() {
   // восстановит поля. Открытие даёт НОВЫЙ расчёт (первичный остаётся в сделке).
   function reopenQuick(c: Calc) {
     if (!c.input_data) return
-    try { sessionStorage.setItem('mglass_quick_reopen', JSON.stringify(c.input_data)) } catch { /* ignore */ }
+    // Несём контекст: __parentCalcId связывает вторичный расчёт с первичным,
+    // __dealId кладёт пересчёт в ТУ ЖЕ сделку (тот же объект, не спрашиваем заново).
+    const payload = { ...c.input_data, __parentCalcId: c.id, __dealId: deal!.id }
+    try { sessionStorage.setItem('mglass_quick_reopen', JSON.stringify(payload)) } catch { /* ignore */ }
     window.location.assign('/calculator/quick')
   }
 

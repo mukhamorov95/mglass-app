@@ -2,14 +2,14 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { formatPhone } from '@/lib/b2c/phoneKey'
+import { formatPhone, phoneKey } from '@/lib/b2c/phoneKey'
 
 // Список сделок B2C. Поиск по телефону и адресу (владелец: через полгода помнят
 // «квартиру на Лётной», не номер). Плюс блок «требуют привязки» — сохранённые
 // расчёты без сделки, чтобы они были видны и привязывались руками, а не терялись.
 
 type Deal = {
-  id: number; client_name: string; phone: string; address: string
+  id: number; client_name: string; phone: string; phone_key: string | null; address: string
   manager_id: string | null; amo_lead_id: string | null; updated_at: string; calc_count: number
 }
 type Orphan = {
@@ -55,6 +55,27 @@ export default function DealsPage() {
     } finally { setBusy(null) }
   }
 
+  // Привязать осиротевший расчёт к существующей сделке (кейс «телефон совпал» —
+  // человек решает: этот объект или новый). Склейка только через явный выбор.
+  async function attachOrphan(o: Orphan, dealId: number) {
+    setBusy(o.id)
+    try {
+      const r = await fetch(`/api/deals/${dealId}/attach`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ calc_id: o.id }),
+      })
+      if (r.ok) await load(q.trim())
+    } finally { setBusy(null) }
+  }
+
+  // Кандидаты для привязки — сделки с тем же телефоном (по нормализованному ключу).
+  // Это и есть неоднозначность «сюда или новый объект», решаемая одним нажатием.
+  function candidatesFor(o: Orphan): Deal[] {
+    const pk = phoneKey(o.client_phone)
+    if (!pk) return []
+    return deals.filter(d => d.phone_key === pk)
+  }
+
   const hasOrphans = orphans.length > 0
   const dealList = useMemo(() => deals, [deals])
 
@@ -84,20 +105,34 @@ export default function DealsPage() {
                 <p className="text-[11px] text-amber-700">Расчёты с клиентом, но без сделки. Заведите по ним объект.</p>
               </div>
               <div className="divide-y divide-amber-100">
-                {orphans.map(o => (
-                  <div key={o.id} className="px-4 py-2.5 flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[13px] text-[#111110] truncate">
-                        {o.client_name || '—'}{o.client_phone ? ` · ${formatPhone(o.client_phone)}` : ''}
-                      </p>
-                      <p className="text-[11px] text-[#9a9a95]">{date(o.created_at)} · {fmt(Number(o.final_price) || 0)}</p>
+                {orphans.map(o => {
+                  const cands = candidatesFor(o)
+                  return (
+                    <div key={o.id} className="px-4 py-2.5 flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-0">
+                        <p className="text-[13px] text-[#111110] truncate">
+                          {o.client_name || '—'}{o.client_phone ? ` · ${formatPhone(o.client_phone)}` : ''}
+                        </p>
+                        <p className="text-[11px] text-[#9a9a95]">{date(o.created_at)} · {fmt(Number(o.final_price) || 0)}</p>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {/* Телефон совпал с существующей сделкой → предлагаем привязать
+                            туда; человек решает объект. Плюс всегда «Новый объект». */}
+                        {cands.map(c => (
+                          <button key={c.id} onClick={() => attachOrphan(o, c.id)} disabled={busy === o.id}
+                            title={`Привязать к сделке ${c.address || c.client_name}`}
+                            className="text-[12px] px-2.5 py-1.5 rounded-lg border border-[#c9d4f0] bg-white text-[#111110] hover:bg-[#f0f4ff] disabled:opacity-40 whitespace-nowrap max-w-[180px] truncate">
+                            → {c.address || c.client_name || `сделка #${c.id}`}
+                          </button>
+                        ))}
+                        <button onClick={() => createDealFromOrphan(o)} disabled={busy === o.id}
+                          className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">
+                          {busy === o.id ? '…' : cands.length ? 'Новый объект' : 'Завести сделку'}
+                        </button>
+                      </div>
                     </div>
-                    <button onClick={() => createDealFromOrphan(o)} disabled={busy === o.id}
-                      className="text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40 whitespace-nowrap">
-                      {busy === o.id ? '…' : 'Завести сделку'}
-                    </button>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
           )}

@@ -61,6 +61,8 @@ export default function QuickCalcPage() {
   const [saveMsg, setSaveMsg] = useState<string | null>(null)
   const recognitionRef = useRef<ISpeechRecognition | null>(null)
   const lastSavedSigRef = useRef('')   // сигнатура последнего сохранённого снимка — гард от дублей
+  const parentCalcIdRef = useRef<number | null>(null)  // первичный расчёт (при пересчёте из карточки)
+  const reopenDealIdRef = useRef<number | null>(null)  // сделка пересчёта — вторичный ложится в неё же
   const transcriptRef = useRef('')
   // eslint-disable-next-line react-hooks/refs
   transcriptRef.current = transcript
@@ -100,6 +102,9 @@ export default function QuickCalcPage() {
       set(s('clientName'), setClientName); set(s('clientPhone'), setClientPhone); set(s('objectAddress'), setObjectAddress)
       if (p.designer === 10 || p.designer === 15) setDesigner(p.designer)
       if (p.extraMode === 'pct' || p.extraMode === 'sum') setExtraMode(p.extraMode)
+      // Контекст пересчёта: связь с первичным и сделкой (см. карточку /deal).
+      if (typeof p.__parentCalcId === 'number') parentCalcIdRef.current = p.__parentCalcId
+      if (typeof p.__dealId === 'number') reopenDealIdRef.current = p.__dealId
     } catch { /* ignore */ }
   }, [])
 
@@ -249,19 +254,30 @@ export default function QuickCalcPage() {
         client_text: [label, objectAddress && `Адрес: ${objectAddress}`].filter(Boolean).join(' · '),
         client_name: clientName.trim() || undefined,
         client_phone: clientPhone.trim() || undefined,
+        // Связь первичный→вторичный: пересчёт из карточки помнит родителя.
+        parent_calc_id: parentCalcIdRef.current ?? undefined,
       })
       const ok = !!(res && 'id' in res && res.id)
       if (!ok) { if (!silent) setSaveMsg(res && 'error' in res ? res.error! : 'Не удалось сохранить'); return false }
       lastSavedSigRef.current = sig
-      // Кабинет менеджера: расчёт с телефоном/адресом заводит сделку по объекту.
-      // Решение «создать/спросить/осиротеть» принимает сервер (/api/deals/ensure);
-      // best-effort — сохранение расчёта не блокируем, если сделка не завелась.
+      const newId = (res as { id: number }).id
       let createdDeal = false
-      if (clientPhone.trim() || objectAddress.trim()) {
+      if (reopenDealIdRef.current) {
+        // Пересчёт из карточки — тот же объект: кладём вторичный в ту же сделку,
+        // не спрашивая (человек уже выбрал объект, открыв карточку).
+        try {
+          await fetch(`/api/deals/${reopenDealIdRef.current}/attach`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ calc_id: newId }),
+          })
+        } catch { /* привяжется вручную из «требуют привязки» */ }
+      } else if (clientPhone.trim() || objectAddress.trim()) {
+        // Новый расчёт с телефоном/адресом: сервер решает создать/спросить/осиротеть
+        // (/api/deals/ensure). Создание ≠ склейка — молча только новый объект.
         try {
           const er = await fetch('/api/deals/ensure', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ calc_id: (res as { id: number }).id, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
+            body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }),
           }).then(x => x.json()).catch(() => null)
           createdDeal = !!er?.created
         } catch { /* заведём позже вручную из «требуют привязки» */ }
