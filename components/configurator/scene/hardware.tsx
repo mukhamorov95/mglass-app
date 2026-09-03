@@ -125,33 +125,40 @@ function SlidingRoller({ material }: { material: THREE.Material }) {
   )
 }
 
-// КП-006 — крепёж трубы к СТЕКЛУ. П-зажим сидит на верхней кромке стекла (у z=0),
-// вынос идёт к трубе (+Z). Зажим не поворачивается вслед за трубой — стекло всегда
-// вертикально; подстраивается только седло, в которое ложится труба.
-function KP006({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
-  const w = 18.5 * M
-  const arm = 44 * M
+// КП-001 (Ветро) — крепление СТЕКЛА К ШТАНГЕ 30×10, 44×36×32 мм, AISI 304.
+// По каталожному фото: кубический корпус, надетый на штангу (сквозное прямоугольное
+// отверстие), снизу прорезь под стекло 8–10 мм, сбоку два стопорных винта.
+// Штанга смещена от плоскости стекла, поэтому корпус сидит на ней, а к стеклу
+// спускается щека с прорезью.
+function GlassToRailClamp({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
+  const arm = 44 * M                               // вынос до оси штанги
   const tubeH = (flatTube ? 10 : 30) * M
   const tubeW = (flatTube ? 30 : 10) * M
-  const wall = 3.5 * M
+  const wall = 5 * M
+  const bodyX = 36 * M                             // ширина корпуса вдоль штанги
+  const bodyY = tubeH + wall * 2
+  const bodyZ = tubeW + wall * 2
+  const screwR = 2.6 * M
   return (
     <group>
-      {/* вынос-планка от зажима к трубе */}
-      <mesh position={[0, 4 * M, arm / 2]} material={material} castShadow>
-        <boxGeometry args={[w, 14 * M, arm]} />
-      </mesh>
-      {/* седло СТРОГО на оси трубы (y=0) — иначе труба легла бы по краю обоймы */}
-      <RoundedBox args={[w, tubeH + wall * 2, tubeW + wall * 2]} radius={1.5 * M} smoothness={3}
+      {/* корпус, надетый на штангу */}
+      <RoundedBox args={[bodyX, bodyY, bodyZ]} radius={2 * M} smoothness={3}
         position={[0, 0, arm]} material={material} castShadow />
-      {/* П-зажим на кромке стекла: две щеки по граням */}
-      {[-6 * M, 6 * M].map((z, i) => (
-        <mesh key={i} position={[0, -6 * M, z]} material={material} castShadow>
-          <boxGeometry args={[w, 26 * M, 4 * M]} />
+      {/* два стопорных винта на боковой грани корпуса */}
+      {[-9 * M, 9 * M].map((dz, i) => (
+        <mesh key={i} position={[bodyX / 2, 0, arm + dz]} rotation={[0, 0, Math.PI / 2]} material={material} castShadow>
+          <cylinderGeometry args={[screwR, screwR, 2.5 * M, 14]} />
         </mesh>
       ))}
-      <mesh position={[0, 6 * M, 0]} material={material} castShadow>
-        <boxGeometry args={[w, 8 * M, 14 * M]} />
-      </mesh>
+      {/* щека вниз к стеклу */}
+      <RoundedBox args={[26 * M, 18 * M, arm - bodyZ / 2]} radius={1.5 * M} smoothness={3}
+        position={[0, -2 * M, (arm - bodyZ / 2) / 2]} material={material} castShadow />
+      {/* прорезь на кромке стекла: две щеки по граням (стекло входит между ними) */}
+      {[-6 * M, 6 * M].map((z, i) => (
+        <mesh key={i} position={[0, -8 * M, z]} material={material} castShadow>
+          <boxGeometry args={[26 * M, 22 * M, 4 * M]} />
+        </mesh>
+      ))}
     </group>
   )
 }
@@ -177,30 +184,6 @@ function KP002({ material, flatTube }: { material: THREE.Material; flatTube?: bo
   )
 }
 
-// КП-001 — угловой крепёж (М7): труба приходит перпендикулярно к боковому стеклу.
-// Обойма на трубе (по её ориентации) + U-скоба, севшая на кромку стекла.
-function KP001({ material, flatTube }: { material: THREE.Material; flatTube?: boolean }) {
-  const tubeH = (flatTube ? 10 : 30) * M
-  const tubeW = (flatTube ? 30 : 10) * M
-  const wall = 4 * M
-  const clampH = tubeH + wall * 2, clampW = tubeW + wall * 2
-  return (
-    <group>
-      {/* обойма, надетая на конец трубы */}
-      <RoundedBox args={[26 * M, clampH, clampW]} radius={2 * M} smoothness={3}
-        position={[-4 * M, 0, 0]} material={material} castShadow />
-      {/* переходник к стеклу */}
-      <RoundedBox args={[14 * M, clampH, 14 * M]} radius={1.5 * M} smoothness={3}
-        position={[12 * M, 0, 0]} material={material} castShadow />
-      {/* U-скоба на кромку стекла: две щеки по его граням */}
-      {[-6 * M, 6 * M].map((z, i) => (
-        <mesh key={i} position={[20 * M, 0, z]} material={material} castShadow>
-          <boxGeometry args={[10 * M, clampH * 0.9, 4 * M]} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
 
 // Ручка-купе КУ-002: круглая утопленная чаша заподлицо со стеклом двери. Диск
 // смотрит наружу (плоскость ⊥ нормали двери → после rotY это ±Z-local).
@@ -288,9 +271,9 @@ export function Hardware({ model, shape, material, flatTube }: { model: Hardware
     case 'handle-knob': return <HandleKnob material={material} />
     case 'handle-inset': return <KupeHandle material={material} />
     case 'roller': return <SlidingRoller material={material} />
-    case 'mount-glass': return <KP006 material={material} flatTube={flatTube} />
+    case 'mount-glass': return <GlassToRailClamp material={material} flatTube={flatTube} />
     case 'mount-wall': return <KP002 material={material} flatTube={flatTube} />
-    case 'mount-corner': return <KP001 material={material} flatTube={flatTube} />
+    case 'mount-corner': return <GlassToRailClamp material={material} flatTube={flatTube} />
     case 'mount-diag45': return <MountDiag45 material={material} />
     case 'mount-stabilizer': return <MountStabilizer material={material} />
     case 'connector': return <TubeConnector material={material} />
