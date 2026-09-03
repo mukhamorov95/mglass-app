@@ -75,7 +75,6 @@ export default function BuildCalcPage() {
   const [delivery, setDelivery] = useState('5000')
   const [lift, setLift] = useState('')
   const [discount, setDiscount] = useState('0')
-  const [priceOpen, setPriceOpen] = useState(true)
 
   const [cart, setCart] = useState<CartItem[]>([])
   const [clientName, setClientName] = useState('')
@@ -97,6 +96,30 @@ export default function BuildCalcPage() {
     setScreen('detail')
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
+
+  // Восстановление сохранённого расчёта (история «Открыть» → mglass_build_reopen): владелец
+  // просил «расчёт можно открыть и пересчитать». Возвращаем модель, габариты, стекло/цвет,
+  // выбор фурнитуры, параметры цены и корзину, открываем экран изделия.
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('mglass_build_reopen')
+      if (!raw) return
+      sessionStorage.removeItem('mglass_build_reopen')
+      const p = JSON.parse(raw) as Record<string, unknown>
+      const s = (k: string, f: (v: string) => void) => { if (p[k] != null) f(String(p[k])) }
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      if (p.code) setCode(String(p.code))
+      if (p.dims && typeof p.dims === 'object') setDims(p.dims as MDims)
+      if (p.finishId) setFinishId(p.finishId as FinishId)
+      if (p.glassId) setGlassId(String(p.glassId))
+      if (p.choice && typeof p.choice === 'object') setChoice(p.choice as Record<string, string>)
+      if (p.qtyChoice && typeof p.qtyChoice === 'object') setQtyChoice(p.qtyChoice as Record<string, number>)
+      s('margin', setMargin); s('tax', setTax); s('perSection', setPerSection); s('delivery', setDelivery); s('lift', setLift); s('discount', setDiscount)
+      s('clientName', setClientName); s('clientPhone', setClientPhone); s('objectAddress', setObjectAddress)
+      if (Array.isArray(p.cart)) setCart(p.cart as CartItem[])
+      setScreen('detail')
+    } catch { /* ignore */ }
+  }, [])
 
   // Варианты фурнитуры ЭТОЙ модели — из комплекта (kit.slots) через /options. Только то,
   // что реально выбирается; набор ролей зависит от геометрии, поэтому дёргаем на смену размеров.
@@ -223,18 +246,21 @@ export default function BuildCalcPage() {
               </button>
             )}
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          {/* Экран для выбора модели глазами — карточки портретные и крупные, рендер целиком
+              по высоте (object-cover на вертикальной ячейке ≈ соотношение рендера 576×720),
+              чтобы видеть конструкцию, а не полоску стекла. */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {M_MODELS.map(mm => (
               <button key={mm.code} onClick={() => pickModel(mm.code)}
                 className="flex flex-col items-stretch p-2 rounded-xl border border-[#e4e4e0] bg-white text-left hover:border-[#111110] transition-all">
-                <div className="rounded-lg mb-1.5 overflow-hidden h-[150px] bg-[#f5f5f7] flex items-center justify-center">
+                <div className="rounded-lg mb-2 overflow-hidden aspect-[4/5] bg-[#f5f5f7] flex items-center justify-center">
                   {PHOTO.has(mm.code)
                     // eslint-disable-next-line @next/next/no-img-element
                     ? <img src={`/models/${photoSlug(mm.code)}.jpg`} alt="" className="w-full h-full object-cover" />
-                    : <div className="text-[#c4c4be] flex flex-col items-center gap-1"><span className="text-[22px]">🚿</span><span className="text-[10px]">фото скоро</span></div>}
+                    : <div className="text-[#c4c4be] flex flex-col items-center gap-1"><span className="text-[28px]">🚿</span><span className="text-[11px]">фото скоро</span></div>}
                 </div>
                 <span className="text-[13px] font-bold text-[#111110]">{mm.code} · {mm.name}</span>
-                <span className="text-[9px] text-[#86868b] leading-tight">{mm.desc}</span>
+                <span className="text-[10px] text-[#86868b] leading-tight">{mm.desc}</span>
               </button>
             ))}
           </div>
@@ -265,8 +291,9 @@ export default function BuildCalcPage() {
             </div>
           </div>
 
-          {/* Справа — параметры и цена, свой скролл */}
-          <div className="space-y-3 max-h-[80vh] overflow-y-auto pr-1">
+          {/* Справа — параметры прокручиваются, низ (К оплате + кнопки) закреплён и всегда виден. */}
+          <div className="flex flex-col max-h-[86vh] lg:sticky lg:top-4">
+          <div className="space-y-3 overflow-y-auto pr-1 flex-1 min-h-0">
             {/* Габариты */}
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
               <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-2">Габариты проёма, мм</p>
@@ -295,6 +322,10 @@ export default function BuildCalcPage() {
                     </button>
                   ))}
                 </div>
+                {/* Тонированные материалы в справочнике пока не заведены — цена от прозрачного. */}
+                {glass.id !== 'clear' && glass.b2b === 'Прозрачное М1' && (
+                  <p className="text-[10px] text-[#c2410c] mt-1">Цена как за прозрачное (тонированное в справочнике пока не заведено)</p>
+                )}
               </div>
               <div>
                 <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1.5">Цвет фурнитуры</p>
@@ -333,41 +364,27 @@ export default function BuildCalcPage() {
               </div>
             )}
 
-            {/* Цена — сворачивается, чтобы влезть без прокрутки страницы */}
-            <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
-              <button onClick={() => setPriceOpen(v => !v)} className="w-full flex items-center justify-between">
-                <span className="text-[14px] font-semibold text-[#111110]">К оплате</span>
-                <span className="flex items-center gap-2">
-                  <span className="text-[20px] font-bold font-mono text-[#111110]">{RUB(grand)}</span>
-                  <span className="text-[#9a9a95] text-[12px]">{priceOpen ? '▲' : '▼'}</span>
-                </span>
-              </button>
-              {state === 'loading' && <p className="text-[11px] text-[#9a9a95] mt-1">считаю…</p>}
-              {price && !usable && price.missing.length > 0 && (
-                <p className="text-[11px] text-[#c2410c] mt-1">Цена не заведена: {price.missing.map(x => x.label).join(', ')}.</p>
-              )}
-              {priceOpen && (
-                <div className="mt-3 space-y-1.5 text-[12px]">
-                  <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. стекло</span><span className="font-mono">{RUB(glassCost)}</span></div>
-                  <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. фурнитура</span><span className="font-mono">{RUB(hwCost)}</span></div>
-                  <div className="grid grid-cols-2 gap-2 pt-1">
-                    <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => setMargin(e.target.value)} /></div>
-                    <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => setTax(e.target.value)} /></div>
-                  </div>
-                  {denom > 0 && <div className="flex justify-between"><span className="text-[#6b6b66]">Цена изделия</span><span className="font-mono font-semibold">{RUB(productPrice)}</span></div>}
-                  <div className="grid grid-cols-2 gap-2">
-                    <div><label className={lbl}>Монтаж/секц</label><input type="number" className={fld} value={perSection} onChange={e => setPerSection(e.target.value)} /></div>
-                    <div><label className={lbl}>Секций</label><input type="number" className={fld} value={sections} readOnly /></div>
-                    <div><label className={lbl}>Доставка</label><input type="number" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
-                    <div><label className={lbl}>Подъём</label><input type="number" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
-                    <div><label className={lbl}>Скидка, %</label><input type="number" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0" /></div>
-                  </div>
-                  {install > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж ({sections}×{RUB(numOr(perSection))})</span><span className="font-mono">{RUB(install)}</span></div>}
-                  {deliveryN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Доставка</span><span className="font-mono">{RUB(deliveryN)}</span></div>}
-                  {liftN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Подъём</span><span className="font-mono">{RUB(liftN)}</span></div>}
-                  {discPct > 0 && <div className="flex justify-between text-emerald-700"><span>Скидка {discPct}%</span><span className="font-mono">−{RUB(Math.round(beforeDisc * discPct / 100))}</span></div>}
-                </div>
-              )}
+            {/* Детали цены — прокручиваются; итог и кнопки закреплены ниже. */}
+            <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 space-y-1.5 text-[12px]">
+              <p className="text-[11px] font-semibold text-[#8a8a85] uppercase tracking-widest mb-1">Себестоимость и цена</p>
+              <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. стекло</span><span className="font-mono">{RUB(glassCost)}</span></div>
+              <div className="flex justify-between"><span className="text-[#6b6b66]">Себест. фурнитура</span><span className="font-mono">{RUB(hwCost)}</span></div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div><label className={lbl}>Маржа, %</label><input type="number" className={fld} value={margin} onChange={e => setMargin(e.target.value)} /></div>
+                <div><label className={lbl}>Налог, %</label><input type="number" className={fld} value={tax} onChange={e => setTax(e.target.value)} /></div>
+              </div>
+              {denom > 0 && <div className="flex justify-between"><span className="text-[#6b6b66]">Цена изделия</span><span className="font-mono font-semibold">{RUB(productPrice)}</span></div>}
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className={lbl}>Монтаж/секц</label><input type="number" className={fld} value={perSection} onChange={e => setPerSection(e.target.value)} /></div>
+                <div><label className={lbl}>Секций</label><input type="number" className={fld} value={sections} readOnly /></div>
+                <div><label className={lbl}>Доставка</label><input type="number" className={fld} value={delivery} onChange={e => setDelivery(e.target.value)} /></div>
+                <div><label className={lbl}>Подъём</label><input type="number" className={fld} value={lift} onChange={e => setLift(e.target.value)} placeholder="0" /></div>
+                <div><label className={lbl}>Скидка, %</label><input type="number" className={fld} value={discount} onChange={e => setDiscount(e.target.value)} placeholder="0" /></div>
+              </div>
+              {install > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Монтаж ({sections}×{RUB(numOr(perSection))})</span><span className="font-mono">{RUB(install)}</span></div>}
+              {deliveryN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Доставка</span><span className="font-mono">{RUB(deliveryN)}</span></div>}
+              {liftN > 0 && <div className="flex justify-between text-[#6b6b66]"><span>Подъём</span><span className="font-mono">{RUB(liftN)}</span></div>}
+              {discPct > 0 && <div className="flex justify-between text-emerald-700"><span>Скидка {discPct}%</span><span className="font-mono">−{RUB(Math.round(beforeDisc * discPct / 100))}</span></div>}
             </div>
 
             {/* Клиент (опц.) */}
@@ -378,8 +395,18 @@ export default function BuildCalcPage() {
                 <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта" className={`${fld} font-sans`} />
               </div>
             </div>
+          </div>
 
-            {/* Действия */}
+          {/* Закреплённый низ — итог и кнопки всегда видны (самое частое действие). */}
+          <div className="shrink-0 mt-2 pt-3 border-t border-[#e4e4e0] space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[14px] font-semibold text-[#111110]">К оплате{cart.length ? ` (изделие ${cart.length + 1})` : ''}</span>
+              <span className="text-[22px] font-bold font-mono text-[#111110]">{RUB(grand)}</span>
+            </div>
+            {state === 'loading' && <p className="text-[11px] text-[#9a9a95]">считаю…</p>}
+            {price && !usable && price.missing.length > 0 && (
+              <p className="text-[11px] text-[#c2410c]">Цена не заведена: {price.missing.map(x => x.label).join(', ')}.</p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button onClick={addMore} disabled={!usable || grand <= 0}
                 className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">
@@ -390,8 +417,9 @@ export default function BuildCalcPage() {
                 {saving ? 'Сохраняю…' : 'Сохранить → КП'}
               </button>
             </div>
-            {saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-2 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>}
-            {cart.length > 0 && <p className="text-[11px] text-[#9a9a95] text-center">В корзине изделий: {cart.length}. «Сохранить» соберёт КП из всех.</p>}
+            {saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>}
+            {cart.length > 0 && <p className="text-[11px] text-[#9a9a95] text-center">В корзине {cart.length}. «Сохранить» соберёт КП из всех.</p>}
+          </div>
           </div>
         </div>
       </div>
