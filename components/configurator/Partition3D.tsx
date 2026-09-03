@@ -105,17 +105,20 @@ function tiledMaterial(base: THREE.CanvasTexture, uM: number, vM: number) {
 }
 
 function NicheMesh({ niche }: { niche: Niche }) {
-  const { w, depth, wallH, trayH, walls } = niche
+  const { w, depth, wallH, trayH } = niche
   const base = useMemo(() => makeTileTexture(), [])
-  const WH = wallH + 0.4                    // стены выше кабины (до «потолка» ниши)
-  const EXT = 1.2                           // вынос стен/пола за габарит — «угол комнаты»
-  const FW = w + 2.6, FD = depth + 2.6      // большой облицованный пол
+  // R1: комната замкнута в УГОЛ. Раньше облицовывалась одна стена по флагам ниши,
+  // вокруг оставался белый фон — изделие висело в пустоте. Задняя и дальняя боковая
+  // рисуются всегда; ближняя к камере не рисуется никогда, иначе она закроет кадр.
+  const WH = wallH + 0.9                    // стены заметно выше кабины
+  const EXT = 3.0                           // вынос стен за габарит — угол уходит за кадр
+  const FW = w + 7, FD = depth + 7          // пол доходит до камеры и за неё
   const floorMat = useMemo(() => tiledMaterial(base, FW, FD), [base, FW, FD])
   const backMat = useMemo(() => tiledMaterial(base, w + EXT, WH), [base, w, WH])
   const sideMat = useMemo(() => tiledMaterial(base, depth + EXT, WH), [base, depth, WH])
   // V5: та же текстура как bump-карта — тёмная затирка утоплена → рельеф шва под светом.
   const tile = (map: THREE.Texture) =>
-    <meshStandardMaterial map={map} bumpMap={map} bumpScale={0.5} color="#f4f2ec" roughness={0.62} metalness={0.04} envMapIntensity={0.75} />
+    <meshStandardMaterial map={map} bumpMap={map} bumpScale={0.5} color="#e9e5dc" roughness={0.55} metalness={0.04} envMapIntensity={0.75} />
 
   return (
     <group>
@@ -125,26 +128,16 @@ function NicheMesh({ niche }: { niche: Niche }) {
         {/* Глянцевая плитка (полированный керамогранит): отражение окружения через
             envMap — без off-screen прохода MeshReflectorMaterial, который конфликтовал
             с MeshTransmissionMaterial стекла и давал чёрный артефакт на части GPU. */}
-        <meshStandardMaterial map={floorMat} color="#f1efe9" roughness={0.5} metalness={0.05} envMapIntensity={0.85} />
+        <meshStandardMaterial map={floorMat} color="#e6e2d9" roughness={0.42} metalness={0.05} envMapIntensity={0.85} />
       </mesh>
-      {walls.back && (
-        <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
-          <planeGeometry args={[w + EXT, WH]} />
-          {tile(backMat)}
-        </mesh>
-      )}
-      {walls.right && (
-        <mesh position={[w, WH / 2, depth / 2]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
-          <planeGeometry args={[depth + EXT, WH]} />
-          {tile(sideMat)}
-        </mesh>
-      )}
-      {walls.left && (
-        <mesh position={[0, WH / 2, depth / 2]} rotation={[0, Math.PI / 2, 0]} receiveShadow>
-          <planeGeometry args={[depth + EXT, WH]} />
-          {tile(sideMat.clone())}
-        </mesh>
-      )}
+      <mesh position={[w / 2, WH / 2, depth]} rotation={[0, Math.PI, 0]} receiveShadow>
+        <planeGeometry args={[w + EXT * 2, WH]} />
+        {tile(backMat)}
+      </mesh>
+      <mesh position={[w + EXT / 2, WH / 2, depth / 2]} rotation={[0, -Math.PI / 2, 0]} receiveShadow>
+        <planeGeometry args={[depth + EXT * 2, WH]} />
+        {tile(sideMat)}
+      </mesh>
       {/* V4: поддон — акрил/камень со скруглёнными кромками и мокрым подблеском (clearcoat) */}
       <RoundedBox args={[w + 0.05, trayH, depth + 0.05]} radius={Math.min(trayH * 0.35, 0.012)} smoothness={3}
         position={[w / 2, trayH / 2, depth / 2]} castShadow receiveShadow>
@@ -166,7 +159,11 @@ function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRo
       {assembly.glass.map(g => (
         <mesh key={g.key} position={g.pos} rotation={[0, g.rotY, 0]} castShadow>
           <boxGeometry args={g.size} />
+          {/* Общий сэмплер преломления: у каждого стекла свой off-screen буфер, и при
+              нескольких полотнах соседнее попадало в буфер пустым — дверь рисовалась
+              белым прямоугольником. Встроенный сэмплер делает один проход на всех. */}
           <MeshTransmissionMaterial
+            transmissionSampler
             transmission={0.96}
             thickness={0.008}
             roughness={0.03}
@@ -240,21 +237,21 @@ function Studio() {
     <Environment resolution={512} frames={1}>
       <color attach="background" args={['#d3d7dd']} />
       {/* верхний софт-бокс — основной свет */}
-      <Lightformer form="rect" intensity={3.2} position={[0, 5, 1]} rotation={[Math.PI / 2, 0, 0]} scale={[9, 5, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={1.34} position={[0, 5, 1]} rotation={[Math.PI / 2, 0, 0]} scale={[9, 5, 1]} color="#ffffff" />
       {/* боковые заполняющие (холодный слева, тёплый справа) */}
-      <Lightformer form="rect" intensity={1.6} position={[-5, 2, 2]} rotation={[0, Math.PI / 2, 0]} scale={[4, 6, 1]} color="#e6eeff" />
-      <Lightformer form="rect" intensity={1.6} position={[5, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[4, 6, 1]} color="#fff1e0" />
+      <Lightformer form="rect" intensity={0.67} position={[-5, 2, 2]} rotation={[0, Math.PI / 2, 0]} scale={[4, 6, 1]} color="#e6eeff" />
+      <Lightformer form="rect" intensity={0.67} position={[5, 2, 2]} rotation={[0, -Math.PI / 2, 0]} scale={[4, 6, 1]} color="#fff1e0" />
       {/* контровой сзади — блики на кромках хрома и стекла */}
-      <Lightformer form="rect" intensity={2.4} position={[0, 3, -5]} scale={[7, 4, 1]} color="#ffffff" />
-      <Lightformer form="ring" intensity={1.4} position={[3, 2, 4]} scale={2.2} color="#ffffff" />
+      <Lightformer form="rect" intensity={1.01} position={[0, 3, -5]} scale={[7, 4, 1]} color="#ffffff" />
+      <Lightformer form="ring" intensity={0.59} position={[3, 2, 4]} scale={2.2} color="#ffffff" />
       {/* V3: вертикальные софт-боксы — вытянутые «студийные» блики-полосы на хроме */}
-      <Lightformer form="rect" intensity={2.6} position={[-2.2, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.28, 5.5, 1]} color="#ffffff" />
-      <Lightformer form="rect" intensity={2.4} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.24, 5.5, 1]} color="#f4f8ff" />
-      <Lightformer form="rect" intensity={2.2} position={[0.6, 3, 3.6]} rotation={[0, 0, 0]} scale={[0.18, 6, 1]} color="#ffffff" />
-      <Lightformer form="rect" intensity={1.8} position={[-3.6, 2, 1]} rotation={[0, Math.PI / 3, 0]} scale={[0.2, 5, 1]} color="#eef3ff" />
+      <Lightformer form="rect" intensity={1.09} position={[-2.2, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.28, 5.5, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={1.01} position={[2.4, 2.5, 3.2]} rotation={[0, 0, 0]} scale={[0.24, 5.5, 1]} color="#f4f8ff" />
+      <Lightformer form="rect" intensity={0.92} position={[0.6, 3, 3.6]} rotation={[0, 0, 0]} scale={[0.18, 6, 1]} color="#ffffff" />
+      <Lightformer form="rect" intensity={0.76} position={[-3.6, 2, 1]} rotation={[0, Math.PI / 3, 0]} scale={[0.2, 5, 1]} color="#eef3ff" />
       {/* V7: градиентная среда — тёплое отражение «от пола» снизу + холодный купол сверху */}
-      <Lightformer form="rect" intensity={0.5} position={[0, -1.5, 1.5]} rotation={[-Math.PI / 2, 0, 0]} scale={[10, 10, 1]} color="#ffe8d6" />
-      <Lightformer form="ring" intensity={0.5} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={7} color="#eef4ff" />
+      <Lightformer form="rect" intensity={0.21} position={[0, -1.5, 1.5]} rotation={[-Math.PI / 2, 0, 0]} scale={[10, 10, 1]} color="#ffe8d6" />
+      <Lightformer form="ring" intensity={0.21} position={[0, 6, 0]} rotation={[Math.PI / 2, 0, 0]} scale={7} color="#eef4ff" />
     </Environment>
   )
 }
@@ -277,9 +274,16 @@ export default function Partition3D(
   }, [finishId, finishHex])
   const { w, h, d } = assembly.bounds
   const span = Math.max(w, h, d)
-  const camDist = span * 1.7 + 0.9
+  // R1: кадр каталога, а не обзор комнаты. Камера на уровне глаз, объектив ~50 мм
+  // (вертикальные 27° при полном кадре), дистанция подобрана так, чтобы изделие
+  // держало кадр по высоте. Раньше fov 33 и дистанция 1.7×габарит давали мелкое
+  // изделие в пустой комнате.
   const cx = w / 2, cz = d / 2
-  const ty = assembly.niche.trayH + h * 0.45
+  const FOV = 30
+  const frameH = (h + assembly.niche.trayH) * 1.28          // изделие + воздух сверху и снизу
+  const camDist = frameH / 2 / Math.tan((FOV / 2) * Math.PI / 180)
+  const ty = assembly.niche.trayH + h * 0.42
+  const eye = assembly.niche.trayH + 1.5                     // рост смотрящего
 
   return (
     <div className="w-full h-[420px] md:h-[480px] rounded-xl overflow-hidden bg-gradient-to-b from-[#f2f1ee] to-[#e4e2dd]">
@@ -288,19 +292,19 @@ export default function Partition3D(
         dpr={[1, 2]}
         style={{ width: '100%', height: '100%', display: 'block' }}
         resize={{ debounce: 0 }}
-        camera={{ position: [cx - camDist * 0.58, ty + h * 0.26, cz - camDist * 1.05], fov: 33 }}
-        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.03 }}
+        camera={{ position: [cx - camDist * 0.42, eye, cz - camDist * 0.92], fov: FOV }}
+        gl={{ antialias: true, preserveDrawingBuffer: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 0.92 }}
         onCreated={onCanvasCreated}
       >
         <Suspense fallback={null}>
           {/* V10: тёплый студийный фон-кадр */}
           <color attach="background" args={['#f0efec']} />
           {/* V6: тёплый ключ + холодное заполнение + контровой; мягкие тени */}
-          <ambientLight intensity={0.28} />
-          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.75} color="#fff4e6" castShadow
+          <ambientLight intensity={0.16} />
+          <directionalLight position={[cx - 4.5, ty + 6.5, cz - 5.5]} intensity={1.15} color="#fff4e6" castShadow
             shadow-mapSize={[2048, 2048]} shadow-camera-far={24} shadow-bias={-0.0002} shadow-normalBias={0.02} shadow-radius={5} />
-          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.6} color="#e6eeff" />
-          <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.4} color="#ffffff" />
+          <directionalLight position={[cx + 5, ty + 3, cz - 1]} intensity={0.38} color="#e6eeff" />
+          <directionalLight position={[cx + 1, ty + 4, cz + 6]} intensity={0.26} color="#ffffff" />
           <NicheMesh niche={assembly.niche} />
           <Assembly3D assembly={assembly} metalMat={metalMat} glassTint={glassTint} onPick={onPick} pickedKey={pickedKey} pickedRole={pickedRole} />
           <ContactShadows position={[cx, 0.002, cz]} opacity={0.52} scale={span * 3.2} blur={2.5} far={span * 1.2} resolution={1024} />
