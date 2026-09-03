@@ -22,8 +22,16 @@ type Calc = {
 type Doc = { id: number; number: string; total: number; status: string; manager_name: string | null; created_at: string }
 type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_sum: number | null }
 type Invoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
+type Measure = { id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string }
 
 const DOC_STATUS: Record<string, string> = { draft: 'Черновик', final: 'Готово', sent: 'Отправлен', signed: 'Подписан', issued: 'Выставлен', paid: 'Оплачен', cancelled: 'Отменён' }
+const MEASURE_STATUS: Record<string, { label: string; tone: string; emoji: string }> = {
+  new:       { label: 'Заявка отправлена', tone: 'bg-amber-50 text-amber-700',   emoji: '🆕' },
+  scheduled: { label: 'Замер назначен',    tone: 'bg-blue-50 text-blue-700',     emoji: '🗓' },
+  done:      { label: 'Замер выполнен',    tone: 'bg-emerald-50 text-emerald-700', emoji: '✅' },
+  issue:     { label: 'Проблема на замере', tone: 'bg-red-50 text-red-700',       emoji: '⚠️' },
+  cancelled: { label: 'Замер отменён',     tone: 'bg-[#f0f0ec] text-[#6b6b66]',   emoji: '✕' },
+}
 
 const fmt = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`
 const date = (s: string) => new Date(s).toLocaleDateString('ru-RU', { timeZone: 'Europe/Moscow' })
@@ -45,7 +53,8 @@ export default function DealPage() {
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '' })
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
-  const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[] } | null>(null)
+  const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
+  const [measuring, setMeasuring] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -56,6 +65,7 @@ export default function DealPage() {
       setDeal(j.deal); setCalcs(j.calculations ?? [])
       setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '' })
       setError(null)
+      loadDocs()   // документы и замер грузим сразу — блок замера виден без открытия вкладки
     } catch { setError('Сеть недоступна') } finally { setLoading(false) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -89,14 +99,24 @@ export default function DealPage() {
     try {
       const r = await fetch(`/api/deals/${id}/documents`)
       const j = await r.json().catch(() => ({}))
-      if (r.ok) setDocs({ kps: j.kps ?? [], contracts: j.contracts ?? [], invoices: j.invoices ?? [] })
+      if (r.ok) setDocs({ kps: j.kps ?? [], contracts: j.contracts ?? [], invoices: j.invoices ?? [], measures: j.measures ?? [] })
     } catch { /* ignore */ }
   }
-  // Документы подгружаются при первом открытии вкладок «Документы»/«Деньги» — из
-  // обработчика клика по вкладке, не из эффекта (без каскадных ре-рендеров).
-  function openTab(k: 'calcs' | 'docs' | 'money') {
-    setTab(k)
-    if ((k === 'docs' || k === 'money') && docs === null) loadDocs()
+  function openTab(k: 'calcs' | 'docs' | 'money') { setTab(k) }
+
+  // Отправить на замер: заявка с данными сделки. Замерщик увидит её в своём кабинете;
+  // отметка и файлы вернутся сюда через deal_id.
+  async function sendMeasure() {
+    setMeasuring(true)
+    try {
+      const r = await fetch(`/api/deals/${id}/measure`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({}) })
+      if (r.ok) await loadDocs()
+    } finally { setMeasuring(false) }
+  }
+  async function attachMeasure(reqId: number, file: File) {
+    const fd = new FormData(); fd.append('file', file)
+    const r = await fetch(`/api/measure-requests/${reqId}/photo`, { method: 'POST', body: fd })
+    if (r.ok) await loadDocs()
   }
 
   // «Сделать КП» из карточки: клиент, адрес и позиции из расчётов сделки уже подставлены —
@@ -176,7 +196,7 @@ export default function DealPage() {
         )}
       </div>
 
-      {/* Действия по сделке — документы делаются отсюда, клиент уже подставлен. */}
+      {/* Действия по сделке — документы и замер делаются отсюда, клиент уже подставлен. */}
       <div className="flex flex-wrap gap-2">
         <button onClick={makeKp} disabled={calcs.length === 0}
           className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
@@ -185,7 +205,43 @@ export default function DealPage() {
         <Link href="/contracts" className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
           📝 Договор
         </Link>
+        <button onClick={sendMeasure} disabled={measuring}
+          className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
+          {measuring ? 'Отправляю…' : '📐 Отправить на замер'}
+        </button>
       </div>
+
+      {/* Замер — состояние возвращается сюда через deal_id; файл прикладывается тут же. */}
+      {docs && docs.measures.length > 0 && (
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-4 space-y-2">
+          {docs.measures.map(m => {
+            const st = MEASURE_STATUS[m.status] ?? { label: m.status, tone: 'bg-[#f0f0ec] text-[#6b6b66]', emoji: '📐' }
+            return (
+              <div key={m.id} className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <span className={`text-[12px] font-semibold px-2 py-0.5 rounded-full ${st.tone}`}>{st.emoji} {st.label}</span>
+                  <span className="text-[11px] text-[#9a9a95]">
+                    {m.scheduled_at ? `на ${date(m.scheduled_at)}` : date(m.created_at)}{m.measurer_name ? ` · ${m.measurer_name}` : ''}
+                  </span>
+                </div>
+                {m.scope && <p className="text-[12px] text-[#6b6b66]">{m.scope}</p>}
+                {Array.isArray(m.photos) && m.photos.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {m.photos.map((u, i) => (
+                      <a key={i} href={u} target="_blank" rel="noopener noreferrer" className="text-[12px] text-blue-600 hover:underline">📎 файл {i + 1}</a>
+                    ))}
+                  </div>
+                )}
+                <label className="inline-block text-[12px] text-blue-600 hover:underline cursor-pointer">
+                  + приложить файл замера
+                  <input type="file" accept="image/*,application/pdf" className="hidden"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) attachMeasure(m.id, f); e.target.value = '' }} />
+                </label>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* Вкладки */}
       <div className="flex gap-1 border-b border-[#e4e4e0]">
