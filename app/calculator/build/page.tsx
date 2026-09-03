@@ -27,14 +27,14 @@ const numOr = (v: string) => { const n = Number(String(v ?? '').replace(/[^\d.-]
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110] transition-all'
 const lbl = 'block text-[11px] font-medium text-[#6e6e73] mb-1'
 
-// Иконка модели — фотореалистичный рендер из /public/models/<код>.jpg (снимки настоящего
-// 3D-визуализатора). Пока файла нет — откат на схематичную иконку, чтобы пикер работал,
-// а картинки добавлялись по мере готовности.
+// Модели, для которых заведён фотореалистичный рендер в /public/models/<код>.jpg
+// (снимки настоящего 3D-визуализатора). Остальным — схема, БЕЗ попытки загрузить
+// картинку (иначе браузер рисует «битое фото»). Добавили новый файл — впиши код сюда.
+const PHOTO_MODELS = new Set<string>(['M1', 'M2', 'M4', 'M7', 'M8', 'M9', 'M10', 'M12'])
 function ModelThumb({ id, active }: { id: ShowerModelId; active: boolean }) {
-  const [err, setErr] = useState(false)
-  if (err) return <ShowerModelIcon modelId={id} active={active} />
+  if (!PHOTO_MODELS.has(id)) return <ShowerModelIcon modelId={id} active={active} />
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={`/models/${id.toLowerCase()}.jpg`} alt="" onError={() => setErr(true)} className="w-full h-full object-cover" />
+  return <img src={`/models/${id.toLowerCase()}.jpg`} alt="" className="w-full h-full object-cover" />
 }
 
 export default function BuildCalcPage() {
