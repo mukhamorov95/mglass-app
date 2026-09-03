@@ -15,9 +15,12 @@ const THICKNESS = 8   // душевые — только 8 мм закалённ
 
 // Тип/цвет стекла (тон в 3D через MeshTransmissionMaterial).
 type GlassType = { id: string; label: string; swatch: string; tint: GlassTint }
+// Прозрачное и осветлённое НЕ красят поверхность: цвет поверхности лёг бы ровным
+// тоном на всё полотно (стекло читалось матово-зелёным). Зелёный набирается длиной
+// пути через attenuation — на просвет 8 мм его почти нет, на кромке он есть.
 const GLASS_TYPES: GlassType[] = [
-  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#e8f2ec', attenuation: '#c2ddca', distance: 2.4 } },
-  { id: 'crystal',  label: 'Осветлённое Crystal Vision', swatch: '#dfeaf6', tint: { color: '#e9f2fb', attenuation: '#c4daef', distance: 3.2 } },
+  { id: 'clear',    label: 'Прозрачное М1',              swatch: '#cfe3d3', tint: { color: '#ffffff', attenuation: '#b8d8c4', distance: 3.5 } },
+  { id: 'crystal',  label: 'Осветлённое Crystal Vision', swatch: '#dfeaf6', tint: { color: '#ffffff', attenuation: '#cfe4f2', distance: 6.0 } },
   { id: 'bronze',   label: 'Тонированная бронза',        swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
   { id: 'graphite', label: 'Тонированная графит',        swatch: '#7f858b', tint: { color: '#b9bec4', attenuation: '#4f555d', distance: 1.1 } },
 ]
