@@ -239,6 +239,9 @@ export function computeKitQuantities(assembly: Assembly, thickness: number, mode
 
   const roleQty = Object.fromEntries(ROLES.map(r => [r, 0])) as Record<RoleId, number>
   for (const h of assembly.hardware) {
+    // Вторая половина сквозной детали (двусторонняя ручка) — только вид: одна
+    // позиция прайса, две нарисованные половины.
+    if ((h as { mirrorOf?: string }).mirrorOf) continue
     const spec = (h as { spec?: string }).spec
     const fallback = PLACEMENT_ROLE[h.model]
     if (!spec && !fallback) continue
