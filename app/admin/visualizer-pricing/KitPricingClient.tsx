@@ -14,23 +14,12 @@ import {
 } from '@/lib/configurator/kit'
 import { auditKits } from '@/lib/configurator/audit'
 import { buildDataHealth } from '@/lib/configurator/dataHealth'
+import { SHAPE_LIST } from '@/lib/configurator/hardwareShapes'
 import { CatalogPicker } from './CatalogPicker'
 
-// Форма для 3D: чем позиция выглядит у клиента. По умолчанию выводится из названия,
-// но название поставщика бывает неочевидным — тогда владелец задаёт форму руками.
-const SHAPES: { id: string; label: string }[] = [
-  { id: 'hinge-glass', label: 'Петля стекло-стекло' },
-  { id: 'hinge-wall', label: 'Петля стекло-стена' },
-  { id: 'handle-bar', label: 'Ручка-скоба' },
-  { id: 'handle-knob', label: 'Ручка-кноб' },
-  { id: 'handle-inset', label: 'Ручка-купе врезная' },
-  { id: 'roller', label: 'Ролик' },
-  { id: 'mount-glass', label: 'Крепление к стеклу' },
-  { id: 'mount-wall', label: 'Крепление к стене' },
-  { id: 'mount-corner', label: 'Крепление угловое' },
-  { id: 'connector', label: 'Соединитель' },
-  { id: 'cap', label: 'Заглушка' },
-]
+// Формы 3D — единый источник в hardwareShapes.ts (их определяет вкладка 3D). Не копируем
+// список сюда: добавили форму там — она появляется у Веры сама, без правок этого файла.
+const SHAPES = SHAPE_LIST
 
 // Прайс душевых: слева модель → справа ЕЁ комплект. Цена позиции живёт в библиотеке
 // тарифа (правится один раз), комплект модели держит порядок вариантов, ★ по умолчанию
@@ -927,7 +916,7 @@ export function KitPricingClient({ initial, finance }: { initial: Record<Tier, T
                             title="Как позиция выглядит в 3D у клиента"
                             className="text-[11px] border border-[#e4e4e0] rounded-md px-1 py-0.5 text-[#6b6b66] outline-none focus:border-[#111110]">
                             <option value="">вид: авто ({SHAPES.find(sh => sh.id === autoShapeForRole(it.name, it.role))?.label ?? 'по названию'})</option>
-                            {SHAPES.map(sh => <option key={sh.id} value={sh.id}>вид: {sh.label}</option>)}
+                            {SHAPES.map(sh => <option key={sh.id} value={sh.id} title={sh.hint}>вид: {sh.label}</option>)}
                           </select>
                         )}
                         <button onClick={() => applyToAllModels(it.id, slot.role)} title="Добавить эту позицию в комплекты всех моделей, где есть такая роль"
