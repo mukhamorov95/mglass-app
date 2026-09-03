@@ -431,6 +431,11 @@ export type KitOptions = {
   zoneId?: string          // зона доставки; нет → Москва
   km?: number              // километраж за МКАД — уточняет цену внутри зоны
   installFactors?: string[] // id выбранных надбавок монтажа (сложная стена, лестница, нестандарт)
+  // Готовая себестоимость стекла. Кабинет менеджера считает её раскроем B2B-калькулятора
+  // (толщина, тип, отход) и передаёт сюда числом — раскрой остаётся в одном месте,
+  // второй реализации в конфигураторе не заводим. Не передано → плоская ставка за м²,
+  // как на сайте, где габаритов стёкол вводить некому.
+  glassCostOverride?: number
 }
 
 const priceOf = (it: LibraryItem, finishId: string) => it.prices?.[finishId] ?? it.prices?.chrome ?? 0
@@ -506,7 +511,9 @@ export function computeKitPrice(
   const byId = new Map(lib.items.map(i => [i.id, i]))
 
   const glassRate = rates.glassPerM2[glassType] ?? rates.glassPerM2.clear ?? 0
-  const glassCost = Math.round(q.glassM2 * glassRate)
+  const glassCost = opts.glassCostOverride != null && opts.glassCostOverride >= 0
+    ? Math.round(opts.glassCostOverride)
+    : Math.round(q.glassM2 * glassRate)
 
   const lines: KitLine[] = []
   const missing: KitPriceResult['missing'] = []
