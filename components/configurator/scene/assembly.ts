@@ -37,6 +37,7 @@ export type HardwarePlacement = {
   model: 'balge' | 'dessau' | 'sd210' | 'roller' | 'kp006' | 'kupe' | 'cap' | 'kp002' | 'kp001' | 'connector'
   shape?: string                 // форма для 3D (выбор клиента); нет → берётся по model
   spec?: string                  // код узла для прайса (штучное): mount-wall/mount-corner/mount-glass/mount-diag45/mount-stabilizer
+  flatTube?: boolean             // труба лежит «на пузе» (10 высота × 30 глубина) — крепёж садится на неё иначе
   pos: [number, number, number]
   rotY: number
 }
@@ -258,18 +259,19 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
   }
   // КП-006 — крепёж трубы к стеклу, на стационаре ближе к двери. Вынос — к трубе
   // (внутрь); если +нормаль сегмента смотрит наружу, разворот кронштейна на π.
-  const addKP006 = (key: string, A: P, B: P, frac: number, y: number, out: P) => {
+  const addKP006 = (key: string, A: P, B: P, frac: number, y: number, out: P, flatTube: boolean) => {
     const { ux, uz, nx, nz, L, rotY } = seg2(A, B)
     if (!L) return
     const flip = (nx * -out[0] + nz * -out[1]) < 0 ? Math.PI : 0
-    hardware.push({ key: `${key}-kp006`, model: 'kp006', rotY: rotY + flip, pos: [A[0] + ux * L * frac, y, A[1] + uz * L * frac] })
+    hardware.push({ key: `${key}-kp006`, model: 'kp006', flatTube, rotY: rotY + flip, pos: [A[0] + ux * L * frac, y, A[1] + uz * L * frac] })
   }
   // Торцы трубы: у A — КП-002 (к стене); у B — КП-002 либо КП-001 (угол М7). Смещение внутрь.
-  const addTubeEnds = (kp: string, A: P, B: P, y: number, bModel: 'kp002' | 'kp001', out: P) => {
+  const addTubeEnds = (kp: string, A: P, B: P, y: number, bModel: 'kp002' | 'kp001', out: P, flatTube: boolean) => {
     const { rotY } = seg2(A, B)
     const ox = -out[0] * SLIDE_GAP, oz = -out[1] * SLIDE_GAP
-    hardware.push({ key: `${kp}-endA`, model: 'kp002', rotY, pos: [A[0] + ox, y, A[1] + oz] })
-    hardware.push({ key: `${kp}-endB`, model: bModel, rotY, pos: [B[0] + ox, y, B[1] + oz] })
+    // Торец A смотрит «назад» по оси трубы — разворачиваем, чтобы фланец лёг на стену.
+    hardware.push({ key: `${kp}-endA`, model: 'kp002', flatTube, rotY: rotY + Math.PI, pos: [A[0] + ox, y, A[1] + oz] })
+    hardware.push({ key: `${kp}-endB`, model: bModel, flatTube, rotY, pos: [B[0] + ox, y, B[1] + oz] })
   }
 
   // Дверь: открыта наружу вокруг петлевой кромки Ph; ставит петли и ручку.
@@ -335,7 +337,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
     const hasTube = topKind === 'slide' || topKind === 'swing'
     const runY = sliding ? tubeYSlide : tubeYSwing
     // Торцы трубы: у трапеции стыки закрывает соединитель (ниже), КП-002 не ставим.
-    if (hasTube && !isTrap) addTubeEnds(run.kp, run.A, run.B, runY, isM7Front ? 'kp001' : 'kp002', run.out)
+    if (hasTube && !isTrap) addTubeEnds(run.kp, run.A, run.B, runY, isM7Front ? 'kp001' : 'kp002', run.out, !sliding)
     const rL = Math.hypot(run.B[0] - run.A[0], run.B[1] - run.A[1])
     const rux = rL ? (run.B[0] - run.A[0]) / rL : 0, ruz = rL ? (run.B[1] - run.A[1]) / rL : 0
     // Длины сегментов вдоль рана: дверь = ширине двери (≤85% рана), стационары/створки
@@ -360,7 +362,7 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
         if (hasTube) {   // КП-006 труба→стекло, ближе к двери/створке
           const frac = (i < n - 1 && run.segs[i + 1].t !== 'fixed') ? 0.82
             : (i > 0 && run.segs[i - 1].t !== 'fixed') ? 0.18 : 0.5
-          addKP006(key, sa, sb, frac, runY, run.out)
+          addKP006(key, sa, sb, frac, runY, run.out, !sliding)
         }
       }
       else if (sg.t === 'slide') {
@@ -415,8 +417,8 @@ export function buildFromModel(model: MModel, dims: MDims, thickness: number, do
       // Труба 30×10 перпендикулярно от стекла (свободный край) до задней стены; длина = глубина поддона.
       const L = trayDepth
       metal.push({ key: 'm1-tube', kind: 'rail', rotY: Math.PI / 2, spec: 'tube-perp90', pos: [Lg, yTop, L / 2], size: [L, 0.010, 0.030] })
-      hardware.push({ key: 'm1-mnt-glass', model: 'kp006', spec: 'mount-glass', rotY: 0, pos: [Lg, yTop, 0.02] })
-      hardware.push({ key: 'm1-mnt-wall', model: 'kp002', spec: 'mount-wall', rotY: Math.PI / 2, pos: [Lg, yTop, L] })
+      hardware.push({ key: 'm1-mnt-glass', model: 'kp006', spec: 'mount-glass', flatTube: true, rotY: 0, pos: [Lg, yTop, 0.02] })
+      hardware.push({ key: 'm1-mnt-wall', model: 'kp002', spec: 'mount-wall', flatTube: true, rotY: Math.PI / 2, pos: [Lg, yTop, L] })
     } else if (mount === 'diag45') {
       // Труба под 45° к стене крепления (в плане): равные смещения по x (к стене) и z (внутрь).
       const d = Math.min(trayDepth, Lg * 0.8)
