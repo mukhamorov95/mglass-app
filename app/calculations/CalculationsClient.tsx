@@ -259,6 +259,18 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
     setCalcs(prev => prev.map(c => c.order_group_id === groupId ? { ...c, status } : c))
   }
 
+  // Быстрый расчёт «Открыть» → в калькулятор для ПЕРЕСЧЁТА (владелец: «открыть и
+  // пересчитать»), а не в read-only деталь /calculations/[id]: у quick другая форма
+  // cost_breakdown (нет lines), деталь на нём падает. Снимок в sessionStorage, как
+  // из карточки сделки; __parentCalcId связывает пересчёт с оригиналом.
+  function reopenQuick(c: Calc) {
+    try {
+      const snap = (c.input_data ?? {}) as Record<string, unknown>
+      sessionStorage.setItem('mglass_quick_reopen', JSON.stringify({ ...snap, __parentCalcId: c.id }))
+    } catch { /* ignore */ }
+    window.location.assign('/calculator/quick')
+  }
+
   async function duplicateCalc(c: Calc) {
     setDuplicating(c.id)
     const supabase = createClient()
@@ -754,10 +766,17 @@ export default function CalculationsClient({ isAdmin, canViewAll, usersMap, allS
                       </div>
 
                       <div className="flex items-center gap-2 flex-wrap">
-                        <Link href={`/calculations/${c.id}`}
-                          className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
-                          Открыть
-                        </Link>
+                        {c.product_type === 'quick' ? (
+                          <button onClick={() => reopenQuick(c)}
+                            className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                            Открыть
+                          </button>
+                        ) : (
+                          <Link href={`/calculations/${c.id}`}
+                            className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-[#e4e4e0] bg-white text-[#4b4b47] hover:bg-[#fafaf9] transition-colors">
+                            Открыть
+                          </Link>
+                        )}
                         <a href={`/calculations/${c.id}/print`} target="_blank" rel="noopener noreferrer"
                           className="px-3 py-1.5 rounded-lg text-[12px] font-medium border border-blue-100 text-blue-600 hover:bg-blue-50 transition-colors">
                           PDF КП
