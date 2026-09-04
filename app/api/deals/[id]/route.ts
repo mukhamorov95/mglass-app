@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor, canSeeDeal } from '@/lib/b2c/dealScope'
+import { dealStage, dealValue, emptyArtifacts } from '@/lib/b2c/dealProgress'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,7 +42,29 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     siblings = (data ?? []) as Record<string, unknown>[]
   }
 
-  return NextResponse.json({ deal, calculations: calcs ?? [], siblings }, { headers: { 'Cache-Control': 'no-store' } })
+  // Этаж и деньги считаем ТЕМ ЖЕ кодом, что доска: раньше карточка знала только
+  // про расчёты и показывала «Новая · 0 ₽» у сделки с договором на 775 000.
+  const [{ data: kps }, { data: contracts }, { data: pays }] = await Promise.all([
+    svc.from('commercial_proposals').select('total, created_at').eq('deal_id', dealId).order('created_at', { ascending: true }),
+    svc.from('contracts').select('total, created_at').eq('deal_id', dealId).order('created_at', { ascending: true }),
+    svc.from('deal_payments').select('amount').eq('deal_id', dealId),
+  ])
+  const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
+  const art = emptyArtifacts()
+  for (const c of (calcs ?? []) as Record<string, unknown>[]) {
+    art.calcCount++
+    art.calcMax = Math.max(art.calcMax, num(c.final_price))
+    if (c.status === 'sent' || c.status === 'approved') art.hasSentCalc = true
+  }
+  for (const k of (kps ?? []) as Record<string, unknown>[]) { art.kpCount++; art.kpTotal = num(k.total) }
+  for (const c of (contracts ?? []) as Record<string, unknown>[]) { art.contractCount++; art.contractTotal = num(c.total) }
+  for (const p of (pays ?? []) as Record<string, unknown>[]) { art.paid += num(p.amount); art.payCount++ }
+  const money = dealValue(art)
+  const stage = dealStage(art)
+
+  return NextResponse.json(
+    { deal, calculations: calcs ?? [], siblings, stage, money },
+    { headers: { 'Cache-Control': 'no-store' } })
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {

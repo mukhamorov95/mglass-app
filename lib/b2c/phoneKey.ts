@@ -38,3 +38,15 @@ export function extractPhone(source: unknown): string | null {
   }
   return null
 }
+
+// Позвонить и написать прямо с карточки: на телефоне это самый частый жест
+// менеджера, а номер до сих пор был просто текстом, который надо выделять.
+// WhatsApp принимает номер без плюса и знаков.
+export function telHref(raw: unknown): string | null {
+  const k = phoneKey(raw)
+  return k ? `tel:+7${k}` : null
+}
+export function waHref(raw: unknown): string | null {
+  const k = phoneKey(raw)
+  return k ? `https://wa.me/7${k}` : null
+}
