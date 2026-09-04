@@ -104,10 +104,13 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 // Клиентский визуализатор на 9 моделях М1–М12 (раскладка — lib/configurator/arrangement).
 // Раскладка экрана: модель (сворачивается) слева · 3D по центру (sticky, всегда виден) ·
 // габариты/стекло/цвет + спецификация + цена справа. variant='embed' — публичный виджет.
-export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'internal' | 'embed' }) {
+export function ConfiguratorClient({ variant = 'internal', initialModel }: {
+  variant?: 'internal' | 'embed'
+  initialModel?: string      // пришли из карточки вида — модель уже выбрана
+}) {
   const embed = variant === 'embed'
-  const [code, setCode] = useState<string>('М7')
-  const [dims, setDims] = useState<MDims>(() => defaultsFor(getModel('М7')))
+  const [code, setCode] = useState<string>(initialModel ?? 'М7')
+  const [dims, setDims] = useState<MDims>(() => defaultsFor(getModel(initialModel ?? 'М7')))
   const [tier, setTier] = useState<Tier>('budget')
   const [finishId, setFinishId] = useState<FinishId>('chrome')
   const [glassId, setGlassId] = useState<string>('clear')
@@ -115,7 +118,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   // Виджет на сайте ведёт клиента так же, как «Расчёт» ведёт менеджера: сначала
   // выбор модели крупными карточками, потом отдельный экран сборки. Одним экраном
   // человек с улицы видит сразу всё и не понимает, с чего начать.
-  const [screen, setScreen] = useState<'models' | 'build'>(variant === 'embed' ? 'models' : 'build')
+  const [screen, setScreen] = useState<'models' | 'build'>(variant === 'embed' && !initialModel ? 'models' : 'build')
   const [doorOpen, setDoorOpen] = useState(true)
   const [sent, setSent] = useState(false)
   const [kitChoices, setKitChoices] = useState<KitChoices | null>(null)
