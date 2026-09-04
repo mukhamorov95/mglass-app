@@ -301,7 +301,10 @@ function MirrorScheme({ w, h, shape, lit, sides, frame }: {
 }) {
   const W = Math.max(1, w), H = Math.max(1, h)
   const box = 320
-  const k = box / Math.max(W, H)
+  // Поля обязательны: зеркало во всю ширину кадра — и полосы подсветки слева и
+  // справа рисуются ЗА границей viewBox, то есть просто не видны.
+  const PAD = 26
+  const k = (box - PAD * 2) / Math.max(W, H)
   const pw = Math.max(24, W * k), ph = Math.max(24, H * k)
   const round = shape === 'circle' || shape === 'oval'
   const glow = '#ffd977'
