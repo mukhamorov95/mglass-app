@@ -688,11 +688,20 @@ export default function DealPage() {
               быть несколько, дата — поступления денег (не записи). */}
           <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between">
             <p className="text-[12px] font-semibold text-[#9a9a95] uppercase tracking-wider">Оплаты</p>
-            {payments && payments.length > 0 && (
+            {/* План и факт рядом: «поступило» без «сколько должен» не отвечает на
+                главный вопрос — сколько ещё ждать с клиента. */}
+            {money && money.value > 0 ? (
+              <p className="text-[12.5px] font-mono text-[#4b4b47]">
+                по договору <b className="text-[#111110]">{fmt(money.value)}</b> · оплачено {fmt(money.paid)}
+                {money.remaining > 0
+                  ? <> · остаток <b className="text-[#c2410c]">{fmt(money.remaining)}</b></>
+                  : <span className="text-emerald-700"> · закрыто</span>}
+              </p>
+            ) : payments && payments.length > 0 ? (
               <p className="text-[13px] font-semibold font-mono text-[#111110]">
                 поступило {fmt(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0))}
               </p>
-            )}
+            ) : null}
           </div>
 
           {payments === null ? <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Загрузка…</p>
