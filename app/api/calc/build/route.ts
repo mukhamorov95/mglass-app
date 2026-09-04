@@ -59,15 +59,31 @@ export async function POST(req: NextRequest) {
   const assembly = buildWithVariant(model, body.dims, thickness)
   const glassMissing: string[] = []
   let glassCost = 0
+  // Спецификация стекла: по одной строке на панель — размер, площадь, ₽/м² по прайсу,
+  // сумма и скидка M GLASS. Менеджеру нужно видеть, из чего сложилась цифра.
+  const glassLines: Array<{
+    label: string; w: number; h: number; areaM2: number; pricePerM2: number
+    listTotal: number; total: number; minPriceApplied: boolean
+  }> = []
   if (glassMat) {
-    for (const g of assembly.glass) {
+    assembly.glass.forEach((g, i) => {
       const w = Math.round(g.size[0] * 1000)
       const h = Math.round(g.size[1] * 1000)
-      if (w <= 0 || h <= 0) continue
+      if (w <= 0 || h <= 0) return
       // Душевое стекло — всегда закалённое (hasTempering=true), иначе занижение.
       const item = calcItem(glassMat, w, h, 1, glassMat.waste_percent, true)
-      glassCost += effectiveItemTotal(item as B2BOrderItem, mgDiscount)
-    }
+      const total = effectiveItemTotal(item as B2BOrderItem, mgDiscount)
+      glassCost += total
+      glassLines.push({
+        label: `Панель ${i + 1}`,
+        w, h,
+        areaM2: item.totalAreaNet,
+        pricePerM2: item.pricePerM2,
+        listTotal: item.saleIncVat,
+        total,
+        minPriceApplied: !!item.minPriceApplied,
+      })
+    })
   } else {
     glassMissing.push('стекло: материал не найден в справочнике')
   }
@@ -91,6 +107,12 @@ export async function POST(req: NextRequest) {
   const missing = [...price.missing, ...glassMissing.map(label => ({ role: 'glass' as RoleId, label, reason: 'нет цены' as const }))]
   return NextResponse.json({
     full: true,
-    price: { ...price, missing, complete: price.complete && glassMissing.length === 0, glassSource: glassMat ? glassMat.name : null },
+    price: {
+      ...price, missing, complete: price.complete && glassMissing.length === 0,
+      glassSource: glassMat ? glassMat.name : null,
+      glassThickness: glassMat ? glassMat.thickness : thickness,
+      glassDiscountPct: mgDiscount,
+      glassLines,
+    },
   }, { headers: { 'Cache-Control': 'no-store' } })
 }
