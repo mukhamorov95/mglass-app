@@ -30,7 +30,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const g = await guard(id)
   if (g.err) return g.err
   const { data } = await g.svc.from('deal_payments')
-    .select('id, kind, amount, paid_at, entered_by_name, note, created_at')
+    .select('id, kind, amount, paid_at, entered_by_name, note, invoice_id, created_at')
     .eq('deal_id', g.dealId).order('paid_at', { ascending: true })
   return NextResponse.json({ payments: data ?? [] }, { headers: { 'Cache-Control': 'no-store' } })
 }
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const { id } = await params
   const g = await guard(id)
   if (g.err) return g.err
-  const b = await req.json().catch(() => ({})) as { kind?: string; amount?: number; paid_at?: string; note?: string }
+  const b = await req.json().catch(() => ({})) as { kind?: string; amount?: number; paid_at?: string; note?: string; invoice_id?: number | null }
   if (!b.kind || !KINDS.has(b.kind)) return NextResponse.json({ error: 'kind: предоплата/остаток/остаток за монтаж' }, { status: 400 })
   const amount = Number(b.amount)
   if (!Number.isFinite(amount) || amount < 0) return NextResponse.json({ error: 'Некорректная сумма' }, { status: 400 })
@@ -52,6 +52,8 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     entered_by: g.actor.userId,
     entered_by_name: g.actor.name,
     note: b.note?.trim() || null,
+    // Оплата может закрывать конкретный счёт; без счёта — просто деньги по сделке.
+    invoice_id: Number.isFinite(Number(b.invoice_id)) ? Number(b.invoice_id) : null,
   }).select('id').single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, id: data.id })

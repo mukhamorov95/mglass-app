@@ -8,6 +8,7 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from '@/components/configurator/scene/assembly'
 import type { KitChoices } from '@/lib/configurator/kit'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -52,10 +53,6 @@ type Price = {
   glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
-}
-type MirrorModel = {
-  code: string; name: string; descr: string | null; shape: string
-  has_lighting: boolean; frame_kind: string | null; image_url: string | null
 }
 type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
 
@@ -118,6 +115,7 @@ export default function BuildCalcPage() {
   // ведёт на свой старый калькулятор — врать вкладкой «скоро» не нужно.
   const [product, setProduct] = useState<'shower' | 'mirror'>('shower')
   const [mirrorModels, setMirrorModels] = useState<MirrorModel[] | null>(null)
+  const [mirrorMats, setMirrorMats] = useState<MirrorMaterial[]>([])
   const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
   const [dealId, setDealId] = useState<number | null>(null)
   const [dealTitle, setDealTitle] = useState<string>('')
@@ -149,7 +147,7 @@ export default function BuildCalcPage() {
       try {
         const r = await fetch('/api/calc/mirror/models')
         const j = await r.json().catch(() => ({}))
-        if (r.ok) setMirrorModels(j.models ?? [])
+        if (r.ok) { setMirrorModels(j.models ?? []); setMirrorMats(j.materials ?? []) }
         else setMirrorModels([])
       } catch { setMirrorModels([]) }
     })()
@@ -254,6 +252,11 @@ export default function BuildCalcPage() {
   const glassCost = price?.glassCost ?? 0
   const hwCost = price?.hardwareCost ?? 0
   const usable = !!price && price.complete
+  // Расчёт сохраняем только с клиентом: без имени и телефона он не заводит сделку,
+  // не попадает в воронку и не доходит до КП. Пришли из карточки сделки — клиент
+  // уже известен, спрашивать нечего.
+  const phoneDigits = clientPhone.replace(/\D/g, '')
+  const clientOk = dealId != null || (clientName.trim().length >= 2 && phoneDigits.length >= 10)
   const cost = glassCost + hwCost
   const sections = price?.sections ?? 1
   const m = numOr(margin), tx = numOr(tax)
@@ -275,8 +278,16 @@ export default function BuildCalcPage() {
   }
 
   async function save() {
+    if (!clientOk) {
+      setSaveMsg('Впишите имя и телефон клиента')
+      setTimeout(() => setSaveMsg(null), 3000)
+      return
+    }
     const list = [...cart]
-    if (usable && grand > 0) list.push(currentItem())
+    // Текущее изделие добавляем только в режиме душевых: у зеркала своя кнопка
+    // «+ В КП», а цена душевой могла остаться в состоянии от прошлого захода —
+    // иначе в КП приезжало бы лишнее изделие, которого менеджер не добавлял.
+    if (product === 'shower' && usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
     const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
@@ -304,7 +315,7 @@ export default function BuildCalcPage() {
       // новый телефон заводит сделку сам, совпавший оставляет решение человеку.
       if (dealId) {
         try { await fetch(`/api/deals/${dealId}/attach`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId }) }) } catch { /* ignore */ }
-      } else if (clientPhone.trim() || objectAddress.trim()) {
+      } else {
         try { await fetch('/api/deals/ensure', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ calc_id: newId, client_name: clientName.trim(), phone: clientPhone.trim(), address: objectAddress.trim() }) }) } catch { /* ignore */ }
       }
       // КП из этого расчёта: позиции корзины → префилл /kp.
@@ -351,7 +362,15 @@ export default function BuildCalcPage() {
             <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
           </div>
 
-          {product === 'mirror' ? (
+          {product === 'mirror' && mirrorPick ? (
+            <MirrorPanel
+              model={mirrorPick} materials={mirrorMats}
+              onBack={() => setMirrorPick(null)}
+              onAdd={item => setCart(c => [...c, item])}
+              cartCount={cart.length}
+              onSave={save} saving={saving}
+            />
+          ) : product === 'mirror' ? (
             mirrorModels === null ? (
               <p className="text-[13px] text-[#9a9a95]">Загружаю модели…</p>
             ) : mirrorModels.length === 0 ? (
@@ -373,19 +392,7 @@ export default function BuildCalcPage() {
                     </button>
                   ))}
                 </div>
-                {mirrorPick && (
-                  <div className="mt-4 bg-white border border-[#e4e4e0] rounded-2xl p-4">
-                    <p className="text-[13px] font-semibold text-[#111110]">{mirrorPick.code} · {mirrorPick.name}</p>
-                    <p className="text-[12px] text-[#6b6b66] mt-1 max-w-[70ch]">
-                      Экран расчёта зеркала — следующие шаги маршрута (З3–З6): геометрия и длина подсветки,
-                      кратность бухт ленты и хлыстов профиля, серверный расчёт цены. Пока считайте зеркало
-                      в «Калькуляторы → Зеркало».
-                    </p>
-                    <a href="/calculator/mirror" className="inline-block mt-2 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors">
-                      Открыть старый калькулятор зеркал
-                    </a>
-                  </div>
-                )}
+
               </>
             )
           ) : (
@@ -591,12 +598,18 @@ export default function BuildCalcPage() {
               {discPct > 0 && <div className="flex justify-between text-emerald-700"><span>Скидка {discPct}%</span><span className="font-mono">−{RUB(Math.round(beforeDisc * discPct / 100))}</span></div>}
             </div>
 
-            {/* Клиент (опц.) */}
+            {/* Клиент. Обязателен для сохранения: расчёт без имени и телефона
+                не превращается в сделку и теряется — так ушли в никуда все
+                просчёты первых дней. Прикидывать цену можно и без него. */}
             <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4 grid grid-cols-1 gap-2">
-              <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Клиент (необязательно)" className={`${fld} font-sans`} />
+              <div className="flex items-baseline justify-between">
+                <span className="text-[12px] font-semibold text-[#111110]">Кому считаем</span>
+                {!dealId && !clientOk && <span className="text-[11px] text-[#9a9a95]">нужно для сохранения</span>}
+              </div>
+              <input value={clientName} onChange={e => setClientName(e.target.value)} placeholder="Имя клиента" className={`${fld} font-sans`} />
               <div className="grid grid-cols-2 gap-2">
                 <input value={clientPhone} onChange={e => setClientPhone(e.target.value)} placeholder="Телефон" inputMode="tel" className={`${fld} font-sans`} />
-                <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта" className={`${fld} font-sans`} />
+                <input value={objectAddress} onChange={e => setObjectAddress(e.target.value)} placeholder="Адрес объекта (необязательно)" className={`${fld} font-sans`} />
               </div>
             </div>
           </div>
@@ -617,11 +630,16 @@ export default function BuildCalcPage() {
                 className="px-4 py-2.5 border border-[#111110] text-[#111110] text-[13px] font-semibold rounded-lg hover:bg-[#f0f0ec] disabled:opacity-40">
                 + Ещё изделие
               </button>
-              <button onClick={save} disabled={saving || priceDirty || state === 'loading' || (!usable && cart.length === 0)}
+              <button onClick={save} disabled={saving || priceDirty || state === 'loading' || (!usable && cart.length === 0) || !clientOk}
                 className="px-4 py-2.5 bg-[#111110] text-white text-[13px] font-semibold rounded-lg hover:bg-[#2a2a28] disabled:opacity-40">
                 {saving ? 'Сохраняю…' : 'Сохранить → КП'}
               </button>
             </div>
+            {!clientOk && (
+              <p className="text-[11px] text-[#9a9a95] text-center">
+                Впишите имя и телефон — расчёт станет сделкой и попадёт в воронку.
+              </p>
+            )}
             {saveMsg && <p className={`text-center text-[13px] font-semibold rounded-lg px-3 py-1.5 ${saveMsg.includes('✓') ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>{saveMsg}</p>}
             {cart.length > 0 && <p className="text-[11px] text-[#9a9a95] text-center">В корзине {cart.length}. «Сохранить» соберёт КП из всех.</p>}
           </div>

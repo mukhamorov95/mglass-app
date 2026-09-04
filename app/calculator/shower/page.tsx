@@ -16,7 +16,7 @@ import {
 } from '@/lib/showerCalculator'
 import { ShowerModelIcon } from '@/components/ShowerModelIcon'
 import {
-  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent, resolveBudgetHardwareCost,
+  resolveShowerGlassCostPerM2, resolveShowerExpensesPercent,
 } from '@/lib/pricing/showerInputs'
 import { saveCalculation } from '@/lib/saveCalculation'
 import { useCart } from '@/lib/CartContext'
@@ -120,7 +120,11 @@ export default function ShowerCalculatorPage() {
   const [catalogPrices, setCatalogPrices] = useState<CatalogPrice[]>([])
   const [hwColors, setHwColors]           = useState<HwColor[]>([])
   const [hwSuppliers, setHwSuppliers]     = useState<HwSupplier[]>([])
-  const [budgetManualPrices, setBudgetManualPrices] = useState<{ model_id: string; color_id: number; price: number }[]>([])
+  // Себестоимость фурнитуры приходит с сервера из прайса визуализатора —
+  // единственного источника. Ручная таблица shower_budget_manual_prices выведена
+  // из расчёта: она занижала комплект до вдвое.
+  const [vizHw, setVizHw] = useState<{ found: boolean; cost: number; complete: boolean; missing: string[] } | null>(null)
+  const [vizHwLoading, setVizHwLoading] = useState(false)
   // Фото моделей из админки (/admin/shower-images → shower_model_images). Если фото
   // загружено — показываем его, иначе единую SVG-иллюстрацию ShowerModelIcon.
   const [modelPhotos, setModelPhotos] = useState<Record<string, string>>({})
@@ -285,14 +289,26 @@ export default function ShowerCalculatorPage() {
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setHwSelection({}) }, [tier, stdShowerType, hingeType, trackType])
 
-  // Load manual hardware prices for budget tier when model changes
+  // Фурнитура из прайса визуализатора: пересчёт при смене модели, габаритов и цвета.
+  // Габариты влияют на длину профиля, поэтому ждём паузу в наборе, а не дёргаем на
+  // каждую цифру.
   useEffect(() => {
-    if (tier !== 'budget') return
-    supabase.from('shower_budget_manual_prices')
-      .select('model_id,color_id,price')
-      .eq('model_id', modelId)
-      .then(({ data }) => setBudgetManualPrices((data ?? []) as { model_id: string; color_id: number; price: number }[]))
-  }, [tier, modelId])
+    const w = Number(width) || 0, h = Number(height) || 0, w2 = Number(width2) || 0
+    let cancelled = false
+    const t = setTimeout(() => {
+      if (!modelId || w <= 0 || h <= 0) { setVizHw(null); return }
+      setVizHwLoading(true)
+      const qs = new URLSearchParams({ model: modelId, w: String(w), h: String(h), t: String(thickness) })
+      if (w2 > 0) qs.set('w2', String(w2))
+      if (hwColor) qs.set('color', hwColor)
+      fetch(`/api/shower/hardware-cost?${qs}`)
+        .then(r => r.json())
+        .then(j => { if (!cancelled) setVizHw(j?.found ? j : { found: false, cost: 0, complete: false, missing: [] }) })
+        .catch(() => { if (!cancelled) setVizHw(null) })
+        .finally(() => { if (!cancelled) setVizHwLoading(false) })
+    }, 400)
+    return () => { cancelled = true; clearTimeout(t) }
+  }, [modelId, width, width2, height, hwColor, thickness])
 
   // Фото моделей из админки (загруженные в /admin/shower-images). GET открыт.
   useEffect(() => {
@@ -383,14 +399,11 @@ export default function ShowerCalculatorPage() {
       })
   }, [filteredCatalogItems, hwSelection, getPriceForItem, hwColors, stdColorId])
 
-  // Себестоимость фурнитуры бюджета — из shower_budget_manual_prices (единый резолвер).
-  const budgetManualCost = tier === 'budget'
-    ? resolveBudgetHardwareCost(budgetManualPrices, hwColors, modelId, hwColor)
-    : undefined
-
-  const customHardwareCost = tier === 'standard' && selectedHardwareLines.length > 0
-    ? selectedHardwareLines.reduce((s, l) => s + l.total, 0)
-    : budgetManualCost
+  // Себестоимость фурнитуры — только прайс визуализатора, для обоих тарифов.
+  // Ручной подбор из каталога и ручная таблица бюджета больше в цену не идут:
+  // два источника расходились, и продавали по меньшему.
+  const customHardwareCost = vizHw?.found ? vizHw.cost : undefined
+  const hwPriceMissing = vizHw != null && !vizHw.found
 
   const glassCostPerM2 = useMemo(
     () => resolveShowerGlassCostPerM2(glassMatrix, glassType, thickness, materials),
@@ -524,16 +537,27 @@ export default function ShowerCalculatorPage() {
     <div className="min-h-screen bg-[#f5f5f7]" style={{ fontFamily: '-apple-system,BlinkMacSystemFont,"Helvetica Neue",sans-serif' }}>
       <div className="max-w-[960px] mx-auto px-5 py-6">
 
-        {/* Экран вернули по просьбе менеджеров, но дефект остался: фурнитуру
-            бюджета он берёт из таблицы, заполняемой руками, и занижает.
-            Молчать об этом нельзя — по такой цене продают. */}
-        <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
-          <p className="text-[12px] font-semibold text-amber-800">Цена фурнитуры здесь занижена</p>
-          <p className="text-[11px] text-amber-700 mt-0.5">
-            Фурнитура считается по старой ручной таблице, а не по справочнику закупки — на комплекте это даёт занижение.
-            Для продажи считайте в «Новом расчёте»: там фурнитура берётся из реального состава комплекта.
-          </p>
-        </div>
+        {/* Фурнитура берётся из прайса визуализатора. Если модели там нет или в
+            комплекте не проставлены цены — говорим об этом, а не подставляем
+            старый флэт: заниженная цена уходит клиенту и возвращается убытком. */}
+        {hwPriceMissing && (
+          <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl">
+            <p className="text-[12px] font-semibold text-red-800">Цена фурнитуры не считается</p>
+            <p className="text-[11px] text-red-700 mt-0.5">
+              Модели {modelId} нет в прайсе визуализатора — комплект не собран. Заведите её в
+              «Себестоимость визуализатора» или считайте в «Расчёте».
+            </p>
+          </div>
+        )}
+        {vizHw?.found && !vizHw.complete && (
+          <div className="mb-4 px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+            <p className="text-[12px] font-semibold text-amber-800">В комплекте есть позиции без цены</p>
+            <p className="text-[11px] text-amber-700 mt-0.5">
+              {vizHw.missing.join('; ')} — себестоимость занижена на эти позиции. Проставьте цены в
+              «Себестоимость визуализатора».
+            </p>
+          </div>
+        )}
 
         {/* ── Header ────────────────────────────────────────── */}
         {editCalcId && (
@@ -1024,7 +1048,10 @@ export default function ShowerCalculatorPage() {
             {!clientView && (<>
             {/* Cost breakdown */}
             <section className="bg-white rounded-2xl border border-[#e8e8ed] p-4">
-              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">Себестоимость</p>
+              <p className="text-[11px] font-bold text-[#86868b] uppercase tracking-widest mb-3">
+                Себестоимость
+                {vizHwLoading && <span className="ml-2 font-medium normal-case tracking-normal text-[#86868b]">фурнитура пересчитывается…</span>}
+              </p>
               <div className="space-y-1.5">
                 {result.costLines.map((l, i) => (
                   <div key={i} className="flex justify-between items-start gap-2">

@@ -155,6 +155,18 @@ export function BudgetKitTab({ colors, suppliers }: { colors: Color[]; suppliers
   return (
     <div className="space-y-4">
 
+      {/* Эта таблица больше не участвует в цене (04.09.2026). Себестоимость
+          фурнитуры считается по составу комплекта в «Себестоимость визуализатора».
+          Оставлена для истории: заполнять её — терять время. */}
+      <div className="px-4 py-3 bg-amber-50 border border-amber-200 rounded-xl">
+        <p className="text-[12px] font-semibold text-amber-800">Эта таблица в цену не идёт</p>
+        <p className="text-[11px] text-amber-700 mt-0.5">
+          Себестоимость фурнитуры берётся из «Себестоимость визуализатора» — по реальному составу
+          комплекта и габаритам. Ручные цены отсюда занижали комплект до вдвое, поэтому выведены
+          из расчёта. Заводите цены в визуализаторе.
+        </p>
+      </div>
+
       {/* Model tabs */}
       <div className="flex flex-wrap gap-1">
         {MODELS.map(m => (

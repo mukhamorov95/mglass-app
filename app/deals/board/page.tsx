@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { formatPhone, phoneKey } from '@/lib/b2c/phoneKey'
+import { formatPhone, phoneKey, telHref, waHref } from '@/lib/b2c/phoneKey'
 
 // Доска сделок — тот же список /deals, но по этажам пути денег: просчёт → КП →
 // договор → оплата → готово. Этаж приходит с сервера вычисленным по реальным
@@ -15,6 +15,7 @@ type Card = {
   manager_name: string | null; stage: string; value: number; paid: number; remaining: number
   calcCount: number; hasKp: boolean; measure: Measure | null; hasContract: boolean
   hasDrawing: boolean; ageDays: number; source: string | null; archived: boolean
+  lost: boolean; lostReason: string | null; nextContactAt: string | null
 }
 type Stage = { key: string; label: string }
 type AmoLead = { id: number; name: string; stage: string; manager: string; createdAt: string }
@@ -29,7 +30,7 @@ export const SOURCES: { id: string; label: string }[] = [
   { id: 'other',     label: 'Другое' },
 ]
 export const sourceLabel = (id?: string | null) => SOURCES.find(s => s.id === id)?.label ?? (id || '')
-type Kpis = { inWork: number; awaitingPay: number; stalled: number; receivedThisMonth: number }
+type Kpis = { inWork: number; awaitingPay: number; stalled: number; overdue: number; receivedThisMonth: number }
 
 // Цвет этажа: точка + верхняя граница колонки. Семантика (не акцент): синий=КП,
 // янтарь=договор, фирменный красный=оплата, зелёный=готово.
@@ -48,9 +49,12 @@ export default function DealBoardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
+  const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled' | 'overdue'>('all')
   const [adding, setAdding] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [showLost, setShowLost] = useState(false)
+  const [manager, setManager] = useState('')     // фильтр владельца: чьи сделки смотрим
+  const [help, setHelp] = useState(false)        // справка — по кнопке, а не полотном под доской
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
   // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
@@ -98,7 +102,7 @@ export default function DealBoardPage() {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : ''}`)
+        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : showLost ? '?lost=1' : ''}`)
         const j = await r.json().catch(() => ({}))
         if (!alive) return
         if (!r.ok) { setError(j.error || 'Не удалось загрузить'); return }
@@ -106,7 +110,7 @@ export default function DealBoardPage() {
       } catch { if (alive) setError('Сеть недоступна') } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [showArchive])
+  }, [showArchive, showLost])
 
   // Телефон ищем по тем же правилам, что и список: сравниваем цифры, а не строку,
   // иначе «8926…» не находит сделку, записанную как «+7 926…».
@@ -125,12 +129,18 @@ export default function DealBoardPage() {
 
   // Показатель сверху — это ещё и фильтр доски: нажал «Зависли» — видишь только их.
   // Иначе цифра «зависли 6» есть, а найти эти шесть на доске нечем.
+  const managers = useMemo(
+    () => [...new Set(cards.map(c => c.manager_name).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'ru')),
+    [cards])
+
   const focused = useMemo(() => {
-    if (focus === 'inWork') return filtered.filter(c => c.stage !== 'done')
-    if (focus === 'awaiting') return filtered.filter(c => c.stage === 'contract' || c.stage === 'pay')
-    if (focus === 'stalled') return filtered.filter(c => c.stage !== 'done' && c.ageDays > 7)
-    return filtered
-  }, [filtered, focus])
+    const base = manager ? filtered.filter(c => c.manager_name === manager) : filtered
+    if (focus === 'inWork') return base.filter(c => c.stage !== 'done')
+    if (focus === 'awaiting') return base.filter(c => c.stage === 'contract' || c.stage === 'pay')
+    if (focus === 'stalled') return base.filter(c => c.stage !== 'done' && c.ageDays > 7)
+    if (focus === 'overdue') return base.filter(c => c.stage !== 'done' && !!c.nextContactAt && c.nextContactAt <= todayStr())
+    return base
+  }, [filtered, focus, manager])
 
   const byStage = useMemo(() => {
     const m = new Map<string, Card[]>()
@@ -143,23 +153,37 @@ export default function DealBoardPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
         <div>
-          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : 'Сделки'}</h1>
-          <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
-            Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
-          </p>
+          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : showLost ? 'Отказы' : 'Сделки'}</h1>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             value={q} onChange={e => setQ(e.target.value)}
             placeholder="Поиск: телефон, адрес, клиент"
-            className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
+            className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-full sm:w-64 outline-none focus:border-[#111110] transition-colors" />
+          {/* Владельцу видны все сделки: без фильтра по менеджеру доска на команде
+              превращается в кашу. Менеджеру фильтр не нужен — у него только свои. */}
+          {seeAll && managers.length > 1 && (
+            <select value={manager} onChange={e => setManager(e.target.value)}
+              className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] bg-white outline-none focus:border-[#111110]">
+              <option value="">Все менеджеры</option>
+              {managers.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
           {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
               ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
-          <button onClick={() => { setShowArchive(v => !v); setLoading(true); setFocus('all') }}
+          <button onClick={() => { setShowLost(v => !v); setShowArchive(false); setLoading(true); setFocus('all') }}
+            className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showLost ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            {showLost ? 'В работе' : 'Отказы'}
+          </button>
+          <button onClick={() => { setShowArchive(v => !v); setShowLost(false); setLoading(true); setFocus('all') }}
             className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showArchive ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
             {showArchive ? 'Активные' : 'Архив'}
           </button>
-          {!showArchive && (
+          <button onClick={() => setHelp(v => !v)} title="Как работать с доской"
+            className={`text-[13px] font-semibold w-9 h-9 rounded-xl border transition-colors ${help ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            ?
+          </button>
+          {!showArchive && !showLost && (
             <button onClick={() => setAdding(v => !v)}
               className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
               {adding ? 'Отмена' : '+ Сделка'}
@@ -167,6 +191,20 @@ export default function DealBoardPage() {
           )}
         </div>
       </div>
+
+      {help && (
+        <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4 text-[12.5px] text-[#4b4b47] leading-relaxed space-y-2 max-w-[80ch]">
+          <div className="flex items-start justify-between gap-3">
+            <p className="text-[13px] font-semibold text-[#111110]">Как работать с доской</p>
+            <button onClick={() => setHelp(false)} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">закрыть</button>
+          </div>
+          <p><b className="text-[#111110]">Столбец</b> — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по карточке открывает её целиком, по телефону — звонок, по «WA» — WhatsApp.</p>
+          <p><b className="text-[#111110]">Столбцы не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово».</p>
+          <p><b className="text-[#111110]">Откуда карточки.</b> Сделка заводится сама на первом расчёте с телефоном или адресом — сразу в «Просчёт». В «Новая» попадают только заведённые кнопкой «+ Сделка» или взятые из АМО.</p>
+          <p><b className="text-[#111110]">С чего начать день.</b> Нажмите показатель «Просрочен контакт» — доска оставит только тех, кому вы обещали перезвонить. Дату обещания ставят в сделке, блок «Что дальше». Клиент отказался — кнопка «Отказ» с причиной, такие уходят в отдельный вид и не мешают.</p>
+          {!seeAll && <p className="text-[#9a9a95]">Показаны ваши сделки.</p>}
+        </div>
+      )}
 
       {adding && (
         <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4">
@@ -253,24 +291,29 @@ export default function DealBoardPage() {
         <>
           {kpis && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
                 <Kpi label="В работе" value={`${kpis.inWork}`} unit="сделок"
                   active={focus === 'inWork'} onClick={() => setFocus(f => f === 'inWork' ? 'all' : 'inWork')} />
                 <Kpi label="Ждут оплаты" value={fmt(kpis.awaitingPay)} mono
                   active={focus === 'awaiting'} onClick={() => setFocus(f => f === 'awaiting' ? 'all' : 'awaiting')} />
+                <Kpi label="Просрочен контакт" value={`${kpis.overdue}`} flag={kpis.overdue > 0}
+                  active={focus === 'overdue'} onClick={() => setFocus(f => f === 'overdue' ? 'all' : 'overdue')} />
                 <Kpi label="Зависли > 7 дней" value={`${kpis.stalled}`} flag={kpis.stalled > 0}
                   active={focus === 'stalled'} onClick={() => setFocus(f => f === 'stalled' ? 'all' : 'stalled')} />
                 <Kpi label="Поступило за месяц" value={fmt(kpis.receivedThisMonth)} mono />
               </div>
               <p className="text-[11.5px] text-[#9a9a95] mb-4">
                 {focus === 'all'
-                  ? 'Нажмите на показатель — доска покажет только эти сделки.'
+                  ? <span className="hidden sm:inline">Нажмите на показатель — доска покажет только эти сделки.</span>
                   : <>Показаны только «{FOCUS_LABEL[focus]}» — {focused.length}. <button onClick={() => setFocus('all')} className="underline hover:text-[#111110]">показать все</button></>}
               </p>
             </>
           )}
 
-          <div className="flex gap-3.5 overflow-x-auto pb-3">
+          {/* Колонки — с ноутбука. На телефоне шесть колонок по горизонтали
+              означают, что «Оплата» и «Готово» физически за краем экрана,
+              поэтому там тот же набор идёт списком по этажам. */}
+          <div className="hidden lg:flex gap-3.5 overflow-x-auto pb-3">
             {stages.map(st => {
               const list = byStage.get(st.key) ?? []
               const sum = list.reduce((s, c) => s + c.value, 0)
@@ -286,25 +329,38 @@ export default function DealBoardPage() {
                       {sum > 0 && <span className="block text-[11px] text-[#4b4b47] font-semibold tabular-nums">{fmt(sum)}</span>}
                     </span>
                   </div>
-                  {list.map(c => <DealCard key={c.id} c={c} />)}
+                  {list.map(c => <DealCard key={c.id} c={c} showManager={seeAll} />)}
                   {list.length === 0 && <p className="text-[11px] text-[#c4c4be] px-1">—</p>}
                 </div>
               )
             })}
           </div>
 
-          <div className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch] space-y-1.5">
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
-            </p>
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Зависли».
-            </p>
-            <p>
-              <b className="text-[#4b4b47] font-semibold">Столбец не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово». Замер — не столбец, а метка: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию: деньгам, КП, договору, замеру, чертежу.
-              {!seeAll && <span> Показаны ваши сделки.</span>}
-            </p>
+          <div className="lg:hidden space-y-4">
+            {stages.map(st => {
+              const list = byStage.get(st.key) ?? []
+              if (list.length === 0) return null
+              const sum = list.reduce((s2, c) => s2 + c.value, 0)
+              const hex = STAGE_HEX[st.key] ?? '#9a9a95'
+              return (
+                <div key={st.key}>
+                  <div className="flex items-baseline justify-between gap-2 px-1 pb-2 border-b-2" style={{ borderColor: hex }}>
+                    <span className="text-[13px] font-bold text-[#111110] flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: hex }} />{st.label}
+                    </span>
+                    <span className="text-[12px] text-[#9a9a95] font-semibold">
+                      {list.length}{sum > 0 ? ` · ${fmt(sum)}` : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5 mt-2.5">
+                    {list.map(c => <DealCard key={c.id} c={c} showManager={seeAll} />)}
+                  </div>
+                </div>
+              )
+            })}
+            {focused.length === 0 && <p className="text-[13px] text-[#9a9a95]">Ничего не найдено.</p>}
           </div>
+
         </>
       )}
     </div>
@@ -312,7 +368,7 @@ export default function DealBoardPage() {
 }
 
 const FOCUS_LABEL: Record<string, string> = {
-  inWork: 'В работе', awaiting: 'Ждут оплаты', stalled: 'Зависли > 7 дней',
+  inWork: 'В работе', awaiting: 'Ждут оплаты', stalled: 'Зависли > 7 дней', overdue: 'Просрочен контакт',
 }
 
 function Kpi({ label, value, unit, mono, flag, active, onClick }: {
@@ -331,13 +387,15 @@ function Kpi({ label, value, unit, mono, flag, active, onClick }: {
   )
 }
 
+const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' })
+
 function ageClass(days: number) {
   if (days > 7) return 'text-red-600'
   if (days > 3) return 'text-amber-600'
   return 'text-[#9a9a95]'
 }
 
-function DealCard({ c }: { c: Card }) {
+function DealCard({ c, showManager }: { c: Card; showManager?: boolean }) {
   const showPay = c.stage === 'pay' || c.stage === 'done'
   const pct = c.value > 0 ? Math.min(100, Math.round((c.paid / c.value) * 100)) : 0
   const full = c.stage === 'done'
@@ -355,12 +413,14 @@ function DealCard({ c }: { c: Card }) {
         {c.value > 0 && <span className="text-[13px] font-semibold text-[#111110] tabular-nums whitespace-nowrap">{fmt(c.value)}</span>}
       </div>
       <div className="text-[12px] text-[#4b4b47] mt-0.5 truncate">{c.address || <span className="text-[#9a9a95]">адрес не указан</span>}</div>
+      {showManager && c.manager_name && <div className="text-[11px] text-[#9a9a95] truncate">{c.manager_name}</div>}
 
       <div className="flex flex-wrap gap-1.5 mt-2">
         {c.calcCount > 0 && <Chip>⚡ {c.calcCount > 1 ? `Расчёт ×${c.calcCount}` : 'Расчёт'}</Chip>}
         {c.hasKp && <Chip tone="info">📄 КП</Chip>}
         {c.measure && <Chip tone={measureTone(c.measure)}>📐 {measureLabel(c.measure)}</Chip>}
         {c.source && <Chip>{sourceLabel(c.source)}</Chip>}
+        {c.lostReason && <Chip tone="warn">✕ {c.lostReason}</Chip>}
         {c.hasDrawing && <Chip tone="good">📎 чертёж</Chip>}
         {c.hasContract && <Chip tone="good">📝 договор</Chip>}
       </div>
@@ -392,7 +452,14 @@ function DealCard({ c }: { c: Card }) {
       )}
 
       <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[#f0f0ec]">
-        <span className="text-[11.5px] text-[#9a9a95]">{c.phone ? formatPhone(c.phone) : '—'}</span>
+        {/* Позвонить и написать прямо с доски — на телефоне это главный жест. */}
+        {c.phone && telHref(c.phone) ? (
+          <span className="flex items-center gap-1.5 pointer-events-auto relative z-20">
+            <a href={telHref(c.phone)!} className="text-[11.5px] text-[#4b4b47] hover:text-[#111110] hover:underline">{formatPhone(c.phone)}</a>
+            <a href={waHref(c.phone)!} target="_blank" rel="noopener noreferrer" title="Написать в WhatsApp"
+              className="text-[11px] leading-none px-1.5 py-0.5 rounded-md border border-[#e4e4e0] text-[#4b4b47] hover:border-[#2f8f5b] hover:text-[#2f8f5b] transition-colors">WA</a>
+          </span>
+        ) : <span className="text-[11.5px] text-[#9a9a95]">—</span>}
         <span className="flex items-center gap-2">
           {amoHref && (
             <a href={amoHref} target="_blank" rel="noopener noreferrer" title="Открыть сделку в АМО"
@@ -400,9 +467,17 @@ function DealCard({ c }: { c: Card }) {
               АМО ↗
             </a>
           )}
-          <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
-            {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
-          </span>
+          {/* Обещание перезвонить важнее «давно не трогали»: если дата назначена,
+              показываем её, а не возраст. */}
+          {c.nextContactAt ? (
+            <span className={`text-[11px] font-semibold ${c.nextContactAt <= todayStr() ? 'text-red-600' : 'text-[#4b4b47]'}`}>
+              {c.nextContactAt <= todayStr() ? '📞 просрочен' : `📞 ${new Date(c.nextContactAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`}
+            </span>
+          ) : (
+            <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
+              {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
+            </span>
+          )}
         </span>
       </div>
       </div>
