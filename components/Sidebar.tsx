@@ -32,6 +32,14 @@ const MANAGER_AMO: NavItem[] = [
 // ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
 
 const MANAGER_MGLASS: NavEntry[] = [
+  // Калькуляторы — сразу под «MGlass»: пока «Новый расчёт» не закрыл все случаи,
+  // менеджеры ходят сюда каждый день и искать их в конце списка неудобно.
+  { sectionLabel: 'Калькуляторы', icon: '🧮', items: [
+    { href: '/calculator/shower', label: 'Душевая',        icon: '🚿' },
+    { href: '/calculator/mirror', label: 'Зеркало',        icon: '🪞' },
+    { href: '/calculator/loft',   label: 'Лофт',           icon: '🏗️' },
+    { href: '/configurator',      label: 'Визуализатор 3D', icon: '🧊' },
+  ] },
   // Первый уровень — дневная работа менеджера, ровно по порядку владельца:
   // день → сделки → посчитать → документы → деньги. Остальное сложено в
   // свёрнутые подменюшки ниже: ничего не удалено, но список экранов больше
@@ -46,15 +54,6 @@ const MANAGER_MGLASS: NavEntry[] = [
   { href: '/contracts',         label: 'Договор/Счёт',     icon: '📃' },
   { href: '/my-earnings',       label: 'Мои деньги',       icon: '💰' },
 
-  // Старые калькуляторы вернулись по просьбе менеджеров (04.09.2026) — до того,
-  // как всё сведём в «Новый расчёт». У душевой фурнитура считается по ручной
-  // таблице и занижает: на экране об этом предупреждение.
-  { sectionLabel: 'Калькуляторы', icon: '🧮', items: [
-    { href: '/calculator/shower', label: 'Душевая',        icon: '🚿' },
-    { href: '/calculator/mirror', label: 'Зеркало',        icon: '🪞' },
-    { href: '/calculator/loft',   label: 'Лофт',           icon: '🏗️' },
-    { href: '/configurator',      label: 'Визуализатор 3D', icon: '🧊' },
-  ] },
   { sectionLabel: 'Клиенты и продажи', icon: '👥', items: [
     { href: '/clients',           label: 'Клиенты',        icon: '👤' },
     { href: '/crm',               label: 'CRM · Продажи',  icon: '📊' },
