@@ -24,6 +24,11 @@ export const ROLE_SOURCES: { role: string; label: string; match: string[]; hint:
   { role: 'heating',      label: 'Подогрев / реле',        match: ['Подогрев и реле'],           hint: 'антизапотевание' },
   { role: 'wire',         label: 'Провод',                 match: ['Мебельное освещение'],       hint: 'цена за метр' },
   { role: 'connector',    label: 'Коннекторы',             match: ['Мебельное освещение'],       hint: '' },
+  // Рамки. Профиль Ветро уже в справочнике (бокс 20×20, 20×10, 30×30, хлыст 6 м);
+  // П-профиль от душевых цены пока не имеет — роль показываем, чтобы пробел был
+  // виден, а не всплывал «не заведено» в момент расчёта у менеджера.
+  { role: 'frame',        label: 'Рамка · алюминиевый профиль', match: ['Профили'], hint: 'хлыст 6 м' },
+  { role: 'frame_ushape', label: 'Рамка · П-профиль (душевой)', match: [],          hint: 'только зеркало 6 мм' },
 ]
 
 async function rateRub(req: NextRequest): Promise<number> {
