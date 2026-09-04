@@ -37,6 +37,21 @@ export default function DealBoardPage() {
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
   const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
+  const [adding, setAdding] = useState(false)
+  const [form, setForm] = useState({ client_name: '', phone: '', address: '' })
+  const [creating, setCreating] = useState(false)
+
+  async function createDeal() {
+    if (!form.client_name.trim() && !form.phone.trim()) return
+    setCreating(true)
+    try {
+      const r = await fetch('/api/deals', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(form),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (r.ok && j.id) window.location.assign(`/deal/${j.id}`)
+    } finally { setCreating(false) }
+  }
 
   useEffect(() => {
     let alive = true
@@ -97,12 +112,35 @@ export default function DealBoardPage() {
             value={q} onChange={e => setQ(e.target.value)}
             placeholder="Поиск: телефон, адрес, клиент"
             className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
-          <div className="flex bg-white border border-[#e4e4e0] rounded-xl p-0.5">
-            <Link href="/deals" className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Список</Link>
-            <span className="text-[12.5px] font-medium px-3 py-1.5 rounded-[10px] bg-[#111110] text-white">Доска</span>
-          </div>
+          {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
+              ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
+          <button onClick={() => setAdding(v => !v)}
+            className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
+            {adding ? 'Отмена' : '+ Сделка'}
+          </button>
         </div>
       </div>
+
+      {adding && (
+        <div className="bg-white border border-[#111110] rounded-2xl p-4 mb-4">
+          <p className="text-[12px] font-semibold text-[#111110] mb-2">Новая сделка</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            <input autoFocus value={form.client_name} onChange={e => setForm(f => ({ ...f, client_name: e.target.value }))}
+              placeholder="Клиент" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <input value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+              placeholder="Телефон" inputMode="tel" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+            <input value={form.address} onChange={e => setForm(f => ({ ...f, address: e.target.value }))}
+              placeholder="Адрес объекта" className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] outline-none focus:border-[#111110]" />
+          </div>
+          <div className="flex items-center gap-3 mt-2.5">
+            <button onClick={createDeal} disabled={creating || (!form.client_name.trim() && !form.phone.trim())}
+              className="text-[13px] font-semibold px-4 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+              {creating ? 'Создаю…' : 'Завести и открыть'}
+            </button>
+            <span className="text-[11.5px] text-[#9a9a95]">Попадёт в «Новая». Дальше — расчёт.</span>
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <p className="text-[13px] text-[#9a9a95]">Загрузка…</p>
@@ -153,6 +191,9 @@ export default function DealBoardPage() {
           </div>
 
           <div className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch] space-y-1.5">
+            <p>
+              <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
+            </p>
             <p>
               <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Зависли».
             </p>
