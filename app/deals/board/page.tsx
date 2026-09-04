@@ -53,6 +53,7 @@ export default function DealBoardPage() {
   const [adding, setAdding] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
   const [showLost, setShowLost] = useState(false)
+  const [manager, setManager] = useState('')     // фильтр владельца: чьи сделки смотрим
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
   // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
@@ -127,13 +128,18 @@ export default function DealBoardPage() {
 
   // Показатель сверху — это ещё и фильтр доски: нажал «Зависли» — видишь только их.
   // Иначе цифра «зависли 6» есть, а найти эти шесть на доске нечем.
+  const managers = useMemo(
+    () => [...new Set(cards.map(c => c.manager_name).filter(Boolean) as string[])].sort((a, b) => a.localeCompare(b, 'ru')),
+    [cards])
+
   const focused = useMemo(() => {
-    if (focus === 'inWork') return filtered.filter(c => c.stage !== 'done')
-    if (focus === 'awaiting') return filtered.filter(c => c.stage === 'contract' || c.stage === 'pay')
-    if (focus === 'stalled') return filtered.filter(c => c.stage !== 'done' && c.ageDays > 7)
-    if (focus === 'overdue') return filtered.filter(c => c.stage !== 'done' && !!c.nextContactAt && c.nextContactAt <= todayStr())
-    return filtered
-  }, [filtered, focus])
+    const base = manager ? filtered.filter(c => c.manager_name === manager) : filtered
+    if (focus === 'inWork') return base.filter(c => c.stage !== 'done')
+    if (focus === 'awaiting') return base.filter(c => c.stage === 'contract' || c.stage === 'pay')
+    if (focus === 'stalled') return base.filter(c => c.stage !== 'done' && c.ageDays > 7)
+    if (focus === 'overdue') return base.filter(c => c.stage !== 'done' && !!c.nextContactAt && c.nextContactAt <= todayStr())
+    return base
+  }, [filtered, focus, manager])
 
   const byStage = useMemo(() => {
     const m = new Map<string, Card[]>()
@@ -151,11 +157,20 @@ export default function DealBoardPage() {
             Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <input
             value={q} onChange={e => setQ(e.target.value)}
             placeholder="Поиск: телефон, адрес, клиент"
-            className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
+            className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-full sm:w-64 outline-none focus:border-[#111110] transition-colors" />
+          {/* Владельцу видны все сделки: без фильтра по менеджеру доска на команде
+              превращается в кашу. Менеджеру фильтр не нужен — у него только свои. */}
+          {seeAll && managers.length > 1 && (
+            <select value={manager} onChange={e => setManager(e.target.value)}
+              className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] bg-white outline-none focus:border-[#111110]">
+              <option value="">Все менеджеры</option>
+              {managers.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+          )}
           {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
               ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
           <button onClick={() => { setShowLost(v => !v); setShowArchive(false); setLoading(true); setFocus('all') }}
@@ -279,7 +294,10 @@ export default function DealBoardPage() {
             </>
           )}
 
-          <div className="flex gap-3.5 overflow-x-auto pb-3">
+          {/* Колонки — с ноутбука. На телефоне шесть колонок по горизонтали
+              означают, что «Оплата» и «Готово» физически за краем экрана,
+              поэтому там тот же набор идёт списком по этажам. */}
+          <div className="hidden lg:flex gap-3.5 overflow-x-auto pb-3">
             {stages.map(st => {
               const list = byStage.get(st.key) ?? []
               const sum = list.reduce((s, c) => s + c.value, 0)
@@ -295,14 +313,42 @@ export default function DealBoardPage() {
                       {sum > 0 && <span className="block text-[11px] text-[#4b4b47] font-semibold tabular-nums">{fmt(sum)}</span>}
                     </span>
                   </div>
-                  {list.map(c => <DealCard key={c.id} c={c} />)}
+                  {list.map(c => <DealCard key={c.id} c={c} showManager={seeAll} />)}
                   {list.length === 0 && <p className="text-[11px] text-[#c4c4be] px-1">—</p>}
                 </div>
               )
             })}
           </div>
 
-          <div className="text-[12px] text-[#9a9a95] mt-4 leading-relaxed max-w-[80ch] space-y-1.5">
+          <div className="lg:hidden space-y-4">
+            {stages.map(st => {
+              const list = byStage.get(st.key) ?? []
+              if (list.length === 0) return null
+              const sum = list.reduce((s2, c) => s2 + c.value, 0)
+              const hex = STAGE_HEX[st.key] ?? '#9a9a95'
+              return (
+                <div key={st.key}>
+                  <div className="flex items-baseline justify-between gap-2 px-1 pb-2 border-b-2" style={{ borderColor: hex }}>
+                    <span className="text-[13px] font-bold text-[#111110] flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full" style={{ background: hex }} />{st.label}
+                    </span>
+                    <span className="text-[12px] text-[#9a9a95] font-semibold">
+                      {list.length}{sum > 0 ? ` · ${fmt(sum)}` : ''}
+                    </span>
+                  </div>
+                  <div className="space-y-2.5 mt-2.5">
+                    {list.map(c => <DealCard key={c.id} c={c} showManager={seeAll} />)}
+                  </div>
+                </div>
+              )
+            })}
+            {focused.length === 0 && <p className="text-[13px] text-[#9a9a95]">Ничего не найдено.</p>}
+          </div>
+
+          {/* Инструкция нужна, но на телефоне занимала пол-экрана — свернул. */}
+          <details className="mt-4 max-w-[80ch]">
+            <summary className="text-[12px] text-[#6b6b66] cursor-pointer select-none">Как это работает</summary>
+          <div className="text-[12px] text-[#9a9a95] mt-2 leading-relaxed space-y-1.5">
             <p>
               <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
             </p>
@@ -314,6 +360,7 @@ export default function DealBoardPage() {
               {!seeAll && <span> Показаны ваши сделки.</span>}
             </p>
           </div>
+          </details>
         </>
       )}
     </div>
@@ -348,7 +395,7 @@ function ageClass(days: number) {
   return 'text-[#9a9a95]'
 }
 
-function DealCard({ c }: { c: Card }) {
+function DealCard({ c, showManager }: { c: Card; showManager?: boolean }) {
   const showPay = c.stage === 'pay' || c.stage === 'done'
   const pct = c.value > 0 ? Math.min(100, Math.round((c.paid / c.value) * 100)) : 0
   const full = c.stage === 'done'
@@ -366,6 +413,7 @@ function DealCard({ c }: { c: Card }) {
         {c.value > 0 && <span className="text-[13px] font-semibold text-[#111110] tabular-nums whitespace-nowrap">{fmt(c.value)}</span>}
       </div>
       <div className="text-[12px] text-[#4b4b47] mt-0.5 truncate">{c.address || <span className="text-[#9a9a95]">адрес не указан</span>}</div>
+      {showManager && c.manager_name && <div className="text-[11px] text-[#9a9a95] truncate">{c.manager_name}</div>}
 
       <div className="flex flex-wrap gap-1.5 mt-2">
         {c.calcCount > 0 && <Chip>⚡ {c.calcCount > 1 ? `Расчёт ×${c.calcCount}` : 'Расчёт'}</Chip>}
