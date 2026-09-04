@@ -35,7 +35,7 @@ const GLASS_TYPES: GlassType[] = [
 ]
 
 // Фото модели из 3D-визуализатора (public/models/<латиница>.jpg). Нет файла (М11) — схема.
-const PHOTO = new Set(['М1', 'М2', 'М4', 'М7', 'М8', 'М9', 'М10', 'М12'])
+const PHOTO = new Set(['М1', 'М2', 'М4', 'М7', 'М8', 'М9', 'М10', 'М11', 'М12'])
 const photoSlug = (code: string) => code.replace('М', 'M').toLowerCase()
 
 const RUB = (n: number) => `${Math.round(n).toLocaleString('ru-RU')} ₽`

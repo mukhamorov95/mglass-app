@@ -11,6 +11,11 @@ import type { KitPriceResult, KitChoices } from '@/lib/configurator/kit'
 
 type Quote = { full: boolean; price?: KitPriceResult; total?: number; clientFrom?: number; complete?: boolean }
 
+// Фотографии моделей общие с «Расчётом» менеджера (public/models). Второй набор
+// картинок для сайта разошёлся бы с первым на первой же замене.
+const MODEL_PHOTO = new Set(['М1', 'М2', 'М4', 'М7', 'М8', 'М9', 'М10', 'М11', 'М12'])
+const photoSlug = (code: string) => code.replace('М', 'M').toLowerCase()
+
 const THICKNESS = 8   // душевые — только 8 мм закалённое
 
 // Тип/цвет стекла (тон в 3D через MeshTransmissionMaterial).
@@ -281,13 +286,22 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
             className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
         </div>
         <p className="text-[13px] text-[#8a8a85] mb-4">Выберите тип конструкции — дальше зададите размеры и увидите цену.</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {/* Конструкцию выбирают глазами: сначала картинка, потом название. Портретная
+            ячейка под соотношение рендера — видно изделие целиком, а не полоску стекла. */}
+        <div className="grid gap-3 grid-cols-2 sm:grid-cols-3">
           {M_MODELS.map(m => (
             <button key={m.code} onClick={() => changeModel(m.code)}
-              className="text-left rounded-xl border border-[#e4e4e0] bg-white p-4 transition-colors hover:border-[#111110]">
-              <span className="font-mono text-[13px] text-[#9a9a95]">{m.code}</span>
-              <span className="block text-[15px] font-semibold text-[#111110] mt-0.5">{m.name}</span>
-              <span className="block text-[13px] text-[#9a9a95] mt-1.5">{m.desc}</span>
+              className="flex flex-col items-stretch text-left rounded-xl border border-[#e4e4e0] bg-white p-2 transition-colors hover:border-[#111110]">
+              <div className="rounded-lg mb-2 overflow-hidden aspect-[4/5] bg-[#f1efec] flex items-center justify-center">
+                {MODEL_PHOTO.has(m.code) ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={`/models/${photoSlug(m.code)}.jpg`} alt={`${m.code} · ${m.name}`} loading="lazy" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="font-mono text-[22px] text-[#c4c4be]">{m.code}</span>
+                )}
+              </div>
+              <span className="px-1 text-[14px] font-semibold text-[#111110]">{m.name}</span>
+              <span className="px-1 pb-1 text-[12px] text-[#9a9a95] leading-snug mt-0.5">{m.desc}</span>
             </button>
           ))}
         </div>
