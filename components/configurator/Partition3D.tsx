@@ -322,11 +322,11 @@ function Assembly3D({ assembly, metalMat, glassTint, onPick, pickedKey, pickedRo
               белым прямоугольником. Встроенный сэмплер делает один проход на всех. */}
           <MeshTransmissionMaterial
             transmissionSampler
-            transmission={0.96}
+            transmission={glassTint.roughness ? 0.9 : 0.96}
             thickness={0.008}
-            roughness={0.03}
+            roughness={glassTint.roughness ?? 0.03}
             ior={1.52}
-            chromaticAberration={0.02}
+            chromaticAberration={glassTint.roughness ? 0 : 0.02}
             anisotropy={0.04}
             distortion={0}
             temporalDistortion={0}
