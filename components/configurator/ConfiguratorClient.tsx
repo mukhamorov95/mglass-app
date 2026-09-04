@@ -107,6 +107,10 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
   const [finishId, setFinishId] = useState<FinishId>('chrome')
   const [glassId, setGlassId] = useState<string>('clear')
   const [modelOpen, setModelOpen] = useState(true)
+  // Виджет на сайте ведёт клиента так же, как «Расчёт» ведёт менеджера: сначала
+  // выбор модели крупными карточками, потом отдельный экран сборки. Одним экраном
+  // человек с улицы видит сразу всё и не понимает, с чего начать.
+  const [screen, setScreen] = useState<'models' | 'build'>(variant === 'embed' ? 'models' : 'build')
   const [doorOpen, setDoorOpen] = useState(true)
   const [sent, setSent] = useState(false)
   const [kitChoices, setKitChoices] = useState<KitChoices | null>(null)
@@ -156,6 +160,7 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
 
   function changeModel(c: string) {
     setCode(c)
+    if (embed) setScreen('build')
     setDims(defaultsFor(getModel(c)))
     setM1var({ mount: 'perp90', profileFrame: 'partial' })
     setPicked(null)
@@ -265,8 +270,39 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
     setSent(true)
   }
 
+  // ЭКРАН 1 (только виджет): какая душевая. Ничего лишнего — тариф и девять типов.
+  if (embed && screen === 'models') {
+    return (
+      <div className="w-full px-4 py-5">
+        <div className="inline-flex rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium mb-4">
+          <button onClick={() => changeTier('budget')}
+            className={`px-5 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
+          <button onClick={() => changeTier('premium')}
+            className={`px-5 py-2 ${tier === 'premium' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Премиум</button>
+        </div>
+        <p className="text-[13px] text-[#8a8a85] mb-4">Выберите тип конструкции — дальше зададите размеры и увидите цену.</p>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {M_MODELS.map(m => (
+            <button key={m.code} onClick={() => changeModel(m.code)}
+              className="text-left rounded-xl border border-[#e4e4e0] bg-white p-4 transition-colors hover:border-[#111110]">
+              <span className="font-mono text-[13px] text-[#9a9a95]">{m.code}</span>
+              <span className="block text-[15px] font-semibold text-[#111110] mt-0.5">{m.name}</span>
+              <span className="block text-[13px] text-[#9a9a95] mt-1.5">{m.desc}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className={embed ? 'w-full px-4 py-5' : 'max-w-[1280px] mx-auto px-6 py-6'}>
+      {embed && (
+        <button onClick={() => setScreen('models')}
+          className="mb-4 text-[13px] text-[#4b4b47] hover:text-[#111110]">
+          ← Другая модель
+        </button>
+      )}
       {!embed && (
         <div className="mb-5">
           <h1 className="text-[20px] font-semibold text-[#111110] tracking-tight">Визуализатор 3D</h1>
@@ -274,9 +310,11 @@ export function ConfiguratorClient({ variant = 'internal' }: { variant?: 'intern
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[250px_1fr_330px] gap-5 items-start">
-        {/* ── Тариф + Модель (сворачивается) ── на мобильном под 3D */}
-        <div className="order-2 lg:order-none lg:sticky lg:top-4 space-y-3">
+      {/* Колонка моделей есть только у менеджера: в виджете её место отдано 3D. */}
+      <div className={`grid grid-cols-1 gap-5 items-start ${embed ? 'lg:grid-cols-[1fr_360px]' : 'lg:grid-cols-[250px_1fr_330px]'}`}>
+        {/* ── Тариф + Модель (сворачивается) ── на мобильном под 3D.
+            В виджете колонка не показывается: модель уже выбрана на первом экране. */}
+        <div className={`order-2 lg:order-none lg:sticky lg:top-4 space-y-3 ${embed ? 'hidden' : ''}`}>
           <div className="inline-flex w-full rounded-lg border border-[#e4e4e0] overflow-hidden text-[13px] font-medium">
             <button onClick={() => changeTier('budget')}
               className={`flex-1 py-2 ${tier === 'budget' ? 'bg-[#111110] text-white' : 'bg-white text-[#4b4b47]'}`}>Бюджет</button>
