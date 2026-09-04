@@ -8,6 +8,7 @@ import { Partition3DView } from '@/components/configurator/Partition3DView'
 import type { MDims, GlassTint, HardwareChoice, MVariant } from '@/components/configurator/scene/assembly'
 import type { KitChoices } from '@/lib/configurator/kit'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { MirrorPanel, type MirrorModel, type MirrorMaterial } from './MirrorPanel'
 
 // Вкладка «Расчёт» — два экрана. Экран 1: только выбор модели. Экран 2: слева крупный
 // настоящий 3D-визуализатор, справа параметры (габариты → стекло/цвет фурнитуры →
@@ -52,10 +53,6 @@ type Price = {
   glassCost: number; hardwareCost: number; sections: number; lines: KitLine[]
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
-}
-type MirrorModel = {
-  code: string; name: string; descr: string | null; shape: string
-  has_lighting: boolean; frame_kind: string | null; image_url: string | null
 }
 type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
 
@@ -118,6 +115,7 @@ export default function BuildCalcPage() {
   // ведёт на свой старый калькулятор — врать вкладкой «скоро» не нужно.
   const [product, setProduct] = useState<'shower' | 'mirror'>('shower')
   const [mirrorModels, setMirrorModels] = useState<MirrorModel[] | null>(null)
+  const [mirrorMats, setMirrorMats] = useState<MirrorMaterial[]>([])
   const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
   const [dealId, setDealId] = useState<number | null>(null)
   const [dealTitle, setDealTitle] = useState<string>('')
@@ -149,7 +147,7 @@ export default function BuildCalcPage() {
       try {
         const r = await fetch('/api/calc/mirror/models')
         const j = await r.json().catch(() => ({}))
-        if (r.ok) setMirrorModels(j.models ?? [])
+        if (r.ok) { setMirrorModels(j.models ?? []); setMirrorMats(j.materials ?? []) }
         else setMirrorModels([])
       } catch { setMirrorModels([]) }
     })()
@@ -276,7 +274,10 @@ export default function BuildCalcPage() {
 
   async function save() {
     const list = [...cart]
-    if (usable && grand > 0) list.push(currentItem())
+    // Текущее изделие добавляем только в режиме душевых: у зеркала своя кнопка
+    // «+ В КП», а цена душевой могла остаться в состоянии от прошлого захода —
+    // иначе в КП приезжало бы лишнее изделие, которого менеджер не добавлял.
+    if (product === 'shower' && usable && grand > 0) list.push(currentItem())
     if (!list.length) { setSaveMsg('Нечего сохранять'); setTimeout(() => setSaveMsg(null), 2500); return }
     const snapshot = { code, dims, finishId, glassId, profileFrame, choice, qtyChoice, margin, tax, perSection, delivery, lift, discount, cart: list, clientName, clientPhone, objectAddress }
     const total = list.reduce((s, i) => s + i.total, 0)
@@ -351,7 +352,15 @@ export default function BuildCalcPage() {
             <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
           </div>
 
-          {product === 'mirror' ? (
+          {product === 'mirror' && mirrorPick ? (
+            <MirrorPanel
+              model={mirrorPick} materials={mirrorMats}
+              onBack={() => setMirrorPick(null)}
+              onAdd={item => setCart(c => [...c, item])}
+              cartCount={cart.length}
+              onSave={save} saving={saving}
+            />
+          ) : product === 'mirror' ? (
             mirrorModels === null ? (
               <p className="text-[13px] text-[#9a9a95]">Загружаю модели…</p>
             ) : mirrorModels.length === 0 ? (
@@ -373,19 +382,7 @@ export default function BuildCalcPage() {
                     </button>
                   ))}
                 </div>
-                {mirrorPick && (
-                  <div className="mt-4 bg-white border border-[#e4e4e0] rounded-2xl p-4">
-                    <p className="text-[13px] font-semibold text-[#111110]">{mirrorPick.code} · {mirrorPick.name}</p>
-                    <p className="text-[12px] text-[#6b6b66] mt-1 max-w-[70ch]">
-                      Экран расчёта зеркала — следующие шаги маршрута (З3–З6): геометрия и длина подсветки,
-                      кратность бухт ленты и хлыстов профиля, серверный расчёт цены. Пока считайте зеркало
-                      в «Калькуляторы → Зеркало».
-                    </p>
-                    <a href="/calculator/mirror" className="inline-block mt-2 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors">
-                      Открыть старый калькулятор зеркал
-                    </a>
-                  </div>
-                )}
+
               </>
             )
           ) : (
