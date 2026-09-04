@@ -39,7 +39,7 @@ const GLASS_TYPES: GlassType[] = [
   { id: 'bronze',   label: 'Бронза',      b2b: 'Тонированное (бронза/графит)', swatch: '#b0895c', tint: { color: '#d6bd97', attenuation: '#7a5836', distance: 1.2 } },
 ]
 
-// Фото модели из 3D-визуализатора (public/models/<латиница>.jpg). Нет файла (М11) — схема.
+// Фото модели (public/models/<латиница>.jpg) — каталожные рендеры владельца, все девять есть.
 const PHOTO = new Set(['М1', 'М2', 'М4', 'М7', 'М8', 'М9', 'М10', 'М11', 'М12'])
 const photoSlug = (code: string) => code.replace('М', 'M').toLowerCase()
 
