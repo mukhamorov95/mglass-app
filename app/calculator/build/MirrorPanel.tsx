@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { calcFinancialModel } from '@/lib/pricing/financialModel'
+import { Mirror3DView } from '@/components/mirror/Mirror3DView'
+import { SINK_MAX_MIRROR_H } from '@/components/mirror/Mirror3D'
 
 // Экран расчёта зеркала (маршрут З6). Отдельный компонент, а не ветка внутри
 // экрана душевых: у продуктов разные параметры, и мешать их в одном файле —
@@ -70,6 +72,7 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
   const [lift, setLift] = useState('')
   const [discount, setDiscount] = useState('0')
 
+  const [view, setView] = useState<'3d' | 'scheme'>('3d')
   const [quote, setQuote] = useState<Quote | null>(null)
   const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
   const [spec, setSpec] = useState(false)
@@ -133,17 +136,31 @@ export function MirrorPanel({ model, materials, onBack, onAdd, cartCount, onSave
     <div className="grid grid-cols-1 lg:grid-cols-[1fr_400px] gap-4 items-start">
       {/* Слева — схема зеркала: видно пропорции и с какой стороны свет. */}
       <div className="bg-white border border-[#e4e4e0] rounded-2xl p-4">
-        <div className="flex items-center gap-3 mb-3">
+        <div className="flex items-center gap-3 mb-3 flex-wrap">
           <button onClick={onBack} className="text-[13px] text-[#6b6b66] hover:text-[#111110]">← Модели</button>
           <h2 className="text-[15px] font-semibold text-[#111110]">{model.code} · {model.name}</h2>
+          <div className="ml-auto flex bg-[#f5f5f3] border border-[#e4e4e0] rounded-lg p-0.5">
+            {([['3d', '3D'], ['scheme', 'Схема']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setView(k)}
+                className={`text-[12px] font-medium px-2.5 py-1 rounded-md transition-colors ${view === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47]'}`}>
+                {label}
+              </button>
+            ))}
+          </div>
         </div>
-        <MirrorScheme w={numOr(width)} h={numOr(height)} shape={model.shape} lit={model.has_lighting} sides={sides} frame={frame} />
-        {quote && (
-          <p className="text-[11.5px] text-[#9a9a95] mt-3">
-            {quote.areaM2.toFixed(2)} м² · периметр {quote.perimeterM.toFixed(2)} м
-            {model.has_lighting ? ` · подсветка ${quote.lightingM.toFixed(2)} м` : ''}
-          </p>
+        {view === '3d' ? (
+          <div className="h-[52vh] min-h-[320px] rounded-xl overflow-hidden bg-[#f1efec]">
+            <Mirror3DView width={numOr(width)} height={numOr(height)} shape={model.shape}
+              lit={model.has_lighting} sides={sides} frame={frame} />
+          </div>
+        ) : (
+          <MirrorScheme w={numOr(width)} h={numOr(height)} shape={model.shape} lit={model.has_lighting} sides={sides} frame={frame} />
         )}
+        <p className="text-[11.5px] text-[#9a9a95] mt-3">
+          {quote && <>{quote.areaM2.toFixed(2)} м² · периметр {quote.perimeterM.toFixed(2)} м{model.has_lighting ? ` · подсветка ${quote.lightingM.toFixed(2)} м` : ''} · </>}
+          {/* Почему исчезла раковина — объясняем, иначе выглядит как сбой сцены. */}
+          {numOr(height) > SINK_MAX_MIRROR_H ? 'зеркало в рост — раковину под него не ставим' : 'над раковиной'}
+        </p>
       </div>
 
       {/* Справа — параметры и цена. */}
