@@ -43,9 +43,20 @@ type Calc = {
 }
 type Doc = { id: number; number: string; total: number; status: string; manager_name: string | null; created_at: string }
 type Contract = Doc & { kp_id: number | null; make_sum: number | null; install_sum: number | null }
-type Invoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
+// Счета B2B-контура (приходят из /documents) — к рознице отношения не имеют,
+// розничный счёт ниже: type Invoice.
+type B2BInvoice = { id: number; invoice_no: string; amount: number; status: string; issued_at: string | null; paid_at: string | null }
 type Measure = { id: number; status: string; scope: string | null; measurer_name: string | null; scheduled_at: string | null; photos: string[] | null; created_at: string }
-type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null }
+type Payment = { id: number; kind: string; amount: number; paid_at: string; entered_by_name: string | null; note: string | null; invoice_id: number | null }
+type Invoice = {
+  id: number; number: string; amount: number; purpose: string; issued_at: string; due_at: string | null
+  status: string; state: 'issued' | 'paid' | 'cancelled'; paid: number; remaining: number
+  contract_id: number | null; created_by_name: string | null; created_at: string
+}
+// Назначение счёта — словами владельца, как у оплат.
+const INVOICE_PURPOSE: Record<string, string> = {
+  prepay: 'Предоплата', balance: 'Остаток', install: 'Остаток за монтаж', full: 'Полная сумма',
+}
 type DealFile = { id: number; kind: string; url: string; name: string | null; uploaded_by_name: string | null; created_at: string }
 
 // Слова владельца дословно — не «частичная оплата 1/2/3».
@@ -96,12 +107,16 @@ export default function DealPage() {
   const [lostOpen, setLostOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
-  const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
+  const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: B2BInvoice[]; measures: Measure[] } | null>(null)
   const [measuring, setMeasuring] = useState(false)
   const [payments, setPayments] = useState<Payment[] | null>(null)
   const [files, setFiles] = useState<DealFile[] | null>(null)
-  const [payForm, setPayForm] = useState({ kind: 'prepay', amount: '', paid_at: new Date().toISOString().slice(0, 10) })
+  const [payForm, setPayForm] = useState({ kind: 'prepay', amount: '', paid_at: new Date().toISOString().slice(0, 10), invoice_id: '' })
   const [payingSave, setPayingSave] = useState(false)
+  const [invoices, setInvoices] = useState<Invoice[]>([])
+  const [invForm, setInvForm] = useState({ amount: '', purpose: 'prepay', due_at: '' })
+  const [invBusy, setInvBusy] = useState(false)
+  const [invOpen, setInvOpen] = useState(false)
 
   async function load() {
     setLoading(true)
@@ -117,6 +132,7 @@ export default function DealPage() {
       loadPayments()  // оплаты — для вкладки «Деньги»
       loadFiles()     // чертёж и файлы сделки
       loadNotes()     // о чём договорились
+      loadInvoices()  // счета сделки
     } catch { setError('Сеть недоступна') } finally { setLoading(false) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -183,6 +199,36 @@ export default function DealPage() {
       const r = await fetch(`/api/deals/${id}/kp-candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kp_id: kpId }) })
       if (r.ok) { setKpPick(null); await loadDocs() }
     } finally { setKpBusy(false) }
+  }
+
+  async function loadInvoices() {
+    try {
+      const r = await fetch(`/api/deals/${id}/invoices`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setInvoices(j.invoices ?? [])
+    } catch { /* ignore */ }
+  }
+  // Счёт выставляется на СВОЮ сумму: предоплата, остаток или монтаж отдельно.
+  async function createInvoice() {
+    const amount = Number(String(invForm.amount).replace(/[^\d.]/g, ''))
+    if (!(amount > 0)) return
+    setInvBusy(true)
+    try {
+      const contractId = docs?.contracts?.[0]?.id ?? null
+      const r = await fetch(`/api/deals/${id}/invoices`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ amount, purpose: invForm.purpose, due_at: invForm.due_at || null, contract_id: contractId }),
+      })
+      if (r.ok) { setInvForm({ amount: '', purpose: 'prepay', due_at: '' }); setInvOpen(false); await loadInvoices() }
+    } finally { setInvBusy(false) }
+  }
+  async function cancelInvoice(invoiceId: number) {
+    if (!window.confirm('Отменить счёт? Запись останется, номер не переиспользуется.')) return
+    const r = await fetch(`/api/deals/${id}/invoices`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ invoice_id: invoiceId, status: 'cancelled' }),
+    })
+    if (r.ok) await loadInvoices()
   }
 
   async function loadNotes() {
@@ -278,14 +324,14 @@ export default function DealPage() {
     try {
       const r = await fetch(`/api/deals/${id}/payments`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ kind: payForm.kind, amount, paid_at: payForm.paid_at }),
+        body: JSON.stringify({ kind: payForm.kind, amount, paid_at: payForm.paid_at, invoice_id: payForm.invoice_id || null }),
       })
-      if (r.ok) { setPayForm(f => ({ ...f, amount: '' })); await loadPayments() }
+      if (r.ok) { setPayForm(f => ({ ...f, amount: '', invoice_id: '' })); await loadPayments(); await loadInvoices() }
     } finally { setPayingSave(false) }
   }
   async function deletePayment(pid: number) {
     const r = await fetch(`/api/deals/${id}/payments`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ payment_id: pid }) })
-    if (r.ok) await loadPayments()
+    if (r.ok) { await loadPayments(); await loadInvoices() }
   }
 
   async function loadFiles() {
@@ -683,6 +729,77 @@ export default function DealPage() {
       )}
 
       {tab === 'money' && (
+        <>
+        {/* Счета: отдельная запись со своим номером и суммой. Статус «оплачен»
+            выводится из привязанных оплат, а не ставится галочкой. */}
+        <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden mb-4">
+          <div className="px-5 py-3 border-b border-[#f0f0ec] flex items-center justify-between gap-3">
+            <p className="text-[12px] font-semibold text-[#9a9a95] uppercase tracking-wider">Счета</p>
+            <button onClick={() => setInvOpen(v => !v)}
+              className="text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors">
+              {invOpen ? 'Отмена' : '+ Выставить счёт'}
+            </button>
+          </div>
+
+          {invOpen && (
+            <div className="px-5 py-3 bg-[#fafaf9] border-b border-[#f0f0ec] grid grid-cols-1 sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 items-end">
+              <div>
+                <label className="block text-[10px] text-[#9a9a95] mb-1">За что</label>
+                <select value={invForm.purpose} onChange={e => setInvForm(f => ({ ...f, purpose: e.target.value }))}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white outline-none focus:border-[#111110]">
+                  {Object.entries(INVOICE_PURPOSE).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-[10px] text-[#9a9a95] mb-1">Сумма, ₽</label>
+                <input value={invForm.amount} onChange={e => setInvForm(f => ({ ...f, amount: e.target.value }))} inputMode="numeric"
+                  placeholder={money?.remaining ? String(money.remaining) : '0'}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
+              </div>
+              <div>
+                <label className="block text-[10px] text-[#9a9a95] mb-1">Оплатить до</label>
+                <input type="date" value={invForm.due_at} onChange={e => setInvForm(f => ({ ...f, due_at: e.target.value }))}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] outline-none focus:border-[#111110]" />
+              </div>
+              <button onClick={createInvoice} disabled={invBusy || !(Number(String(invForm.amount).replace(/[^\d.]/g, '')) > 0)}
+                className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+                {invBusy ? '…' : 'Выставить'}
+              </button>
+            </div>
+          )}
+
+          {invoices.length === 0 ? (
+            <p className="px-5 py-4 text-[13px] text-[#9a9a95]">Счетов нет. Выставьте счёт на предоплату, остаток или монтаж — оплата будет закрывать его.</p>
+          ) : (
+            <div className="divide-y divide-[#f0f0ec]">
+              {invoices.map(inv => (
+                <div key={inv.id} className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap">
+                  <div className="min-w-0">
+                    <p className="text-[13px] text-[#111110]">
+                      🧾 Счёт {inv.number} · {INVOICE_PURPOSE[inv.purpose] ?? inv.purpose}
+                      {inv.state === 'paid' && <span className="ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700">оплачен</span>}
+                      {inv.state === 'cancelled' && <span className="ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">отменён</span>}
+                      {inv.state === 'issued' && inv.due_at && inv.due_at < new Date().toISOString().slice(0, 10) && (
+                        <span className="ml-2 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">просрочен</span>
+                      )}
+                    </p>
+                    <p className="text-[11px] text-[#9a9a95]">
+                      от {date(inv.issued_at)}{inv.due_at ? ` · оплатить до ${date(inv.due_at)}` : ''}
+                      {inv.paid > 0 && inv.state !== 'paid' ? ` · оплачено ${fmt(inv.paid)} из ${fmt(inv.amount)}` : ''}
+                    </p>
+                  </div>
+                  <span className="flex items-center gap-3">
+                    <span className="text-[13px] font-semibold font-mono text-[#111110]">{fmt(inv.amount)}</span>
+                    {inv.state === 'issued' && (
+                      <button onClick={() => cancelInvoice(inv.id)} className="text-[12px] text-[#9a9a95] hover:text-red-600">отменить</button>
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         <div className="bg-white border border-[#e4e4e0] rounded-2xl overflow-hidden">
           {/* Оплаты прямо на сделке. Сумма свободная (не из %), отметок одного вида может
               быть несколько, дата — поступления денег (не записи). */}
@@ -712,7 +829,12 @@ export default function DealPage() {
                 <div key={p.id} className="px-5 py-3 flex items-center justify-between gap-3">
                   <div>
                     <span className="text-[13px] text-[#111110]">{payLabel(p.kind)}</span>
-                    <p className="text-[11px] text-[#9a9a95]">{date(p.paid_at)}{p.entered_by_name ? ` · ${p.entered_by_name}` : ''}</p>
+                    <p className="text-[11px] text-[#9a9a95]">
+                      {date(p.paid_at)}{p.entered_by_name ? ` · ${p.entered_by_name}` : ''}
+                      {/* Видно, какой счёт закрыла оплата — иначе счета и деньги живут порознь. */}
+                      {p.invoice_id && invoices.find(i => i.id === p.invoice_id)
+                        ? ` · счёт ${invoices.find(i => i.id === p.invoice_id)!.number}` : ''}
+                    </p>
                   </div>
                   <div className="flex items-center gap-3">
                     <span className="text-[13px] font-semibold font-mono text-[#111110]">{fmt(Number(p.amount) || 0)}</span>
@@ -737,6 +859,19 @@ export default function DealPage() {
               <input value={payForm.amount} onChange={e => setPayForm(f => ({ ...f, amount: e.target.value }))} inputMode="numeric" placeholder="0"
                 className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono outline-none focus:border-[#111110]" />
             </div>
+            {/* Какой счёт закрывает эта оплата. Без счёта — просто деньги по сделке. */}
+            {invoices.some(i => i.state === 'issued') && (
+              <div className="sm:col-span-2">
+                <label className="block text-[10px] text-[#9a9a95] mb-1">По счёту</label>
+                <select value={payForm.invoice_id} onChange={e => setPayForm(f => ({ ...f, invoice_id: e.target.value }))}
+                  className="w-full border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] bg-white outline-none focus:border-[#111110]">
+                  <option value="">Без счёта</option>
+                  {invoices.filter(i => i.state === 'issued').map(i => (
+                    <option key={i.id} value={i.id}>{i.number} · {INVOICE_PURPOSE[i.purpose] ?? i.purpose} · остаток {Math.round(i.remaining).toLocaleString('ru-RU')} ₽</option>
+                  ))}
+                </select>
+              </div>
+            )}
             <div>
               <label className="block text-[10px] text-[#9a9a95] mb-1">Дата поступления</label>
               <input type="date" value={payForm.paid_at} onChange={e => setPayForm(f => ({ ...f, paid_at: e.target.value }))}
@@ -748,6 +883,7 @@ export default function DealPage() {
             </button>
           </div>
         </div>
+        </>
       )}
     </div>
   )
