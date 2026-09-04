@@ -16,6 +16,7 @@ type LightingComponent = {
   cost_price: number
   sale_price: number | null
   unit: string
+  pack_length_m: number | null
   active: boolean
   sort_order: number
 }
@@ -236,6 +237,7 @@ export default function MirrorLightingPage() {
                 <th className="text-right px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Макс. Вт</th>
               </>}
               <th className="text-right px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Ед.</th>
+              <th className="text-right px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide" title="Длина бухты или хлыста: расчёт платит за целую упаковку">Бухта, м</th>
               <th className="text-right px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Себест.</th>
               <th className="text-right px-3 py-2 text-[11px] font-semibold text-[#9a9a95] uppercase tracking-wide">Продажная</th>
               <th className="px-3 py-2" />
@@ -264,6 +266,7 @@ export default function MirrorLightingPage() {
                   <td className="px-3 py-2 text-right text-sm font-mono">{fmtN(item.max_power)}</td>
                 </>}
                 <td className="px-3 py-2 text-right text-[11px] text-[#9a9a95]">{item.unit}</td>
+                <td className="px-3 py-2 text-right text-sm font-mono text-[#9a9a95]">{item.pack_length_m ?? '—'}</td>
                 <td className="px-3 py-2 text-right text-sm font-mono">{fmtN(item.cost_price)} ₽</td>
                 <td className="px-3 py-2 text-right text-sm font-mono text-[#9a9a95]">
                   {item.sale_price ? `${fmtN(item.sale_price)} ₽` : '—'}
@@ -360,6 +363,15 @@ export default function MirrorLightingPage() {
                     onChange={e => setEditing(p => ({ ...p!, max_power: Number(e.target.value) || null }))} />
                 </div>
               )}
+
+              {/* Длина бухты/хлыста: расчёт зеркала платит за ЦЕЛУЮ упаковку.
+                  Пусто — позиция считается погонно или штучно. */}
+              <div>
+                <label className="text-[11px] text-[#9a9a95] font-semibold uppercase tracking-wide">Бухта / хлыст, м</label>
+                <input type="number" step="0.1" className={num} value={editing.pack_length_m ?? ''} placeholder="лента 5, профиль 6"
+                  onChange={e => setEditing(p => ({ ...p!, pack_length_m: Number(e.target.value) || null }))} />
+                <p className="text-[11px] text-[#9a9a95] mt-1">Нужно 3 м → платим за целую бухту. Пусто = считать погонно/штучно.</p>
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
