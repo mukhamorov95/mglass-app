@@ -71,6 +71,7 @@ export async function POST(req: NextRequest) {
   if (actor instanceof NextResponse) return actor
   const b = await req.json().catch(() => ({})) as {
     client_name?: string; phone?: string; address?: string; calc_id?: number; amo_lead_id?: string
+    source?: string
   }
   const svc = createServiceClient()
   const { data, error } = await svc.from('deals').insert({
@@ -80,6 +81,7 @@ export async function POST(req: NextRequest) {
     address: (b.address ?? '').trim(),
     manager_id: actor.userId,
     amo_lead_id: b.amo_lead_id?.trim() || null,
+    source: b.source?.trim() || null,
     created_by: actor.userId,
     created_by_name: actor.name,
   }).select('id').single()

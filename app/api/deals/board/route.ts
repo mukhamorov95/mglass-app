@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor } from '@/lib/b2c/dealScope'
 
@@ -12,7 +12,7 @@ export const dynamic = 'force-dynamic'
 // Запросы пакетные: по одному .in('deal_id', ids) на каждую таблицу-артефакт,
 // сведение по deal_id в коде. Не per-deal Promise.all — иначе 500 сделок = тысячи запросов.
 
-const DEAL_COLS = 'id, client_name, phone, address, manager_id, amo_lead_id, created_by_name, created_at, updated_at'
+const DEAL_COLS = 'id, client_name, phone, address, manager_id, amo_lead_id, source, archived_at, created_by_name, created_at, updated_at'
 
 // Этаж = путь ДЕНЕГ до конца. Замер сюда не входит: в нашем деле он и КП не
 // упорядочены (бывает замер→чертёж→КП, бывает КП→замер), и как ступень он
@@ -29,12 +29,16 @@ const STAGES = [
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const ms = (v: unknown) => { const t = new Date(String(v ?? '')).getTime(); return Number.isFinite(t) ? t : 0 }
 
-export async function GET() {
+export async function GET(req: NextRequest) {
   const actor = await requireDealActor()
   if (actor instanceof NextResponse) return actor
   const svc = createServiceClient()
+  // ?archived=1 — вид архива. По умолчанию доска показывает только активные:
+  // архив это «убрал с глаз», а не «удалил», и он не должен мешать работе.
+  const archived = req.nextUrl.searchParams.get('archived') === '1'
 
   let dq = svc.from('deals').select(DEAL_COLS).order('updated_at', { ascending: false }).limit(500)
+  dq = archived ? dq.not('archived_at', 'is', null) : dq.is('archived_at', null)
   if (!actor.seeAll) dq = dq.or(`created_by.eq.${actor.userId},manager_id.eq.${actor.userId}`)
   const { data: dealsRaw, error } = await dq
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
@@ -42,7 +46,7 @@ export async function GET() {
   const deals = (dealsRaw ?? []) as Record<string, unknown>[]
   const ids = deals.map(d => Number(d.id))
   if (ids.length === 0) {
-    return NextResponse.json({ stages: STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll },
+    return NextResponse.json({ stages: STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll, archived },
       { headers: { 'Cache-Control': 'no-store' } })
   }
 
@@ -140,6 +144,8 @@ export async function GET() {
       phone: (d.phone as string) || '',
       amo_lead_id: (d.amo_lead_id as string) || null,
       manager_name: (d.created_by_name as string) || null,
+      source: (d.source as string) || null,
+      archived: !!d.archived_at,
       stage: key,
       value, paid, remaining,
       calcCount: a?.calcCount ?? 0,
@@ -162,7 +168,7 @@ export async function GET() {
     }, 0),
   }
 
-  return NextResponse.json({ stages: STAGES, cards, kpis, seeAll: actor.seeAll },
+  return NextResponse.json({ stages: STAGES, cards, kpis, seeAll: actor.seeAll, archived },
     { headers: { 'Cache-Control': 'no-store' } })
 }
 
