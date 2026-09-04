@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
     svc.from('glass_price_matrix').select('name,category,price_type,t4,t5,t6,t8,t10,waste_pct'),
     svc.from('b2b_clients').select('id,discount_percent').in('id', [...MGLASS_CLIENT_IDS]).maybeSingle(),
     svc.from('mirror_lighting_components')
-      .select('id, component_type, name, voltage, power_per_meter, max_power, cost_price, unit, pack_length_m')
+      .select('id, component_type, name, voltage, power_per_meter, max_power, cost_price, unit, pack_length_m, sort_order')
       .eq('active', true),
     svc.from('mirror_frame_rates').select('key, value'),
   ])

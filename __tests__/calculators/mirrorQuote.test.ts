@@ -5,8 +5,8 @@ const strip = (over: Partial<MirrorComponent> = {}): MirrorComponent => ({
   id: 1, component_type: 'led_strip', name: 'Лента 24V', voltage: 24,
   power_per_meter: 9.6, max_power: null, cost_price: 80, unit: 'пог.м', pack_length_m: 5, ...over,
 })
-const psu = (max: number, cost: number): MirrorComponent => ({
-  id: max, component_type: 'power_supply', name: `БП ${max}W`, voltage: 24,
+const psu = (max: number, cost: number, volt = 24): MirrorComponent => ({
+  id: max, component_type: 'power_supply', name: `БП ${max}W`, voltage: volt,
   power_per_meter: null, max_power: max, cost_price: cost, unit: 'шт', pack_length_m: null,
 })
 
@@ -62,5 +62,21 @@ describe('зеркало: спецификация', () => {
     }, comps, {})
     expect(q.complete).toBe(false)
     expect(q.missing.map(m => m.role)).toContain('sensor')
+  })
+})
+
+describe('зеркало: что берём по умолчанию', () => {
+  it('берёт первую по порядку справочника, а не самую дешёвую', () => {
+    const comps: MirrorComponent[] = [
+      { id: 1, component_type: 'led_strip', name: 'Рабочая 2835 9,6 Вт/м', voltage: 12, power_per_meter: 9.6, max_power: null, cost_price: 88, unit: 'пог.м', pack_length_m: 5, sort_order: 10 },
+      { id: 2, component_type: 'led_strip', name: 'Дешёвая 5050 14,4 Вт/м', voltage: 12, power_per_meter: 14.4, max_power: null, cost_price: 58, unit: 'пог.м', pack_length_m: 5, sort_order: 13 },
+      psu(100, 439, 12),
+    ]
+    const q = calcMirrorQuote({
+      width: 800, height: 600, shape: 'rect', lighting: true,
+      sides: { top: true, bottom: false, left: false, right: false },
+      voltage: 12, control: 'none', frame: 'none', glassCost: 0,
+    }, comps, {})
+    expect(q.lines.find(l => l.role === 'led_strip')!.label).toContain('Рабочая')
   })
 })

@@ -13,7 +13,7 @@ export type MirrorFrameKind = 'none' | 'vetro' | 'metal' | 'ushape'
 
 export type MirrorComponent = {
   id: number
-  component_type: string          // led_strip | power_supply | diffuser | frame | button | sensor | wire | connector | dimmer
+  component_type: string          // led_strip | power_supply | diffuser | frame | button | sensor | wire | connector | dimmer | heating
   name: string
   voltage: number | null
   power_per_meter: number | null
@@ -21,6 +21,7 @@ export type MirrorComponent = {
   cost_price: number
   unit: string | null
   pack_length_m: number | null
+  sort_order?: number | null      // порядок в справочнике = что берём по умолчанию
 }
 
 export type MirrorQuoteInput = {
@@ -107,9 +108,13 @@ export function pickPsu(comps: MirrorComponent[], voltage: number, needW: number
 
 // Вид позиции ищем по нескольким кодам: в справочнике уже жили русские вкладки
 // («кнопка»), а новые заведены латиницей — принимаем оба, чтобы не терять позиции.
+//
+// Берём ПЕРВУЮ ПО ПОРЯДКУ справочника, а не самую дешёвую: «дешёвая» — правило,
+// которое я придумал за владельца, и оно выбирало ленту 5050 за 58 ₽ вместо
+// рабочей 2835 за 88 ₽. Что ставить по умолчанию — решает порядок в админке.
 const first = (comps: MirrorComponent[], types: string[], voltage?: number) =>
   comps.filter(c => types.includes(c.component_type) && (voltage == null || c.voltage == null || c.voltage === voltage))
-       .sort((a, b) => a.cost_price - b.cost_price)[0] ?? null
+       .sort((a, b) => (a.sort_order ?? 999) - (b.sort_order ?? 999) || a.cost_price - b.cost_price)[0] ?? null
 
 export function calcMirrorQuote(
   input: MirrorQuoteInput,
