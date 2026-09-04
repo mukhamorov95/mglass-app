@@ -15,6 +15,7 @@ type Card = {
   manager_name: string | null; stage: string; value: number; paid: number; remaining: number
   calcCount: number; hasKp: boolean; measure: Measure | null; hasContract: boolean
   hasDrawing: boolean; ageDays: number; source: string | null; archived: boolean
+  lost: boolean; lostReason: string | null; nextContactAt: string | null
 }
 type Stage = { key: string; label: string }
 type AmoLead = { id: number; name: string; stage: string; manager: string; createdAt: string }
@@ -29,7 +30,7 @@ export const SOURCES: { id: string; label: string }[] = [
   { id: 'other',     label: 'Другое' },
 ]
 export const sourceLabel = (id?: string | null) => SOURCES.find(s => s.id === id)?.label ?? (id || '')
-type Kpis = { inWork: number; awaitingPay: number; stalled: number; receivedThisMonth: number }
+type Kpis = { inWork: number; awaitingPay: number; stalled: number; overdue: number; receivedThisMonth: number }
 
 // Цвет этажа: точка + верхняя граница колонки. Семантика (не акцент): синий=КП,
 // янтарь=договор, фирменный красный=оплата, зелёный=готово.
@@ -48,9 +49,10 @@ export default function DealBoardPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [q, setQ] = useState('')
-  const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled'>('all')
+  const [focus, setFocus] = useState<'all' | 'inWork' | 'awaiting' | 'stalled' | 'overdue'>('all')
   const [adding, setAdding] = useState(false)
   const [showArchive, setShowArchive] = useState(false)
+  const [showLost, setShowLost] = useState(false)
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', source: '' })
   const [creating, setCreating] = useState(false)
   // Второй способ завести карточку — забрать заявку из АМО. Из CRM только читаем.
@@ -98,7 +100,7 @@ export default function DealBoardPage() {
     let alive = true
     ;(async () => {
       try {
-        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : ''}`)
+        const r = await fetch(`/api/deals/board${showArchive ? '?archived=1' : showLost ? '?lost=1' : ''}`)
         const j = await r.json().catch(() => ({}))
         if (!alive) return
         if (!r.ok) { setError(j.error || 'Не удалось загрузить'); return }
@@ -106,7 +108,7 @@ export default function DealBoardPage() {
       } catch { if (alive) setError('Сеть недоступна') } finally { if (alive) setLoading(false) }
     })()
     return () => { alive = false }
-  }, [showArchive])
+  }, [showArchive, showLost])
 
   // Телефон ищем по тем же правилам, что и список: сравниваем цифры, а не строку,
   // иначе «8926…» не находит сделку, записанную как «+7 926…».
@@ -129,6 +131,7 @@ export default function DealBoardPage() {
     if (focus === 'inWork') return filtered.filter(c => c.stage !== 'done')
     if (focus === 'awaiting') return filtered.filter(c => c.stage === 'contract' || c.stage === 'pay')
     if (focus === 'stalled') return filtered.filter(c => c.stage !== 'done' && c.ageDays > 7)
+    if (focus === 'overdue') return filtered.filter(c => c.stage !== 'done' && !!c.nextContactAt && c.nextContactAt <= todayStr())
     return filtered
   }, [filtered, focus])
 
@@ -143,7 +146,7 @@ export default function DealBoardPage() {
     <div className="p-6 max-w-[1400px] mx-auto">
       <div className="flex items-end justify-between gap-4 flex-wrap mb-4">
         <div>
-          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : 'Сделки'}</h1>
+          <h1 className="text-[24px] font-bold text-[#111110]">{showArchive ? 'Архив сделок' : showLost ? 'Отказы' : 'Сделки'}</h1>
           <p className="text-[13px] text-[#9a9a95] mt-0.5 max-w-[62ch]">
             Каждая карточка идёт по этажам пути денег: просчёт → КП → договор → оплата. Этаж вычисляется по тому, что в сделке реально появилось — руками ничего не двигают.
           </p>
@@ -155,11 +158,15 @@ export default function DealBoardPage() {
             className="border border-[#e4e4e0] rounded-xl px-3 py-2 text-[13px] w-64 outline-none focus:border-[#111110] transition-colors" />
           {/* Единственный способ завести карточку руками — клиент позвонил, расчёта
               ещё нет. Всё остальное приходит на доску само, с первым расчётом. */}
-          <button onClick={() => { setShowArchive(v => !v); setLoading(true); setFocus('all') }}
+          <button onClick={() => { setShowLost(v => !v); setShowArchive(false); setLoading(true); setFocus('all') }}
+            className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showLost ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
+            {showLost ? 'В работе' : 'Отказы'}
+          </button>
+          <button onClick={() => { setShowArchive(v => !v); setShowLost(false); setLoading(true); setFocus('all') }}
             className={`text-[12.5px] font-medium px-3.5 py-2 rounded-xl border transition-colors ${showArchive ? 'border-[#111110] bg-[#111110] text-white' : 'border-[#e4e4e0] bg-white text-[#4b4b47] hover:border-[#111110]'}`}>
             {showArchive ? 'Активные' : 'Архив'}
           </button>
-          {!showArchive && (
+          {!showArchive && !showLost && (
             <button onClick={() => setAdding(v => !v)}
               className="text-[12.5px] font-semibold px-3.5 py-2 rounded-xl bg-[#111110] text-white hover:bg-[#2a2a28] transition-colors">
               {adding ? 'Отмена' : '+ Сделка'}
@@ -253,11 +260,13 @@ export default function DealBoardPage() {
         <>
           {kpis && (
             <>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-2">
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-2">
                 <Kpi label="В работе" value={`${kpis.inWork}`} unit="сделок"
                   active={focus === 'inWork'} onClick={() => setFocus(f => f === 'inWork' ? 'all' : 'inWork')} />
                 <Kpi label="Ждут оплаты" value={fmt(kpis.awaitingPay)} mono
                   active={focus === 'awaiting'} onClick={() => setFocus(f => f === 'awaiting' ? 'all' : 'awaiting')} />
+                <Kpi label="Просрочен контакт" value={`${kpis.overdue}`} flag={kpis.overdue > 0}
+                  active={focus === 'overdue'} onClick={() => setFocus(f => f === 'overdue' ? 'all' : 'overdue')} />
                 <Kpi label="Зависли > 7 дней" value={`${kpis.stalled}`} flag={kpis.stalled > 0}
                   active={focus === 'stalled'} onClick={() => setFocus(f => f === 'stalled' ? 'all' : 'stalled')} />
                 <Kpi label="Поступило за месяц" value={fmt(kpis.receivedThisMonth)} mono />
@@ -298,10 +307,10 @@ export default function DealBoardPage() {
               <b className="text-[#4b4b47] font-semibold">Откуда берутся карточки.</b> Сделка заводится сама на первом сохранённом расчёте, где есть телефон или адрес, — такая карточка появляется сразу в «Просчёт». В «Новая» попадают только заведённые руками кнопкой «+ Сделка»: клиент позвонил, расчёта ещё нет. Пустых карточек система не плодит.
             </p>
             <p>
-              <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Зависли».
+              <b className="text-[#4b4b47] font-semibold">Как работать.</b> Столбец — где сделка сейчас. Чёрная кнопка на карточке — следующий шаг, ведёт сразу в нужное место сделки. Клик по самой карточке открывает её целиком. Показатель сверху — фильтр: начните день с «Просрочен контакт».
             </p>
             <p>
-              <b className="text-[#4b4b47] font-semibold">Столбец не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово». Замер — не столбец, а метка: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию: деньгам, КП, договору, замеру, чертежу.
+              <b className="text-[#4b4b47] font-semibold">Столбец не перетаскивают.</b> Сделка переходит сама, когда в ней появляется артефакт: отправлено КП → «КП отправлено», подписан договор → «Договор», пришли деньги → «Оплата», оплачено полностью → «Готово». Замер — не столбец, а метка: янтарь — назначен, зелёный — проведён. «Без движения» считается по последнему событию: деньгам, КП, договору, замеру, чертежу. Если в сделке назначена дата следующего контакта, карточка показывает её, а не возраст: обещание точнее тишины. Клиент отказался — кнопка «Отказ» в сделке с причиной; такие уходят с доски в отдельный вид «Отказы» и не считаются ни «в работе», ни «зависшими».
               {!seeAll && <span> Показаны ваши сделки.</span>}
             </p>
           </div>
@@ -312,7 +321,7 @@ export default function DealBoardPage() {
 }
 
 const FOCUS_LABEL: Record<string, string> = {
-  inWork: 'В работе', awaiting: 'Ждут оплаты', stalled: 'Зависли > 7 дней',
+  inWork: 'В работе', awaiting: 'Ждут оплаты', stalled: 'Зависли > 7 дней', overdue: 'Просрочен контакт',
 }
 
 function Kpi({ label, value, unit, mono, flag, active, onClick }: {
@@ -330,6 +339,8 @@ function Kpi({ label, value, unit, mono, flag, active, onClick }: {
     </Tag>
   )
 }
+
+const todayStr = () => new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Moscow' })
 
 function ageClass(days: number) {
   if (days > 7) return 'text-red-600'
@@ -361,6 +372,7 @@ function DealCard({ c }: { c: Card }) {
         {c.hasKp && <Chip tone="info">📄 КП</Chip>}
         {c.measure && <Chip tone={measureTone(c.measure)}>📐 {measureLabel(c.measure)}</Chip>}
         {c.source && <Chip>{sourceLabel(c.source)}</Chip>}
+        {c.lostReason && <Chip tone="warn">✕ {c.lostReason}</Chip>}
         {c.hasDrawing && <Chip tone="good">📎 чертёж</Chip>}
         {c.hasContract && <Chip tone="good">📝 договор</Chip>}
       </div>
@@ -407,9 +419,17 @@ function DealCard({ c }: { c: Card }) {
               АМО ↗
             </a>
           )}
-          <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
-            {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
-          </span>
+          {/* Обещание перезвонить важнее «давно не трогали»: если дата назначена,
+              показываем её, а не возраст. */}
+          {c.nextContactAt ? (
+            <span className={`text-[11px] font-semibold ${c.nextContactAt <= todayStr() ? 'text-red-600' : 'text-[#4b4b47]'}`}>
+              {c.nextContactAt <= todayStr() ? '📞 просрочен' : `📞 ${new Date(c.nextContactAt).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })}`}
+            </span>
+          ) : (
+            <span className={`text-[11px] font-semibold ${ageClass(c.ageDays)}`}>
+              {c.ageDays === 0 ? 'сегодня' : `без движения ${c.ageDays} д`}
+            </span>
+          )}
         </span>
       </div>
       </div>

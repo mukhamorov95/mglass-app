@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
 
   const svc = createServiceClient()
   const { data: deal, error } = await svc.from('deals')
-    .select('id, client_name, phone, phone_key, address, manager_id, amo_lead_id, source, archived_at, created_by, created_by_name, created_at, updated_at')
+    .select('id, client_name, phone, phone_key, address, manager_id, amo_lead_id, source, archived_at, lost_at, lost_reason, next_contact_at, created_by, created_by_name, created_at, updated_at')
     .eq('id', dealId).maybeSingle()
   if (error || !deal) return NextResponse.json({ error: 'Сделка не найдена' }, { status: 404 })
   if (!canSeeDeal(actor, deal as { created_by: string | null; manager_id: string | null })) {
@@ -84,6 +84,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const b = await req.json().catch(() => ({})) as {
     client_name?: string; phone?: string; address?: string; amo_lead_id?: string | null
     source?: string | null; archived?: boolean
+    lost?: boolean; lost_reason?: string | null; next_contact_at?: string | null
   }
   const { phoneKey } = await import('@/lib/b2c/phoneKey')
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() }
@@ -99,6 +100,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     patch.archived_at = b.archived ? new Date().toISOString() : null
     patch.archived_by = b.archived ? actor.userId : null
   }
+  // Отказ — исход сделки, а не удаление: причина остаётся, иначе через месяц
+  // не ответить, почему не купили.
+  if (b.lost !== undefined) {
+    patch.lost_at = b.lost ? new Date().toISOString() : null
+    patch.lost_reason = b.lost ? (b.lost_reason?.trim() || 'без причины') : null
+  }
+  if (b.next_contact_at !== undefined) patch.next_contact_at = b.next_contact_at || null
 
   const { error } = await svc.from('deals').update(patch).eq('id', dealId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

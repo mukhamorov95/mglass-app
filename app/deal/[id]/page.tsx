@@ -14,8 +14,12 @@ type Deal = {
   id: number; client_name: string; phone: string; address: string
   manager_id: string | null; amo_lead_id: string | null; created_by_name: string | null
   source: string | null; archived_at: string | null
+  lost_at: string | null; lost_reason: string | null; next_contact_at: string | null
   created_at: string; updated_at: string
 }
+type Note = { id: number; text: string; author_name: string | null; created_at: string }
+// Причины отказа — короткий закрытый список: свободный текст не сложится в отчёт.
+const LOST_REASONS = ['Дорого', 'Выбрал другого', 'Отложил покупку', 'Не отвечает', 'Не наш профиль', 'Другое']
 type Sibling = { id: number; client_name: string | null; address: string | null; created_at: string; archived_at: string | null }
 type KpCandidate = {
   id: number; number: string; client_name: string | null; client_phone: string | null
@@ -86,6 +90,10 @@ export default function DealPage() {
   const [kpPick, setKpPick] = useState<KpCandidate[] | null>(null)
   const [kpBusy, setKpBusy] = useState(false)
   const [archiving, setArchiving] = useState(false)
+  const [notes, setNotes] = useState<Note[]>([])
+  const [noteText, setNoteText] = useState('')
+  const [noteBusy, setNoteBusy] = useState(false)
+  const [lostOpen, setLostOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [tab, setTab] = useState<'calcs' | 'docs' | 'money'>('calcs')
   const [docs, setDocs] = useState<{ kps: Doc[]; contracts: Contract[]; invoices: Invoice[]; measures: Measure[] } | null>(null)
@@ -108,6 +116,7 @@ export default function DealPage() {
       loadDocs()      // документы и замер грузим сразу — блок замера виден без открытия вкладки
       loadPayments()  // оплаты — для вкладки «Деньги»
       loadFiles()     // чертёж и файлы сделки
+      loadNotes()     // о чём договорились
     } catch { setError('Сеть недоступна') } finally { setLoading(false) }
   }
   // eslint-disable-next-line react-hooks/set-state-in-effect, react-hooks/exhaustive-deps
@@ -174,6 +183,50 @@ export default function DealPage() {
       const r = await fetch(`/api/deals/${id}/kp-candidates`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kp_id: kpId }) })
       if (r.ok) { setKpPick(null); await loadDocs() }
     } finally { setKpBusy(false) }
+  }
+
+  async function loadNotes() {
+    try {
+      const r = await fetch(`/api/deals/${id}/notes`)
+      const j = await r.json().catch(() => ({}))
+      if (r.ok) setNotes(j.notes ?? [])
+    } catch { /* ignore */ }
+  }
+  async function addNote() {
+    const text = noteText.trim()
+    if (!text) return
+    setNoteBusy(true)
+    try {
+      const r = await fetch(`/api/deals/${id}/notes`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+      })
+      if (r.ok) { setNoteText(''); await loadNotes() }
+    } finally { setNoteBusy(false) }
+  }
+
+  // Дата следующего контакта — обещание менеджера. По ней доска считает
+  // просрочку: это точнее, чем «давно не трогали».
+  async function setNextContact(value: string) {
+    const r = await fetch(`/api/deals/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ next_contact_at: value || null }),
+    })
+    if (r.ok) await load()
+  }
+
+  // Отказ — исход, а не удаление: причина остаётся в сделке.
+  async function markLost(reason: string) {
+    const r = await fetch(`/api/deals/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lost: true, lost_reason: reason }),
+    })
+    if (r.ok) { setLostOpen(false); await load() }
+  }
+  async function unLost() {
+    const r = await fetch(`/api/deals/${id}`, {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lost: false }),
+    })
+    if (r.ok) await load()
   }
 
   async function loadDocs() {
@@ -293,6 +346,7 @@ export default function DealPage() {
               {stage && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONE[stage.tone]}`}>{stage.label}</span>}
               {deal.source && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">{sourceLabel(deal.source)}</span>}
               {deal.archived_at && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">В архиве</span>}
+              {deal.lost_at && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-red-50 text-red-700">Отказ · {deal.lost_reason}</span>}
             </div>
             <p className="text-[13px] text-[#6b6b66] mt-0.5 flex items-center gap-2 flex-wrap">
               {deal.phone && telHref(deal.phone) ? (
@@ -372,6 +426,17 @@ export default function DealPage() {
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40">
           🔗 Подтянуть КП
         </button>
+        {deal.lost_at ? (
+          <button onClick={unLost}
+            className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
+            ↩︎ Вернуть в работу
+          </button>
+        ) : (
+          <button onClick={() => setLostOpen(v => !v)}
+            className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#111110] hover:bg-[#f0f0ec]">
+            ✕ Отказ
+          </button>
+        )}
         <button onClick={toggleArchive} disabled={archiving}
           className="text-[13px] font-medium px-4 py-2 rounded-lg border border-[#e4e4e0] text-[#9a9a95] hover:text-[#111110] hover:bg-[#f0f0ec] disabled:opacity-40 ml-auto">
           {deal.archived_at ? '↩︎ Вернуть из архива' : '🗄 В архив'}
@@ -407,6 +472,58 @@ export default function DealPage() {
           )}
         </div>
       )}
+
+      {lostOpen && !deal.lost_at && (
+        <div className="bg-white border border-[#111110] rounded-2xl px-5 py-4">
+          <p className="text-[13px] font-semibold text-[#111110] mb-2">Почему отказ?</p>
+          <div className="flex flex-wrap gap-1.5">
+            {LOST_REASONS.map(r => (
+              <button key={r} onClick={() => markLost(r)}
+                className="text-[12.5px] px-3 py-1.5 rounded-lg border border-[#e4e4e0] text-[#111110] hover:border-[#111110] transition-colors">
+                {r}
+              </button>
+            ))}
+          </div>
+          <p className="text-[11.5px] text-[#9a9a95] mt-2">Сделка уйдёт с доски в «Отказы» вместе с причиной. Вернуть можно в любой момент.</p>
+        </div>
+      )}
+
+      {/* Что дальше: обещание перезвонить + о чём договорились. Доска умеет
+          сказать «тишина 12 дней», но не «обещал перезвонить в понедельник». */}
+      <div className="bg-white border border-[#e4e4e0] rounded-2xl px-5 py-4 space-y-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <p className="text-[12px] font-semibold text-[#9a9a95] uppercase tracking-wider">Что дальше</p>
+          <div className="flex items-center gap-2">
+            <label className="text-[12px] text-[#6b6b66]">Связаться</label>
+            <input type="date" value={deal.next_contact_at ?? ''} onChange={e => setNextContact(e.target.value)}
+              className="border border-[#e4e4e0] rounded-lg px-2 py-1 text-[13px] outline-none focus:border-[#111110]" />
+            {deal.next_contact_at && (
+              <button onClick={() => setNextContact('')} className="text-[12px] text-[#9a9a95] hover:text-[#111110]">убрать</button>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-start gap-2">
+          <textarea value={noteText} onChange={e => setNoteText(e.target.value)} rows={2}
+            placeholder="О чём договорились, что обещали, что мешает купить"
+            className="flex-1 border border-[#e4e4e0] rounded-lg px-3 py-2 text-[13px] outline-none focus:border-[#111110] resize-y" />
+          <button onClick={addNote} disabled={noteBusy || !noteText.trim()}
+            className="text-[13px] font-semibold px-4 py-2 rounded-lg bg-[#111110] text-white hover:bg-[#2a2a28] disabled:opacity-40">
+            {noteBusy ? '…' : 'Записать'}
+          </button>
+        </div>
+
+        {notes.length > 0 && (
+          <div className="divide-y divide-[#f0f0ec]">
+            {notes.map(n => (
+              <div key={n.id} className="py-2">
+                <p className="text-[13px] text-[#111110] whitespace-pre-wrap">{n.text}</p>
+                <p className="text-[11px] text-[#9a9a95] mt-0.5">{date(n.created_at)}{n.author_name ? ` · ${n.author_name}` : ''}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Другие сделки этого клиента: у одного человека может быть несколько объектов. */}
       {siblings.length > 0 && (
