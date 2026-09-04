@@ -22,10 +22,27 @@ type LightingComponent = {
 }
 
 const BASE_TABS: { value: string; label: string }[] = [
-  { value: 'frame',         label: 'Каркас (профиль)' },
   { value: 'led_strip',     label: 'LED-лента' },
+  { value: 'diffuser',      label: 'Профиль с рассеивателем' },
   { value: 'power_supply',  label: 'Блок питания' },
-  { value: 'diffuser',      label: 'Рассеиватель' },
+  { value: 'button',        label: 'Кнопка' },
+  { value: 'sensor',        label: 'Сенсор' },
+  { value: 'wire',          label: 'Провод' },
+  { value: 'connector',     label: 'Коннекторы' },
+  { value: 'dimmer',        label: 'Диммер' },
+  { value: 'frame',         label: 'Каркас (профиль)' },
+]
+
+// Что нужно калькулятору зеркал, чтобы посчитать изделие целиком. Позиция
+// «есть» = включена и с ненулевой ценой: выключенная заготовка не считается.
+const REQUIRED: { value: string; label: string; note: string }[] = [
+  { value: 'led_strip',    label: 'Лента',      note: 'бухта 5 м, Вт/м' },
+  { value: 'diffuser',     label: 'Профиль',    note: 'хлыст 6 м' },
+  { value: 'power_supply', label: 'Блок питания', note: 'запас 30%' },
+  { value: 'button',       label: 'Кнопка',     note: 'если с выключателем' },
+  { value: 'sensor',       label: 'Сенсор',     note: 'если с сенсором' },
+  { value: 'wire',         label: 'Провод',     note: '' },
+  { value: 'connector',    label: 'Коннекторы', note: '' },
 ]
 const BASE_VALUES = BASE_TABS.map(t => t.value)
 
@@ -154,14 +171,37 @@ export default function MirrorLightingPage() {
   const num = 'w-full border border-[#e4e4e0] rounded-md px-2 py-1.5 text-sm font-mono focus:outline-none focus:border-blue-400'
 
   const currentTabLabel = allTabs.find(t => t.value === tab)?.label ?? tab
+  const ready = (v: string) => items.some(i => i.component_type === v && i.active && Number(i.cost_price) > 0)
+  const countOf = (v: string) => items.filter(i => i.component_type === v && i.active && Number(i.cost_price) > 0).length
 
   if (loading) return <div className="p-6 text-sm text-gray-400">Загрузка...</div>
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-4">
 
+      {/* Чего не хватает калькулятору — сразу, а не после первого «не заведено»
+          в расчёте. Позиция считается заполненной, только если включена и с ценой. */}
+      <div className="mb-4 rounded-xl border border-[#e4e4e0] bg-white p-3">
+        <p className="text-[12px] font-semibold text-[#111110] mb-2">Что нужно калькулятору зеркал</p>
+        <div className="flex flex-wrap gap-1.5">
+          {REQUIRED.map(r => {
+            const ok = ready(r.value)
+            return (
+              <button key={r.value} onClick={() => setTab(r.value)}
+                className={`text-[12px] px-2.5 py-1 rounded-lg border transition-colors ${ok ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                {ok ? '✓' : '•'} {r.label}
+                {ok ? <span className="opacity-60"> · {countOf(r.value)}</span> : <span className="opacity-70"> — не заведено</span>}
+              </button>
+            )
+          })}
+        </div>
+        <p className="text-[11px] text-[#9a9a95] mt-2">
+          Позиция считается заведённой, когда у неё есть закупочная цена и она включена. Для ленты укажите Вт/м и длину бухты (5 м), для профиля — длину хлыста (6 м), для блока питания — максимальную мощность.
+        </p>
+      </div>
+
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-base font-semibold text-[#111110]">Компоненты подсветки зеркал</h1>
+        <h1 className="text-base font-semibold text-[#111110]">Себестоимость зеркал · компоненты</h1>
         <button
           onClick={() => { setSaveError(null); setEditing({
             component_type: tab,
