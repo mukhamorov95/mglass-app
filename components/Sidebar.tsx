@@ -96,7 +96,7 @@ const BUYER_ZAKUPKI: NavItem[] = [
   { href: '/accounting',            label: 'Заявки на оплату',  icon: '💸', indent: true },
   { href: '/admin/suppliers',       label: 'Поставщики',        icon: '🏭', indent: true },
   { href: '/admin/supplier-catalog', label: 'Справочник цен',   icon: '📗', indent: true },
-  { href: '/admin/visualizer-pricing', label: 'Себестоимость визуализатора', icon: '🧊', indent: true },
+  { href: '/admin/visualizer-pricing', label: 'Себестоимость душевых', icon: '🧊', indent: true },
   { href: '/admin/shower-hardware', label: 'Фурнитура душевых', icon: '🚿', indent: true },
   { href: '/admin/hardware',        label: 'Фурнитура лофт',   icon: '🔩', indent: true },
 ]
@@ -110,7 +110,8 @@ const BUYER_LOGISTIKA: NavItem[] = [
 const BUYER_SPRAVOCHNIKI: NavItem[] = [
   { href: '/admin/glass-prices',     label: 'Стекло',             icon: '🔷', indent: true },
   { href: '/admin/facet',            label: 'Фацет',              icon: '💎', indent: true },
-  { href: '/admin/mirror-lighting',  label: 'Себестоимость зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-pricing',   label: 'Себестоимость зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-lighting',  label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',    label: 'Рамки зеркал',      icon: '🖼️', indent: true },
   { href: '/admin/services',         label: 'Услуги',             icon: '🔧', indent: true },
   { href: '/admin/cutting-settings', label: 'Настройки раскроя', icon: '✂️', indent: true },
@@ -253,12 +254,13 @@ const ADMIN_DIRECTORIES: NavEntry[] = [
   { groupLabel: 'Стекло и зеркала' },
   { href: '/admin/glass-prices',    label: 'Стекло',           icon: '🔷', indent: true },
   { href: '/admin/facet',           label: 'Фацет',            icon: '💎', indent: true },
-  { href: '/admin/mirror-lighting', label: 'Себестоимость зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-pricing',  label: 'Себестоимость зеркал', icon: '💡', indent: true },
+  { href: '/admin/mirror-lighting', label: 'Компоненты подсветки', icon: '🔌', indent: true },
   { href: '/admin/mirror-frames',   label: 'Рамки зеркал',     icon: '🖼️', indent: true },
   { href: '/admin/pricing-v2',      label: 'Маржа / финмодель зеркал', icon: '📈', indent: true },
   { groupLabel: 'Фурнитура' },
   { href: '/admin/shower-hardware', label: 'Душевые',          icon: '🚿', indent: true },
-  { href: '/admin/visualizer-pricing', label: 'Себестоимость визуализатора', icon: '🧊', indent: true },
+  { href: '/admin/visualizer-pricing', label: 'Себестоимость душевых', icon: '🧊', indent: true },
   { href: '/admin/hardware',        label: 'Лофт',             icon: '🔩', indent: true },
   { href: '/admin/loft-rates',      label: 'Лофт — ставки цеха', icon: '🏗️', indent: true },
   { href: '/admin/mirror-frame-rates', label: 'Зеркало в раме — ставки', icon: '🖼️', indent: true },
@@ -460,7 +462,7 @@ function autoOpenAdmin(pathname: string, mode: ViewMode): string[] {
     if (inSection(pathname, ['/admin/product-line', '/admin/b2b-presentation'])) open.push('productline')
     if (inSection(pathname, ['/admin/pricing-manual', '/admin/owner-questionnaire', '/admin/roadmap', '/admin/infrastructure', '/admin/shower-images', '/admin/video-studio', '/admin/services', '/admin/quote-quality'])) open.push('system')
   } else {
-    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
+    if (inSection(pathname, ['/admin/glass-prices', '/admin/mirror-lighting', '/admin/mirror-pricing', '/admin/mirror-frames', '/admin/facet', '/admin/materials', '/admin/services', '/admin/hardware', '/admin/shower-hardware', '/admin/loft-rates', '/admin/mirror-frame-rates', '/admin/railing-rates', '/admin/settings', '/admin/suppliers', '/admin/supplier-catalog', '/admin/procurement'])) open.push('directories')
     if (inSection(pathname, ['/admin/b2b-clients', '/admin/b2b-services', '/admin/b2b-materials', '/admin/ai-b2b-quote'])) open.push('b2b')
     if (inSection(pathname, ['/measure-requests', '/measure-calendar', '/measurer-cabinet', '/admin/installations', '/inventory', '/admin/stock-control', '/admin/route-sheet', '/admin/brigades', '/admin/delivery-zones', '/admin/ideas', '/admin/b2b-access', '/admin/referrals', '/admin/referral-stats', '/admin/security', '/admin/activity'])) open.push('operations')
   }
