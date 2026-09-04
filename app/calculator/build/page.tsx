@@ -53,6 +53,10 @@ type Price = {
   glassLines?: GlassLine[]; glassSource?: string | null; glassThickness?: number; glassDiscountPct?: number
   missing: { label: string; reason: string }[]; complete: boolean
 }
+type MirrorModel = {
+  code: string; name: string; descr: string | null; shape: string
+  has_lighting: boolean; frame_kind: string | null; image_url: string | null
+}
 type CartItem = { title: string; cost: number; productPrice: number; install: number; delivery: number; lift: number; total: number }
 
 const fld = 'w-full bg-white border border-[#e4e4e0] rounded-lg px-3 py-1.5 text-[13px] font-mono text-[#111110] outline-none focus:border-[#111110]'
@@ -109,6 +113,12 @@ export default function BuildCalcPage() {
   const [profileFrame, setProfileFrame] = useState<'partial' | 'perimeter'>('partial')
   // Пришли из карточки сделки (/calculator/build?deal=12) — расчёт кладём именно
   // в неё, а не оставляем на усмотрение авто-привязки по телефону.
+  // Какой продукт считаем. Душевые — как было; зеркала строятся по маршруту
+  // docs/MIRROR_CALC_ROUTE.md (сейчас готовы З1 подменю и З2 модели); лофт пока
+  // ведёт на свой старый калькулятор — врать вкладкой «скоро» не нужно.
+  const [product, setProduct] = useState<'shower' | 'mirror'>('shower')
+  const [mirrorModels, setMirrorModels] = useState<MirrorModel[] | null>(null)
+  const [mirrorPick, setMirrorPick] = useState<MirrorModel | null>(null)
   const [dealId, setDealId] = useState<number | null>(null)
   const [dealTitle, setDealTitle] = useState<string>('')
 
@@ -132,6 +142,18 @@ export default function BuildCalcPage() {
     setScreen('detail')
   }
   const setD = <K extends keyof MDims>(k: K, v: MDims[K]) => setDims(d => ({ ...d, [k]: v }))
+
+  useEffect(() => {
+    if (product !== 'mirror' || mirrorModels) return
+    ;(async () => {
+      try {
+        const r = await fetch('/api/calc/mirror/models')
+        const j = await r.json().catch(() => ({}))
+        if (r.ok) setMirrorModels(j.models ?? [])
+        else setMirrorModels([])
+      } catch { setMirrorModels([]) }
+    })()
+  }, [product, mirrorModels])
 
   // Расчёт «в сделку»: id из адреса, поля клиента — из самой сделки, чтобы КП и
   // привязка шли по её данным, а не переписывались руками.
@@ -306,7 +328,9 @@ export default function BuildCalcPage() {
           <div className="mb-5 flex items-end justify-between gap-4 flex-wrap">
             <div>
               <h1 className="text-[18px] font-semibold text-[#111110]">Расчёт{cart.length ? ` · в корзине ${cart.length}` : ''}</h1>
-              <p className="text-[12px] text-[#9a9a95] mt-0.5">Выберите модель душевой перегородки.</p>
+              <p className="text-[12px] text-[#9a9a95] mt-0.5">
+                {product === 'shower' ? 'Выберите модель душевой перегородки.' : 'Выберите модель зеркала.'}
+              </p>
             </div>
             {cart.length > 0 && (
               <button onClick={save} disabled={saving}
@@ -315,6 +339,57 @@ export default function BuildCalcPage() {
               </button>
             )}
           </div>
+          {/* Подменю продукта (маршрут З1). Лофт ведёт на свой калькулятор — пока
+              он живой, честнее отправить туда, чем рисовать вкладку «скоро». */}
+          <div className="flex items-center gap-1 mb-4 bg-white border border-[#e4e4e0] rounded-xl p-1 w-fit">
+            {([['shower', 'Душевые'], ['mirror', 'Зеркала']] as const).map(([k, label]) => (
+              <button key={k} onClick={() => setProduct(k)}
+                className={`text-[13px] font-medium px-4 py-1.5 rounded-lg transition-colors ${product === k ? 'bg-[#111110] text-white' : 'text-[#4b4b47] hover:bg-[#f5f5f3]'}`}>
+                {label}
+              </button>
+            ))}
+            <a href="/calculator/loft" className="text-[13px] font-medium px-4 py-1.5 rounded-lg text-[#4b4b47] hover:bg-[#f5f5f3] transition-colors">Лофт ↗</a>
+          </div>
+
+          {product === 'mirror' ? (
+            mirrorModels === null ? (
+              <p className="text-[13px] text-[#9a9a95]">Загружаю модели…</p>
+            ) : mirrorModels.length === 0 ? (
+              <p className="text-[13px] text-[#9a9a95]">Моделей зеркал пока нет в справочнике.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {mirrorModels.map(mm => (
+                    <button key={mm.code} onClick={() => setMirrorPick(mm)}
+                      className={`flex flex-col items-stretch p-2 rounded-xl border bg-white text-left transition-all ${mirrorPick?.code === mm.code ? 'border-[#111110]' : 'border-[#e4e4e0] hover:border-[#111110]'}`}>
+                      <div className="rounded-lg mb-2 overflow-hidden aspect-[4/5] bg-[#f5f5f7] flex items-center justify-center">
+                        {mm.image_url
+                          // eslint-disable-next-line @next/next/no-img-element
+                          ? <img src={mm.image_url} alt="" className="w-full h-full object-cover" />
+                          : <MirrorThumb lit={mm.has_lighting} shape={mm.shape} />}
+                      </div>
+                      <span className="text-[13px] font-bold text-[#111110]">{mm.code} · {mm.name}</span>
+                      <span className="text-[10px] text-[#86868b] leading-tight">{mm.descr}</span>
+                    </button>
+                  ))}
+                </div>
+                {mirrorPick && (
+                  <div className="mt-4 bg-white border border-[#e4e4e0] rounded-2xl p-4">
+                    <p className="text-[13px] font-semibold text-[#111110]">{mirrorPick.code} · {mirrorPick.name}</p>
+                    <p className="text-[12px] text-[#6b6b66] mt-1 max-w-[70ch]">
+                      Экран расчёта зеркала — следующие шаги маршрута (З3–З6): геометрия и длина подсветки,
+                      кратность бухт ленты и хлыстов профиля, серверный расчёт цены. Пока считайте зеркало
+                      в «Калькуляторы → Зеркало».
+                    </p>
+                    <a href="/calculator/mirror" className="inline-block mt-2 text-[12.5px] font-semibold px-3 py-1.5 rounded-lg border border-[#111110] text-[#111110] hover:bg-[#111110] hover:text-white transition-colors">
+                      Открыть старый калькулятор зеркал
+                    </a>
+                  </div>
+                )}
+              </>
+            )
+          ) : (
+          <>
           {/* Экран для выбора модели глазами — карточки портретные и крупные, рендер целиком
               по высоте (object-cover на вертикальной ячейке ≈ соотношение рендера 576×720),
               чтобы видеть конструкцию, а не полоску стекла. */}
@@ -333,6 +408,8 @@ export default function BuildCalcPage() {
               </button>
             ))}
           </div>
+          </>
+          )}
         </div>
       </div>
     )
@@ -552,6 +629,23 @@ export default function BuildCalcPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// Превью модели зеркала, пока нет фото: силуэт и, если модель с подсветкой,
+// свечение по контуру. Схема честнее «фото скоро» — видно, чем модели отличаются.
+function MirrorThumb({ lit, shape }: { lit: boolean; shape: string }) {
+  const round = shape === 'circle' || shape === 'oval'
+  return (
+    <svg viewBox="0 0 80 100" className="w-full h-full">
+      {lit && (round
+        ? <ellipse cx="40" cy="50" rx="30" ry="34" fill="none" stroke="#ffe9a8" strokeWidth="7" opacity="0.85" />
+        : <rect x="16" y="16" width="48" height="68" rx="3" fill="none" stroke="#ffe9a8" strokeWidth="7" opacity="0.85" />)}
+      {round
+        ? <ellipse cx="40" cy="50" rx="26" ry="30" fill="#dfe7ea" stroke="#b9c6cc" strokeWidth="1.5" />
+        : <rect x="20" y="20" width="40" height="60" rx="2" fill="#dfe7ea" stroke="#b9c6cc" strokeWidth="1.5" />}
+      <path d={round ? 'M26 62 L54 34' : 'M24 70 L56 30'} stroke="#ffffff" strokeWidth="3" opacity="0.7" />
+    </svg>
   )
 }
 
