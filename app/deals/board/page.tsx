@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { formatPhone, phoneKey } from '@/lib/b2c/phoneKey'
+import { formatPhone, phoneKey, telHref, waHref } from '@/lib/b2c/phoneKey'
 
 // Доска сделок — тот же список /deals, но по этажам пути денег: просчёт → КП →
 // договор → оплата → готово. Этаж приходит с сервера вычисленным по реальным
@@ -392,7 +392,14 @@ function DealCard({ c }: { c: Card }) {
       )}
 
       <div className="flex items-center justify-between gap-2 mt-2.5 pt-2 border-t border-[#f0f0ec]">
-        <span className="text-[11.5px] text-[#9a9a95]">{c.phone ? formatPhone(c.phone) : '—'}</span>
+        {/* Позвонить и написать прямо с доски — на телефоне это главный жест. */}
+        {c.phone && telHref(c.phone) ? (
+          <span className="flex items-center gap-1.5 pointer-events-auto relative z-20">
+            <a href={telHref(c.phone)!} className="text-[11.5px] text-[#4b4b47] hover:text-[#111110] hover:underline">{formatPhone(c.phone)}</a>
+            <a href={waHref(c.phone)!} target="_blank" rel="noopener noreferrer" title="Написать в WhatsApp"
+              className="text-[11px] leading-none px-1.5 py-0.5 rounded-md border border-[#e4e4e0] text-[#4b4b47] hover:border-[#2f8f5b] hover:text-[#2f8f5b] transition-colors">WA</a>
+          </span>
+        ) : <span className="text-[11.5px] text-[#9a9a95]">—</span>}
         <span className="flex items-center gap-2">
           {amoHref && (
             <a href={amoHref} target="_blank" rel="noopener noreferrer" title="Открыть сделку в АМО"

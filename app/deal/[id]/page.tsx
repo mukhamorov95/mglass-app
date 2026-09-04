@@ -3,11 +3,12 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useParams } from 'next/navigation'
-import { formatPhone } from '@/lib/b2c/phoneKey'
-import { dealStage } from '@/lib/b2c/dealStatus'
+import { formatPhone, telHref, waHref } from '@/lib/b2c/phoneKey'
+import type { DealStage } from '@/lib/b2c/dealProgress'
 
 // Карточка Сделки (B2C). Паттерн — как /b2b-deal, но модель своя (deals — тонкая
-// группировка по объекту). Статус — производная от расчётов (dealStage), не хранится.
+// группировка по объекту). Этаж и деньги приходят с сервера тем же кодом, что
+// считает доску (lib/b2c/dealProgress) — иначе два экрана расходятся об одной сделке.
 
 type Deal = {
   id: number; client_name: string; phone: string; address: string
@@ -66,7 +67,8 @@ const PRODUCT: Record<string, string> = { mirror: '🪞 Зеркало', shower:
 const CALC_STATUS: Record<string, string> = { draft: 'Черновик', sent: 'Отправлено', approved: 'Согласовано', rejected: 'Отказ' }
 
 const TONE: Record<string, string> = {
-  plain: 'bg-[#f0f0ec] text-[#6b6b66]', sent: 'bg-blue-50 text-blue-700', good: 'bg-emerald-50 text-emerald-700',
+  plain: 'bg-[#f0f0ec] text-[#6b6b66]', sent: 'bg-blue-50 text-blue-700',
+  warn: 'bg-amber-50 text-amber-800', good: 'bg-emerald-50 text-emerald-700',
 }
 
 export default function DealPage() {
@@ -79,6 +81,8 @@ export default function DealPage() {
   const [edit, setEdit] = useState(false)
   const [form, setForm] = useState({ client_name: '', phone: '', address: '', amo_lead_id: '', source: '' })
   const [siblings, setSiblings] = useState<Sibling[]>([])
+  const [stage, setStage] = useState<DealStage | null>(null)
+  const [money, setMoney] = useState<{ value: number; paid: number; remaining: number } | null>(null)
   const [kpPick, setKpPick] = useState<KpCandidate[] | null>(null)
   const [kpBusy, setKpBusy] = useState(false)
   const [archiving, setArchiving] = useState(false)
@@ -98,6 +102,7 @@ export default function DealPage() {
       const j = await r.json().catch(() => ({}))
       if (!r.ok) { setError(r.status === 403 ? 'Нет доступа к этой сделке' : 'Сделка не найдена'); return }
       setDeal(j.deal); setCalcs(j.calculations ?? []); setSiblings(j.siblings ?? [])
+      setStage(j.stage ?? null); setMoney(j.money ?? null)
       setForm({ client_name: j.deal.client_name ?? '', phone: j.deal.phone ?? '', address: j.deal.address ?? '', amo_lead_id: j.deal.amo_lead_id ?? '', source: j.deal.source ?? '' })
       setError(null)
       loadDocs()      // документы и замер грузим сразу — блок замера виден без открытия вкладки
@@ -274,8 +279,7 @@ export default function DealPage() {
     </div>
   )
 
-  const stage = dealStage(calcs)
-  const total = calcs.reduce((s, c) => s + (Number(c.final_price) || 0), 0)
+  const total = money?.value ?? 0
 
   return (
     <div className="p-6 max-w-3xl mx-auto space-y-4">
@@ -286,12 +290,19 @@ export default function DealPage() {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h1 className="text-[20px] font-bold text-[#111110]">{deal.client_name || 'Без имени'}</h1>
-              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONE[stage.tone]}`}>{stage.label}</span>
+              {stage && <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${TONE[stage.tone]}`}>{stage.label}</span>}
               {deal.source && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-[#f0f0ec] text-[#6b6b66]">{sourceLabel(deal.source)}</span>}
               {deal.archived_at && <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">В архиве</span>}
             </div>
-            <p className="text-[13px] text-[#6b6b66] mt-0.5">
-              {deal.phone ? formatPhone(deal.phone) : 'телефон не указан'}{deal.address ? ` · ${deal.address}` : ''}
+            <p className="text-[13px] text-[#6b6b66] mt-0.5 flex items-center gap-2 flex-wrap">
+              {deal.phone && telHref(deal.phone) ? (
+                <>
+                  <a href={telHref(deal.phone)!} className="text-[#111110] font-medium hover:underline">{formatPhone(deal.phone)}</a>
+                  <a href={waHref(deal.phone)!} target="_blank" rel="noopener noreferrer"
+                    className="text-[11px] font-semibold px-2 py-0.5 rounded-md border border-[#e4e4e0] text-[#4b4b47] hover:border-[#2f8f5b] hover:text-[#2f8f5b] transition-colors">WhatsApp</a>
+                </>
+              ) : <span>телефон не указан</span>}
+              {deal.address && <span>· {deal.address}</span>}
             </p>
             <p className="text-[11px] text-[#9a9a95] mt-0.5">
               создана {date(deal.created_at)}{deal.created_by_name ? ` · ${deal.created_by_name}` : ''}
@@ -300,6 +311,13 @@ export default function DealPage() {
           </div>
           <div className="text-right">
             <p className="text-[18px] font-bold font-mono text-[#111110]">{fmt(total)}</p>
+            {/* План и факт рядом: раньше «поступило» было во вкладке, а сколько
+                должен по договору — нигде. */}
+            {!!money && money.value > 0 && (
+              <p className="text-[11px] text-[#9a9a95] mt-0.5">
+                оплачено {fmt(money.paid)}{money.remaining > 0 ? ` · остаток ${fmt(money.remaining)}` : ' · закрыто'}
+              </p>
+            )}
             <button onClick={() => setEdit(v => !v)} className="text-[12px] text-blue-600 hover:underline mt-1">
               {edit ? 'Отмена' : 'Изменить'}
             </button>

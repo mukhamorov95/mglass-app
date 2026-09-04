@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase-service'
 import { requireDealActor } from '@/lib/b2c/dealScope'
+import { DEAL_STAGES, dealStageKey, dealValue, type DealArtifacts } from '@/lib/b2c/dealProgress'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,17 +15,6 @@ export const dynamic = 'force-dynamic'
 
 const DEAL_COLS = 'id, client_name, phone, address, manager_id, amo_lead_id, source, archived_at, created_by_name, created_at, updated_at'
 
-// Этаж = путь ДЕНЕГ до конца. Замер сюда не входит: в нашем деле он и КП не
-// упорядочены (бывает замер→чертёж→КП, бывает КП→замер), и как ступень он
-// откатывал сделку с отправленным КП назад. Замер показан фактом на карточке.
-const STAGES = [
-  { key: 'new',      label: 'Новая' },
-  { key: 'quote',    label: 'Просчёт' },
-  { key: 'kp',       label: 'КП отправлено' },
-  { key: 'contract', label: 'Договор' },
-  { key: 'pay',      label: 'Оплата' },
-  { key: 'done',     label: 'Готово' },
-] as const
 
 const num = (v: unknown) => { const n = Number(v); return Number.isFinite(n) ? n : 0 }
 const ms = (v: unknown) => { const t = new Date(String(v ?? '')).getTime(); return Number.isFinite(t) ? t : 0 }
@@ -46,7 +36,7 @@ export async function GET(req: NextRequest) {
   const deals = (dealsRaw ?? []) as Record<string, unknown>[]
   const ids = deals.map(d => Number(d.id))
   if (ids.length === 0) {
-    return NextResponse.json({ stages: STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll, archived },
+    return NextResponse.json({ stages: DEAL_STAGES, cards: [], kpis: emptyKpis(), seeAll: actor.seeAll, archived },
       { headers: { 'Cache-Control': 'no-store' } })
   }
 
@@ -119,21 +109,10 @@ export async function GET(req: NextRequest) {
   const cards = deals.map(d => {
     const id = Number(d.id)
     const a = agg.get(id)
-    // Ценность сделки: договор → последнее КП → максимум по расчётам.
-    const value = a ? (a.contractTotal || a.kpTotal || a.calcMax) : 0
-    const paid = a?.paid ?? 0
-    const remaining = Math.max(0, value - paid)
-
-    // Этаж = самый дальний достигнутый артефакт на пути денег.
-    let key: string = 'new'
-    if (a) {
-      if (a.calcCount > 0) key = 'quote'
-      if (a.kpCount > 0 || a.hasSentCalc) key = 'kp'
-      if (a.contractCount > 0) key = 'contract'
-      if (a.payCount > 0) key = 'pay'
-      // Готово — деньги полностью получены (честный сигнал, а не ручная отметка).
-      if (a.payCount > 0 && value > 0 && paid >= value - 1) key = 'done'
-    }
+    // Этаж и деньги — общей логикой с карточкой сделки (lib/b2c/dealProgress).
+    const art: DealArtifacts = a ?? { calcCount: 0, calcMax: 0, hasSentCalc: false, kpCount: 0, kpTotal: 0, contractCount: 0, contractTotal: 0, paid: 0, payCount: 0 }
+    const { value, paid, remaining } = dealValue(art)
+    const key = dealStageKey(art)
 
     const lastAt = Math.max(ms(d.updated_at), a?.lastAt ?? 0) || nowMs
     const ageDays = Math.max(0, Math.floor((nowMs - lastAt) / DAY))
@@ -168,7 +147,7 @@ export async function GET(req: NextRequest) {
     }, 0),
   }
 
-  return NextResponse.json({ stages: STAGES, cards, kpis, seeAll: actor.seeAll, archived },
+  return NextResponse.json({ stages: DEAL_STAGES, cards, kpis, seeAll: actor.seeAll, archived },
     { headers: { 'Cache-Control': 'no-store' } })
 }
 
