@@ -15,9 +15,13 @@ type ViewMode = 'manager' | 'admin' | 'ceo' | 'cfo' | 'production' | 'measurer'
 
 type NavItem  = { href: string; label: string; icon: string; indent?: boolean }
 type NavGroup = { groupLabel: string }
-type NavEntry = NavItem | NavGroup
+// Свёрнутая подменюшка: заголовок + свои пункты. Нужна там, где список длинный,
+// а каждый день пользуются пятью пунктами (меню менеджера).
+type NavSection = { sectionLabel: string; icon: string; items: NavItem[] }
+type NavEntry = NavItem | NavGroup | NavSection
 
 function isGroup(e: NavEntry): e is NavGroup { return 'groupLabel' in e }
+function isSection(e: NavEntry): e is NavSection { return 'sectionLabel' in e }
 
 // ─── Manager: AmoCRM Dashboard ────────────────────────────────────────────────
 
@@ -28,35 +32,45 @@ const MANAGER_AMO: NavItem[] = [
 // ─── Manager: MGlass (B2C) ────────────────────────────────────────────────────
 
 const MANAGER_MGLASS: NavEntry[] = [
-  // Двадцать пунктов свёрнуты в пять — 04.09.2026, после того как карточка сделки
-  // стала центром работы. Всё, что ушло из первого уровня, достижимо оттуда:
-  // КП и договор делаются кнопкой из карточки, замер отправляется оттуда же,
-  // оплаты и файлы живут её вкладками. Меню перестало быть списком экранов
-  // и стало списком дел.
-  //
-  // Ничего не удалено: разделы ниже, в «Ещё». Права не тронуты — маршруты
-  // остались в ROLE_ALLOWED, прямые ссылки и закладки работают как раньше.
-  { href: '/my-day',            label: 'Мой день',     icon: '☀️' },
-  { href: '/deals',             label: 'Сделки',       icon: '🤝' },
-  { href: '/calculator/build',  label: 'Новый расчёт', icon: '🚿' },
-  { href: '/my-earnings',       label: 'Мои деньги',   icon: '💰' },
-  { groupLabel: 'Ещё' },
-  { href: '/calculator/quick',      label: 'Быстрый расчёт',   icon: '⚡' },
-  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',       icon: '🧾' },
-  { href: '/configurator',          label: 'Визуализатор 3D',  icon: '🧊' },
+  // Первый уровень — дневная работа менеджера, ровно по порядку владельца:
+  // день → сделки → посчитать → документы → деньги. Остальное сложено в
+  // свёрнутые подменюшки ниже: ничего не удалено, но список экранов больше
+  // не заслоняет то, чем пользуются каждый день.
+  { href: '/my-day',            label: 'Мой день',         icon: '☀️' },
+  { href: '/deals',             label: 'Сделки',           icon: '🤝' },
+  { href: '/calculator/build',  label: 'Новый расчёт',     icon: '🚿' },
+  { href: '/calculator/quick',  label: 'Быстрый расчёт',   icon: '⚡' },
+  { href: '/calculator/b2b-mglass', label: 'Расчёт B2B',   icon: '🧾' },
   { href: '/calculations',      label: 'История расчётов', icon: '📋' },
   { href: '/kp',                label: 'КП',               icon: '📄' },
   { href: '/contracts',         label: 'Договор/Счёт',     icon: '📃' },
-  { href: '/clients',           label: 'Клиенты',          icon: '👤' },
-  { href: '/crm',               label: 'CRM · Продажи',    icon: '📊' },
-  { href: '/sales',             label: 'Отдел продаж',     icon: '💰' },
-  { href: '/orders',            label: 'Заказы',           icon: '📦' },
-  { href: '/measure-requests',  label: 'Заявки на замер',  icon: '📐' },
-  { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
-  { href: '/measurer',          label: 'Форма замера',     icon: '📋' },
-  { href: '/installations',     label: 'Монтажи',          icon: '🔧' },
-  { href: '/calendar',          label: 'Календарь',        icon: '📅' },
-  { href: '/inventory',         label: 'Склад (остатки)',  icon: '🏬' },
+  { href: '/my-earnings',       label: 'Мои деньги',       icon: '💰' },
+
+  // Старые калькуляторы вернулись по просьбе менеджеров (04.09.2026) — до того,
+  // как всё сведём в «Новый расчёт». У душевой фурнитура считается по ручной
+  // таблице и занижает: на экране об этом предупреждение.
+  { sectionLabel: 'Калькуляторы', icon: '🧮', items: [
+    { href: '/calculator/shower', label: 'Душевая',        icon: '🚿' },
+    { href: '/calculator/mirror', label: 'Зеркало',        icon: '🪞' },
+    { href: '/calculator/loft',   label: 'Лофт',           icon: '🏗️' },
+    { href: '/configurator',      label: 'Визуализатор 3D', icon: '🧊' },
+  ] },
+  { sectionLabel: 'Клиенты и продажи', icon: '👥', items: [
+    { href: '/clients',           label: 'Клиенты',        icon: '👤' },
+    { href: '/crm',               label: 'CRM · Продажи',  icon: '📊' },
+    { href: '/sales',             label: 'Отдел продаж',   icon: '💰' },
+    { href: '/orders',            label: 'Заказы',         icon: '📦' },
+  ] },
+  { sectionLabel: 'Замеры и монтаж', icon: '📐', items: [
+    { href: '/measure-requests',  label: 'Заявки на замер',   icon: '📐' },
+    { href: '/measure-calendar',  label: 'Календарь замеров', icon: '🗓️' },
+    { href: '/measurer',          label: 'Форма замера',      icon: '📋' },
+    { href: '/installations',     label: 'Монтажи',           icon: '🔧' },
+    { href: '/calendar',          label: 'Календарь',         icon: '📅' },
+  ] },
+  { sectionLabel: 'Склад', icon: '🏬', items: [
+    { href: '/inventory',         label: 'Склад (остатки)',   icon: '🏬' },
+  ] },
 ]
 
 // ─── Manager: B2B ─────────────────────────────────────────────────────────────
@@ -664,12 +678,38 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
                 <div key={`group-${idx}`} className="px-2.5 pt-2 pb-0.5 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
                   {entry.groupLabel}
                 </div>
+              ) : isSection(entry) ? (
+                navSection(entry, activeCls)
               ) : (
                 navItem(entry, activeCls)
               )
             )}
           </div>
         )}
+      </div>
+    )
+  }
+
+  // Свёрнутая подменюшка внутри списка. Открытие живёт в том же наборе `open`,
+  // ключ по названию — состояние переживает переходы между экранами.
+  const navSection = (sec: NavSection, activeCls: string) => {
+    const key = `sec:${sec.sectionLabel}`
+    const isOpen = open.has(key)
+    const hasActive = sec.items.some(i => pathname === i.href || pathname.startsWith(i.href + '/'))
+    return (
+      <div key={key}>
+        <button onClick={() => toggle(key)}
+          className="w-full flex items-center justify-between px-2.5 py-[6px] rounded-md hover:bg-[#f5f5f3] transition-colors">
+          <span className="flex items-center gap-2 min-w-0">
+            <span className="text-[13px] leading-none">{sec.icon}</span>
+            <span className={`text-[13px] truncate ${hasActive ? 'font-semibold text-[#111110]' : 'text-[#6b6b66]'}`}>{sec.sectionLabel}</span>
+          </span>
+          <svg className={`w-3 h-3 text-[#c4c4be] transition-transform duration-200 flex-shrink-0 ${isOpen ? 'rotate-180' : ''}`}
+            fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M19 9l-7 7-7-7" />
+          </svg>
+        </button>
+        {isOpen && <div className="ml-3 mt-0.5 space-y-px border-l border-[#f0f0ec] pl-1.5">{sec.items.map(i => navItem(i, activeCls))}</div>}
       </div>
     )
   }
@@ -709,6 +749,8 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
                 <div key={`group-${idx}`} className="px-2.5 pt-3 pb-1 text-[9px] font-bold uppercase tracking-widest text-[#b8b8b2]">
                   {entry.groupLabel}
                 </div>
+              ) : isSection(entry) ? (
+                navSection(entry, activeCls)
               ) : (
                 navItem(entry, activeCls)
               )
@@ -722,13 +764,20 @@ export function Sidebar({ userEmail, role, permissions = DEFAULT_PERMISSIONS, ca
   // ── Role-based navigation ───────────────────────────────────────────────────
 
   function buildMglassNav(): NavEntry[] {
-    return MANAGER_MGLASS.filter(e => {
-      if (isGroup(e)) return true
-      if (e.href === '/clients')     return permissions.see_clients
-      if (e.href === '/calendar')    return permissions.see_calendar
-      if (e.href === '/my-earnings') return permissions.see_earnings
-      return true
-    })
+    // Права проверяем и внутри подменюшек — иначе спрятанный пункт «Клиенты»
+    // просто переехал бы в свёрнутый список и остался бы виден.
+    const allowed = (i: NavItem) =>
+      i.href === '/clients'     ? permissions.see_clients
+      : i.href === '/calendar'  ? permissions.see_calendar
+      : i.href === '/my-earnings' ? permissions.see_earnings
+      : true
+    return MANAGER_MGLASS
+      .map(e => (isSection(e) ? { ...e, items: e.items.filter(allowed) } : e))
+      .filter(e => {
+        if (isGroup(e)) return true
+        if (isSection(e)) return e.items.length > 0
+        return allowed(e)
+      })
   }
 
   function buildB2bNav(): NavItem[] {
